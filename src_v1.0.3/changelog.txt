@@ -1,0 +1,116 @@
+=================================
+UFEMISM v1.0.3 changelog
+=================================
+
+Some more code clean-up, some restructuring to bring it more in line with the
+new IMAU-ICE, and more extensive output data support.
+
+General:
+- (re-)introduced the "semi-rectangular" ("square") mesh, for writing output
+	to a regular square grid file (so that NcView can be used), and for future use
+	in fast data smoothing, the ELRA GIA model, and mapping data to and from SELEN.
+
+NetCDF output:
+- Split "output" into "restart" and "help_fields", both of which contain the full mesh data.
+- The user can now specify which data fields are written to the help_fields NetCDF file
+	through the config. For a list of which data fields can be chosen, see the "write_help_field"
+	subroutine in the "netcdf_module".
+- Added "_grid" versions of both restart and help_fields, which contain the same data fields
+  but mapped to a regular square grid for easy output inspection.
+- A separate NetCDf file has been added for debugging. At (almost) any point in the code,
+	data can be copied to the "debug" structure, which can then be written to the 
+	"debug_REG.nc" output file. For example, if we want to inspect SIA ice diffusivity, we add:
+	  ...
+	  debug%dp_2D_Aa_01 = ice%D_SIA
+	  CALL write_to_debug_file
+	  ...
+	The debug structure currently has the following data fields:
+		int_2D_Aa_01       : 2D         (vi     ) integer          fields
+		int_2D_Ac_01       : 2D         (aci    ) integer          fields
+		int_2D_AaAc_01     : 2D         (ai     ) integer          fields
+		dp_2D_Aa_01        : 2D         (vi     ) double precision fields
+		dp_2D_Ac_01        : 2D         (aci    ) double precision fields
+		dp_2D_AaAc_01      : 2D         (ai     ) double precision fields
+		dp_3D_Aa_01        : 3D         (vi,zeta) double precision fields
+		dp_2D_monthly_Aa_01: 2D monthly (vi,m   ) double precision fields
+	The user need not worry about the mesh sizes for the four model regions, this has been
+	taken care of.
+	Note also that the debug file has no time dimension; when "write_to_debug_file"
+	is called, all data fields in the NetCDF file are overwritten.
+	Note also also that the debug data structure is always there, but "write_to_debug_file"
+	only does anything if the config option "do_write_debug_data_config" is set to true.
+
+Ice:
+- restructured the SSA solver along the lines of IMAU-ICE; separate subroutines
+  for calculating the effective viscosity and the sliding term, and separated the
+  viscosity iteration and the linearised SOR solver.
+
+=================================
+UFEMISM v1.0.2 changelog
+=================================
+
+Cleaned up the code some more, rewrote the neighbour functions calculation,
+and added support for the first MISMIP benchmark experiment.
+
+General:
+- renamed subroutines for consistency. No more capitalisation, except in case of actual
+  names (Voronoi, Delaunay, etc.), and words separated by underscores
+- added MISMIP_1_2 as a benchmark experiment to all routines. The semi-analytical GL flux
+  is not yet included, so grounding line positions are probably still resolution-dependent,
+  but the experiment itself now runs smoothly.
+  
+Mesh:
+- removed masked neighbour functions (which were not used anywhere)
+- rewrote get_neighbour_functions based on a formal derivation which has been added to the UFEMISM paper appendix
+
+Ice:
+- clarified names of different velocities
+- merged the Coulomb and Weertman SSA solvers into a single routine
+- changed remapping mode for Hi and Ti from 2nd to 1st order conservative
+
+=================================
+UFEMISM v1.0.1 changelog
+=================================
+
+Cleaned up the code.
+
+General:
+- added "USE mpi" and "IMPLICIT NONE" to all subroutines
+- removed unused variables, compiling now generates almost no warnings
+  (only two unused variables in the BMB routine, they will be used later in the paleo parameterisation)
+- cleaned up code layout in several modules
+
+Configuration:
+- cleaned up the configuration_module
+- changed config variable names from "mesh_POI_*" to "POI_*"
+- changed config variable "do_eismint_experiment" to "do_benchmark_experiment",
+  cleaned up exceptions for benchmark experiments in all subroutines
+- removed do_thermodynamics_config
+- replaced the "which_icesheets" string by four separate LOGICALs (do_NAM, do_EAS, do_GRL, do_ANT)
+
+Netcdf:
+- moved netcdf file types to their own data_types_netcdf module
+- cleaned up netcdf file types:
+    - added dimension ID's as variables to the type
+    - renamed some of the mesh dimensions for extra clarity
+- moved non-netcdf functionality for reading forcing data from netcdf_module to forcing_module
+
+Mesh:
+- removed the "semi-rectangular mesh"
+- changed [nV_max, nTrimax, nconmax] to [nV_mem, nTri_mem, nC_mem]
+- added nTri_mem and nC_mem as arguments to AllocateMesh, AllocateSubmesh, ExtendMesh and ExtendSubmesh
+- changed all instances of "CROSS" to "CROSS2", removed "CROSS"
+- renamed mesh memory allocation routines for more consistency
+- made submesh alignment and merging lists to be generated procedurally
+- added the different resolutions as mesh properties, removed the "mesh_config" type
+- updated and cleaned the domain partitioning routines
+- cleaned up mesh_derivatives_module and mesh_ArakawaC_module
+
+Remapping:
+- moved single field remapping calls to the individual submodels (ice, climate, SMB, BMB, PD)
+- removed commented print statements from conservative remapping
+- removed WriteMeshToTextFile calls from conservative remapping
+
+Ice:
+- moved "initialise_ice_temperature" to the thermodynamics module
+- removed variables Us & Vs, added D_SIA as a diagnostic variable

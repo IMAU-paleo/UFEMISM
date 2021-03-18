@@ -432,7 +432,7 @@ CONTAINS
     CALL basal_yield_stress( mesh, ice)
     
     ! Calculate the semi-analytical grounding-line flux solution
-    CALL calculate_GL_flux( mesh, ice)
+    IF (C%use_analytical_GL_flux) CALL calculate_GL_flux( mesh, ice)
     
     ! Solve the SSA
     ! Same approach as an ANICE: an outer loop where ice viscosity is updated,

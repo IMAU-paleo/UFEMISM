@@ -17,7 +17,7 @@
 \usepackage{listings}
 
 \title{UFEMISM - documentation}
-\date{2021-02-17}
+\date{2021-03-25}
 \author{dr. C. J. (Tijn) Berends}
 
 \begin{document}
@@ -31,7 +31,7 @@
 
   \paragraph{Abstract}
   
-The Utrecht Finite voluMe Ice-Sheet Model (UFEMISM) is an ice-sheet-shelf model that solves the hybrid SIA/SIA ice-dynamical equations on a fully adaptive, unstructured grid. It has been developed at IMAU since 2020. While intended mainly for palaeo-applications, the model is very versatile, and can be used for future projections as well. This document contains a complete description of the model; a derivation of the underlying equations, a description of the data and code structure, descriptions of (most of) the subroutines, and results of several important benchmark experiments. In theory, this should give the user enough information to be able to freely use and adapt UFEMISM for their own research.
+The Utrecht Finite voluMe Ice-Sheet Model (UFEMISM) is an ice-sheet-shelf model that solves the hybrid SIA/SSA ice-dynamical equations on a fully adaptive, unstructured grid. It has been developed at IMAU since 2020. While intended mainly for palaeo-applications, the model is very versatile, and can be used for future projections as well. This document contains a complete description of the model; a derivation of the underlying equations, a description of the data and code structure, descriptions of (most of) the subroutines, and results of several important benchmark experiments. In theory, this should give the user enough information to be able to freely use and adapt UFEMISM for their own research.
   
 \newpage
 \tableofcontents
@@ -67,7 +67,7 @@ The first objective, that of the dynamic adaptive grid, immediately created the 
 
 \subsection{Status quo}
 
-Currently (Feb. 2021), the following features in UFEMISM are \textbf{operational}, in development, and \textit{planned}:
+Currently (March 2021), the following features in UFEMISM are \textbf{operational}, in development, and \textit{planned}:
 
 \begin{itemize}
 
@@ -75,23 +75,24 @@ Currently (Feb. 2021), the following features in UFEMISM are \textbf{operational
 \item \textbf{Adaptive mesh}
 \item \textbf{Shared-memory (single node) MPI parallelisation}
 \item \textbf{Simultaneous, coupled simulation of four continental ice sheets}
+\item \textbf{Glacial index / inverse-$\delta^{18}O$ forcing}
+\item \textbf{Matrix-method climate model}
 \item \textbf{Insolation-temperature-based SMB}
-\item \textbf{Spatially + temporally variable insolation}
+\item \textbf{Basic temperature-depth-based BMB}
+\item \textbf{ELRA GIA model}
 \\
-\item Matrix-method climate model
-\item Glacial index / inverse-$\delta^{18}O$ forcing
-\item ELRA GIA model
-\item Coupling to sea-level equation model
+\item Coupling to sea-level equation model SELEN
 \\
 \item \textit{Multi-node MPI parallelisation}
+\item \textit{Englacial tracers ($CO_2, \delta^{18}O$)}
 \item \textit{Improved thermodynamics (enthalpy-based, energy-conserving)}
 \item \textit{Basal hydrology}
 \item \textit{Eigencalving, cliff failure, shelf crevasse failure}
-\item \textit{Englacial tracers ($CO_2, \delta^{18}O$)}
+\item \textit{Improved SMB and BMB parameterisations}
 
 \end{itemize}
 
-Since a proper climate model and forcing method are still in development, no full glacial cycle simulations have been performed yet. However, extrapolation from results of smaller experiments indicates that UFEMISM should be able to simulate an entire glacial cycle, with a 4 km grounding-line resolution, in 1,600 - 3,200 core hours (100 - 200 wall-clock hours on a 16-core system).
+Currently (March 2021), a simulation of all four ice sheets over the entire last glacial cycle (120 kyr) with a grounding line resolution of 10 km takes about 40 wall clock hours.
 
 \newpage
 \section{Model structure}
@@ -331,48 +332,31 @@ This kind of parallelisation works only for ''embarassingly parallel'' problems,
 \\
 Mesh generation is parallelised in a very different manner. This is explained in Sect. XXX.
 
-\subsection{Climate model}
+\subsection{Output}
 
-UFEMISM's climate model is based on the matrix method developed by Berends et al. (2018), which is described in detail in Sect. XXX. This method interpolates between two pre-calculated GCM snapshots: one describing the pre-industrial (PI) climate, and one describing the climate of the last glacial maximum (LGM). The interpolation weights are determined by atmospheric CO2, and partly by the modelled ice-sheet geometry.\\
+\subsubsection{Text files}
+
+UFEMISM creates a number of ASCII text files containing scalar output data. These are given the prefix ''\textsc{aa\textunderscore}'' so that they will always be the first to show up in the results directory.\\
 \\
-The data structure of UFEMISM's climate model has been created specifically to accomodate this kind of climate forcing. The \textsc{type\textunderscore climate\textunderscore model} is subdivided into several ''subclimates'', which describe either the present-day observed climate \textsc{pd\textunderscore obs} (typically the ERA-40 reanalysis), the different GCM snapshot used in the matrix, or the final applied climate resulting from the matrix interpolation. This structure looks as follows:
+The file ''\textsc{general\textunderscore output.txt}'' lists some global scalars such as global mean sea level, atmospheric CO\textsubscript{2}, deep-sea temperature, regional ice volume, contributions to the benthic $\delta^{18}O$ signal, etc.\\
+\\
+The regional ''\textsc{general\textunderscore output}'' files list regional scalars such as ice-sheet area, volume, volume above flotation, mean surface temperature, and the integrated mass balance components.\\
+\\
+The regional ''\textsc{time\textunderscore log}'' files list the computation time used by the different model components used by each region.\\
+\\
+Lastly, the Point-Of-Interest (POI) files list ice thickness and englacial temperature over time for the different POIs that have been specified through the config, to enable easy comparison with ice core data.
 
-\begin{itemize}
-\item \textsc{type\textunderscore climate\textunderscore model}
-\begin{itemize}
+\subsubsection{NetCDF files}
 
-  \item \textsc{pd\textunderscore obs (type\textunderscore subclimate\textunderscore region)}
-  \begin{itemize}
-    \item \textsc{real(dp), dimension(:,:) :: t2m} ! Monthly mean 2-m air temperature [$K$]
-    \item \textsc{real(dp), dimension(:,:) :: precip} ! Monthly total precipitation [$m$]
-    \item \textsc{real(dp), dimension(:) :: Hs} ! Reference surface elevation [$m$]
-    \item \textsc{real(dp), dimension(:) :: wind\textunderscore we} ! Zonal wind [$m/s$]
-    \item \textsc{real(dp), dimension(:) :: wind\textunderscore sn} ! Meridional wind [$m/s$]
-    \item \textsc{real(dp), dimension(:) :: wind\textunderscore lr} ! Wind in regional grid x-direction [$m/s$]
-    \item \textsc{real(dp), dimension(:) :: wind\textunderscore du} ! Wind in regional grid y-direction [$m/s$]
-    \item \textsc{real(dp), dimension(:) :: i\textunderscore abs} ! Yearly total absorbed insolation [$J/m^2$]
-    \item \dots
-  \end{itemize}
-  
-  \item \textsc{gcm\textunderscore pi (type\textunderscore subclimate\textunderscore region)}
-  \begin{itemize}
-    \item \dots
-  \end{itemize}
-  
-  \item \textsc{gcm\textunderscore lgm (type\textunderscore subclimate\textunderscore region)}
-  \begin{itemize}
-    \item \dots
-  \end{itemize}
-  
-  \item \textsc{applied (type\textunderscore subclimate\textunderscore region)}
-  \begin{itemize}
-    \item \dots
-  \end{itemize}
-  
-\end{itemize}
-\end{itemize}
-
-All data fields in the \textsc{type\textunderscore climate\textunderscore model} are defined on the mesh. To easily handle mesh updates, global climates (on their respective original lat/lon grids) are stored in memory as well. These are kept in the \textsc{type\textunderscore climate\textunderscore matrix}, which is declared in \textsc{ufemism\textunderscore program} and passed to the different models as an argument. The \textsc{type\textunderscore climate\textunderscore matrix} has the same structure as the \textsc{type\textunderscore climate\textunderscore model}, with subclimates containing the present-day observed climate and the GCM snapshots.
+Data fields are written to a number of NetCDF files. Each model region has its own set of output files, which are divided into ''\textsc{restart}'' and ''\textsc{help\textunderscore fields}'' files, and into ''\textsc{mesh}'' and ''\textsc{grid}'' files.\\
+\\
+\textsc{restart} files, as their name suggests, contain everything that is needed to restart a simulation (either in the event of a crash, or when it is convenient to split a long simulation into parts): ice thickness, bed topography, englacial temperature, the depth of the overlying firn layer, and the amount of melt that occurred during the previous year (used in the albedo parameterisation).\\
+\\
+\textsc{help\textunderscore fields} files can be configured by the user to contain a wide selection of data fields. Ice velocities (surface, basal, 3D), mass balance components (yearly or monthly), climate fields (temperature, precipitation, wind; yearly or monthly), etc. A full list of all the data fields that can be chosen can be found in the routine \textsc{create\textunderscore help\textunderscore field} in the \textsc{netcdf\textunderscore module} (where additional options can also easily be added).\\
+\\
+\textsc{mesh} files contain the data on the model mesh, as well as all the data describing that mesh. Since the mesh is irregularly updated during simulations, changing the number of vertices, this data cannot be contained within a single NetCDF file. Instead, whenever the mesh is updated, a new NetCDF file is created. The UFEMISM Github repository contains a number of Matlab scripts that can display mesh data.\\
+\\
+\textsc{grid} files contain the data on a regular square grid. The resolution of this grid can be specified through the config; UFEMISM internally generates this grid, and whenever output is written, it projects the specified model data to this grid and writes it to the grid output file. Note that here too, a distinction is made between \textsc{restart} and \textsc{help\textunderscore fields} files, but that the grid restart files cannot be used to restart the model. They are intended mainly for fast and easy output inspection, for example with NcView.
 
 \newpage
 \section{Ice dynamics and thermodynamics}
@@ -520,7 +504,7 @@ A simple flux-correction scheme is applied to prevent negative ice thicknesses f
 
 \subsection{Thermodynamics}
 
-UFEMISM uses the approach developed for SICOPOLIS (Greve et al., 1995) to solve the heat equation in a flowing medium:
+UFEMISM uses the approach developed for SICOPOLIS (Greve et al., 1997) to solve the heat equation in a flowing medium:
 
 \begin{equation}
 \frac{\partial T}{\partial t} = \frac{k}{\rho c_p} \nabla^2 T - \mathbf{u} \cdot \nabla T + \frac{\Phi}{\rho c_p}.
@@ -608,6 +592,283 @@ If the vertical direction is discretised into $n$ unevenly spaced layers, this s
 \end{align}
 
 This matrix equation can be solved for every individual grid cell independently, making this an embarrassingly parallel problem. In UFEMISM, this is done with the Fortran package LAPACK; in Matlab, it can be done with the “backslash method”: T = A \textbackslash delta. We apply a Dirichlet boundary condition at the top of the column, keeping ice temperature equal to surface air temperature (limited to melting point). At the base, a Neumann boundary condition is applied, keeping the vertical temperature gradient fixed to a value dictated by the geothermal heat flux and the frictional heating from sliding. Ice temperature throughout the vertical column is limited to the depth-dependent pressure melting point (a non-energy-conserving approach).
+
+\newpage
+\section{Climate}
+
+UFEMISM's climate model is the same as that in IMAU-ICE, which in turn is same as in its predecessor ANICE2.1. It uses the matrix method developed by Berends et al. (2018). Quoting that paper: ''A climate matrix, as defined by Pollard (2010), is a collection of output data from different steady-state GCM simulations that differ from each other in one or more key parameters or boundary conditions, such as prescribed atmospheric pCO\textsubscript{2}, orbital configuration, or ice-sheet configuration. At every point in time during the simulation, the location of the model state within this matrix is extracted from the matrix by interpolating between its constituent precalculated climate states.''\\
+\\
+Berends et al. (2018) developed a way to use modelled ice-sheet geometry as a spatially variable interpolant between two GCM snapshots, respectively describing the PI and the LGM (Singarayer and Valdes, 2010). The ice-albedo feedback and the orographic forcing of precipitation are parameterised by this interpolation, resulting in a modelled ice-sheet geometry at LGM that agrees better with geomorphological evidence than was the case with earlier versions of the IMAU ice-sheet models. Since temperature and precipitation (which together constitute the entirety of the ''climate'' that's needed to calculate the surface mass balance) are affected by ice-sheet geometry in different ways, two separate interpolation schemes are used for these quantities.\\
+
+\subsection{Temperature}
+
+The equations described here are contained in the subroutine \textsc{run\textunderscore climate\textunderscore model\textunderscore matrix\textunderscore pi\textunderscore lgm\textunderscore temperature} of the \textsc{climate\textunderscore module}.\\
+\\
+During the LGM, temperatures in the high latitudes of the northern hemisphere were between 10 and 15 K colder than pre-industrial, much more than the global mean cooling of 5 K. This temperature change has three main causes: a lower CO2 concentration in the atmosphere (global), a much higher albedo (regional), and a much higher surface elevation (local).\\
+\\
+The temperature interpolation scheme of the climate matrix is based on the absorbed insolation $I_{abs}$, which is defined as the product of insolation at the top of the atmosphere $Q_{TOA}$ with the inverse of the surface albedo $a$:
+
+\begin{equation} \label{eq:matrix_Iabs}
+I_{abs}(x,y) = \sum_{m=1}^{12} Q_{TOA} (x,y,m) \cdot (1 - a( x,y,m))
+\end{equation}
+
+The absorbed insolation is calculated for the modelled ice-sheet geometry at time $t$ using the insolation at the top of the atmosphere at that point in time, using the solution by Laskar et al. (2004). Absorbed insolation fields are also calculated for the two GCM snapshots, so that we have three fields: $I_{abs,mod}$, $I_{abs,PI}$, $I_{abs,LGM}$. For all three, the albedo $a$ is modelled with UFEMISM's own SMB model. The insolation-based weighting field $w_{ins}(x,y)$ is calculated by scaling $I_{abs,mod}$ between the two reference fields:
+
+\begin{equation} \label{eq:matrix_wins_T2m}
+w_{ins}(x,y) = \frac{I_{abs,mod}(x,y) - I_{abs,LGM}(x,y)}{I_{abs,PI}(x,y) - I_{abs,LGM}(x,y)}
+\end{equation}
+
+To account for the fact that a change in albedo will affect temperatures not only locally but also regionally, a Gaussian smoothing filter $F$ with a smoothing radius of 200 km and a region-wide average value are added to find the weighting field $w_{ice}$:
+
+\begin{equation} \label{eq:matrix_wice_T2m}
+w_{ice}(x,y) = \frac{1}{7} w_{ins}(x,y) + \frac{3}{7} F \left( w_{ins}(x,y) \right) + \frac{3}{7} \overline{w_{ins}(x,y)}
+\end{equation}
+
+NOTE: preliminary attempts at writing a proper (i.e. conservative, monotonic, efficient) smoothing algorithm on an unstructured mesh have not been successful. Instead, a fixed square grid is included for these operations. The weighting field $w_{ins}$ is mapped from the mesh to the square grid, smoothing is applied on the grid, and the smoothed field is mapped back to the mesh. The two mapping operations generate a certain amount of numerical diffusion, which fortunately is not a problem for a smoothing operation.\\
+\\
+Lastly, the atmospheric CO\textsubscript{2} concentration is included to yield the final weighting field $w_{tot}$:
+
+\begin{align}
+w_{CO_2} &= \frac{CO_2 - 190}{280 - 190}\\
+w_{tot}(x,y) &= \frac{w_{CO_2} + w_{ice}(x,y)}{2}
+\end{align}
+
+This weighting field is then used to interpolate between the two GCM snapshots:
+
+\begin{equation}
+T_{ref,GCM}(x,y) = w_{tot} (x,y) \cdot T_{PI} (x,y) + \left( 1 - w_{tot} (x,y) \right) \cdot T_{LGM} (x,y)
+\end{equation}
+
+Since the native resolution of the GCM snapshots is much lower than that of the ice-sheet model, this interpolated temperature is still very ''smooth''. To correct for this, an elevation-based downscaling scheme is used. First, the reference orography of the GCM snapshots is interpolated with the same weighting field. Then, the GCM-derived lapse rate is derived to find the ice-sheet model temperature:
+
+\begin{align}
+h_{ref,GCM}(x,y) &= w_{tot} (x,y) \cdot h_{PI} (x,y) + \left( 1 - w_{tot} (x,y) \right) \cdot h_{LGM} (x,y)\\
+T_{mod} (x,y) &= T_{ref,GCM} + \lambda_{GCM} (x,y) \cdot \left( h_{mod} (x,y) - h_{ref,GCM} (x,y) \right)
+\end{align}
+
+Rather than using a constant lapse rate (typical values range from 6 to 8 K / km), a GCM-derived, spatially variable lapse rate $\lambda_{GCM} (x,y)$ is calculated from the temperature and orography fields of the two GCM snapshots:
+
+\begin{equation}
+\lambda_{LGM} (x,y) = \frac{T_{LGM}(x,y) - \left( T_{PI} (x,y) + \Delta T_{LGM} \right) }{h_{LGM} (x,y) - h_{PI} (x,y)}
+\end{equation}
+
+The temperature offset $􏰀\Delta T_{LGM}$ is the mean difference in GCM-calculated temperature between the LGM and PI fields over the ice-free area in the respective model region (either North America or Eurasia) at the LGM. The rationale behind this approach is explained in detail by Berends et al. (2018); in short, it ensures that, during the inception phase of the glacial cycle, the ice-free parts of the continent experience an appropriate amount of cooling so that the ice-sheet can expand.\\
+
+\subsection{Precipitation}
+
+The equations described here are contained in the subroutine \textsc{run\textunderscore climate\textunderscore model\textunderscore matrix\textunderscore pi\textunderscore lgm\textunderscore precipitation} of the \textsc{climate\textunderscore module}.\\
+\\
+At present, Antarctica is the driest desert on Earth, with the interior of East Antarctica receiving barely a centimetre of precipitation per year. The two main reasons for this are the extreme cold, which strongly reduces the moisture carrying capacity of the atmosphere, and the geometry of the ice-sheet. The dome shape of the Antarctic (or indeed any) ice sheet results in relatively steep slopes at the margin. As the wind blows moist air from the sea towards the ice sheet, the air has to move up this slope. Moving upwards means the pressure and temperature decrease, reducing the moisture carrying capacity, and so most of the moisture precipitates onto the ice-sheet margin. Any air that reaches the plateau of the ice-sheet interior is very dry, and so hardly and precipitation occurs there. This ''plateau desert'' effect is also expected to have existed over the North American and Eurasian ice sheets during the LGM.\\
+\\
+This geometry-induced precipitation change is captured in the matrix method by using a different way to calculate the weighting field. Instead of absorbed insolation, ice thickness is used an interpolant:
+
+\begin{equation} \label{eq:matrix_wice_precip}
+w_{ice} (x,y) = \frac{H_{mod}(x,y) - H_{PI}(x,y)}{H_{LGM}(x,y) - H_{PI}(x,y)} \cdot
+\left( \frac{V_{mod} - V_{PI}}{V_{LGM} - V_{PI}} \right)^2
+\end{equation}
+
+Here, $H(x,y)$ is the local ice thickness, while $V = \iint H dA$ is the total regional ice volume. Note that \eqref{eq:matrix_wice_precip} is slightly different from Eq. 12 in Berends et al. (2018); the version in the paper is wrong, in the actual model code the scaled local ice thickness is multiplied with the square of the scaled ice volume.\\
+\\
+The final weighting field $w_{tot}(x,y)$ is obtained by applied a Gaussian smoothing filter $F$ with a radius of 200 km:
+
+\begin{equation}
+w_{tot} (x,y) = 1 - F( w_{ice} (x,y) )
+\end{equation}
+
+Note that the weight is inverted so that a value of 1 corresponds to PI conditions.\\
+\\
+The GCM precipitation fields are then interpolated with this weighting field:
+
+\begin{equation}
+P_{ref,GCM} (x,y) = w_{tot} (x,y) \cdot P_{PI} (x,y) + \left( 1 - w_{tot} (x,y) \right) \cdot P_{LGM} (x,y)
+\end{equation}
+
+As with the temperature, the resulting precipitation is still very ''smooth'' because of the low GCM resolution. Here too, an orography-based downscaling scheme is used to transform the precipitation from the smooth reference orography to the ''fine'' model orography. This is done using the temperature/orography precipitation model developed by Roe and Lindzen (2001), which models precipitation as a function of surface temperature, wind speed and direction, and surface slope (parameterising both the effects of temperature on atmospheric moisture carrying capacity, and of orographic forcing of precipitation).
+
+\begin{align}
+e_{sat} &= e_0 e^{\frac{c_1 (T - T_0)}{c_2 + T - T_0}} \\
+w_{vv} &= max(0, u_{wind} \frac{\partial h}{\partial x} + v_{wind} \frac{\partial h}{\partial y}) \\
+f( w_{vv}') &= \frac{1}{N} e^{-{\left( \frac{w_{vv}' - w_0}{\alpha} \right)}^2}\\
+dP_{RL} &= e_{sat} max(0, a+b w_{vv}') f( w_{vv}') dw_{vv}'
+\end{align}
+
+Here, $e_{sat}$ is the saturation vapour pressure at the surface, which is a good proxy for the moisture content of the overlying air column. It is described by a Clausius-Clapeyron relation using the monthly mean surface temperature $T$, where $e_0$ = 6.112 mbar, $c_1$ = 17.67, and $c_2$ = 243.5 K. The vertical wind velocity $w_{vv}$ is calculated from the 850 hPa wind $[u_{wind},v_{wind}]$and the surface gradient. The precipitation $P_{RL}$ is related to vertical wind velocity $w_{vv}$ through a probability distribution $f 􏰁(w') 􏰂dw'$ , which is the probability that $w_{vv}$ lies between $w_{vv}'$ and $w_{vv}'$ + $dw_{vv}'$. $\alpha$ = 1.15 cm s\textsuperscript{-1} is the measure of variability in the vertical wind velocity (Roe, 2002). The precipitation $dP_{RL}$ is given by Eq. XX, where the constants a = 2.5 $\cdot$ 10-11 kg\textsuperscript{-1} s\textsuperscript{2} m and b = 5.9 $\cdot$ 10\textsuperscript{-9} s\textsuperscript{3} kg were obtained by tuning to observations of Greenland (Roe, 2002). This equation is solved analytically using error functions (Roe and Lindzen, 2001), resulting in the following expression:
+
+\begin{align}
+x_0 &= \frac{a}{b} + w_{vv} \\
+P_{RL} &= b e_{sat} \left[ \frac{x_0}{2} + \frac{ x_o^2 erf( a |x_0| )}{2|x_0|} + \frac{e^{-\alpha^2 x_0^2}}{2 \sqrt{\pi} \alpha}\right]
+\end{align}
+
+The Roe and Lindzen precipitation model is applied to both the ''smooth'' interpolated GCM orography $h_{ref,GCM}$ (calculated with the weighting field for precipitation, which is not the same as the interpolated orography used in the temperature scheme) and to the ''fine'' modelled orography to calculate a correction factor with which the interpolated GCM precipitation $P_{ref,GCM}$ is adjusted:
+
+\begin{equation}
+P_{mod} = P_{ref,GCM} \frac{P_{RL,mod}}{P_{RL,GCM}}
+\end{equation}
+
+\newpage
+\subsection{Data structure}
+
+The current implementation of the matrix method uses the PI and LGM climates produced by Singarayer and Valdes (2010) as GCM snapshots, plus the ERA-40 reanalysis as a present-day reference state.
+
+\begin{figure}[h!] \label{fig:climate_ERA40}
+  \includegraphics[width=0.95\linewidth]{Fig_climate_ERA40.png}
+  \caption{The ERA-40 reanalysis data.}
+\end{figure}
+
+\begin{figure}[h!] \label{fig:climate_GCM_PI}
+  \includegraphics[width=0.95\linewidth]{Fig_climate_GCM_PI.png}
+  \caption{The PI GCM snapshot by Singarayer and Valdes (2010).}
+\end{figure}
+
+\begin{figure}[h!] \label{fig:climate_GCM_LGM}
+  \includegraphics[width=0.95\linewidth]{Fig_climate_GCM_LGM.png}
+  \caption{The LGM GCM snapshot by Singarayer and Valdes (2010).}
+\end{figure}
+
+The data structure of UFEMISM's climate model has been created specifically to accommodate the matrix method. The \textsc{type\textunderscore climate\textunderscore model} is subdivided into several ''subclimates'', which describe either the present-day observed climate \textsc{pd\textunderscore obs} (typically the ERA-40 reanalysis), the different GCM snapshot used in the matrix, or the final applied climate resulting from the matrix interpolation. This structure looks as follows:
+
+\begin{itemize}
+\item \textsc{type\textunderscore climate\textunderscore model}
+\begin{itemize}
+
+  \item \textsc{pd\textunderscore obs (type\textunderscore subclimate\textunderscore region)}
+  \begin{itemize}
+    \item \textsc{real(dp), dimension(:,:) :: t2m} ! Monthly mean 2-m air temperature [$K$]
+    \item \textsc{real(dp), dimension(:,:) :: precip} ! Monthly total precipitation [$m$]
+    \item \textsc{real(dp), dimension(:) :: Hs} ! Reference surface elevation [$m$]
+    \item \textsc{real(dp), dimension(:) :: wind\textunderscore we} ! Zonal wind [$m/s$]
+    \item \textsc{real(dp), dimension(:) :: wind\textunderscore sn} ! Meridional wind [$m/s$]
+    \item \textsc{real(dp), dimension(:) :: wind\textunderscore lr} ! Wind in regional grid x-direction [$m/s$]
+    \item \textsc{real(dp), dimension(:) :: wind\textunderscore du} ! Wind in regional grid y-direction [$m/s$]
+    \item \textsc{real(dp), dimension(:) :: i\textunderscore abs} ! Yearly total absorbed insolation [$J/m^2$]
+    \item \dots
+  \end{itemize}
+  
+  \item \textsc{gcm\textunderscore pi (type\textunderscore subclimate\textunderscore region)}
+  \begin{itemize}
+    \item \dots
+  \end{itemize}
+  
+  \item \textsc{gcm\textunderscore lgm (type\textunderscore subclimate\textunderscore region)}
+  \begin{itemize}
+    \item \dots
+  \end{itemize}
+  
+  \item \textsc{applied (type\textunderscore subclimate\textunderscore region)}
+  \begin{itemize}
+    \item \dots
+  \end{itemize}
+  
+\end{itemize}
+\end{itemize}
+
+All data fields in the \textsc{type\textunderscore climate\textunderscore model} are defined on the mesh. To easily handle mesh updates, global climates (on their respective original lat/lon grids) are stored in memory as well. These are kept in the \textsc{type\textunderscore climate\textunderscore matrix}, which is declared in \textsc{ufemism\textunderscore program} and passed to the different models as an argument. The \textsc{type\textunderscore climate\textunderscore matrix} has the same structure as the \textsc{type\textunderscore climate\textunderscore model}, with subclimates containing the present-day observed climate and the GCM snapshots. When the mesh is updated, the different subclimates are remapped from the global fields to the new mesh.
+
+\newpage
+\section{Mass balance}
+
+The surface mass balance is modelled in UFEMISM using IMAU's in-house insolation-temperature model IMAU-ITM (Berends et al., 2018). This model took part in the GrSMBMIP intercomparison exercise (Fettweis et al., 2021), where it was shown to perform well in comparison to other parameterised SMB models when simulating the different components of the mass balance of the Greenland ice sheet during the satellite era.\\
+\\
+The basal melt currently consists of the temperature/depth-dependent sub-shelf melt parameterisation by Martin et al. (2011), combined with the glacial/interglacial parameterisation by Pollard and DeConto (2012), and the subtended-angle/distance-to-open-ocean parameterisation also by Pollard and DeConto (2012). Basal melt underneath grounded ice is currently not included. All of these parameterisations are currently the same as in IMAU-ICE and its predecessor ANICE2.1.
+
+\subsection{Surface mass balance}
+
+The surface mass balance is modelled in UFEMISM using IMAU's in-house insolation-temperature model IMAU-ITM (Berends et al., 2018; Fettweis et al., 2021). This 0-D model takes monthly values of surface temperature and precipitation, and insolation at the top of the atmosphere, to separately calculate different components of the surface mass balance.\\
+\\
+First, the snow fraction of precipitation is calculated according to the parameterization by Ohmura (1999), so that the  monthly precipitation $P$ is partitioned into the monthly snowfall $S$ and the monthly rainfall $R$ (all expressed in metres of water equivalent):
+
+\begin{align}
+f_{snow} &= \frac{1 - 0.796 \cdot tan^{-1} \left( \frac{T - T_0}{3.5}\right) }{2} \\
+S &= P \cdot f_{snow} \\
+R &= P \cdot (1 - f_{snow})
+\end{align}
+
+The monthly snowmelt $A$ is parameterised as a linear function of the 2-m air temperature $T$, the albedo $a$, and the insolation at the top of the atmosphere $Q_{TOA}$ following the approach by Bintanja et al. (2002):
+
+\begin{equation}
+A = c_1 (T - T_0) + c_2 (Q_{TOA} (1 - a)) - c_3
+\end{equation}
+
+The refreezing $F$ is calculated from the available liquid water content $L$ and the (parameterised) superimposed water content $L_{sup}$ following the approach by Huybrechts and de Wolde (1999) and Janssens and Huybrechts (2000):
+
+\begin{align}
+L &= R + A \\
+L_{sup} &= 0.012 \cdot max(0, T_0 - T) \\
+F &= min( L, L_{sup}, P)
+\end{align}
+
+The surface mass balance $M_s$ is equal to the sum of snowfall, (minus) ablation, and refreezing, and converted from metres of water equivalent to metres of ice equivalent:
+
+\begin{equation}
+M_s = (S - A + F) \frac{\rho_w}{\rho_i}
+\end{equation}
+
+In order to calculate the albedo used in the snowmelt parameterisation, the thickness of the firn layer $H_f$ is modelled as well, using a simple no-compaction model where any snowfall is assumed to immediately become firn with the density of ice. The firn layer thickness is limited to 10 m. The albedo $a$ is then parameterised according to the thickness of the firn layer $H_f$ and the amount of snowmelt $A_{prev}$ that occurred during the previous year:
+
+\begin{equation}
+a = a_{snow} - (a_{snow} - a_{surf}) e^{-15 H_f} - 0.015 A_{prev}
+\end{equation}
+
+Here, $a_{snow} = 0.85$ is the albedo of fresh snow, and $a_{surf}$ is the albedo of the surface underneath the firn layer (either 0.5 for bare ice, or 0.2 for bare soil).
+
+\subsection{Basal mass balance}
+
+The basal melt currently consists of the (linear) temperature/depth-dependent sub-shelf melt parameterisation by Martin et al. (2011), combined with the glacial/interglacial parameterisation by Pollard and DeConto (2009), and the subtended-angle/distance-to-open-ocean parameterisation also by Pollard and DeConto (2009).\\
+\\
+Pollard and DeConto (2009) provide a highly parameterised relation for sub-shelf melt, which depends only on horizontal shelf geometry. They provide three uniform values for sub-shelf melt underneath ''protected'', ''exposed'', and ''deep ocean'' shelves. A weighted average between these values is calculated as follows:
+
+\begin{align}
+z_e &= max[ 0, min[ 1, \frac{A - 80}{30} ]] e^{\frac{-D}{100}} \\
+z_d &= max[ 0, min[ 1,  \frac{h - h_{deep}}{200} ]] \\
+M &= (1 - z_d) \left[ (1 - z_e) M_p + z_e M_e \right] + z_d M_d
+\end{align}
+
+Here, the protected/exposed weighting factor $z_e$ is calculated based on the angle $A$ (degrees) subtended by the set of all straight lines from the point in question that reach open ocean without encountering land or grounded ice, and the shortest linear distance $D$ (km) from the shelf point to the open ocean. The deep-ocean weighting factor $z_d$ is calculated from the bathymetry $h$, scaled with respect to a threshold depth $h_{deep}$ which represents the transition from the continental shelf to the oceanic basin (configurable per model region).\\
+\\
+The three uniform melt rates for protected shelves $M_p$, exposed shelves $M_e$ and deep-ocean shelves $M_d$ are calculated as weighted averages from fixed values for the present-day, and hypothetical ''cold'' and ''warm'' ocean states. The values for these states were derived by Bas de Boer for ANICE somewhere in the early 2010' to provide reasonable patterns of Antartic advance/retreat. They are configurable per model region, with the default values copied from ANICE. The interpolation between these fixed values is done based on CO\textunderscore{2} and high-latitude insolation.\\
+\\
+As in ANICE and IMAU-ICE, the melt rate for protected shelves is replaced with the parameterisation by Martin et al. (2011). Here, the sub-shelf melt rate $M_p$ is parameterised as a linear function of the (mean) ocean temperature $T_{Om}$ according to Martin et al. (2011):
+
+\begin{align}
+T_{freeze} &= -1.9011 - 7.64 \cdot 10^{-4} H \frac{\rho_i}{\rho_w} \\
+M_p &= \rho_w c_{pO} \gamma_T c_M \frac{T_{Om} - T_{freeze}}{L_{fus} \rho_i}
+\end{align}
+
+Here, the freezing temperature $T_{freeze}$ of ocean water at the base of the shelf is expressed as a linear function of the water depth (which is simply the ice thickness $H$ times the ratio of densities). The sub-shelf melt rate $M$ is then found from the heat capacity $C_{pO} = 3.97 \cdot 10^3 J kg^{-1} K^{-1} $ of the ocean, the thermal exchange velocity $\gamma_T = 10^{-4} m s^{-1}$, a tuning factor $c_M$ (default value 0.005), the mean ocean temperature $T_{Om}$, and the heat of fusion $L_{fus} = 3.335 \cdot 10^ J kg^{-1}$ for liquid water.\\
+
+\newpage
+\section{Glacial isostatic adjustment}
+
+Currently, glacial isostatic adjustment (GIA) is calculated with a simple ELRA (Elastic Lithosphere, viscously Relaxed Asthenosphere) model according to Huybrechts (1992). In future improvements, the option to instead use bedrock deformation rates supplied by SELEN will be included as well.
+
+\subsection{ELRA}
+
+\subsubsection{Theory}
+
+The ELRA model uses three scalar values to completely describe the response of the solid Earth to changes in loading: the flexural ridigity $D = 10^5 kg m^2 s^{-2}$ of the lithosphere, and the relaxation time $\tau = 3000 yr$ and density $\rho_m = 3300 kg m^{-3}$ of the viscous mantle (all configurable). These are used to calculate the 2D flexural profile $F$ (i.e. the equilibrium deformation in response to a unit point load), using the Kelvin function $Klv$:
+
+\begin{align}
+L_r &= {\left( \frac{D}{\rho_m g} \right) }^{\frac{1}{4}} \\
+F(r) &= Klv( \frac{r}{L_r} )
+\end{align}
+
+Here, $L_r$ (m) is the influence radius of lithospheric rigidity, and $r$ is the linear distance (m) from the point load. The equilibrium bedrock deformation $\delta h_{eq}$ in response to a load distribution $P(x,y)$ is calculated by 2D convolution of the load with the flexural profile:
+
+\begin{equation}
+\delta h_{eq} (x,y) = F(r) \ast P(x,y)
+\end{equation}
+
+The lithospheric deformation rate $\frac{\partial h}{\partial t}$ is proportional to the difference between the modelled deformation :
+
+\begin{equation}
+\frac{\partial h}{\partial t} (x,y,t) = \frac{\delta h (x,y,t) - \delta h_{eq} (x,y)}{\tau}
+\end{equation}
+
+\subsubsection{Implementation}
+
+Due to the highly diffusive nature of glacial isostatic adjustment, the ELRA model needs neither a high spatial resolution nor a small time step. Therefore, the calculation of the deformation rate $\frac{\partial h}{\partial t}$ has been given its own separate time step \textsc{dt\textunderscore elra} (configurable, default value 100 yr). Note that the bedrock elevation itself is updated in every model loop to prevent ''jumps''. Since the ELRA model does not require a high spatial resolution, and also since performing a proper 2D convolution on an unstructured mesh is not easy, the ELRA model is run on a fixed square grid (resolution configurable, default value 100 km). The surface load (relative to the present-day load, which includes both ice and liquid water) is calculated on the mesh, and then projected to this square grid. The 2D convolution is performed on the grid, and the resulting deformation rate is mapped back to the mesh. While the two mapping operations induce some small amount of numerical diffusion, this does not significantly affect the results due to the already highly diffusive nature of the ELRA model itself.\\
+\\
+A similar square grid construction is being developed for the coupling to SELEN.
 
 \newpage
 \section{Unstructured grid}
@@ -1502,6 +1763,61 @@ The first few attempts didn't look like much, but after a day or two I figured o
 \\
 So, in January 2020 I put together a few nice, sleek-looking animations and went to visit Roderik (then my promotor, now still my supervisor). ''Do you have a moment for me somewhere this week? I have something nice to show you.'', I mailed late on Sunday evening. Not ten minutes later came the reply: ''If it's really nice I have time first thing tomorrow morning.'' So, on Monday morning I spent just over an hour describing my pet project to Roderik. He asked a handful of questions throughout, otherwise just leaning back and observing. When I was finished, he was quiet for a moment, and he said to me, ''Well, I think it's interesting.''. He's not a very wordy man. However, early the next day he came to my office again, together with Heiko (Goelzer, then a postdoc at IMAU). ''Show him what you showed me'', Roderik told me. So I did. The two of them were very enthusiastic this time, and we agreed that I should finish up what I had into a paper, and they'd see if they could find a good way to put it to use. A few weeks later, on 31 January 2020, I defended my PhD thesis. In the laudatio, Roderik stated that the most memorable moment of my PhD happened at the very end of it when, ''having already finished the thesis, one day Tijn showed up and said he had something nice to show me - and I nearly fell from my chair with amazement!''. Not exactly how I remember it going, but I'll take it.\\
 \\
-In May 2020 we wrote and submitted (I wrote, Roderik submitted) a proposal to NWO, asking them to fund a project to finish develop UFEMISM and apply it to some nice palaeoglaciological research. While initially the plan was to use the funding (if we got it) to hire myself for a three-year postdoc, another position opened just after we'd submitted the proposal. Rather than gamble on a proposal that would take another 8 months to be processed, I decided to take the other position instead, and use the funding (if we got it) to hire someone else to carry out my ideas. Just over a week ago we received word that the proposal was accepted, and so it's now confirmed that UFEMISM will be, as they say, a thing. Where before I'd kept only some very basic ''documentation'' just for myself, I've now set myself to the task of writing out a complete description of everything I've created. That will be the rest of this document; this final page right here I wrote simply to please my own ego. Both the paper and the documentation are, as is tradition, phrased as ''we developed'', ''we chose'', ''we, we, we'', and I wanted to have just a little bit all to myself. Sue me.
+In May 2020 we wrote and submitted (I wrote, Roderik submitted) a proposal to NWO, asking them to fund a project to finish develop UFEMISM and apply it to some nice palaeoglaciological research. While initially the plan was to use the funding (if we got it) to hire myself for a three-year postdoc, another position opened just after we'd submitted the proposal. Rather than gamble on a proposal that would take another 8 months at least to be processed, I decided to take the other position instead, and use the funding (if we got it) to hire someone else to carry out my ideas. Just over a week ago (early Feburary 2021) we received word that the proposal was accepted, and so it's now confirmed that UFEMISM will be, as they say, a thing. Where before I'd kept only some very basic ''documentation'' just for myself, I've now set myself to the task of writing out a complete description of everything I've created. That will be the rest of this document; this final page right here I wrote simply to please my own ego. Both the paper and the documentation are, as is tradition, phrased as ''we developed'', ''we chose'', ''we, we, we'', and I wanted to have just a little bit all to myself. Sue me.
+
+
+\newpage
+\section{References}
+
+Berends, C. J., de Boer, B., and van de Wal, R. S. W.: Application of HadCM3@Bristolv1.0 simulations of paleoclimate as forcing for an ice-sheet model, ANICE2.1: set-up and benchmark experiments, Geoscientific Model Development 11, 4657-4675, 2018\\
+\\
+Berends, C. J., de Boer, B., Dolan, A. M., Hill, D. J., and van de Wal, R. S. W.: Modelling ice sheet evolution and atmospheric CO2 during the Late Pliocene, Climate of the Past 15, 1603-1619, 2019\\
+\\
+Berends, C. J., de Boer, B., and van de Wal, R. S. W.: Reconstructing the evolution of ice sheets, sea level, and atmospheric CO2 during the past 3.6 million years, Climate of the Past 17, 361-377, 2021\\
+\\
+Bintanja, R., van de Wal, R. S. W., and Oerlemans, J.: Global ice volume variations through the last glacial cycle simulated by a 3-D ice-dynamical model, Quaternary International 95-96, 11-23, 2002\
+\\
+Bueler, E. and Brown, J.: Shallow shelf approximation as a "sliding law" in a thermomechanically coupled ice sheet model, Journal of Geophysical Research 114, 200\\
+\\
+Determann, J.: Numerical modelling of ice shelf dynamics, Antarctic Science 3, 187-195, 1991\\
+\\
+Fettweis, X., Hofer, S., Krebs-Kanzow, U., Amory, C., Aoki, T., Berends, C. J., Born, A., Box, J. E., Delhasse, A., Fujita, K., Gierz, P., Goelzer, H., Hanna, E., Hashimoto, A., Huybrechts, P., Kapsch, M.-L., King, M. D., Kittel, C., Lang, C., Langen, P. L., Lenaerts, J. T. M., Liston, G. E., Lohmann, G., Mernild, S. H., Mikolajewicz, U., Modali, K., Mottram, R. H., Niwano, M., Noël, B. P. Y., Ryan, J. C., Smith, A., Streffing, J., Tedesco, M., van de Berg, W. J., van den Broeke, M. R., van de Wal, R. S. W., van Kampenhout, L., Wilton, D., Wouters, B., Ziemen, F., and Zolles, T.: GrSMBMIP: intercomparison of the modelled 1980-2012 surface mass balance over the Greenland Ice Sheet, The Cryosphere 14, 2020\\
+\\
+Greve, R.: Application of a Polythermal Three-Dimensional Ice Sheet Model to the Greenland Ice Sheet: Response to Steady-State and Transient Climate Scenarios, Journal of Climate 10, 901-918, 1997\\
+\\
+Huybrechts, P.: The Antarctic ice sheet and environmental change: a three-dimensional modelling study, Berichte zur Polarforschung 99, 1992\\
+\\
+Huybrechts, P. and de Wolde, J.: The Dynamic Response of the Greenland and Antarctic Ice Sheets to Multiple-Century Climatic Warming, Journal of Climate, 12, 2169–2188, 1999\\
+\\
+Janssens, I. and Huybrechts, P.: The treatment of meltwater re- tention in mass-balance parameterizations of the Greenland ice sheet, Ann. Glaciol., 31, 133–140, 2000\\
+\\
+Jones, P. W.: First- and Second-Order Conservative Remapping Schemes for Grids in Spherical Coordinates, Monthly Weather Review 127, 2204-2210, 1999\\
+\\
+Laskar, J., Robutel, P., Gastineau, M., Correia, A. C. M., and Levrard, B.: A long-term numerical solution for the insolation quantities of the Earth, Astronomy and Astrophysics 428, 261-285, 2004\\
+\\
+MacAyeal, D. R.: Large-Scale Ice Flow Over a Viscous Basal Sediment: Theory and Application to Ice Stream B, Antarctica, Journal of Geophysical Research 94, 4071-4087, 1989\\
+\\
+Martin, M. A., Winkelmann, R., Haseloff, M., Albrecht, T., Bueler, E., Khroulev, C., and Levermann, A.: The Potsdam Parallel Ice Sheet Model (PISM-PIK) - Part 2: Dynamic equilibrium simulation of the Antarctic ice sheet, The Cryosphere 5, 727-740, 2011\\
+\\
+Ohmura, A.: Precipitation, accumulation and mass balance of the Greenland ice sheet, Zeitschrift fur Gletscherkunde und Glazialgeologie, 35, 1–20, 1999\\
+\\
+Pollard, D. and DeConto, R. M.: Modelling West Antarctic ice sheet growth and collapse through the past five million years, Nature 458, 329-332, 2009\\
+\\
+Pollard, D.: A retrospective look at coupled ice sheet-climate modeiing, Climatic Change 100, 173-194, 2010\\
+\\
+Roe, G. H.: Modeling precipitation over ice sheets: an assessment using Greenland, Journal of Glaciology 48, 70-80, 2002\\
+\\
+Roe, G. H. and Lindzen, R. S.: The Mutual Interaction between Continental-Scale Ice Sheets and Atmospheric Stationary Waves, Journal of Climate 14, 1450-1465, 2001\\
+\\
+Ruppert, J.: A Delaunay Refinement Algorithm for Quality 2-Dimensional Mesh Generation, Journal of Algorithms 18, 548-585, 1995\\
+\\
+Singarayer, J. S. and Valdes, P. J.: High-latitude climate sensitivity to ice-sheet forcing over the last 120 kyr, Quaternary Science Reviews 29, 43-55, 2010\\
+\\
+Syrakos, A., Varchanis, S., Dimakopoulos, Y., Goulas, A., and Tsamopoulos, J.: A critical analysis of some popular methods for the discretisation of the gradient operator in finite volume methods, Physics of Fluids 29, 2017\\
+\\
+Weis, M., Greve, R., and Hutter, K.: Theory of shallow ice shelves, Continuum Mechanics and Thermodynamics 11, 15-50, 1999\\
+\\
+Winkelmann, R., Martin, M. A., Haseloff, M., Albrecht, T., Bueler, E., Khroulev, C., and Levermann, A.: The Potsdam Parallel Ice Sheet Model (PISM-PIK) - Part 1: Model description, The Cryosphere 5, 715-726, 2011\\
+\\
 
 \end{document}

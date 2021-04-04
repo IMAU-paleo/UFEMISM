@@ -17,7 +17,7 @@
 \usepackage{listings}
 
 \title{UFEMISM - documentation}
-\date{2021-03-25}
+\date{2021-04-03}
 \author{dr. C. J. (Tijn) Berends}
 
 \begin{document}
@@ -31,7 +31,7 @@
 
   \paragraph{Abstract}
   
-The Utrecht Finite voluMe Ice-Sheet Model (UFEMISM) is an ice-sheet-shelf model that solves the hybrid SIA/SSA ice-dynamical equations on a fully adaptive, unstructured grid. It has been developed at IMAU since 2020. While intended mainly for palaeo-applications, the model is very versatile, and can be used for future projections as well. This document contains a complete description of the model; a derivation of the underlying equations, a description of the data and code structure, descriptions of (most of) the subroutines, and results of several important benchmark experiments. In theory, this should give the user enough information to be able to freely use and adapt UFEMISM for their own research.
+The Utrecht Finite voluMe Ice-Sheet Model (UFEMISM) is an ice-sheet-shelf model that solves the hybrid SIA/SSA ice-dynamical equations on a dynamic adaptive grid. It has been developed at IMAU since 2020. While intended mainly for palaeo-applications, the model is very versatile, and can be used for future projections as well. This document contains an in-depth description of the model, including a derivation of the discretisations of  the underlying equations, and a description of the data and code structure.. In theory, this should give the user enough information to be able to freely use and adapt UFEMISM for their own research.
   
 \newpage
 \tableofcontents
@@ -336,7 +336,7 @@ Mesh generation is parallelised in a very different manner. This is explained in
 
 \subsubsection{Text files}
 
-UFEMISM creates a number of ASCII text files containing scalar output data. These are given the prefix ''\textsc{aa\textunderscore}'' so that they will always be the first to show up in the results directory.\\
+UFEMISM creates a number of ASCII text files containing scalar output data. These are given the prefix ''\textsc{aa\textunderscore}'' so that they will always be the first to show up in the results directory (since long simulations with frequent mesh updates can produce a large number of NetCDF files, see next section).\\
 \\
 The file ''\textsc{general\textunderscore output.txt}'' lists some global scalars such as global mean sea level, atmospheric CO\textsubscript{2}, deep-sea temperature, regional ice volume, contributions to the benthic $\delta^{18}O$ signal, etc.\\
 \\
@@ -354,14 +354,35 @@ Data fields are written to a number of NetCDF files. Each model region has its o
 \\
 \textsc{help\textunderscore fields} files can be configured by the user to contain a wide selection of data fields. Ice velocities (surface, basal, 3D), mass balance components (yearly or monthly), climate fields (temperature, precipitation, wind; yearly or monthly), etc. A full list of all the data fields that can be chosen can be found in the routine \textsc{create\textunderscore help\textunderscore field} in the \textsc{netcdf\textunderscore module} (where additional options can also easily be added).\\
 \\
-\textsc{mesh} files contain the data on the model mesh, as well as all the data describing that mesh. Since the mesh is irregularly updated during simulations, changing the number of vertices, this data cannot be contained within a single NetCDF file. Instead, whenever the mesh is updated, a new NetCDF file is created. The UFEMISM Github repository contains a number of Matlab scripts that can display mesh data.\\
+\textsc{grid} files contain the data on a regular square grid. The resolution of this grid can be specified through the config; UFEMISM internally generates this grid, and whenever output is written, it projects the specified model data to this grid and writes it to the grid output file. Note that here too, a distinction is made between \textsc{restart} and \textsc{help\textunderscore fields} files, but that the grid restart files cannot be used to restart the model. They are intended mainly for fast and easy output inspection, for example with NcView.\\
 \\
-\textsc{grid} files contain the data on a regular square grid. The resolution of this grid can be specified through the config; UFEMISM internally generates this grid, and whenever output is written, it projects the specified model data to this grid and writes it to the grid output file. Note that here too, a distinction is made between \textsc{restart} and \textsc{help\textunderscore fields} files, but that the grid restart files cannot be used to restart the model. They are intended mainly for fast and easy output inspection, for example with NcView.
+\textsc{mesh} files contain the data on the model mesh, as well as all the data describing that mesh. Since the mesh is irregularly updated during simulations, changing the number of vertices, this data cannot be contained within a single NetCDF file. Instead, whenever the mesh is updated, a new NetCDF file is created. The UFEMISM Github repository contains a number of Matlab scripts that can display mesh data. The \textsc{mesh} files also contain a list of vertex indices and weights for creating transects, which are very useful for benchmark experiments.
+
+\subsection{Computer resources}
+
+The following results were obtained with a ''typical'' simulation of the last glacial cycle (120 kyr, all four ice sheets) with a grounding-line resolution of 10 km, and 32 km for the ice margin, calving front, and coastline.
+
+\begin{table}[H]
+  \begin{center}
+    \begin{tabular}{l|l}
+      \textbf{Region} & \textbf{nV} \\
+      \hline
+      North America & 8,000 \\
+      Eurasia & 6,000 \\
+      Greenland & 5,500 \\ 
+      Antarctica & 18,000 \\
+    \end{tabular}
+  \end{center}
+\end{table}
+
+As was shown by Berends et al. (2021), the number of vertices scales with the desired resolution to about order 1.2 - 1.4. UFEMISM uses about 100 kB of RAM per vertex, adding up to a total of about 3.6 Gb for the above simulation (the maximum memory use during a simulation is written in the \textsc{general\textunderscore output.txt} file).\\
+\\
+Computation time depends on a number of factors, the most important one being (again) resolution. BLA
 
 \newpage
 \section{Ice dynamics and thermodynamics}
 
-UFEMISM uses the hybrid SIA/SSA approximation to the stress balance developed by Bueler and Brown (2009). In this approach, the SIA is used to determine deformational velocities over land, while the SSA provides both deformational velocities for floating ice, and sliding velocities over land. Here, we will briefly list the equations describing these approximations.
+UFEMISM uses the hybrid SIA/SSA approximation to the stress balance developed by Bueler and Brown (2009). In this approach, the SIA is used to determine deformational velocities over land, while the SSA provides both deformational velocities for floating ice, and sliding velocities over land. Here, we will briefly list the equations describing these approximations. Built into UFEMISM are options to run the EISMINT-I benchmark experiments (Huybrechts et al., 1996) for benchmarking the SIA and the thermodynamics, and a modified, 2D version of the first MISMIP experiment (Pattyn et al., 2012) for benchmarking the hybrid SIA/SSA. The results of these benchmark experiments are described in detail by Berends et al., 2021.
 
 \subsection{Shallow Ice Approximation}
 
@@ -386,6 +407,8 @@ dt_{SIA} < \min_c \frac{R_c^2}{6D}
 \end{equation}
 
 \subsection{Shallow Shelf Approximation}
+
+\subsubsection{Discretisation and solution}
 
 The SSA assumes that all velocity gradients inside the ice sheet are negligible except for the horizontal gradients of the horizontal velocities. This means that the gravitational driving stress is balanced by the longitunal (or ''membrane'') stresses, plus a (small) basal shear stress for ice on land. A concrete form of this stress balance is given by Bueler and Brown (2009), based on the work by MacAyeal (1989) and Weis et al. (1999):
 
@@ -458,6 +481,72 @@ SSA ice velocities are updated with a dynamical time step according to the CFL-c
 \begin{equation} \label{eq:SSA_dt}
 dt_{SSA} < \min_c \frac{R_c}{|u_c| + |v_c|}
 \end{equation}
+
+\subsubsection{Grounding-line flux}
+
+Solving the discretised equations of the SSA is not particularly difficult. However, when the resulting velocity field is used to integrate the ice-sheet model through time, several problems become apparent in the solution. This is particularly obvious in experiments where a periodic step-wise forcing is applied, such that the grounding line responds (or rather, should respond) with repeated advance-retreat cycles. Early work by Weertman, as well as later work by Schoof, showed that the SSA predicts a unique steady-state solution for a given bed geometry and mass balance. However, Pattyn et al., (2012) demonstrated that numerical ice-sheet models that solve the SSA produce significant hysteresis in these experiments. Furthermore, the magnitude of the hysteresis often depends strongly on model resolution, and vanishes only when model resolution (at least at the grounding line) is < 100 m (a value that is completely unfeasible for palaeosimulations). A solution to this problem that has become common practise is to apply a ''semi-analytical solution'' to the grounding-line flux as some sort of boundary condition to the SSA, or to the mass continuity integration. Schoof (2007) and Tsai et al. (2015) produced such semi-analytical solutions for the cases of Weertman-type and Coulomb-type sliding laws, respectively, relating the flux at the grounding line to the ice thickness at the grounding line, regardless of the geometry of the rest of the ice sheet.\\
+\\
+Since UFEMISM uses a (regularised) Coulomb-type sliding law, the solution by Tsai et al. (2015) is used. Rather than using this to ''overrule'' the ice flux in the ice mass continuity integration, as is sometimes done (which requires some sort of heuristic to choose where to apply the flux, and thereby violates conservation of mass), we apply it directly as a boundary condition to the SSA velocity field.\\
+\\
+The semi-analytical solution by Tsai et al. (2015) reads:
+
+\begin{equation}
+q_g = Q_0 \frac{8A {\left( \rho_i g \right)}^n}{4^n tan \phi} \left( 1 - \frac{\rho_i}{\rho_w}\right)^{n-1} H_g^{n+2}
+\end{equation}
+
+Here, the ice flux at the grounding line $q_g$ is related to the ice flow factor $A$, the till friction angle $\phi$ (used in the Coulomb sliding law), and the ice thickness at the grounding line $H_g$. $Q_0$ = 0.61 is a tuning factor derived by Tsai et al. (2015).\\
+\\
+UFEMISM solves the SSA on both the regular and the staggered mesh simultaneously (see Sect. XX). At grounding-line vertices (defined as staggered vertices separating a floating and a non-floating pixel), the semi-analytical solution is calculated. To get accurate values, the ice flow factor $A$, the till friction angle $\phi$ and the ice thickness $H$ are evaluated at the sub-grid grounding line position by linearly interpolating the thickness above flotation $T = H - \left( S - b\right) \frac{\rho_w}{\rho_i}$ to zero. The resulting grounding-line flux $q_g$ is divided by the ice thickness $H_g$ to find the magnitude $u$ of the ice velocity. The direction of the ice velocity is assumed to be perpendicular to the grounding-line, which means it is anti-parallel to the gradient of the thickness above flotation. This yields separate values for $u$ and $v$, which are applied to the grounding-line pixels and subsequently left unchanged during the SOR iteration that solves the SSA.\\
+\\
+This solution is only valid when there is no significant buttressing. While this condition holds for the schematic MISMIP\textunderscore mod benchmark experiment for which UFEMISM is validated, it does not hold for most of the actual Antarctic grounding line. Different approaches have been proposed to ''adapt'' this solution for buttressing, which have so far achieved very limited success. No solution for buttressing has so far been implemented in UFEMISM. This means that realistic experiments can only be run by setting the config option \textsc{use\textunderscore analytical\textunderscore GL\textunderscore flux} to \textsc{false}.
+
+\subsubsection{Parallelisation}
+
+The SOR solver used to solve the SSA is parallelised using a five-colour scheme. This is similar to the red-black scheme commonly used on square grids. Since SOR calculates the new solution $f_i^{k+1}$ on vertex $i$ based on the old solution $f^k$ on $i$ and the direct neighbours of $i$, problems can occur when two processors attempt to update values on two connected vertices at the same time. To prevent this, the five-colour theorem is used:\\
+\\
+\emph{Given a planar graph, the vertices of the graph can be coloured with at most 5 different colours, such that no vertex is ever connected to another vertex of the same colour.}\\
+\\
+In this context, a square grid presents a special case of a planar graph where only 2 colours are necessary: a red-black scheme. For the unstructured mesh used in UFEMISM, five colours are sufficient (the stronger \textit{four-colour theorem} has been boggling the minds of mathematicians for almost two centuries; although the consensus now is that it is true, no easily implementable algorithms to calculate four-colourings for a mesh are yet available, so for now we shall stick to five colours). The five-colouring of a mesh is calculated using the algorithm presented by Williams (1985), which is easy to implement, uses very little memory, and is fast enough that it requires negligibly little computation time compared to the rest of the mesh generation routines.
+
+\begin{figure}[h!] \label{fig:fivecolours}
+  \includegraphics[width=0.8\linewidth]{Fig_fivecolours.png}
+  \caption{Part of a mesh, showing the five-colouring scheme.}
+\end{figure}
+
+The colours are stored in mesh data as two arrays:
+
+\begin{itemize}
+\item \textsc{colour}: the colour of each vertex (1 - 5)
+\item \textsc{colour\textunderscore vi}: list of vertices of each colour (size nV-by-5)
+\end{itemize}
+
+There are $nV_c$ vertices of each colour. These five groups of vertices are all partitioned over the processors. In each SOR iteration, an outer loop loops over the five colours, while an inner loop loops of the range of vertices of that colour assigned to each processor:
+
+\begin{lstlisting}
+
+! Loop over the five colours
+DO ci = 1, 5
+
+  ! Find process domains for this colour
+  vii1 = mesh%colours_v1( ci)
+  vii2 = mesh%colours_v2( ci)
+  
+  ! Loop over all vertices of this colours assigned to this process
+  DO vii = vii1, vii2
+    
+    vi = mesh%colours_vi( vii,ci)
+    
+    ! Calculate new solution for this vertex using SOR
+    ...
+    ...
+    !
+    
+  END DO
+  CALL sync
+  
+END DO
+
+\end{lstlisting}
 
 \subsection{Mass continuity}
 
@@ -592,6 +681,33 @@ If the vertical direction is discretised into $n$ unevenly spaced layers, this s
 \end{align}
 
 This matrix equation can be solved for every individual grid cell independently, making this an embarrassingly parallel problem. In UFEMISM, this is done with the Fortran package LAPACK; in Matlab, it can be done with the “backslash method”: T = A \textbackslash delta. We apply a Dirichlet boundary condition at the top of the column, keeping ice temperature equal to surface air temperature (limited to melting point). At the base, a Neumann boundary condition is applied, keeping the vertical temperature gradient fixed to a value dictated by the geothermal heat flux and the frictional heating from sliding. Ice temperature throughout the vertical column is limited to the depth-dependent pressure melting point (a non-energy-conserving approach).
+
+\subsection{Physical properties}
+
+The ice flow factor $A$, specific heat $C_p$, and thermal conductivity $K$ are calculated based on parameterised relations to the englacial temperature $T$.\\
+\\
+The flow factor $A$ is parameterised using an Arrhenius relation, following Huybrechts (1992):
+
+\begin{align}
+A &= A_0 e^{\frac{-Q}{R \cdot T}} \\
+A_0 &=\begin{cases}
+  1.14 \cdot 10^{-5} & T < 263.15 \\
+  5.47 \cdot 10^{10} & T \geq 263.15
+       \end{cases} \\
+Q &=\begin{cases}
+  6.0 \cdot 10^4 & T < 263.15 \\
+  13.9 \cdot 10^4 & T \geq 263.15
+       \end{cases} 
+\end{align}
+
+Here, $R$ = 8.314 J mol\textsuperscript{-1} K\textsuperscript{-1} is the gas constant. Before being used in the SIA and SSA, the flow factor $A$ is multiplied by an enhancement factor $e$, with different values used in the SIA and the SSA. This can be interpreted as a correction for the (overly) simplified parameterised expression for the flow factor, wth the different values representing different degrees of anisotropy present in slowly deforming land ice and fast-flowing floating ice. The default values are $e_{SIA}$ = 5.0, $e_{SSA}$ = 0.7, which are taken from ANICE, (based on tuning experiments by Bas de Boer, which seem to agree with literature values, e.g. Ma et al., 2017). \\
+\\
+The specific heat $C_p$ is calculated according to Pounder (1965), and the thermal conductivity $K$ according to Ritz (1987):
+
+\begin{align}
+C_p &= 2115.3 + 7.79293 \left( T - T_0\right) \\
+K &= 3.101 \cdot 10^8 \cdot e^{-0.0057 \cdot T}
+\end{align}
 
 \newpage
 \section{Climate}
@@ -845,7 +961,7 @@ Currently, glacial isostatic adjustment (GIA) is calculated with a simple ELRA (
 
 \subsubsection{Theory}
 
-The ELRA model uses three scalar values to completely describe the response of the solid Earth to changes in loading: the flexural ridigity $D = 10^5 kg m^2 s^{-2}$ of the lithosphere, and the relaxation time $\tau = 3000 yr$ and density $\rho_m = 3300 kg m^{-3}$ of the viscous mantle (all configurable). These are used to calculate the 2D flexural profile $F$ (i.e. the equilibrium deformation in response to a unit point load), using the Kelvin function $Klv$:
+The ELRA model uses three scalar values to completely describe the response of the solid Earth to changes in loading: the flexural rigidity $D$ = 10\textsuperscript{5} kg m\textsuperscript{2} s\textsuperscript{-2} of the lithosphere, and the relaxation time $\tau$ = 3000 yr and density $\rho_m$ = 3300 kg m\textsuperscript{-3} of the viscous mantle (all configurable). These are used to calculate the 2D flexural profile $F$ (i.e. the equilibrium deformation in response to a unit point load), using the Kelvin function $Klv$:
 
 \begin{align}
 L_r &= {\left( \frac{D}{\rho_m g} \right) }^{\frac{1}{4}} \\
@@ -885,7 +1001,7 @@ Before we get started, we will briefly review some important concepts in mesh ge
 Consider the simple mesh shown in Fig. \ref{fig:dummymesh}.
 
 \begin{figure}[h!] \label{fig:dummymesh}
-  \includegraphics[width=0.3\linewidth]{Fig_dummymesh_01.png}
+  \includegraphics[width=0.3\linewidth]{Fig_dummymesh_02.png}
   \caption{A simple mesh.}
 \end{figure}
 
@@ -937,6 +1053,7 @@ It can be proven mathematically (if one were of a mind to do so) that any triang
   \caption{(a) This pair of triangles violates the local Delaunay criterion, (b) the pair has been "flipped", and now satisfies the criterion.}
 \end{figure}
 
+\newpage
 \subsection{Data structure}
 
 Theoretically, all that is needed to uniquely and completely describe a mesh is a list of the coordinates of its vertices. Everything else flows from there; their position in space determines the geometry of their Voronoi cells, which determines the Delaunay triangulation, which determines the connectivity. However, deriving all this information from the vertex coordinates can be a lengthy process, so instead several different forms of the mesh connectivity are stored in memory as well.\\
@@ -1045,6 +1162,7 @@ The mesh data for this mesh is shown in Tables \ref{tab:table_vertexdata_01} and
 \end{table}
 
 
+\newpage
 \subsection{Staggered mesh}
 
 In order to apply the finite volume method, we need to define ice fluxes on the boundaries of the Voronoi cells of the vertices. This means we need a way to efficiently keep track of these boundaries. This is done by creating a "staggered mesh", which is conceptually very similar to the Arakawa C mesh used in square-grid models.
@@ -1091,9 +1209,19 @@ Each connection between two regular vertices is given a unique index, and repres
   \end{center}
 \end{table}
 
-\textbf{iAci} lists the staggered vertices surrounding each regular vertex. The ordering corresponds to that of \textbf{C}, so that the $j$'th staggered vertex listed for vertex $i$ lies halfway along the connection between $v_i$ and its $j$'th neighbour. \textbf{Aci} lists the regular vertices along whose connection each staggered vertex lies. Additionally, it lists the two regular vertices lying to the left and right of this connection, so that the four columns in a row of \textbf{Aci} read $[v_i,v_j,v_l,v_r]$, with $v_l$ lying to the left of the line from $v_i$ to $v_j$, and $v_r$ lying to the right. If either $v_l$ or $v_r$ does not exist (which can happen when $v_i$ and $v_j$ lie on the domain boundary), the entry is zero. Keeping track of $v_l$ and $v_r$ is very useful for calculating derivatives on the staggered vertices, as we will see in Sect. XXX on discretisation.
+\textbf{iAci} lists the staggered vertices surrounding each regular vertex. The ordering corresponds to that of \textbf{C}, so that the $j$'th staggered vertex listed for vertex $i$ lies halfway along the connection between $v_i$ and its $j$'th neighbour. \textbf{Aci} lists the regular vertices along whose connection each staggered vertex lies. Additionally, it lists the two regular vertices lying to the left and right of this connection, so that the four columns in a row of \textbf{Aci} read $[v_i,v_j,v_l,v_r]$, with $v_l$ lying to the left of the line from $v_i$ to $v_j$, and $v_r$ lying to the right. If either $v_l$ or $v_r$ does not exist (which can happen when $v_i$ and $v_j$ lie on the domain boundary), the entry is zero. Keeping track of $v_l$ and $v_r$ is very useful for calculating derivatives on the staggered vertices, as we will see in Sect. XXX on discretisation.\\
+\\
+The SSA is solved on both the regular and the staggered mesh at the same time. To make this easier, a ''combined Aa-Ac mesh'' is created as well. This is done by adding all the staggered vertices as regular vertices to the regular mesh. Applying this to the mesh in Fig. \ref{fig:staggeredmesh} results in the following combined Aa-Ac mesh:
+
+\begin{figure}[H] \label{fig:combinedAaAcmesh}
+  \includegraphics[width=0.5\linewidth]{Fig_AaAcMesh.png}
+  \caption{The combined Aa-Ac mesh.}
+\end{figure}
+
+Note that the indices of the regular vertices are unchanged, while the indices of the staggered vertices have been increased by $nV$. This makes it very easy to convert data between the regular/staggered mesh and the combined Aa-Ac mesh. Since the combined Aa-Ac mesh is a complete mesh, neighbour functions can be calculated for it using the same subroutine as for the regular mesh.
 
 
+\newpage
 \subsection{Mesh refinement}
 
 UFEMISM uses an iterative mesh refinement approach to create the model mesh. The basis for this is Ruppert's algorithm (Ruppert, 1995), which iteratively "splits" triangles (i.e. adds new vertices at their circumcentres) whose smallest internal angle lies below a certain prescribe threshold value (typically 25\degree) In pseudo-code form, this reads as follows:
@@ -1153,37 +1281,81 @@ In UFEMISM, Ruppert's algorithm has been extended to include more conditions tha
 
 Points of interest (POIs) are specified by their lat/lon-coordinates, and can be given individual resolutions. The \textsc{res\textunderscore max\textunderscore mountain} condition ensures a high resolution over ice-free mountains, scaling smoothly from the coarsest allowed resolution at elevations of 500 m and below, to the prescribed mountain resolution for elevations of 1500 m and above. This ensures that locations where inception can occur always have a high resolution, preventing a sudden jump in resolution when the mesh is updated from ice-free land (which typically has a resolution $res_{max}$) to ice margin.
 
+
+\newpage
 \subsection{Paralellisation}
 
 Mesh generation has been parallelised using a form of domain decomposition. Each processor is assigned a portion of the total model domain, and will generate a ''submesh'' for that portion only. Once this is done, the different meshes are ''merged'' to create one single mesh covering the whole model domain.
 
 \begin{figure}[H] \label{fig:submeshes}
   \centering
-  \begin{subfigure}[b]{0.1\linewidth}
+  \begin{subfigure}[b]{0.15\linewidth}
     \includegraphics[width=\linewidth]{Fig_submesh1.png}
     \caption{}
   \end{subfigure}
-  \begin{subfigure}[b]{0.1\linewidth}
+  \begin{subfigure}[b]{0.15\linewidth}
     \includegraphics[width=\linewidth]{Fig_submesh2.png}
     \caption{}
   \end{subfigure}
-  \begin{subfigure}[b]{0.1\linewidth}
+  \begin{subfigure}[b]{0.15\linewidth}
     \includegraphics[width=\linewidth]{Fig_submesh3.png}
     \caption{}
   \end{subfigure}
-  \begin{subfigure}[b]{0.1\linewidth}
+  \begin{subfigure}[b]{0.15\linewidth}
     \includegraphics[width=\linewidth]{Fig_submesh4.png}
     \caption{}
   \end{subfigure}
   \caption{Four submeshes for Antarctica.}
 \end{figure}
 
-The process of mesh merging hinges on the fact that, when Rupperts algorithm refines a boundary triangle whose circumcentre lies outside the (sub)mesh domain, a new vertex is added at the midpoint of the triangle's segment. This means that boundary vertices always lie at integer sums of power-of-two fractions of a boundary edge. Looking carefully at submeshes a) and b) in the figure, we can see that many vertices on the eastern boundary of submesh a) lie at the same y-coordinate as vertices on the western boundary of submesh b). These vertices can then be merged. Generally, a small number of vertices on either boundary will have no corresponding vertex on the opposite boundary. During submesh merging, additional vertices are added first to ensure that all vertices on either boundary have corresponding vertices on the opposite boundary (a process called ''submesh alignment'').\\
-\\
-Since only two submeshes can be merged at a time, submesh merging is an iterative process. For example, the four submeshes in the figure would be merged in two phases. In the first phase, processor a) would be given access to the data of the submesh created by processor b). It allocates new memory that can accomodate the new (merged) submesh ab), and then merges submeshes a) and b) into this new memory. The old memory for submeshes a) and b) is then deallocated. At the same time, processor c) will do the same with submeshes c) and d), creating a new submesh cd). In the second phase, processor a) will merge submeshes ab) and cd) into the final mesh.\\
+The process of mesh merging hinges on the fact that, when Rupperts algorithm refines a boundary triangle whose circumcentre lies outside the (sub)mesh domain, a new vertex is added at the midpoint of the triangle's segment. This means that boundary vertices always lie at integer sums of power-of-two fractions of a boundary edge (e.g. $\frac{1}{2}$, $\frac{3}{4}$, $\frac{1}{2}+\frac{1}{8}+\frac{13}{64}$, etc.). Looking carefully at submeshes a) and b) in the figure, we can see that many vertices on the eastern boundary of submesh a) lie at the same y-coordinate as vertices on the western boundary of submesh b). These vertices can then be merged. Generally, a small number of vertices on either boundary will have no corresponding vertex on the opposite boundary. During submesh merging, additional vertices are added first to ensure that all vertices on either boundary have corresponding vertices on the opposite boundary (a process called ''submesh alignment'').
+
+\begin{figure}[H] \label{fig:submeshes_align}
+  \centering
+  \begin{subfigure}[b]{0.3\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_align_01.png}
+    \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_align_02.png}
+    \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.3\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_align_03.png}
+    \caption{}
+  \end{subfigure}
+  \caption{Aligning two simple submeshes: a) before, b) a single non-overlapping (red) vertex is detected, c) after.}
+\end{figure}
+
+The figure illustrates how two very simple submeshes are aligned. First, the vertices lying on the ''seam'' are checked, and those that overlap are marked. The right-hand submesh has one vertex that doesn't overlap with any vertex in the left-hand submesh. This is remedied by adding a new vertex to the left-hand mesh. All seam vertices now match, and the submeshes can be merged. This is done by merging the overlapping vertices one by one, as illustrated in Fig. Xx.
+
+\begin{figure}[H] \label{fig:submeshes_align}
+  \centering
+  \begin{subfigure}[b]{0.2\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_merge_01.png}
+    \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.2\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_merge_02.png}
+    \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.2\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_merge_03.png}
+    \caption{}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.2\linewidth}
+    \includegraphics[width=\linewidth]{Fig_mesh_merge_04.png}
+    \caption{}
+  \end{subfigure}
+  \caption{Merging two simple submeshes. Note that no actual deformation is occurring; the vertices along the seam have the same x-ccordinate, and have only been moved apart for this illustration.}
+\end{figure}
+
+Since only two submeshes can be merged at a time, submesh merging is an iterative process. For example, the four submeshes in Fig. XX would be merged in two phases. In the first phase, processor a) would be given access to the data of the submesh created by processor b). It allocates new memory that can accomodate the new (merged) submesh ab), and then merges submeshes a) and b) into this new memory. The old memory for submeshes a) and b) is then deallocated. At the same time, processor c) will do the same with submeshes c) and d), creating a new submesh cd). In the second phase, processor a) will merge submeshes ab) and cd) into the final mesh.\\
 \\
 The four submeshes shown above all have equal domain widths. This is generally not the case; domain widths for mesh generation are determined such that each processor will have (roughly) the same number of vertices. This is done by looking at the vertex coordinates of the previous mesh, which is assumed to be a reasonable approximation of the new mesh.
 
+
+\newpage
 \subsection{Discretisation}
 
 Here, we will derive a way to discretise the first and second partial derivatives of a function defined on a mesh.
@@ -1571,7 +1743,12 @@ To determine the order of convergence, discretisation errors are plotted against
 \end{figure}
 
 
+\newpage
 \subsection{Remapping}
+
+Whenever the mesh is updated, some of the modelled data fields need to be remapped from the old to the new mesh. While several generic mapping toolboxes are available, none of them are well-suited for UFEMISM. Mesh updates occur irregularly, with the frequency depending on the simulation (specifically on how fast the ice-sheet geometry evolves) such that a single glacial cycle simulation can already contain several hundred mesh updates. Mesh resolution can vary dramatically in space and time, as well as between simulations. This means that the remapping scheme must be both fast enough not to significantly affect model speed, and robust enough to handle all possible mesh combinations.\\
+\\
+Following the objective of \textbf{flexibility} set out at the start, we decided to create a remapping scheme specifically for UFEMISM. The following section will give a brief description of how this has been done.
 
 \subsubsection{Theory}
 
@@ -1629,7 +1806,7 @@ w_{1y} &= \frac{1}{A_d} \oint_{C_{sd}} xy dy.
 
 The basic theory of conservative remapping described in the previous section is fairly straightforward. Creating an implementation that is both robust (being able to handle any possible combination of meshes, including the possibility of overlapping vertices or lines) and fast (being able to remap data between meshes counting tens of thousands of thousands of vertices without significantly slowing down the model) turned out to be a surprisingly difficult problem, which took almost three months of full-time work to solve.\\
 \\
-The main routines for remapping are \textsc{create\textunderscore remapping\textunderscore arrays\textunderscore conservative} (for creating the remapping weights, stored in the \textsc{type\textunderscore remapping\textunderscore conservative}) and \textsc{remap\textunderscore cons\textunderscore 2nd\textunderscore order\textunderscore 2d/3d} (for using them to remap a data field), which are located in the \textsc{mesh\textunderscore mapping\textunderscore module}. A basic program that uses these routines to remap some data fields between a source mesh \textsc{mesh\textunderscore src} and a destination mesh \textsc{mesh\textunderscore dst} looks like this:
+The main routines for remapping are \textsc{create\textunderscore remapping\textunderscore arrays\textunderscore conservative} (for creating the remapping weights, stored in the \textsc{type\textunderscore remapping\textunderscore conservative}) and \textsc{remap\textunderscore cons\textunderscore 2nd\textunderscore order\textunderscore 2d/3d} (for using them to remap a data field), which are located in the \textsc{mesh\textunderscore mapping\textunderscore module}. A basic program that uses these routines to remap some data fields between a source mesh \textsc{mesh\textunderscore src} and a destination mesh \textsc{mesh\textunderscore dst} looks like this:\\
 
 \hrulefill
 \begin{lstlisting}
@@ -1664,6 +1841,9 @@ CALL allocate_shared_dp_2D( mesh_dst%nV, d3_dst, wd3_dst)
 CALL remap_cons_2nd_order_2D( mesh_src, mesh_dst, map, d1_src, d1_dst)
 CALL remap_cons_2nd_order_2D( mesh_src, mesh_dst, map, d2_src, d2_dst)
 CALL remap_cons_2nd_order_2D( mesh_src, mesh_dst, map, d3_src, d3_dst)
+
+! Deallocate the remapping arrays
+CALL deallocate_remapping_arrays_conservative( map)
 
 END PROGRAM remap_data_between_meshes
 
@@ -1751,7 +1931,6 @@ The different subroutines called here perform the following operations:
 \item \textsc{check\textunderscore if\textunderscore remapping\textunderscore is\textunderscore conservative}: To make sure everything works as intended, the remapping weights are applied to a dummy data field. On very rare occasions (estimated 1 in 100,000 vertices), minor errors occur when a vertex of one mesh lies exactly on the Voronoi cell boundary of a vertex of the other mesh. These erroneous vertices are detected by this routine, and their remapping weights are replaced by those representing simple bilinear interpolation.
 \end{itemize}
 
-
 \newpage
 \section{Personal note}
 
@@ -1759,11 +1938,11 @@ By Tijn Berends, February 2021.\\
 \\
 In early 2019, the last year of my PhD at IMAU, I found myself with some spare time, sitting around and waiting for some particularly long ANICE simulations to finish (simulating the Lake Agassiz outburst flood during the last deglaciation, I believe). For some reason, the idea popped into my head that I should write a little Matlab program to create an unstructured grid. Not unusual for me - over the course of my PhD I wrote three different multi-purpose plotting programs, two text adventures, and a program for making 3D-printed ice sheets (I still have one lying on my desk!), all with the excuse of ''my model's running!''. Got to do something to keep the brain gears from rusting.\\
 \\
-The first few attempts didn't look like much, but after a day or two I figured out a nice way to describe a triangular grid data-wise. A quick internet search and some late nights spent drawing triangles on paper got me to write out a very basic refinement scheme. By then the idea that I'd use this as the basis for a new ice-sheet model had already crept up on me. It just seemed so very elegant; triangles can fit together any way you want them to, so you can make them small or large wherever you please. The benefits of this seemed obvious to me, though I hadn't yet started digging into the literature on grounding-line migration or other resolution-related issues. Creating a proper algorithm for mesh adaptation and writing out the discretisation of the model equations took me almost half a year. Around July I had a version that could solve the SIA, but creating a solution for the SSA took until early December. At that point I had a model that could do basic simulations of the Antarctic ice sheet; reading in input data for geometry and climate, calculating a mass balance, solving the ice dynamics, and updating the mesh whenever the ice geometry changed.\\
+The first few attempts didn't look like much, but after a day or two I figured out a nice way to describe a triangular grid data-wise. A quick internet search and some late nights spent drawing triangles on paper got me to write out a very basic refinement scheme. By then the idea that I'd use this as the basis for a new ice-sheet model had already crept up on me. It just seemed so very elegant; triangles can fit together any way you want them to, so you can make them small or large wherever you please. The benefits of this seemed obvious to me, though I hadn't yet started digging into the literature on grounding-line migration or other resolution-related issues. Creating a proper algorithm for mesh adaptation and writing out the discretisation of the model equations took me almost half a year. Around July I had a version that could solve the SIA, but creating a solution for the SSA took until early December. At that point I had a model that could do basic simulations of the Antarctic ice sheet; reading in input data for geometry and climate, calculating a mass balance, solving the ice dynamics, and updating the mesh whenever the ice geometry changed. And it looked damn cool.\\
 \\
-So, in January 2020 I put together a few nice, sleek-looking animations and went to visit Roderik (then my promotor, now still my supervisor). ''Do you have a moment for me somewhere this week? I have something nice to show you.'', I mailed late on Sunday evening. Not ten minutes later came the reply: ''If it's really nice I have time first thing tomorrow morning.'' So, on Monday morning I spent just over an hour describing my pet project to Roderik. He asked a handful of questions throughout, otherwise just leaning back and observing. When I was finished, he was quiet for a moment, and he said to me, ''Well, I think it's interesting.''. He's not a very wordy man. However, early the next day he came to my office again, together with Heiko (Goelzer, then a postdoc at IMAU). ''Show him what you showed me'', Roderik told me. So I did. The two of them were very enthusiastic this time, and we agreed that I should finish up what I had into a paper, and they'd see if they could find a good way to put it to use. A few weeks later, on 31 January 2020, I defended my PhD thesis. In the laudatio, Roderik stated that the most memorable moment of my PhD happened at the very end of it when, ''having already finished the thesis, one day Tijn showed up and said he had something nice to show me - and I nearly fell from my chair with amazement!''. Not exactly how I remember it going, but I'll take it.\\
+So, in January 2020 I put together a few nice, sleek-looking animations and went to visit Roderik (then my promotor, now still my supervisor). ''Do you have a moment for me somewhere this week? I have something nice to show you.'', I mailed late on Sunday evening. Not ten minutes later came the reply: ''If it's really nice I have time first thing tomorrow morning.'' So, on Monday morning I spent just over an hour describing my pet project to Roderik. He asked a handful of questions throughout, otherwise just leaning back and observing. When I was finished, he was quiet for a moment, and he said to me, ''Well, I think it's interesting.''. He's not a very wordy man. However, early the next day he came to my office again, together with Heiko (Goelzer, then a postdoc at IMAU). ''Show him what you showed me'', Roderik told me. So I did. The two of them were very enthusiastic this time, and we agreed that I should finish up what I had into a paper, and they'd see if they could find a good way to put it to use. A few weeks later, on 31 January 2020, I defended my PhD thesis. In the laudatio, Roderik stated that the most memorable moment of my PhD happened at the very end of it when, ''having already finished the thesis, one day Tijn showed up and said he had something nice to show me - and I nearly fell from my chair with amazement!''. Not exactly how I remember that conversation, but I'll take it.\\
 \\
-In May 2020 we wrote and submitted (I wrote, Roderik submitted) a proposal to NWO, asking them to fund a project to finish develop UFEMISM and apply it to some nice palaeoglaciological research. While initially the plan was to use the funding (if we got it) to hire myself for a three-year postdoc, another position opened just after we'd submitted the proposal. Rather than gamble on a proposal that would take another 8 months at least to be processed, I decided to take the other position instead, and use the funding (if we got it) to hire someone else to carry out my ideas. Just over a week ago (early Feburary 2021) we received word that the proposal was accepted, and so it's now confirmed that UFEMISM will be, as they say, a thing. Where before I'd kept only some very basic ''documentation'' just for myself, I've now set myself to the task of writing out a complete description of everything I've created. That will be the rest of this document; this final page right here I wrote simply to please my own ego. Both the paper and the documentation are, as is tradition, phrased as ''we developed'', ''we chose'', ''we, we, we'', and I wanted to have just a little bit all to myself. Sue me.
+In May 2020 we wrote and submitted (I wrote, Roderik submitted) a proposal to NWO, asking them to fund a project to further developing UFEMISM and apply it to some nice palaeoglaciological research. While initially the plan was to use the funding (if we got it) to hire myself for a three-year postdoc, another position opened just after we'd submitted the proposal. Rather than gamble on a proposal that would take another 8 months at least to be processed, I decided to take the other position instead, and use the funding (if we got it) to hire someone else to carry out my ideas. In early February 2021, just over a year after I first showed my creation to anyone and almost two years since I started working on it, we received word that the proposal was accepted. That meant that UFEMISM was now officially, as they say, a thing. Although I'd maintained some very basic ''documentation'' just for myself, I've now set myself to the task of writing out a complete description of everything I've created. That will be the rest of this document; this final page right here I wrote simply to please my own ego. Both the paper and the documentation are, as is tradition, phrased as ''we developed'', ''we chose'', ''we, we, we'', and I wanted to have just a little bit all to myself. Sue me.
 
 
 \newpage
@@ -1801,6 +1980,8 @@ Martin, M. A., Winkelmann, R., Haseloff, M., Albrecht, T., Bueler, E., Khroulev,
 \\
 Ohmura, A.: Precipitation, accumulation and mass balance of the Greenland ice sheet, Zeitschrift fur Gletscherkunde und Glazialgeologie, 35, 1–20, 1999\\
 \\
+Pattyn, F., Schoof, C., Perichon, L., Hindmarsh, R. C. A., Bueler, E., de Fleurian, B., Durand, G., Gagliardini, O., Gladstone, R. M., Goldberg, D., Gudmunsson, G. H., Huybrechts, P., Lee, V., Nick, F. M., Payne, A. J., Pollard, D., Rybak, O., Saito, F., and Vieli, A.: Results of the Marine Ice Sheet Model Intercomparison Project, MISMIP, The Cryosphere 6, 573-588, 2012\\
+\\
 Pollard, D. and DeConto, R. M.: Modelling West Antarctic ice sheet growth and collapse through the past five million years, Nature 458, 329-332, 2009\\
 \\
 Pollard, D.: A retrospective look at coupled ice sheet-climate modeiing, Climatic Change 100, 173-194, 2010\\
@@ -1811,11 +1992,17 @@ Roe, G. H. and Lindzen, R. S.: The Mutual Interaction between Continental-Scale 
 \\
 Ruppert, J.: A Delaunay Refinement Algorithm for Quality 2-Dimensional Mesh Generation, Journal of Algorithms 18, 548-585, 1995\\
 \\
+Schoof, C.: Ice sheet grounding line dynamics: Steady states, stability, and hysteresis, Journal of Geophysical Research 112, , 2007\\
+\\
 Singarayer, J. S. and Valdes, P. J.: High-latitude climate sensitivity to ice-sheet forcing over the last 120 kyr, Quaternary Science Reviews 29, 43-55, 2010\\
 \\
 Syrakos, A., Varchanis, S., Dimakopoulos, Y., Goulas, A., and Tsamopoulos, J.: A critical analysis of some popular methods for the discretisation of the gradient operator in finite volume methods, Physics of Fluids 29, 2017\\
 \\
+Tsai, V. C., Stewart, A. L., and Thompson, A. F.: Marine ice-sheet profiles and stability under Coulomb basal conditions, Journal of Glaciology 61, 205-215, 2015\\
+\\
 Weis, M., Greve, R., and Hutter, K.: Theory of shallow ice shelves, Continuum Mechanics and Thermodynamics 11, 15-50, 1999\\
+\\
+Williams, M. H.: A Linear Algorithm for Colouring Planar Graphs with Five Colours, The Computer Journal 28, 78-81, 1985\\
 \\
 Winkelmann, R., Martin, M. A., Haseloff, M., Albrecht, T., Bueler, E., Khroulev, C., and Levermann, A.: The Potsdam Parallel Ice Sheet Model (PISM-PIK) - Part 1: Model description, The Cryosphere 5, 715-726, 2011\\
 \\

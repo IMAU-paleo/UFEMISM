@@ -1,5 +1,5 @@
 =================================
-UFEMISM v1.1.0 changelog
+UFEMISM v1.1 changelog
 =================================
 
 Added the climate matrix, different forcing methods, the ELRA GIA model, and the Martin/P&dC

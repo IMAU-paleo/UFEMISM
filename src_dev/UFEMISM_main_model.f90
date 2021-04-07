@@ -210,7 +210,7 @@ CONTAINS
       IF (par%master) region%tcomp_SIA = region%tcomp_SIA + MPI_WTIME() - t2
       
       ! DENK DROM
-      !region%time = t_end
+      region%time = t_end
     
     END DO ! DO WHILE (region%time < t_end)
     

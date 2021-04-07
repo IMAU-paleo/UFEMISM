@@ -11,7 +11,12 @@ MODULE mesh_creation_module
                                                       adapt_shared_int_1D,    adapt_shared_dp_1D, &
                                                       adapt_shared_int_2D,    adapt_shared_dp_2D, &
                                                       adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                                      adapt_shared_bool_1D, allocate_shared_dist_dp_1D, allocate_shared_dist_int_1D
+                                                      adapt_shared_bool_1D, &
+                                                      allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                                      allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                                      allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                                      allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                                      allocate_shared_dist_bool_1D
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_init_data_fields
   USE mesh_help_functions_module,    ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
                                           determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
@@ -441,6 +446,12 @@ MODULE mesh_creation_module
       
       ! Smooth the submesh using Lloyd' algorithm
       CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+      
+      ! After the last refinement step, apply Lloyds algorithm two more times, because we can.
+      IF (res_min_inc <= C%res_min) THEN
+      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+      END IF
       
       ! Write submesh to text file for debugging
       WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)

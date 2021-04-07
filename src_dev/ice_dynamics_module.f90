@@ -417,11 +417,15 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    INTEGER                                            :: cerr,ierr
     LOGICAL                                            :: set_SSA_velocities_to_zero
-    INTEGER                                            :: cerr, ierr
     LOGICAL                                            :: has_converged
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: sum_DN_sq, sum_N_sq, RN
+    LOGICAL                                            :: did_reset_before, did_reset_now
+    
+    did_reset_before = .FALSE.
+    did_reset_now    = .FALSE.
         
     ! Check if we really need to, or are even able to, solve the SSA.
     set_SSA_velocities_to_zero = .FALSE.
@@ -524,7 +528,17 @@ CONTAINS
       CALL SSA_sliding_term( mesh, ice)
     
       ! Solve the linearised SSA using SOR
-      CALL solve_SSA_linearised( mesh, ice)
+      CALL solve_SSA_linearised( mesh, ice, did_reset_now)
+      
+      ! Check if velocities were reset due to instability. If this happens twice, crash.
+      IF (did_reset_now) THEN
+        IF (.NOT. did_reset_before) THEN
+          did_reset_before = .TRUE.
+        ELSE
+          IF (par%master) WRITE(0,*) 'solve_SSA - ERROR: SSA remains unstable after resetting velocities to zero!'
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        END IF
+      END IF
       
       ! DENK DROM
      ! EXIT
@@ -542,7 +556,7 @@ CONTAINS
     CALL rotate_xy_to_po( mesh, ice%Ux_SSA_Ac, ice%Uy_SSA_Ac, ice%Up_SSA_Ac, ice%Uo_SSA_Ac)
     
   END SUBROUTINE solve_SSA
-  SUBROUTINE solve_SSA_linearised( mesh, ice)
+  SUBROUTINE solve_SSA_linearised( mesh, ice, did_reset)
     ! Calculate ice velocities using the SSA
     
     USE parameters_module, ONLY : n_flow, ice_density, grav, sec_per_year
@@ -552,6 +566,7 @@ CONTAINS
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    LOGICAL,                             INTENT(OUT)   :: did_reset
     
     ! Local variables:
     INTEGER                                            :: cerr,ierr
@@ -563,6 +578,9 @@ CONTAINS
     LOGICAL                                            :: has_converged
     INTEGER                                            :: inner_loop_i
     REAL(dp)                                           :: max_residual_UV
+    
+    cerr = 0
+    ierr = 0
       
     ! Calculate the right-hand sides of the PDE's
     DO ai = mesh%a1, mesh%a2
@@ -661,12 +679,14 @@ CONTAINS
       
       !IF (par%master) WRITE(0,*) ' SSA -  inner loop ', inner_loop_i, ': largest residual = ', max_residual_UV
       IF (max_residual_UV < C%SSA_max_residual_UV) THEN
+        did_reset     = .FALSE.
         has_converged = .TRUE.
       ELSEIF (max_residual_UV > 1E6_dp) THEN
-        WRITE(0,*) ' ERROR - instability in SSA SOR solver!'
-        IF (par%master) CALL write_mesh_to_text_file( mesh, 'mesh_crash.txt')
-        CALL sync
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        ! Instability detected. Reset velocities to zero. If that doesn't work, crash (do this from the outer loop)
+        ice%U_SSA_AaAc( mesh%a1:mesh%a2) = 0._dp
+        ice%V_SSA_AaAc( mesh%a1:mesh%a2) = 0._dp
+        did_reset     = .TRUE.
+        has_converged = .TRUE.
       ELSEIF (inner_loop_i == C%SSA_max_inner_loops) THEN
         WRITE(0,*) ' WARNING - SSA SOR solver doesnt converge!'
         !IF (par%master) WRITE(0,*) ' ERROR - SSA SOR solver doesnt converge!'

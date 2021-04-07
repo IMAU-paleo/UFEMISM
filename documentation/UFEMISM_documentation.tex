@@ -39,6 +39,62 @@ The Utrecht Finite voluMe Ice-Sheet Model (UFEMISM) is an ice-sheet-shelf model 
 \newpage
 \pagenumbering{arabic}
 
+\section{How to get and run UFEMISM}
+
+\subsection{Code}
+
+The complete source code of UFEMISM, including Makefiles and a handful of scripts to compile and run the model, as well as a collection of Matlab scripts to read, analyse, and plot output data, are available from the UFEMISM Github repository at https://github.com/TijnBerends/UFEMISM. In this repository are several folders with versions of the source code, with the model version included as an extension (''src\textunderscore v1.0.1'', ''src\textunderscore v1.1'', etc.). These represent the stable versions of UFEMISM. It is strongly recommended that users download only the latest version. In order to download, unzip, compile, and run the code, follow the following steps:
+
+\begin{enumerate}
+\item \textbf{Download} the Github repository by clicking the green ''Code'' button, and selecting ''Download ZIP''. The file ''UFEMISM-master.zip'' should now be in your Downloads folder.
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Fig_howto_01.png}
+  \end{figure}
+  
+  \item \textbf{Decompress} the file ''UFEMISM-master.zip'' using your favourite archiving program (WinZIP or WinRAR on Windows, Archive Utility on Mac). This should create the folder ''UFEMISM-master''.
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{Fig_howto_02.png}
+  \end{figure}
+  
+  \item \textbf{Compile} the model by running the script ''compile\textunderscore clean.csh'' from the terminal. If you have the required modules (Fortran90 compiler, NetCDF, OpenMPI, and Lapack) installed, this should compile the model, creating the executable ''UFEMISM\textunderscore program'' in the UFEMISM-master folder. If not, please contact your local IT expert.
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{Fig_howto_03.png}
+  \end{figure}
+  
+  \item \textbf{Run} the model by running the script ''run\textunderscore UFEMISM\textunderscore demo.csh''. This will start a short 10,000 year simulation (specifically, the first 10 kyr of the EISMINT\textunderscore 1 benchmark experiment) with a 16 km resolution. This should finish in about 20 seconds on a 2-core system.
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{Fig_howto_04.png}
+  \end{figure}
+  
+  ...
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{Fig_howto_05.png}
+  \end{figure}
+  
+  \item \textbf{Inspect} the output in the results folder ''results\textunderscore 20210407\textunderscore 001'' (with the current date in the name), which has been created by UFEMISM. The ''gridded'' output files (\textsc{restart\textunderscore grid\textunderscore ANT.nc} and \textsc{help\textunderscore fields\textunderscore grid\textunderscore ANT.nc}) should be compatible with any NetCDF viewing program (e.g. ncview). The ''mesh'' output files can be read with the different Matlab scripts in the ''MATLAB'' folder.
+
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.4\linewidth]{Fig_howto_06.png}
+  \end{figure}
+
+\end{enumerate}
+
+\subsection{Data}
+
+As with any ice-sheet model, UFEMISM needs a collection of input files to be able to run, describing the present-day topography of the world, the geometry of the ice-sheets, the global climate, etc. Without these files, only the schematic benchmark experiments hard-coded into the model can be run. The required data files are not available from Github, but have to be obtained from the original authors. If the user wants to know more about which files to get and who to get them from, please contact us.
+
+\newpage
 \section{Introduction}
 
 \subsection{Background}
@@ -122,13 +178,15 @@ A slightly modified version of the first MISMIP experiment (Pattyn et al., 2012)
 
 
 \newpage
-\section{Model structure}
+\section{Model overview}
 
-UFEMISM is intended mainly for simulations of glacial cycles. For this reason, it has the ability to simultaneously simulate the evolution of ice sheets in Greenland and Antarctica, as well as North America and Eurasia (where large ice sheets existed during the Pleistocene glacial cycles). It also includes an elaborate mix of modelled data and extrapolations for both climate and mass balance, as well as an ELRA GIA model (the coupling to the sea-level/GIA model SELEN is being worked on, but is currently not yet operational). UFEMISM has been designed from the start to include all these components, and the code/data structure has been created so as to make this easy to achieve.
+In this chapter, we will give a brief overview of the way UFEMISM is structured, both code-wise and data-wise, what kinds of output data it generates, and what kind of computer resources are needed to run the model.
 
-\subsection{Coupler}
+\subsection{Code structure}
 
-The Fortran90 program \textsc{ufemism\textunderscore program.f90} contains the coupler: the overarching routine that calls the different regional ice-sheet models, updates the global climate forcing, and calls the sea-level equation solver SELEN (in progress). This is done in a loop using the coupler time step dt\textunderscore coupling. The general structure of the coupler looks as follows:
+\subsubsection{Coupler}
+
+The Fortran90 program \textsc{ufemism\textunderscore program.f90} contains the coupler: the overarching routine that calls the different regional ice-sheet models, updates the global climate forcing, and calls the sea-level equation solver SELEN (in progress). This is done in a loop using the coupler time step dt\textunderscore coupling. The general code structure of the coupler looks as follows:
 
 \hrulefill
 \begin{lstlisting}
@@ -176,9 +234,9 @@ END PROGRAM UFEMISM_program
 
 Note that, since we generally don't need to call SELEN, it is given its own separate time step. Also note that model initialisation has been separated from model running, a practise that we have adopted everywhere in the model.
 
-\subsection{Ice model}
+\subsubsection{Ice model}
 
-The main ice model of UFEMISM is contained in the subroutine \textsc{run\textunderscore model} in the module \textsc{UFEMISM\textunderscore main\textunderscore module.f90}. This subroutine is called from the coupler and is provided one of the model regions as an in/output argument. When called, it will run that model region up till the next coupling moment. The general structure of the ice model looks as follow:
+The main ice model of UFEMISM is contained in the subroutine \textsc{run\textunderscore model} in the module \textsc{UFEMISM\textunderscore main\textunderscore module.f90}. This subroutine is called from the coupler and is provided one of the model regions as an in/output argument. When called, it will run that model region up till the next coupling moment. The general code structure of the ice model looks as follow:
 
 \hrulefill
 \begin{lstlisting}
@@ -219,6 +277,8 @@ The time steps $dt_{SIA}, dt_{SSA}$ of the SIA and SSA are calculated dynamicall
 The order of the different model components is such that output written at time $t$ exactly represents the modelled ice thickness and velocity fields at that time. In order to achieve this, in the very first iteration of the first time \textsc{run\textunderscore model} is called, bedrock deformation, ice thickness, and englacial temperature are updated with a time step of zero. By the time output is written, the ice velocities, climate, SMB, and BMB are all given exactly for the initial model state at $t=0$.
 
 \subsection{Data structure}
+
+\subsubsection{Type hierarchy}
 
 Data fields in UFEMISM have been organised into Fortran90 \textsc{type}s. This main advantages of this approach are that it makes the header sections of subroutines a lot smaller (since instead of passing 10 or 20 different arrays as arguments, only the type containing them needs to be passed), and that it makes it impossible to accidentally use different names for the same variables in different subroutines.\\
 \\
@@ -1016,7 +1076,7 @@ The lithospheric deformation rate $\frac{\partial h}{\partial t}$ is proportiona
 
 \subsubsection{Implementation}
 
-Due to the highly diffusive nature of glacial isostatic adjustment, the ELRA model needs neither a high spatial resolution nor a small time step. Therefore, the calculation of the deformation rate $\frac{\partial h}{\partial t}$ has been given its own separate time step \textsc{dt\textunderscore elra} (configurable, default value 100 yr). Note that the bedrock elevation itself is updated in every model loop to prevent ''jumps''. Since the ELRA model does not require a high spatial resolution, and also since performing a proper 2D convolution on an unstructured mesh is not easy, the ELRA model is run on a fixed square grid (resolution configurable, default value 100 km). The surface load (relative to the present-day load, which includes both ice and liquid water) is calculated on the mesh, and then projected to this square grid. The 2D convolution is performed on the grid, and the resulting deformation rate is mapped back to the mesh. While the two mapping operations induce some small amount of numerical diffusion, this does not significantly affect the results due to the already highly diffusive nature of the ELRA model itself.\\
+Due to the highly diffusive nature of glacial isostatic adjustment, the ELRA model needs neither a high spatial resolution nor a small time step. Therefore, the calculation of the deformation rate $\frac{\partial h}{\partial t}$ has been given its own separate time step \textsc{dt\textunderscore elra} (configurable, default value 100 yr). Note that the bedrock elevation itself is updated in every model loop to prevent ''jumps''; it is only the calculation of the deformation rates, which is computationally much more expensive, that is done every \textsc{dt\textunderscore elra}. Since the ELRA model does not require a high spatial resolution, and also since performing a proper 2D convolution on an unstructured mesh is not easy, the ELRA model is run on a fixed square grid (resolution configurable, default value 100 km). The surface load (relative to the present-day load, which includes both ice and liquid water) is calculated on the mesh, and then projected to this square grid. The 2D convolution is performed on the grid, and the resulting deformation rate is mapped back to the mesh. While the two mapping operations induce some small amount of numerical diffusion, this does not significantly affect the results due to the already highly diffusive nature of the ELRA model itself.\\
 \\
 A similar square grid construction is being developed for the coupling to SELEN.
 

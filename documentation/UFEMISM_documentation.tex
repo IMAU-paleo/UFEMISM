@@ -26,7 +26,7 @@
 
   \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{Fig_UFEMISM.jpg}
+    \includegraphics[width=0.8\linewidth]{Fig_UFEMISM.png}
   \end{figure}  
 
   \paragraph{Abstract}
@@ -59,7 +59,7 @@ When the development of UFEMISM first began, the following objectives were set:
 
 \item \textbf{Flexibility}: a large part of palaeoglaciological research consists of inventing new features to add to ice-sheet models, just to see what they do. This is one of the main reasons why most palaeoglaciologists use simple square-grid models; not only are they fast enough for such long simulations, they're also very easy to build by hand, enabling the individual researcher to adapt the model to suit the needs of whatever project they're working on. We wanted UFEMISM to have that same flexibility.
 
-\item \textbf{Performance}: since the whole point of creating UFEMISM was to be able to run very long simulations at a high resolution without requiring excessive amounts of computer time, good computational performance was an important goal.
+\item \textbf{Performance}: since the whole point of creating UFEMISM was to be able to run very long simulations at a high resolution without requiring excessive amounts of computer time, good computational performance was an important goal. In practical terms, this means being able to simulate an entire 120 kyr glacial cycle within a few days of wall clock time.
 
 \end{itemize}
 
@@ -94,6 +94,18 @@ Currently (April 2021), the following features in UFEMISM are \textbf{operationa
 
 \end{itemize}
 
+\subsubsection{Performance}
+
+\begin{table}[H]
+  \begin{center}
+    \begin{tabular}{l|l|l|l|l|l|l}
+      \textbf{Simulation} & \textbf{Ice sheets} & \textbf{Duration} & \textbf{Resolution} & \textbf{Memory use} & \textbf{Core time} & \textbf{Wall time}\\
+      \hline
+      Last glacial cycle & All & 120 kyr & 10 km & 3.5 Gb & 160 h & 10 h \\
+    \end{tabular}
+  \end{center}
+\end{table}
+
 \subsubsection{Benchmark experiments}
 
 \paragraph{Analytical solutions}
@@ -108,9 +120,6 @@ The six experiments from the first EISMINT intercomparison exercise (Huybrechts 
 
 A slightly modified version of the first MISMIP experiment (Pattyn et al., 2012) is hard-coded into UFEMISM. This experiment describes a schematic ice sheet lying on a coastal slope, so that a shelf forms. It is meant to investigate grounding-line migration under repeated forced advance-retreat cycles, using the hybrid SIA/SSA ice dynamics. The original experiment is a 1-D flowline set-up; following the approach of Pattyn (2017), it is adapted into a 2-D plan-view set-up by assuming the 1-D flowline is a radial transect of a circular symmetric ice-sheet. The results of this experiment are presented by Berends et al. (2021), who show that the grounding-line flux condition results in a grounding-line position that is independent of model resolution or forcing history (i.e. no hysteresis), matching the other models in Pattyn et al. (2012).
 
-\subsubsection{Performance}
-
-Currently (March 2021), a simulation of all four ice sheets over the entire last glacial cycle (120 kyr) with a grounding line resolution of 10 km takes about 40 wall clock hours.
 
 \newpage
 \section{Model structure}
@@ -165,7 +174,7 @@ END PROGRAM UFEMISM_program
 \\
 \\
 
-Note that, since we generally want to update the global climate more often than the sea-level equation, SELEN is given its own seperate time step. Also note that model initialisation has been separated from model running, a practise that we have adopted everywhere in the model.
+Note that, since we generally don't need to call SELEN, it is given its own separate time step. Also note that model initialisation has been separated from model running, a practise that we have adopted everywhere in the model.
 
 \subsection{Ice model}
 
@@ -378,24 +387,31 @@ Data fields are written to a number of NetCDF files. Each model region has its o
 
 \subsection{Computer resources}
 
-The following results were obtained with a ''typical'' simulation of the last glacial cycle (120 kyr, all four ice sheets) with a grounding-line resolution of 10 km, and 32 km for the ice margin, calving front, and coastline.
+\subsubsection{Computation time}
 
-\begin{table}[H]
-  \begin{center}
-    \begin{tabular}{l|l}
-      \textbf{Region} & \textbf{nV} \\
-      \hline
-      North America & 8,000 \\
-      Eurasia & 6,000 \\
-      Greenland & 5,500 \\ 
-      Antarctica & 18,000 \\
-    \end{tabular}
-  \end{center}
-\end{table}
+Shown in Fig. XX is the core time used by the different model components for a simulation of the last glacial cycle, where all four ice sheets were simulated simultaneously with a grounding-line resolution of 10 km. The model was run on 16 cores in parallel, so that the simulation took about 10 wall clock hours to finish.
 
-As was shown by Berends et al. (2021), the number of vertices scales with the desired resolution to about order 1.2 - 1.4. UFEMISM uses about 100 kB of RAM per vertex, adding up to a total of about 3.6 Gb for the above simulation (the maximum memory use during a simulation is written in the \textsc{general\textunderscore output.txt} file).\\
+\begin{figure}[h!] \label{fig:resources_time}
+  \includegraphics[width=0.9\linewidth]{Fig_resources_time.png}
+  \caption{Computation time used by the different model components.}
+\end{figure}
+
+As can be seen, most of the computation time is used for the SIA part of the model (which also includes the free surface update, i.e. the time integration of the ice mass continuity equation), with the SSA coming in second. Mesh updates are visible as irregularly placed spikes; although a single mesh update takes relatively long (100 - 150 core seconds for Antarctica), this does not need to be done very often as the ice-sheet geometry evolves relatively slowly, so that the total computation time used for mesh updates is only a tiny fraction of the total budget. The climate and thermodynamics components require relatively little computation time.\\
 \\
-Computation time depends on a number of factors, the most important one being (again) resolution. BLA
+Berends et al. (2021) showed that total computation time scales with model resolution to about order 2.6. This means that the same simulation of the last glacial cycle with a ground-line resolution of 5 km can be expected to take about 60 wall clock hours to finish (about 1,000 core hours). For a resolution of 1 km, this number increases to 4,000 wall clock hours, almost half a year. This is not feasible in practise, until significant advances in the parallelisation of the model are made. Currently the model can run on only as many cores as can access the same physical memory chip (shared memory), typically 16, 24, or 32. When this limitation is removed, using dozens to possibly even hundreds of cores might be possible. Using 256 cores, wall clock time for a 1 km resolution simulation might be reduced to about 10 days - long, but definitely possible.
+
+\subsubsection{Memory}
+
+Shown in Fig. XX is the memory used by UFEMISM during this simulation, as well as the total number of vertices in all four meshes combined. Since the number of vertices in a mesh changes during a simulation, memory use is not constant. When a mesh is updated, both the old and new mesh need to be stored in memory until the model data has been remapped, and the old mesh can be discarded. Memory use therefore peaks during mesh updates at about 75 kB per vertex, resulting in about 3.5 Gb for this particular simulation.  This is well within the limits of the computer systems typically used for scientific research; in practise, model resolution will be limited by available computation time long before memory use becomes a problem. Berends et al. (2021) showed that the number of vertices increases with resolution to about order 1.5. For the hypothesised 1 km simulation, this would result in a memory use of about 110 Gb. If the future work on parallelisation goes as hoped, and the model will be able to run on multiple nodes (which typically have 16 - 32 Gb of memory each), this will not be a problem.
+
+\begin{figure}[h!] \label{fig:resources_memory}
+  \includegraphics[width=0.6\linewidth]{Fig_resources_memory.png}
+  \caption{Memory used by UFEMISM during the simulation.}
+\end{figure}
+
+\subsubsection{Data}
+
+For the \textsc{restart\textunderscore mesh} files, about 1.2 kb of data is written per vertex per time frame. Consider a simulation of 120 kyr with a mesh of (on average) 15,000 vertices, writing output every 1,000 years; this will then create about 2 Gb worth of \textsc{restart\textunderscore mesh} files (for that particular model region). For the \textsc{help\textunderscore fields} files, this obviously depends on the user's choice of which fields to write. The default settings contain 24 fields, which results in about 3 Gb of data.
 
 \newpage
 \section{Ice dynamics and thermodynamics}
@@ -2050,7 +2066,9 @@ Berends, C. J., de Boer, B., and van de Wal, R. S. W.: Reconstructing the evolut
 \\
 Bintanja, R., van de Wal, R. S. W., and Oerlemans, J.: Global ice volume variations through the last glacial cycle simulated by a 3-D ice-dynamical model, Quaternary International 95-96, 11-23, 2002\
 \\
-Bueler, E. and Brown, J.: Shallow shelf approximation as a "sliding law" in a thermomechanically coupled ice sheet model, Journal of Geophysical Research 114, 200\\
+Bueler, E., Lingle, C. S., Kallen-Brown, J. A., Covey, D. N., and Bowman, L. N.: Exact solutions and verification of numerical models for isothermal ice sheets, Journal of Glaciology 51, 291-306, 2005\\
+\\
+Bueler, E. and Brown, J.: Shallow shelf approximation as a "sliding law" in a thermomechanically coupled ice sheet model, Journal of Geophysical Research 114, 2009\\
 \\
 Determann, J.: Numerical modelling of ice shelf dynamics, Antarctic Science 3, 187-195, 1991\\
 \\
@@ -2058,7 +2076,11 @@ Fettweis, X., Hofer, S., Krebs-Kanzow, U., Amory, C., Aoki, T., Berends, C. J., 
 \\
 Greve, R.: Application of a Polythermal Three-Dimensional Ice Sheet Model to the Greenland Ice Sheet: Response to Steady-State and Transient Climate Scenarios, Journal of Climate 10, 901-918, 1997\\
 \\
+Halfar, P.: On the Dynamics of Ice Sheets, Journal of Geophysical Research 86, 11065-11072, 1981\\
+\\
 Huybrechts, P.: The Antarctic ice sheet and environmental change: a three-dimensional modelling study, Berichte zur Polarforschung 99, 1992\\
+\\
+Huybrechts, P., Payne, T., Abe-Ouchi, A., Calov, R., Fabre, A., Fastook, J. L., Greve, R., Hindmarsh, R. C. A., Hoydal, O., Johannesson, T., MacAyeal, D. R., Marsiat, I., Ritz, C., Verbitsky, M. Y., Waddington, E. D., and Warner, R.: The EISMINT benchmarks for testing ice-sheet models, Annals of Glaciology 23, 1-12, 1996\\
 \\
 Huybrechts, P. and de Wolde, J.: The Dynamic Response of the Greenland and Antarctic Ice Sheets to Multiple-Century Climatic Warming, Journal of Climate, 12, 2169–2188, 1999\\
 \\
@@ -2075,6 +2097,8 @@ Martin, M. A., Winkelmann, R., Haseloff, M., Albrecht, T., Bueler, E., Khroulev,
 Ohmura, A.: Precipitation, accumulation and mass balance of the Greenland ice sheet, Zeitschrift fur Gletscherkunde und Glazialgeologie, 35, 1–20, 1999\\
 \\
 Pattyn, F., Schoof, C., Perichon, L., Hindmarsh, R. C. A., Bueler, E., de Fleurian, B., Durand, G., Gagliardini, O., Gladstone, R. M., Goldberg, D., Gudmunsson, G. H., Huybrechts, P., Lee, V., Nick, F. M., Payne, A. J., Pollard, D., Rybak, O., Saito, F., and Vieli, A.: Results of the Marine Ice Sheet Model Intercomparison Project, MISMIP, The Cryosphere 6, 573-588, 2012\\
+\\
+Pattyn, F.: Sea-level response to melting of Antarctic ice shelves on multi-centennial timescales with the fast Elementary Thermomechanical Ice Sheet model (f.ETISh v1.0), The Cryosphere 11, 1851-1878, 2017\\
 \\
 Pollard, D. and DeConto, R. M.: Modelling West Antarctic ice sheet growth and collapse through the past five million years, Nature 458, 329-332, 2009\\
 \\

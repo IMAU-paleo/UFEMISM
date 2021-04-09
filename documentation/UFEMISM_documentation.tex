@@ -16,8 +16,8 @@
  }
 \usepackage{listings}
 
-\title{UFEMISM - documentation}
-\date{2021-04-03}
+\title{UFEMISM v1.1 - documentation}
+\date{2021-04-07}
 \author{dr. C. J. (Tijn) Berends}
 
 \begin{document}
@@ -133,7 +133,7 @@ Currently (April 2021), the following features in UFEMISM are \textbf{operationa
 \item \textbf{Adaptive mesh}
 \item \textbf{Shared-memory (single node) MPI parallelisation}
 \item \textbf{Simultaneous, coupled simulation of four continental ice sheets}
-\item \textbf{Glacial index / inverse-$\delta^{18}O$ forcing}
+\item \textbf{Direct CO\textsubscript{2} / inverse-$\delta^{18}O$ forcing}
 \item \textbf{Matrix-method climate model}
 \item \textbf{Insolation-temperature-based SMB}
 \item \textbf{Basic temperature-depth-based BMB}
@@ -157,7 +157,8 @@ Currently (April 2021), the following features in UFEMISM are \textbf{operationa
     \begin{tabular}{l|l|l|l|l|l|l}
       \textbf{Simulation} & \textbf{Ice sheets} & \textbf{Duration} & \textbf{Resolution} & \textbf{Memory use} & \textbf{Core time} & \textbf{Wall time}\\
       \hline
-      Last glacial cycle & All & 120 kyr & 10 km & 3.5 Gb & 160 h & 10 h \\
+      Last glacial cycle & All & 120 kyr & 10 km & 3.8 Gb & 120 h & 7.5 h \\
+      Last glacial cycle & All & 120 kyr & 4 km & 27 Gb & 1,920 h & 120 h \\
     \end{tabular}
   \end{center}
 \end{table}
@@ -449,16 +450,16 @@ Data fields are written to a number of NetCDF files. Each model region has its o
 
 \subsubsection{Computation time}
 
-Shown in Fig. XX is the core time used by the different model components for a simulation of the last glacial cycle, where all four ice sheets were simulated simultaneously with a grounding-line resolution of 10 km. The model was run on 16 cores in parallel, so that the simulation took about 10 wall clock hours to finish.
+Shown in Fig. XX is the core time used by the different model components for a simulation of the last glacial cycle, where all four ice sheets were simulated simultaneously with a grounding-line resolution of 10 km. The model was run on 16 cores in parallel, so that the simulation took about 7.5 wall clock hours to finish. The lines show the computation requirements over the course of the simulation; the pie charts show the relative contribution from each model component averaged over the entire simulation.
 
 \begin{figure}[h!] \label{fig:resources_time}
   \includegraphics[width=0.9\linewidth]{Fig_resources_time.png}
   \caption{Computation time used by the different model components.}
 \end{figure}
 
-As can be seen, most of the computation time is used for the SIA part of the model (which also includes the free surface update, i.e. the time integration of the ice mass continuity equation), with the SSA coming in second. Mesh updates are visible as irregularly placed spikes; although a single mesh update takes relatively long (100 - 150 core seconds for Antarctica), this does not need to be done very often as the ice-sheet geometry evolves relatively slowly, so that the total computation time used for mesh updates is only a tiny fraction of the total budget. The climate and thermodynamics components require relatively little computation time.\\
+As can be seen, the SIA dominates the computation time for most of the simulation. However, during the deglaciation large shelves form in North America and Eurasia, so that the SSA becomes a lot slower (although the SSA is always solved on all vertices, higher ice velocities generally mean more SOR iterations are required to reach a solution). Since the ice sheet geometry changes faster during the deglaciation, the mesh is also updated more frequently, which slightly  increases the computation times of both the SIA and the SSA.\\
 \\
-Berends et al. (2021) showed that total computation time scales with model resolution to about order 2.6. This means that the same simulation of the last glacial cycle with a ground-line resolution of 5 km can be expected to take about 60 wall clock hours to finish (about 1,000 core hours). For a resolution of 1 km, this number increases to 4,000 wall clock hours, almost half a year. This is not feasible in practise, until significant advances in the parallelisation of the model are made. Currently the model can run on only as many cores as can access the same physical memory chip (shared memory), typically 16, 24, or 32. When this limitation is removed, using dozens to possibly even hundreds of cores might be possible. Using 256 cores, wall clock time for a 1 km resolution simulation might be reduced to about 10 days - long, but definitely possible.
+Berends et al. (2021) showed that total computation time scales with model resolution to about order 2.6. This means that the same simulation of the last glacial cycle with a ground-line resolution of 5 km can be expected to take about 45 wall clock hours to finish (about 750 core hours). For a resolution of 1 km, this number increases to 3,000 wall clock hours, over four months. This is not feasible in practise, until significant advances in the parallelisation of the model are made. Currently the model can run on only as many cores as can access the same physical memory chip (shared memory), typically 16, 24, or 32. When this limitation is removed, using dozens to possibly even hundreds of cores might be possible. Using 256 cores, wall clock time for a 1 km resolution simulation might be reduced to about 8 days - long, but definitely possible.
 
 \subsubsection{Memory}
 
@@ -592,7 +593,7 @@ Here, the ice flux at the grounding line $q_g$ is related to the ice flow factor
 \\
 UFEMISM solves the SSA on both the regular and the staggered mesh simultaneously (see Sect. XX). At grounding-line vertices (defined as staggered vertices separating a floating and a non-floating pixel), the semi-analytical solution is calculated. To get accurate values, the ice flow factor $A$, the till friction angle $\phi$ and the ice thickness $H$ are evaluated at the sub-grid grounding line position by linearly interpolating the thickness above flotation $T = H - \left( S - b\right) \frac{\rho_w}{\rho_i}$ to zero. The resulting grounding-line flux $q_g$ is divided by the ice thickness $H_g$ to find the magnitude $u$ of the ice velocity. The direction of the ice velocity is assumed to be perpendicular to the grounding-line, which means it is anti-parallel to the gradient of the thickness above flotation. This yields separate values for $u$ and $v$, which are applied to the grounding-line pixels and subsequently left unchanged during the SOR iteration that solves the SSA.\\
 \\
-This solution is only valid when there is no significant buttressing. While this condition holds for the schematic MISMIP\textunderscore mod benchmark experiment for which UFEMISM is validated, it does not hold for most of the actual Antarctic grounding line. Different approaches have been proposed to ''adapt'' this solution for buttressing, which have so far achieved very limited success. No solution for buttressing has so far been implemented in UFEMISM. This means that realistic experiments can only be run by setting the config option \textsc{use\textunderscore analytical\textunderscore GL\textunderscore flux} to \textsc{false}.
+This solution is only valid when there is no significant buttressing. While this condition holds for the schematic MISMIP\textunderscore mod benchmark experiment for which UFEMISM is validated, it does not hold for most of the actual Antarctic grounding line. Different approaches have been proposed to ''adapt'' this solution for buttressing, which have so far achieved very limited success. No solution for buttressing has so far been implemented in UFEMISM. This means that realistic experiments can only be run by setting the config option \textsc{use\textunderscore analytical\textunderscore gl\textunderscore flux} to \textsc{false}.
 
 \subsubsection{Parallelisation}
 
@@ -683,7 +684,7 @@ H_i^{t+\Delta t} = H_i^t + \Delta t \left( \left[ \frac{-1}{A_i} \sum_{c=1}^n \l
 
 In order to solve this equation, we need to know the ice velocities $\textbf{u}_c$ on the Voronoi cell boundaries. Both the SIA and the SSA are therefore solved on the staggered vertices described earlier. The staggered ice thickness $H_c$ is determined using an up-wind scheme ($H_c=H_i$ if ice flows from $i$ to $j$, $H_c=H_j$ if it flows from$ $j to $i$). This means that the finite volume approach is essentially identical to the ''mass-conserving up-wind finite difference scheme'' used in PISM (Winkelmann et al., 2011), and very similar to the combination of finite differences with a staggered grid used in many other ice-sheet models.\\
 \\
-A simple flux-correction scheme is applied to prevent negative ice thicknesses from occurring. After the fluxes across all Voronoi cell boundaries have been calculated, a check is done to find vertices where $H_i^{t+\Delta t}<0$. There, all outgoing fluxes are reduced by a scaling factor so that $H_i^{t+\Delta t}=0$. Since this rescaling is applied to the staggered fluxes before the final ice thickness update is applied, this scheme is still mass-conserving.
+A simple flux-correction scheme is applied to prevent negative ice thicknesses from occurring. After the fluxes across all Voronoi cell boundaries have been calculated, a check is done to find vertices where $H_i^{t+\Delta t}<0$. There, all outgoing fluxes are reduced by a scaling factor so that $H_i^{t+\Delta t}=0$. Since this rescaling is applied to the staggered fluxes before the final ice thickness update is applied, conservation of mass is never violated.
 
 \subsection{Thermodynamics}
 
@@ -806,7 +807,7 @@ K &= 3.101 \cdot 10^8 \cdot e^{-0.0057 \cdot T}
 \newpage
 \section{Climate}
 
-UFEMISM's climate model is the same as that in IMAU-ICE, which in turn is same as in its predecessor ANICE2.1. It uses the matrix method developed by Berends et al. (2018). Quoting that paper: ''A climate matrix, as defined by Pollard (2010), is a collection of output data from different steady-state GCM simulations that differ from each other in one or more key parameters or boundary conditions, such as prescribed atmospheric pCO\textsubscript{2}, orbital configuration, or ice-sheet configuration. At every point in time during the simulation, the location of the model state within this matrix is extracted from the matrix by interpolating between its constituent precalculated climate states.''\\
+UFEMISM's climate model is the same as that in IMAU-ICE, which in turn is same as in its predecessor ANICE2.1. It uses the matrix method developed by Berends et al. (2018). Quoting that paper: ''A climate matrix, as defined by Pollard (2010), is a collection of output data from different steady-state GCM simulations that differ from each other in one or more key parameters or boundary conditions, such as prescribed atmospheric CO\textsubscript{2}, orbital configuration, or ice-sheet configuration. At every point in time during the simulation, the location of the model state within this matrix is extracted from the matrix by interpolating between its constituent precalculated climate states.''\\
 \\
 Berends et al. (2018) developed a way to use modelled ice-sheet geometry as a spatially variable interpolant between two GCM snapshots, respectively describing the PI and the LGM (Singarayer and Valdes, 2010). The ice-albedo feedback and the orographic forcing of precipitation are parameterised by this interpolation, resulting in a modelled ice-sheet geometry at LGM that agrees better with geomorphological evidence than was the case with earlier versions of the IMAU ice-sheet models. Since temperature and precipitation (which together constitute the entirety of the ''climate'' that's needed to calculate the surface mass balance) are affected by ice-sheet geometry in different ways, two separate interpolation schemes are used for these quantities.\\
 
@@ -814,7 +815,7 @@ Berends et al. (2018) developed a way to use modelled ice-sheet geometry as a sp
 
 The equations described here are contained in the subroutine \textsc{run\textunderscore climate\textunderscore model\textunderscore matrix\textunderscore pi\textunderscore lgm\textunderscore temperature} of the \textsc{climate\textunderscore module}.\\
 \\
-During the LGM, temperatures in the high latitudes of the northern hemisphere were between 10 and 15 K colder than pre-industrial, much more than the global mean cooling of 5 K. This temperature change has three main causes: a lower CO2 concentration in the atmosphere (global), a much higher albedo (regional), and a much higher surface elevation (local).\\
+During the LGM, temperatures in the high latitudes of the northern hemisphere were between 10 and 15 K colder than pre-industrial, much more than the global mean cooling of 5 K. This temperature change has three main causes: a lower CO\textsubscript{2} concentration in the atmosphere (global), a much higher albedo (regional), and a much higher surface elevation (local).\\
 \\
 The temperature interpolation scheme of the climate matrix is based on the absorbed insolation $I_{abs}$, which is defined as the product of insolation at the top of the atmosphere $Q_{TOA}$ with the inverse of the surface albedo $a$:
 

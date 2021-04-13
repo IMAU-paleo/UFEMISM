@@ -396,18 +396,18 @@ MODULE mesh_creation_module
     ! with very coarse resolution. This triggers a mesh update, which results in a mesh with a very wide high-resolution band.
     ! Prevent this by making the very first mesh slightly finer than strictly needed.
     IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar') THEN
+      IF     (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
+              C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
+              C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
+              C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
+              C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
+              C%choice_benchmark_experiment == 'EISMINT_6' ) THEN
         submesh%res_max = MAX(C%res_min * 2._dp, 16._dp)
-      ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
-        ! No need for an exception here, as this one starts with a small ice sheet
+      ELSEIF (C%choice_benchmark_experiment == 'Bueler'.OR. &
+              C%choice_benchmark_experiment == 'Halfar') THEN
+        ! No need for an exception here, as this one starts with a (small) ice sheet
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+              C%choice_benchmark_experiment == 'mesh_generation_test') THEN
         ! No need for an exception here either, as the initial state has a coastline.
       ELSE
         WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in create_mesh_from_cart_data!'

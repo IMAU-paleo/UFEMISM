@@ -195,7 +195,8 @@ CONTAINS
           C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
           C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
           C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler') THEN
+          C%choice_benchmark_experiment == 'Bueler' .OR. &
+          C%choice_benchmark_experiment == 'MISMIP_mod') THEN
 
           ! Apply boundary conditions: set ice thickness to zero at the domain boundary
           DO vi = mesh%v1, mesh%v2
@@ -205,13 +206,13 @@ CONTAINS
         
       ELSEIF (C%choice_benchmark_experiment == 'SSA_icestream') THEN
         ! No exception here, as we already exited the routine at the top.
-      ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        
-        ! Create a nice circular ice shelf
-        DO vi = mesh%v1, mesh%v2
-          IF (SQRT(mesh%V(vi,1)**2+mesh%V(vi,2)**2) > mesh%xmax * 0.95_dp) ice%Hi( vi) = 0._dp
-        END DO
-        CALL sync
+!      ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
+!        
+!        ! Create a nice circular ice shelf
+!        DO vi = mesh%v1, mesh%v2
+!          IF (SQRT(mesh%V(vi,1)**2+mesh%V(vi,2)**2) > mesh%xmax * 0.95_dp) ice%Hi( vi) = 0._dp
+!        END DO
+!        CALL sync
         
       ELSE
         IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in calculate_ice_thickness_change!'
@@ -697,147 +698,6 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE solve_SSA_linearised
-  SUBROUTINE solve_SSA_linearised_old( mesh, ice)
-    ! Calculate ice velocities using the SSA
-    
-    USE parameters_module, ONLY : n_flow, ice_density, grav, sec_per_year
-      
-    IMPLICIT NONE
-    
-    ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
-    ! Local variables:
-    INTEGER                                            :: cerr,ierr
-    INTEGER                                            :: ai, ci, ac
-    LOGICAL                                            :: is_edge
-    REAL(dp)                                           :: Uxxi, Uxyi, Uyyi, Vxxi, Vxyi, Vyyi
-    REAL(dp)                                           :: sumUc, sumVc
-    INTEGER                                            :: redblack, a1, a2
-    LOGICAL                                            :: has_converged
-    INTEGER                                            :: inner_loop_i
-    REAL(dp)                                           :: max_residual_UV
-      
-    ! Calculate the right-hand sides of the PDE's
-    DO ai = mesh%a1, mesh%a2
-      ice%RHSx_AaAc( ai) = ice_density * grav * ice%dHs_dx_shelf_AaAc( ai) / ice%eta_AaAc( ai)
-      ice%RHSy_AaAc( ai) = ice_density * grav * ice%dHs_dy_shelf_AaAc( ai) / ice%eta_AaAc( ai)
-    END DO ! DO ai = mesh%a1, mesh%a2
-    
-    ! Calculate the centre coefficients
-    DO ai = mesh%a1, mesh%a2
-      IF (.NOT. is_floating( ice%Hi_AaAc( ai), ice%Hb_AaAc( ai), ice%SL_AaAc( ai))) THEN
-        ice%eu_i_AaAc( ai) = (4._dp * mesh%Nxx_AaAc( ai,mesh%nCAaAc( ai)+1) + mesh%Nyy_AaAc( ai,mesh%nCAaAc( ai)+1)) - ice%S_AaAc( ai) / (MAX(0.1_dp,ice%Hi_AaAc( ai)) * ice%eta_AaAc( ai))
-        ice%ev_i_AaAc( ai) = (4._dp * mesh%Nyy_AaAc( ai,mesh%nCAaAc( ai)+1) + mesh%Nxx_AaAc( ai,mesh%nCAaAc( ai)+1)) - ice%S_AaAc( ai) / (MAX(0.1_dp,ice%Hi_AaAc( ai)) * ice%eta_AaAc( ai))
-      ELSE
-        ice%eu_i_AaAc( ai) = (4._dp * mesh%Nxx_AaAc( ai,mesh%nCAaAc( ai)+1) + mesh%Nyy_AaAc( ai,mesh%nCAaAc( ai)+1))
-        ice%ev_i_AaAc( ai) = (4._dp * mesh%Nyy_AaAc( ai,mesh%nCAaAc( ai)+1) + mesh%Nxx_AaAc( ai,mesh%nCAaAc( ai)+1))
-      END IF
-    END DO ! DO ai = mesh%a1, mesh%a2
-    CALL sync
-      
-    ! Use SOR to solve U and V for the given right-hand side of the PDE's
-    has_converged = .FALSE.
-    inner_loop_i  = 0
-    DO WHILE ((.NOT. has_converged) .AND. (inner_loop_i < C%SSA_max_inner_loops))
-      inner_loop_i = inner_loop_i + 1
-      
-      max_residual_UV = 0._dp
-      
-      ! Go through one iteration of the SOR scheme, using a red-black partitioning (red = Aa, black = Ac)
-      DO redblack = 0, 1
-      
-        IF (redblack == 0) THEN
-          a1 = mesh%v1
-          a2 = mesh%v2
-        ELSE
-          a1 = mesh%ac1 + mesh%nV
-          a2 = mesh%ac2 + mesh%nV
-        END IF
-      
-        !DO ai = a1, a2
-        IF (par%master) THEN
-        DO ai = 1, mesh%nVAaAc
-        
-          ! Don't update edge vertices, those will be treated by the boundary conditions
-          is_edge = .FALSE.
-          IF (ai <= mesh%nV) THEN
-            IF (mesh%edge_index(    ai        )>0) is_edge = .TRUE.
-          ELSE
-            IF (mesh%edge_index_Ac( ai-mesh%nV)>0) is_edge = .TRUE.
-          END IF
-          IF (is_edge) CYCLE
-          
-          ! If we're using the analytical GL flux solution, values at the grounding line (on the Ac mesh)
-          ! will be prescribed by that solution, so we skip those vertices
-          IF (C%use_analytical_GL_flux) THEN
-            IF (ai > mesh%nV) THEN
-              IF (ice%mask_gl_Ac( ai-mesh%nV) == 1) CYCLE
-            END IF
-          END IF
-      
-          ! Calculate Uxy, Vxy with partially updated values pf U and V according to Gauss-Seidler
-          CALL get_mesh_curvatures_vertex_AaAc( mesh, ice%U_SSA_AaAc, Uxxi, Uxyi, Uyyi, ai)
-          CALL get_mesh_curvatures_vertex_AaAc( mesh, ice%V_SSA_AaAc, Vxxi, Vxyi, Vyyi, ai)
-          
-          ! The sum terms in the equation
-          sumUc = 0._dp
-          sumVc = 0._dp
-          DO ci = 1, mesh%nCAaAc( ai)
-            ac = mesh%CAaAc( ai,ci)
-            sumUc = sumUc + ice%U_SSA_AaAc( ac) * (4._dp * mesh%Nxx_AaAc( ai,ci) + mesh%Nyy_AaAc( ai,ci))
-            sumVc = sumVc + ice%V_SSA_AaAc( ac) * (4._dp * mesh%Nyy_AaAc( ai,ci) + mesh%Nxx_AaAc( ai,ci))
-          END DO
-          
-          ! Calculate the left-hand side of the equation, using partially updated values
-          ice%LHSx_AaAc( ai) = sumUc + (3._dp * Vxyi) + (ice%eu_i_AaAc( ai) * ice%U_SSA_AaAc( ai))
-          ice%LHSy_AaAc( ai) = sumVc + (3._dp * Uxyi) + (ice%ev_i_AaAc( ai) * ice%V_SSA_AaAc( ai))
-          
-          ! Calculate the residuals
-          ice%resU_AaAc( ai) = (ice%LHSx_AaAc( ai) - ice%RHSx_AaAc( ai)) / ice%eu_i_AaAc( ai)
-          ice%resV_AaAc( ai) = (ice%LHSy_AaAc( ai) - ice%RHSy_AaAc( ai)) / ice%ev_i_AaAc( ai)
-        
-          max_residual_UV = MAX( max_residual_UV, ABS(ice%resU_AaAc( ai)))
-          max_residual_UV = MAX( max_residual_UV, ABS(ice%resV_AaAc( ai)))
-          
-          ! Update velocities
-          ice%U_SSA_AaAc( ai) = ice%U_SSA_AaAc( ai) - C%SSA_SOR_omega * ice%resU_AaAc( ai)
-          ice%V_SSA_AaAc( ai) = ice%V_SSA_AaAc( ai) - C%SSA_SOR_omega * ice%resV_AaAc( ai)
-        
-        END DO ! DO ai = a1, a2
-        END IF ! IF (par%master) THEN
-        CALL sync
-      
-      END DO ! DO redblack = 0, 1
-      
-      !IF (par%master) WRITE(0,'(A,I5,A,E10.4)') '   SSA -   SOR iteration ', inner_loop_i, ', max_residual_UV = ', max_residual_UV
-      
-      ! Apply Neumann boundary conditions
-      CALL apply_Neumann_boundary_AaAc( mesh, ice%U_SSA_AaAc)
-      CALL apply_Neumann_boundary_AaAc( mesh, ice%V_SSA_AaAc)
-      
-      ! Check if we've reached a stable solution
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, max_residual_UV, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-      
-      !IF (par%master) WRITE(0,*) ' SSA -  inner loop ', inner_loop_i, ': largest residual = ', max_residual_UV
-      IF (max_residual_UV < C%SSA_max_residual_UV) THEN
-        has_converged = .TRUE.
-      ELSEIF (max_residual_UV > 1E6_dp) THEN
-        WRITE(0,*) ' ERROR - instability in SSA SOR solver!'
-        IF (par%master) CALL write_mesh_to_text_file( mesh, 'mesh_crash.txt')
-        CALL sync
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      ELSEIF (inner_loop_i == C%SSA_max_inner_loops) THEN
-        WRITE(0,*) ' WARNING - SSA SOR solver doesnt converge!'
-        !IF (par%master) WRITE(0,*) ' ERROR - SSA SOR solver doesnt converge!'
-        !CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    
-    END DO
-    CALL sync
-    
-  END SUBROUTINE solve_SSA_linearised_old
   SUBROUTINE SSA_effective_viscosity( mesh, ice)
     ! Calculate the effective viscosity eta, the product term N = eta*H, and the gradient of N in the SSA
     
@@ -861,10 +721,10 @@ CONTAINS
     ! The effective viscosity eta on both grids, with a normalisation term (following Bueler & Brown, 2009) to prevent divide-by-zero errors,
     ! and the product term N = eta * H
     DO ai = mesh%a1, mesh%a2
-    !  ice%eta_AaAc( ai) = (C%m_enh_ssa * 0.5_dp * ice%A_flow_mean_AaAc( ai))**(-1._dp / n_flow) * (ice%dU_SSA_dx_AaAc( ai)**2 + ice%dV_SSA_dy_AaAc( ai)**2 + &
-    !    ice%dU_SSA_dx_AaAc( ai) * ice%dV_SSA_dy_AaAc( ai) + 0.25_dp * (ice%dU_SSA_dy_AaAc( ai) + ice%dV_SSA_dx_AaAc( ai))**2 + epsilon_sq_0)**((1._dp - n_flow) / (2._dp * n_flow))
-      ice%eta_AaAc( ai) = 0.5_dp * (C%m_enh_ssa * ice%A_flow_mean_AaAc( ai))**(-1._dp / n_flow) * (ice%dU_SSA_dx_AaAc( ai)**2 + ice%dV_SSA_dy_AaAc( ai)**2 + &
+      ice%eta_AaAc( ai) = (C%m_enh_ssa * 0.5_dp * ice%A_flow_mean_AaAc( ai))**(-1._dp / n_flow) * (ice%dU_SSA_dx_AaAc( ai)**2 + ice%dV_SSA_dy_AaAc( ai)**2 + &
         ice%dU_SSA_dx_AaAc( ai) * ice%dV_SSA_dy_AaAc( ai) + 0.25_dp * (ice%dU_SSA_dy_AaAc( ai) + ice%dV_SSA_dx_AaAc( ai))**2 + epsilon_sq_0)**((1._dp - n_flow) / (2._dp * n_flow))
+    !  ice%eta_AaAc( ai) = 0.5_dp * (C%m_enh_ssa * ice%A_flow_mean_AaAc( ai))**(-1._dp / n_flow) * (ice%dU_SSA_dx_AaAc( ai)**2 + ice%dV_SSA_dy_AaAc( ai)**2 + &
+    !    ice%dU_SSA_dx_AaAc( ai) * ice%dV_SSA_dy_AaAc( ai) + 0.25_dp * (ice%dU_SSA_dy_AaAc( ai) + ice%dV_SSA_dx_AaAc( ai))**2 + epsilon_sq_0)**((1._dp - n_flow) / (2._dp * n_flow))
       ice%N_AaAc(  ai) = ice%eta_AaAc( ai) * MAX(0.1_dp, ice%Hi_AaAc( ai))
     END DO ! DO ai = mesh%a1, mesh%a2
     CALL sync

@@ -446,8 +446,8 @@ CONTAINS
         init%grid%ny = 51
       ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
               C%choice_benchmark_experiment == 'Bueler') THEN
-        init%grid%nx = 2501
-        init%grid%ny = 2501
+        init%grid%nx = 251
+        init%grid%ny = 251
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
         init%grid%nx = 900
         init%grid%ny = 900

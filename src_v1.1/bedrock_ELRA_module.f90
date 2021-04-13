@@ -81,7 +81,7 @@ CONTAINS
     REAL(dp)                                           :: Lr
     
     ! Influence radius of the lithospheric rigidity
-    Lr = (C%ELRA_lithosphere_flex_rigidity / (C%mantle_density * grav))**0.25_dp
+    Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
     
     ! Calculate the absolute and relative surface loads on the mesh
     DO vi = mesh%v1, mesh%v2
@@ -212,7 +212,7 @@ CONTAINS
     ! ============================================================
     
     ! Influence radius of the lithospheric rigidity
-    Lr = (C%ELRA_lithosphere_flex_rigidity / (C%mantle_density * grav))**0.25_dp
+    Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
     
     ! Calculate radius (in number of grid cells) of the flexural profile
     CALL allocate_shared_int_0D( ice%flex_prof_rad, ice%wflex_prof_rad)

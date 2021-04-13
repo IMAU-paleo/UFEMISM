@@ -45,7 +45,7 @@ PROGRAM UFEMISM_program
 
   IMPLICIT NONE
   
-  CHARACTER(LEN=256), PARAMETER          :: version_number = '1.1'
+  CHARACTER(LEN=256), PARAMETER          :: version_number = '1.1.0'
   
   INTEGER                                :: p, iargc, ierr, cerr
   INTEGER                                :: process_rank, number_of_processes

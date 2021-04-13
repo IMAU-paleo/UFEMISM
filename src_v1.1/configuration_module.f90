@@ -162,10 +162,6 @@ MODULE configuration_module
   ! d18O record (ASCII text file, so the number of rows needs to be specified)
   CHARACTER(LEN=256) :: filename_d18O_record_config = 'Datasets/d18O/Ahn2017_d18O.dat'
   INTEGER            :: d18O_record_length_config   = 2051
-  
-  ! Ice5G ice-sheet geometry
-  CHARACTER(LEN=256) :: filename_ICE5G_PD_config    = 'Datasets/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  CHARACTER(LEN=256) :: filename_ICE5G_LGM_config   = 'Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
 
   ! Ice dynamics and thermodynamics
   ! ===============================
@@ -181,9 +177,7 @@ MODULE configuration_module
   
   ! Some parameters for numerically solving the SSA
   REAL(dp)           :: SSA_RN_tol_config                       = 1E-5_dp                ! Successive solutions of the effective viscosity iteration must not differ by more than this amount (norm(N-Nprev) / norm(N) < RN_tol)
-  REAL(dp)           :: SSA_norm_dUV_tol_config                 = 0.5_dp                 ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
   INTEGER            :: SSA_max_outer_loops_config              = 50                     ! Maximum number of effective viscosity iterations
-  REAL(dp)           :: SSA_max_grad_N_config                   = 315.5694_dp            ! = 1e-5 * sec_per_year according to Frank Pattyn. If set to zero, the solver becomes identical to the old ANICE solver.
   REAL(dp)           :: SSA_max_residual_UV_config              = 2.5_dp                 ! The maximum residual in U and V in the SOR solver of the linearised SSA must drop below this value [m yr^-1]
   REAL(dp)           :: SSA_SOR_omega_config                    = 1.2_dp                 ! The over-relaxation parameter in the SOR solver of the linearised SSA
   INTEGER            :: SSA_max_inner_loops_config              = 10000                  ! Maximum number of iterations in the SOR solver of the linearised SSA
@@ -200,7 +194,7 @@ MODULE configuration_module
   CHARACTER(LEN=256) :: choice_GIA_model_config                 = 'ELRA'                 ! Can be "none", "ELRA", or "SELEN"
   REAL(dp)           :: ELRA_lithosphere_flex_rigidity_config   = 1.0E+25_dp             ! Lithospheric flexural rigidity [kg m^2 s^-2]
   REAL(dp)           :: ELRA_bedrock_relaxation_time_config     = 3000.0_dp              ! Relaxation time for bedrock adjustment [yr]
-  REAL(dp)           :: mantle_density_config                   = 3300.0_dp              ! Mantle density [kg m^-3]
+  REAL(dp)           :: ELRA_mantle_density_config              = 3300.0_dp              ! Mantle density [kg m^-3]
   
   ! Climate matrix
   ! ==============
@@ -213,11 +207,9 @@ MODULE configuration_module
   CHARACTER(LEN=256) :: filename_GCM_snapshot_PI_config         = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
   CHARACTER(LEN=256) :: filename_GCM_snapshot_LGM_config        = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
   
-  ! Ocean temperature (used for both thermodynamics and basal melt)
-  CHARACTER(LEN=256) :: choice_ocean_temperature_model_config   = 'scaled'               ! Can be "fixed" (use PD value) or "scaled" (scale between "PD", "warm", and "cold" values based on forcing (prescribed or inverse-modelled))
-  REAL(dp)           :: ocean_temperature_PD_config             = 271.46_dp              ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
-  REAL(dp)           :: ocean_temperature_cold_config           = 268.16_dp              ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
-  REAL(dp)           :: ocean_temperature_warm_config           = 275.16_dp              ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
+  ! Ice5G ice-sheet geometry
+  CHARACTER(LEN=256) :: filename_ICE5G_PD_config                = 'Datasets/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
+  CHARACTER(LEN=256) :: filename_ICE5G_LGM_config               = 'Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
   
   REAL(dp)           :: constant_lapserate_config               = 0.008_dp               ! Constant atmospheric lapse rate [K m^-1]
   
@@ -262,6 +254,12 @@ MODULE configuration_module
   
   ! Sub-shelf melt parameterisation
   ! ===============================
+  
+  ! Ocean temperature (used for both thermodynamics and basal melt)
+  CHARACTER(LEN=256) :: choice_ocean_temperature_model_config   = 'scaled'               ! Can be "fixed" (use PD value) or "scaled" (scale between "PD", "warm", and "cold" values based on forcing (prescribed or inverse-modelled))
+  REAL(dp)           :: ocean_temperature_PD_config             = 271.46_dp              ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
+  REAL(dp)           :: ocean_temperature_cold_config           = 268.16_dp              ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
+  REAL(dp)           :: ocean_temperature_warm_config           = 275.16_dp              ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
   
   ! Mean ocean temperatures and deep ocean & exposed shelf melt rates were tuned by Bas de Boer in 2011.
   REAL(dp)           :: T_ocean_mean_PD_NAM_config            = -1.7_dp       ! Present day temperature of the ocean beneath the shelves [Celcius]
@@ -492,9 +490,6 @@ MODULE configuration_module
     INTEGER                  :: CO2_record_length
     CHARACTER(LEN=256)       :: filename_d18O_record
     INTEGER                  :: d18O_record_length
-  
-    CHARACTER(LEN=256)       :: filename_ICE5G_PD
-    CHARACTER(LEN=256)       :: filename_ICE5G_LGM
 
     ! Ice dynamics & thermodynamics
     ! =============================
@@ -511,9 +506,7 @@ MODULE configuration_module
   
     ! Some parameters for numerically solving the SSA
     REAL(dp)                 :: SSA_RN_tol
-    REAL(dp)                 :: SSA_norm_dUV_tol
     INTEGER                  :: SSA_max_outer_loops
-    REAL(dp)                 :: SSA_max_grad_N
     REAL(dp)                 :: SSA_max_residual_UV
     REAL(dp)                 :: SSA_SOR_omega
     INTEGER                  :: SSA_max_inner_loops
@@ -530,7 +523,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)       :: choice_GIA_model
     REAL(dp)                 :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                 :: ELRA_bedrock_relaxation_time
-    REAL(dp)                 :: mantle_density
+    REAL(dp)                 :: ELRA_mantle_density
     
     ! Climate matrix
     ! ==============
@@ -539,6 +532,8 @@ MODULE configuration_module
     CHARACTER(LEN=256)       :: choice_climate_matrix
     CHARACTER(LEN=256)       :: filename_GCM_snapshot_PI
     CHARACTER(LEN=256)       :: filename_GCM_snapshot_LGM
+    CHARACTER(LEN=256)       :: filename_ICE5G_PD
+    CHARACTER(LEN=256)       :: filename_ICE5G_LGM
     
     CHARACTER(LEN=256)       :: choice_ocean_temperature_model
     REAL(dp)                 :: ocean_temperature_PD
@@ -812,8 +807,6 @@ CONTAINS
                      CO2_record_length_config,                   &
                      filename_d18O_record_config,                &
                      d18O_record_length_config,                  &
-                     filename_ICE5G_PD_config,                   &
-                     filename_ICE5G_LGM_config,                  &
                      m_enh_sia_config,                           &
                      m_enh_ssa_config,                           &
                      choice_sliding_law_config,                  &
@@ -824,9 +817,7 @@ CONTAINS
                      constant_geothermal_heat_flux_config,       &
                      filename_geothermal_heat_flux_config,       &
                      SSA_RN_tol_config,                          &
-                     SSA_norm_dUV_tol_config,                    &
                      SSA_max_outer_loops_config,                 &
-                     SSA_max_grad_N_config,                      &
                      SSA_max_residual_UV_config,                 &
                      SSA_SOR_omega_config,                       &
                      SSA_max_inner_loops_config,                 &
@@ -838,11 +829,13 @@ CONTAINS
                      choice_GIA_model_config,                    &
                      ELRA_lithosphere_flex_rigidity_config,      &
                      ELRA_bedrock_relaxation_time_config,        &
-                     mantle_density_config,                      &
+                     ELRA_mantle_density_config,                 &
                      filename_PD_obs_climate_config,             &
                      choice_climate_matrix_config,               &
                      filename_GCM_snapshot_PI_config,            &
                      filename_GCM_snapshot_LGM_config,           &
+                     filename_ICE5G_PD_config,                   &
+                     filename_ICE5G_LGM_config,                  &
                      choice_ocean_temperature_model_config,      &
                      ocean_temperature_PD_config,                &
                      ocean_temperature_cold_config,              &
@@ -1136,9 +1129,6 @@ CONTAINS
     C%CO2_record_length                   = CO2_record_length_config
     C%filename_d18O_record                = filename_d18O_record_config
     C%d18O_record_length                  = d18O_record_length_config
-    
-    C%filename_ICE5G_PD                   = filename_ICE5G_PD_config
-    C%filename_ICE5G_LGM                  = filename_ICE5G_LGM_config
 
     ! Ice dynamics & thermodynamics
     ! =============================
@@ -1155,9 +1145,7 @@ CONTAINS
   
     ! Some parameters for numerically solving the SSA
     C%SSA_RN_tol                          = SSA_RN_tol_config
-    C%SSA_norm_dUV_tol                    = SSA_norm_dUV_tol_config
     C%SSA_max_outer_loops                 = SSA_max_outer_loops_config
-    C%SSA_max_grad_N                      = SSA_max_grad_N_config
     C%SSA_max_residual_UV                 = SSA_max_residual_UV_config
     C%SSA_SOR_omega                       = SSA_SOR_omega_config
     C%SSA_max_inner_loops                 = SSA_max_inner_loops_config
@@ -1174,7 +1162,7 @@ CONTAINS
     C%choice_GIA_model                    = choice_GIA_model_config
     C%ELRA_lithosphere_flex_rigidity      = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time        = ELRA_bedrock_relaxation_time_config
-    C%mantle_density                      = mantle_density_config
+    C%ELRA_mantle_density                 = ELRA_mantle_density_config
     
     ! Climate matrix
     ! ==============
@@ -1183,6 +1171,8 @@ CONTAINS
     C%choice_climate_matrix               = choice_climate_matrix_config
     C%filename_GCM_snapshot_PI            = filename_GCM_snapshot_PI_config
     C%filename_GCM_snapshot_LGM           = filename_GCM_snapshot_LGM_config
+    C%filename_ICE5G_PD                   = filename_ICE5G_PD_config
+    C%filename_ICE5G_LGM                  = filename_ICE5G_LGM_config
     
     C%choice_ocean_temperature_model      = choice_ocean_temperature_model_config
     C%ocean_temperature_PD                = ocean_temperature_PD_config

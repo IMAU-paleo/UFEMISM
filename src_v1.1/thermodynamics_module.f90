@@ -49,12 +49,12 @@ CONTAINS
               C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
               C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
               C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-              C%choice_benchmark_experiment == 'Halfar' .OR. &
-              C%choice_benchmark_experiment == 'Bueler') THEN
+              C%choice_benchmark_experiment == 'EISMINT_6') THEN
         ! Thermodynamics are included in these experiments
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-              C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+              C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+              C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'Bueler') THEN
         ! Thermodynamics are not included in these experiments
         RETURN
       ELSE

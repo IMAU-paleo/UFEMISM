@@ -462,7 +462,7 @@ CONTAINS
   SUBROUTINE update_CO2_at_model_time( time)
     ! Interpolate the data in forcing%CO2 to find the value at the queried time.
     ! If time lies outside the range of forcing%CO2_time, return the first/last value
-    ! NOTE: assumes time is listed in kyr (so LGM would be -21000.0)
+    ! NOTE: assumes time is listed in kyr (so LGM would be -21.0)
     
     IMPLICIT NONE
     

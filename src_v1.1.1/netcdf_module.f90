@@ -2,13 +2,13 @@ MODULE netcdf_module
   ! This module defines methods to read and write the current state of the model from or to a NetCDF file.
 
   USE mpi
-  USE parallel_module,             ONLY: par, sync, &
+  USE configuration_module,        ONLY: dp, C
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                          allocate_shared_int_0D, allocate_shared_dp_0D, &
                                          allocate_shared_int_1D, allocate_shared_dp_1D, &
                                          allocate_shared_int_2D, allocate_shared_dp_2D, &
                                          allocate_shared_int_3D, allocate_shared_dp_3D, &
                                          deallocate_shared
-  USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,           ONLY: type_model_region, type_mesh, type_grid, type_PD_data_fields, type_forcing_data, &
                                          type_init_data_fields, type_subclimate_global, type_debug_fields, type_ICE5G_timeframe
@@ -300,9 +300,6 @@ CONTAINS
     INTEGER,                        INTENT(IN)    :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
-    ! Local variables:
-    INTEGER                                       :: cerr, ierr
-    
     IF (field_name == 'none') THEN
       RETURN
       
@@ -499,7 +496,6 @@ CONTAINS
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, time, zeta, month
     
@@ -645,7 +641,6 @@ CONTAINS
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, time, zeta, month
     
@@ -834,7 +829,6 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, t, z, m
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -1166,7 +1160,6 @@ CONTAINS
     CHARACTER(LEN=*),              INTENT(IN)    :: field_name
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi
     REAL(dp), DIMENSION(:    ), POINTER           :: d_year
     INTEGER                                       :: wd_year
@@ -1605,7 +1598,6 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: x, y, t, z, m
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -2776,6 +2768,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
     
+    ! Local variables:
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_debug_fields'
+    INTEGER                                       :: n1, n2
+    
+    n1 = par%mem%n
+    
     IF     (region%name == 'NAM') THEN
       CALL initialise_debug_fields_region( debug_NAM, region%mesh)
     ELSEIF (region%name == 'EAS') THEN
@@ -2785,6 +2783,9 @@ CONTAINS
     ELSEIF (region%name == 'ANT') THEN
       CALL initialise_debug_fields_region( debug_ANT, region%mesh)
     END IF
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE initialise_debug_fields
   SUBROUTINE initialise_debug_fields_region( debug, mesh)
@@ -3055,7 +3056,6 @@ CONTAINS
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
     ! Local variables:
-    INTEGER                                  :: cerr, ierr
     INTEGER                                  :: nZ, nt, nm, k
     REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
         
@@ -3139,7 +3139,6 @@ CONTAINS
     TYPE(type_netcdf_restart),   INTENT(INOUT) :: netcdf
     
     ! Local variables:
-    INTEGER                                    :: cerr, ierr
     INTEGER                                    :: nt, ti, ti_min
     REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
     REAL(dp)                                   :: dt_min, dt

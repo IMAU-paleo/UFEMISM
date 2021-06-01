@@ -4,6 +4,7 @@ MODULE data_types_module
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
 
+  USE mpi
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_PD_data, type_netcdf_init_data, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
@@ -476,15 +477,81 @@ MODULE data_types_module
     
   END TYPE type_remapping_nearest_neighbour
   
+  TYPE type_remapping_conservative_intermediate_Ac_local
+    ! Intermediate data used in creating conservative remapping arrays
+    
+    INTEGER                                 :: n_tot
+    INTEGER                                 :: n_max
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nS
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli1
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli2
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_left
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_right
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
+  
+  END TYPE type_remapping_conservative_intermediate_Ac_local
+  
+  TYPE type_remapping_conservative_intermediate_Ac_shared
+    ! Intermediate data used in creating conservative remapping arrays
+    
+    INTEGER,                    POINTER :: n_tot
+    INTEGER,                    POINTER :: n_max
+    INTEGER,  DIMENSION(:    ), POINTER :: nS
+    INTEGER,  DIMENSION(:    ), POINTER :: sli1
+    INTEGER,  DIMENSION(:    ), POINTER :: sli2
+    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_left
+    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_right
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
+    INTEGER :: wn_tot, wn_max, wnS, wsli1, wsli2, wvi_opp_left, wvi_opp_right, wLI_xdy, wLI_mxydx, wLI_xydy
+  
+  END TYPE type_remapping_conservative_intermediate_Ac_shared
+  
+  TYPE type_remapping_conservative_intermediate_local
+    ! Intermediate data used in creating conservative remapping arrays
+    
+    INTEGER                                 :: n_tot
+    INTEGER                                 :: n_max
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nV
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli1
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli2
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
+  
+  END TYPE type_remapping_conservative_intermediate_local
+  
+  TYPE type_remapping_conservative_intermediate_shared
+    ! Intermediate data used in creating conservative remapping arrays
+    
+    INTEGER,                    POINTER :: n_tot
+    INTEGER,                    POINTER :: n_max
+    INTEGER,  DIMENSION(:    ), POINTER :: nV
+    INTEGER,  DIMENSION(:    ), POINTER :: vli1
+    INTEGER,  DIMENSION(:    ), POINTER :: vli2
+    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
+    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
+    INTEGER :: wn_tot, wn_max, wnV, wvli1, wvli2, wvi_opp, wLI_xdy, wLI_mxydx, wLI_xydy
+  
+  END TYPE type_remapping_conservative_intermediate_shared
+  
   TYPE type_remapping_conservative
     ! Indices and weights for mapping data between two meshes, using 1st or 2nd order conservative remapping
     
-    INTEGER,  DIMENSION(:    ), POINTER :: nV   ! Number  of vertices from mesh_src contributing to this mesh_dst vertex
-    INTEGER,  DIMENSION(:,:  ), POINTER :: vi   ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:,:  ), POINTER :: w0   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:,:  ), POINTER :: w1x  ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:,:  ), POINTER :: w1y  ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    INTEGER :: wnV, wvi, ww0, ww1x, ww1y
+    INTEGER,                    POINTER :: n_tot ! Total number of entries in list
+    INTEGER,  DIMENSION(:    ), POINTER :: vli1  ! List index range per vertex
+    INTEGER,  DIMENSION(:    ), POINTER :: vli2
+    INTEGER,  DIMENSION(:    ), POINTER :: vi    ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
+    REAL(dp), DIMENSION(:    ), POINTER :: w0    ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
+    REAL(dp), DIMENSION(:    ), POINTER :: w1x   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
+    REAL(dp), DIMENSION(:    ), POINTER :: w1y   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
+    INTEGER :: wn_tot, wvli1, wvli2, wvi, ww0, ww1x, ww1y
     
   END TYPE type_remapping_conservative
   
@@ -942,6 +1009,15 @@ MODULE data_types_module
     REAL(dp)                                :: tcomp_output
     
   END TYPE type_model_region
+  
+  TYPE type_memory_use_tracker
+  
+    ! Memory use history
+    INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
+    INTEGER                             :: n                         ! Number of entries
+    INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
+    
+  END TYPE type_memory_use_tracker
   
 CONTAINS
 

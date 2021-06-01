@@ -5,7 +5,7 @@ MODULE restart_module
   
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -22,6 +22,7 @@ MODULE restart_module
   USE mesh_ArakawaC_module,          ONLY: make_Ac_mesh
   USE mesh_derivatives_module,       ONLY: get_neighbour_functions
   USE mesh_creation_module,          ONLY: create_transect
+  USE mesh_five_colour_module,       ONLY: calculate_five_colouring_AaAc
   
   IMPLICIT NONE
 
@@ -36,7 +37,6 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Local variables:
-    INTEGER                                            :: ierr
     INTEGER                                            :: nV, nTri, nC_mem
     REAL(dp)                                           :: xmin, xmax, ymin, ymax
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
@@ -99,6 +99,7 @@ CONTAINS
     CALL find_POI_vertices_and_weights(           region%mesh)
     CALL find_Voronoi_cell_geometric_centres(     region%mesh)
     CALL create_transect(                         region%mesh)
+    CALL calculate_five_colouring_AaAc(           region%mesh)
     
     CALL check_mesh( region%mesh)
 

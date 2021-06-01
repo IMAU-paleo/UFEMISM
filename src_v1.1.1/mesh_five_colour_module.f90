@@ -2,11 +2,12 @@ MODULE mesh_five_colour_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                                      allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                                      allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                                      allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                                      allocate_shared_bool_1D, deallocate_shared
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
+                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
+                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
+                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
+                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
+                                           allocate_shared_bool_1D, deallocate_shared
   USE data_types_module,             ONLY: type_mesh
   USE mesh_help_functions_module,    ONLY: partition_list
 
@@ -157,7 +158,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(INOUT)     :: noofvert
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi, k, ci1, xi, ci2, yi, ci3, qii, ai, it
     LOGICAL                                       :: found_pair, xy_are_adjacent
     
@@ -249,7 +249,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(INOUT)     :: Sn
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi, ui, col, ci, it
     INTEGER, DIMENSION(5)                         :: L_colours
     INTEGER, DIMENSION(:     ), ALLOCATABLE       :: Lv
@@ -325,7 +324,6 @@ MODULE mesh_five_colour_module
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi, ci, vj
     
     DO vi = 1, mesh%nVAaAc
@@ -365,7 +363,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(IN)        :: vi
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: ci, wi, ci2
     
     ci = S_u( 1)
@@ -428,7 +425,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(IN)        :: vi
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: ci, wi, ciu, cii
     
     WRITE(0,*) 'beep'
@@ -518,9 +514,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(INOUT)     :: Q5n
     INTEGER,                    INTENT(IN)        :: vi
     
-    ! Local variables:
-    INTEGER                                       :: cerr, ierr
-    
     IF     (deg( vi) <= 4) THEN
       ! vi should be in Q4
       IF (      is_in_Q5( LDP, Q4, Q5, vi)) CALL remove_from_Q5(      LDP, Q4, Q4n, Q5, Q5n, vi)
@@ -554,9 +547,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(INOUT)     :: Q5n
     INTEGER,                    INTENT(IN)        :: vi
     
-    ! Local variables
-    INTEGER                                       :: cerr, ierr
-    
     cerr = Q5( 1)
     cerr = Q5n
     
@@ -587,9 +577,6 @@ MODULE mesh_five_colour_module
     INTEGER,  DIMENSION(:    ), INTENT(INOUT)     :: Q5
     INTEGER,                    INTENT(INOUT)     :: Q5n
     INTEGER,                    INTENT(IN)        :: vi
-    
-    ! Local variables
-    INTEGER                                       :: cerr, ierr
     
     cerr = Q4(1)
     cerr = Q4n
@@ -622,7 +609,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(IN)        :: vi
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: qi, qii, ai
     
     ai = Q5n
@@ -667,7 +653,6 @@ MODULE mesh_five_colour_module
     INTEGER,                    INTENT(IN)        :: vi
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: qi, qii, ai
     
     ai = Q4n
@@ -711,7 +696,6 @@ MODULE mesh_five_colour_module
     LOGICAL                                       :: isso
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: qi
     
     isso = .FALSE.
@@ -737,7 +721,6 @@ MODULE mesh_five_colour_module
     LOGICAL                                       :: isso
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: qi
     
     isso = .FALSE.

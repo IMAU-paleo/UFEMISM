@@ -3,7 +3,7 @@ MODULE mesh_help_functions_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync                 
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
   USE data_types_module,             ONLY: type_mesh, type_model_region
 
   IMPLICIT NONE
@@ -1504,7 +1504,7 @@ MODULE mesh_help_functions_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables
-    INTEGER                                       :: POIi, ierr, cerr
+    INTEGER                                       :: POIi
     REAL(dp)                                      :: lat, lon, x, y
     
     IF (mesh%region_name == 'NAM') THEN

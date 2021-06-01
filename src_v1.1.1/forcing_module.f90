@@ -2,7 +2,7 @@ MODULE forcing_module
  
   USE mpi
   USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, &
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                          allocate_shared_int_0D, allocate_shared_dp_0D, &
                                          allocate_shared_int_1D, allocate_shared_dp_1D, &
                                          allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -33,7 +33,6 @@ CONTAINS
     ! A continuous simulation of global ice volume over the past 1 million years with 3-D ice-sheet models, Climate Dynamics 41, 1365-1384, 2013)
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     REAL(dp)                                           :: dT_glob_inverse_average_over_window
     
     ! Not needed for benchmark experiments
@@ -88,7 +87,6 @@ CONTAINS
     ! (Berends, C. J., de Boer, B., Dolan, A. M., Hill, D. J., and van de Wal, R. S. W.: Modelling ice sheet evolution and atmospheric CO2 during the Late Pliocene, Climate of the Past 15, 1603-1619, 2019)
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     REAL(dp)                                           :: CO2_inverse_average_over_window
     
     ! Not needed for benchmark experiments
@@ -135,9 +133,6 @@ CONTAINS
     
     ! In/output variables
     TYPE(type_model_region),             INTENT(IN)    :: NAM, EAS, GRL, ANT
-    
-    ! Local variables
-    INTEGER                                            :: cerr,ierr
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -196,7 +191,6 @@ CONTAINS
     TYPE(type_model_region),             INTENT(IN)    :: NAM, EAS, GRL, ANT
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     REAL(dp)                                           :: dT_NAM, dT_EAS, dT_GRL, dT_ANT, dT_glob_average_over_window
     REAL(dp)                                           :: A_reg, A_glob
     
@@ -283,7 +277,6 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: dT
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: dT_lapse_mod, dT_lapse_PD, T_pot_mod, T_pot_PD, A_reg
     
@@ -358,7 +351,6 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables
-    INTEGER                                            :: cerr,ierr
     !CHARACTER(LEN=256)                                 :: filename
     
     ! Not needed for benchmark experiments
@@ -470,7 +462,6 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
     
     ! Local variables
-    INTEGER                                            :: cerr,ierr
     INTEGER                                            :: il, iu
     REAL(dp)                                           :: wl, wu
     
@@ -538,7 +529,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables
-    INTEGER                                            :: i,ios,cerr,ierr
+    INTEGER                                            :: i,ios
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -612,7 +603,6 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
     
     ! Local variables
-    INTEGER                                            :: cerr,ierr
     INTEGER                                            :: il, iu
     REAL(dp)                                           :: wl, wu
     
@@ -682,7 +672,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables
-    INTEGER                                            :: i,ios,cerr,ierr
+    INTEGER                                            :: i,ios
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -763,7 +753,6 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: t_coupling
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: ti0, ti1
     
     ! Not needed for benchmark experiments
@@ -887,8 +876,6 @@ CONTAINS
     
     IMPLICIT NONE
     
-    INTEGER :: cerr, ierr
-    
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
       IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
@@ -952,9 +939,6 @@ CONTAINS
   SUBROUTINE initialise_geothermal_heat_flux
 
     IMPLICIT NONE
-    
-    ! Local variables:
-    INTEGER                                       :: cerr, ierr
 
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN

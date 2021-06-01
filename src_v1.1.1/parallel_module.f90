@@ -2,18 +2,20 @@ MODULE parallel_module
   ! A collection of different routines that make parallel programming in UFEMISM a lot easier.
 
   USE mpi
-  USE configuration_module,        ONLY: dp
+  USE configuration_module,        ONLY: C, dp
+  USE data_types_module,           ONLY: type_memory_use_tracker
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER, C_LOC
   
   IMPLICIT NONE
+  
+  INTEGER :: cerr, ierr    ! Error flags for MPI routines
     
   TYPE parallel_info
     
-    INTEGER :: i        ! ID of this process (0 = master, >0 = slave)
-    INTEGER :: n        ! Total number of processes (0 = single-core, >0 = master+slaves)
-    LOGICAL :: master   ! Whether or not the current process is the master process
-    INTEGER(KIND=MPI_ADDRESS_KIND) :: mem_use  ! Amount of allocated shared memory (in bytes)
-    INTEGER(KIND=MPI_ADDRESS_KIND) :: mem_use_max  ! Maximum amount of allocated shared memory ever used (in bytes)
+    INTEGER                       :: i        ! ID of this process (0 = master, >0 = slave)
+    INTEGER                       :: n        ! Total number of processes (0 = single-core, >0 = master+slaves)
+    LOGICAL                       :: master   ! Whether or not the current process is the master process
+    TYPE(type_memory_use_tracker) :: mem      ! Memory use tracker
     
   END TYPE parallel_info
     
@@ -21,17 +23,91 @@ MODULE parallel_module
 
 CONTAINS
 
+  ! Initialise the MPI parallelisation
+  SUBROUTINE initialise_parallelisation
+    
+    IMPLICIT NONE
+    
+    ! MPI Initialisation
+    ! ==================
+    
+    ! Use MPI to create copies of the program on all the processors, so the model can run in parallel.
+    CALL MPI_INIT(ierr)
+    
+    ! Get rank of current process and total number of processes
+    CALL MPI_COMM_RANK(       MPI_COMM_WORLD, par%i, ierr)
+    CALL MPI_COMM_SIZE(       MPI_COMM_WORLD, par%n, ierr)
+    par%master = (par%i == 0)
+    
+    ! Memory use tracker
+    IF (par%master) THEN
+      par%mem%n = 0
+      ALLOCATE( par%mem%h( 50000))
+    END IF
+    CALL sync
+    
+  END SUBROUTINE initialise_parallelisation
+
   ! Synchronise the different processes
   SUBROUTINE sync
     ! Use MPI_BARRIER to synchronise all the processes         
     
     IMPLICIT NONE
     
-    INTEGER                                           :: ierr
-    
     CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
   
   END SUBROUTINE sync
+  
+  ! Reset the memory use tracker at the start of the coupling interval
+  SUBROUTINE reset_memory_use_tracker
+  
+    IMPLICIT NONE
+    
+    IF (.NOT. par%master) RETURN
+    
+    par%mem%n = 0
+    par%mem%h = 0_MPI_ADDRESS_KIND
+    
+  END SUBROUTINE reset_memory_use_tracker
+  SUBROUTINE write_to_memory_log( routine_name, n1, n2)
+  
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    CHARACTER(LEN=64),  INTENT(IN)                :: routine_name
+    INTEGER,            INTENT(IN)                :: n1, n2
+    
+    ! Local variables:
+    CHARACTER(LEN=256)                            :: filename
+    REAL(dp)                                      :: m1, m2, m_max
+    
+    IF (.NOT. (par%master .AND. C%do_write_memory_tracker)) RETURN
+      
+    filename = TRIM(C%output_dir) // 'aa_memory_use_log.txt'
+    OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
+    
+    IF (n1 == 0) THEN
+      IF (n2 == 0) THEN
+        m1    = REAL(par%mem%total,dp)/1E6_dp
+        m2    = REAL(par%mem%total,dp)/1E6_dp
+        m_max = REAL(par%mem%total,dp)/1E6_dp
+      ELSE
+        m1    = REAL(par%mem%total,dp)/1E6_dp
+        m2    = REAL(par%mem%h( n2),dp)/1E6_dp
+        m_max = REAL(MAXVAL(par%mem%h(1:n2)),dp)/1E6_dp
+      END IF
+    ELSE
+        m1    = REAL(par%mem%h( n1),dp)/1E6_dp
+        m2    = REAL(par%mem%h( n2),dp)/1E6_dp
+        m_max = REAL(MAXVAL(par%mem%h(n1:n2)),dp)/1E6_dp
+    END IF
+    
+    WRITE(UNIT = 1337, FMT = '(A64,A,F11.2,A,F11.2,A,F11.2,A,F11.2,A,F11.2,A)') routine_name, &
+      ': start = ', m1, ' MB, end = ', m2, ' MB, max = ', m_max, ' MB, base = ', m2 - m1, ' MB, peak = ', m_max - m2, ' MB'
+    
+    CLOSE(UNIT = 1337)
+  
+  END SUBROUTINE write_to_memory_log
     
   ! Allocate some shared memory space on all the processes (cannot be done on only one process).
   ! The slave process allocate zero space. The master process allocates actual space,
@@ -49,7 +125,6 @@ CONTAINS
     INTEGER,                    POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -70,8 +145,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -93,7 +171,6 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -114,8 +191,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -137,7 +217,6 @@ CONTAINS
     INTEGER,  DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -158,8 +237,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN 
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -181,7 +263,6 @@ CONTAINS
     INTEGER,  DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -202,8 +283,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -224,7 +308,6 @@ CONTAINS
     REAL(dp),                   POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -245,8 +328,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -268,7 +354,6 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -289,8 +374,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -312,7 +400,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -333,8 +420,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN    
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -356,7 +446,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
@@ -377,8 +466,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -400,7 +492,6 @@ CONTAINS
     LOGICAL,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -421,8 +512,11 @@ CONTAINS
     
     ! Update memory use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
-    IF (par%master) par%mem_use_max = MAX( par%mem_use, par%mem_use_max)
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
@@ -443,7 +537,6 @@ CONTAINS
   
     INTEGER,                             INTENT(INOUT) :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
@@ -451,7 +544,11 @@ CONTAINS
     ! Update memory use tracker
     CALL MPI_WIN_SHARED_QUERY( win, par%i, windowsize, disp_unit, baseptr, ierr)
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use - windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total - windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
     CALL MPI_WIN_FREE( win, ierr)  
   
@@ -699,7 +796,6 @@ CONTAINS
     INTEGER,                    POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -720,7 +816,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_int_0D  
   SUBROUTINE allocate_shared_dist_int_1D(  n1,         p, win)
@@ -733,7 +833,6 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -751,7 +850,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
     
   END SUBROUTINE allocate_shared_dist_int_1D
   SUBROUTINE allocate_shared_dist_int_2D(  n1, n2,     p, win)
@@ -765,7 +868,6 @@ CONTAINS
     INTEGER,  DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -786,7 +888,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_int_2D  
   SUBROUTINE allocate_shared_dist_int_3D(  n1, n2, n3, p, win)
@@ -800,7 +906,6 @@ CONTAINS
     INTEGER,  DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -821,7 +926,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_int_3D 
   SUBROUTINE allocate_shared_dist_dp_0D(               p, win)
@@ -834,7 +943,6 @@ CONTAINS
     REAL(dp),                   POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -855,7 +963,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_dp_0D  
   SUBROUTINE allocate_shared_dist_dp_1D(   n1,         p, win)
@@ -869,7 +981,6 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -890,7 +1001,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_dp_1D  
   SUBROUTINE allocate_shared_dist_dp_2D(   n1, n2,     p, win)
@@ -904,7 +1019,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -925,7 +1039,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_dp_2D  
   SUBROUTINE allocate_shared_dist_dp_3D(   n1, n2, n3, p, win)
@@ -939,7 +1057,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
@@ -960,7 +1077,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_dp_3D  
   SUBROUTINE allocate_shared_dist_bool_1D( n1,         p, win)
@@ -974,7 +1095,6 @@ CONTAINS
     LOGICAL,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
     INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
     
-    INTEGER                                            :: ierr
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
@@ -995,7 +1115,11 @@ CONTAINS
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) par%mem_use = par%mem_use + windowsize
+    IF (par%master) THEN
+      par%mem%total = par%mem%total + windowsize
+      par%mem%n = par%mem%n + 1
+      par%mem%h( par%mem%n) = par%mem%total
+    END IF
   
   END SUBROUTINE allocate_shared_dist_bool_1D
   

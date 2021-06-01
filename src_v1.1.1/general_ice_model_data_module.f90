@@ -1,8 +1,8 @@
 MODULE general_ice_model_data_module
 
   USE mpi
-  USE configuration_module,          ONLY: dp, C  
-  USE parallel_module,               ONLY: par, sync, &
+  USE configuration_module,          ONLY: dp, C
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -30,7 +30,11 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
     
     ! Local variables
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'update_general_ice_model_data'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi, aci
+    
+    n1 = par%mem%n
  
     ! Map basic ice data to Ac mesh
     CALL map_Aa_to_Ac(    mesh, ice%Hi, ice%Hi_Ac)
@@ -85,6 +89,9 @@ CONTAINS
         
     ! Calculate physical properties on both Aa and Ac mesh
     CALL ice_physical_properties( mesh, ice, time)
+    
+    n2 = par%mem%n
+    !CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE update_general_ice_model_data
   SUBROUTINE determine_masks( mesh, ice)
@@ -301,7 +308,6 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
   
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi, ci, k
     REAL(dp)                                           :: Ti_mean     ! Mean ice temperature at the shelf [K]
     REAL(dp), DIMENSION(C%nZ)                          :: prof

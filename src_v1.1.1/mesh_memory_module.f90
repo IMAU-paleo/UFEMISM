@@ -3,28 +3,29 @@ MODULE mesh_memory_module
 
   USE mpi
   USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                                    allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                                    allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                                    allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                                    allocate_shared_bool_1D, deallocate_shared, &
-                                                    adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                                    adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                                    adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                                    adapt_shared_bool_1D, &
-                                                    allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                                    allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                                    allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                                    allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                                    allocate_shared_dist_bool_1D, &
-                                                    adapt_shared_dist_int_1D,    adapt_shared_dist_dp_1D, &
-                                                    adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
-                                                    adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
-                                                    adapt_shared_dist_bool_1D, &
-                                                    share_memory_access_int_0D, share_memory_access_dp_0D, &
-                                                    share_memory_access_int_1D, share_memory_access_dp_1D, &
-                                                    share_memory_access_int_2D, share_memory_access_dp_2D, &
-                                                    share_memory_access_int_3D, share_memory_access_dp_3D
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
+                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
+                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
+                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
+                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
+                                         allocate_shared_bool_1D, deallocate_shared, &
+                                         adapt_shared_int_1D,    adapt_shared_dp_1D, &
+                                         adapt_shared_int_2D,    adapt_shared_dp_2D, &
+                                         adapt_shared_int_3D,    adapt_shared_dp_3D, &
+                                         adapt_shared_bool_1D, &
+                                         allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                         allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                         allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                         allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                         allocate_shared_dist_bool_1D, &
+                                         adapt_shared_dist_int_1D,    adapt_shared_dist_dp_1D, &
+                                         adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
+                                         adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
+                                         adapt_shared_dist_bool_1D, &
+                                         share_memory_access_int_0D, share_memory_access_dp_0D, &
+                                         share_memory_access_int_1D, share_memory_access_dp_1D, &
+                                         share_memory_access_int_2D, share_memory_access_dp_2D, &
+                                         share_memory_access_int_3D, share_memory_access_dp_3D
   USE data_types_module,           ONLY: type_mesh
 
   IMPLICIT NONE

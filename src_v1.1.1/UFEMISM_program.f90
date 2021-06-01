@@ -31,8 +31,8 @@ PROGRAM UFEMISM_program
 
   USE mpi
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-  USE parallel_module,             ONLY: par, sync
   USE configuration_module,        ONLY: dp, C, create_output_dir, read_main_config_file, initialize_main_constants
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
                                          initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
@@ -40,15 +40,14 @@ PROGRAM UFEMISM_program
                                          initialise_geothermal_heat_flux
   USE climate_module,              ONLY: initialise_climate_matrix
   USE zeta_module,                 ONLY: initialize_zeta_discretization
-  USE global_text_output_module,   ONLY: create_text_output_file, write_text_output
+  USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
 
   IMPLICIT NONE
   
   CHARACTER(LEN=256), PARAMETER          :: version_number = '1.1.1'
   
-  INTEGER                                :: p, iargc, ierr, cerr
-  INTEGER                                :: process_rank, number_of_processes
+  INTEGER                                :: p, iargc
   
   CHARACTER(LEN=256)                     :: config_filename
   
@@ -65,37 +64,12 @@ PROGRAM UFEMISM_program
   
   ! ======================================================================================
   
-  
-  ! MPI Initialisation
-  ! ==================
-  
-  ! Use MPI to create copies of the program on all the processors, so the model can run in parallel.
-  CALL MPI_INIT(ierr)
-  
-  ! Get rank of current process and total number of processes
-  CALL MPI_COMM_RANK(       MPI_COMM_WORLD, process_rank, ierr)
-  CALL MPI_COMM_SIZE(       MPI_COMM_WORLD, number_of_processes, ierr)
-
-  par%i      = process_rank
-  par%n      = number_of_processes  
-  par%master = (par%i == 0)
-  
-  IF (par%master) THEN
-    par%mem_use     = 0
-    par%mem_use_max = 0
-  END IF
-    
-  ! Paralellised mesh merging only works for up to 16 processes
-  IF (par%n < 2 .OR. par%n > 16) THEN
-    IF (par%master) WRITE(0,'(A,I2,A)') ' ERROR: parallelised mesh creation only implemented for 2 - 16 processors!'
-    IF (par%master) WRITE(0,'(A,I2,A)') ' Stopping the run.'
-    CALL MPI_FINALIZE(ierr)
-    STOP
-  END IF
+  ! Initialise the MPI parallelisation
+  CALL initialise_parallelisation
   
   IF (par%master) WRITE(0,*) ''
   IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', TRIM(version_number), ' on ', number_of_processes, ' cores ====='
+  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', TRIM(version_number), ' on ', par%n, ' cores ====='
   IF (par%master) WRITE(0,*) '=================================================='
   IF (par%master) WRITE(0,*) ''
   
@@ -143,7 +117,7 @@ PROGRAM UFEMISM_program
     ! Copy the config file to the output directory
     CALL system('cp ' // config_filename // ' ' // TRIM(C%output_dir))
     ! Create a text file for global output data
-    CALL create_text_output_file    
+    CALL create_text_output_files    
   END IF 
   CALL MPI_BCAST( C%output_dir, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
   
@@ -160,7 +134,7 @@ PROGRAM UFEMISM_program
   ! ===== Initialise the climate matrix =====
   ! =========================================
   
-  CALL initialise_climate_matrix(matrix)  
+  CALL initialise_climate_matrix(matrix) 
       
   ! ===== Initialise zeta transformation =====
   ! ==========================================
@@ -192,25 +166,25 @@ PROGRAM UFEMISM_program
   CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
     
   ! Write global data at t=0 to output file
-  IF (par%master) CALL write_text_output( &
-                          C%start_time_of_run,               &  ! time
-                          GMSL_glob,                         &  ! global mean sea level
-                          forcing%CO2_obs,                   &  ! observed CO2  from prescribed record (if any)
-                          forcing%CO2_mod,                   &  ! modelled CO2                         (if any)
-                          forcing%d18O_obs,                  &  ! observed d18O from prescribed record (if any)
-                          forcing%d18O_mod,                  &  ! modelled d18O                        (always)
-                          forcing%d18O_from_ice_volume_mod,  &  ! contribution to modelled d18O from ice volume
-                          forcing%d18O_from_temperature_mod, &  !     ""            ""          ""   deep-sea temperature change
-                          GMSL_NAM,                          &  ! contribution to GMSL from North America
-                          GMSL_EAS,                          &  ! contribution to GMSL from Eurasia
-                          GMSL_GRL,                          &  ! contribution to GMSL from Greenland
-                          GMSL_ANT,                          &  ! contribution to GMSL from Antarctica
-                          forcing%d18O_NAM,                  &  ! mean isotope content of North America
-                          forcing%d18O_EAS,                  &  ! mean isotope content of Eurasia
-                          forcing%d18O_GRL,                  &  ! mean isotope content of Greenland
-                          forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
-                          forcing%dT_glob,                   &  ! global mean surface temperature anomaly
-                          forcing%dT_deepwater               )  ! deep-water temperature anomaly
+  CALL write_text_output( &
+    C%start_time_of_run,               &  ! time
+    GMSL_glob,                         &  ! global mean sea level
+    forcing%CO2_obs,                   &  ! observed CO2  from prescribed record (if any)
+    forcing%CO2_mod,                   &  ! modelled CO2     (if any)
+    forcing%d18O_obs,                  &  ! observed d18O from prescribed record (if any)
+    forcing%d18O_mod,                  &  ! modelled d18O    (always)
+    forcing%d18O_from_ice_volume_mod,  &  ! contribution to modelled d18O from ice volume
+    forcing%d18O_from_temperature_mod, &  !     ""            ""          ""   deep-sea temperature change
+    GMSL_NAM,                          &  ! contribution to GMSL from North America
+    GMSL_EAS,                          &  ! contribution to GMSL from Eurasia
+    GMSL_GRL,                          &  ! contribution to GMSL from Greenland
+    GMSL_ANT,                          &  ! contribution to GMSL from Antarctica
+    forcing%d18O_NAM,                  &  ! mean isotope content of North America
+    forcing%d18O_EAS,                  &  ! mean isotope content of Eurasia
+    forcing%d18O_GRL,                  &  ! mean isotope content of Greenland
+    forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
+    forcing%dT_glob,                   &  ! global mean surface temperature anomaly
+    forcing%dT_deepwater               )  ! deep-water temperature anomaly
   
   ! ===== The big time loop =====
   ! =============================
@@ -223,7 +197,7 @@ PROGRAM UFEMISM_program
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
     
     ! Keep track of how much shared memory was used at the highest point of this coupling interval
-    par%mem_use_max = par%mem_use
+    CALL reset_memory_use_tracker
   
     ! Update global insolation forcing, CO2, and d18O at the current model time
     CALL update_insolation_data(    t_coupling)
@@ -285,25 +259,25 @@ PROGRAM UFEMISM_program
     END IF
     
     ! Write global data to output file
-    IF (par%master) CALL write_text_output( &
-                            t_coupling,                        &  ! time
-                            GMSL_glob,                         &  ! global mean sea level
-                            forcing%CO2_obs,                   &  ! observed CO2  from prescribed record (if any)
-                            forcing%CO2_mod,                   &  ! modelled CO2                         (if any)
-                            forcing%d18O_obs,                  &  ! observed d18O from prescribed record (if any)
-                            forcing%d18O_mod,                  &  ! modelled d18O                        (always)
-                            forcing%d18O_from_ice_volume_mod,  &  ! contribution to modelled d18O from ice volume
-                            forcing%d18O_from_temperature_mod, &  !     ""            ""          ""   deep-sea temperature change
-                            GMSL_NAM,                          &  ! contribution to GMSL from North America
-                            GMSL_EAS,                          &  ! contribution to GMSL from Eurasia
-                            GMSL_GRL,                          &  ! contribution to GMSL from Greenland
-                            GMSL_ANT,                          &  ! contribution to GMSL from Antarctica
-                            forcing%d18O_NAM,                  &  ! mean isotope content of North America
-                            forcing%d18O_EAS,                  &  ! mean isotope content of Eurasia
-                            forcing%d18O_GRL,                  &  ! mean isotope content of Greenland
-                            forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
-                            forcing%dT_glob,                   &  ! global mean surface temperature anomaly
-                            forcing%dT_deepwater               )  ! deep-water temperature anomaly
+    CALL write_text_output( &
+      t_coupling,  &  ! time
+      GMSL_glob,   &  ! global mean sea level
+      forcing%CO2_obs,                   &  ! observed CO2  from prescribed record (if any)
+      forcing%CO2_mod,                   &  ! modelled CO2   (if any)
+      forcing%d18O_obs,                  &  ! observed d18O from prescribed record (if any)
+      forcing%d18O_mod,                  &  ! modelled d18O  (always)
+      forcing%d18O_from_ice_volume_mod,  &  ! contribution to modelled d18O from ice volume
+      forcing%d18O_from_temperature_mod, &  !     ""            ""          ""   deep-sea temperature change
+      GMSL_NAM,    &  ! contribution to GMSL from North America
+      GMSL_EAS,    &  ! contribution to GMSL from Eurasia
+      GMSL_GRL,    &  ! contribution to GMSL from Greenland
+      GMSL_ANT,    &  ! contribution to GMSL from Antarctica
+      forcing%d18O_NAM,                  &  ! mean isotope content of North America
+      forcing%d18O_EAS,                  &  ! mean isotope content of Eurasia
+      forcing%d18O_GRL,                  &  ! mean isotope content of Greenland
+      forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
+      forcing%dT_glob,                   &  ! global mean surface temperature anomaly
+      forcing%dT_deepwater               )  ! deep-water temperature anomaly
       
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)
   

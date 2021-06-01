@@ -2,7 +2,7 @@ MODULE reference_fields_module
 
   USE mpi
   USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, &
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                          allocate_shared_int_0D, allocate_shared_dp_0D, &
                                          allocate_shared_int_1D, allocate_shared_dp_1D, &
                                          allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -29,7 +29,12 @@ CONTAINS
     TYPE(type_PD_data_fields),      INTENT(INOUT) :: PD
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     
+    ! Local variables:
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_PD_data_fields'
+    INTEGER                                       :: n1, n2
     INTEGER                                       :: i,j
+    
+    n1 = par%mem%n
     
     IF (C%do_benchmark_experiment) THEN
       ! Benchmark experiments: don't read data from an input file, but generate it internally
@@ -131,6 +136,9 @@ CONTAINS
     END DO ! DO i = MAX(2,PD%i1), MIN(PD%nx-1,PD%i2)
     CALL sync
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_PD_data_fields
   SUBROUTINE initialise_PD_data_fields_benchmarks( PD)
     ! Initialising PD reference data for the different benchmark experiments
@@ -143,7 +151,7 @@ CONTAINS
     TYPE(type_PD_data_fields),      INTENT(INOUT) :: PD
     
     ! Local variables:
-    INTEGER                                       :: i, j, cerr, ierr
+    INTEGER                                       :: i, j
     REAL(dp)                                      :: R
     
     REAL(dp), PARAMETER                           :: EISMINT_xmin = -750000._dp
@@ -273,8 +281,13 @@ CONTAINS
     TYPE(type_init_data_fields),    INTENT(INOUT) :: init
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     
+    ! Local variables:
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_init_data_fields'
+    INTEGER                                       :: n1, n2
     INTEGER                                       :: i,j
     REAL(dp)                                      :: dx, dy, d2dx2, d2dy2, d2dxdy
+    
+    n1 = par%mem%n
     
     IF (C%do_benchmark_experiment) THEN
       ! Benchmark experiments: don't read data from an input file, but generate it internally
@@ -405,6 +418,9 @@ CONTAINS
     END DO
     CALL sync
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_init_data_fields
   SUBROUTINE initialise_init_data_fields_benchmarks( init)
     ! Initialising init reference data for the different benchmark experiments
@@ -415,7 +431,7 @@ CONTAINS
     TYPE(type_init_data_fields),    INTENT(INOUT) :: init
     
     ! Local variables:
-    INTEGER                                       :: i, j, cerr, ierr
+    INTEGER                                       :: i, j
     REAL(dp)                                      :: R
     
     REAL(dp), PARAMETER                           :: EISMINT_xmin = -750000._dp
@@ -610,7 +626,13 @@ CONTAINS
     TYPE(type_mesh),                INTENT(INOUT) :: mesh
     TYPE(type_PD_data_fields),      INTENT(INOUT) :: PD
     
+    ! Local variables
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'map_PD_data_to_mesh'
+    INTEGER                                       :: n1, n2
+    
     IF (par%master) WRITE(0,*) '  Mapping PD   reference data to the mesh...'
+    
+    n1 = par%mem%n
     
     ! Calculate mapping arrays
     CALL create_remapping_arrays_mesh_grid( mesh, PD%grid)
@@ -627,6 +649,9 @@ CONTAINS
     
     ! Deallocate remapping arrays
     CALL deallocate_remapping_arrays_mesh_grid( PD%grid)
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
   
   END SUBROUTINE map_PD_data_to_mesh
   SUBROUTINE map_init_data_to_mesh( mesh, init)
@@ -639,9 +664,13 @@ CONTAINS
     TYPE(type_init_data_fields),    INTENT(INOUT) :: init
     
     ! Local variables
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'map_init_data_to_mesh'
+    INTEGER                                       :: n1, n2
     INTEGER                                       :: vi
     
     IF (par%master) WRITE(0,*) '  Mapping init reference data to the mesh...'
+    
+    n1 = par%mem%n
     
     ! Calculate mapping arrays
     CALL create_remapping_arrays_mesh_grid( mesh, init%grid)
@@ -668,6 +697,9 @@ CONTAINS
     
     ! Deallocate remapping arrays
     CALL deallocate_remapping_arrays_mesh_grid( init%grid)
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
   
   END SUBROUTINE map_init_data_to_mesh
   

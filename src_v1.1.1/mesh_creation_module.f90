@@ -3,23 +3,24 @@ MODULE mesh_creation_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                                      allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                                      allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                                      allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                                      allocate_shared_bool_1D, deallocate_shared, &
-                                                      adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                                      adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                                      adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                                      adapt_shared_bool_1D, &
-                                                      allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                                      allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                                      allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                                      allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                                      allocate_shared_dist_bool_1D
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
+                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
+                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
+                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
+                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
+                                           allocate_shared_bool_1D, deallocate_shared, &
+                                           adapt_shared_int_1D,    adapt_shared_dp_1D, &
+                                           adapt_shared_int_2D,    adapt_shared_dp_2D, &
+                                           adapt_shared_int_3D,    adapt_shared_dp_3D, &
+                                           adapt_shared_bool_1D, &
+                                           allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                           allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                           allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                           allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                           allocate_shared_dist_bool_1D
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_init_data_fields
   USE mesh_help_functions_module,    ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
-                                          determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
+                                           determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
                                            cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
                                            min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
                                            find_POI_xy_coordinates, find_Voronoi_cell_geometric_centres, partition_domain_regular, find_POI_vertices_and_weights, &
@@ -359,12 +360,15 @@ MODULE mesh_creation_module
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'create_mesh_from_cart_data'
+    INTEGER                                       :: n1, n2
     INTEGER                                       :: orientation
     TYPE(type_mesh)                               :: submesh
     REAL(dp)                                      :: xmin, xmax, ymin, ymax
     REAL(dp)                                      :: res_min_inc
     CHARACTER(LEN=2)                              :: str_processid
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE(0,*) '  Creating the first mesh...'
     
@@ -475,6 +479,9 @@ MODULE mesh_creation_module
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
     END IF
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE create_mesh_from_cart_data
   
   ! == Extended and basic Ruppert's algorithm
@@ -488,7 +495,7 @@ MODULE mesh_creation_module
     TYPE(type_init_data_fields),INTENT(IN)        :: init
     
     ! Local variables
-    INTEGER                                       :: ti, ierr
+    INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
     
@@ -574,7 +581,7 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables
-    INTEGER                                       :: ti, ierr
+    INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
     
@@ -656,7 +663,7 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables
-    INTEGER                                       :: ti, ierr
+    INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
     
@@ -876,7 +883,7 @@ MODULE mesh_creation_module
     INTEGER,                    INTENT(IN)        :: p_left, p_right
     INTEGER,                    INTENT(OUT)       :: nVl_east, nVr_west
     
-    INTEGER                                       :: ierr, status(MPI_STATUS_SIZE)
+    INTEGER                                       :: status(MPI_STATUS_SIZE)
     
     INTEGER                                       :: nVl_tot, nVr_tot, nV_extra
     INTEGER,  DIMENSION(:  ), ALLOCATABLE         :: Vil_east, Vir_west, Vi_dummy
@@ -1348,7 +1355,7 @@ MODULE mesh_creation_module
     ! Local variables
     TYPE(type_mesh)                               :: submesh_right
     
-    INTEGER                                       :: ierr, status(MPI_STATUS_SIZE)
+    INTEGER                                       :: status(MPI_STATUS_SIZE)
     
     INTEGER                                       :: p_left, p_right, i
     
@@ -1686,7 +1693,6 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables
-    INTEGER                                       :: ierr
     INTEGER                                       :: nV, nTri
     
     ! Communicate final merged mesh size to all processes

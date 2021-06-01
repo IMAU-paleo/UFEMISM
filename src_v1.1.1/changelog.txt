@@ -1,9 +1,15 @@
 =================================
 UFEMISM v1.1.1 changelog
 =================================
+Small changes to some of the remapping codes for improved memory efficiency.
 
-Small change to the mesh-to-grid remapping code; changed the structure of the
-remapping arrays from matrix-based to list-based to drastically reduce memory use.
+General:
+- Added a more elaborate memory use tracker, complete with its own output log file.
+
+Mesh:
+- mesh-to-grid remapping code; changed the structure of the
+  remapping arrays from matrix-based to list-based to reduce memory use.
+- mesh-to-mesh remapping code: same.
 
 =================================
 UFEMISM v1.1 changelog

@@ -2,7 +2,7 @@ MODULE SMB_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -42,11 +42,14 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_SMB_model'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi,m
     INTEGER                                            :: mprev
     REAL(dp)                                           :: snowfrac, liquid_water, sup_imp_wat
     REAL(dp)                                           :: R
+    
+    n1 = par%mem%n
     
     ! Check if we need to apply any special benchmark experiment SMB
     IF (C%do_benchmark_experiment) THEN
@@ -159,6 +162,9 @@ CONTAINS
       
     END DO
     CALL sync
+    
+    n2 = par%mem%n
+    !CALL write_to_memory_log( routine_name, n1, n2)
           
   END SUBROUTINE run_SMB_model
   
@@ -289,7 +295,11 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_SMB_model'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE (0,*) '  Initialising SMB model...'
     
@@ -359,7 +369,7 @@ CONTAINS
       SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
       SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
       
-    END DO
+    END DO ! DO vi = mesh%v1, mesh%v2
     CALL sync
     
     ! If we're doing a restart, initialise with that
@@ -387,7 +397,10 @@ CONTAINS
       END DO
       CALL sync
       
-    END IF
+    END IF ! IF (C%is_restart) THEN
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
   
   END SUBROUTINE initialise_SMB_model  
   SUBROUTINE remap_SMB_model( mesh_old, mesh_new, map, SMB)

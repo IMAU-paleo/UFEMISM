@@ -3,15 +3,16 @@ MODULE mesh_ArakawaC_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                                      allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                                      allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                                      allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                                      allocate_shared_bool_1D, deallocate_shared, &
-                                                      adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                                      adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                                      adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                                      adapt_shared_bool_1D               
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
+                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
+                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
+                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
+                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
+                                           allocate_shared_bool_1D, deallocate_shared, &
+                                           adapt_shared_int_1D,    adapt_shared_dp_1D, &
+                                           adapt_shared_int_2D,    adapt_shared_dp_2D, &
+                                           adapt_shared_int_3D,    adapt_shared_dp_3D, &
+                                           adapt_shared_bool_1D               
   USE data_types_module,             ONLY: type_mesh
   USE mesh_help_functions_module,    ONLY: is_boundary_segment, partition_list
   USE mesh_derivatives_module,       ONLY: get_neighbour_functions_vertex_gr
@@ -291,7 +292,6 @@ MODULE mesh_ArakawaC_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables:
-    INTEGER                                       :: cerr, ierr
     INTEGER                                       :: vi, vj, ci, aci, ai, vk, vl, vr, aci1, aci2, aci3, aci4
     LOGICAL                                       :: switchthem
     INTEGER                                       :: ti, vip, viq, vir, aci_pq, aci_qr, aci_rp, acj, ack, iti

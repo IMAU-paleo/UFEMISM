@@ -3,7 +3,7 @@ MODULE mesh_update_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync              
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
   USE data_types_module,             ONLY: type_mesh, type_model_region, type_ice_model, type_PD_data_fields
   USE mesh_help_functions_module,    ONLY: cart_bilinear_dp, max_cart_over_triangle_dp, mesh_bilinear_dp, is_in_triangle, check_mesh, &
                                            partition_domain_regular, partition_domain_x_balanced, partition_domain_y_balanced, is_walltowall, &
@@ -240,14 +240,17 @@ MODULE mesh_update_module
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
     ! Local variables
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'create_new_mesh'
+    INTEGER                                       :: n1, n2
     INTEGER                                       :: vi
     REAL(dp)                                      :: d2dx2, d2dxdy, d2dy2
-    
     INTEGER                                       :: orientation, it
     TYPE(type_mesh)                               :: submesh
     REAL(dp)                                      :: xmin, xmax, ymin, ymax
     REAL(dp)                                      :: res_min_inc
     CHARACTER(LEN=2)                              :: str_processid
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE(0,*) '  Creating a new mesh for region ', region%mesh%region_name, '...'
     
@@ -339,6 +342,9 @@ MODULE mesh_update_module
       WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh_new%nTri
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh_new%resolution_min/1000._dp, ' - ', region%mesh_new%resolution_max/1000._dp, ' km'
     END IF
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE create_new_mesh
   
@@ -445,7 +451,7 @@ MODULE mesh_update_module
     TYPE(type_PD_data_fields),  INTENT(IN)        :: PD
     
     ! Local variables
-    INTEGER                                       :: ti, ierr
+    INTEGER                                       :: ti
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
     REAL(dp), DIMENSION(2)                        :: p
     
@@ -537,7 +543,7 @@ MODULE mesh_update_module
     REAL(dp),                   INTENT(OUT)       :: fitness
     
     ! Local variables
-    INTEGER                                       :: ti, i, ierr, status(MPI_STATUS_SIZE)
+    INTEGER                                       :: ti, i, status(MPI_STATUS_SIZE)
     INTEGER                                       :: v1, v2, v3
     REAL(dp), DIMENSION(2)                        :: p,q,r,pq,qr,rp
     REAL(dp)                                      :: dmax

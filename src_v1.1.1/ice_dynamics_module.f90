@@ -4,8 +4,7 @@ MODULE ice_dynamics_module
   USE mpi
   USE configuration_module,          ONLY: dp, C
   USE parameters_module,             ONLY: seawater_density, ice_density, T0
-  USE zeta_module,                   ONLY: vertical_integrate, vertical_average
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -14,6 +13,7 @@ MODULE ice_dynamics_module
   USE data_types_module,             ONLY: type_mesh, type_ice_model, type_init_data_fields, type_SMB_model, type_BMB_model, &
                                            type_remapping, type_PD_data_fields
   USE netcdf_module,                 ONLY: debug, write_to_debug_file
+  USE zeta_module,                   ONLY: vertical_integrate, vertical_average
   USE mesh_derivatives_module,       ONLY: get_mesh_derivatives, get_mesh_curvatures_vertex, apply_Neumann_boundary, &
                                            apply_Neumann_boundary_3D, get_mesh_derivatives_vertex_3D
   USE mesh_mapping_module,           ONLY: remap_field_dp, remap_field_dp_3D, remap_field_dp_monthly, &
@@ -44,7 +44,6 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     
     ! Local variables
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: Upar
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
@@ -418,7 +417,6 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     LOGICAL                                            :: set_SSA_velocities_to_zero
     LOGICAL                                            :: has_converged
     INTEGER                                            :: viscosity_iteration_i
@@ -570,7 +568,6 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: did_reset
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     INTEGER                                            :: ai, ci, ac
     LOGICAL                                            :: is_edge
     REAL(dp)                                           :: Uxxi, Uxyi, Uyyi, Vxxi, Vxyi, Vyyi
@@ -579,9 +576,6 @@ CONTAINS
     LOGICAL                                            :: has_converged
     INTEGER                                            :: inner_loop_i
     REAL(dp)                                           :: max_residual_UV
-    
-    cerr = 0
-    ierr = 0
       
     ! Calculate the right-hand sides of the PDE's
     DO ai = mesh%a1, mesh%a2
@@ -742,7 +736,6 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: ai
     REAL(dp), PARAMETER                                :: delta_v = 1E-3_dp                    ! Normalisation parameter to prevent errors when velocity is zero
     REAL(dp), PARAMETER                                :: q_plastic            = 0.30_dp       ! Parameter used for basal stress (inverse of m_flow)
@@ -866,7 +859,6 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: aci, vi, vj
     REAL(dp)                                           :: TAFi, TAFj, lambda_GL, Hi_GL, phi_fric_GL, A_flow_GL
     REAL(dp)                                           :: exponent_Schoof, C_sliding, factor_Schoof, factor_Tsai
@@ -969,7 +961,10 @@ CONTAINS
     TYPE(type_init_data_fields),         INTENT(IN)    :: init
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_ice_model'
+    INTEGER                                            :: n1, n2
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE(0,*) '  Initialising ice dynamics model...'
     
@@ -1000,6 +995,9 @@ CONTAINS
       ice%U_SSA( mesh%v1:mesh%v2) = init%U_SSA( mesh%v1:mesh%v2)
       ice%V_SSA( mesh%v1:mesh%v2) = init%V_SSA( mesh%v1:mesh%v2)
     END IF
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE initialise_ice_model
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
@@ -1206,9 +1204,6 @@ CONTAINS
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
-    
-    ! Local variables:
-    INTEGER                                            :: cerr, ierr
         
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
     CALL remap_field_dp(         mesh_old, mesh_new, map, ice%Hi,                  ice%wHi,                  'cons_1st_order')

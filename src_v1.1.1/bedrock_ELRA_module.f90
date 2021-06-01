@@ -2,7 +2,7 @@ MODULE bedrock_ELRA_module
 
   USE mpi
   USE configuration_module,            ONLY: dp, C
-  USE parallel_module,                 ONLY: par, sync, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                              allocate_shared_int_0D, allocate_shared_dp_0D, &
                                              allocate_shared_int_1D, allocate_shared_dp_1D, &
                                              allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -29,7 +29,6 @@ CONTAINS
     TYPE(type_model_region),         INTENT(INOUT)     :: region
     
     ! Local variables:
-    INTEGER                                            :: cerr,ierr
     INTEGER                                            :: vi
     
     ! Exceptions for benchmark experiments
@@ -173,9 +172,12 @@ CONTAINS
     TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_ELRA_model'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: i,j,n,k,l
     REAL(dp)                                           :: Lr, r
+    
+    n1 = par%mem%n
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -240,6 +242,9 @@ CONTAINS
     ! ===============================
     
     CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, PD)
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
         
   END SUBROUTINE initialise_ELRA_model
   SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, PD)
@@ -278,7 +283,6 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: int_dummy
     
     ! Exceptions for benchmark experiments

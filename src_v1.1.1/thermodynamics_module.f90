@@ -2,7 +2,7 @@ MODULE thermodynamics_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -31,7 +31,6 @@ CONTAINS
     TYPE(type_SMB_model),                INTENT(IN)    :: SMB
 
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: dTi_dx, dTi_dy, internal_heating, f1, f2, f3
     REAL(dp), DIMENSION(2:C%NZ)                        :: alpha
@@ -369,7 +368,6 @@ CONTAINS
     TYPE(type_climate_model),            INTENT(IN)    :: climate
     
     ! Local variables
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: T_surf_annual
     

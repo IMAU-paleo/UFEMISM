@@ -1,23 +1,28 @@
 MODULE global_text_output_module
 
   USE mpi
-  USE parallel_module,                 ONLY: par, sync
   USE configuration_module,            ONLY: dp, C
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr
 
   IMPLICIT NONE
 
 CONTAINS
   
-  SUBROUTINE create_text_output_file
+  SUBROUTINE create_text_output_files
     
     IMPLICIT NONE
     
     CHARACTER(LEN=256)                            :: filename
     
+    IF (.NOT. par%master) RETURN
+    
+    ! The general output file
+    ! =======================
+    
     filename = TRIM(C%output_dir) // 'aa_general_output.txt'
     OPEN(UNIT  = 1337, FILE = filename, STATUS = 'NEW')
     
-    WRITE(UNIT = 1337, FMT = '(A)') '% IMAU-ICE global output data'
+    WRITE(UNIT = 1337, FMT = '(A)') '% UFEMISM global output data'
     WRITE(UNIT = 1337, FMT = '(A)') '%'
     WRITE(UNIT = 1337, FMT = '(A)') '% Time     : in yr, so LGM occurs at -21000'
     WRITE(UNIT = 1337, FMT = '(A)') '% sealevel : global mean sea level in m w.r.t. PD, so a sea-level drop shows up as a negative number'
@@ -37,14 +42,29 @@ CONTAINS
     WRITE(UNIT = 1337, FMT = '(A)') '% d18O_ANT : contribution to benthic d18O       from the Antarctic      ice sheet'
     WRITE(UNIT = 1337, FMT = '(A)') '% dT_glob  : global mean annual surface temperature change (scaled to sea-level)'
     WRITE(UNIT = 1337, FMT = '(A)') '% dT_dw    : deep-water temperature anomaly'
-    WRITE(UNIT = 1337, FMT = '(A)') '% mem_use  : maximum amount of RAM used by the model (Gb)'
+    WRITE(UNIT = 1337, FMT = '(A)') '% dT_dw    : maximum memory use (GB)'
     WRITE(UNIT = 1337, FMT = '(A)') ''
     WRITE(UNIT = 1337, FMT = '(A,A)') '     Time     sealevel    CO2_obs    CO2_mod   d18O_obs   d18O_mod   d18O_ice   d18O_Tdw     ', &
-                                      'SL_NAM     SL_EAS     SL_GRL     SL_ANT   d18O_NAM   d18O_EAS   d18O_GRL   d18O_ANT    dT_glob      dT_dw     mem_use'
+                                      'SL_NAM     SL_EAS     SL_GRL     SL_ANT   d18O_NAM   d18O_EAS   d18O_GRL   d18O_ANT    dT_glob      dT_dw    mem_use'
     
     CLOSE(UNIT = 1337)
     
-  END SUBROUTINE create_text_output_file
+    ! The memory use log
+    ! ==================
+
+    IF (C%do_write_memory_tracker) THEN
+  
+      filename = TRIM(C%output_dir) // 'aa_memory_use_log.txt'
+      OPEN(UNIT  = 1337, FILE = filename, STATUS = 'NEW')
+      
+      WRITE(UNIT = 1337, FMT = '(A)') '% UFEMISM memory use log'
+      WRITE(UNIT = 1337, FMT = '(A)') ''
+      
+      CLOSE(UNIT = 1337)
+  
+    END IF ! IF (C%do_write_memory_tracker) THENc
+    
+  END SUBROUTINE create_text_output_files
   SUBROUTINE write_text_output( time, SL_glob, CO2_obs, CO2_mod, d18O_obs, d18O_mod, d18O_ice, d18O_Tdw, &
     SL_NAM, SL_EAS, SL_GRL, SL_ANT, d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT, dT_glob, dT_deepwater)
     ! Write data to global output file
@@ -59,6 +79,11 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256)                            :: filename
+    
+    IF (.NOT. par%master) RETURN
+    
+    ! The general output file
+    ! =======================
             
     filename = TRIM(C%output_dir) // 'aa_general_output.txt'
     OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
@@ -82,7 +107,7 @@ CONTAINS
       d18O_ANT,     &                       ! 16
       dT_glob,      &                       ! 17
       dT_deepwater, &                       ! 18
-      REAL(par%mem_use_max,dp) / 1E9_dp     ! 19
+      REAL(MAXVAL(par%mem%h(1:par%mem%n)),dp)/1e9_dp ! 19
     
     CLOSE(UNIT = 1337)
     

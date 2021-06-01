@@ -1,14 +1,14 @@
 MODULE UFEMISM_main_model
 
   USE mpi
-  USE parallel_module,               ONLY: par, sync, &
+  USE configuration_module,          ONLY: dp, C
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
                                            allocate_shared_int_3D, allocate_shared_dp_3D, &
                                            deallocate_shared
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping
-  USE configuration_module,          ONLY: dp, C  
   USE parameters_module,             ONLY: seawater_density, ice_density
   USE reference_fields_module,       ONLY: initialise_PD_data_fields, initialise_init_data_fields, &
                                            map_PD_data_to_mesh, map_init_data_to_mesh
@@ -45,7 +45,6 @@ CONTAINS
     REAL(dp),                   INTENT(IN)        :: t_end
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
     REAL(dp)                                      :: meshfitness
     REAL(dp)                                      :: t1, t2
     
@@ -253,11 +252,11 @@ CONTAINS
     TYPE(type_remapping)                               :: map
     
     ! Create a new mesh
-    CALL create_new_mesh( region)      
+    CALL create_new_mesh( region)
     
     IF (par%master) WRITE(0,*) '  Mapping model data to the new mesh...'
     
-    ! Calculate the mapping arrays    
+    ! Calculate the mapping arrays
     CALL create_remapping_arrays( region%mesh, region%mesh_new, map)
     
     ! Update the square grid mapping arrays (needed for remapping/reinitialising the climate model)
@@ -327,7 +326,10 @@ CONTAINS
     TYPE(type_climate_matrix),  INTENT(IN)        :: matrix
     
     ! Local variables
-    INTEGER                                       :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model'
+    INTEGER                                       :: n1, n2
+    
+    n1 = par%mem%n
               
     ! Basic initialisation
     ! ====================
@@ -459,19 +461,16 @@ CONTAINS
     ! =============================    
     
     CALL initialise_climate_model( region%climate, matrix, region%mesh, region%PD, region%name, region%mask_noice, region%grid_smooth)
-    CALL sync    
     
     ! ===== The SMB model =====
     ! =========================    
     
     CALL initialise_SMB_model( region%mesh, region%init, region%SMB, region%name)
-    CALL sync     
     
     ! ===== The BMB model =====
     ! =========================    
     
-    CALL initialise_BMB_model( region%mesh, region%BMB, region%name)    
-    CALL sync   
+    CALL initialise_BMB_model( region%mesh, region%BMB, region%name) 
   
     ! ===== The ice dynamics model
     ! ============================
@@ -513,6 +512,9 @@ CONTAINS
     ! ===== ASCII output (computation time tracking, general output)
     IF (par%master) CALL create_text_output_files( region)
     
+    n2 = par%mem%n
+    !CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_model
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
     ! Initialise a regular square grid enveloping this model region
@@ -525,8 +527,12 @@ CONTAINS
     REAL(dp),                   INTENT(IN)        :: dx
     
     ! Local variables:
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model_square_grid'
+    INTEGER                                       :: n1, n2
     REAL(dp)                                      :: xmid, ymid
     INTEGER                                       :: nsx, nsy, i, j
+    
+    n1 = par%mem%n
     
     nsx = 0
     nsy = 0
@@ -595,6 +601,9 @@ CONTAINS
     ! Calculate mapping arrays between the mesh and the grid
     CALL create_remapping_arrays_mesh_grid( region%mesh, grid)
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_model_square_grid
   SUBROUTINE initialise_mask_noice( region, mesh)
     ! Mask a certain area where no ice is allowed to grow. This is used to "remove"
@@ -607,10 +616,13 @@ CONTAINS
     TYPE(type_mesh),                 INTENT(IN)        :: mesh
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_mask_noice'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
     REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
+    
+    n1 = par%mem%n
     
     region%mask_noice( mesh%v1:mesh%v2) = 0
     
@@ -687,6 +699,9 @@ CONTAINS
       
     END IF ! IF (region%name == 'NAM') THEN
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_mask_noice
   
   ! Calculate critical time steps from the SIA and SSA, and determine which actions should be taken
@@ -706,7 +721,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: t_end
     
     ! Local variables:
-    INTEGER                                     :: ci, vi, vj, k, ierr
+    INTEGER                                     :: ci, vi, vj, k
     REAL(dp)                                    :: dist
     REAL(dp)                                    :: dt_D_2D,     dt_D_2D_min
     REAL(dp)                                    :: dt_V_3D_SIA, dt_V_3D_SIA_min
@@ -836,7 +851,7 @@ CONTAINS
     
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
-    INTEGER                                       :: vi,ierr
+    INTEGER                                       :: vi
     REAL(dp)                                      :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
     
     ice_area                   = 0._dp
@@ -876,7 +891,7 @@ CONTAINS
     
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
-    INTEGER                                       :: i, j, ierr
+    INTEGER                                       :: i, j
     REAL(dp)                                      :: ice_volume, thickness_above_flotation, ice_volume_above_flotation
     
     ice_volume                 = 0._dp

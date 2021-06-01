@@ -113,9 +113,10 @@ MODULE configuration_module
   ! This works fine locally, on LISA its better to use a fixed folder name.
   ! =======================================================================
   
-  LOGICAL            :: create_new_output_dir_config = .TRUE.
-  CHARACTER(LEN=256) :: output_dir_config            = 'results_UFEMISM'
-  LOGICAL            :: do_write_debug_data_config   = .FALSE.
+  LOGICAL            :: create_new_output_dir_config   = .TRUE.
+  CHARACTER(LEN=256) :: output_dir_config              = 'results_UFEMISM'
+  LOGICAL            :: do_write_debug_data_config     = .FALSE.
+  LOGICAL            :: do_write_memory_tracker_config = .FALSE.
 
   ! The scaled vertical coordinate zeta, used mainly in thermodynamics
   ! ==================================================================
@@ -464,6 +465,7 @@ MODULE configuration_module
     LOGICAL                  :: create_new_output_dir
     CHARACTER(LEN=256)       :: output_dir
     LOGICAL                  :: do_write_debug_data
+    LOGICAL                  :: do_write_memory_tracker
 
     ! Scaled vertical coordinate zeta  
     ! ===============================
@@ -792,6 +794,7 @@ CONTAINS
                      create_new_output_dir_config,               &
                      output_dir_config,                          &
                      do_write_debug_data_config,                 &
+                     do_write_memory_tracker_config,             &
                      nz_config,                                  &
                      zeta_config,                                &
                      filename_init_NAM_config,                   &
@@ -1102,6 +1105,7 @@ CONTAINS
     C%create_new_output_dir               = create_new_output_dir_config
     C%output_dir                          = output_dir_config
     C%do_write_debug_data                 = do_write_debug_data_config
+    C%do_write_memory_tracker             = do_write_memory_tracker_config
 
     ! Scaled vertical coordinate zeta  
     ! ===============================

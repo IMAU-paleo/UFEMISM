@@ -2,7 +2,7 @@ MODULE BMB_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -33,19 +33,19 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_BMB_model'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi
-    
     REAL(dp)                                           :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
     REAL(dp)                                           :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
     REAL(dp)                                           :: BMB_deepocean                         ! Sub-shelf melt rate for deep-ocean areas   [m/year]
     REAL(dp)                                           :: w_ins, w_PD, w_warm, w_cold, w_deep, w_expo, weight
-    
     REAL(dp)                                           :: T_freeze                              ! Freezing temperature at the base of the shelf (Celcius)
     REAL(dp)                                           :: water_depth
-    
     REAL(dp), PARAMETER                                :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1) 
     REAL(dp), PARAMETER                                :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
+    
+    n1 = par%mem%n
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -201,6 +201,9 @@ CONTAINS
     ! Add sheet and shelf melt together
     BMB%BMB( mesh%v1:mesh%v2) = BMB%BMB_sheet( mesh%v1:mesh%v2) + BMB%BMB_shelf( mesh%v1:mesh%v2)
     CALL sync
+    
+    n2 = par%mem%n
+    !CALL write_to_memory_log( routine_name, n1, n2)
           
   END SUBROUTINE run_BMB_model
   
@@ -339,10 +342,16 @@ CONTAINS
     
     IMPLICIT NONE
     
-    !In/output variables
+    ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    
+    ! Local variables:
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_BMB_model'
+    INTEGER                                            :: n1, n2
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE (0,*) '  Initialising BMB model...'
     
@@ -415,6 +424,9 @@ CONTAINS
       BMB%subshelf_melt_factor       = C%subshelf_melt_factor_ANT
       BMB%deep_ocean_threshold_depth = C%deep_ocean_threshold_depth_ANT
     END IF
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
       
   END SUBROUTINE initialise_BMB_model
   SUBROUTINE remap_BMB_model( mesh_old, mesh_new, map, BMB)

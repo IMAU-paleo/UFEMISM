@@ -2,7 +2,7 @@ MODULE isotopes_module
  
   USE mpi
   USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, &
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                          allocate_shared_int_0D, allocate_shared_dp_0D, &
                                          allocate_shared_int_1D, allocate_shared_dp_1D, &
                                          allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -35,7 +35,6 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Local variables
-    INTEGER                                            :: ierr, cerr
     INTEGER                                            :: vi, ci, vj, aci
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
     REAL(dp)                                           :: IsoMin,IsoMax    ! minimum and maximum value of IsoIce
@@ -186,7 +185,6 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: d18O_contribution
     
     ! Local variables
-    INTEGER                                            :: ierr
     INTEGER                                            :: vi
     REAL(dp)                                           :: Hi_msle
     REAL(dp)                                           :: total_isotope_content
@@ -237,9 +235,12 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Local variables
-    INTEGER                                            :: ierr, cerr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_isotopes_model'
+    INTEGER                                            :: n1, n2
     INTEGER                                            :: vi
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
+    
+    n1 = par%mem%n
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -325,6 +326,9 @@ CONTAINS
     ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
     CALL calculate_isotope_content( region%mesh, region%ice%Hi, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
     
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
+    
   END SUBROUTINE initialise_isotopes_model
   SUBROUTINE calculate_reference_isotopes( region)
     ! Allocate memory for the data fields of the isotopes model.
@@ -335,7 +339,6 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Local variables
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi
     
     ! Not needed for benchmark experiments
@@ -374,9 +377,6 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
-    ! Local variables:
-    INTEGER                                            :: cerr, ierr
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN

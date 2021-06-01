@@ -2,7 +2,7 @@ MODULE zeta_module
 
   USE configuration_module,        ONLY: dp, C
   USE data_types_module,           ONLY: type_mesh, type_ice_model
-  USE parallel_module,             ONLY: par, sync
+  USE parallel_module,             ONLY: par, sync, ierr, cerr
   
   IMPLICIT NONE
   

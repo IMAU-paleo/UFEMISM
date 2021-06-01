@@ -2,7 +2,7 @@ MODULE climate_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, &
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                            allocate_shared_int_0D, allocate_shared_dp_0D, &
                                            allocate_shared_int_1D, allocate_shared_dp_1D, &
                                            allocate_shared_int_2D, allocate_shared_dp_2D, &
@@ -40,7 +40,10 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_climate_model'
+    INTEGER                                            :: n1, n2
+    
+    n1 = par%mem%n
     
     ! Check if we need to apply any special benchmark experiment climate
     IF (C%do_benchmark_experiment) THEN
@@ -89,6 +92,9 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_climate_model!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+    
+    n2 = par%mem%n
+    !CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE run_climate_model
   
@@ -187,7 +193,6 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi,m
     
     ! Use the (CO2 + absorbed insolation)-based interpolation scheme for temperature
@@ -233,7 +238,6 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: CO2, w_CO2
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
@@ -498,7 +502,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM      ! Climate matrix precipitation
     
     ! Local variables
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi,m
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_inv,  T_inv_ref
     INTEGER                                            :: wT_inv, wT_inv_ref
@@ -740,6 +743,7 @@ CONTAINS
     
     IMPLICIT NONE
     
+    ! In/output variables:
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
@@ -749,7 +753,10 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
+    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_climate_model'
+    INTEGER                                            :: n1, n2
+    
+    n1 = par%mem%n
     
     IF (par%master) WRITE (0,*) '  Initialising climate model...'
     
@@ -850,6 +857,9 @@ CONTAINS
       climate%applied%Wind_DU = climate%PD_obs%Wind_DU
     END IF ! IF (par%master) THEN
     CALL sync
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
   
   END SUBROUTINE initialise_climate_model  
   SUBROUTINE allocate_subclimate( mesh, subclimate, name)
@@ -934,7 +944,6 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_ICE5G,  Hb_ICE5G,  Hb_ICE5G_PD,  mask_ice_ICE5G,  dHb_ICE5G
     INTEGER                                            :: wHi_ICE5G, wHb_ICE5G, wHb_ICE5G_PD, wmask_ice_ICE5G, wdHb_ICE5G
@@ -1029,7 +1038,6 @@ CONTAINS
     TYPE(type_subclimate_region),        INTENT(IN)    :: snapshot_PI
     
     ! Local variables:
-    INTEGER                                            :: ierr
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: dT_mean_nonice
     INTEGER                                            :: n_nonice, n_ice
@@ -1121,7 +1129,6 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: GCM_bias_Precip
     
     ! Local variables:
-    INTEGER                                            :: cerr, ierr
     INTEGER                                            :: vi,m,y
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  Q_TOA0,  Q_TOA1
     INTEGER                                            :: wQ_TOA0, wQ_TOA1
@@ -1439,8 +1446,11 @@ CONTAINS
     ! In/output variables:
     TYPE(type_climate_matrix),      INTENT(INOUT) :: matrix
     
-    ! Local variables:
-    INTEGER                                       :: cerr, ierr
+    ! Local variables
+    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_climate_matrix'
+    INTEGER                                       :: n1, n2
+    
+    n1 = par%mem%n
     
     IF (C%do_benchmark_experiment) THEN
       IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
@@ -1497,6 +1507,9 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_climate_matrix!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+    
+    n2 = par%mem%n
+    CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE initialise_climate_matrix  
   SUBROUTINE initialise_PD_obs_data_fields( PD_obs, name)
@@ -1665,7 +1678,7 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: int_dummy
     
-    int_dummy = map%conservative%nV(1)
+    int_dummy = map%conservative%n_tot
     int_dummy = mesh_old%nV
 
     ! Reallocate memory for the different subclimates

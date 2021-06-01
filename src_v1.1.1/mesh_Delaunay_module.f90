@@ -3,7 +3,7 @@ MODULE mesh_Delaunay_module
 
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync                   
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
   USE data_types_module,             ONLY: type_mesh
   USE mesh_help_functions_module,    ONLY: is_in_triangle, is_boundary_segment, find_circumcenter, find_containing_triangle, &
                                            line_from_points, line_line_intersection, perpendicular_bisector_from_line, &

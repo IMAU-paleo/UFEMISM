@@ -1,27 +1,9 @@
 MODULE mesh_derivatives_module
   ! Routines for calculating the neighbour functions on a mesh.
 
-  ! Given a function f on the mesh, its first order derivatives on
-  ! vertex i are called fx(i) and fy(i). These can be expressed as a linear
-  ! combination of the values of f on i and its neighbours using the
-  ! neighbour functions Nx and Ny, which depend only on mesh geometry:
-  !
-  ! fx(i) = Nx(i) * f(i) + sum_over_neighbours( Nx(c) * f(c))
-  ! fy(i) = Ny(i) * f(i) + sum_over_neighbours( Ny(c) * f(c))
-  !
-  ! Similarly, the second order derivatives are found using the second
-  ! order neighbour functions Nxx, Nxy and Nyy:
-  !
-  ! fxx(i) = Nxx(i) * f(i) + sum_over_neighbours( Nxx(c) * f(c))
-  ! fxy(i) = Nxy(i) * f(i) + sum_over_neighbours( Nxy(c) * f(c))
-  ! fyy(i) = Nyy(i) * f(i) + sum_over_neighbours( Nyy(c) * f(c))
-  !
-  ! To find out how neighbour functions are derived, see the original
-  ! UFEMISM paper (Berends et al., GMD, 2020)
-
   USE mpi
   USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync                
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
   USE data_types_module,             ONLY: type_mesh
   USE mesh_help_functions_module,    ONLY: is_in_triangle
 

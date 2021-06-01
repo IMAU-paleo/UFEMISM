@@ -1,13 +1,13 @@
 MODULE utilities_module
 
   USE mpi
-  USE parallel_module,                 ONLY: par, sync, &
+  USE configuration_module,            ONLY: dp, C
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, write_to_memory_log, &
                                              allocate_shared_int_0D, allocate_shared_dp_0D, &
                                              allocate_shared_int_1D, allocate_shared_dp_1D, &
                                              allocate_shared_int_2D, allocate_shared_dp_2D, &
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
                                              deallocate_shared
-  USE configuration_module,            ONLY: dp, C
   USE parameters_module,               ONLY: pi, earth_radius
   USE data_types_module,               ONLY: type_mesh, type_grid
 

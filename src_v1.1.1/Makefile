@@ -3,7 +3,7 @@
 #    For "make" syntax search on "make tutorial", or see:
 #     http://www.gnu.org/software/make/manual/make.html
 
-include Makefile.mpif90
+include Makefile_include_local.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files

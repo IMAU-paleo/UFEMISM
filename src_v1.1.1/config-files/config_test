@@ -13,29 +13,30 @@ time_to_restart_from_config             = 0
 create_new_output_dir_config            = .TRUE.
 output_dir_config                       = 'results'
 do_write_debug_data_config              = .FALSE.
+do_write_memory_tracker_config          = .TRUE.
 
 ! Benchmark experiment
 do_benchmark_experiment_config          = .FALSE.
 
 ! Which ice sheets
-do_NAM_config                           = .FALSE.
-do_EAS_config                           = .FALSE.
-do_GRL_config                           = .FALSE.
+do_NAM_config                           = .TRUE.
+do_EAS_config                           = .TRUE.
+do_GRL_config                           = .TRUE.
 do_ANT_config                           = .TRUE.
 
 ! Points of interest
 nPOI_ANT_config                         = 1
 POI_ANT_coordinates_config              = -90.0, 0.0
-POI_ANT_resolutions_config              = 32.0
+POI_ANT_resolutions_config              = 10.0
 
 ! Mesh generation parameters - coarse
 alpha_min_config                        = 0.5
 dz_max_ice_config                       = 6000.0      ! Maximum allowed 2nd order surface deviation over ice  (m)
 res_max_config                          = 200.0       ! Maximum allowed resolution                            (km)
-res_max_margin_config                   = 32.0         ! Maximum allowed resolution over land-based ice margin (km)
-res_max_gl_config                       = 10.0         ! Maximum allowed resolution over grounding line        (km)
-res_max_cf_config                       = 32.0         ! Maximum allowed resolution over calving front         (km)
-res_max_mountain_config                 = 32.0         ! Maximum allowed resolution over mountains             (km)
+res_max_margin_config                   = 64.0         ! Maximum allowed resolution over land-based ice margin (km)
+res_max_gl_config                       = 32.0         ! Maximum allowed resolution over grounding line        (km)
+res_max_cf_config                       = 64.0         ! Maximum allowed resolution over calving front         (km)
+res_max_mountain_config                 = 64.0         ! Maximum allowed resolution over mountains             (km)
 mesh_fitness_threshold_config           = 0.9
 
 ! Square grid resolutions

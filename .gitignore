@@ -1,0 +1,9 @@
+# Ignore the main executable
+UFEMISM_program
+
+# Ignore the module and object files
+*.mod
+*.o
+
+# Ignore output files
+result*/

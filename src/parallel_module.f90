@@ -846,6 +846,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p)
+
+    ! Initialise memory with zeros
+    p = 0
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -880,6 +884,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1])
+
+    ! Initialise memory with zeros
+    p = 0
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -918,6 +926,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2])
+
+    ! Initialise memory with zeros
+    p = 0
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -956,6 +968,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2, n3])
+
+    ! Initialise memory with zeros
+    p = 0
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -993,6 +1009,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p)
+
+    ! Initialise memory with zeros
+    p = 0._dp
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -1031,6 +1051,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1])
+
+    ! Initialise memory with zeros
+    p = 0._dp
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -1069,6 +1093,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2])
+
+    ! Initialise memory with zeros
+    p = 0._dp
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -1107,6 +1135,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2, n3])
+
+    ! Initialise memory with zeros
+    p = 0._dp
+    CALL sync
     
     ! Update shared memory use
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)

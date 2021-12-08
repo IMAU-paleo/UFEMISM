@@ -1,4 +1,5 @@
 MODULE parallel_module
+
   ! A collection of different routines that make parallel programming in UFEMISM a lot easier.
 
   USE mpi
@@ -158,6 +159,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER( baseptr, p)
+
+    ! Initialise memory with zeros
+    IF (par%master) p = 0
+    CALL sync
   
   END SUBROUTINE allocate_shared_int_0D  
   SUBROUTINE allocate_shared_int_1D(  n1,         p, win)
@@ -204,6 +209,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = 0
+    CALL sync
   
   END SUBROUTINE allocate_shared_int_1D  
   SUBROUTINE allocate_shared_int_2D(  n1, n2,     p, win)
@@ -250,6 +259,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = 0
+    CALL sync
   
   END SUBROUTINE allocate_shared_int_2D  
   SUBROUTINE allocate_shared_int_3D(  n1, n2, n3, p, win)
@@ -296,6 +309,10 @@ CONTAINS
     
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1, n2, n3])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = 0
+    CALL sync
   
   END SUBROUTINE allocate_shared_int_3D  
   SUBROUTINE allocate_shared_dp_0D(               p, win)

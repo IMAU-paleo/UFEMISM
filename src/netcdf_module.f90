@@ -1,22 +1,35 @@
 MODULE netcdf_module
-  ! This module defines methods to read and write the current state of the model from or to a NetCDF file.
 
+  ! Contains all the subroutines for reading, creating, and writing to NetCDF files.
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         deallocate_shared
-  USE data_types_netcdf_module,    ONLY: type_netcdf_restart, type_netcdf_help_fields
-  USE data_types_module,           ONLY: type_model_region, type_mesh, type_grid, type_PD_data_fields, type_forcing_data, &
-                                         type_init_data_fields, type_subclimate_global, type_debug_fields, type_ICE5G_timeframe
-  USE netcdf,                      ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
-                                         nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
-                                         nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
-                                         nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
-  USE mesh_mapping_module,         ONLY: map_mesh2grid_2D, map_mesh2grid_3D, map_mesh2grid_2D_min
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
+  USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_PD_data_fields, type_forcing_data, &
+                                           type_init_data_fields, type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
+                                           type_sparse_matrix_CSR
+  USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
+                                           nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
+                                           nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
+                                           nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
+  USE mesh_mapping_module,           ONLY: map_mesh2grid_2D, map_mesh2grid_3D, map_mesh2grid_2D_min
   
   IMPLICIT NONE
   
@@ -195,14 +208,10 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start=(/       netcdf%ti/)))
     
     ! Write data
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi,                  start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb,                  start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs,                  start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_U_SIA,            region%ice%U_SIA,               start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_V_SIA,            region%ice%V_SIA,               start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_U_SSA,            region%ice%U_SSA,               start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_V_SSA,            region%ice%V_SSA,               start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti,                  start=(/1, 1,  netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start=(/1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start=(/1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start=(/1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start=(/1, 1,  netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start=(/1, 1,  netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start=(/1,     netcdf%ti/)))
     
@@ -314,7 +323,7 @@ CONTAINS
     
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF, start=(/1 /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF_a, start=(/1 /) ))
       
     ! Fields with a time dimension
     ! ============================
@@ -325,61 +334,61 @@ CONTAINS
       
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hi, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hi_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Hb') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Hs') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'SL') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dHs_dx') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dx, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dx_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dHs_dy') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dy, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dy_a, start=(/1, netcdf%ti /) ))
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Cpi') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Cpi, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Cpi_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Ki') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ki, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ki_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Ti_basal') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti(:,C%nZ), start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a(:,C%nZ), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Ti_pmp') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_pmp, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_pmp_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'A_flow') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_3D_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'A_flow_mean') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_mean, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_vav_a, start=(/1, netcdf%ti /) ))
       
     ! Velocity fields
-    ELSEIF (field_name == 'U_SIA') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SIA, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_SIA') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SIA, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'U_SSA') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SSA, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_SSA') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SSA, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'U_vav') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_vav, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_vav') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_vav, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'U_surf') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_surf, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_surf') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_surf, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'U_base') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_base, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_base') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_base, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'U_3D') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_3D, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'V_3D') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_3D, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'W_3D') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%W_3D, start=(/1, 1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_SIA') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SIA, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_SIA') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SIA, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_SSA') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SSA, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_SSA') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SSA, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_vav') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_vav, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_vav') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_vav, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_surf') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_surf, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_surf') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_surf, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_base') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_base, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_base') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_base, start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'U_3D') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_3D, start=(/1, 1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'V_3D') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_3D, start=(/1, 1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'W_3D') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%W_3D, start=(/1, 1, netcdf%ti /) ))
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -441,33 +450,33 @@ CONTAINS
       
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_land') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_land, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_land_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_ocean') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ocean, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ocean_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_lake') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_lake, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_lake_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_ice') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ice, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ice_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_sheet') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_sheet, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_sheet_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_shelf') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_shelf, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_shelf_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_coast') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_coast, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_coast_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_margin') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_margin, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_margin_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_gl') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_gl, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_gl_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_cf') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf_a, start=(/1, netcdf%ti /) ))
       
-    ! Basal conditions
-    ELSEIF (field_name == 'phi_fric') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%phi_fric_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'tau_yield') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tau_c_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
+!    ! Basal conditions
+!    ELSEIF (field_name == 'phi_fric') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%phi_fric_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
+!    ELSEIF (field_name == 'tau_yield') THEN
+!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tau_c_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -477,7 +486,7 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb - region%PD%Hb, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%PD%Hb, start=(/1, netcdf%ti /) ))
     
     ELSE
       WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_mesh!'
@@ -587,11 +596,7 @@ CONTAINS
     ! Define model data variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice Thickness', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock Height', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface Height', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_U_SIA,            [vi,        time], netcdf%id_var_U_SIA,            long_name='SIA ice x-velocity', units='m/yr')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_V_SIA,            [vi,        time], netcdf%id_var_V_SIA,            long_name='SIA ice y-velocity', units='m/yr')    
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_U_SSA,            [vi,        time], netcdf%id_var_U_SSA,            long_name='SSA ice x-velocity', units='m/yr')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_V_SSA,            [vi,        time], netcdf%id_var_V_SSA,            long_name='SSA ice y-velocity', units='m/yr')              
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface Height', units='m')            
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [vi, zeta,  time], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [vi, month, time], netcdf%id_var_FirnDepth,        long_name='Firn depth', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [vi,        time], netcdf%id_var_MeltPreviousYear, long_name='Melt during previous year', units='mie')
@@ -900,37 +905,37 @@ CONTAINS
     ELSEIF (field_name == 'A_flow_mean') THEN
       CALL create_double_var( netcdf%ncid, 'A_flow_mean',              [vi,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
       
-    ! Velocity fields
-    ELSEIF (field_name == 'U_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'U_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'V_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_SSA') THEN
-      CALL create_double_var( netcdf%ncid, 'U_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_SSA') THEN
-      CALL create_double_var( netcdf%ncid, 'V_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_vav') THEN
-      CALL create_double_var( netcdf%ncid, 'U_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_vav') THEN
-      CALL create_double_var( netcdf%ncid, 'V_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_surf') THEN
-      CALL create_double_var( netcdf%ncid, 'U_surf',                   [vi,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_surf') THEN
-      CALL create_double_var( netcdf%ncid, 'V_surf',                   [vi,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_base') THEN
-      CALL create_double_var( netcdf%ncid, 'U_base',                   [vi,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_base') THEN
-      CALL create_double_var( netcdf%ncid, 'V_base',                   [vi,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'U_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'V_3D',                     [vi, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'W_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'W_3D',                     [vi, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
-    ELSEIF (field_name == 'D_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'D_SIA',                    [vi,    t], id_var, long_name='SIA ice diffusivity')
-    ELSEIF (field_name == 'D_SIA_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'D_SIA_3D',                 [vi, z, t], id_var, long_name='3D SIA ice diffusivity')
+!    ! Velocity fields
+!    ELSEIF (field_name == 'U_SIA') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_SIA') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice y-velocity', units='m/yr')
+!    ELSEIF (field_name == 'U_SSA') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_SSA') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice y-velocity', units='m/yr')
+!    ELSEIF (field_name == 'U_vav') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_vav') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'U_surf') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_surf',                   [vi,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_surf') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_surf',                   [vi,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
+!    ELSEIF (field_name == 'U_base') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_base',                   [vi,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_base') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_base',                   [vi,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
+!    ELSEIF (field_name == 'U_3D') THEN
+!      CALL create_double_var( netcdf%ncid, 'U_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
+!    ELSEIF (field_name == 'V_3D') THEN
+!      CALL create_double_var( netcdf%ncid, 'V_3D',                     [vi, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
+!    ELSEIF (field_name == 'W_3D') THEN
+!      CALL create_double_var( netcdf%ncid, 'W_3D',                     [vi, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
+!    ELSEIF (field_name == 'D_SIA') THEN
+!      CALL create_double_var( netcdf%ncid, 'D_SIA',                    [vi,    t], id_var, long_name='SIA ice diffusivity')
+!    ELSEIF (field_name == 'D_SIA_3D') THEN
+!      CALL create_double_var( netcdf%ncid, 'D_SIA_3D',                 [vi, z, t], id_var, long_name='3D SIA ice diffusivity')
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1014,11 +1019,11 @@ CONTAINS
     ELSEIF (field_name == 'mask_cf') THEN
       CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='calving-front mask')
       
-    ! Basal conditions
-    ELSEIF (field_name == 'phi_fric') THEN
-      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
-    ELSEIF (field_name == 'tau_yield') THEN
-      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
+!    ! Basal conditions
+!    ELSEIF (field_name == 'phi_fric') THEN
+!      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
+!    ELSEIF (field_name == 'tau_yield') THEN
+!      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -1055,14 +1060,10 @@ CONTAINS
     IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,      start=(/         netcdf%ti/)))
     
     ! Map and write data
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi,               netcdf%id_var_Hi,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb,               netcdf%id_var_Hb,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs,               netcdf%id_var_Hs,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SIA,            netcdf%id_var_U_SIA,            netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SIA,            netcdf%id_var_V_SIA,            netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SSA,            netcdf%id_var_U_SSA,            netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SSA,            netcdf%id_var_V_SSA,            netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti,               netcdf%id_var_Ti,               netcdf%ti, C%nZ)
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a,             netcdf%id_var_Hi,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a,             netcdf%id_var_Hb,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a,             netcdf%id_var_Hs,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a,             netcdf%id_var_Ti,               netcdf%ti, C%nZ)
     CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12  )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
     
@@ -1180,7 +1181,7 @@ CONTAINS
     
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
-      IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF ))
+      IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF_a ))
       
     ! Fields with a time dimension
     ! ============================
@@ -1191,61 +1192,61 @@ CONTAINS
       
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Hb') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Hs') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'SL') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dHs_dx') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dx, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dx_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dHs_dy') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dy, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dy_a, id_var, netcdf%ti)
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti, id_var, netcdf%ti, C%nZ)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'Cpi') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Cpi, id_var, netcdf%ti, C%nZ)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Cpi_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'Ki') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ki, id_var, netcdf%ti, C%nZ)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ki_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'Ti_basal') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti(:,C%nZ), id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a(:,C%nZ), id_var, netcdf%ti)
     ELSEIF (field_name == 'Ti_pmp') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_pmp, id_var, netcdf%ti, C%nZ)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_pmp_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'A_flow') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow, id_var, netcdf%ti, C%nZ)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_3D_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'A_flow_mean') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_mean, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_vav_a, id_var, netcdf%ti)
       
-    ! Velocity fields
-    ELSEIF (field_name == 'U_SIA') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SIA, id_var, netcdf%ti)
-    ELSEIF (field_name == 'V_SIA') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SIA, id_var, netcdf%ti)
-    ELSEIF (field_name == 'U_SSA') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SSA, id_var, netcdf%ti)
-    ELSEIF (field_name == 'V_SSA') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SSA, id_var, netcdf%ti)
-    ELSEIF (field_name == 'U_vav') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_vav, id_var, netcdf%ti)
-    ELSEIF (field_name == 'V_vav') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_vav, id_var, netcdf%ti)
-    ELSEIF (field_name == 'U_surf') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_surf, id_var, netcdf%ti)
-    ELSEIF (field_name == 'V_surf') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_surf, id_var, netcdf%ti)
-    ELSEIF (field_name == 'U_base') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_base, id_var, netcdf%ti)
-    ELSEIF (field_name == 'V_base') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_base, id_var, netcdf%ti)
-    ELSEIF (field_name == 'U_3D') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_3D, id_var, netcdf%ti, C%nZ)
-    ELSEIF (field_name == 'V_3D') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_3D, id_var, netcdf%ti, C%nZ)
-    ELSEIF (field_name == 'W_3D') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%W_3D, id_var, netcdf%ti, C%nZ)
+!    ! Velocity fields
+!    ELSEIF (field_name == 'U_SIA') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SIA, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'V_SIA') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SIA, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'U_SSA') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SSA, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'V_SSA') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SSA, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'U_vav') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_vav, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'V_vav') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_vav, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'U_surf') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_surf, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'V_surf') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_surf, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'U_base') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_base, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'V_base') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_base, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'U_3D') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_3D, id_var, netcdf%ti, C%nZ)
+!    ELSEIF (field_name == 'V_3D') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_3D, id_var, netcdf%ti, C%nZ)
+!    ELSEIF (field_name == 'W_3D') THEN
+!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%W_3D, id_var, netcdf%ti, C%nZ)
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1364,13 +1365,13 @@ CONTAINS
     ELSEIF (field_name == 'mask_cf') THEN
 !      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_cf, id_var, netcdf%ti)
       
-    ! Basal conditions
-    ELSEIF (field_name == 'phi_fric') THEN
-      d_year( region%mesh%v1:region%mesh%v2) = region%ice%phi_fric_AaAc( region%mesh%v1:region%mesh%v2)
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
-    ELSEIF (field_name == 'tau_yield') THEN
-      d_year( region%mesh%v1:region%mesh%v2) = region%ice%tau_c_AaAc( region%mesh%v1:region%mesh%v2)
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+!    ! Basal conditions
+!    ELSEIF (field_name == 'phi_fric') THEN
+!      d_year( region%mesh%v1:region%mesh%v2) = region%ice%phi_fric_AaAc( region%mesh%v1:region%mesh%v2)
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+!    ELSEIF (field_name == 'tau_yield') THEN
+!      d_year( region%mesh%v1:region%mesh%v2) = region%ice%tau_c_AaAc( region%mesh%v1:region%mesh%v2)
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -1380,7 +1381,7 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      d_year( region%mesh%v1:region%mesh%v2) = region%ice%Hb( region%mesh%v1:region%mesh%v2) - region%PD%Hb( region%mesh%v1:region%mesh%v2)
+      d_year( region%mesh%v1:region%mesh%v2) = region%ice%Hb_a( region%mesh%v1:region%mesh%v2) - region%PD%Hb( region%mesh%v1:region%mesh%v2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     
     ELSE
@@ -1944,93 +1945,115 @@ CONTAINS
     CALL open_netcdf_file( debug%netcdf%filename, ncid)
     
     ! Write data
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_01, debug%int_2D_Aa_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_02, debug%int_2D_Aa_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_03, debug%int_2D_Aa_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_04, debug%int_2D_Aa_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_05, debug%int_2D_Aa_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_06, debug%int_2D_Aa_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_07, debug%int_2D_Aa_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_08, debug%int_2D_Aa_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_09, debug%int_2D_Aa_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Aa_10, debug%int_2D_Aa_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_01, debug%int_2D_a_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_02, debug%int_2D_a_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_03, debug%int_2D_a_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_04, debug%int_2D_a_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_05, debug%int_2D_a_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_06, debug%int_2D_a_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_07, debug%int_2D_a_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_08, debug%int_2D_a_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_09, debug%int_2D_a_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_10, debug%int_2D_a_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_01, debug%int_2D_Ac_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_02, debug%int_2D_Ac_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_03, debug%int_2D_Ac_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_04, debug%int_2D_Ac_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_05, debug%int_2D_Ac_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_06, debug%int_2D_Ac_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_07, debug%int_2D_Ac_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_08, debug%int_2D_Ac_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_09, debug%int_2D_Ac_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_Ac_10, debug%int_2D_Ac_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_01, debug%int_2D_b_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_02, debug%int_2D_b_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_03, debug%int_2D_b_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_04, debug%int_2D_b_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_05, debug%int_2D_b_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_06, debug%int_2D_b_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_07, debug%int_2D_b_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_08, debug%int_2D_b_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_09, debug%int_2D_b_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_10, debug%int_2D_b_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_01, debug%int_2D_AaAc_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_02, debug%int_2D_AaAc_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_03, debug%int_2D_AaAc_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_04, debug%int_2D_AaAc_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_05, debug%int_2D_AaAc_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_06, debug%int_2D_AaAc_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_07, debug%int_2D_AaAc_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_08, debug%int_2D_AaAc_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_09, debug%int_2D_AaAc_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_AaAc_10, debug%int_2D_AaAc_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_01, debug%int_2D_c_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_02, debug%int_2D_c_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_03, debug%int_2D_c_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_04, debug%int_2D_c_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_05, debug%int_2D_c_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_06, debug%int_2D_c_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_07, debug%int_2D_c_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_08, debug%int_2D_c_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_09, debug%int_2D_c_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_10, debug%int_2D_c_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_01, debug%dp_2D_Aa_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_02, debug%dp_2D_Aa_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_03, debug%dp_2D_Aa_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_04, debug%dp_2D_Aa_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_05, debug%dp_2D_Aa_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_06, debug%dp_2D_Aa_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_07, debug%dp_2D_Aa_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_08, debug%dp_2D_Aa_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_09, debug%dp_2D_Aa_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Aa_10, debug%dp_2D_Aa_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_01, debug%int_2D_ac_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_02, debug%int_2D_ac_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_03, debug%int_2D_ac_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_04, debug%int_2D_ac_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_05, debug%int_2D_ac_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_06, debug%int_2D_ac_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_07, debug%int_2D_ac_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_08, debug%int_2D_ac_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_09, debug%int_2D_ac_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_10, debug%int_2D_ac_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_01, debug%dp_2D_Ac_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_02, debug%dp_2D_Ac_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_03, debug%dp_2D_Ac_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_04, debug%dp_2D_Ac_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_05, debug%dp_2D_Ac_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_06, debug%dp_2D_Ac_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_07, debug%dp_2D_Ac_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_08, debug%dp_2D_Ac_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_09, debug%dp_2D_Ac_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_Ac_10, debug%dp_2D_Ac_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_01, debug%dp_2D_a_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_02, debug%dp_2D_a_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_03, debug%dp_2D_a_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_04, debug%dp_2D_a_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_05, debug%dp_2D_a_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_06, debug%dp_2D_a_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_07, debug%dp_2D_a_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_08, debug%dp_2D_a_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_09, debug%dp_2D_a_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_10, debug%dp_2D_a_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_01, debug%dp_2D_AaAc_01, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_02, debug%dp_2D_AaAc_02, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_03, debug%dp_2D_AaAc_03, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_04, debug%dp_2D_AaAc_04, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_05, debug%dp_2D_AaAc_05, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_06, debug%dp_2D_AaAc_06, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_07, debug%dp_2D_AaAc_07, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_08, debug%dp_2D_AaAc_08, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_09, debug%dp_2D_AaAc_09, start=(/1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_AaAc_10, debug%dp_2D_AaAc_10, start=(/1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_01, debug%dp_2D_b_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_02, debug%dp_2D_b_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_03, debug%dp_2D_b_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_04, debug%dp_2D_b_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_05, debug%dp_2D_b_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_06, debug%dp_2D_b_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_07, debug%dp_2D_b_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_08, debug%dp_2D_b_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_09, debug%dp_2D_b_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_10, debug%dp_2D_b_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_01, debug%dp_3D_Aa_01, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_02, debug%dp_3D_Aa_02, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_03, debug%dp_3D_Aa_03, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_04, debug%dp_3D_Aa_04, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_05, debug%dp_3D_Aa_05, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_06, debug%dp_3D_Aa_06, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_07, debug%dp_3D_Aa_07, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_08, debug%dp_3D_Aa_08, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_09, debug%dp_3D_Aa_09, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_Aa_10, debug%dp_3D_Aa_10, start=(/1, 1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_01, debug%dp_2D_c_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_02, debug%dp_2D_c_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_03, debug%dp_2D_c_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_04, debug%dp_2D_c_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_05, debug%dp_2D_c_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_06, debug%dp_2D_c_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_07, debug%dp_2D_c_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_08, debug%dp_2D_c_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_09, debug%dp_2D_c_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_10, debug%dp_2D_c_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_01, debug%dp_2D_monthly_Aa_01, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_02, debug%dp_2D_monthly_Aa_02, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_03, debug%dp_2D_monthly_Aa_03, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_04, debug%dp_2D_monthly_Aa_04, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_05, debug%dp_2D_monthly_Aa_05, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_06, debug%dp_2D_monthly_Aa_06, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_07, debug%dp_2D_monthly_Aa_07, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_08, debug%dp_2D_monthly_Aa_08, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_09, debug%dp_2D_monthly_Aa_09, start=(/1, 1/) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_Aa_10, debug%dp_2D_monthly_Aa_10, start=(/1, 1/) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_01, debug%dp_2D_ac_01, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_02, debug%dp_2D_ac_02, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_03, debug%dp_2D_ac_03, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_04, debug%dp_2D_ac_04, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_05, debug%dp_2D_ac_05, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_06, debug%dp_2D_ac_06, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_07, debug%dp_2D_ac_07, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_08, debug%dp_2D_ac_08, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_09, debug%dp_2D_ac_09, start = (/ 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_10, debug%dp_2D_ac_10, start = (/ 1 /) ))
+    
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_01, debug%dp_3D_a_01, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_02, debug%dp_3D_a_02, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_03, debug%dp_3D_a_03, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_04, debug%dp_3D_a_04, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_05, debug%dp_3D_a_05, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_06, debug%dp_3D_a_06, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_07, debug%dp_3D_a_07, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_08, debug%dp_3D_a_08, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_09, debug%dp_3D_a_09, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_10, debug%dp_3D_a_10, start = (/ 1, 1 /) ))
+    
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_01, debug%dp_2D_monthly_a_01, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_02, debug%dp_2D_monthly_a_02, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_03, debug%dp_2D_monthly_a_03, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_04, debug%dp_2D_monthly_a_04, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_05, debug%dp_2D_monthly_a_05, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_06, debug%dp_2D_monthly_a_06, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_07, debug%dp_2D_monthly_a_07, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_08, debug%dp_2D_monthly_a_08, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_09, debug%dp_2D_monthly_a_09, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_10, debug%dp_2D_monthly_a_10, start = (/ 1, 1 /) ))
 
     ! Close the file
     CALL close_netcdf_file( ncid)
@@ -2141,93 +2164,115 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_month, [month ], debug_temp%id_var_month, long_name='Month', units='1-12')
     
     ! Data
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_01, [vi], debug_temp%id_var_int_2D_Aa_01, long_name='2D int Aa variable 01')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_02, [vi], debug_temp%id_var_int_2D_Aa_02, long_name='2D int Aa variable 02')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_03, [vi], debug_temp%id_var_int_2D_Aa_03, long_name='2D int Aa variable 03')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_04, [vi], debug_temp%id_var_int_2D_Aa_04, long_name='2D int Aa variable 04')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_05, [vi], debug_temp%id_var_int_2D_Aa_05, long_name='2D int Aa variable 05')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_06, [vi], debug_temp%id_var_int_2D_Aa_06, long_name='2D int Aa variable 06')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_07, [vi], debug_temp%id_var_int_2D_Aa_07, long_name='2D int Aa variable 07')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_08, [vi], debug_temp%id_var_int_2D_Aa_08, long_name='2D int Aa variable 08')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_09, [vi], debug_temp%id_var_int_2D_Aa_09, long_name='2D int Aa variable 09')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Aa_10, [vi], debug_temp%id_var_int_2D_Aa_10, long_name='2D int Aa variable 10')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_01,  [vi], debug_temp%id_var_int_2D_a_01,  long_name='2D int a-grid (vertex) variable 01')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_02,  [vi], debug_temp%id_var_int_2D_a_02,  long_name='2D int a-grid (vertex) variable 02')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_03,  [vi], debug_temp%id_var_int_2D_a_03,  long_name='2D int a-grid (vertex) variable 03')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_04,  [vi], debug_temp%id_var_int_2D_a_04,  long_name='2D int a-grid (vertex) variable 04')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_05,  [vi], debug_temp%id_var_int_2D_a_05,  long_name='2D int a-grid (vertex) variable 05')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_06,  [vi], debug_temp%id_var_int_2D_a_06,  long_name='2D int a-grid (vertex) variable 06')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_07,  [vi], debug_temp%id_var_int_2D_a_07,  long_name='2D int a-grid (vertex) variable 07')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_08,  [vi], debug_temp%id_var_int_2D_a_08,  long_name='2D int a-grid (vertex) variable 08')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_09,  [vi], debug_temp%id_var_int_2D_a_09,  long_name='2D int a-grid (vertex) variable 09')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_10,  [vi], debug_temp%id_var_int_2D_a_10,  long_name='2D int a-grid (vertex) variable 10')
+     
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_01,  [ti], debug_temp%id_var_int_2D_b_01,  long_name='2D int b-grid (triangle) variable 01')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_02,  [ti], debug_temp%id_var_int_2D_b_02,  long_name='2D int b-grid (triangle) variable 02')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_03,  [ti], debug_temp%id_var_int_2D_b_03,  long_name='2D int b-grid (triangle) variable 03')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_04,  [ti], debug_temp%id_var_int_2D_b_04,  long_name='2D int b-grid (triangle) variable 04')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_05,  [ti], debug_temp%id_var_int_2D_b_05,  long_name='2D int b-grid (triangle) variable 05')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_06,  [ti], debug_temp%id_var_int_2D_b_06,  long_name='2D int b-grid (triangle) variable 06')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_07,  [ti], debug_temp%id_var_int_2D_b_07,  long_name='2D int b-grid (triangle) variable 07')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_08,  [ti], debug_temp%id_var_int_2D_b_08,  long_name='2D int b-grid (triangle) variable 08')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_09,  [ti], debug_temp%id_var_int_2D_b_09,  long_name='2D int b-grid (triangle) variable 09')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_10,  [ti], debug_temp%id_var_int_2D_b_10,  long_name='2D int b-grid (triangle) variable 10')
     
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_01, [aci], debug_temp%id_var_int_2D_Ac_01, long_name='2D int Ac variable 01')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_02, [aci], debug_temp%id_var_int_2D_Ac_02, long_name='2D int Ac variable 02')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_03, [aci], debug_temp%id_var_int_2D_Ac_03, long_name='2D int Ac variable 03')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_04, [aci], debug_temp%id_var_int_2D_Ac_04, long_name='2D int Ac variable 04')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_05, [aci], debug_temp%id_var_int_2D_Ac_05, long_name='2D int Ac variable 05')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_06, [aci], debug_temp%id_var_int_2D_Ac_06, long_name='2D int Ac variable 06')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_07, [aci], debug_temp%id_var_int_2D_Ac_07, long_name='2D int Ac variable 07')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_08, [aci], debug_temp%id_var_int_2D_Ac_08, long_name='2D int Ac variable 08')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_09, [aci], debug_temp%id_var_int_2D_Ac_09, long_name='2D int Ac variable 09')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_Ac_10, [aci], debug_temp%id_var_int_2D_Ac_10, long_name='2D int Ac variable 10')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_01, [aci], debug_temp%id_var_int_2D_c_01,  long_name='2D int c-grid (edge) variable 01')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_02, [aci], debug_temp%id_var_int_2D_c_02,  long_name='2D int c-grid (edge) variable 02')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_03, [aci], debug_temp%id_var_int_2D_c_03,  long_name='2D int c-grid (edge) variable 03')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_04, [aci], debug_temp%id_var_int_2D_c_04,  long_name='2D int c-grid (edge) variable 04')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_05, [aci], debug_temp%id_var_int_2D_c_05,  long_name='2D int c-grid (edge) variable 05')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_06, [aci], debug_temp%id_var_int_2D_c_06,  long_name='2D int c-grid (edge) variable 06')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_07, [aci], debug_temp%id_var_int_2D_c_07,  long_name='2D int c-grid (edge) variable 07')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_08, [aci], debug_temp%id_var_int_2D_c_08,  long_name='2D int c-grid (edge) variable 08')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_09, [aci], debug_temp%id_var_int_2D_c_09,  long_name='2D int c-grid (edge) variable 09')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_10, [aci], debug_temp%id_var_int_2D_c_10,  long_name='2D int c-grid (edge) variable 10')
     
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_01, [ai], debug_temp%id_var_int_2D_AaAc_01, long_name='2D int AaAc variable 01')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_02, [ai], debug_temp%id_var_int_2D_AaAc_02, long_name='2D int AaAc variable 02')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_03, [ai], debug_temp%id_var_int_2D_AaAc_03, long_name='2D int AaAc variable 03')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_04, [ai], debug_temp%id_var_int_2D_AaAc_04, long_name='2D int AaAc variable 04')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_05, [ai], debug_temp%id_var_int_2D_AaAc_05, long_name='2D int AaAc variable 05')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_06, [ai], debug_temp%id_var_int_2D_AaAc_06, long_name='2D int AaAc variable 06')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_07, [ai], debug_temp%id_var_int_2D_AaAc_07, long_name='2D int AaAc variable 07')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_08, [ai], debug_temp%id_var_int_2D_AaAc_08, long_name='2D int AaAc variable 08')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_09, [ai], debug_temp%id_var_int_2D_AaAc_09, long_name='2D int AaAc variable 09')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_AaAc_10, [ai], debug_temp%id_var_int_2D_AaAc_10, long_name='2D int AaAc variable 10')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_01, [ai], debug_temp%id_var_int_2D_ac_01, long_name='2D int ac-grid (combi) variable 01')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_02, [ai], debug_temp%id_var_int_2D_ac_02, long_name='2D int ac-grid (combi) variable 02')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_03, [ai], debug_temp%id_var_int_2D_ac_03, long_name='2D int ac-grid (combi) variable 03')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_04, [ai], debug_temp%id_var_int_2D_ac_04, long_name='2D int ac-grid (combi) variable 04')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_05, [ai], debug_temp%id_var_int_2D_ac_05, long_name='2D int ac-grid (combi) variable 05')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_06, [ai], debug_temp%id_var_int_2D_ac_06, long_name='2D int ac-grid (combi) variable 06')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_07, [ai], debug_temp%id_var_int_2D_ac_07, long_name='2D int ac-grid (combi) variable 07')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_08, [ai], debug_temp%id_var_int_2D_ac_08, long_name='2D int ac-grid (combi) variable 08')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_09, [ai], debug_temp%id_var_int_2D_ac_09, long_name='2D int ac-grid (combi) variable 09')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_10, [ai], debug_temp%id_var_int_2D_ac_10, long_name='2D int ac-grid (combi) variable 10')
     
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_01, [vi], debug_temp%id_var_dp_2D_Aa_01, long_name='2D dp Aa variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_02, [vi], debug_temp%id_var_dp_2D_Aa_02, long_name='2D dp Aa variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_03, [vi], debug_temp%id_var_dp_2D_Aa_03, long_name='2D dp Aa variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_04, [vi], debug_temp%id_var_dp_2D_Aa_04, long_name='2D dp Aa variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_05, [vi], debug_temp%id_var_dp_2D_Aa_05, long_name='2D dp Aa variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_06, [vi], debug_temp%id_var_dp_2D_Aa_06, long_name='2D dp Aa variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_07, [vi], debug_temp%id_var_dp_2D_Aa_07, long_name='2D dp Aa variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_08, [vi], debug_temp%id_var_dp_2D_Aa_08, long_name='2D dp Aa variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_09, [vi], debug_temp%id_var_dp_2D_Aa_09, long_name='2D dp Aa variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Aa_10, [vi], debug_temp%id_var_dp_2D_Aa_10, long_name='2D dp Aa variable 10')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_01,  [vi], debug_temp%id_var_dp_2D_a_01,  long_name='2D dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_02,  [vi], debug_temp%id_var_dp_2D_a_02,  long_name='2D dp a-grid (vertex) variable 02')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_03,  [vi], debug_temp%id_var_dp_2D_a_03,  long_name='2D dp a-grid (vertex) variable 03')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_04,  [vi], debug_temp%id_var_dp_2D_a_04,  long_name='2D dp a-grid (vertex) variable 04')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_05,  [vi], debug_temp%id_var_dp_2D_a_05,  long_name='2D dp a-grid (vertex) variable 05')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_06,  [vi], debug_temp%id_var_dp_2D_a_06,  long_name='2D dp a-grid (vertex) variable 06')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_07,  [vi], debug_temp%id_var_dp_2D_a_07,  long_name='2D dp a-grid (vertex) variable 07')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_08,  [vi], debug_temp%id_var_dp_2D_a_08,  long_name='2D dp a-grid (vertex) variable 08')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_09,  [vi], debug_temp%id_var_dp_2D_a_09,  long_name='2D dp a-grid (vertex) variable 09')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_10,  [vi], debug_temp%id_var_dp_2D_a_10,  long_name='2D dp a-grid (vertex) variable 10')
+     
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_01,  [ti], debug_temp%id_var_dp_2D_b_01,  long_name='2D dp b-grid (triangle) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_02,  [ti], debug_temp%id_var_dp_2D_b_02,  long_name='2D dp b-grid (triangle) variable 02')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_03,  [ti], debug_temp%id_var_dp_2D_b_03,  long_name='2D dp b-grid (triangle) variable 03')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_04,  [ti], debug_temp%id_var_dp_2D_b_04,  long_name='2D dp b-grid (triangle) variable 04')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_05,  [ti], debug_temp%id_var_dp_2D_b_05,  long_name='2D dp b-grid (triangle) variable 05')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_06,  [ti], debug_temp%id_var_dp_2D_b_06,  long_name='2D dp b-grid (triangle) variable 06')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_07,  [ti], debug_temp%id_var_dp_2D_b_07,  long_name='2D dp b-grid (triangle) variable 07')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_08,  [ti], debug_temp%id_var_dp_2D_b_08,  long_name='2D dp b-grid (triangle) variable 08')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_09,  [ti], debug_temp%id_var_dp_2D_b_09,  long_name='2D dp b-grid (triangle) variable 09')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_10,  [ti], debug_temp%id_var_dp_2D_b_10,  long_name='2D dp b-grid (triangle) variable 10')
     
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_01, [aci], debug_temp%id_var_dp_2D_Ac_01, long_name='2D dp Ac variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_02, [aci], debug_temp%id_var_dp_2D_Ac_02, long_name='2D dp Ac variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_03, [aci], debug_temp%id_var_dp_2D_Ac_03, long_name='2D dp Ac variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_04, [aci], debug_temp%id_var_dp_2D_Ac_04, long_name='2D dp Ac variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_05, [aci], debug_temp%id_var_dp_2D_Ac_05, long_name='2D dp Ac variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_06, [aci], debug_temp%id_var_dp_2D_Ac_06, long_name='2D dp Ac variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_07, [aci], debug_temp%id_var_dp_2D_Ac_07, long_name='2D dp Ac variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_08, [aci], debug_temp%id_var_dp_2D_Ac_08, long_name='2D dp Ac variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_09, [aci], debug_temp%id_var_dp_2D_Ac_09, long_name='2D dp Ac variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_Ac_10, [aci], debug_temp%id_var_dp_2D_Ac_10, long_name='2D dp Ac variable 10')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_01, [aci], debug_temp%id_var_dp_2D_c_01,  long_name='2D dp c-grid (edge) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_02, [aci], debug_temp%id_var_dp_2D_c_02,  long_name='2D dp c-grid (edge) variable 02')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_03, [aci], debug_temp%id_var_dp_2D_c_03,  long_name='2D dp c-grid (edge) variable 03')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_04, [aci], debug_temp%id_var_dp_2D_c_04,  long_name='2D dp c-grid (edge) variable 04')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_05, [aci], debug_temp%id_var_dp_2D_c_05,  long_name='2D dp c-grid (edge) variable 05')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_06, [aci], debug_temp%id_var_dp_2D_c_06,  long_name='2D dp c-grid (edge) variable 06')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_07, [aci], debug_temp%id_var_dp_2D_c_07,  long_name='2D dp c-grid (edge) variable 07')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_08, [aci], debug_temp%id_var_dp_2D_c_08,  long_name='2D dp c-grid (edge) variable 08')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_09, [aci], debug_temp%id_var_dp_2D_c_09,  long_name='2D dp c-grid (edge) variable 09')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_10, [aci], debug_temp%id_var_dp_2D_c_10,  long_name='2D dp c-grid (edge) variable 10')
     
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_01, [ai], debug_temp%id_var_dp_2D_AaAc_01, long_name='2D dp AaAc variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_02, [ai], debug_temp%id_var_dp_2D_AaAc_02, long_name='2D dp AaAc variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_03, [ai], debug_temp%id_var_dp_2D_AaAc_03, long_name='2D dp AaAc variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_04, [ai], debug_temp%id_var_dp_2D_AaAc_04, long_name='2D dp AaAc variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_05, [ai], debug_temp%id_var_dp_2D_AaAc_05, long_name='2D dp AaAc variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_06, [ai], debug_temp%id_var_dp_2D_AaAc_06, long_name='2D dp AaAc variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_07, [ai], debug_temp%id_var_dp_2D_AaAc_07, long_name='2D dp AaAc variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_08, [ai], debug_temp%id_var_dp_2D_AaAc_08, long_name='2D dp AaAc variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_09, [ai], debug_temp%id_var_dp_2D_AaAc_09, long_name='2D dp AaAc variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_AaAc_10, [ai], debug_temp%id_var_dp_2D_AaAc_10, long_name='2D dp AaAc variable 10')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_01, [ai], debug_temp%id_var_dp_2D_ac_01, long_name='2D dp ac-grid (combi) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_02, [ai], debug_temp%id_var_dp_2D_ac_02, long_name='2D dp ac-grid (combi) variable 02')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_03, [ai], debug_temp%id_var_dp_2D_ac_03, long_name='2D dp ac-grid (combi) variable 03')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_04, [ai], debug_temp%id_var_dp_2D_ac_04, long_name='2D dp ac-grid (combi) variable 04')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_05, [ai], debug_temp%id_var_dp_2D_ac_05, long_name='2D dp ac-grid (combi) variable 05')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_06, [ai], debug_temp%id_var_dp_2D_ac_06, long_name='2D dp ac-grid (combi) variable 06')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_07, [ai], debug_temp%id_var_dp_2D_ac_07, long_name='2D dp ac-grid (combi) variable 07')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_08, [ai], debug_temp%id_var_dp_2D_ac_08, long_name='2D dp ac-grid (combi) variable 08')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_09, [ai], debug_temp%id_var_dp_2D_ac_09, long_name='2D dp ac-grid (combi) variable 09')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_10, [ai], debug_temp%id_var_dp_2D_ac_10, long_name='2D dp ac-grid (combi) variable 10')
     
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_01, [vi, zeta], debug_temp%id_var_dp_3D_Aa_01, long_name='3D dp Aa variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_02, [vi, zeta], debug_temp%id_var_dp_3D_Aa_02, long_name='3D dp Aa variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_03, [vi, zeta], debug_temp%id_var_dp_3D_Aa_03, long_name='3D dp Aa variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_04, [vi, zeta], debug_temp%id_var_dp_3D_Aa_04, long_name='3D dp Aa variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_05, [vi, zeta], debug_temp%id_var_dp_3D_Aa_05, long_name='3D dp Aa variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_06, [vi, zeta], debug_temp%id_var_dp_3D_Aa_06, long_name='3D dp Aa variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_07, [vi, zeta], debug_temp%id_var_dp_3D_Aa_07, long_name='3D dp Aa variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_08, [vi, zeta], debug_temp%id_var_dp_3D_Aa_08, long_name='3D dp Aa variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_09, [vi, zeta], debug_temp%id_var_dp_3D_Aa_09, long_name='3D dp Aa variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_Aa_10, [vi, zeta], debug_temp%id_var_dp_3D_Aa_10, long_name='3D dp Aa variable 10')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_01,  [vi, zeta], debug_temp%id_var_dp_3D_a_01,  long_name='3D dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_02,  [vi, zeta], debug_temp%id_var_dp_3D_a_02,  long_name='3D dp a-grid (vertex) variable 02')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_03,  [vi, zeta], debug_temp%id_var_dp_3D_a_03,  long_name='3D dp a-grid (vertex) variable 03')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_04,  [vi, zeta], debug_temp%id_var_dp_3D_a_04,  long_name='3D dp a-grid (vertex) variable 04')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_05,  [vi, zeta], debug_temp%id_var_dp_3D_a_05,  long_name='3D dp a-grid (vertex) variable 05')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_06,  [vi, zeta], debug_temp%id_var_dp_3D_a_06,  long_name='3D dp a-grid (vertex) variable 06')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_07,  [vi, zeta], debug_temp%id_var_dp_3D_a_07,  long_name='3D dp a-grid (vertex) variable 07')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_08,  [vi, zeta], debug_temp%id_var_dp_3D_a_08,  long_name='3D dp a-grid (vertex) variable 08')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_09,  [vi, zeta], debug_temp%id_var_dp_3D_a_09,  long_name='3D dp a-grid (vertex) variable 09')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_10,  [vi, zeta], debug_temp%id_var_dp_3D_a_10,  long_name='3D dp a-grid (vertex) variable 10')
     
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_01, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_01, long_name='2D monthly dp Aa variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_02, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_02, long_name='2D monthly dp Aa variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_03, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_03, long_name='2D monthly dp Aa variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_04, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_04, long_name='2D monthly dp Aa variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_05, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_05, long_name='2D monthly dp Aa variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_06, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_06, long_name='2D monthly dp Aa variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_07, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_07, long_name='2D monthly dp Aa variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_08, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_08, long_name='2D monthly dp Aa variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_09, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_09, long_name='2D monthly dp Aa variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_Aa_10, [vi, month], debug_temp%id_var_dp_2D_monthly_Aa_10, long_name='2D monthly dp Aa variable 10')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_01,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_01,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_02,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_02,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_03,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_03,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_04,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_04,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_05,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_05,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_06,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_06,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_07,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_07,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_08,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_08,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_09,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_09,  long_name='2D-monthly dp a-grid (vertex) variable 01')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_10,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_10,  long_name='2D-monthly dp a-grid (vertex) variable 01')
     
     ! Leave definition mode:
     CALL handle_error(nf90_enddef( debug_temp%ncid))
@@ -2305,458 +2350,568 @@ CONTAINS
     CALL sync
     
     ! If necessary (i.e. every time except the first ever time this subroutine is called), de-associate the intermediary pointers first.
-    IF (ASSOCIATED(debug%dp_2D_Aa_01)) THEN
+    IF (ASSOCIATED(debug%dp_2D_a_01)) THEN
     
-      NULLIFY( debug%int_2D_Aa_01)
-      NULLIFY( debug%int_2D_Aa_02)
-      NULLIFY( debug%int_2D_Aa_03)
-      NULLIFY( debug%int_2D_Aa_04)
-      NULLIFY( debug%int_2D_Aa_05)
-      NULLIFY( debug%int_2D_Aa_06)
-      NULLIFY( debug%int_2D_Aa_07)
-      NULLIFY( debug%int_2D_Aa_08)
-      NULLIFY( debug%int_2D_Aa_09)
-      NULLIFY( debug%int_2D_Aa_10)
-      
-      NULLIFY( debug%int_2D_Ac_01)
-      NULLIFY( debug%int_2D_Ac_02)
-      NULLIFY( debug%int_2D_Ac_03)
-      NULLIFY( debug%int_2D_Ac_04)
-      NULLIFY( debug%int_2D_Ac_05)
-      NULLIFY( debug%int_2D_Ac_06)
-      NULLIFY( debug%int_2D_Ac_07)
-      NULLIFY( debug%int_2D_Ac_08)
-      NULLIFY( debug%int_2D_Ac_09)
-      NULLIFY( debug%int_2D_Ac_10)
-      
-      NULLIFY( debug%int_2D_AaAc_01)
-      NULLIFY( debug%int_2D_AaAc_02)
-      NULLIFY( debug%int_2D_AaAc_03)
-      NULLIFY( debug%int_2D_AaAc_04)
-      NULLIFY( debug%int_2D_AaAc_05)
-      NULLIFY( debug%int_2D_AaAc_06)
-      NULLIFY( debug%int_2D_AaAc_07)
-      NULLIFY( debug%int_2D_AaAc_08)
-      NULLIFY( debug%int_2D_AaAc_09)
-      NULLIFY( debug%int_2D_AaAc_10)
+      NULLIFY( debug%int_2D_a_01)
+      NULLIFY( debug%int_2D_a_02)
+      NULLIFY( debug%int_2D_a_03)
+      NULLIFY( debug%int_2D_a_04)
+      NULLIFY( debug%int_2D_a_05)
+      NULLIFY( debug%int_2D_a_06)
+      NULLIFY( debug%int_2D_a_07)
+      NULLIFY( debug%int_2D_a_08)
+      NULLIFY( debug%int_2D_a_09)
+      NULLIFY( debug%int_2D_a_10)
     
-      NULLIFY( debug%dp_2D_Aa_01)
-      NULLIFY( debug%dp_2D_Aa_02)
-      NULLIFY( debug%dp_2D_Aa_03)
-      NULLIFY( debug%dp_2D_Aa_04)
-      NULLIFY( debug%dp_2D_Aa_05)
-      NULLIFY( debug%dp_2D_Aa_06)
-      NULLIFY( debug%dp_2D_Aa_07)
-      NULLIFY( debug%dp_2D_Aa_08)
-      NULLIFY( debug%dp_2D_Aa_09)
-      NULLIFY( debug%dp_2D_Aa_10)
-      
-      NULLIFY( debug%dp_2D_Ac_01)
-      NULLIFY( debug%dp_2D_Ac_02)
-      NULLIFY( debug%dp_2D_Ac_03)
-      NULLIFY( debug%dp_2D_Ac_04)
-      NULLIFY( debug%dp_2D_Ac_05)
-      NULLIFY( debug%dp_2D_Ac_06)
-      NULLIFY( debug%dp_2D_Ac_07)
-      NULLIFY( debug%dp_2D_Ac_08)
-      NULLIFY( debug%dp_2D_Ac_09)
-      NULLIFY( debug%dp_2D_Ac_10)
-      
-      NULLIFY( debug%dp_2D_AaAc_01)
-      NULLIFY( debug%dp_2D_AaAc_02)
-      NULLIFY( debug%dp_2D_AaAc_03)
-      NULLIFY( debug%dp_2D_AaAc_04)
-      NULLIFY( debug%dp_2D_AaAc_05)
-      NULLIFY( debug%dp_2D_AaAc_06)
-      NULLIFY( debug%dp_2D_AaAc_07)
-      NULLIFY( debug%dp_2D_AaAc_08)
-      NULLIFY( debug%dp_2D_AaAc_09)
-      NULLIFY( debug%dp_2D_AaAc_10)
+      NULLIFY( debug%int_2D_b_01)
+      NULLIFY( debug%int_2D_b_02)
+      NULLIFY( debug%int_2D_b_03)
+      NULLIFY( debug%int_2D_b_04)
+      NULLIFY( debug%int_2D_b_05)
+      NULLIFY( debug%int_2D_b_06)
+      NULLIFY( debug%int_2D_b_07)
+      NULLIFY( debug%int_2D_b_08)
+      NULLIFY( debug%int_2D_b_09)
+      NULLIFY( debug%int_2D_b_10)
     
-      NULLIFY( debug%dp_3D_Aa_01)
-      NULLIFY( debug%dp_3D_Aa_02)
-      NULLIFY( debug%dp_3D_Aa_03)
-      NULLIFY( debug%dp_3D_Aa_04)
-      NULLIFY( debug%dp_3D_Aa_05)
-      NULLIFY( debug%dp_3D_Aa_06)
-      NULLIFY( debug%dp_3D_Aa_07)
-      NULLIFY( debug%dp_3D_Aa_08)
-      NULLIFY( debug%dp_3D_Aa_09)
-      NULLIFY( debug%dp_3D_Aa_10)
+      NULLIFY( debug%int_2D_c_01)
+      NULLIFY( debug%int_2D_c_02)
+      NULLIFY( debug%int_2D_c_03)
+      NULLIFY( debug%int_2D_c_04)
+      NULLIFY( debug%int_2D_c_05)
+      NULLIFY( debug%int_2D_c_06)
+      NULLIFY( debug%int_2D_c_07)
+      NULLIFY( debug%int_2D_c_08)
+      NULLIFY( debug%int_2D_c_09)
+      NULLIFY( debug%int_2D_c_10)
     
-      NULLIFY( debug%dp_2D_monthly_Aa_01)
-      NULLIFY( debug%dp_2D_monthly_Aa_02)
-      NULLIFY( debug%dp_2D_monthly_Aa_03)
-      NULLIFY( debug%dp_2D_monthly_Aa_04)
-      NULLIFY( debug%dp_2D_monthly_Aa_05)
-      NULLIFY( debug%dp_2D_monthly_Aa_06)
-      NULLIFY( debug%dp_2D_monthly_Aa_07)
-      NULLIFY( debug%dp_2D_monthly_Aa_08)
-      NULLIFY( debug%dp_2D_monthly_Aa_09)
-      NULLIFY( debug%dp_2D_monthly_Aa_10)
+      NULLIFY( debug%int_2D_ac_01)
+      NULLIFY( debug%int_2D_ac_02)
+      NULLIFY( debug%int_2D_ac_03)
+      NULLIFY( debug%int_2D_ac_04)
+      NULLIFY( debug%int_2D_ac_05)
+      NULLIFY( debug%int_2D_ac_06)
+      NULLIFY( debug%int_2D_ac_07)
+      NULLIFY( debug%int_2D_ac_08)
+      NULLIFY( debug%int_2D_ac_09)
+      NULLIFY( debug%int_2D_ac_10)
+    
+      NULLIFY( debug%dp_2D_a_01)
+      NULLIFY( debug%dp_2D_a_02)
+      NULLIFY( debug%dp_2D_a_03)
+      NULLIFY( debug%dp_2D_a_04)
+      NULLIFY( debug%dp_2D_a_05)
+      NULLIFY( debug%dp_2D_a_06)
+      NULLIFY( debug%dp_2D_a_07)
+      NULLIFY( debug%dp_2D_a_08)
+      NULLIFY( debug%dp_2D_a_09)
+      NULLIFY( debug%dp_2D_a_10)
+    
+      NULLIFY( debug%dp_2D_b_01)
+      NULLIFY( debug%dp_2D_b_02)
+      NULLIFY( debug%dp_2D_b_03)
+      NULLIFY( debug%dp_2D_b_04)
+      NULLIFY( debug%dp_2D_b_05)
+      NULLIFY( debug%dp_2D_b_06)
+      NULLIFY( debug%dp_2D_b_07)
+      NULLIFY( debug%dp_2D_b_08)
+      NULLIFY( debug%dp_2D_b_09)
+      NULLIFY( debug%dp_2D_b_10)
+    
+      NULLIFY( debug%dp_2D_c_01)
+      NULLIFY( debug%dp_2D_c_02)
+      NULLIFY( debug%dp_2D_c_03)
+      NULLIFY( debug%dp_2D_c_04)
+      NULLIFY( debug%dp_2D_c_05)
+      NULLIFY( debug%dp_2D_c_06)
+      NULLIFY( debug%dp_2D_c_07)
+      NULLIFY( debug%dp_2D_c_08)
+      NULLIFY( debug%dp_2D_c_09)
+      NULLIFY( debug%dp_2D_c_10)
+    
+      NULLIFY( debug%dp_2D_ac_01)
+      NULLIFY( debug%dp_2D_ac_02)
+      NULLIFY( debug%dp_2D_ac_03)
+      NULLIFY( debug%dp_2D_ac_04)
+      NULLIFY( debug%dp_2D_ac_05)
+      NULLIFY( debug%dp_2D_ac_06)
+      NULLIFY( debug%dp_2D_ac_07)
+      NULLIFY( debug%dp_2D_ac_08)
+      NULLIFY( debug%dp_2D_ac_09)
+      NULLIFY( debug%dp_2D_ac_10)
+    
+      NULLIFY( debug%dp_3D_a_01)
+      NULLIFY( debug%dp_3D_a_02)
+      NULLIFY( debug%dp_3D_a_03)
+      NULLIFY( debug%dp_3D_a_04)
+      NULLIFY( debug%dp_3D_a_05)
+      NULLIFY( debug%dp_3D_a_06)
+      NULLIFY( debug%dp_3D_a_07)
+      NULLIFY( debug%dp_3D_a_08)
+      NULLIFY( debug%dp_3D_a_09)
+      NULLIFY( debug%dp_3D_a_10)
+    
+      NULLIFY( debug%dp_2D_monthly_a_01)
+      NULLIFY( debug%dp_2D_monthly_a_02)
+      NULLIFY( debug%dp_2D_monthly_a_03)
+      NULLIFY( debug%dp_2D_monthly_a_04)
+      NULLIFY( debug%dp_2D_monthly_a_05)
+      NULLIFY( debug%dp_2D_monthly_a_06)
+      NULLIFY( debug%dp_2D_monthly_a_07)
+      NULLIFY( debug%dp_2D_monthly_a_08)
+      NULLIFY( debug%dp_2D_monthly_a_09)
+      NULLIFY( debug%dp_2D_monthly_a_10)
       
     END IF
     
     ! Bind to the actual memory for this region
     IF (region%name == 'NAM') THEN
     
-      debug%int_2D_Aa_01 => debug_NAM%int_2D_Aa_01    
-      debug%int_2D_Aa_02 => debug_NAM%int_2D_Aa_02    
-      debug%int_2D_Aa_03 => debug_NAM%int_2D_Aa_03    
-      debug%int_2D_Aa_04 => debug_NAM%int_2D_Aa_04    
-      debug%int_2D_Aa_05 => debug_NAM%int_2D_Aa_05    
-      debug%int_2D_Aa_06 => debug_NAM%int_2D_Aa_06    
-      debug%int_2D_Aa_07 => debug_NAM%int_2D_Aa_07    
-      debug%int_2D_Aa_08 => debug_NAM%int_2D_Aa_08    
-      debug%int_2D_Aa_09 => debug_NAM%int_2D_Aa_09    
-      debug%int_2D_Aa_10 => debug_NAM%int_2D_Aa_10
+      debug%int_2D_a_01 => debug_NAM%int_2D_a_01
+      debug%int_2D_a_02 => debug_NAM%int_2D_a_02
+      debug%int_2D_a_03 => debug_NAM%int_2D_a_03
+      debug%int_2D_a_04 => debug_NAM%int_2D_a_04
+      debug%int_2D_a_05 => debug_NAM%int_2D_a_05
+      debug%int_2D_a_06 => debug_NAM%int_2D_a_06
+      debug%int_2D_a_07 => debug_NAM%int_2D_a_07
+      debug%int_2D_a_08 => debug_NAM%int_2D_a_08
+      debug%int_2D_a_09 => debug_NAM%int_2D_a_09
+      debug%int_2D_a_10 => debug_NAM%int_2D_a_10
     
-      debug%int_2D_Ac_01 => debug_NAM%int_2D_Ac_01    
-      debug%int_2D_Ac_02 => debug_NAM%int_2D_Ac_02    
-      debug%int_2D_Ac_03 => debug_NAM%int_2D_Ac_03    
-      debug%int_2D_Ac_04 => debug_NAM%int_2D_Ac_04    
-      debug%int_2D_Ac_05 => debug_NAM%int_2D_Ac_05    
-      debug%int_2D_Ac_06 => debug_NAM%int_2D_Ac_06    
-      debug%int_2D_Ac_07 => debug_NAM%int_2D_Ac_07    
-      debug%int_2D_Ac_08 => debug_NAM%int_2D_Ac_08    
-      debug%int_2D_Ac_09 => debug_NAM%int_2D_Ac_09    
-      debug%int_2D_Ac_10 => debug_NAM%int_2D_Ac_10
+      debug%int_2D_b_01 => debug_NAM%int_2D_b_01
+      debug%int_2D_b_02 => debug_NAM%int_2D_b_02
+      debug%int_2D_b_03 => debug_NAM%int_2D_b_03
+      debug%int_2D_b_04 => debug_NAM%int_2D_b_04
+      debug%int_2D_b_05 => debug_NAM%int_2D_b_05
+      debug%int_2D_b_06 => debug_NAM%int_2D_b_06
+      debug%int_2D_b_07 => debug_NAM%int_2D_b_07
+      debug%int_2D_b_08 => debug_NAM%int_2D_b_08
+      debug%int_2D_b_09 => debug_NAM%int_2D_b_09
+      debug%int_2D_b_10 => debug_NAM%int_2D_b_10
     
-      debug%int_2D_AaAc_01 => debug_NAM%int_2D_AaAc_01    
-      debug%int_2D_AaAc_02 => debug_NAM%int_2D_AaAc_02    
-      debug%int_2D_AaAc_03 => debug_NAM%int_2D_AaAc_03    
-      debug%int_2D_AaAc_04 => debug_NAM%int_2D_AaAc_04    
-      debug%int_2D_AaAc_05 => debug_NAM%int_2D_AaAc_05    
-      debug%int_2D_AaAc_06 => debug_NAM%int_2D_AaAc_06    
-      debug%int_2D_AaAc_07 => debug_NAM%int_2D_AaAc_07    
-      debug%int_2D_AaAc_08 => debug_NAM%int_2D_AaAc_08    
-      debug%int_2D_AaAc_09 => debug_NAM%int_2D_AaAc_09    
-      debug%int_2D_AaAc_10 => debug_NAM%int_2D_AaAc_10
+      debug%int_2D_c_01 => debug_NAM%int_2D_c_01
+      debug%int_2D_c_02 => debug_NAM%int_2D_c_02
+      debug%int_2D_c_03 => debug_NAM%int_2D_c_03
+      debug%int_2D_c_04 => debug_NAM%int_2D_c_04
+      debug%int_2D_c_05 => debug_NAM%int_2D_c_05
+      debug%int_2D_c_06 => debug_NAM%int_2D_c_06
+      debug%int_2D_c_07 => debug_NAM%int_2D_c_07
+      debug%int_2D_c_08 => debug_NAM%int_2D_c_08
+      debug%int_2D_c_09 => debug_NAM%int_2D_c_09
+      debug%int_2D_c_10 => debug_NAM%int_2D_c_10
     
-      debug%dp_2D_Aa_01 => debug_NAM%dp_2D_Aa_01    
-      debug%dp_2D_Aa_02 => debug_NAM%dp_2D_Aa_02    
-      debug%dp_2D_Aa_03 => debug_NAM%dp_2D_Aa_03    
-      debug%dp_2D_Aa_04 => debug_NAM%dp_2D_Aa_04    
-      debug%dp_2D_Aa_05 => debug_NAM%dp_2D_Aa_05    
-      debug%dp_2D_Aa_06 => debug_NAM%dp_2D_Aa_06    
-      debug%dp_2D_Aa_07 => debug_NAM%dp_2D_Aa_07    
-      debug%dp_2D_Aa_08 => debug_NAM%dp_2D_Aa_08    
-      debug%dp_2D_Aa_09 => debug_NAM%dp_2D_Aa_09    
-      debug%dp_2D_Aa_10 => debug_NAM%dp_2D_Aa_10
+      debug%int_2D_ac_01 => debug_NAM%int_2D_ac_01
+      debug%int_2D_ac_02 => debug_NAM%int_2D_ac_02
+      debug%int_2D_ac_03 => debug_NAM%int_2D_ac_03
+      debug%int_2D_ac_04 => debug_NAM%int_2D_ac_04
+      debug%int_2D_ac_05 => debug_NAM%int_2D_ac_05
+      debug%int_2D_ac_06 => debug_NAM%int_2D_ac_06
+      debug%int_2D_ac_07 => debug_NAM%int_2D_ac_07
+      debug%int_2D_ac_08 => debug_NAM%int_2D_ac_08
+      debug%int_2D_ac_09 => debug_NAM%int_2D_ac_09
+      debug%int_2D_ac_10 => debug_NAM%int_2D_ac_10
     
-      debug%dp_2D_Ac_01 => debug_NAM%dp_2D_Ac_01    
-      debug%dp_2D_Ac_02 => debug_NAM%dp_2D_Ac_02    
-      debug%dp_2D_Ac_03 => debug_NAM%dp_2D_Ac_03    
-      debug%dp_2D_Ac_04 => debug_NAM%dp_2D_Ac_04    
-      debug%dp_2D_Ac_05 => debug_NAM%dp_2D_Ac_05    
-      debug%dp_2D_Ac_06 => debug_NAM%dp_2D_Ac_06    
-      debug%dp_2D_Ac_07 => debug_NAM%dp_2D_Ac_07    
-      debug%dp_2D_Ac_08 => debug_NAM%dp_2D_Ac_08    
-      debug%dp_2D_Ac_09 => debug_NAM%dp_2D_Ac_09    
-      debug%dp_2D_Ac_10 => debug_NAM%dp_2D_Ac_10
+      debug%dp_2D_a_01 => debug_NAM%dp_2D_a_01
+      debug%dp_2D_a_02 => debug_NAM%dp_2D_a_02
+      debug%dp_2D_a_03 => debug_NAM%dp_2D_a_03
+      debug%dp_2D_a_04 => debug_NAM%dp_2D_a_04
+      debug%dp_2D_a_05 => debug_NAM%dp_2D_a_05
+      debug%dp_2D_a_06 => debug_NAM%dp_2D_a_06
+      debug%dp_2D_a_07 => debug_NAM%dp_2D_a_07
+      debug%dp_2D_a_08 => debug_NAM%dp_2D_a_08
+      debug%dp_2D_a_09 => debug_NAM%dp_2D_a_09
+      debug%dp_2D_a_10 => debug_NAM%dp_2D_a_10
     
-      debug%dp_2D_AaAc_01 => debug_NAM%dp_2D_AaAc_01    
-      debug%dp_2D_AaAc_02 => debug_NAM%dp_2D_AaAc_02    
-      debug%dp_2D_AaAc_03 => debug_NAM%dp_2D_AaAc_03    
-      debug%dp_2D_AaAc_04 => debug_NAM%dp_2D_AaAc_04    
-      debug%dp_2D_AaAc_05 => debug_NAM%dp_2D_AaAc_05    
-      debug%dp_2D_AaAc_06 => debug_NAM%dp_2D_AaAc_06    
-      debug%dp_2D_AaAc_07 => debug_NAM%dp_2D_AaAc_07    
-      debug%dp_2D_AaAc_08 => debug_NAM%dp_2D_AaAc_08    
-      debug%dp_2D_AaAc_09 => debug_NAM%dp_2D_AaAc_09    
-      debug%dp_2D_AaAc_10 => debug_NAM%dp_2D_AaAc_10
+      debug%dp_2D_b_01 => debug_NAM%dp_2D_b_01
+      debug%dp_2D_b_02 => debug_NAM%dp_2D_b_02
+      debug%dp_2D_b_03 => debug_NAM%dp_2D_b_03
+      debug%dp_2D_b_04 => debug_NAM%dp_2D_b_04
+      debug%dp_2D_b_05 => debug_NAM%dp_2D_b_05
+      debug%dp_2D_b_06 => debug_NAM%dp_2D_b_06
+      debug%dp_2D_b_07 => debug_NAM%dp_2D_b_07
+      debug%dp_2D_b_08 => debug_NAM%dp_2D_b_08
+      debug%dp_2D_b_09 => debug_NAM%dp_2D_b_09
+      debug%dp_2D_b_10 => debug_NAM%dp_2D_b_10
     
-      debug%dp_3D_Aa_01 => debug_NAM%dp_3D_Aa_01    
-      debug%dp_3D_Aa_02 => debug_NAM%dp_3D_Aa_02    
-      debug%dp_3D_Aa_03 => debug_NAM%dp_3D_Aa_03    
-      debug%dp_3D_Aa_04 => debug_NAM%dp_3D_Aa_04    
-      debug%dp_3D_Aa_05 => debug_NAM%dp_3D_Aa_05    
-      debug%dp_3D_Aa_06 => debug_NAM%dp_3D_Aa_06    
-      debug%dp_3D_Aa_07 => debug_NAM%dp_3D_Aa_07    
-      debug%dp_3D_Aa_08 => debug_NAM%dp_3D_Aa_08    
-      debug%dp_3D_Aa_09 => debug_NAM%dp_3D_Aa_09    
-      debug%dp_3D_Aa_10 => debug_NAM%dp_3D_Aa_10
+      debug%dp_2D_c_01 => debug_NAM%dp_2D_c_01
+      debug%dp_2D_c_02 => debug_NAM%dp_2D_c_02
+      debug%dp_2D_c_03 => debug_NAM%dp_2D_c_03
+      debug%dp_2D_c_04 => debug_NAM%dp_2D_c_04
+      debug%dp_2D_c_05 => debug_NAM%dp_2D_c_05
+      debug%dp_2D_c_06 => debug_NAM%dp_2D_c_06
+      debug%dp_2D_c_07 => debug_NAM%dp_2D_c_07
+      debug%dp_2D_c_08 => debug_NAM%dp_2D_c_08
+      debug%dp_2D_c_09 => debug_NAM%dp_2D_c_09
+      debug%dp_2D_c_10 => debug_NAM%dp_2D_c_10
     
-      debug%dp_2D_monthly_Aa_01 => debug_NAM%dp_2D_monthly_Aa_01    
-      debug%dp_2D_monthly_Aa_02 => debug_NAM%dp_2D_monthly_Aa_02    
-      debug%dp_2D_monthly_Aa_03 => debug_NAM%dp_2D_monthly_Aa_03    
-      debug%dp_2D_monthly_Aa_04 => debug_NAM%dp_2D_monthly_Aa_04    
-      debug%dp_2D_monthly_Aa_05 => debug_NAM%dp_2D_monthly_Aa_05    
-      debug%dp_2D_monthly_Aa_06 => debug_NAM%dp_2D_monthly_Aa_06    
-      debug%dp_2D_monthly_Aa_07 => debug_NAM%dp_2D_monthly_Aa_07    
-      debug%dp_2D_monthly_Aa_08 => debug_NAM%dp_2D_monthly_Aa_08    
-      debug%dp_2D_monthly_Aa_09 => debug_NAM%dp_2D_monthly_Aa_09    
-      debug%dp_2D_monthly_Aa_10 => debug_NAM%dp_2D_monthly_Aa_10
+      debug%dp_2D_ac_01 => debug_NAM%dp_2D_ac_01
+      debug%dp_2D_ac_02 => debug_NAM%dp_2D_ac_02
+      debug%dp_2D_ac_03 => debug_NAM%dp_2D_ac_03
+      debug%dp_2D_ac_04 => debug_NAM%dp_2D_ac_04
+      debug%dp_2D_ac_05 => debug_NAM%dp_2D_ac_05
+      debug%dp_2D_ac_06 => debug_NAM%dp_2D_ac_06
+      debug%dp_2D_ac_07 => debug_NAM%dp_2D_ac_07
+      debug%dp_2D_ac_08 => debug_NAM%dp_2D_ac_08
+      debug%dp_2D_ac_09 => debug_NAM%dp_2D_ac_09
+      debug%dp_2D_ac_10 => debug_NAM%dp_2D_ac_10
+    
+      debug%dp_3D_a_01 => debug_NAM%dp_3D_a_01
+      debug%dp_3D_a_02 => debug_NAM%dp_3D_a_02
+      debug%dp_3D_a_03 => debug_NAM%dp_3D_a_03
+      debug%dp_3D_a_04 => debug_NAM%dp_3D_a_04
+      debug%dp_3D_a_05 => debug_NAM%dp_3D_a_05
+      debug%dp_3D_a_06 => debug_NAM%dp_3D_a_06
+      debug%dp_3D_a_07 => debug_NAM%dp_3D_a_07
+      debug%dp_3D_a_08 => debug_NAM%dp_3D_a_08
+      debug%dp_3D_a_09 => debug_NAM%dp_3D_a_09
+      debug%dp_3D_a_10 => debug_NAM%dp_3D_a_10
+    
+      debug%dp_2D_monthly_a_01 => debug_NAM%dp_2D_monthly_a_01
+      debug%dp_2D_monthly_a_02 => debug_NAM%dp_2D_monthly_a_02
+      debug%dp_2D_monthly_a_03 => debug_NAM%dp_2D_monthly_a_03
+      debug%dp_2D_monthly_a_04 => debug_NAM%dp_2D_monthly_a_04
+      debug%dp_2D_monthly_a_05 => debug_NAM%dp_2D_monthly_a_05
+      debug%dp_2D_monthly_a_06 => debug_NAM%dp_2D_monthly_a_06
+      debug%dp_2D_monthly_a_07 => debug_NAM%dp_2D_monthly_a_07
+      debug%dp_2D_monthly_a_08 => debug_NAM%dp_2D_monthly_a_08
+      debug%dp_2D_monthly_a_09 => debug_NAM%dp_2D_monthly_a_09
+      debug%dp_2D_monthly_a_10 => debug_NAM%dp_2D_monthly_a_10
       
     ELSEIF (region%name == 'EAS') THEN
     
-      debug%int_2D_Aa_01 => debug_EAS%int_2D_Aa_01    
-      debug%int_2D_Aa_02 => debug_EAS%int_2D_Aa_02    
-      debug%int_2D_Aa_03 => debug_EAS%int_2D_Aa_03    
-      debug%int_2D_Aa_04 => debug_EAS%int_2D_Aa_04    
-      debug%int_2D_Aa_05 => debug_EAS%int_2D_Aa_05    
-      debug%int_2D_Aa_06 => debug_EAS%int_2D_Aa_06    
-      debug%int_2D_Aa_07 => debug_EAS%int_2D_Aa_07    
-      debug%int_2D_Aa_08 => debug_EAS%int_2D_Aa_08    
-      debug%int_2D_Aa_09 => debug_EAS%int_2D_Aa_09    
-      debug%int_2D_Aa_10 => debug_EAS%int_2D_Aa_10
+      debug%int_2D_a_01 => debug_EAS%int_2D_a_01
+      debug%int_2D_a_02 => debug_EAS%int_2D_a_02
+      debug%int_2D_a_03 => debug_EAS%int_2D_a_03
+      debug%int_2D_a_04 => debug_EAS%int_2D_a_04
+      debug%int_2D_a_05 => debug_EAS%int_2D_a_05
+      debug%int_2D_a_06 => debug_EAS%int_2D_a_06
+      debug%int_2D_a_07 => debug_EAS%int_2D_a_07
+      debug%int_2D_a_08 => debug_EAS%int_2D_a_08
+      debug%int_2D_a_09 => debug_EAS%int_2D_a_09
+      debug%int_2D_a_10 => debug_EAS%int_2D_a_10
     
-      debug%int_2D_Ac_01 => debug_EAS%int_2D_Ac_01    
-      debug%int_2D_Ac_02 => debug_EAS%int_2D_Ac_02    
-      debug%int_2D_Ac_03 => debug_EAS%int_2D_Ac_03    
-      debug%int_2D_Ac_04 => debug_EAS%int_2D_Ac_04    
-      debug%int_2D_Ac_05 => debug_EAS%int_2D_Ac_05    
-      debug%int_2D_Ac_06 => debug_EAS%int_2D_Ac_06    
-      debug%int_2D_Ac_07 => debug_EAS%int_2D_Ac_07    
-      debug%int_2D_Ac_08 => debug_EAS%int_2D_Ac_08    
-      debug%int_2D_Ac_09 => debug_EAS%int_2D_Ac_09    
-      debug%int_2D_Ac_10 => debug_EAS%int_2D_Ac_10
+      debug%int_2D_b_01 => debug_EAS%int_2D_b_01
+      debug%int_2D_b_02 => debug_EAS%int_2D_b_02
+      debug%int_2D_b_03 => debug_EAS%int_2D_b_03
+      debug%int_2D_b_04 => debug_EAS%int_2D_b_04
+      debug%int_2D_b_05 => debug_EAS%int_2D_b_05
+      debug%int_2D_b_06 => debug_EAS%int_2D_b_06
+      debug%int_2D_b_07 => debug_EAS%int_2D_b_07
+      debug%int_2D_b_08 => debug_EAS%int_2D_b_08
+      debug%int_2D_b_09 => debug_EAS%int_2D_b_09
+      debug%int_2D_b_10 => debug_EAS%int_2D_b_10
     
-      debug%int_2D_AaAc_01 => debug_EAS%int_2D_AaAc_01    
-      debug%int_2D_AaAc_02 => debug_EAS%int_2D_AaAc_02    
-      debug%int_2D_AaAc_03 => debug_EAS%int_2D_AaAc_03    
-      debug%int_2D_AaAc_04 => debug_EAS%int_2D_AaAc_04    
-      debug%int_2D_AaAc_05 => debug_EAS%int_2D_AaAc_05    
-      debug%int_2D_AaAc_06 => debug_EAS%int_2D_AaAc_06    
-      debug%int_2D_AaAc_07 => debug_EAS%int_2D_AaAc_07    
-      debug%int_2D_AaAc_08 => debug_EAS%int_2D_AaAc_08    
-      debug%int_2D_AaAc_09 => debug_EAS%int_2D_AaAc_09    
-      debug%int_2D_AaAc_10 => debug_EAS%int_2D_AaAc_10
+      debug%int_2D_c_01 => debug_EAS%int_2D_c_01
+      debug%int_2D_c_02 => debug_EAS%int_2D_c_02
+      debug%int_2D_c_03 => debug_EAS%int_2D_c_03
+      debug%int_2D_c_04 => debug_EAS%int_2D_c_04
+      debug%int_2D_c_05 => debug_EAS%int_2D_c_05
+      debug%int_2D_c_06 => debug_EAS%int_2D_c_06
+      debug%int_2D_c_07 => debug_EAS%int_2D_c_07
+      debug%int_2D_c_08 => debug_EAS%int_2D_c_08
+      debug%int_2D_c_09 => debug_EAS%int_2D_c_09
+      debug%int_2D_c_10 => debug_EAS%int_2D_c_10
     
-      debug%dp_2D_Aa_01 => debug_EAS%dp_2D_Aa_01    
-      debug%dp_2D_Aa_02 => debug_EAS%dp_2D_Aa_02    
-      debug%dp_2D_Aa_03 => debug_EAS%dp_2D_Aa_03    
-      debug%dp_2D_Aa_04 => debug_EAS%dp_2D_Aa_04    
-      debug%dp_2D_Aa_05 => debug_EAS%dp_2D_Aa_05    
-      debug%dp_2D_Aa_06 => debug_EAS%dp_2D_Aa_06    
-      debug%dp_2D_Aa_07 => debug_EAS%dp_2D_Aa_07    
-      debug%dp_2D_Aa_08 => debug_EAS%dp_2D_Aa_08    
-      debug%dp_2D_Aa_09 => debug_EAS%dp_2D_Aa_09    
-      debug%dp_2D_Aa_10 => debug_EAS%dp_2D_Aa_10
+      debug%int_2D_ac_01 => debug_EAS%int_2D_ac_01
+      debug%int_2D_ac_02 => debug_EAS%int_2D_ac_02
+      debug%int_2D_ac_03 => debug_EAS%int_2D_ac_03
+      debug%int_2D_ac_04 => debug_EAS%int_2D_ac_04
+      debug%int_2D_ac_05 => debug_EAS%int_2D_ac_05
+      debug%int_2D_ac_06 => debug_EAS%int_2D_ac_06
+      debug%int_2D_ac_07 => debug_EAS%int_2D_ac_07
+      debug%int_2D_ac_08 => debug_EAS%int_2D_ac_08
+      debug%int_2D_ac_09 => debug_EAS%int_2D_ac_09
+      debug%int_2D_ac_10 => debug_EAS%int_2D_ac_10
     
-      debug%dp_2D_Ac_01 => debug_EAS%dp_2D_Ac_01    
-      debug%dp_2D_Ac_02 => debug_EAS%dp_2D_Ac_02    
-      debug%dp_2D_Ac_03 => debug_EAS%dp_2D_Ac_03    
-      debug%dp_2D_Ac_04 => debug_EAS%dp_2D_Ac_04    
-      debug%dp_2D_Ac_05 => debug_EAS%dp_2D_Ac_05    
-      debug%dp_2D_Ac_06 => debug_EAS%dp_2D_Ac_06    
-      debug%dp_2D_Ac_07 => debug_EAS%dp_2D_Ac_07    
-      debug%dp_2D_Ac_08 => debug_EAS%dp_2D_Ac_08    
-      debug%dp_2D_Ac_09 => debug_EAS%dp_2D_Ac_09    
-      debug%dp_2D_Ac_10 => debug_EAS%dp_2D_Ac_10
+      debug%dp_2D_a_01 => debug_EAS%dp_2D_a_01
+      debug%dp_2D_a_02 => debug_EAS%dp_2D_a_02
+      debug%dp_2D_a_03 => debug_EAS%dp_2D_a_03
+      debug%dp_2D_a_04 => debug_EAS%dp_2D_a_04
+      debug%dp_2D_a_05 => debug_EAS%dp_2D_a_05
+      debug%dp_2D_a_06 => debug_EAS%dp_2D_a_06
+      debug%dp_2D_a_07 => debug_EAS%dp_2D_a_07
+      debug%dp_2D_a_08 => debug_EAS%dp_2D_a_08
+      debug%dp_2D_a_09 => debug_EAS%dp_2D_a_09
+      debug%dp_2D_a_10 => debug_EAS%dp_2D_a_10
     
-      debug%dp_2D_AaAc_01 => debug_EAS%dp_2D_AaAc_01    
-      debug%dp_2D_AaAc_02 => debug_EAS%dp_2D_AaAc_02    
-      debug%dp_2D_AaAc_03 => debug_EAS%dp_2D_AaAc_03    
-      debug%dp_2D_AaAc_04 => debug_EAS%dp_2D_AaAc_04    
-      debug%dp_2D_AaAc_05 => debug_EAS%dp_2D_AaAc_05    
-      debug%dp_2D_AaAc_06 => debug_EAS%dp_2D_AaAc_06    
-      debug%dp_2D_AaAc_07 => debug_EAS%dp_2D_AaAc_07    
-      debug%dp_2D_AaAc_08 => debug_EAS%dp_2D_AaAc_08    
-      debug%dp_2D_AaAc_09 => debug_EAS%dp_2D_AaAc_09    
-      debug%dp_2D_AaAc_10 => debug_EAS%dp_2D_AaAc_10
+      debug%dp_2D_b_01 => debug_EAS%dp_2D_b_01
+      debug%dp_2D_b_02 => debug_EAS%dp_2D_b_02
+      debug%dp_2D_b_03 => debug_EAS%dp_2D_b_03
+      debug%dp_2D_b_04 => debug_EAS%dp_2D_b_04
+      debug%dp_2D_b_05 => debug_EAS%dp_2D_b_05
+      debug%dp_2D_b_06 => debug_EAS%dp_2D_b_06
+      debug%dp_2D_b_07 => debug_EAS%dp_2D_b_07
+      debug%dp_2D_b_08 => debug_EAS%dp_2D_b_08
+      debug%dp_2D_b_09 => debug_EAS%dp_2D_b_09
+      debug%dp_2D_b_10 => debug_EAS%dp_2D_b_10
     
-      debug%dp_3D_Aa_01 => debug_EAS%dp_3D_Aa_01    
-      debug%dp_3D_Aa_02 => debug_EAS%dp_3D_Aa_02    
-      debug%dp_3D_Aa_03 => debug_EAS%dp_3D_Aa_03    
-      debug%dp_3D_Aa_04 => debug_EAS%dp_3D_Aa_04    
-      debug%dp_3D_Aa_05 => debug_EAS%dp_3D_Aa_05    
-      debug%dp_3D_Aa_06 => debug_EAS%dp_3D_Aa_06    
-      debug%dp_3D_Aa_07 => debug_EAS%dp_3D_Aa_07    
-      debug%dp_3D_Aa_08 => debug_EAS%dp_3D_Aa_08    
-      debug%dp_3D_Aa_09 => debug_EAS%dp_3D_Aa_09    
-      debug%dp_3D_Aa_10 => debug_EAS%dp_3D_Aa_10
+      debug%dp_2D_c_01 => debug_EAS%dp_2D_c_01
+      debug%dp_2D_c_02 => debug_EAS%dp_2D_c_02
+      debug%dp_2D_c_03 => debug_EAS%dp_2D_c_03
+      debug%dp_2D_c_04 => debug_EAS%dp_2D_c_04
+      debug%dp_2D_c_05 => debug_EAS%dp_2D_c_05
+      debug%dp_2D_c_06 => debug_EAS%dp_2D_c_06
+      debug%dp_2D_c_07 => debug_EAS%dp_2D_c_07
+      debug%dp_2D_c_08 => debug_EAS%dp_2D_c_08
+      debug%dp_2D_c_09 => debug_EAS%dp_2D_c_09
+      debug%dp_2D_c_10 => debug_EAS%dp_2D_c_10
     
-      debug%dp_2D_monthly_Aa_01 => debug_EAS%dp_2D_monthly_Aa_01    
-      debug%dp_2D_monthly_Aa_02 => debug_EAS%dp_2D_monthly_Aa_02    
-      debug%dp_2D_monthly_Aa_03 => debug_EAS%dp_2D_monthly_Aa_03    
-      debug%dp_2D_monthly_Aa_04 => debug_EAS%dp_2D_monthly_Aa_04    
-      debug%dp_2D_monthly_Aa_05 => debug_EAS%dp_2D_monthly_Aa_05    
-      debug%dp_2D_monthly_Aa_06 => debug_EAS%dp_2D_monthly_Aa_06    
-      debug%dp_2D_monthly_Aa_07 => debug_EAS%dp_2D_monthly_Aa_07    
-      debug%dp_2D_monthly_Aa_08 => debug_EAS%dp_2D_monthly_Aa_08    
-      debug%dp_2D_monthly_Aa_09 => debug_EAS%dp_2D_monthly_Aa_09    
-      debug%dp_2D_monthly_Aa_10 => debug_EAS%dp_2D_monthly_Aa_10
+      debug%dp_2D_ac_01 => debug_EAS%dp_2D_ac_01
+      debug%dp_2D_ac_02 => debug_EAS%dp_2D_ac_02
+      debug%dp_2D_ac_03 => debug_EAS%dp_2D_ac_03
+      debug%dp_2D_ac_04 => debug_EAS%dp_2D_ac_04
+      debug%dp_2D_ac_05 => debug_EAS%dp_2D_ac_05
+      debug%dp_2D_ac_06 => debug_EAS%dp_2D_ac_06
+      debug%dp_2D_ac_07 => debug_EAS%dp_2D_ac_07
+      debug%dp_2D_ac_08 => debug_EAS%dp_2D_ac_08
+      debug%dp_2D_ac_09 => debug_EAS%dp_2D_ac_09
+      debug%dp_2D_ac_10 => debug_EAS%dp_2D_ac_10
+    
+      debug%dp_3D_a_01 => debug_EAS%dp_3D_a_01
+      debug%dp_3D_a_02 => debug_EAS%dp_3D_a_02
+      debug%dp_3D_a_03 => debug_EAS%dp_3D_a_03
+      debug%dp_3D_a_04 => debug_EAS%dp_3D_a_04
+      debug%dp_3D_a_05 => debug_EAS%dp_3D_a_05
+      debug%dp_3D_a_06 => debug_EAS%dp_3D_a_06
+      debug%dp_3D_a_07 => debug_EAS%dp_3D_a_07
+      debug%dp_3D_a_08 => debug_EAS%dp_3D_a_08
+      debug%dp_3D_a_09 => debug_EAS%dp_3D_a_09
+      debug%dp_3D_a_10 => debug_EAS%dp_3D_a_10
+    
+      debug%dp_2D_monthly_a_01 => debug_EAS%dp_2D_monthly_a_01
+      debug%dp_2D_monthly_a_02 => debug_EAS%dp_2D_monthly_a_02
+      debug%dp_2D_monthly_a_03 => debug_EAS%dp_2D_monthly_a_03
+      debug%dp_2D_monthly_a_04 => debug_EAS%dp_2D_monthly_a_04
+      debug%dp_2D_monthly_a_05 => debug_EAS%dp_2D_monthly_a_05
+      debug%dp_2D_monthly_a_06 => debug_EAS%dp_2D_monthly_a_06
+      debug%dp_2D_monthly_a_07 => debug_EAS%dp_2D_monthly_a_07
+      debug%dp_2D_monthly_a_08 => debug_EAS%dp_2D_monthly_a_08
+      debug%dp_2D_monthly_a_09 => debug_EAS%dp_2D_monthly_a_09
+      debug%dp_2D_monthly_a_10 => debug_EAS%dp_2D_monthly_a_10
       
     ELSEIF (region%name == 'GRL') THEN
     
-      debug%int_2D_Aa_01 => debug_GRL%int_2D_Aa_01    
-      debug%int_2D_Aa_02 => debug_GRL%int_2D_Aa_02    
-      debug%int_2D_Aa_03 => debug_GRL%int_2D_Aa_03    
-      debug%int_2D_Aa_04 => debug_GRL%int_2D_Aa_04    
-      debug%int_2D_Aa_05 => debug_GRL%int_2D_Aa_05    
-      debug%int_2D_Aa_06 => debug_GRL%int_2D_Aa_06    
-      debug%int_2D_Aa_07 => debug_GRL%int_2D_Aa_07    
-      debug%int_2D_Aa_08 => debug_GRL%int_2D_Aa_08    
-      debug%int_2D_Aa_09 => debug_GRL%int_2D_Aa_09    
-      debug%int_2D_Aa_10 => debug_GRL%int_2D_Aa_10
+      debug%int_2D_a_01 => debug_GRL%int_2D_a_01
+      debug%int_2D_a_02 => debug_GRL%int_2D_a_02
+      debug%int_2D_a_03 => debug_GRL%int_2D_a_03
+      debug%int_2D_a_04 => debug_GRL%int_2D_a_04
+      debug%int_2D_a_05 => debug_GRL%int_2D_a_05
+      debug%int_2D_a_06 => debug_GRL%int_2D_a_06
+      debug%int_2D_a_07 => debug_GRL%int_2D_a_07
+      debug%int_2D_a_08 => debug_GRL%int_2D_a_08
+      debug%int_2D_a_09 => debug_GRL%int_2D_a_09
+      debug%int_2D_a_10 => debug_GRL%int_2D_a_10
     
-      debug%int_2D_Ac_01 => debug_GRL%int_2D_Ac_01    
-      debug%int_2D_Ac_02 => debug_GRL%int_2D_Ac_02    
-      debug%int_2D_Ac_03 => debug_GRL%int_2D_Ac_03    
-      debug%int_2D_Ac_04 => debug_GRL%int_2D_Ac_04    
-      debug%int_2D_Ac_05 => debug_GRL%int_2D_Ac_05    
-      debug%int_2D_Ac_06 => debug_GRL%int_2D_Ac_06    
-      debug%int_2D_Ac_07 => debug_GRL%int_2D_Ac_07    
-      debug%int_2D_Ac_08 => debug_GRL%int_2D_Ac_08    
-      debug%int_2D_Ac_09 => debug_GRL%int_2D_Ac_09    
-      debug%int_2D_Ac_10 => debug_GRL%int_2D_Ac_10
+      debug%int_2D_b_01 => debug_GRL%int_2D_b_01
+      debug%int_2D_b_02 => debug_GRL%int_2D_b_02
+      debug%int_2D_b_03 => debug_GRL%int_2D_b_03
+      debug%int_2D_b_04 => debug_GRL%int_2D_b_04
+      debug%int_2D_b_05 => debug_GRL%int_2D_b_05
+      debug%int_2D_b_06 => debug_GRL%int_2D_b_06
+      debug%int_2D_b_07 => debug_GRL%int_2D_b_07
+      debug%int_2D_b_08 => debug_GRL%int_2D_b_08
+      debug%int_2D_b_09 => debug_GRL%int_2D_b_09
+      debug%int_2D_b_10 => debug_GRL%int_2D_b_10
     
-      debug%int_2D_AaAc_01 => debug_GRL%int_2D_AaAc_01    
-      debug%int_2D_AaAc_02 => debug_GRL%int_2D_AaAc_02    
-      debug%int_2D_AaAc_03 => debug_GRL%int_2D_AaAc_03    
-      debug%int_2D_AaAc_04 => debug_GRL%int_2D_AaAc_04    
-      debug%int_2D_AaAc_05 => debug_GRL%int_2D_AaAc_05    
-      debug%int_2D_AaAc_06 => debug_GRL%int_2D_AaAc_06    
-      debug%int_2D_AaAc_07 => debug_GRL%int_2D_AaAc_07    
-      debug%int_2D_AaAc_08 => debug_GRL%int_2D_AaAc_08    
-      debug%int_2D_AaAc_09 => debug_GRL%int_2D_AaAc_09    
-      debug%int_2D_AaAc_10 => debug_GRL%int_2D_AaAc_10
+      debug%int_2D_c_01 => debug_GRL%int_2D_c_01
+      debug%int_2D_c_02 => debug_GRL%int_2D_c_02
+      debug%int_2D_c_03 => debug_GRL%int_2D_c_03
+      debug%int_2D_c_04 => debug_GRL%int_2D_c_04
+      debug%int_2D_c_05 => debug_GRL%int_2D_c_05
+      debug%int_2D_c_06 => debug_GRL%int_2D_c_06
+      debug%int_2D_c_07 => debug_GRL%int_2D_c_07
+      debug%int_2D_c_08 => debug_GRL%int_2D_c_08
+      debug%int_2D_c_09 => debug_GRL%int_2D_c_09
+      debug%int_2D_c_10 => debug_GRL%int_2D_c_10
     
-      debug%dp_2D_Aa_01 => debug_GRL%dp_2D_Aa_01    
-      debug%dp_2D_Aa_02 => debug_GRL%dp_2D_Aa_02    
-      debug%dp_2D_Aa_03 => debug_GRL%dp_2D_Aa_03    
-      debug%dp_2D_Aa_04 => debug_GRL%dp_2D_Aa_04    
-      debug%dp_2D_Aa_05 => debug_GRL%dp_2D_Aa_05    
-      debug%dp_2D_Aa_06 => debug_GRL%dp_2D_Aa_06    
-      debug%dp_2D_Aa_07 => debug_GRL%dp_2D_Aa_07    
-      debug%dp_2D_Aa_08 => debug_GRL%dp_2D_Aa_08    
-      debug%dp_2D_Aa_09 => debug_GRL%dp_2D_Aa_09    
-      debug%dp_2D_Aa_10 => debug_GRL%dp_2D_Aa_10
+      debug%int_2D_ac_01 => debug_GRL%int_2D_ac_01
+      debug%int_2D_ac_02 => debug_GRL%int_2D_ac_02
+      debug%int_2D_ac_03 => debug_GRL%int_2D_ac_03
+      debug%int_2D_ac_04 => debug_GRL%int_2D_ac_04
+      debug%int_2D_ac_05 => debug_GRL%int_2D_ac_05
+      debug%int_2D_ac_06 => debug_GRL%int_2D_ac_06
+      debug%int_2D_ac_07 => debug_GRL%int_2D_ac_07
+      debug%int_2D_ac_08 => debug_GRL%int_2D_ac_08
+      debug%int_2D_ac_09 => debug_GRL%int_2D_ac_09
+      debug%int_2D_ac_10 => debug_GRL%int_2D_ac_10
     
-      debug%dp_2D_Ac_01 => debug_GRL%dp_2D_Ac_01    
-      debug%dp_2D_Ac_02 => debug_GRL%dp_2D_Ac_02    
-      debug%dp_2D_Ac_03 => debug_GRL%dp_2D_Ac_03    
-      debug%dp_2D_Ac_04 => debug_GRL%dp_2D_Ac_04    
-      debug%dp_2D_Ac_05 => debug_GRL%dp_2D_Ac_05    
-      debug%dp_2D_Ac_06 => debug_GRL%dp_2D_Ac_06    
-      debug%dp_2D_Ac_07 => debug_GRL%dp_2D_Ac_07    
-      debug%dp_2D_Ac_08 => debug_GRL%dp_2D_Ac_08    
-      debug%dp_2D_Ac_09 => debug_GRL%dp_2D_Ac_09    
-      debug%dp_2D_Ac_10 => debug_GRL%dp_2D_Ac_10
+      debug%dp_2D_a_01 => debug_GRL%dp_2D_a_01
+      debug%dp_2D_a_02 => debug_GRL%dp_2D_a_02
+      debug%dp_2D_a_03 => debug_GRL%dp_2D_a_03
+      debug%dp_2D_a_04 => debug_GRL%dp_2D_a_04
+      debug%dp_2D_a_05 => debug_GRL%dp_2D_a_05
+      debug%dp_2D_a_06 => debug_GRL%dp_2D_a_06
+      debug%dp_2D_a_07 => debug_GRL%dp_2D_a_07
+      debug%dp_2D_a_08 => debug_GRL%dp_2D_a_08
+      debug%dp_2D_a_09 => debug_GRL%dp_2D_a_09
+      debug%dp_2D_a_10 => debug_GRL%dp_2D_a_10
     
-      debug%dp_2D_AaAc_01 => debug_GRL%dp_2D_AaAc_01    
-      debug%dp_2D_AaAc_02 => debug_GRL%dp_2D_AaAc_02    
-      debug%dp_2D_AaAc_03 => debug_GRL%dp_2D_AaAc_03    
-      debug%dp_2D_AaAc_04 => debug_GRL%dp_2D_AaAc_04    
-      debug%dp_2D_AaAc_05 => debug_GRL%dp_2D_AaAc_05    
-      debug%dp_2D_AaAc_06 => debug_GRL%dp_2D_AaAc_06    
-      debug%dp_2D_AaAc_07 => debug_GRL%dp_2D_AaAc_07    
-      debug%dp_2D_AaAc_08 => debug_GRL%dp_2D_AaAc_08    
-      debug%dp_2D_AaAc_09 => debug_GRL%dp_2D_AaAc_09    
-      debug%dp_2D_AaAc_10 => debug_GRL%dp_2D_AaAc_10
+      debug%dp_2D_b_01 => debug_GRL%dp_2D_b_01
+      debug%dp_2D_b_02 => debug_GRL%dp_2D_b_02
+      debug%dp_2D_b_03 => debug_GRL%dp_2D_b_03
+      debug%dp_2D_b_04 => debug_GRL%dp_2D_b_04
+      debug%dp_2D_b_05 => debug_GRL%dp_2D_b_05
+      debug%dp_2D_b_06 => debug_GRL%dp_2D_b_06
+      debug%dp_2D_b_07 => debug_GRL%dp_2D_b_07
+      debug%dp_2D_b_08 => debug_GRL%dp_2D_b_08
+      debug%dp_2D_b_09 => debug_GRL%dp_2D_b_09
+      debug%dp_2D_b_10 => debug_GRL%dp_2D_b_10
     
-      debug%dp_3D_Aa_01 => debug_GRL%dp_3D_Aa_01    
-      debug%dp_3D_Aa_02 => debug_GRL%dp_3D_Aa_02    
-      debug%dp_3D_Aa_03 => debug_GRL%dp_3D_Aa_03    
-      debug%dp_3D_Aa_04 => debug_GRL%dp_3D_Aa_04    
-      debug%dp_3D_Aa_05 => debug_GRL%dp_3D_Aa_05    
-      debug%dp_3D_Aa_06 => debug_GRL%dp_3D_Aa_06    
-      debug%dp_3D_Aa_07 => debug_GRL%dp_3D_Aa_07    
-      debug%dp_3D_Aa_08 => debug_GRL%dp_3D_Aa_08    
-      debug%dp_3D_Aa_09 => debug_GRL%dp_3D_Aa_09    
-      debug%dp_3D_Aa_10 => debug_GRL%dp_3D_Aa_10
+      debug%dp_2D_c_01 => debug_GRL%dp_2D_c_01
+      debug%dp_2D_c_02 => debug_GRL%dp_2D_c_02
+      debug%dp_2D_c_03 => debug_GRL%dp_2D_c_03
+      debug%dp_2D_c_04 => debug_GRL%dp_2D_c_04
+      debug%dp_2D_c_05 => debug_GRL%dp_2D_c_05
+      debug%dp_2D_c_06 => debug_GRL%dp_2D_c_06
+      debug%dp_2D_c_07 => debug_GRL%dp_2D_c_07
+      debug%dp_2D_c_08 => debug_GRL%dp_2D_c_08
+      debug%dp_2D_c_09 => debug_GRL%dp_2D_c_09
+      debug%dp_2D_c_10 => debug_GRL%dp_2D_c_10
     
-      debug%dp_2D_monthly_Aa_01 => debug_GRL%dp_2D_monthly_Aa_01    
-      debug%dp_2D_monthly_Aa_02 => debug_GRL%dp_2D_monthly_Aa_02    
-      debug%dp_2D_monthly_Aa_03 => debug_GRL%dp_2D_monthly_Aa_03    
-      debug%dp_2D_monthly_Aa_04 => debug_GRL%dp_2D_monthly_Aa_04    
-      debug%dp_2D_monthly_Aa_05 => debug_GRL%dp_2D_monthly_Aa_05    
-      debug%dp_2D_monthly_Aa_06 => debug_GRL%dp_2D_monthly_Aa_06    
-      debug%dp_2D_monthly_Aa_07 => debug_GRL%dp_2D_monthly_Aa_07    
-      debug%dp_2D_monthly_Aa_08 => debug_GRL%dp_2D_monthly_Aa_08    
-      debug%dp_2D_monthly_Aa_09 => debug_GRL%dp_2D_monthly_Aa_09    
-      debug%dp_2D_monthly_Aa_10 => debug_GRL%dp_2D_monthly_Aa_10
+      debug%dp_2D_ac_01 => debug_GRL%dp_2D_ac_01
+      debug%dp_2D_ac_02 => debug_GRL%dp_2D_ac_02
+      debug%dp_2D_ac_03 => debug_GRL%dp_2D_ac_03
+      debug%dp_2D_ac_04 => debug_GRL%dp_2D_ac_04
+      debug%dp_2D_ac_05 => debug_GRL%dp_2D_ac_05
+      debug%dp_2D_ac_06 => debug_GRL%dp_2D_ac_06
+      debug%dp_2D_ac_07 => debug_GRL%dp_2D_ac_07
+      debug%dp_2D_ac_08 => debug_GRL%dp_2D_ac_08
+      debug%dp_2D_ac_09 => debug_GRL%dp_2D_ac_09
+      debug%dp_2D_ac_10 => debug_GRL%dp_2D_ac_10
+    
+      debug%dp_3D_a_01 => debug_GRL%dp_3D_a_01
+      debug%dp_3D_a_02 => debug_GRL%dp_3D_a_02
+      debug%dp_3D_a_03 => debug_GRL%dp_3D_a_03
+      debug%dp_3D_a_04 => debug_GRL%dp_3D_a_04
+      debug%dp_3D_a_05 => debug_GRL%dp_3D_a_05
+      debug%dp_3D_a_06 => debug_GRL%dp_3D_a_06
+      debug%dp_3D_a_07 => debug_GRL%dp_3D_a_07
+      debug%dp_3D_a_08 => debug_GRL%dp_3D_a_08
+      debug%dp_3D_a_09 => debug_GRL%dp_3D_a_09
+      debug%dp_3D_a_10 => debug_GRL%dp_3D_a_10
+    
+      debug%dp_2D_monthly_a_01 => debug_GRL%dp_2D_monthly_a_01
+      debug%dp_2D_monthly_a_02 => debug_GRL%dp_2D_monthly_a_02
+      debug%dp_2D_monthly_a_03 => debug_GRL%dp_2D_monthly_a_03
+      debug%dp_2D_monthly_a_04 => debug_GRL%dp_2D_monthly_a_04
+      debug%dp_2D_monthly_a_05 => debug_GRL%dp_2D_monthly_a_05
+      debug%dp_2D_monthly_a_06 => debug_GRL%dp_2D_monthly_a_06
+      debug%dp_2D_monthly_a_07 => debug_GRL%dp_2D_monthly_a_07
+      debug%dp_2D_monthly_a_08 => debug_GRL%dp_2D_monthly_a_08
+      debug%dp_2D_monthly_a_09 => debug_GRL%dp_2D_monthly_a_09
+      debug%dp_2D_monthly_a_10 => debug_GRL%dp_2D_monthly_a_10
       
     ELSEIF (region%name == 'ANT') THEN
     
-      debug%int_2D_Aa_01 => debug_ANT%int_2D_Aa_01    
-      debug%int_2D_Aa_02 => debug_ANT%int_2D_Aa_02    
-      debug%int_2D_Aa_03 => debug_ANT%int_2D_Aa_03    
-      debug%int_2D_Aa_04 => debug_ANT%int_2D_Aa_04    
-      debug%int_2D_Aa_05 => debug_ANT%int_2D_Aa_05    
-      debug%int_2D_Aa_06 => debug_ANT%int_2D_Aa_06    
-      debug%int_2D_Aa_07 => debug_ANT%int_2D_Aa_07    
-      debug%int_2D_Aa_08 => debug_ANT%int_2D_Aa_08    
-      debug%int_2D_Aa_09 => debug_ANT%int_2D_Aa_09    
-      debug%int_2D_Aa_10 => debug_ANT%int_2D_Aa_10
+      debug%int_2D_a_01 => debug_ANT%int_2D_a_01
+      debug%int_2D_a_02 => debug_ANT%int_2D_a_02
+      debug%int_2D_a_03 => debug_ANT%int_2D_a_03
+      debug%int_2D_a_04 => debug_ANT%int_2D_a_04
+      debug%int_2D_a_05 => debug_ANT%int_2D_a_05
+      debug%int_2D_a_06 => debug_ANT%int_2D_a_06
+      debug%int_2D_a_07 => debug_ANT%int_2D_a_07
+      debug%int_2D_a_08 => debug_ANT%int_2D_a_08
+      debug%int_2D_a_09 => debug_ANT%int_2D_a_09
+      debug%int_2D_a_10 => debug_ANT%int_2D_a_10
     
-      debug%int_2D_Ac_01 => debug_ANT%int_2D_Ac_01    
-      debug%int_2D_Ac_02 => debug_ANT%int_2D_Ac_02    
-      debug%int_2D_Ac_03 => debug_ANT%int_2D_Ac_03    
-      debug%int_2D_Ac_04 => debug_ANT%int_2D_Ac_04    
-      debug%int_2D_Ac_05 => debug_ANT%int_2D_Ac_05    
-      debug%int_2D_Ac_06 => debug_ANT%int_2D_Ac_06    
-      debug%int_2D_Ac_07 => debug_ANT%int_2D_Ac_07    
-      debug%int_2D_Ac_08 => debug_ANT%int_2D_Ac_08    
-      debug%int_2D_Ac_09 => debug_ANT%int_2D_Ac_09    
-      debug%int_2D_Ac_10 => debug_ANT%int_2D_Ac_10
+      debug%int_2D_b_01 => debug_ANT%int_2D_b_01
+      debug%int_2D_b_02 => debug_ANT%int_2D_b_02
+      debug%int_2D_b_03 => debug_ANT%int_2D_b_03
+      debug%int_2D_b_04 => debug_ANT%int_2D_b_04
+      debug%int_2D_b_05 => debug_ANT%int_2D_b_05
+      debug%int_2D_b_06 => debug_ANT%int_2D_b_06
+      debug%int_2D_b_07 => debug_ANT%int_2D_b_07
+      debug%int_2D_b_08 => debug_ANT%int_2D_b_08
+      debug%int_2D_b_09 => debug_ANT%int_2D_b_09
+      debug%int_2D_b_10 => debug_ANT%int_2D_b_10
     
-      debug%int_2D_AaAc_01 => debug_ANT%int_2D_AaAc_01    
-      debug%int_2D_AaAc_02 => debug_ANT%int_2D_AaAc_02    
-      debug%int_2D_AaAc_03 => debug_ANT%int_2D_AaAc_03    
-      debug%int_2D_AaAc_04 => debug_ANT%int_2D_AaAc_04    
-      debug%int_2D_AaAc_05 => debug_ANT%int_2D_AaAc_05    
-      debug%int_2D_AaAc_06 => debug_ANT%int_2D_AaAc_06    
-      debug%int_2D_AaAc_07 => debug_ANT%int_2D_AaAc_07    
-      debug%int_2D_AaAc_08 => debug_ANT%int_2D_AaAc_08    
-      debug%int_2D_AaAc_09 => debug_ANT%int_2D_AaAc_09    
-      debug%int_2D_AaAc_10 => debug_ANT%int_2D_AaAc_10
+      debug%int_2D_c_01 => debug_ANT%int_2D_c_01
+      debug%int_2D_c_02 => debug_ANT%int_2D_c_02
+      debug%int_2D_c_03 => debug_ANT%int_2D_c_03
+      debug%int_2D_c_04 => debug_ANT%int_2D_c_04
+      debug%int_2D_c_05 => debug_ANT%int_2D_c_05
+      debug%int_2D_c_06 => debug_ANT%int_2D_c_06
+      debug%int_2D_c_07 => debug_ANT%int_2D_c_07
+      debug%int_2D_c_08 => debug_ANT%int_2D_c_08
+      debug%int_2D_c_09 => debug_ANT%int_2D_c_09
+      debug%int_2D_c_10 => debug_ANT%int_2D_c_10
     
-      debug%dp_2D_Aa_01 => debug_ANT%dp_2D_Aa_01    
-      debug%dp_2D_Aa_02 => debug_ANT%dp_2D_Aa_02    
-      debug%dp_2D_Aa_03 => debug_ANT%dp_2D_Aa_03    
-      debug%dp_2D_Aa_04 => debug_ANT%dp_2D_Aa_04    
-      debug%dp_2D_Aa_05 => debug_ANT%dp_2D_Aa_05    
-      debug%dp_2D_Aa_06 => debug_ANT%dp_2D_Aa_06    
-      debug%dp_2D_Aa_07 => debug_ANT%dp_2D_Aa_07    
-      debug%dp_2D_Aa_08 => debug_ANT%dp_2D_Aa_08    
-      debug%dp_2D_Aa_09 => debug_ANT%dp_2D_Aa_09    
-      debug%dp_2D_Aa_10 => debug_ANT%dp_2D_Aa_10
+      debug%int_2D_ac_01 => debug_ANT%int_2D_ac_01
+      debug%int_2D_ac_02 => debug_ANT%int_2D_ac_02
+      debug%int_2D_ac_03 => debug_ANT%int_2D_ac_03
+      debug%int_2D_ac_04 => debug_ANT%int_2D_ac_04
+      debug%int_2D_ac_05 => debug_ANT%int_2D_ac_05
+      debug%int_2D_ac_06 => debug_ANT%int_2D_ac_06
+      debug%int_2D_ac_07 => debug_ANT%int_2D_ac_07
+      debug%int_2D_ac_08 => debug_ANT%int_2D_ac_08
+      debug%int_2D_ac_09 => debug_ANT%int_2D_ac_09
+      debug%int_2D_ac_10 => debug_ANT%int_2D_ac_10
     
-      debug%dp_2D_Ac_01 => debug_ANT%dp_2D_Ac_01    
-      debug%dp_2D_Ac_02 => debug_ANT%dp_2D_Ac_02    
-      debug%dp_2D_Ac_03 => debug_ANT%dp_2D_Ac_03    
-      debug%dp_2D_Ac_04 => debug_ANT%dp_2D_Ac_04    
-      debug%dp_2D_Ac_05 => debug_ANT%dp_2D_Ac_05    
-      debug%dp_2D_Ac_06 => debug_ANT%dp_2D_Ac_06    
-      debug%dp_2D_Ac_07 => debug_ANT%dp_2D_Ac_07    
-      debug%dp_2D_Ac_08 => debug_ANT%dp_2D_Ac_08    
-      debug%dp_2D_Ac_09 => debug_ANT%dp_2D_Ac_09    
-      debug%dp_2D_Ac_10 => debug_ANT%dp_2D_Ac_10
+      debug%dp_2D_a_01 => debug_ANT%dp_2D_a_01
+      debug%dp_2D_a_02 => debug_ANT%dp_2D_a_02
+      debug%dp_2D_a_03 => debug_ANT%dp_2D_a_03
+      debug%dp_2D_a_04 => debug_ANT%dp_2D_a_04
+      debug%dp_2D_a_05 => debug_ANT%dp_2D_a_05
+      debug%dp_2D_a_06 => debug_ANT%dp_2D_a_06
+      debug%dp_2D_a_07 => debug_ANT%dp_2D_a_07
+      debug%dp_2D_a_08 => debug_ANT%dp_2D_a_08
+      debug%dp_2D_a_09 => debug_ANT%dp_2D_a_09
+      debug%dp_2D_a_10 => debug_ANT%dp_2D_a_10
     
-      debug%dp_2D_AaAc_01 => debug_ANT%dp_2D_AaAc_01    
-      debug%dp_2D_AaAc_02 => debug_ANT%dp_2D_AaAc_02    
-      debug%dp_2D_AaAc_03 => debug_ANT%dp_2D_AaAc_03    
-      debug%dp_2D_AaAc_04 => debug_ANT%dp_2D_AaAc_04    
-      debug%dp_2D_AaAc_05 => debug_ANT%dp_2D_AaAc_05    
-      debug%dp_2D_AaAc_06 => debug_ANT%dp_2D_AaAc_06    
-      debug%dp_2D_AaAc_07 => debug_ANT%dp_2D_AaAc_07    
-      debug%dp_2D_AaAc_08 => debug_ANT%dp_2D_AaAc_08    
-      debug%dp_2D_AaAc_09 => debug_ANT%dp_2D_AaAc_09    
-      debug%dp_2D_AaAc_10 => debug_ANT%dp_2D_AaAc_10
+      debug%dp_2D_b_01 => debug_ANT%dp_2D_b_01
+      debug%dp_2D_b_02 => debug_ANT%dp_2D_b_02
+      debug%dp_2D_b_03 => debug_ANT%dp_2D_b_03
+      debug%dp_2D_b_04 => debug_ANT%dp_2D_b_04
+      debug%dp_2D_b_05 => debug_ANT%dp_2D_b_05
+      debug%dp_2D_b_06 => debug_ANT%dp_2D_b_06
+      debug%dp_2D_b_07 => debug_ANT%dp_2D_b_07
+      debug%dp_2D_b_08 => debug_ANT%dp_2D_b_08
+      debug%dp_2D_b_09 => debug_ANT%dp_2D_b_09
+      debug%dp_2D_b_10 => debug_ANT%dp_2D_b_10
     
-      debug%dp_3D_Aa_01 => debug_ANT%dp_3D_Aa_01    
-      debug%dp_3D_Aa_02 => debug_ANT%dp_3D_Aa_02    
-      debug%dp_3D_Aa_03 => debug_ANT%dp_3D_Aa_03    
-      debug%dp_3D_Aa_04 => debug_ANT%dp_3D_Aa_04    
-      debug%dp_3D_Aa_05 => debug_ANT%dp_3D_Aa_05    
-      debug%dp_3D_Aa_06 => debug_ANT%dp_3D_Aa_06    
-      debug%dp_3D_Aa_07 => debug_ANT%dp_3D_Aa_07    
-      debug%dp_3D_Aa_08 => debug_ANT%dp_3D_Aa_08    
-      debug%dp_3D_Aa_09 => debug_ANT%dp_3D_Aa_09    
-      debug%dp_3D_Aa_10 => debug_ANT%dp_3D_Aa_10
+      debug%dp_2D_c_01 => debug_ANT%dp_2D_c_01
+      debug%dp_2D_c_02 => debug_ANT%dp_2D_c_02
+      debug%dp_2D_c_03 => debug_ANT%dp_2D_c_03
+      debug%dp_2D_c_04 => debug_ANT%dp_2D_c_04
+      debug%dp_2D_c_05 => debug_ANT%dp_2D_c_05
+      debug%dp_2D_c_06 => debug_ANT%dp_2D_c_06
+      debug%dp_2D_c_07 => debug_ANT%dp_2D_c_07
+      debug%dp_2D_c_08 => debug_ANT%dp_2D_c_08
+      debug%dp_2D_c_09 => debug_ANT%dp_2D_c_09
+      debug%dp_2D_c_10 => debug_ANT%dp_2D_c_10
     
-      debug%dp_2D_monthly_Aa_01 => debug_ANT%dp_2D_monthly_Aa_01    
-      debug%dp_2D_monthly_Aa_02 => debug_ANT%dp_2D_monthly_Aa_02    
-      debug%dp_2D_monthly_Aa_03 => debug_ANT%dp_2D_monthly_Aa_03    
-      debug%dp_2D_monthly_Aa_04 => debug_ANT%dp_2D_monthly_Aa_04    
-      debug%dp_2D_monthly_Aa_05 => debug_ANT%dp_2D_monthly_Aa_05    
-      debug%dp_2D_monthly_Aa_06 => debug_ANT%dp_2D_monthly_Aa_06    
-      debug%dp_2D_monthly_Aa_07 => debug_ANT%dp_2D_monthly_Aa_07    
-      debug%dp_2D_monthly_Aa_08 => debug_ANT%dp_2D_monthly_Aa_08    
-      debug%dp_2D_monthly_Aa_09 => debug_ANT%dp_2D_monthly_Aa_09    
-      debug%dp_2D_monthly_Aa_10 => debug_ANT%dp_2D_monthly_Aa_10
+      debug%dp_2D_ac_01 => debug_ANT%dp_2D_ac_01
+      debug%dp_2D_ac_02 => debug_ANT%dp_2D_ac_02
+      debug%dp_2D_ac_03 => debug_ANT%dp_2D_ac_03
+      debug%dp_2D_ac_04 => debug_ANT%dp_2D_ac_04
+      debug%dp_2D_ac_05 => debug_ANT%dp_2D_ac_05
+      debug%dp_2D_ac_06 => debug_ANT%dp_2D_ac_06
+      debug%dp_2D_ac_07 => debug_ANT%dp_2D_ac_07
+      debug%dp_2D_ac_08 => debug_ANT%dp_2D_ac_08
+      debug%dp_2D_ac_09 => debug_ANT%dp_2D_ac_09
+      debug%dp_2D_ac_10 => debug_ANT%dp_2D_ac_10
+    
+      debug%dp_3D_a_01 => debug_ANT%dp_3D_a_01
+      debug%dp_3D_a_02 => debug_ANT%dp_3D_a_02
+      debug%dp_3D_a_03 => debug_ANT%dp_3D_a_03
+      debug%dp_3D_a_04 => debug_ANT%dp_3D_a_04
+      debug%dp_3D_a_05 => debug_ANT%dp_3D_a_05
+      debug%dp_3D_a_06 => debug_ANT%dp_3D_a_06
+      debug%dp_3D_a_07 => debug_ANT%dp_3D_a_07
+      debug%dp_3D_a_08 => debug_ANT%dp_3D_a_08
+      debug%dp_3D_a_09 => debug_ANT%dp_3D_a_09
+      debug%dp_3D_a_10 => debug_ANT%dp_3D_a_10
+    
+      debug%dp_2D_monthly_a_01 => debug_ANT%dp_2D_monthly_a_01
+      debug%dp_2D_monthly_a_02 => debug_ANT%dp_2D_monthly_a_02
+      debug%dp_2D_monthly_a_03 => debug_ANT%dp_2D_monthly_a_03
+      debug%dp_2D_monthly_a_04 => debug_ANT%dp_2D_monthly_a_04
+      debug%dp_2D_monthly_a_05 => debug_ANT%dp_2D_monthly_a_05
+      debug%dp_2D_monthly_a_06 => debug_ANT%dp_2D_monthly_a_06
+      debug%dp_2D_monthly_a_07 => debug_ANT%dp_2D_monthly_a_07
+      debug%dp_2D_monthly_a_08 => debug_ANT%dp_2D_monthly_a_08
+      debug%dp_2D_monthly_a_09 => debug_ANT%dp_2D_monthly_a_09
+      debug%dp_2D_monthly_a_10 => debug_ANT%dp_2D_monthly_a_10
       
     END IF
     
@@ -2796,93 +2951,115 @@ CONTAINS
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
     TYPE(type_mesh),                 INTENT(IN)        :: mesh
     
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_01,        debug%wint_2D_Aa_01       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_02,        debug%wint_2D_Aa_02       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_03,        debug%wint_2D_Aa_03       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_04,        debug%wint_2D_Aa_04       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_05,        debug%wint_2D_Aa_05       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_06,        debug%wint_2D_Aa_06       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_07,        debug%wint_2D_Aa_07       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_08,        debug%wint_2D_Aa_08       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_09,        debug%wint_2D_Aa_09       )
-    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_Aa_10,        debug%wint_2D_Aa_10       )
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_01, debug%wint_2D_a_01)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_02, debug%wint_2D_a_02)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_03, debug%wint_2D_a_03)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_04, debug%wint_2D_a_04)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_05, debug%wint_2D_a_05)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_06, debug%wint_2D_a_06)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_07, debug%wint_2D_a_07)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_08, debug%wint_2D_a_08)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_09, debug%wint_2D_a_09)
+    CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_10, debug%wint_2D_a_10)
     
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_01,        debug%wint_2D_Ac_01       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_02,        debug%wint_2D_Ac_02       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_03,        debug%wint_2D_Ac_03       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_04,        debug%wint_2D_Ac_04       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_05,        debug%wint_2D_Ac_05       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_06,        debug%wint_2D_Ac_06       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_07,        debug%wint_2D_Ac_07       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_08,        debug%wint_2D_Ac_08       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_09,        debug%wint_2D_Ac_09       )
-    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_Ac_10,        debug%wint_2D_Ac_10       )
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_01, debug%wint_2D_b_01)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_02, debug%wint_2D_b_02)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_03, debug%wint_2D_b_03)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_04, debug%wint_2D_b_04)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_05, debug%wint_2D_b_05)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_06, debug%wint_2D_b_06)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_07, debug%wint_2D_b_07)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_08, debug%wint_2D_b_08)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_09, debug%wint_2D_b_09)
+    CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_10, debug%wint_2D_b_10)
     
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_01,        debug%wint_2D_AaAc_01       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_02,        debug%wint_2D_AaAc_02       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_03,        debug%wint_2D_AaAc_03       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_04,        debug%wint_2D_AaAc_04       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_05,        debug%wint_2D_AaAc_05       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_06,        debug%wint_2D_AaAc_06       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_07,        debug%wint_2D_AaAc_07       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_08,        debug%wint_2D_AaAc_08       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_09,        debug%wint_2D_AaAc_09       )
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_AaAc_10,        debug%wint_2D_AaAc_10       )
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_01, debug%wint_2D_c_01)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_02, debug%wint_2D_c_02)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_03, debug%wint_2D_c_03)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_04, debug%wint_2D_c_04)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_05, debug%wint_2D_c_05)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_06, debug%wint_2D_c_06)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_07, debug%wint_2D_c_07)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_08, debug%wint_2D_c_08)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_09, debug%wint_2D_c_09)
+    CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_10, debug%wint_2D_c_10)
     
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_01,        debug%wdp_2D_Aa_01       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_02,        debug%wdp_2D_Aa_02       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_03,        debug%wdp_2D_Aa_03       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_04,        debug%wdp_2D_Aa_04       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_05,        debug%wdp_2D_Aa_05       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_06,        debug%wdp_2D_Aa_06       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_07,        debug%wdp_2D_Aa_07       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_08,        debug%wdp_2D_Aa_08       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_09,        debug%wdp_2D_Aa_09       )
-    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_Aa_10,        debug%wdp_2D_Aa_10       )
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_01, debug%wint_2D_ac_01)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_02, debug%wint_2D_ac_02)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_03, debug%wint_2D_ac_03)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_04, debug%wint_2D_ac_04)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_05, debug%wint_2D_ac_05)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_06, debug%wint_2D_ac_06)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_07, debug%wint_2D_ac_07)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_08, debug%wint_2D_ac_08)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_09, debug%wint_2D_ac_09)
+    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_10, debug%wint_2D_ac_10)
     
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_01,        debug%wdp_2D_Ac_01       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_02,        debug%wdp_2D_Ac_02       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_03,        debug%wdp_2D_Ac_03       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_04,        debug%wdp_2D_Ac_04       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_05,        debug%wdp_2D_Ac_05       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_06,        debug%wdp_2D_Ac_06       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_07,        debug%wdp_2D_Ac_07       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_08,        debug%wdp_2D_Ac_08       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_09,        debug%wdp_2D_Ac_09       )
-    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_Ac_10,        debug%wdp_2D_Ac_10       )
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_01, debug%wdp_2D_a_01)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_02, debug%wdp_2D_a_02)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_03, debug%wdp_2D_a_03)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_04, debug%wdp_2D_a_04)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_05, debug%wdp_2D_a_05)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_06, debug%wdp_2D_a_06)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_07, debug%wdp_2D_a_07)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_08, debug%wdp_2D_a_08)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_09, debug%wdp_2D_a_09)
+    CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_10, debug%wdp_2D_a_10)
     
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_01,        debug%wdp_2D_AaAc_01       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_02,        debug%wdp_2D_AaAc_02       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_03,        debug%wdp_2D_AaAc_03       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_04,        debug%wdp_2D_AaAc_04       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_05,        debug%wdp_2D_AaAc_05       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_06,        debug%wdp_2D_AaAc_06       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_07,        debug%wdp_2D_AaAc_07       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_08,        debug%wdp_2D_AaAc_08       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_09,        debug%wdp_2D_AaAc_09       )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_AaAc_10,        debug%wdp_2D_AaAc_10       )
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_01, debug%wdp_2D_b_01)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_02, debug%wdp_2D_b_02)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_03, debug%wdp_2D_b_03)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_04, debug%wdp_2D_b_04)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_05, debug%wdp_2D_b_05)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_06, debug%wdp_2D_b_06)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_07, debug%wdp_2D_b_07)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_08, debug%wdp_2D_b_08)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_09, debug%wdp_2D_b_09)
+    CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_10, debug%wdp_2D_b_10)
     
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_01,        debug%wdp_3D_Aa_01       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_02,        debug%wdp_3D_Aa_02       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_03,        debug%wdp_3D_Aa_03       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_04,        debug%wdp_3D_Aa_04       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_05,        debug%wdp_3D_Aa_05       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_06,        debug%wdp_3D_Aa_06       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_07,        debug%wdp_3D_Aa_07       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_08,        debug%wdp_3D_Aa_08       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_09,        debug%wdp_3D_Aa_09       )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nZ, debug%dp_3D_Aa_10,        debug%wdp_3D_Aa_10       )
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_01, debug%wdp_2D_c_01)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_02, debug%wdp_2D_c_02)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_03, debug%wdp_2D_c_03)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_04, debug%wdp_2D_c_04)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_05, debug%wdp_2D_c_05)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_06, debug%wdp_2D_c_06)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_07, debug%wdp_2D_c_07)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_08, debug%wdp_2D_c_08)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_09, debug%wdp_2D_c_09)
+    CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_10, debug%wdp_2D_c_10)
     
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_01,        debug%wdp_2D_monthly_Aa_01       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_02,        debug%wdp_2D_monthly_Aa_02       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_03,        debug%wdp_2D_monthly_Aa_03       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_04,        debug%wdp_2D_monthly_Aa_04       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_05,        debug%wdp_2D_monthly_Aa_05       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_06,        debug%wdp_2D_monthly_Aa_06       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_07,        debug%wdp_2D_monthly_Aa_07       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_08,        debug%wdp_2D_monthly_Aa_08       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_09,        debug%wdp_2D_monthly_Aa_09       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_Aa_10,        debug%wdp_2D_monthly_Aa_10       )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_01, debug%wdp_2D_ac_01)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_02, debug%wdp_2D_ac_02)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_03, debug%wdp_2D_ac_03)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_04, debug%wdp_2D_ac_04)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_05, debug%wdp_2D_ac_05)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_06, debug%wdp_2D_ac_06)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_07, debug%wdp_2D_ac_07)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_08, debug%wdp_2D_ac_08)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_09, debug%wdp_2D_ac_09)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_10, debug%wdp_2D_ac_10)
+    
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_01, debug%wdp_3D_a_01)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_02, debug%wdp_3D_a_02)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_03, debug%wdp_3D_a_03)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_04, debug%wdp_3D_a_04)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_05, debug%wdp_3D_a_05)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_06, debug%wdp_3D_a_06)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_07, debug%wdp_3D_a_07)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_08, debug%wdp_3D_a_08)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_09, debug%wdp_3D_a_09)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_10, debug%wdp_3D_a_10)
+    
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_01, debug%wdp_2D_monthly_a_01)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_02, debug%wdp_2D_monthly_a_02)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_03, debug%wdp_2D_monthly_a_03)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_04, debug%wdp_2D_monthly_a_04)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_05, debug%wdp_2D_monthly_a_05)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_06, debug%wdp_2D_monthly_a_06)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_07, debug%wdp_2D_monthly_a_07)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_08, debug%wdp_2D_monthly_a_08)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_09, debug%wdp_2D_monthly_a_09)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_10, debug%wdp_2D_monthly_a_10)
     
   END SUBROUTINE initialise_debug_fields_region
   SUBROUTINE reallocate_debug_fields( region)
@@ -2915,93 +3092,115 @@ CONTAINS
     ! In/output variables:
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
     
-    CALL deallocate_shared( debug%wint_2D_Aa_01)
-    CALL deallocate_shared( debug%wint_2D_Aa_02)
-    CALL deallocate_shared( debug%wint_2D_Aa_03)
-    CALL deallocate_shared( debug%wint_2D_Aa_04)
-    CALL deallocate_shared( debug%wint_2D_Aa_05)
-    CALL deallocate_shared( debug%wint_2D_Aa_06)
-    CALL deallocate_shared( debug%wint_2D_Aa_07)
-    CALL deallocate_shared( debug%wint_2D_Aa_08)
-    CALL deallocate_shared( debug%wint_2D_Aa_09)
-    CALL deallocate_shared( debug%wint_2D_Aa_10)
+    CALL deallocate_shared( debug%wint_2D_a_01)
+    CALL deallocate_shared( debug%wint_2D_a_02)
+    CALL deallocate_shared( debug%wint_2D_a_03)
+    CALL deallocate_shared( debug%wint_2D_a_04)
+    CALL deallocate_shared( debug%wint_2D_a_05)
+    CALL deallocate_shared( debug%wint_2D_a_06)
+    CALL deallocate_shared( debug%wint_2D_a_07)
+    CALL deallocate_shared( debug%wint_2D_a_08)
+    CALL deallocate_shared( debug%wint_2D_a_09)
+    CALL deallocate_shared( debug%wint_2D_a_10)
     
-    CALL deallocate_shared( debug%wint_2D_Ac_01)
-    CALL deallocate_shared( debug%wint_2D_Ac_02)
-    CALL deallocate_shared( debug%wint_2D_Ac_03)
-    CALL deallocate_shared( debug%wint_2D_Ac_04)
-    CALL deallocate_shared( debug%wint_2D_Ac_05)
-    CALL deallocate_shared( debug%wint_2D_Ac_06)
-    CALL deallocate_shared( debug%wint_2D_Ac_07)
-    CALL deallocate_shared( debug%wint_2D_Ac_08)
-    CALL deallocate_shared( debug%wint_2D_Ac_09)
-    CALL deallocate_shared( debug%wint_2D_Ac_10)
+    CALL deallocate_shared( debug%wint_2D_b_01)
+    CALL deallocate_shared( debug%wint_2D_b_02)
+    CALL deallocate_shared( debug%wint_2D_b_03)
+    CALL deallocate_shared( debug%wint_2D_b_04)
+    CALL deallocate_shared( debug%wint_2D_b_05)
+    CALL deallocate_shared( debug%wint_2D_b_06)
+    CALL deallocate_shared( debug%wint_2D_b_07)
+    CALL deallocate_shared( debug%wint_2D_b_08)
+    CALL deallocate_shared( debug%wint_2D_b_09)
+    CALL deallocate_shared( debug%wint_2D_b_10)
     
-    CALL deallocate_shared( debug%wint_2D_AaAc_01)
-    CALL deallocate_shared( debug%wint_2D_AaAc_02)
-    CALL deallocate_shared( debug%wint_2D_AaAc_03)
-    CALL deallocate_shared( debug%wint_2D_AaAc_04)
-    CALL deallocate_shared( debug%wint_2D_AaAc_05)
-    CALL deallocate_shared( debug%wint_2D_AaAc_06)
-    CALL deallocate_shared( debug%wint_2D_AaAc_07)
-    CALL deallocate_shared( debug%wint_2D_AaAc_08)
-    CALL deallocate_shared( debug%wint_2D_AaAc_09)
-    CALL deallocate_shared( debug%wint_2D_AaAc_10)
+    CALL deallocate_shared( debug%wint_2D_c_01)
+    CALL deallocate_shared( debug%wint_2D_c_02)
+    CALL deallocate_shared( debug%wint_2D_c_03)
+    CALL deallocate_shared( debug%wint_2D_c_04)
+    CALL deallocate_shared( debug%wint_2D_c_05)
+    CALL deallocate_shared( debug%wint_2D_c_06)
+    CALL deallocate_shared( debug%wint_2D_c_07)
+    CALL deallocate_shared( debug%wint_2D_c_08)
+    CALL deallocate_shared( debug%wint_2D_c_09)
+    CALL deallocate_shared( debug%wint_2D_c_10)
     
-    CALL deallocate_shared( debug%wdp_2D_Aa_01)
-    CALL deallocate_shared( debug%wdp_2D_Aa_02)
-    CALL deallocate_shared( debug%wdp_2D_Aa_03)
-    CALL deallocate_shared( debug%wdp_2D_Aa_04)
-    CALL deallocate_shared( debug%wdp_2D_Aa_05)
-    CALL deallocate_shared( debug%wdp_2D_Aa_06)
-    CALL deallocate_shared( debug%wdp_2D_Aa_07)
-    CALL deallocate_shared( debug%wdp_2D_Aa_08)
-    CALL deallocate_shared( debug%wdp_2D_Aa_09)
-    CALL deallocate_shared( debug%wdp_2D_Aa_10)
+    CALL deallocate_shared( debug%wint_2D_ac_01)
+    CALL deallocate_shared( debug%wint_2D_ac_02)
+    CALL deallocate_shared( debug%wint_2D_ac_03)
+    CALL deallocate_shared( debug%wint_2D_ac_04)
+    CALL deallocate_shared( debug%wint_2D_ac_05)
+    CALL deallocate_shared( debug%wint_2D_ac_06)
+    CALL deallocate_shared( debug%wint_2D_ac_07)
+    CALL deallocate_shared( debug%wint_2D_ac_08)
+    CALL deallocate_shared( debug%wint_2D_ac_09)
+    CALL deallocate_shared( debug%wint_2D_ac_10)
     
-    CALL deallocate_shared( debug%wdp_2D_Ac_01)
-    CALL deallocate_shared( debug%wdp_2D_Ac_02)
-    CALL deallocate_shared( debug%wdp_2D_Ac_03)
-    CALL deallocate_shared( debug%wdp_2D_Ac_04)
-    CALL deallocate_shared( debug%wdp_2D_Ac_05)
-    CALL deallocate_shared( debug%wdp_2D_Ac_06)
-    CALL deallocate_shared( debug%wdp_2D_Ac_07)
-    CALL deallocate_shared( debug%wdp_2D_Ac_08)
-    CALL deallocate_shared( debug%wdp_2D_Ac_09)
-    CALL deallocate_shared( debug%wdp_2D_Ac_10)
+    CALL deallocate_shared( debug%wdp_2D_a_01)
+    CALL deallocate_shared( debug%wdp_2D_a_02)
+    CALL deallocate_shared( debug%wdp_2D_a_03)
+    CALL deallocate_shared( debug%wdp_2D_a_04)
+    CALL deallocate_shared( debug%wdp_2D_a_05)
+    CALL deallocate_shared( debug%wdp_2D_a_06)
+    CALL deallocate_shared( debug%wdp_2D_a_07)
+    CALL deallocate_shared( debug%wdp_2D_a_08)
+    CALL deallocate_shared( debug%wdp_2D_a_09)
+    CALL deallocate_shared( debug%wdp_2D_a_10)
     
-    CALL deallocate_shared( debug%wdp_2D_AaAc_01)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_02)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_03)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_04)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_05)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_06)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_07)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_08)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_09)
-    CALL deallocate_shared( debug%wdp_2D_AaAc_10)
+    CALL deallocate_shared( debug%wdp_2D_b_01)
+    CALL deallocate_shared( debug%wdp_2D_b_02)
+    CALL deallocate_shared( debug%wdp_2D_b_03)
+    CALL deallocate_shared( debug%wdp_2D_b_04)
+    CALL deallocate_shared( debug%wdp_2D_b_05)
+    CALL deallocate_shared( debug%wdp_2D_b_06)
+    CALL deallocate_shared( debug%wdp_2D_b_07)
+    CALL deallocate_shared( debug%wdp_2D_b_08)
+    CALL deallocate_shared( debug%wdp_2D_b_09)
+    CALL deallocate_shared( debug%wdp_2D_b_10)
     
-    CALL deallocate_shared( debug%wdp_3D_Aa_01)
-    CALL deallocate_shared( debug%wdp_3D_Aa_02)
-    CALL deallocate_shared( debug%wdp_3D_Aa_03)
-    CALL deallocate_shared( debug%wdp_3D_Aa_04)
-    CALL deallocate_shared( debug%wdp_3D_Aa_05)
-    CALL deallocate_shared( debug%wdp_3D_Aa_06)
-    CALL deallocate_shared( debug%wdp_3D_Aa_07)
-    CALL deallocate_shared( debug%wdp_3D_Aa_08)
-    CALL deallocate_shared( debug%wdp_3D_Aa_09)
-    CALL deallocate_shared( debug%wdp_3D_Aa_10)
+    CALL deallocate_shared( debug%wdp_2D_c_01)
+    CALL deallocate_shared( debug%wdp_2D_c_02)
+    CALL deallocate_shared( debug%wdp_2D_c_03)
+    CALL deallocate_shared( debug%wdp_2D_c_04)
+    CALL deallocate_shared( debug%wdp_2D_c_05)
+    CALL deallocate_shared( debug%wdp_2D_c_06)
+    CALL deallocate_shared( debug%wdp_2D_c_07)
+    CALL deallocate_shared( debug%wdp_2D_c_08)
+    CALL deallocate_shared( debug%wdp_2D_c_09)
+    CALL deallocate_shared( debug%wdp_2D_c_10)
     
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_01)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_02)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_03)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_04)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_05)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_06)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_07)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_08)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_09)
-    CALL deallocate_shared( debug%wdp_2D_monthly_Aa_10)
+    CALL deallocate_shared( debug%wdp_2D_ac_01)
+    CALL deallocate_shared( debug%wdp_2D_ac_02)
+    CALL deallocate_shared( debug%wdp_2D_ac_03)
+    CALL deallocate_shared( debug%wdp_2D_ac_04)
+    CALL deallocate_shared( debug%wdp_2D_ac_05)
+    CALL deallocate_shared( debug%wdp_2D_ac_06)
+    CALL deallocate_shared( debug%wdp_2D_ac_07)
+    CALL deallocate_shared( debug%wdp_2D_ac_08)
+    CALL deallocate_shared( debug%wdp_2D_ac_09)
+    CALL deallocate_shared( debug%wdp_2D_ac_10)
+    
+    CALL deallocate_shared( debug%wdp_3D_a_01)
+    CALL deallocate_shared( debug%wdp_3D_a_02)
+    CALL deallocate_shared( debug%wdp_3D_a_03)
+    CALL deallocate_shared( debug%wdp_3D_a_04)
+    CALL deallocate_shared( debug%wdp_3D_a_05)
+    CALL deallocate_shared( debug%wdp_3D_a_06)
+    CALL deallocate_shared( debug%wdp_3D_a_07)
+    CALL deallocate_shared( debug%wdp_3D_a_08)
+    CALL deallocate_shared( debug%wdp_3D_a_09)
+    CALL deallocate_shared( debug%wdp_3D_a_10)
+    
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_01)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_02)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_03)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_04)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_05)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_06)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_07)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_08)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_09)
+    CALL deallocate_shared( debug%wdp_2D_monthly_a_10)
     
   END SUBROUTINE deallocate_debug_fields_region
   
@@ -3597,6 +3796,65 @@ CONTAINS
     forcing%ghf_ghf = forcing%ghf_ghf * sec_per_year
 
   END SUBROUTINE read_geothermal_heat_flux_file
+  
+  ! Write a CSR matrix to a NetCDF file
+  SUBROUTINE write_CSR_matrix_to_NetCDF( AA, filename)
+    ! Write a CSR matrix to a NetCDF file
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    
+    ! Local variables:
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: ncid
+    INTEGER                                       :: m, mp1, n, nnz, ptr, index, val
+    
+    IF (.NOT. par%master) RETURN
+
+    ! Safety
+    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+    IF (file_exists) THEN
+      WRITE(0,*) 'write_CSR_matrix_to_NetCDF - ERROR: file "', TRIM(filename), '" already exists!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
+    
+    ! Create netCDF file
+    CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
+        
+    ! Define dimensions:
+    CALL create_dim( ncid, 'm',      AA%m  , m  )
+    CALL create_dim( ncid, 'mplus1', AA%m+1, mp1)
+    CALL create_dim( ncid, 'n',      AA%n  , n  )
+    CALL create_dim( ncid, 'nnz',    AA%nnz, nnz)
+    
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+    
+    CALL create_int_var(    ncid, 'ptr',   [mp1], ptr  , long_name = 'ptr'  )
+    CALL create_int_var(    ncid, 'index', [nnz], index, long_name = 'index')
+    CALL create_double_var( ncid, 'val',   [nnz], val  , long_name = 'val'  )
+       
+    ! Leave definition mode
+    CALL handle_error( nf90_enddef( ncid))    
+    
+    ! Write data
+    CALL handle_error( nf90_put_var( ncid, ptr  , AA%ptr  ))
+    CALL handle_error( nf90_put_var( ncid, index, AA%index))
+    CALL handle_error( nf90_put_var( ncid, val  , AA%val  ))
+        
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( ncid))
+    
+    ! Close the file
+    CALL close_netcdf_file(ncid)
+    
+  END SUBROUTINE write_CSR_matrix_to_NetCDF
 
 ! Basic NetCDF wrapper functions
 ! ==============================

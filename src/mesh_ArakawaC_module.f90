@@ -1,21 +1,28 @@
 MODULE mesh_ArakawaC_module
+
   ! Routines used in creating the Arakawa C staggered mesh.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           allocate_shared_bool_1D, deallocate_shared, &
-                                           adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                           adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                           adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                           adapt_shared_bool_1D               
-  USE data_types_module,             ONLY: type_mesh
-  USE mesh_help_functions_module,    ONLY: is_boundary_segment, partition_list
-  USE mesh_derivatives_module,       ONLY: get_neighbour_functions_vertex_gr
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality           
+  USE data_types_module,               ONLY: type_mesh
+  USE mesh_help_functions_module,      ONLY: is_boundary_segment
 
   IMPLICIT NONE
 
@@ -32,15 +39,6 @@ MODULE mesh_ArakawaC_module
     INTEGER                                       :: vi, ci, vj, cj, iti, ti, n1, n2, n3, vl, vr
     INTEGER,  DIMENSION(:,:), ALLOCATABLE         :: Aci_temp
     REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: VAc_temp
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Nx_Ac_temp
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Ny_Ac_temp
-    REAL(dp), DIMENSION(:  ), ALLOCATABLE         :: Np_Ac_temp
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: No_Ac_temp
-    REAL(dp), DIMENSION(4)                        :: Nxl, Nxr, Nyl, Nyr
-    REAL(dp)                                      :: Nzl, Nzr
-    REAL(dp), DIMENSION(4)                        :: Nx, Ny
-    REAL(dp)                                      :: Ux, Uy, U, Np
-    REAL(dp), DIMENSION(4)                        :: No
                 
     ! Allocate memory for the mapping arrays. Aci is stored in temporary memory on the master process first,
     ! once we know how much is needed, we will allocate shared memory and transfer the data there.
@@ -58,51 +56,39 @@ MODULE mesh_ArakawaC_module
     IF (.NOT. par%master) THEN
     
       ! Allocate a little memory to prevent compiler warnings
-      ALLOCATE(VAc_temp(   1,1))
-      ALLOCATE(Aci_temp(   1,1))
-      ALLOCATE(Nx_Ac_temp( 1,1))
-      ALLOCATE(Ny_Ac_temp( 1,1))
-      ALLOCATE(Np_Ac_temp( 1  ))
-      ALLOCATE(No_Ac_temp( 1,1))
+      ALLOCATE(VAc_temp( 1,1))
+      ALLOCATE(Aci_temp( 1,1))
     
     ELSE
     
       ! Allocate temporary memory for VAc, Aci and neighbour functions
-      ALLOCATE(VAc_temp(   mesh%nTri * 3,2))
-      ALLOCATE(Aci_temp(   mesh%nTri * 3,4))
-      ALLOCATE(Nx_Ac_temp( mesh%nTri * 3,4))
-      ALLOCATE(Ny_Ac_temp( mesh%nTri * 3,4))
-      ALLOCATE(Np_Ac_temp( mesh%nTri * 3  ))
-      ALLOCATE(No_Ac_temp( mesh%nTri * 3,4))
+      ALLOCATE(VAc_temp( mesh%nTri * 3,2))
+      ALLOCATE(Aci_temp( mesh%nTri * 3,4))
       
       mesh%nAc   = 0
       mesh%iAci  = 0
       Aci_temp   = 0
       VAc_temp   = 0._dp
-      Nx_Ac_temp = 0._dp
-      Ny_Ac_temp = 0._dp
-      Np_Ac_temp = 0._dp
-      No_Ac_temp = 0._dp
       
       ! Go over all Aa vertices
       DO vi = 1, mesh%nV
       
         ! Go over all the vertex connections
-        DO ci = 1, mesh%nC(vi)
-          vj = mesh%C(vi,ci)
+        DO ci = 1, mesh%nC( vi)
+          vj = mesh%C( vi,ci)
           
           ! Skip connections that were already considered in the opposite direction
-          IF (mesh%iAci(vi,ci)>0) CYCLE
+          IF (mesh%iAci( vi,ci)>0) CYCLE
           
           ! List Ac vertex number in reference array
           mesh%nAc = mesh%nAc + 1
-          mesh%iAci(vi,ci) = mesh%nAc
-          VAc_temp(mesh%nAc,:) = (mesh%V(vi,:) + mesh%V(vj,:)) / 2._dp
+          mesh%iAci( vi,ci) = mesh%nAc
+          VAc_temp(mesh%nAc,:) = (mesh%V( vi,:) + mesh%V(vj,:)) / 2._dp
             
           ! Find reverse connection
-          DO cj = 1, mesh%nC(vj)
-            IF (mesh%C(vj,cj)==vi) THEN
-              mesh%iAci(vj,cj) = mesh%nAC
+          DO cj = 1, mesh%nC( vj)
+            IF (mesh%C( vj,cj) == vi) THEN
+              mesh%iAci( vj,cj) = mesh%nAC
               EXIT
             END IF
           END DO
@@ -110,53 +96,39 @@ MODULE mesh_ArakawaC_module
           IF (.NOT. is_boundary_segment( mesh, vi, vj)) THEN
               
             ! Find indices of vl and vr
-            DO iti = 1, mesh%niTri(vi)
-              ti = mesh%iTri(vi,iti)
+            DO iti = 1, mesh%niTri( vi)
+              ti = mesh%iTri( vi,iti)
               DO n1 = 1, 3
                 n2 = n1+1
                 IF (n2==4) n2=1
                 n3 = n2+1
                 IF (n3==4) n3=1
                 
-                IF (mesh%Tri(ti,n1)==vi .AND. mesh%Tri(ti,n2)==vj) THEN
-                  vl = mesh%Tri(ti,n3)
-                ELSE IF (mesh%Tri(ti,n1)==vj .AND. mesh%Tri(ti,n2)==vi) THEN
-                  vr = mesh%Tri(ti,n3)
+                IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj) THEN
+                  vl = mesh%Tri( ti,n3)
+                ELSE IF (mesh%Tri( ti,n1) == vj .AND. mesh%Tri( ti,n2) == vi) THEN
+                  vr = mesh%Tri( ti,n3)
                 END IF
               END DO
             END DO
             
             ! List relevant Aa vertex indices vor Ac vertex in reference array
-            Aci_temp(mesh%nAc,:) = [vi, vj, vl, vr]
-            
-            ! Calculate neighbour functions - first on adjacent triangles, then on Ac vertex
-            ! x an y just as average of the left and right triangles
-            Nxl = [mesh%V(vl,2)-mesh%V(vj,2), mesh%V(vi,2)-mesh%V(vl,2), mesh%V(vj,2)-mesh%V(vi,2), 0._dp]
-            Nyl = [mesh%V(vj,1)-mesh%V(vl,1), mesh%V(vl,1)-mesh%V(vi,1), mesh%V(vi,1)-mesh%V(vj,1), 0._dp]
-            Nxr = [mesh%V(vj,2)-mesh%V(vr,2), mesh%V(vr,2)-mesh%V(vi,2), 0._dp, mesh%V(vi,2)-mesh%V(vj,2)]
-            Nyr = [mesh%V(vr,1)-mesh%V(vj,1), mesh%V(vi,1)-mesh%V(vr,1), 0._dp, mesh%V(vj,1)-mesh%V(vi,1)]
-            Nzl = ( (mesh%V(vj,1)-mesh%V(vi,1)) * (mesh%V(vl,2)-mesh%V(vi,2)) ) - &
-                  ( (mesh%V(vj,2)-mesh%V(vi,2)) * (mesh%V(vl,1)-mesh%V(vi,1)) )
-            Nzr = ( (mesh%V(vr,1)-mesh%V(vi,1)) * (mesh%V(vj,2)-mesh%V(vi,2)) ) - &
-                  ( (mesh%V(vr,2)-mesh%V(vi,2)) * (mesh%V(vj,1)-mesh%V(vi,1)) )
-                  
-            Nx = -((Nxl / Nzl) + (Nxr / Nzr))/2._dp
-            Ny = -((Nyl / Nzl) + (Nyr / Nzr))/2._dp
+            Aci_temp( mesh%nAc,:) = [vi, vj, vl, vr]
             
           ELSE
             ! Surface slope on an edge segment Ac vertex equals that of the (single) triangle
               
             ! Find index of vl
-            DO iti = 1, mesh%niTri(vi)
-              ti = mesh%iTri(vi,iti)
+            DO iti = 1, mesh%niTri( vi)
+              ti = mesh%iTri( vi,iti)
               DO n1 = 1, 3
                 n2 = n1+1
                 IF (n2==4) n2=1
                 n3 = n2+1
                 IF (n3==4) n3=1
                 
-                IF ((mesh%Tri(ti,n1)==vi .AND. mesh%Tri(ti,n2)==vj) .OR. (mesh%Tri(ti,n1)==vj .AND. mesh%Tri(ti,n2)==vi)) THEN
-                  vl = mesh%Tri(ti,n3)
+                IF ((mesh%Tri( ti,n1)==vi .AND. mesh%Tri( ti,n2)==vj) .OR. (mesh%Tri( ti,n1)==vj .AND. mesh%Tri( ti,n2)==vi)) THEN
+                  vl = mesh%Tri( ti,n3)
                 END IF
               END DO
             END DO
@@ -164,34 +136,9 @@ MODULE mesh_ArakawaC_module
             ! List relevant Aa vertex indices vor Ac vertex in reference array
             ! NOTE: fourth entry is set to 1 because it cant be zero, but the fourth
             !       neighbour function is set to zero, so it doesn't matter...
-            Aci_temp(mesh%nAc,:) = [vi, vj, vl, 1]
-            
-            ! Calculate neighbour functions on single adjacent triangle (equal to Ac vertex values)
-            ! x an y just as average of the left and right triangles
-            Nxl = [mesh%V(vl,2)-mesh%V(vj,2), mesh%V(vi,2)-mesh%V(vl,2), mesh%V(vj,2)-mesh%V(vi,2), 0._dp]
-            Nyl = [mesh%V(vj,1)-mesh%V(vl,1), mesh%V(vl,1)-mesh%V(vi,1), mesh%V(vi,1)-mesh%V(vj,1), 0._dp]
-            Nzl = ( (mesh%V(vj,1)-mesh%V(vi,1)) * (mesh%V(vl,2)-mesh%V(vi,2)) ) - &
-                  ( (mesh%V(vj,2)-mesh%V(vi,2)) * (mesh%V(vl,1)-mesh%V(vi,1)) )
-                  
-            Nx = -Nxl / Nzl
-            Ny = -Nyl / Nzl           
+            Aci_temp( mesh%nAc,:) = [vi, vj, vl, 1]          
           
           END IF
-            
-          ! Then p and o by rotating x and y
-          Ux = mesh%V( vj,1) - mesh%V( vi,1)
-          Uy = mesh%V( vj,2) - mesh%V( vi,2)
-          U  = SQRT(Ux**2 + Uy**2)
-          
-          Np = 1._dp / U          ! Slope along line from j to i is just f(j)-f(i)/dist(ji), only need to save that single number
-                                  ! Checked that this gives the same result as just rotating Nx, Ny
-          No = (Ny*Ux - Nx*Uy)/U  ! This one still depends on all four vertices, no symmetries...
-          
-          ! Save everything in the temporary memory
-          Nx_Ac_temp( mesh%nAc,:) = Nx
-          Ny_Ac_temp( mesh%nAc,:) = Ny
-          Np_Ac_temp( mesh%nAc  ) = Np
-          No_Ac_temp( mesh%nAc,:) = No 
             
         END DO ! DO ci = 1, mesh%nC(vi)
       END DO ! DO vi = 1, mesh%nV
@@ -202,20 +149,12 @@ MODULE mesh_ArakawaC_module
     ! Allocate shared memory, move data there
     ! =======================================
     
-    CALL allocate_shared_dp_2D(  mesh%nAc,       2,            mesh%VAc,             mesh%wVAc           )
-    CALL allocate_shared_int_2D( mesh%nAc,       4,            mesh%Aci,             mesh%wAci           )
-    CALL allocate_shared_dp_2D(  mesh%nAc,       4,            mesh%Nx_Ac,           mesh%wNx_Ac         )
-    CALL allocate_shared_dp_2D(  mesh%nAc,       4,            mesh%Ny_Ac,           mesh%wNy_Ac         )
-    CALL allocate_shared_dp_1D(  mesh%nAc,                     mesh%Np_Ac,           mesh%wNp_Ac         )
-    CALL allocate_shared_dp_2D(  mesh%nAc,       4,            mesh%No_Ac,           mesh%wNo_Ac         )
+    CALL allocate_shared_dp_2D(  mesh%nAc, 2, mesh%VAc, mesh%wVAc)
+    CALL allocate_shared_int_2D( mesh%nAc, 4, mesh%Aci, mesh%wAci)
     
     IF (par%master) THEN
       mesh%VAc   = VAc_temp(   1:mesh%nAc,:)
       mesh%Aci   = Aci_temp(   1:mesh%nAc,:)
-      mesh%Nx_Ac = Nx_Ac_temp( 1:mesh%nAc,:)
-      mesh%Ny_Ac = Ny_Ac_temp( 1:mesh%nAc,:)
-      mesh%Np_Ac = Np_Ac_temp( 1:mesh%nAc  )
-      mesh%No_Ac = No_Ac_temp( 1:mesh%nAc,:)
     END IF
     CALl sync
     
@@ -224,10 +163,6 @@ MODULE mesh_ArakawaC_module
     
     DEALLOCATE( VAc_temp)
     DEALLOCATE( Aci_temp)
-    DEALLOCATE( Nx_Ac_temp)
-    DEALLOCATE( Ny_Ac_temp)
-    DEALLOCATE( Np_Ac_temp)
-    DEALLOCATE( No_Ac_temp)
     
     ! Determine Ac vertex domains
     CALL partition_list( mesh%nAc, par%i, par%n, mesh%ac1, mesh%ac2)
@@ -295,10 +230,7 @@ MODULE mesh_ArakawaC_module
     INTEGER                                       :: vi, vj, ci, aci, ai, vk, vl, vr, aci1, aci2, aci3, aci4
     LOGICAL                                       :: switchthem
     INTEGER                                       :: ti, vip, viq, vir, aci_pq, aci_qr, aci_rp, acj, ack, iti
-    REAL(dp), DIMENSION(2)                        :: V_vi
-    INTEGER                                       :: n, aj
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE       :: V_vc
-    LOGICAL                                       :: is_edge
+    INTEGER                                       :: n
     
     ! Allocate shared memory
     CALL allocate_shared_int_0D( mesh%nVAaAc,   mesh%wnVAaAc  )
@@ -314,12 +246,6 @@ MODULE mesh_ArakawaC_module
     CALL allocate_shared_int_1D( mesh%nVAaAc,                  mesh%nCAaAc,   mesh%wnCAaAc  )
     CALL allocate_shared_int_2D( mesh%nVAaAc,   mesh%nC_mem,   mesh%CAaAc,    mesh%wCAaAc   )
     CALL allocate_shared_int_2D( mesh%nTriAaAc, 3,             mesh%TriAaAc,  mesh%wTriAaAc )
-    
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   mesh%nC_mem+1, mesh%Nx_AaAc,  mesh%wNx_AaAc )
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   mesh%nC_mem+1, mesh%Ny_AaAc,  mesh%wNy_AaAc )
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   mesh%nC_mem+1, mesh%Nxx_AaAc, mesh%wNxx_AaAc)
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   mesh%nC_mem+1, mesh%Nxy_AaAc, mesh%wNxy_AaAc)
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   mesh%nC_mem+1, mesh%Nyy_AaAc, mesh%wNyy_AaAc)
     
     ! List coordinates and connectivity for the regular (Aa) vertices
     DO vi = mesh%v1, mesh%v2
@@ -431,7 +357,7 @@ MODULE mesh_ArakawaC_module
     END DO ! DO aci = mesh%ac1, mesh%ac2
     CALL sync
 
-    ! Triangles (not sure if these are needed but they're nice for plotting)
+    ! Triangles
     DO ti = mesh%t1, mesh%t2
     
       vip = mesh%Tri( ti,1)
@@ -503,344 +429,7 @@ MODULE mesh_ArakawaC_module
     
     ! Determine process domains
     CALL partition_list( mesh%nVAaAc, par%i, par%n, mesh%a1, mesh%a2)
-
-    ! Neighbour functions
-    
-    ALLOCATE( V_vc( mesh%nC_mem, 2))
-    
-    DO ai = mesh%a1, mesh%a2
-    
-      vi  = ai
-      aci = ai - mesh%nV
-      
-      V_vi = mesh%VAaAc(  ai,:)
-      n    = mesh%nCAaAc( ai  )
-      DO ci = 1, n
-        aj = mesh%CAaAc( ai,ci)
-        V_vc( ci,:) = mesh%VAaAc( aj,:)
-      END DO
-      
-      is_edge = .FALSE.
-      IF (ai <= mesh%nV) THEN
-        IF (mesh%edge_index(    vi ) > 0) is_edge = .TRUE.
-      ELSE
-        IF (mesh%edge_index_Ac( aci) > 0) is_edge = .TRUE.
-      END IF
-      
-      CALL get_neighbour_functions_vertex_gr( V_vi, n, V_vc, is_edge, &
-        mesh%Nx_AaAc(  ai,:), &
-        mesh%Ny_AaAc(  ai,:), &
-        mesh%Nxx_AaAc( ai,:), &
-        mesh%Nxy_AaAc( ai,:), &
-        mesh%Nyy_AaAc( ai,:))
-      
-    END DO ! DO ai = mesh%a1, mesh%%a2
-    CALL sync
     
   END SUBROUTINE make_combined_AaAc_mesh
-  
-  SUBROUTINE get_mesh_derivatives_Ac( mesh, d_Aa, ddx_Ac, ddy_Ac, ddp_Ac, ddo_Ac)    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_Aa
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: ddx_Ac, ddy_Ac, ddp_Ac, ddo_Ac
-
-    INTEGER                                       :: aci
-
-    DO aci = mesh%ac1, mesh%ac2
-      CALL get_mesh_derivatives_vertex_Ac( mesh, d_Aa, ddx_Ac( aci), ddy_Ac( aci), ddp_Ac( aci), ddo_Ac( aci), aci)
-    END DO ! DO ci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-  END SUBROUTINE get_mesh_derivatives_Ac
-  SUBROUTINE get_mesh_derivatives_vertex_Ac( mesh, d_Aa, ddx_Ac, ddy_Ac, ddp_Ac, ddo_Ac, aci)
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_Aa
-    REAL(dp),                   INTENT(OUT)       :: ddx_Ac, ddy_Ac, ddp_Ac, ddo_Ac
-    INTEGER,                    INTENT(IN)        :: aci
-
-    INTEGER                                       :: n
-
-    ddx_Ac  = 0._dp
-    ddy_Ac  = 0._dp
-    ddp_Ac  = 0._dp
-    ddo_Ac  = 0._dp
-
-    DO n = 1, 4
-      ddx_Ac = ddx_Ac + mesh%Nx_Ac( aci,n) * d_Aa( mesh%Aci( aci,n))
-      ddy_Ac = ddy_Ac + mesh%Ny_Ac( aci,n) * d_Aa( mesh%Aci( aci,n))
-      ddo_Ac = ddo_Ac + mesh%No_Ac( aci,n) * d_Aa( mesh%Aci( aci,n))
-    END DO
-    ddp_Ac = mesh%Np_Ac( aci) * (d_Aa( mesh%Aci( aci,2)) - d_Aa( mesh%Aci( aci,1)))
-    
-  END SUBROUTINE get_mesh_derivatives_vertex_Ac
-  
-  SUBROUTINE get_mesh_derivatives_AaAc( mesh, d_AaAc, ddx_AaAc, ddy_AaAc)    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_AaAc
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: ddx_AaAc, ddy_AaAc
-
-    INTEGER                                       :: ai
-
-    DO ai = mesh%a1, mesh%a2
-      CALL get_mesh_derivatives_vertex_AaAc( mesh, d_AaAc, ddx_AaAc( ai), ddy_AaAc( ai), ai)
-    END DO ! DO ai = mesh%a1, mesh%a2
-    CALL sync
-    
-  END SUBROUTINE get_mesh_derivatives_AaAc
-  SUBROUTINE get_mesh_derivatives_vertex_AaAc( mesh, d_AaAc, ddx_AaAc, ddy_AaAc, ai)
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_AaAc
-    REAL(dp),                   INTENT(OUT)       :: ddx_AaAc, ddy_AaAc
-    INTEGER,                    INTENT(IN)        :: ai
-
-    INTEGER                                       :: ci
-    
-    ddx_AaAc    = mesh%Nx_AaAc( ai,mesh%nCAaAc( ai)+1) * d_AaAc( ai)
-    ddy_AaAc    = mesh%Ny_AaAc( ai,mesh%nCAaAc( ai)+1) * d_AaAc( ai)
-    
-    DO ci = 1, mesh%nCAaAc( ai)
-      ddx_AaAc  = ddx_AaAc  + mesh%Nx_AaAc( ai,ci) * d_AaAc( mesh%CAaAc( ai,ci))
-      ddy_AaAc  = ddy_AaAc  + mesh%Ny_AaAc( ai,ci) * d_AaAc( mesh%CAaAc( ai,ci))
-    END DO
-    
-  END SUBROUTINE get_mesh_derivatives_vertex_AaAc
-  
-  SUBROUTINE get_mesh_curvatures_AaAc( mesh, d_AaAc, ddxx_AaAc, ddxy_AaAc, ddyy_AaAc)    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_AaAc
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: ddxx_AaAc, ddxy_AaAc, ddyy_AaAc
-
-    INTEGER                                       :: ai
-
-    DO ai = mesh%a1, mesh%a2
-      CALL get_mesh_curvatures_vertex_AaAc( mesh, d_AaAc, ddxx_AaAc( ai), ddxy_AaAc( ai), ddyy_AaAc( ai), ai)
-    END DO ! DO ai = mesh%a1, mesh%a2
-    CALL sync
-    
-  END SUBROUTINE get_mesh_curvatures_AaAc
-  SUBROUTINE get_mesh_curvatures_vertex_AaAc( mesh, d_AaAc, ddxx_AaAc, ddxy_AaAc, ddyy_AaAc, ai)
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_AaAc
-    REAL(dp),                   INTENT(OUT)       :: ddxx_AaAc, ddxy_AaAc, ddyy_AaAc
-    INTEGER,                    INTENT(IN)        :: ai
-
-    INTEGER                                       :: ci, ac
-
-    ddxx_AaAc = d_AaAc( ai) * mesh%Nxx_AaAc( ai, mesh%nCAaAc( ai)+1)
-    ddxy_AaAc = d_AaAc( ai) * mesh%Nxy_AaAc( ai, mesh%nCAaAc( ai)+1)
-    ddyy_AaAc = d_AaAc( ai) * mesh%Nyy_AaAc( ai, mesh%nCAaAc( ai)+1)
-    
-    DO ci = 1, mesh%nCAaAc( ai)
-      ac = mesh%CAaAc( ai,ci)
-      ddxx_AaAc = ddxx_AaAc + d_AaAc( ai) * mesh%Nxx_AaAc( ai,ci)
-      ddxy_AaAc = ddxy_AaAc + d_AaAc( ai) * mesh%Nxy_AaAc( ai,ci)
-      ddyy_AaAc = ddyy_AaAc + d_AaAc( ai) * mesh%Nyy_AaAc( ai,ci)
-    END DO
-    
-  END SUBROUTINE get_mesh_curvatures_vertex_AaAc
-  
-  SUBROUTINE apply_Neumann_boundary_AaAc( mesh, d_AaAc)
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(INOUT)     :: d_AaAc
-    
-    INTEGER                                       :: ai, ci, ac
-    REAL(dp), DIMENSION(mesh%nC_mem)              :: vals
-    INTEGER                                       :: nvals
-        
-    ! Apply Neumann boundary conditions: make sure ddx and ddy are zero at domain boundary
-    ! Achieved by setting d for edge vertices to average value of non-edge neighbours
-    ! ==========================================================================================
-            
-    DO ai = MAX(5,mesh%a1), mesh%a2   ! Edge vertices but not the four corners
-    
-      IF (ai <= mesh%nV) THEN
-        IF (mesh%edge_index(    ai          ) == 0) CYCLE
-      ELSE
-        IF (mesh%edge_index_Ac( ai - mesh%nV) == 0) CYCLE
-      END IF
-
-      vals = 0._dp
-      nvals = 0
-  
-      DO ci = 1, mesh%nCAaAc( ai)
-      
-        ac = mesh%CAaAc( ai,ci)
-        
-        IF (ac <= mesh%nV) THEN
-          IF (mesh%edge_index(    ac          ) > 0) CYCLE
-        ELSE
-          IF (mesh%edge_index_Ac( ac - mesh%nV) > 0) CYCLE
-        END IF
-        
-        nvals = nvals+1
-        vals( nvals) = d_AaAc( ac)
-      END DO
-  
-      d_AaAc( ai) = SUM(vals) / nvals
-      
-    END DO ! DO ai = MAX(5,mesh%a1), mesh%a2   ! Edge vertices but not the four corners
-    CALL sync
-
-    ! And the four corner vertices separately
-    IF (par%master) THEN
-      DO ai = 1, 4
-  
-        vals = 0._dp
-        nvals = 0
-  
-        DO ci = 1, mesh%nCAaAc( ai)
-          ac = mesh%CAaAc( ai,ci)
-          nvals = nvals+1
-          vals( nvals) = d_AaAc( ac)
-        END DO
-  
-        d_AaAc( ai) = SUM(vals) / nvals
-           
-      END DO ! DO ai = 1, 4
-    END IF
-    CALL sync
-    
-  END SUBROUTINE apply_Neumann_boundary_AaAc 
-  
-  SUBROUTINE map_Aa_to_Ac(    mesh, d_Aa, d_Ac)
-    ! Map data from the regular Aa mesh to the staggered Ac mesh    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_Aa
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: d_Ac
-
-    INTEGER                                       :: aci, vi, vj
-    
-    DO aci = mesh%ac1, mesh%ac2
-    
-      vi = mesh%Aci( aci,1)
-      vj = mesh%Aci( aci,2)
-      
-      d_Ac( aci) = (d_Aa( vi) + d_Aa( vj)) / 2._dp
-    
-    END DO ! DO ci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-  END SUBROUTINE map_Aa_to_Ac  
-  SUBROUTINE map_Aa_to_Ac_3D( mesh, d_Aa, d_Ac)
-    ! Map data from the regular Aa mesh to the staggered Ac mesh    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:,:),   INTENT(IN)        :: d_Aa
-    REAL(dp), DIMENSION(:,:),   INTENT(OUT)       :: d_Ac
-
-    INTEGER                                       :: aci, vi, vj
-    
-    DO aci = mesh%ac1, mesh%ac2
-    
-      vi = mesh%Aci( aci,1)
-      vj = mesh%Aci( aci,2)
-      
-      d_Ac( aci,:) = (d_Aa( vi,:) + d_Aa( vj,:)) / 2._dp
-    
-    END DO ! DO ci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-  END SUBROUTINE map_Aa_to_Ac_3D  
-  SUBROUTINE map_Ac_to_Aa(    mesh, d_Ac, d_Aa)
-    ! Map data from the regular Aa mesh to the staggered Ac mesh    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_Ac
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: d_Aa
-
-    INTEGER                                       :: vi, ci, aci
-    
-    d_Aa( mesh%v1:mesh%v2) = 0._dp
-    
-    DO vi = mesh%v1, mesh%v2
-      DO ci = 1, mesh%nC( vi)
-        aci = mesh%iAci( vi,ci)
-        d_Aa( vi) = d_Aa( vi) + d_Ac( aci) / mesh%nC( vi)
-      END DO
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-    
-  END SUBROUTINE map_Ac_to_Aa  
-  SUBROUTINE map_Ac_to_Aa_3D( mesh, d_Ac, d_Aa)
-    ! Map data from the regular Aa mesh to the staggered Ac mesh    
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:,:),   INTENT(IN)        :: d_Ac
-    REAL(dp), DIMENSION(:,:),   INTENT(OUT)       :: d_Aa
-
-    INTEGER                                       :: vi, ci, aci
-    
-    d_Aa( mesh%v1:mesh%v2,:) = 0._dp
-    
-    DO vi = mesh%v1, mesh%v2
-      DO ci = 1, mesh%nC( vi)
-        aci = mesh%iAci( vi,ci)
-        d_Aa( vi,:) = d_Aa(vi,:) + d_Ac( aci,:) / mesh%nC( vi)
-      END DO
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-    
-  END SUBROUTINE map_Ac_to_Aa_3D
-  
-  SUBROUTINE rotate_xy_to_po( mesh, d_Ac_x, d_Ac_y, d_Ac_p, d_Ac_o)
-    ! Rotate a vector field on the Ac mesh from [x,y] to [p,o] components
-    
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: d_Ac_x, d_Ac_y
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: d_Ac_p, d_Ac_o
-    
-    ! Local variables:
-    INTEGER                                       :: ci, vi, vj
-    REAL(dp)                                      :: Dx, Dy, D
-    
-    DO ci = mesh%ac1, mesh%ac2
-    
-      vi = mesh%Aci( ci,1)
-      vj = mesh%Aci( ci,2)
-      
-      Dx = mesh%V( vj,1) - mesh%V( vi,1)
-      Dy = mesh%V( vj,2) - mesh%V( vi,2)
-      D  = SQRT(Dx**2 + Dy**2)
-      
-      d_Ac_p( ci) = d_Ac_x( ci) * Dx/D + d_Ac_y( ci) * Dy/D
-      d_Ac_o( ci) = d_Ac_y( ci) * Dx/D - d_Ac_x( ci) * Dy/D
-      
-    END DO ! DO ci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-  END SUBROUTINE rotate_xy_to_po
 
 END MODULE mesh_ArakawaC_module

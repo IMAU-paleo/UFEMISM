@@ -1,16 +1,32 @@
 MODULE forcing_module
- 
+
+  ! Contains all the routines for reading and calculating the model forcing (CO2, d18O, insolation, sea level),
+  ! as well as the "forcing" structure which stores all the results from these routines (so that they
+  ! can be accessed from all four ice-sheet models and the coupling routine).
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         deallocate_shared
-  USE data_types_module,           ONLY: type_forcing_data, type_mesh, type_model_region
-  USE netcdf_module,               ONLY: debug, write_to_debug_file, inquire_insolation_data_file, read_insolation_data_file_time_lat, &
-                                         read_insolation_data_file, inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_forcing_data, type_mesh, type_model_region
+  USE netcdf_module,                   ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
+                                             read_insolation_data_file, inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
 
   IMPLICIT NONE
   
@@ -304,7 +320,7 @@ CONTAINS
     A_reg = (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin)
     
     DO vi = region%mesh%v1, region%mesh%v2
-      dT_lapse_mod = region%ice%Hs(                vi) * C%constant_lapserate
+      dT_lapse_mod = region%ice%Hs_a(              vi) * C%constant_lapserate
       dT_lapse_PD  = region%climate%PD_obs%Hs_ref( vi) * C%constant_lapserate
       DO m = 1, 12
         T_pot_mod = region%climate%applied%T2m( vi,m) - dT_lapse_mod

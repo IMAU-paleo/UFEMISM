@@ -2,27 +2,39 @@ MODULE restart_module
   ! Routines for restarting the model from output of an earlier run.
   ! Read primary mesh data from a NetCDF file, calculate secondary mesh data,
   ! and read ice model data.
-  
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           deallocate_shared                                               
-  USE data_types_netcdf_module,      ONLY: type_netcdf_restart
-  USE data_types_module,             ONLY: type_model_region
-  USE netcdf_module,                 ONLY: inquire_restart_file_mesh, read_restart_file_mesh, inquire_restart_file_init, &
-                                           read_restart_file_init
-  USE mesh_memory_module,            ONLY: allocate_mesh_primary, allocate_mesh_secondary
-  USE mesh_help_functions_module,    ONLY: partition_list, find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
-                                           find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
-                                           find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh
-  USE mesh_ArakawaC_module,          ONLY: make_Ac_mesh
-  USE mesh_derivatives_module,       ONLY: get_neighbour_functions
-  USE mesh_creation_module,          ONLY: create_transect
-  USE mesh_five_colour_module,       ONLY: calculate_five_colouring_AaAc
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_netcdf_module,        ONLY: type_netcdf_restart
+  USE data_types_module,               ONLY: type_model_region
+  USE netcdf_module,                   ONLY: inquire_restart_file_mesh, read_restart_file_mesh, inquire_restart_file_init, &
+                                             read_restart_file_init
+  USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
+  USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
+                                             find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
+                                             find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh
+  USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
+  USE mesh_creation_module,            ONLY: create_transect
+  USE mesh_five_colour_module,         ONLY: calculate_five_colouring_AaAc
   
   IMPLICIT NONE
 
@@ -92,7 +104,7 @@ CONTAINS
     CALL find_triangle_areas(                     region%mesh)
     CALL find_connection_widths(                  region%mesh)
     CALL make_Ac_mesh(                            region%mesh)
-    CALL get_neighbour_functions(                 region%mesh)
+    CALL calc_matrix_operators_mesh(              region%mesh)
     CALL determine_mesh_resolution(               region%mesh)
     IF (par%master) CALL find_POI_xy_coordinates( region%mesh)
     CALL sync

@@ -59,6 +59,29 @@ CONTAINS
   
   END SUBROUTINE sync
   
+  ! Partition a list of ntot elements over the n processes
+  SUBROUTINE partition_list( ntot, i, n, i1, i2)
+    ! Partition a list into parallel ranges (e.g. vertex domains)
+  
+    ! In/output variables:
+    INTEGER,                    INTENT(IN)        :: ntot, i, n
+    INTEGER,                    INTENT(OUT)       :: i1, i2
+    
+    IF (ntot > n*2) THEN
+      i1 = MAX(1,    FLOOR(REAL(ntot *  i      / n)) + 1)
+      i2 = MIN(ntot, FLOOR(REAL(ntot * (i + 1) / n)))
+    ELSE
+      IF (i==0) THEN
+        i1 = 1
+        i2 = ntot
+      ELSE
+        i1 = 1
+        i2 = 0
+      END IF
+    END IF
+    
+  END SUBROUTINE partition_list
+  
   ! Reset the memory use tracker at the start of the coupling interval
   SUBROUTINE reset_memory_use_tracker
   
@@ -513,7 +536,45 @@ CONTAINS
     IF (par%master) p = 0._dp
     CALL sync
   
-  END SUBROUTINE allocate_shared_dp_3D  
+  END SUBROUTINE allocate_shared_dp_3D 
+  SUBROUTINE allocate_shared_bool_0D(                p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    LOGICAL,                    POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    INTEGER                                            :: ierr
+    INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
+    INTEGER                                            :: disp_unit
+    TYPE(C_PTR)                                        :: baseptr    
+    
+    ! ==========
+    ! Allocate MPI-shared memory for data array, with an associated window object
+    ! (Needs to be called in Master and Slaves, but only Master actually allocates any space)
+    
+    IF (par%master) THEN
+      windowsize  = 4_MPI_ADDRESS_KIND
+      disp_unit   = 4
+    ELSE
+      windowsize  = 0_MPI_ADDRESS_KIND
+      disp_unit   = 1
+    END IF
+    
+    CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
+    
+    IF (.NOT. par%master) THEN   
+      ! Get the baseptr, size and disp_unit values of the master's memory space.
+      CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
+    END IF
+    
+    ! Associate a pointer with this memory space.
+    CALL C_F_POINTER(baseptr, p)
+  
+  END SUBROUTINE allocate_shared_bool_0D 
   SUBROUTINE allocate_shared_bool_1D( n1,         p, win)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
     ! Return a pointer associated with that memory space. Makes it so that all processes
@@ -817,8 +878,154 @@ CONTAINS
    
   END SUBROUTINE adapt_shared_bool_1D
   
+  
+  ! Reallocate shared memory without data conservation (i.e. deallocate and allocate new)
+  SUBROUTINE reallocate_shared_int_0D(              p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                    POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_int_0D( p, win)
+  
+  END SUBROUTINE reallocate_shared_int_0D  
+  SUBROUTINE reallocate_shared_int_1D(  n1,         p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1         ! Dimension(s) of memory to be allocated
+    INTEGER,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_int_1D( n1, p, win)
+  
+  END SUBROUTINE reallocate_shared_int_1D  
+  SUBROUTINE reallocate_shared_int_2D(  n1, n2,     p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1, n2     ! Dimension(s) of memory to be allocated
+    INTEGER,  DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_int_2D( n1, n2, p, win)
+  
+  END SUBROUTINE reallocate_shared_int_2D  
+  SUBROUTINE reallocate_shared_int_3D(  n1, n2, n3, p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1, n2, n3 ! Dimension(s) of memory to be allocated
+    INTEGER,  DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_int_3D( n1, n2, n3, p, win)
+  
+  END SUBROUTINE reallocate_shared_int_3D  
+  SUBROUTINE reallocate_shared_dp_0D(               p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    REAL(dp),                   POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_dp_0D( p, win)
+  
+  END SUBROUTINE reallocate_shared_dp_0D  
+  SUBROUTINE reallocate_shared_dp_1D(   n1,         p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1         ! Dimension(s) of memory to be allocated
+    REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_dp_1D( n1, p, win)
+  
+  END SUBROUTINE reallocate_shared_dp_1D  
+  SUBROUTINE reallocate_shared_dp_2D(   n1, n2,     p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1, n2     ! Dimension(s) of memory to be allocated
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_dp_2D( n1, n2, p, win)
+  
+  END SUBROUTINE reallocate_shared_dp_2D  
+  SUBROUTINE reallocate_shared_dp_3D(   n1, n2, n3, p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1, n2, n3 ! Dimension(s) of memory to be allocated
+    REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_dp_3D( n1, n2, n3, p, win)
+  
+  END SUBROUTINE reallocate_shared_dp_3D  
+  SUBROUTINE reallocate_shared_bool_1D( n1,         p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.      
+    
+    IMPLICIT NONE
+  
+    INTEGER,                             INTENT(IN)    :: n1         ! Dimension(s) of memory to be allocated
+    LOGICAL,  DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                             INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+    
+    CALL deallocate_shared( win)
+    NULLIFY( p)
+    CALL allocate_shared_bool_1D( n1, p, win)
+  
+  END SUBROUTINE reallocate_shared_bool_1D
+  
   ! Properly "distributed" memory, right now used only in mesh generation
   ! =====================================================================
+  
   SUBROUTINE allocate_shared_dist_int_0D(              p, win)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
     ! Return a pointer associated with that memory space. Makes it so that all processes

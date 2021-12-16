@@ -1,27 +1,40 @@
 MODULE mesh_mapping_module
+
   ! Routines for creating mapping arrays and mapping data between meshes and grids
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         allocate_shared_bool_1D, deallocate_shared, &
-                                         adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                         adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                         adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                         adapt_shared_bool_1D                   
-  USE data_types_module,           ONLY: type_mesh, type_remapping, type_remapping_trilin, type_remapping_nearest_neighbour, &
-                                         type_remapping_conservative, type_grid, type_latlongrid, type_remapping_latlon2mesh, &
-                                         type_remapping_conservative_intermediate_Ac_local, type_remapping_conservative_intermediate_Ac_shared, &
-                                         type_remapping_conservative_intermediate_shared, type_remapping_conservative_intermediate_local
-  USE mesh_help_functions_module,  ONLY: is_in_triangle, find_Voronoi_cell_vertices, find_containing_triangle, find_triangle_area, find_containing_vertex, &
-                                         line_integral_xdy, line_integral_mxydx, line_integral_xydy, is_boundary_segment, cross2, &
-                                         lies_on_line_segment, segment_intersection, partition_domain_x_balanced, write_mesh_to_text_file, &
-                                         line_from_points, line_line_intersection, partition_list
-  USE mesh_derivatives_module,     ONLY: get_mesh_derivatives, get_mesh_derivatives_3D
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE parallel_module,                 ONLY: adapt_shared_int_1D,    adapt_shared_dp_1D, &
+                                             adapt_shared_int_2D,    adapt_shared_dp_2D, &
+                                             adapt_shared_int_3D,    adapt_shared_dp_3D, &
+                                             adapt_shared_bool_1D                   
+  USE data_types_module,               ONLY: type_mesh, type_remapping, type_remapping_trilin, type_remapping_nearest_neighbour, &
+                                             type_remapping_conservative, type_grid, type_latlongrid, type_remapping_latlon2mesh, &
+                                             type_remapping_conservative_intermediate_Ac_local, type_remapping_conservative_intermediate_Ac_shared, &
+                                             type_remapping_conservative_intermediate_shared, type_remapping_conservative_intermediate_local
+  USE mesh_help_functions_module,      ONLY: is_in_triangle, find_Voronoi_cell_vertices, find_containing_triangle, find_triangle_area, find_containing_vertex, &
+                                             line_integral_xdy, line_integral_mxydx, line_integral_xydy, is_boundary_segment, cross2, &
+                                             lies_on_line_segment, segment_intersection, partition_domain_x_balanced, write_mesh_to_text_file, &
+                                             line_from_points, line_line_intersection
+  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_a_to_a_3D, ddy_a_to_a_3D
+  USE utilities_module,                ONLY: smooth_Gaussian_2D_grid, smooth_Gaussian_3D_grid
 
   IMPLICIT NONE
 
@@ -4029,7 +4042,9 @@ MODULE mesh_mapping_module
     
     CALL allocate_shared_dp_1D(  mesh_src%nV, ddx_src, wddx_src)
     CALL allocate_shared_dp_1D(  mesh_src%nV, ddy_src, wddy_src)
-    CALL get_mesh_derivatives( mesh_src, d_src, ddx_src, ddy_src)
+    
+    CALL ddx_a_to_a_2D( mesh_src, d_src, ddx_src)
+    CALL ddy_a_to_a_2D( mesh_src, d_src, ddy_src)
     
     d_dst( mesh_dst%v1:mesh_dst%v2) = 0._dp
         
@@ -4064,7 +4079,9 @@ MODULE mesh_mapping_module
     
     CALL allocate_shared_dp_2D(  mesh_src%nV, 12, ddx_src, wddx_src)
     CALL allocate_shared_dp_2D(  mesh_src%nV, 12, ddy_src, wddy_src)
-    CALL get_mesh_derivatives_3D( mesh_src, d_src, ddx_src, ddy_src, 12)
+    
+    CALL ddx_a_to_a_3D( mesh_src, d_src, ddx_src)
+    CALL ddy_a_to_a_3D( mesh_src, d_src, ddy_src)
     
     d_dst( mesh_dst%v1:mesh_dst%v2,:) = 0._dp
         
@@ -4102,7 +4119,9 @@ MODULE mesh_mapping_module
     
     CALL allocate_shared_dp_2D(  mesh_src%nV, C%nz, ddx_src, wddx_src)
     CALL allocate_shared_dp_2D(  mesh_src%nV, C%nz, ddy_src, wddy_src)
-    CALL get_mesh_derivatives_3D( mesh_src, d_src, ddx_src, ddy_src, nz)
+    
+    CALL ddx_a_to_a_3D( mesh_src, d_src, ddx_src)
+    CALL ddy_a_to_a_3D( mesh_src, d_src, ddy_src)
     
     d_dst( mesh_dst%v1:mesh_dst%v2,:) = 0._dp
         
@@ -4274,55 +4293,75 @@ MODULE mesh_mapping_module
     
   END SUBROUTINE remap_field_dp_monthly
   
-! == Simple reallocation for when actual remapping is not required
-  SUBROUTINE reallocate_field_dp(    nV, d, w)
-    ! For data that doesn't need to be mapped because it will be recalculated anyway.
+! == Smoothing operations on the mesh
+  SUBROUTINE smooth_Gaussian_2D( mesh, grid, d_mesh, r)
+    ! Use pseudo-conservative remapping to map the data from the mesh
+    ! to the square grid. Apply the smoothing on the gridded data, then map
+    ! it back to the mesh. The numerical diffusion arising from the two mapping
+    ! operations is not a problem since we're smoothing the data anyway.
     
     IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                         INTENT(IN)    :: mesh
+    TYPE(type_grid),                         INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:    ),              INTENT(INOUT) :: d_mesh
+    REAL(dp),                                INTENT(IN)    :: r
     
-    ! In/output variables
-    INTEGER,                             INTENT(IN)    :: nV
-    REAL(dp), DIMENSION(:  ), POINTER,   INTENT(INOUT) :: d            ! Pointer to the data
-    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    ! Local variables:
+    REAL(dp), DIMENSION(:,:  ), POINTER                    :: d_grid
+    INTEGER                                                :: wd_grid
     
-    ! Deallocate and reallocate the shared memory space
-    CALL deallocate_shared(w)
-    NULLIFY(d)    
-    CALL allocate_shared_dp_1D( nV, d, w)
+    ! Allocate shared memory for the gridded data
+    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
     
-  END SUBROUTINE reallocate_field_dp
-  SUBROUTINE reallocate_field_dp_3D( nV, d, w, nz)
-    ! For data that doesn't need to be mapped because it will be recalculated anyway.
+    ! Map data from the mesh to the grid
+    CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
+    
+    ! Smooth data on the grid
+    CALL smooth_Gaussian_2D_grid( grid, d_grid, r)
+    
+    ! Map smoothed data back to the mesh
+    CALL map_grid2mesh_2D( mesh, grid, d_grid, d_mesh)
+    
+    ! Deallocate gridded data
+    CALL deallocate_shared( wd_grid)
+    
+  END SUBROUTINE smooth_Gaussian_2D
+  SUBROUTINE smooth_Gaussian_3D( mesh, grid, d_mesh, r, nz)
+    ! Use pseudo-conservative remapping to map the data from the mesh
+    ! to the square grid. Apply the smoothing on the gridded data, then map
+    ! it back to the mesh. The numerical diffusion arising from the two mapping
+    ! operations is not a problem since we're smoothing the data anyway.
     
     IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                         INTENT(IN)    :: mesh
+    TYPE(type_grid),                         INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: d_mesh
+    REAL(dp),                                INTENT(IN)    :: r
+    INTEGER,                                 INTENT(IN)    :: nz
     
-    ! In/output variables
-    INTEGER,                             INTENT(IN)    :: nV
-    REAL(dp), DIMENSION(:,:), POINTER,   INTENT(INOUT) :: d            ! Pointer to the data
-    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
-    INTEGER,                             INTENT(IN)    :: nz
+    ! Local variables:
+    REAL(dp), DIMENSION(:,:,:), POINTER                    :: d_grid
+    INTEGER                                                :: wd_grid
     
-    ! Deallocate and reallocate the shared memory space
-    CALL deallocate_shared(w)
-    NULLIFY(d)    
-    CALL allocate_shared_dp_2D( nV, nz, d, w)
+    ! Allocate shared memory for the gridded data
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz, d_grid, wd_grid)
     
-  END SUBROUTINE reallocate_field_dp_3D
-  SUBROUTINE reallocate_field_int(   nV, d, w)
-    ! For data that doesn't need to be mapped because it will be recalculated anyway.
+    ! Map data from the mesh to the grid
+    CALL map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
     
-    IMPLICIT NONE
+    ! Smooth data on the grid
+    CALL smooth_Gaussian_3D_grid( grid, d_grid, r, nz)
     
-    ! In/output variables
-    INTEGER,                             INTENT(IN)    :: nV
-    INTEGER,  DIMENSION(:  ), POINTER,   INTENT(INOUT) :: d            ! Pointer to the data
-    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    ! Map smoothed data back to the mesh
+    CALL map_grid2mesh_3D( mesh, grid, d_grid, d_mesh)
     
-    ! Deallocate and reallocate the shared memory space
-    CALL deallocate_shared(w)
-    NULLIFY(d)    
-    CALL allocate_shared_int_1D( nV, d, w)
+    ! Deallocate gridded data
+    CALL deallocate_shared( wd_grid)
     
-  END SUBROUTINE reallocate_field_int
+  END SUBROUTINE smooth_Gaussian_3D
   
 END MODULE mesh_mapping_module

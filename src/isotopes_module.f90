@@ -1,16 +1,29 @@
 MODULE isotopes_module
- 
+
+  ! Contains all the routines for calculating the isotope content of the ice sheet.
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         deallocate_shared
-  USE data_types_module,           ONLY: type_mesh, type_model_region, type_remapping
-  USE netcdf_module,               ONLY: debug, write_to_debug_file
-  USE mesh_mapping_module,         ONLY: reallocate_field_dp, remap_field_dp
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping
+  USE mesh_mapping_module,             ONLY: remap_field_dp
 
   IMPLICIT NONE
     
@@ -72,7 +85,7 @@ CONTAINS
       
       Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
       Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
-      Hs     = region%ice%Hs( vi)
+      Hs     = region%ice%Hs_a( vi)
       Hs_ref = region%climate%PD_obs%Hs( vi)
       
       region%ice%IsoSurf( vi) = region%ice%IsoRef( vi)                 &
@@ -80,7 +93,7 @@ CONTAINS
                               - C%constant_lapserate * (Hs - Hs_ref))  &
                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
         
-      IF (region%ice%mask_ice( vi) == 1) THEN
+      IF (region%ice%mask_ice_a( vi) == 1) THEN
         IsoMax = MAX( IsoMax, region%ice%IsoSurf( vi))
         IsoMin = MIN( IsoMin, region%ice%IsoSurf( vi))
       END IF           
@@ -111,63 +124,66 @@ CONTAINS
 
     ! Calculate the new d18O_ice from the ice fluxes and applied mass balance
     ! =======================================================================
+    
+    IF (par%master) WRITE(0,*) 'run_isotopes_model - FIXME!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-    DO vi = region%mesh%v1, region%mesh%v2
-    
-      region%ice%IsoIce_new( vi) = region%ice%IsoIce( vi)
-    
-      ! Don't treat boundary vertices
-      IF (region%mesh%edge_index( vi) > 0) CYCLE
-    
-      ! Only treat ice-covered vertices
-      IF (region%ice%mask_ice( vi) == 1) THEN
-      
-        dIso_dt = 0._dp
-      
-        ! Calculate advective isotope fluxes
-        DO ci = 1, region%mesh%nC( vi)
-        
-          vj  = region%mesh%C(    vi,ci)
-          aci = region%mesh%iAci( vi,ci)
-          
-          IF (region%mesh%Aci( aci,1) == vi) THEN
-            ! Velocity defined from vi to vj
-            Upar =  (region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
-          ELSE
-            ! Velocity defined from vj to vi
-            Upar = -(region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
-          END IF
-          
-          IF (Upar > 0._dp) THEN
-            ! Ice flows from vi to vj
-            dVIso = Upar * region%ice%IsoIce( vi) * region%ice%Hi( vi) * region%mesh%Cw( vi,ci)
-          ELSE
-            ! Ice flows from vj to vi
-            dVIso = Upar * region%ice%IsoIce( vj) * region%ice%Hi( vj) * region%mesh%Cw( vi,ci)
-          END IF
-          
-          dIso_dt = dIso_dt + dViso
-          
-        END DO ! DO ci = 1, region%mesh%nC( vi)
-        
-        ! Add surface + basal mass balance
-        dIso_dt = dIso_dt + region%ice%MB_iso( vi)
-        
-        ! Update vertically averaged ice isotope content
-        VIso_old = region%ice%IsoIce( vi) * region%ice%Hi_prev( vi) * region%mesh%A( vi)
-        VIso_new = VIso_old + dIso_dt * region%dt
-        region%ice%IsoIce_new( vi) = MIN( IsoMax, MAX( IsoMin, VIso_new / (region%mesh%A( vi) * region%ice%Hi( vi)) ))
-
-      END IF ! IF (ice%mask_ice( vi) == 1) THEN
-      
-    END DO
-    CALL sync
+!    DO vi = region%mesh%v1, region%mesh%v2
+!    
+!      region%ice%IsoIce_new( vi) = region%ice%IsoIce( vi)
+!    
+!      ! Don't treat boundary vertices
+!      IF (region%mesh%edge_index( vi) > 0) CYCLE
+!    
+!      ! Only treat ice-covered vertices
+!      IF (region%ice%mask_ice_a( vi) == 1) THEN
+!      
+!        dIso_dt = 0._dp
+!      
+!        ! Calculate advective isotope fluxes
+!        DO ci = 1, region%mesh%nC( vi)
+!        
+!          vj  = region%mesh%C(    vi,ci)
+!          aci = region%mesh%iAci( vi,ci)
+!          
+!          IF (region%mesh%Aci( aci,1) == vi) THEN
+!            ! Velocity defined from vi to vj
+!            Upar =  (region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
+!          ELSE
+!            ! Velocity defined from vj to vi
+!            Upar = -(region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
+!          END IF
+!          
+!          IF (Upar > 0._dp) THEN
+!            ! Ice flows from vi to vj
+!            dVIso = Upar * region%ice%IsoIce( vi) * region%ice%Hi( vi) * region%mesh%Cw( vi,ci)
+!          ELSE
+!            ! Ice flows from vj to vi
+!            dVIso = Upar * region%ice%IsoIce( vj) * region%ice%Hi( vj) * region%mesh%Cw( vi,ci)
+!          END IF
+!          
+!          dIso_dt = dIso_dt + dViso
+!          
+!        END DO ! DO ci = 1, region%mesh%nC( vi)
+!        
+!        ! Add surface + basal mass balance
+!        dIso_dt = dIso_dt + region%ice%MB_iso( vi)
+!        
+!        ! Update vertically averaged ice isotope content
+!        VIso_old = region%ice%IsoIce( vi) * region%ice%Hi_prev( vi) * region%mesh%A( vi)
+!        VIso_new = VIso_old + dIso_dt * region%dt
+!        region%ice%IsoIce_new( vi) = MIN( IsoMax, MAX( IsoMin, VIso_new / (region%mesh%A( vi) * region%ice%Hi( vi)) ))
+!
+!      END IF ! IF (ice%mask_ice( vi) == 1) THEN
+!      
+!    END DO
+!    CALL sync
     
     ! Update field
     region%ice%IsoIce( region%mesh%v1:region%mesh%v2) = region%ice%IsoIce_new( region%mesh%v1:region%mesh%v2)
     
     ! Calculate mean isotope content of the whole ice sheet
-    CALL calculate_isotope_content( region%mesh, region%ice%Hi, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
+    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
     
   END SUBROUTINE run_isotopes_model
   SUBROUTINE calculate_isotope_content( mesh, Hi, IsoIce, mean_isotope_content, d18O_contribution)
@@ -304,11 +320,11 @@ CONTAINS
     ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)
     DO vi = region%mesh%v1, region%mesh%v2
     
-      IF (region%ice%mask_ice( vi) == 1) THEN
+      IF (region%ice%mask_ice_a( vi) == 1) THEN
       
         Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
         Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
-        Hs     = region%ice%Hs( vi)
+        Hs     = region%ice%Hs_a( vi)
         Hs_ref = region%climate%PD_obs%Hs( vi)
         
         region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
@@ -324,7 +340,7 @@ CONTAINS
     CALL sync
     
     ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
-    CALL calculate_isotope_content( region%mesh, region%ice%Hi, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
+    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)
@@ -399,10 +415,10 @@ CONTAINS
     END IF ! IF (C%do_benchmark_experiment) THEN
     
     ! Reallocate memory
-    CALL reallocate_field_dp( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
-    CALL reallocate_field_dp( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
-    CALL reallocate_field_dp( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
-    CALL reallocate_field_dp( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
+    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
+    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
+    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
     
     ! Remap the actual isotope content of the ice sheet
     CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce, region%ice%wIsoIce, 'cons_1st_order')

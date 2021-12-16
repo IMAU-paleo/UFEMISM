@@ -33,25 +33,28 @@ UFEMISM_program_objects = \
         data_types_module.o \
         parallel_module.o \
         parameters_module.o \
+        utilities_module.o \
         zeta_module.o \
         mesh_memory_module.o \
         mesh_help_functions_module.o \
         mesh_Delaunay_module.o \
-        mesh_derivatives_module.o \
+        mesh_operators_module.o \
         mesh_ArakawaC_module.o \
         mesh_mapping_module.o \
         mesh_five_colour_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
-        utilities_module.o \
         netcdf_module.o \
         restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
+        basal_conditions_and_sliding_module.o \
         SMB_module.o \
         BMB_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
+        ice_velocity_module.o \
+        ice_thickness_module.o \
         ice_dynamics_module.o \
         thermodynamics_module.o \
         isotopes_module.o \

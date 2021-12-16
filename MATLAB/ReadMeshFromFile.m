@@ -25,5 +25,10 @@ function mesh = ReadMeshFromFile(filename)
   mesh.vi_transect    = ncread(filename,'vi_transect');
   mesh.nV_transect    = size(mesh.vi_transect,1);
   mesh.w_transect     = ncread(filename,'w_transect');
+  
+  mesh.VAc            = ncread(filename,'VAc');
+  mesh.nAc            = size( mesh.VAc,1);
+  mesh.Aci            = ncread(filename,'Aci');
+  mesh.iAci           = ncread(filename,'iAci');
 
 end

@@ -1,10 +1,27 @@
 MODULE mesh_help_functions_module
+
   ! General help functions used in mesh creation and updating.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
-  USE data_types_module,             ONLY: type_mesh, type_model_region
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_model_region
 
   IMPLICIT NONE
 
@@ -214,6 +231,22 @@ MODULE mesh_help_functions_module
     mesh%resolution_max = MAXVAL(mesh%R)
 
   END SUBROUTINE determine_mesh_resolution
+  SUBROUTINE calc_triangle_geometric_centres( mesh)
+    ! Find the geometric centres of all the triangles    
+    
+    IMPLICIT NONE
+
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    INTEGER                                       :: ti
+    
+    DO ti = mesh%t1, mesh%t2
+      CALL update_triangle_geometric_center( mesh, ti)
+    END DO
+    CALL sync
+    
+  END SUBROUTINE calc_triangle_geometric_centres
   
 ! == Finding the vertices of a vertex' Voronoi cell
   SUBROUTINE find_Voronoi_cell_vertices(        mesh, vi, Vor, nVor)
@@ -895,6 +928,25 @@ MODULE mesh_help_functions_module
     mesh%Tricc(ti,:) = cc
     
   END SUBROUTINE update_triangle_circumcenter
+  SUBROUTINE update_triangle_geometric_center( mesh, ti)
+    ! Calculate the geometric centre of mesh triangle ti    
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    INTEGER,                    INTENT(IN)        :: ti
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                        :: v1, v2, v3
+    
+    v1 = mesh%V( mesh%Tri( ti,1),:)
+    v2 = mesh%V( mesh%Tri( ti,2),:)
+    v3 = mesh%V( mesh%Tri( ti,3),:) 
+    
+    mesh%TriGC( ti,:) = (v1 + v2 + v3) / 3._dp
+    
+  END SUBROUTINE update_triangle_geometric_center
   
 ! == Routines for merging meshes created by parallel processes
   SUBROUTINE merge_vertices( mesh, nVl, nVr, nTril, nTrir, T, nT, vil, vir, orientation)
@@ -1472,27 +1524,6 @@ MODULE mesh_help_functions_module
     DEALLOCATE( yvals_opt)
     
   END SUBROUTINE partition_domain_y_balanced
-  SUBROUTINE partition_list( ntot, i, n, i1, i2)
-    ! Partition a list into parallel ranges (e.g. vertex domains)
-  
-    ! In/output variables:
-    INTEGER,                    INTENT(IN)        :: ntot, i, n
-    INTEGER,                    INTENT(OUT)       :: i1, i2
-    
-    IF (ntot > n*2) THEN
-      i1 = MAX(1,    FLOOR(REAL(ntot *  i      / n)) + 1)
-      i2 = MIN(ntot, FLOOR(REAL(ntot * (i + 1) / n)))
-    ELSE
-      IF (i==0) THEN
-        i1 = 1
-        i2 = ntot
-      ELSE
-        i1 = 1
-        i2 = 0
-      END IF
-    END IF
-    
-  END SUBROUTINE partition_list
   
 ! == Subroutines for creating Points of Interest (POI)
   SUBROUTINE find_POI_xy_coordinates( mesh)
@@ -1962,6 +1993,7 @@ MODULE mesh_help_functions_module
     ELSE
       llis = [(lb2*lc1 - lb1*lc2), (la1*lc2 - la2*lc1)]/d
     END IF
+    
   END SUBROUTINE line_line_intersection  
   SUBROUTINE find_circumcenter( p, q, r, cc)
     ! Find the circumcenter cc of the triangle pqr    
@@ -2522,24 +2554,23 @@ MODULE mesh_help_functions_module
     INTEGER,                  INTENT(INOUT)       :: ti
     REAL(dp),                 INTENT(OUT)         :: v
 
-    INTEGER                                       :: v1, v2, v3
-    REAL(dp)                                      :: dx, dy, ddx, ddy
+    INTEGER                                       :: via, vib, vic
+    REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc
 
     ! Find the triangle containing p
     CALL find_containing_triangle( mesh, p, ti)
 
-    ! Find function values and derivatives of d on the points of ti
-    v1 = mesh%Tri(ti,1)
-    v2 = mesh%Tri(ti,2)
-    v3 = mesh%Tri(ti,3)
-
-    dx = p(1) - mesh%V(v1,1)
-    dy = p(2) - mesh%V(v1,2)
-     
-    ddx = mesh%NxTri(ti,1) * d(v1) + mesh%NxTri(ti,2) * d(v2) + mesh%NxTri(ti,3) * d(v3)
-    ddy = mesh%NyTri(ti,1) * d(v1) + mesh%NyTri(ti,2) * d(v2) + mesh%NyTri(ti,3) * d(v3)
-     
-    v = d(v1) + (dx * ddx) + (dy * ddy)
+    ! Trilinearly interpolate d to p
+    via = mesh%Tri( ti,1)
+    vib = mesh%Tri( ti,2)
+    vic = mesh%Tri( ti,3)
+    
+    Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), p)
+    Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), p)
+    Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), p)
+    Atri_abc = Atri_abp + Atri_bcp + Atri_cap
+    
+    v = (d( via) * Atri_bcp + d( vib) * Atri_cap + d( vic) * Atri_abp) / Atri_abc
 
   END SUBROUTINE mesh_bilinear_dp
   SUBROUTINE mesh_bilinear_int( mesh, d, p, ti, v)
@@ -2554,24 +2585,23 @@ MODULE mesh_help_functions_module
     INTEGER,                  INTENT(INOUT)       :: ti
     REAL(dp),                 INTENT(OUT)         :: v
 
-    INTEGER                                       :: v1, v2, v3
-    REAL(dp)                                      :: dx, dy, ddx, ddy
+    INTEGER                                       :: via, vib, vic
+    REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc
 
     ! Find the triangle containing p
     CALL find_containing_triangle( mesh, p, ti)
 
-    ! Find function values and derivatives of d on the points of ti
-    v1 = mesh%Tri(ti,1)
-    v2 = mesh%Tri(ti,2)
-    v3 = mesh%Tri(ti,3)
-
-    dx = p(1) - mesh%V(v1,1)
-    dy = p(2) - mesh%V(v1,2)
-     
-    ddx = mesh%NxTri(ti,1) * REAL(d(v1)) + mesh%NxTri(ti,2) * REAL(d(v2)) + mesh%NxTri(ti,3) * REAL(d(v3))
-    ddy = mesh%NyTri(ti,1) * REAL(d(v1)) + mesh%NyTri(ti,2) * REAL(d(v2)) + mesh%NyTri(ti,3) * REAL(d(v3))
-     
-    v = d(v1) + (dx * ddx) + (dy * ddy)
+    ! Trilinearly interpolate d to p
+    via = mesh%Tri( ti,1)
+    vib = mesh%Tri( ti,2)
+    vic = mesh%Tri( ti,3)
+    
+    Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), p)
+    Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), p)
+    Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), p)
+    Atri_abc = Atri_abp + Atri_bcp + Atri_cap
+    
+    v = (REAL(d( via),dp) * Atri_bcp + REAL(d( vib),dp) * Atri_cap + REAL(d( vic),dp) * Atri_abp) / Atri_abc
 
   END SUBROUTINE mesh_bilinear_int
   SUBROUTINE new_triangle_contains_old_mask( mesh, pa, pb, pc, mask, vi_closest_to_gc, isso)
@@ -2589,8 +2619,8 @@ MODULE mesh_help_functions_module
     
     ! Local variables:
     REAL(dp), DIMENSION(2)                        :: gc, p
-    INTEGER                                       :: ti_containing_gc, vi1, vi2, vi3
-    REAL(dp)                                      :: dx, dy, mdp1, mdp2, mdp3, ddx, ddy, mdpgc
+    INTEGER                                       :: ti_containing_gc, via, vib, vic
+    REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc, mdpgc
     INTEGER                                       :: nvi, vi, ci, vc
     
     isso = .FALSE.
@@ -2600,30 +2630,25 @@ MODULE mesh_help_functions_module
     CALL find_containing_vertex( mesh, gc, vi_closest_to_gc)
     
     ! If that vertex doesn't lie inside the triangle, then probably none of them do - use trilinear interpolation instead.
-    p = mesh%V(vi_closest_to_gc,:)
+    p = mesh%V( vi_closest_to_gc,:)
     IF (.NOT. is_in_triangle( pa, pb, pc, p)) THEN
     
       ! Find the (old) mesh triangle containing the (new mesh) triangle's geometric center
-      ti_containing_gc = mesh%iTri(vi_closest_to_gc,1)
+      ti_containing_gc = mesh%iTri( vi_closest_to_gc,1)
       CALL find_containing_triangle( mesh, gc, ti_containing_gc)
 
       ! The three vertices spanning this (old) mesh triangle
-      vi1 = mesh%Tri(ti_containing_gc,1)
-      vi2 = mesh%Tri(ti_containing_gc,2)
-      vi3 = mesh%Tri(ti_containing_gc,3)
+      via = mesh%Tri( ti_containing_gc,1)
+      vib = mesh%Tri( ti_containing_gc,2)
+      vic = mesh%Tri( ti_containing_gc,3)
 
       ! Find the mask value at gc by interpolating between these three vertices.
-      dx = gc(1) - mesh%V(vi1,1)
-      dy = gc(2) - mesh%V(vi1,2)
-      
-      mdp1 = REAL(mask(vi1))
-      mdp2 = REAL(mask(vi2))
-      mdp3 = REAL(mask(vi3))
-     
-      ddx = mesh%NxTri(ti_containing_gc,1) * mdp1 + mesh%NxTri(ti_containing_gc,2) * mdp2 + mesh%NxTri(ti_containing_gc,3) * mdp3
-      ddy = mesh%NyTri(ti_containing_gc,1) * mdp1 + mesh%NyTri(ti_containing_gc,2) * mdp2 + mesh%NyTri(ti_containing_gc,3) * mdp3
-     
-      mdpgc = mdp1 + (dx * ddx) + (dy * ddy)
+      Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), gc)
+      Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), gc)
+      Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), gc)
+      Atri_abc = Atri_abp + Atri_bcp + Atri_cap
+    
+      mdpgc = (REAL(mask( via),dp) * Atri_bcp + REAL(mask( vib),dp) * Atri_cap + REAL(mask( vic),dp) * Atri_abp) / Atri_abc
       
       IF (mdpgc > 0.1_dp) THEN
         isso = .TRUE.
@@ -2660,23 +2685,23 @@ MODULE mesh_help_functions_module
       ! Go over the entire old stack. Add any non-checked neighbours of these stack elements
       ! to the new stack. When finished, cycle the stacks.
       DO nvi = 1, mesh%VStackN1
-        vi = mesh%VStack1(nvi)
+        vi = mesh%VStack1( nvi)
         
-        DO ci = 1, mesh%nC(vi)
+        DO ci = 1, mesh%nC( vi)
         
-          vc = mesh%C(vi,ci)
-          p  = mesh%V(vc,:)
+          vc = mesh%C( vi,ci)
+          p  = mesh%V( vc,:)
           
-          IF (mesh%VMap(vc)==1) CYCLE ! This neighbour has already been checked.
+          IF (mesh%VMap( vc)==1) CYCLE ! This neighbour has already been checked.
           
           ! Mark this neighbour as checked
-          mesh%VMap(vc) = 1
+          mesh%VMap( vc) = 1
           
           ! If it lies inside the triangle, add it to the new stack.
-          IF (is_in_triangle(pa, pb, pc, p)) THEN
+          IF (is_in_triangle( pa, pb, pc, p)) THEN
           
             ! If it has what we're looking for, stop the search.
-            IF (mask(vc) == 1) THEN
+            IF (mask( vc) == 1) THEN
               isso = .TRUE.
               RETURN
             END IF
@@ -2695,6 +2720,38 @@ MODULE mesh_help_functions_module
     END DO ! DO WHILE (mesh%VStackN1) > 0    
     
   END SUBROUTINE new_triangle_contains_old_mask
+  
+! == Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
+  SUBROUTINE rotate_xy_to_po_stag( mesh, u_c, v_c, p_c, o_c)
+    ! Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
+    
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
+    REAL(dp), DIMENSION(:),     INTENT(IN)        :: u_c, v_c
+    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: p_c, o_c
+    
+    ! Local variables:
+    INTEGER                                       :: ci, vi, vj
+    REAL(dp)                                      :: Dx, Dy, D
+    
+    DO ci = mesh%ac1, mesh%ac2
+    
+      vi = mesh%Aci( ci,1)
+      vj = mesh%Aci( ci,2)
+      
+      Dx = mesh%V( vj,1) - mesh%V( vi,1)
+      Dy = mesh%V( vj,2) - mesh%V( vi,2)
+      D  = SQRT(Dx**2 + Dy**2)
+      
+      p_c( ci) = u_c( ci) * Dx/D + v_c( ci) * Dy/D
+      o_c( ci) = v_c( ci) * Dx/D - u_c( ci) * Dy/D
+      
+    END DO ! DO ci = mesh%ac1, mesh%ac2
+    CALL sync
+    
+  END SUBROUTINE rotate_xy_to_po_stag
   
 ! == Diagnostic tools: write a (small) mesh to the screen, and check if mesh data is self-consistent
   SUBROUTINE write_mesh_to_screen( mesh)    

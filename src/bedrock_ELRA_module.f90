@@ -1,18 +1,30 @@
 MODULE bedrock_ELRA_module
 
+  ! Contains all the routines of the ELRA bedrock model.
+
+  ! Import basic functionality
   USE mpi
   USE configuration_module,            ONLY: dp, C
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                             allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D, allocate_shared_dp_3D, &
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, type_PD_data_fields, type_remapping
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  USE parameters_module,               ONLY: grav, seawater_density, ice_density, pi
-  USE general_ice_model_data_module,   ONLY: is_floating
-  USE mesh_mapping_module,             ONLY: reallocate_field_dp, map_mesh2grid_2D, map_grid2mesh_2D
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, type_PD_data_fields, type_remapping
+  USE mesh_mapping_module,             ONLY: map_mesh2grid_2D, map_grid2mesh_2D
+  USE utilities_module,                ONLY: is_floating
 
   IMPLICIT NONE
     
@@ -43,7 +55,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
           C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        region%t0_ELRA = region%time
+        region%t_last_ELRA = region%time
         RETURN
       ELSE
         IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_ELRA_model!'
@@ -54,13 +66,13 @@ CONTAINS
     ! If needed, update the bedrock deformation rate
     IF (region%do_ELRA) THEN
       CALL calculate_ELRA_bedrock_deformation_rate( region%mesh, region%grid_GIA, region%ice)
-      region%t0_ELRA = region%time
+      region%t_last_ELRA = region%time
     END IF
     
     ! Update bedrock with last calculated deformation rate
     DO vi = region%mesh%v1, region%mesh%v2
-      region%ice%Hb(  vi) = region%ice%Hb( vi) + region%ice%dHb_dt( vi) * region%dt
-      region%ice%dHb( vi) = region%ice%Hb( vi) - region%PD%Hb( vi)
+      region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
+      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%PD%Hb( vi)
     END DO
     CALL sync
     
@@ -86,10 +98,10 @@ CONTAINS
     DO vi = mesh%v1, mesh%v2
     
       ! Absolute surface load
-      IF (is_floating( ice%Hi( vi), ice%Hb( vi), ice%SL( vi))) THEN
-        ice%surface_load_mesh( vi) = (ice%SL( vi) - ice%Hb( vi)) * grid%dx**2 * seawater_density
-      ELSEIF (ice%Hi( vi) > 0._dp) THEN
-        ice%surface_load_mesh( vi) =  ice%Hi( vi)                * grid%dx**2 * ice_density
+      IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
+        ice%surface_load_mesh( vi) = (ice%SL_a( vi) - ice%Hb_a( vi)) * grid%dx**2 * seawater_density
+      ELSEIF (ice%Hi_a( vi) > 0._dp) THEN
+        ice%surface_load_mesh( vi) =  ice%Hi_a( vi)                * grid%dx**2 * ice_density
       ELSE
         ice%surface_load_mesh( vi) = 0._dp
       END IF
@@ -145,7 +157,7 @@ CONTAINS
     CALL sync
     
     ! Map the actual bedrock deformation to the grid
-    CALL map_mesh2grid_2D( mesh, grid, ice%dHb, ice%dHb_grid)
+    CALL map_mesh2grid_2D( mesh, grid, ice%dHb_a, ice%dHb_grid)
     
     ! Calculate the bedrock deformation rate from the difference between the current and the equilibrium deformation
     DO i = grid%i1, grid%i2
@@ -156,7 +168,7 @@ CONTAINS
     CALL sync
     
     ! Map the deformation rate back to the model mesh
-    CALL map_grid2mesh_2D( mesh, grid, ice%dHb_dt_grid, ice%dHb_dt)
+    CALL map_grid2mesh_2D( mesh, grid, ice%dHb_dt_grid, ice%dHb_dt_a)
     
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
   
@@ -307,9 +319,9 @@ CONTAINS
     int_dummy = mesh_old%nV
     int_dummy = map%trilin%vi( 1,1)
     
-    CALL reallocate_field_dp( mesh_new%nV, ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
-    CALL reallocate_field_dp( mesh_new%nV, ice%surface_load_mesh,     ice%wsurface_load_mesh    )
-    CALL reallocate_field_dp( mesh_new%nV, ice%surface_load_rel_mesh, ice%wsurface_load_rel_mesh)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_mesh,     ice%wsurface_load_mesh    )
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_rel_mesh, ice%wsurface_load_rel_mesh)
     
     ! Recalculate the PD reference load on the GIA grid
     CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, PD)

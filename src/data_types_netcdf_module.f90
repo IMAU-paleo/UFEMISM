@@ -408,181 +408,225 @@ MODULE data_types_netcdf_module
     ! Variables
     ! =========
     
-    INTEGER :: id_var_int_2D_Aa_01
-    INTEGER :: id_var_int_2D_Aa_02
-    INTEGER :: id_var_int_2D_Aa_03
-    INTEGER :: id_var_int_2D_Aa_04
-    INTEGER :: id_var_int_2D_Aa_05
-    INTEGER :: id_var_int_2D_Aa_06
-    INTEGER :: id_var_int_2D_Aa_07
-    INTEGER :: id_var_int_2D_Aa_08
-    INTEGER :: id_var_int_2D_Aa_09
-    INTEGER :: id_var_int_2D_Aa_10
+    INTEGER :: id_var_int_2D_a_01
+    INTEGER :: id_var_int_2D_a_02
+    INTEGER :: id_var_int_2D_a_03
+    INTEGER :: id_var_int_2D_a_04
+    INTEGER :: id_var_int_2D_a_05
+    INTEGER :: id_var_int_2D_a_06
+    INTEGER :: id_var_int_2D_a_07
+    INTEGER :: id_var_int_2D_a_08
+    INTEGER :: id_var_int_2D_a_09
+    INTEGER :: id_var_int_2D_a_10
     
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_01        = 'int_2D_Aa_01      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_02        = 'int_2D_Aa_02      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_03        = 'int_2D_Aa_03      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_04        = 'int_2D_Aa_04      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_05        = 'int_2D_Aa_05      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_06        = 'int_2D_Aa_06      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_07        = 'int_2D_Aa_07      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_08        = 'int_2D_Aa_08      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_09        = 'int_2D_Aa_09      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Aa_10        = 'int_2D_Aa_10      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_01        = 'int_2D_a_01      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_02        = 'int_2D_a_02      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_03        = 'int_2D_a_03      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_04        = 'int_2D_a_04      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_05        = 'int_2D_a_05      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_06        = 'int_2D_a_06      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_07        = 'int_2D_a_07      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_08        = 'int_2D_a_08      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_09        = 'int_2D_a_09      '
+    CHARACTER(LEN=256) :: name_var_int_2D_a_10        = 'int_2D_a_10      '
     
-    INTEGER :: id_var_int_2D_Ac_01
-    INTEGER :: id_var_int_2D_Ac_02
-    INTEGER :: id_var_int_2D_Ac_03
-    INTEGER :: id_var_int_2D_Ac_04
-    INTEGER :: id_var_int_2D_Ac_05
-    INTEGER :: id_var_int_2D_Ac_06
-    INTEGER :: id_var_int_2D_Ac_07
-    INTEGER :: id_var_int_2D_Ac_08
-    INTEGER :: id_var_int_2D_Ac_09
-    INTEGER :: id_var_int_2D_Ac_10
+    INTEGER :: id_var_int_2D_b_01
+    INTEGER :: id_var_int_2D_b_02
+    INTEGER :: id_var_int_2D_b_03
+    INTEGER :: id_var_int_2D_b_04
+    INTEGER :: id_var_int_2D_b_05
+    INTEGER :: id_var_int_2D_b_06
+    INTEGER :: id_var_int_2D_b_07
+    INTEGER :: id_var_int_2D_b_08
+    INTEGER :: id_var_int_2D_b_09
+    INTEGER :: id_var_int_2D_b_10
     
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_01        = 'int_2D_Ac_01      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_02        = 'int_2D_Ac_02      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_03        = 'int_2D_Ac_03      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_04        = 'int_2D_Ac_04      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_05        = 'int_2D_Ac_05      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_06        = 'int_2D_Ac_06      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_07        = 'int_2D_Ac_07      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_08        = 'int_2D_Ac_08      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_09        = 'int_2D_Ac_09      '
-    CHARACTER(LEN=256) :: name_var_int_2D_Ac_10        = 'int_2D_Ac_10      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_01        = 'int_2D_b_01      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_02        = 'int_2D_b_02      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_03        = 'int_2D_b_03      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_04        = 'int_2D_b_04      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_05        = 'int_2D_b_05      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_06        = 'int_2D_b_06      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_07        = 'int_2D_b_07      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_08        = 'int_2D_b_08      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_09        = 'int_2D_b_09      '
+    CHARACTER(LEN=256) :: name_var_int_2D_b_10        = 'int_2D_b_10      '
     
-    INTEGER :: id_var_int_2D_AaAc_01
-    INTEGER :: id_var_int_2D_AaAc_02
-    INTEGER :: id_var_int_2D_AaAc_03
-    INTEGER :: id_var_int_2D_AaAc_04
-    INTEGER :: id_var_int_2D_AaAc_05
-    INTEGER :: id_var_int_2D_AaAc_06
-    INTEGER :: id_var_int_2D_AaAc_07
-    INTEGER :: id_var_int_2D_AaAc_08
-    INTEGER :: id_var_int_2D_AaAc_09
-    INTEGER :: id_var_int_2D_AaAc_10
+    INTEGER :: id_var_int_2D_c_01
+    INTEGER :: id_var_int_2D_c_02
+    INTEGER :: id_var_int_2D_c_03
+    INTEGER :: id_var_int_2D_c_04
+    INTEGER :: id_var_int_2D_c_05
+    INTEGER :: id_var_int_2D_c_06
+    INTEGER :: id_var_int_2D_c_07
+    INTEGER :: id_var_int_2D_c_08
+    INTEGER :: id_var_int_2D_c_09
+    INTEGER :: id_var_int_2D_c_10
     
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_01      = 'int_2D_AaAc_01      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_02      = 'int_2D_AaAc_02      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_03      = 'int_2D_AaAc_03      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_04      = 'int_2D_AaAc_04      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_05      = 'int_2D_AaAc_05      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_06      = 'int_2D_AaAc_06      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_07      = 'int_2D_AaAc_07      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_08      = 'int_2D_AaAc_08      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_09      = 'int_2D_AaAc_09      '
-    CHARACTER(LEN=256) :: name_var_int_2D_AaAc_10      = 'int_2D_AaAc_10      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_01        = 'int_2D_c_01      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_02        = 'int_2D_c_02      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_03        = 'int_2D_c_03      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_04        = 'int_2D_c_04      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_05        = 'int_2D_c_05      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_06        = 'int_2D_c_06      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_07        = 'int_2D_c_07      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_08        = 'int_2D_c_08      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_09        = 'int_2D_c_09      '
+    CHARACTER(LEN=256) :: name_var_int_2D_c_10        = 'int_2D_c_10      '
     
-    INTEGER :: id_var_dp_2D_Aa_01
-    INTEGER :: id_var_dp_2D_Aa_02
-    INTEGER :: id_var_dp_2D_Aa_03
-    INTEGER :: id_var_dp_2D_Aa_04
-    INTEGER :: id_var_dp_2D_Aa_05
-    INTEGER :: id_var_dp_2D_Aa_06
-    INTEGER :: id_var_dp_2D_Aa_07
-    INTEGER :: id_var_dp_2D_Aa_08
-    INTEGER :: id_var_dp_2D_Aa_09
-    INTEGER :: id_var_dp_2D_Aa_10
+    INTEGER :: id_var_int_2D_ac_01
+    INTEGER :: id_var_int_2D_ac_02
+    INTEGER :: id_var_int_2D_ac_03
+    INTEGER :: id_var_int_2D_ac_04
+    INTEGER :: id_var_int_2D_ac_05
+    INTEGER :: id_var_int_2D_ac_06
+    INTEGER :: id_var_int_2D_ac_07
+    INTEGER :: id_var_int_2D_ac_08
+    INTEGER :: id_var_int_2D_ac_09
+    INTEGER :: id_var_int_2D_ac_10
     
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_01        = 'dp_2D_Aa_01      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_02        = 'dp_2D_Aa_02      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_03        = 'dp_2D_Aa_03      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_04        = 'dp_2D_Aa_04      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_05        = 'dp_2D_Aa_05      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_06        = 'dp_2D_Aa_06      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_07        = 'dp_2D_Aa_07      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_08        = 'dp_2D_Aa_08      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_09        = 'dp_2D_Aa_09      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Aa_10        = 'dp_2D_Aa_10      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_01        = 'int_2D_ac_01      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_02        = 'int_2D_ac_02      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_03        = 'int_2D_ac_03      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_04        = 'int_2D_ac_04      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_05        = 'int_2D_ac_05      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_06        = 'int_2D_ac_06      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_07        = 'int_2D_ac_07      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_08        = 'int_2D_ac_08      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_09        = 'int_2D_ac_09      '
+    CHARACTER(LEN=256) :: name_var_int_2D_ac_10        = 'int_2D_ac_10      '
     
-    INTEGER :: id_var_dp_2D_Ac_01
-    INTEGER :: id_var_dp_2D_Ac_02
-    INTEGER :: id_var_dp_2D_Ac_03
-    INTEGER :: id_var_dp_2D_Ac_04
-    INTEGER :: id_var_dp_2D_Ac_05
-    INTEGER :: id_var_dp_2D_Ac_06
-    INTEGER :: id_var_dp_2D_Ac_07
-    INTEGER :: id_var_dp_2D_Ac_08
-    INTEGER :: id_var_dp_2D_Ac_09
-    INTEGER :: id_var_dp_2D_Ac_10
+    INTEGER :: id_var_dp_2D_a_01
+    INTEGER :: id_var_dp_2D_a_02
+    INTEGER :: id_var_dp_2D_a_03
+    INTEGER :: id_var_dp_2D_a_04
+    INTEGER :: id_var_dp_2D_a_05
+    INTEGER :: id_var_dp_2D_a_06
+    INTEGER :: id_var_dp_2D_a_07
+    INTEGER :: id_var_dp_2D_a_08
+    INTEGER :: id_var_dp_2D_a_09
+    INTEGER :: id_var_dp_2D_a_10
     
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_01        = 'dp_2D_Ac_01      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_02        = 'dp_2D_Ac_02      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_03        = 'dp_2D_Ac_03      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_04        = 'dp_2D_Ac_04      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_05        = 'dp_2D_Ac_05      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_06        = 'dp_2D_Ac_06      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_07        = 'dp_2D_Ac_07      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_08        = 'dp_2D_Ac_08      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_09        = 'dp_2D_Ac_09      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_Ac_10        = 'dp_2D_Ac_10      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_01        = 'dp_2D_a_01      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_02        = 'dp_2D_a_02      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_03        = 'dp_2D_a_03      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_04        = 'dp_2D_a_04      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_05        = 'dp_2D_a_05      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_06        = 'dp_2D_a_06      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_07        = 'dp_2D_a_07      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_08        = 'dp_2D_a_08      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_09        = 'dp_2D_a_09      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_a_10        = 'dp_2D_a_10      '
     
-    INTEGER :: id_var_dp_2D_AaAc_01
-    INTEGER :: id_var_dp_2D_AaAc_02
-    INTEGER :: id_var_dp_2D_AaAc_03
-    INTEGER :: id_var_dp_2D_AaAc_04
-    INTEGER :: id_var_dp_2D_AaAc_05
-    INTEGER :: id_var_dp_2D_AaAc_06
-    INTEGER :: id_var_dp_2D_AaAc_07
-    INTEGER :: id_var_dp_2D_AaAc_08
-    INTEGER :: id_var_dp_2D_AaAc_09
-    INTEGER :: id_var_dp_2D_AaAc_10
+    INTEGER :: id_var_dp_2D_b_01
+    INTEGER :: id_var_dp_2D_b_02
+    INTEGER :: id_var_dp_2D_b_03
+    INTEGER :: id_var_dp_2D_b_04
+    INTEGER :: id_var_dp_2D_b_05
+    INTEGER :: id_var_dp_2D_b_06
+    INTEGER :: id_var_dp_2D_b_07
+    INTEGER :: id_var_dp_2D_b_08
+    INTEGER :: id_var_dp_2D_b_09
+    INTEGER :: id_var_dp_2D_b_10
     
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_01      = 'dp_2D_AaAc_01      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_02      = 'dp_2D_AaAc_02      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_03      = 'dp_2D_AaAc_03      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_04      = 'dp_2D_AaAc_04      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_05      = 'dp_2D_AaAc_05      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_06      = 'dp_2D_AaAc_06      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_07      = 'dp_2D_AaAc_07      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_08      = 'dp_2D_AaAc_08      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_09      = 'dp_2D_AaAc_09      '
-    CHARACTER(LEN=256) :: name_var_dp_2D_AaAc_10      = 'dp_2D_AaAc_10      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_01        = 'dp_2D_b_01      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_02        = 'dp_2D_b_02      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_03        = 'dp_2D_b_03      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_04        = 'dp_2D_b_04      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_05        = 'dp_2D_b_05      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_06        = 'dp_2D_b_06      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_07        = 'dp_2D_b_07      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_08        = 'dp_2D_b_08      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_09        = 'dp_2D_b_09      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_b_10        = 'dp_2D_b_10      '
     
-    INTEGER :: id_var_dp_3D_Aa_01
-    INTEGER :: id_var_dp_3D_Aa_02
-    INTEGER :: id_var_dp_3D_Aa_03
-    INTEGER :: id_var_dp_3D_Aa_04
-    INTEGER :: id_var_dp_3D_Aa_05
-    INTEGER :: id_var_dp_3D_Aa_06
-    INTEGER :: id_var_dp_3D_Aa_07
-    INTEGER :: id_var_dp_3D_Aa_08
-    INTEGER :: id_var_dp_3D_Aa_09
-    INTEGER :: id_var_dp_3D_Aa_10
+    INTEGER :: id_var_dp_2D_c_01
+    INTEGER :: id_var_dp_2D_c_02
+    INTEGER :: id_var_dp_2D_c_03
+    INTEGER :: id_var_dp_2D_c_04
+    INTEGER :: id_var_dp_2D_c_05
+    INTEGER :: id_var_dp_2D_c_06
+    INTEGER :: id_var_dp_2D_c_07
+    INTEGER :: id_var_dp_2D_c_08
+    INTEGER :: id_var_dp_2D_c_09
+    INTEGER :: id_var_dp_2D_c_10
     
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_01         = 'dp_3D_Aa_01      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_02         = 'dp_3D_Aa_02      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_03         = 'dp_3D_Aa_03      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_04         = 'dp_3D_Aa_04      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_05         = 'dp_3D_Aa_05      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_06         = 'dp_3D_Aa_06      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_07         = 'dp_3D_Aa_07      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_08         = 'dp_3D_Aa_08      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_09         = 'dp_3D_Aa_09      '
-    CHARACTER(LEN=256) :: name_var_dp_3D_Aa_10         = 'dp_3D_Aa_10      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_01        = 'dp_2D_c_01      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_02        = 'dp_2D_c_02      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_03        = 'dp_2D_c_03      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_04        = 'dp_2D_c_04      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_05        = 'dp_2D_c_05      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_06        = 'dp_2D_c_06      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_07        = 'dp_2D_c_07      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_08        = 'dp_2D_c_08      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_09        = 'dp_2D_c_09      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_c_10        = 'dp_2D_c_10      '
     
-    INTEGER :: id_var_dp_2D_monthly_Aa_01
-    INTEGER :: id_var_dp_2D_monthly_Aa_02
-    INTEGER :: id_var_dp_2D_monthly_Aa_03
-    INTEGER :: id_var_dp_2D_monthly_Aa_04
-    INTEGER :: id_var_dp_2D_monthly_Aa_05
-    INTEGER :: id_var_dp_2D_monthly_Aa_06
-    INTEGER :: id_var_dp_2D_monthly_Aa_07
-    INTEGER :: id_var_dp_2D_monthly_Aa_08
-    INTEGER :: id_var_dp_2D_monthly_Aa_09
-    INTEGER :: id_var_dp_2D_monthly_Aa_10
+    INTEGER :: id_var_dp_2D_ac_01
+    INTEGER :: id_var_dp_2D_ac_02
+    INTEGER :: id_var_dp_2D_ac_03
+    INTEGER :: id_var_dp_2D_ac_04
+    INTEGER :: id_var_dp_2D_ac_05
+    INTEGER :: id_var_dp_2D_ac_06
+    INTEGER :: id_var_dp_2D_ac_07
+    INTEGER :: id_var_dp_2D_ac_08
+    INTEGER :: id_var_dp_2D_ac_09
+    INTEGER :: id_var_dp_2D_ac_10
     
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_01 = 'dp_2D_monthly_Aa_01'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_02 = 'dp_2D_monthly_Aa_02'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_03 = 'dp_2D_monthly_Aa_03'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_04 = 'dp_2D_monthly_Aa_04'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_05 = 'dp_2D_monthly_Aa_05'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_06 = 'dp_2D_monthly_Aa_06'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_07 = 'dp_2D_monthly_Aa_07'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_08 = 'dp_2D_monthly_Aa_08'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_09 = 'dp_2D_monthly_Aa_09'
-    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_Aa_10 = 'dp_2D_monthly_Aa_10'
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_01        = 'dp_2D_ac_01      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_02        = 'dp_2D_ac_02      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_03        = 'dp_2D_ac_03      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_04        = 'dp_2D_ac_04      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_05        = 'dp_2D_ac_05      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_06        = 'dp_2D_ac_06      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_07        = 'dp_2D_ac_07      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_08        = 'dp_2D_ac_08      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_09        = 'dp_2D_ac_09      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_ac_10        = 'dp_2D_ac_10      '
+    
+    INTEGER :: id_var_dp_3D_a_01
+    INTEGER :: id_var_dp_3D_a_02
+    INTEGER :: id_var_dp_3D_a_03
+    INTEGER :: id_var_dp_3D_a_04
+    INTEGER :: id_var_dp_3D_a_05
+    INTEGER :: id_var_dp_3D_a_06
+    INTEGER :: id_var_dp_3D_a_07
+    INTEGER :: id_var_dp_3D_a_08
+    INTEGER :: id_var_dp_3D_a_09
+    INTEGER :: id_var_dp_3D_a_10
+    
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_01        = 'dp_3D_a_01      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_02        = 'dp_3D_a_02      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_03        = 'dp_3D_a_03      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_04        = 'dp_3D_a_04      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_05        = 'dp_3D_a_05      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_06        = 'dp_3D_a_06      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_07        = 'dp_3D_a_07      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_08        = 'dp_3D_a_08      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_09        = 'dp_3D_a_09      '
+    CHARACTER(LEN=256) :: name_var_dp_3D_a_10        = 'dp_3D_a_10      '
+    
+    INTEGER :: id_var_dp_2D_monthly_a_01
+    INTEGER :: id_var_dp_2D_monthly_a_02
+    INTEGER :: id_var_dp_2D_monthly_a_03
+    INTEGER :: id_var_dp_2D_monthly_a_04
+    INTEGER :: id_var_dp_2D_monthly_a_05
+    INTEGER :: id_var_dp_2D_monthly_a_06
+    INTEGER :: id_var_dp_2D_monthly_a_07
+    INTEGER :: id_var_dp_2D_monthly_a_08
+    INTEGER :: id_var_dp_2D_monthly_a_09
+    INTEGER :: id_var_dp_2D_monthly_a_10
+    
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_01        = 'dp_2D_monthly_a_01      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_02        = 'dp_2D_monthly_a_02      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_03        = 'dp_2D_monthly_a_03      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_04        = 'dp_2D_monthly_a_04      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_05        = 'dp_2D_monthly_a_05      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_06        = 'dp_2D_monthly_a_06      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_07        = 'dp_2D_monthly_a_07      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_08        = 'dp_2D_monthly_a_08      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_09        = 'dp_2D_monthly_a_09      '
+    CHARACTER(LEN=256) :: name_var_dp_2D_monthly_a_10        = 'dp_2D_monthly_a_10      '
         
   END TYPE type_netcdf_debug
     

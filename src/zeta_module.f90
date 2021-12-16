@@ -30,59 +30,6 @@ MODULE zeta_module
   
 CONTAINS
 
-  FUNCTION vertical_average(f) RESULT(average_f)
-    ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
-    !  average_f = INTEGRAL_{zeta=0}^{zeta=1} (f(zeta))dzeta
-    ! So the the integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%NZ) = 1.
-    ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those 
-    ! layers k and k+1, which is immediately the weight factor for this contribution because de total layer distance 
-    ! is scaled to 1. The sum of all the weighted contribution gives the vertical average average_f of f.    
-    
-    IMPLICIT NONE
-
-    ! Input variable:
-    REAL(dp), DIMENSION(C%NZ), INTENT(IN) :: f
-
-    ! Result variable:
-    REAL(dp)                              :: average_f
-    
-    ! Local variable:
-    INTEGER                               :: k
-
-    ! See equation (11.14):
-    average_f = 0._dp
-    DO k = 1, C%NZ-1
-      average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-    END DO
-  END FUNCTION vertical_average
-  FUNCTION vertical_integrate(f) RESULT(int_f)
-    ! This subroutine calcualtes the integral int_f:
-    !  int_f(k) = INTEGRAL_bottom[C%zeta(k=C%NZ)=1]^zeta[C%zeta(k)] f(zeta) dzeta
-    ! In case the integrant f is positive (our cases) our result must be negative because we
-    ! integrate from C%zeta(k=C%NZ) = 1 opposite to the zeta-axis up to C%zeta(k). (Our dzeta's are
-    ! negative).
-    ! This subroutine returns the integral for each layer k from bottom to this layer, so
-    ! inf_f is an array with length C%NZ: int_f(k=1:C%NZ)
-    ! The value of the integrant f at some integration step k is the average of f(k+1) and f(k).
-    !  int_f(k) = int_f(k+1) + 0.5*(f(k+1) + f(k))*(-dzeta)
-    ! So for f > 0  int_f < 0.    
-    
-    IMPLICIT NONE
-
-    ! Input variable:
-    REAL(dp), DIMENSION(C%NZ), INTENT(IN) :: f
-
-    ! Output variable:
-    REAL(dp), DIMENSION(C%NZ)             :: int_f
-
-    ! Local variable:
-    INTEGER                               :: k
-
-    int_f(C%NZ) = 0._dp
-    DO k = C%NZ-1, 1, -1
-      int_f(k) = int_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-    END DO
-  END FUNCTION vertical_integrate  
   SUBROUTINE calculate_zeta_derivatives( mesh, ice)
     ! This subroutine calculates the global struct which contains the derivatives of 
     ! zeta, which are used in the transformation to the t,x,y,zeta coordinates. 
@@ -99,12 +46,12 @@ CONTAINS
     REAL(dp)                                           :: inverse_Hi                 ! Contains the inverse of Hi
     
     DO vi = mesh%v1, mesh%v2
-      inverse_Hi  = 1._dp / MAX(0.1_dp, ice%Hi(vi))
-      ice%dzeta_dz(vi)  = -inverse_Hi                                                      
+      inverse_Hi = 1._dp / ice%Hi_a( vi)
+      ice%dzeta_dz_a(vi) = -inverse_Hi                                                      
       DO k = 1, C%NZ
-        ice%dzeta_dt(vi,k)  =  inverse_Hi * (ice%dHs_dt(vi)  - C%zeta(k) * ice%dHi_dt(vi))                                   
-        ice%dzeta_dx(vi,k)  =  inverse_Hi * (ice%dHs_dx(vi)  - C%zeta(k) * ice%dHi_dx(vi))                                   
-        ice%dzeta_dy(vi,k)  =  inverse_Hi * (ice%dHs_dy(vi)  - C%zeta(k) * ice%dHi_dy(vi))                                   
+        ice%dzeta_dt_a( vi,k)  =  inverse_Hi * (ice%dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi))
+        ice%dzeta_dx_a( vi,k)  =  inverse_Hi * (ice%dHs_dx_a( vi)  - C%zeta(k) * ice%dHi_dx_a( vi))
+        ice%dzeta_dy_a( vi,k)  =  inverse_Hi * (ice%dHs_dy_a( vi)  - C%zeta(k) * ice%dHi_dy_a( vi))
       END DO
     END DO ! DO vi = mesh%v1, mesh%v2
     CALL sync

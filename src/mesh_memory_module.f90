@@ -1,32 +1,43 @@
 MODULE mesh_memory_module
   ! Routines for allocating, deallocating, extending and cropping the memory for the mesh data.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         allocate_shared_bool_1D, deallocate_shared, &
-                                         adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                         adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                         adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                         adapt_shared_bool_1D, &
-                                         allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                         allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                         allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                         allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                         allocate_shared_dist_bool_1D, &
-                                         adapt_shared_dist_int_1D,    adapt_shared_dist_dp_1D, &
-                                         adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
-                                         adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
-                                         adapt_shared_dist_bool_1D, &
-                                         share_memory_access_int_0D, share_memory_access_dp_0D, &
-                                         share_memory_access_int_1D, share_memory_access_dp_1D, &
-                                         share_memory_access_int_2D, share_memory_access_dp_2D, &
-                                         share_memory_access_int_3D, share_memory_access_dp_3D
-  USE data_types_module,           ONLY: type_mesh
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE parallel_module,                 ONLY: adapt_shared_int_1D,    adapt_shared_dp_1D, &
+                                             adapt_shared_int_2D,    adapt_shared_dp_2D, &
+                                             adapt_shared_int_3D,    adapt_shared_dp_3D, &
+                                             adapt_shared_bool_1D, &
+                                             allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                             allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                             allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                             allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                             allocate_shared_dist_bool_1D, &
+                                             adapt_shared_dist_int_1D,    adapt_shared_dist_dp_1D, &
+                                             adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
+                                             adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
+                                             adapt_shared_dist_bool_1D, &
+                                             share_memory_access_int_0D, share_memory_access_dp_0D, &
+                                             share_memory_access_int_1D, share_memory_access_dp_1D, &
+                                             share_memory_access_int_2D, share_memory_access_dp_2D, &
+                                             share_memory_access_int_3D, share_memory_access_dp_3D
+  USE data_types_module,               ONLY: type_mesh
 
   IMPLICIT NONE
 
@@ -239,18 +250,11 @@ MODULE mesh_memory_module
     CALL allocate_shared_int_1D( nV,                  mesh%mesh_old_ti_in,  mesh%wmesh_old_ti_in )
         
     CALL allocate_shared_dp_1D(  nTri,                mesh%TriA,            mesh%wTriA           )
-    
-    CALL allocate_shared_dp_2D(  nTri, 3,             mesh%NxTri,           mesh%wNxTri          )
-    CALL allocate_shared_dp_2D(  nTri, 3,             mesh%NyTri,           mesh%wNyTri          )
-    CALL allocate_shared_dp_2D(  nV,   mesh%nC_mem+1, mesh%Nx,              mesh%wNx             )
-    CALL allocate_shared_dp_2D(  nV,   mesh%nC_mem+1, mesh%Ny,              mesh%wNy             )
-    CALL allocate_shared_dp_2D(  nV,   mesh%nC_mem+1, mesh%Nxx,             mesh%wNxx            )
-    CALL allocate_shared_dp_2D(  nV,   mesh%nC_mem+1, mesh%Nxy,             mesh%wNxy            )
-    CALL allocate_shared_dp_2D(  nV,   mesh%nC_mem+1, mesh%Nyy,             mesh%wNyy            )
+    CALL allocate_shared_dp_2D(  nTri,  2,            mesh%TriGC,           mesh%wTriGC          )
     
     CALL allocate_shared_dp_1D(  nV,                  mesh%lat,             mesh%wlat            )
     CALL allocate_shared_dp_1D(  nV,                  mesh%lon,             mesh%wlon            )
-
+    
   END SUBROUTINE allocate_mesh_secondary
   SUBROUTINE deallocate_mesh_all(         mesh)
     ! Deallocate memory for mesh data
@@ -328,12 +332,14 @@ MODULE mesh_memory_module
     
     CALL deallocate_shared( mesh%wTri)
     CALL deallocate_shared( mesh%wTricc)
+    CALL deallocate_shared( mesh%wTriGC)
     CALL deallocate_shared( mesh%wTriC)
     CALL deallocate_shared( mesh%wTri_edge_index)
     CALL deallocate_shared( mesh%wTriA)
     
     NULLIFY( mesh%Tri)
     NULLIFY( mesh%Tricc)
+    NULLIFY( mesh%TriGC)
     NULLIFY( mesh%TriC)
     NULLIFY( mesh%Tri_edge_index)
     NULLIFY( mesh%TriA)
@@ -360,22 +366,6 @@ MODULE mesh_memory_module
     NULLIFY( mesh%TriStack1)
     NULLIFY( mesh%TriStack2)
     
-    CALL deallocate_shared( mesh%wNxTri)
-    CALL deallocate_shared( mesh%wNyTri)
-    CALL deallocate_shared( mesh%wNx)
-    CALL deallocate_shared( mesh%wNy)
-    CALL deallocate_shared( mesh%wNxx)
-    CALL deallocate_shared( mesh%wNxy)
-    CALL deallocate_shared( mesh%wNyy)
-
-    NULLIFY( mesh%NxTri)
-    NULLIFY( mesh%NyTri)
-    NULLIFY( mesh%Nx)
-    NULLIFY( mesh%Ny)
-    NULLIFY( mesh%Nxx)
-    NULLIFY( mesh%Nxy)
-    NULLIFY( mesh%Nyy)   
-    
     CALL deallocate_shared( mesh%wlat)
     CALL deallocate_shared( mesh%wlon)
     
@@ -387,20 +377,12 @@ MODULE mesh_memory_module
     CALL deallocate_shared( mesh%wAci)
     CALL deallocate_shared( mesh%wiAci)
     CALL deallocate_shared( mesh%wedge_index_Ac)
-    CALL deallocate_shared( mesh%wNx_ac)
-    CALL deallocate_shared( mesh%wNy_ac)
-    CALL deallocate_shared( mesh%wNp_ac)
-    CALL deallocate_shared( mesh%wNo_ac)
     
     NULLIFY( mesh%nAc)
     NULLIFY( mesh%VAc)
     NULLIFY( mesh%Aci)
     NULLIFY( mesh%iAci)
     NULLIFY( mesh%edge_index_Ac)
-    NULLIFY( mesh%Nx_ac)
-    NULLIFY( mesh%Ny_ac)
-    NULLIFY( mesh%Np_ac)
-    NULLIFY( mesh%No_ac)
     
     CALL deallocate_shared( mesh%wnVAaAc)
     CALL deallocate_shared( mesh%wnTriAaAc)
@@ -408,11 +390,6 @@ MODULE mesh_memory_module
     CALL deallocate_shared( mesh%wnCAaAc)
     CALL deallocate_shared( mesh%wCAaAc)
     CALL deallocate_shared( mesh%wTriAaAc)
-    CALL deallocate_shared( mesh%wNx_AaAc)
-    CALL deallocate_shared( mesh%wNy_AaAc)
-    CALL deallocate_shared( mesh%wNxx_AaAc)
-    CALL deallocate_shared( mesh%wNxy_AaAc)
-    CALL deallocate_shared( mesh%wNyy_AaAc)
     
     NULLIFY( mesh%nVAaAc)
     NULLIFY( mesh%nTriAaAc)
@@ -420,11 +397,6 @@ MODULE mesh_memory_module
     NULLIFY( mesh%nCAaAc)
     NULLIFY( mesh%CAaAc)
     NULLIFY( mesh%TriAaAc)
-    NULLIFY( mesh%Nx_AaAc)
-    NULLIFY( mesh%Ny_AaAc)
-    NULLIFY( mesh%Nxx_AaAc)
-    NULLIFY( mesh%Nxy_AaAc)
-    NULLIFY( mesh%Nyy_AaAc)
     
     CALL deallocate_shared( mesh%wnPOI               )        
     CALL deallocate_shared( mesh%wPOI_coordinates    )

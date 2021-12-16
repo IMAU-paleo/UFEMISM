@@ -1,19 +1,33 @@
 MODULE reference_fields_module
+  
+  ! Contains the routines for setting up the three "reference geometries":
+  ! - refgeo_PD:     present-day, used to calculate sea-level contribution, isotope change, and more
+  ! - refgeo_init:   initial, used to initialise the simulation
+  ! - refgeo_GIA_eq: GIA equilibrium, used for the GIA model
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,        ONLY: dp, C
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                         allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                         allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                         allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                         allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                         deallocate_shared
-  USE data_types_module,           ONLY: type_mesh, type_init_data_fields, type_PD_data_fields
-  USE parameters_module,           ONLY: seawater_density, ice_density
-  USE netcdf_module,               ONLY: debug, write_to_debug_file, inquire_PD_data_file, inquire_init_data_file, &
-                                         read_PD_data_file, read_init_data_file
-  USE mesh_help_functions_module,  ONLY: partition_list
-  USE mesh_mapping_module,         ONLY: create_remapping_arrays_mesh_grid, map_grid2mesh_2D, deallocate_remapping_arrays_mesh_grid
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_init_data_fields, type_PD_data_fields
+  USE netcdf_module,                   ONLY: inquire_PD_data_file, inquire_init_data_file, read_PD_data_file, read_init_data_file
+  USE mesh_mapping_module,             ONLY: create_remapping_arrays_mesh_grid, map_grid2mesh_2D, deallocate_remapping_arrays_mesh_grid
 
   IMPLICIT NONE
   

@@ -206,15 +206,15 @@ PROGRAM UFEMISM_program
     
     ! Update regional sea level (needs to be moved to separate subroutine at some point!)
     IF (C%choice_sealevel_model == 'fixed') THEN
-      IF (C%do_NAM) NAM%ice%SL( NAM%mesh%v1:NAM%mesh%v2) = C%fixed_sealevel
-      IF (C%do_EAS) EAS%ice%SL( EAS%mesh%v1:EAS%mesh%v2) = C%fixed_sealevel
-      IF (C%do_GRL) GRL%ice%SL( GRL%mesh%v1:GRL%mesh%v2) = C%fixed_sealevel
-      IF (C%do_ANT) ANT%ice%SL( ANT%mesh%v1:ANT%mesh%v2) = C%fixed_sealevel
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%v1:NAM%mesh%v2) = C%fixed_sealevel
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%v1:EAS%mesh%v2) = C%fixed_sealevel
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%v1:GRL%mesh%v2) = C%fixed_sealevel
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%v1:ANT%mesh%v2) = C%fixed_sealevel
     ELSEIF (C%choice_sealevel_model == 'eustatic') THEN
-      IF (C%do_NAM) NAM%ice%SL( NAM%mesh%v1:NAM%mesh%v2) = GMSL_glob
-      IF (C%do_EAS) EAS%ice%SL( EAS%mesh%v1:EAS%mesh%v2) = GMSL_glob
-      IF (C%do_GRL) GRL%ice%SL( GRL%mesh%v1:GRL%mesh%v2) = GMSL_glob
-      IF (C%do_ANT) ANT%ice%SL( ANT%mesh%v1:ANT%mesh%v2) = GMSL_glob
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%v1:NAM%mesh%v2) = GMSL_glob
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%v1:EAS%mesh%v2) = GMSL_glob
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%v1:GRL%mesh%v2) = GMSL_glob
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%v1:ANT%mesh%v2) = GMSL_glob
     ELSE
       IF (par%master) WRITE(0,*) '  ERROR: choice_sealevel_model "', TRIM(C%choice_sealevel_model), '" not implemented in IMAU_ICE_program!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)

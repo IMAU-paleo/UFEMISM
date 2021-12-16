@@ -1,37 +1,46 @@
 MODULE mesh_creation_module
+
   ! Routines for creating the first mesh from a collection of forcing data on a Cartesian grid.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           allocate_shared_bool_1D, deallocate_shared, &
-                                           adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                           adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                           adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                           adapt_shared_bool_1D, &
-                                           allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                           allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                           allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                           allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                           allocate_shared_dist_bool_1D
-  USE data_types_module,             ONLY: type_model_region, type_mesh, type_init_data_fields
-  USE mesh_help_functions_module,    ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
-                                           determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
-                                           cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
-                                           min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
-                                           find_POI_xy_coordinates, find_Voronoi_cell_geometric_centres, partition_domain_regular, find_POI_vertices_and_weights, &
-                                           update_triangle_circumcenter, write_mesh_to_text_file, is_encroached_upon, is_boundary_segment, partition_list
-  USE mesh_memory_module,            ONLY: allocate_mesh_primary, allocate_submesh_primary, extend_mesh_primary, extend_submesh_primary, &
-                                           crop_mesh_primary, crop_submesh_primary, allocate_mesh_secondary, &
-                                           deallocate_submesh_primary, move_data_from_submesh_to_mesh, share_submesh_access
-  USE mesh_Delaunay_module,          ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
-  USE mesh_derivatives_module,       ONLY: get_neighbour_functions
-  USE mesh_ArakawaC_module,          ONLY: make_Ac_mesh
-  USE mesh_five_colour_module,       ONLY: calculate_five_colouring_AaAc
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE parallel_module,                 ONLY: allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                             allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                             allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                             allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                             allocate_shared_dist_bool_1D
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_init_data_fields
+  USE mesh_help_functions_module,      ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
+                                             determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
+                                             cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
+                                             min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
+                                             find_POI_xy_coordinates, find_Voronoi_cell_geometric_centres, partition_domain_regular, find_POI_vertices_and_weights, &
+                                             update_triangle_circumcenter, write_mesh_to_text_file, is_encroached_upon, is_boundary_segment, &
+                                             calc_triangle_geometric_centres
+  USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_submesh_primary, extend_mesh_primary, extend_submesh_primary, &
+                                             crop_mesh_primary, crop_submesh_primary, allocate_mesh_secondary, &
+                                             deallocate_submesh_primary, move_data_from_submesh_to_mesh, share_submesh_access
+  USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
+  USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
+  USE mesh_five_colour_module,         ONLY: calculate_five_colouring_AaAc
   
   IMPLICIT NONE
   
@@ -1722,12 +1731,13 @@ MODULE mesh_creation_module
     
     ! Calculate extra mesh data
     CALL allocate_mesh_secondary(             mesh)
+    CALL calc_triangle_geometric_centres(     mesh)
     CALL find_Voronoi_cell_areas(             mesh)
     CALL get_lat_lon_coordinates(             mesh)
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)
-    CALL get_neighbour_functions(             mesh)
+    CALL calc_matrix_operators_mesh(          mesh)
     CALL determine_mesh_resolution(           mesh)
     IF (par%master) CALL find_POI_xy_coordinates( mesh)
     CALL sync

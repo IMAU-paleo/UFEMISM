@@ -659,7 +659,7 @@ CONTAINS
     ! Map PD data to the mesh
     CALL map_grid2mesh_2D( mesh, PD%grid, PD%Hi_grid, PD%Hi)
     CALL map_grid2mesh_2D( mesh, PD%grid, PD%Hb_grid, PD%Hb)
-    PD%Hs( mesh%v1:mesh%v2) = MAX(0._dp, PD%Hb( mesh%v1:mesh%v2) + PD%Hi( mesh%v1:mesh%v2))
+    PD%Hs( mesh%vi1:mesh%vi2) = MAX(0._dp, PD%Hb( mesh%vi1:mesh%vi2) + PD%Hi( mesh%vi1:mesh%vi2))
     
     ! Deallocate remapping arrays
     CALL deallocate_remapping_arrays_mesh_grid( PD%grid)
@@ -697,15 +697,15 @@ CONTAINS
     ! Map init data to the mesh
     CALL map_grid2mesh_2D( mesh, init%grid, init%Hi_grid, init%Hi)
     CALL map_grid2mesh_2D( mesh, init%grid, init%Hb_grid, init%Hb)
-    init%Hs( mesh%v1:mesh%v2) = MAX(0._dp, init%Hb( mesh%v1:mesh%v2) + init%Hi( mesh%v1:mesh%v2))  
+    init%Hs( mesh%vi1:mesh%vi2) = MAX(0._dp, init%Hb( mesh%vi1:mesh%vi2) + init%Hi( mesh%vi1:mesh%vi2))  
     
     ! For the Bueler benchmark experiment, recalculate initial ice thickness on the mesh,
     ! to make sure we have the correct starting conditions.
     IF (C%do_benchmark_experiment .AND. C%choice_benchmark_experiment == 'Bueler') THEN
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         init%Hi(vi) = Bueler_solution( C%halfar_solution_H0, C%halfar_solution_R0, C%bueler_solution_lambda, mesh%V(vi,1), mesh%V(vi,2), C%start_time_of_run)
       END DO      
-      init%Hs( mesh%v1:mesh%v2) = init%Hi( mesh%v1:mesh%v2)
+      init%Hs( mesh%vi1:mesh%vi2) = init%Hi( mesh%vi1:mesh%vi2)
       CALL sync
     END IF
     

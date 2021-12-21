@@ -289,7 +289,7 @@ MODULE mesh_update_module
     CALL d2dx2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dx2 )
     CALL d2dxdy_a_to_a_2D( region%mesh, region%ice%Hs_a, d2dxdy)
     CALL d2dy2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dy2 )
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%surf_curv( vi) = MAX(-1E-6, MIN(1E-6, SQRT(d2dx2( vi)**2 + d2dy2( vi)**2 + d2dxdy( vi)**2)))
     END DO
     CALL sync
@@ -600,7 +600,7 @@ MODULE mesh_update_module
     lugl     = 0._dp
     lucf     = 0._dp
     
-    DO ti = mesh%t1, mesh%t2
+    DO ti = mesh%ti1, mesh%ti2
      
       ! Triangle vertex indices
       v1 = mesh%Tri( ti,1)

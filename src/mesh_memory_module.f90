@@ -390,6 +390,8 @@ MODULE mesh_memory_module
     CALL deallocate_shared( mesh%wnCAaAc)
     CALL deallocate_shared( mesh%wCAaAc)
     CALL deallocate_shared( mesh%wTriAaAc)
+    CALL deallocate_shared( mesh%wniTriAaAc)
+    CALL deallocate_shared( mesh%wiTriAaAc)
     
     NULLIFY( mesh%nVAaAc)
     NULLIFY( mesh%nTriAaAc)
@@ -397,6 +399,8 @@ MODULE mesh_memory_module
     NULLIFY( mesh%nCAaAc)
     NULLIFY( mesh%CAaAc)
     NULLIFY( mesh%TriAaAc)
+    NULLIFY( mesh%niTriAaAc)
+    NULLIFY( mesh%iTriAaAc)
     
     CALL deallocate_shared( mesh%wnPOI               )        
     CALL deallocate_shared( mesh%wPOI_coordinates    )
@@ -427,6 +431,10 @@ MODULE mesh_memory_module
     NULLIFY( mesh%colour   )
     NULLIFY( mesh%colour_vi)
     NULLIFY( mesh%colour_nV)
+    
+    ! DENK DROM
+    IF (par%master) WRITE(0,*) 'deallocate_mesh_all - DONT FORGET TO DEALLOCATE MATRIX OPERATORS!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
  
    END SUBROUTINE deallocate_mesh_all
   

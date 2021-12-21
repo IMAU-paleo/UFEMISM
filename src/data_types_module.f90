@@ -117,6 +117,31 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dzeta_dz_a
     INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
     
+    ! Ice dynamics - physical terms in the SSA/DIVA
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dx_b
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dy_b
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dx_b
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dy_b
+!    REAL(dp), DIMENSION(:,:,:), POINTER     :: du_dz_3D_cx
+!    REAL(dp), DIMENSION(:,:,:), POINTER     :: dv_dz_3D_cy
+!    REAL(dp), DIMENSION(:,:,:), POINTER     :: visc_eff_3D_a
+!    REAL(dp), DIMENSION(:,:,:), POINTER     :: visc_eff_3D_b
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_int_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_int_b
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cx
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cy
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: F2_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_cx
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_cy
+!    REAL(dp), DIMENSION(:,:,:), POINTER     :: F1_3D_a
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cx
+!    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cy
+    INTEGER :: wbeta_a
+    
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out
@@ -278,17 +303,27 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: edge_index_Ac
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
     
-    ! Mapping/gradient matrix operators
-   !TYPE(type_sparse_matrix_CSR)            :: M_map_a_a                     ! Matrix operator for mapping data    from the a (vertex)   to the a (vertex)   grid
+    ! Combined A+C mesh
+    INTEGER,                    POINTER     :: nVAaAc    
+    INTEGER,                    POINTER     :: nTriAaAc
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: VAaAc
+    INTEGER,  DIMENSION(:    ), POINTER     :: nCAaAc
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: CAaAc
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: TriAaAc
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: TriGCAaAc
+    INTEGER,  DIMENSION(:    ), POINTER     :: niTriAaAc
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: iTriAaAc
+    INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc, wTriGCAaAc, wniTriAaAc, wiTriAaAc
+    
+    ! Matrix operators: mapping
     TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Matrix operator for mapping data    from the a (vertex)   to the b (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Matrix operator for mapping data    from the a (vertex)   to the c (edge)     grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_b_a                     ! Matrix operator for mapping data    from the b (triangle) to the a (vertex)   grid
-   !TYPE(type_sparse_matrix_CSR)            :: M_map_b_b                     ! Matrix operator for mapping data    from the b (triangle) to the b (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_b_c                     ! Matrix operator for mapping data    from the b (triangle) to the c (edge)     grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_c_a                     ! Matrix operator for mapping data    from the c (edge)     to the a (vertex)   grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_c_b                     ! Matrix operator for mapping data    from the c (edge)     to the b (triangle) grid
-   !TYPE(type_sparse_matrix_CSR)            :: M_map_c_c                     ! Matrix operator for mapping data    from the c (edge)     to the c (edge)     grid
    
+    ! Matrix operators: d/dx
     TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_a                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (vertex)   grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_b                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_c                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (edge)     grid
@@ -299,6 +334,7 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_b                     ! Matrix operator for finding d/dx    from the a (edge)     to the a (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_c                     ! Matrix operator for finding d/dx    from the a (edge)     to the a (edge)     grid
    
+    ! Matrix operators: d/dy
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_a                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (vertex)   grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_b                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_c                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (edge)     grid
@@ -309,18 +345,56 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Matrix operator for finding d/dy    from the a (edge)     to the a (triangle) grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Matrix operator for finding d/dy    from the a (edge)     to the a (edge)     grid
     
+    ! Matrix operators: second derivatives on a-grid
     TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_a_a                   ! Matrix operator for finding d2/dx2  from the a (vertex)   to the a (vertex)   grid
     TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_a_a                  ! Matrix operator for finding d2/dxdy from the a (vertex)   to the a (vertex)   grid
     TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_a_a                   ! Matrix operator for finding d2/dy2  from the a (vertex)   to the a (vertex)   grid
     
-    ! Combined A+C mesh
-    INTEGER,                    POINTER     :: nVAaAc    
-    INTEGER,                    POINTER     :: nTriAaAc
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: VAaAc
-    INTEGER,  DIMENSION(:    ), POINTER     :: nCAaAc
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: CAaAc
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: TriAaAc
-    INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc
+    ! Matrix operators: some operations involving the combined ACUV mesh
+    TYPE(type_sparse_matrix_CSR)            :: M_map_a_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_a
+    TYPE(type_sparse_matrix_CSR)            :: M_map_c_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_c
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_aca_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_aca_acb 
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_aca
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_aca_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_aca_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_aca_aca
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_aca
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_a_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_map_a_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_a
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_a
+    TYPE(type_sparse_matrix_CSR)            :: M_map_c_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_map_c_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_c
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_c
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acau_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acav_acb
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acau_acb 
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acav_acb
+    
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_acau
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_acav
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
@@ -334,10 +408,12 @@ MODULE data_types_module
     INTEGER :: wnV_transect, wvi_transect, ww_transect
     
     ! Parallelisation
-    INTEGER                                 :: v1, v2                        ! Vertex domain [v1,v2] of each process (equal number of vertices)
-    INTEGER                                 :: t1, t2                        ! Vertex domain [v1,v2] of each process (equal number of triangles)
-    INTEGER                                 :: ac1, ac2                      ! Arakawa C   vertex domain [c1,c2] of each process
-    INTEGER                                 :: a1, a2                        ! Arakawa A+C vertex domain [a1,a2] of each process
+    INTEGER                                 :: vi1, vi2                      ! Vertices
+    INTEGER                                 :: ti1, ti2                      ! Triangles
+    INTEGER                                 :: ci1, ci2                      ! Edges
+    INTEGER                                 :: avi1, avi2                    ! Combined-mesh vertices
+    INTEGER                                 :: ati1, ati2                    ! Combined-mesh triangles
+    INTEGER                                 :: auvi1, auvi2                  ! Combined-mesh vector-field vertices
     
     ! Parallelisation - five-colouring
     INTEGER,  DIMENSION(:    ), POINTER     :: colour

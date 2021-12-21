@@ -81,7 +81,7 @@ CONTAINS
     IsoMax = -1E9_dp
     IsoMin =  1E9_dp
     
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
       
       Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
       Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
@@ -103,7 +103,7 @@ CONTAINS
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
 
     ! Calculate the mass gain/loss of d18O
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
     
       region%ice%MB_iso( vi) = 0._dp
     
@@ -128,7 +128,7 @@ CONTAINS
     IF (par%master) WRITE(0,*) 'run_isotopes_model - FIXME!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-!    DO vi = region%mesh%v1, region%mesh%v2
+!    DO vi = region%mesh%vi1, region%mesh%vi2
 !    
 !      region%ice%IsoIce_new( vi) = region%ice%IsoIce( vi)
 !    
@@ -180,7 +180,7 @@ CONTAINS
 !    CALL sync
     
     ! Update field
-    region%ice%IsoIce( region%mesh%v1:region%mesh%v2) = region%ice%IsoIce_new( region%mesh%v1:region%mesh%v2)
+    region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = region%ice%IsoIce_new( region%mesh%vi1:region%mesh%vi2)
     
     ! Calculate mean isotope content of the whole ice sheet
     CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
@@ -212,7 +212,7 @@ CONTAINS
     total_isotope_content = 0._dp
     total_ice_volume_msle = 0._dp
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
           
       IF (Hi( vi) > 0._dp) THEN
         Hi_msle = Hi( vi) * mesh%A( vi) * ice_density / (seawater_density * ocean_area)
@@ -292,7 +292,7 @@ CONTAINS
     
     ! Initialise ice sheet isotope content with the isotope content of present-day annual mean precipitation,
     ! so that we can calculate the total present-day isotope content of the ice-sheet
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
     
       IF (region%PD%Hi( vi) > 0._dp) THEN
       
@@ -318,7 +318,7 @@ CONTAINS
     
     ! Initialise ice sheet isotope content with the isotope content of annual mean precipitation at the start of the simulation
     ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
     
       IF (region%ice%mask_ice_a( vi) == 1) THEN
       
@@ -379,7 +379,7 @@ CONTAINS
     
     ! Calculate reference field of d18O of precipitation
     ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
     END DO
     CALL sync

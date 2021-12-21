@@ -33,7 +33,7 @@ MODULE utilities_module
 CONTAINS
 
 ! == Some operations on the scaled vertical coordinate
-  FUNCTION vertical_integration_from_bottom_to_zeta( f) RESULT( integral_f)
+  SUBROUTINE vertical_integration_from_bottom_to_zeta( f, integral_f)
     ! This subroutine integrates f from the bottom level at C%zeta(k=C%nz) = 1 up to the level C%zeta(k):
     !  See Eq. (12.1)
     ! If the integrand f is positive (our case) the integral is negative because the integration is in
@@ -47,9 +47,7 @@ CONTAINS
 
     ! Input variables:
     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-
-    ! Output variables:
-    REAL(dp), DIMENSION(C%nz)              :: integral_f
+    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
     
     ! Local variables:
     INTEGER                                :: k
@@ -58,8 +56,9 @@ CONTAINS
     DO k = C%nz-1, 1, -1
       integral_f(k) = integral_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
     END DO
-  END FUNCTION vertical_integration_from_bottom_to_zeta
-  FUNCTION vertical_integration_from_top_to_zeta(    f) RESULT( integral_f)
+    
+  END SUBROUTINE vertical_integration_from_bottom_to_zeta
+  SUBROUTINE vertical_integration_from_top_to_zeta(    f, integral_f)
     ! This subroutine integrates f from the top level at C%zeta(k=1) = 0 down to the level C%zeta(k): Eq. (12.2)
     ! Similar to Eq. (12.1) but in the other direction.
     ! If the integrand f is positive (our case) the integral is positive because the integration is in
@@ -73,9 +72,7 @@ CONTAINS
 
     ! Input variables:
     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-
-    ! Output variables:
-    REAL(dp), DIMENSION(C%nz)              :: integral_f
+    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
     
     ! Local variables:
     INTEGER                                :: k
@@ -84,17 +81,16 @@ CONTAINS
     DO k = 2, C%nz, 1
       integral_f(k) = integral_f(k-1) + 0.5_dp * (f(k) + f(k-1)) * (C%zeta(k) - C%zeta(k-1))
     END DO
-  END FUNCTION vertical_integration_from_top_to_zeta
-  FUNCTION vertical_integrate(                       f) RESULT( integral_f)
+    
+  END SUBROUTINE vertical_integration_from_top_to_zeta
+  SUBROUTINE vertical_integrate(                       f, integral_f)
     ! Integrate f over the ice column (from the base to the surface)
     
     IMPLICIT NONE
 
     ! Input variable:
     REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-
-    ! Output variable:
-    REAL(dp)                              :: integral_f
+    REAL(dp),                  INTENT(OUT):: integral_f
 
     ! Local variable:
     INTEGER                               :: k
@@ -108,8 +104,8 @@ CONTAINS
        integral_f = integral_f + 0.5_dp*(f(k)+f(k-1))*(C%zeta(k) - C%zeta(k-1))
     END DO
 
-  END FUNCTION vertical_integrate
-  FUNCTION vertical_average(                         f) RESULT( average_f)
+  END SUBROUTINE vertical_integrate
+  SUBROUTINE vertical_average(                         f, average_f)
     ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
     !  See Eq. (11.3) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf.
     ! The integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%nz) = 1.
@@ -121,9 +117,7 @@ CONTAINS
 
     ! Input variables:
     REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-
-    ! Result variables:
-    REAL(dp)                              :: average_f
+    REAL(dp),                  INTENT(OUT):: average_f
     
     ! Local variables:
     INTEGER                               :: k
@@ -134,8 +128,7 @@ CONTAINS
       average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
     END DO
 
-    RETURN
-  END FUNCTION vertical_average
+  END SUBROUTINE vertical_average
   
 ! == Floatation criterion, surface elevation, and thickness above floatation
   FUNCTION is_floating( Hi, Hb, SL) RESULT( isso)
@@ -652,12 +645,14 @@ CONTAINS
         ia   = ic
         ka1  = AA%ptr( ia)
         ka2  = AA%ptr( ia+1) - 1
+        IF (ka2 < ka1) CYCLE ! This row of A has no entries
         ja1  = AA%index( ka1)
         ja2  = AA%index( ka2)
         
         ibt  = jc
         kbt1 = BBT%ptr( ibt)
         kbt2 = BBT%ptr( ibt+1) - 1
+        IF (kbt2 < kbt1) CYCLE ! This row of BT has no entries
         jbt1 = BBT%index( kbt1)
         jbt2 = BBT%index( kbt2)
         
@@ -818,7 +813,7 @@ CONTAINS
         DO ka = ka1, ka2
           ja = AA%index( ka)
           IF (ja == jc) THEN
-            is_nonzero = .FALSE.
+            is_nonzero = .TRUE.
             Cij = Cij + AA%val( ka)
             EXIT
           END IF
@@ -830,7 +825,7 @@ CONTAINS
         DO kb = kb1, kb2
           jb = BB%index( kb)
           IF (jb == jc) THEN
-            is_nonzero = .FALSE.
+            is_nonzero = .TRUE.
             Cij = Cij + BB%val( kb)
             EXIT
           END IF
@@ -1323,6 +1318,14 @@ CONTAINS
     CALL deallocate_shared( A%wptr)
     CALL deallocate_shared( A%windex)
     CALL deallocate_shared( A%wval)
+    
+    NULLIFY( A%m      )
+    NULLIFY( A%n      )
+    NULLIFY( A%nnz_max)
+    NULLIFY( A%nnz    )
+    NULLIFY( A%ptr    )
+    NULLIFY( A%index  )
+    NULLIFY( A%val    )
   
   END SUBROUTINE deallocate_matrix_CSR
   SUBROUTINE check_CSR_for_double_entries( A)

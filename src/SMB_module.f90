@@ -76,22 +76,22 @@ CONTAINS
         RETURN
         
       ELSEIF (C%choice_benchmark_experiment == 'Halfar') THEN
-        SMB%SMB_year( mesh%v1:mesh%v2  ) = 0._dp
-        SMB%SMB(      mesh%v1:mesh%v2,:) = 0._dp
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0._dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0._dp
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
-        DO vi = mesh%v1, mesh%v2
+        DO vi = mesh%vi1, mesh%vi2
           SMB%SMB_year( vi  ) = Bueler_solution_MB( C%halfar_solution_H0, C%halfar_solution_R0, C%bueler_solution_lambda, mesh%V(vi,1), mesh%V(vi,2), time)
           SMB%SMB(      vi,:) = SMB%SMB_year( vi) / 12._dp
         END DO
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        SMB%SMB_year( mesh%v1:mesh%v2  ) = 0.3_dp
-        SMB%SMB(      mesh%v1:mesh%v2,:) = 0.3_dp / 12._dp
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0.3_dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0.3_dp / 12._dp
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'mesh_generation_test') THEN
         ! Similar to EISMINT
-        DO vi = mesh%v1, mesh%v2
+        DO vi = mesh%vi1, mesh%vi2
           R = NORM2(mesh%V(vi,:))
           IF (R < 250000._dp) THEN
             SMB%SMB_year( vi  ) = 0.3_dp
@@ -99,7 +99,7 @@ CONTAINS
             SMB%SMB_year( vi  ) = MAX(-2._dp, 0.3_dp - (R - 250000._dp) / 200000._dp)
           END IF
           SMB%SMB(      vi,:) = SMB%SMB_year( vi  ) / 12._dp
-        END DO ! DO vi = mesh%v1, mesh%v2
+        END DO ! DO vi = mesh%vi1, mesh%vi2
         CALL sync
         RETURN
       ELSE
@@ -111,7 +111,7 @@ CONTAINS
     ! Calculate SMB components with IMAU_ITM
     ! ======================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Background albedo
       SMB%AlbedoSurf( vi) = albedo_soil
@@ -241,7 +241,7 @@ CONTAINS
       END IF
     END IF
 
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       dist = NORM2( mesh%V( vi,:))
       SMB%SMB_year(vi) = MIN( M_max, S_b * (E - dist))
       SMB%SMB(vi,:) = SMB%SMB_year(vi) / 12._dp
@@ -364,7 +364,7 @@ CONTAINS
     CALL sync
     
     ! Initialise albedo to background albedo
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Background albedo
       IF (init%Hb(vi) < 0._dp) THEN
@@ -381,16 +381,16 @@ CONTAINS
       SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
       SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
     ! If we're doing a restart, initialise with that
     IF (C%is_restart) THEN
     
-      SMB%FirnDepth(        mesh%v1:mesh%v2,:) = init%FirnDepth(        mesh%v1:mesh%v2,:)
-      SMB%MeltPreviousYear( mesh%v1:mesh%v2  ) = init%MeltPreviousYear( mesh%v1:mesh%v2  )
+      SMB%FirnDepth(        mesh%vi1:mesh%vi2,:) = init%FirnDepth(        mesh%vi1:mesh%vi2,:)
+      SMB%MeltPreviousYear( mesh%vi1:mesh%vi2  ) = init%MeltPreviousYear( mesh%vi1:mesh%vi2  )
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         
         ! Background albedo
         IF (init%Hb(vi) < 0._dp) THEN

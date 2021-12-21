@@ -104,9 +104,9 @@ MODULE mesh_mapping_module
     grid_islisted = .FALSE.
     
     ! Calculate overlaps for all vertices
-    DO vi = 1, mesh%nV! mesh%v1, mesh%v2
+    DO vi = 1, mesh%nV! mesh%vi1, mesh%vi2
     
-      IF (vi >= mesh%v1 .AND. vi <= mesh%v2) THEN
+      IF (vi >= mesh%vi1 .AND. vi <= mesh%vi2) THEN
 
       ! Reset temporary data
       n_cells_in_vertex = 0
@@ -167,7 +167,7 @@ MODULE mesh_mapping_module
         A(  n  ) = A_vi( ni)
       END DO
       
-      END IF ! IF (vi >= mesh%v1 .AND. vi <= mesh%v2) THEN
+      END IF ! IF (vi >= mesh%vi1 .AND. vi <= mesh%vi2) THEN
 
       ! Expend list memory if necessary
       do_extend_memory = .FALSE.
@@ -552,7 +552,7 @@ MODULE mesh_mapping_module
     CALL allocate_shared_dp_1D(  mesh%nV, map%wlon1, map%wwlon1)
     CALL allocate_shared_dp_1D(  mesh%nV, map%wlon2, map%wwlon2)
 
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Find enveloping lat-lon indices
       il  = MAX(1, MIN( grid%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid%lon)) / (grid%lon(2) - grid%lon(1)))))
@@ -588,7 +588,7 @@ MODULE mesh_mapping_module
       map%wlat1( vi) = wjl
       map%wlat2( vi) = wju
 
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
   END SUBROUTINE create_remapping_arrays_glob_mesh
@@ -608,7 +608,7 @@ MODULE mesh_mapping_module
     INTEGER                                                :: il,iu,jl,ju
     REAL(dp)                                               :: wil,wiu,wjl,wju
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       il  = map%ilon1( vi)
       iu  = map%ilon2( vi)
@@ -624,7 +624,7 @@ MODULE mesh_mapping_module
                     (wiu * wjl * d_grid( iu,jl)) + &
                     (wiu * wju * d_grid( iu,ju))
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
   END SUBROUTINE map_latlon2mesh_2D
@@ -644,7 +644,7 @@ MODULE mesh_mapping_module
     INTEGER                                                :: il,iu,jl,ju
     REAL(dp)                                               :: wil,wiu,wjl,wju
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       il  = map%ilon1( vi)
       iu  = map%ilon2( vi)
@@ -660,7 +660,7 @@ MODULE mesh_mapping_module
                       (wiu * wjl * d_grid( iu,jl,:)) + &
                       (wiu * wju * d_grid( iu,ju,:))
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
   END SUBROUTINE map_latlon2mesh_3D
@@ -752,7 +752,7 @@ MODULE mesh_mapping_module
     
     ti_src = 1
     
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
     
       ! The vertex coordinates
       p = mesh_dst%V(vi_dst,:)
@@ -770,15 +770,15 @@ MODULE mesh_mapping_module
       pc  = mesh_src%V(vic_src,:)
       
       ! Calculate their interpolation weights
-      Atot = find_triangle_area( pa, pb, pc)
-      Aa   = find_triangle_area( pb, pc, p )
-      Ab   = find_triangle_area( pc, pa, p )
-      Ac   = find_triangle_area( pa, pb, p )
+      CALL find_triangle_area( pa, pb, pc, Atot)
+      CALL find_triangle_area( pb, pc, p , Aa  )
+      CALL find_triangle_area( pc, pa, p , Ab  )
+      CALL find_triangle_area( pa, pb, p , Ac  )
       
       map%vi( vi_dst,:) = [via_src, vib_src, vic_src]
       map%w(  vi_dst,:) = [Aa/Atot, Ab/Atot, Ac/Atot]
        
-    END DO ! DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    END DO ! DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
     CALL sync
     
   END SUBROUTINE create_remapping_arrays_trilin
@@ -804,7 +804,7 @@ MODULE mesh_mapping_module
     
     vi_src = 1
     
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
     
       ! The vertex coordinates
       p = mesh_dst%V(vi_dst,:)
@@ -814,7 +814,7 @@ MODULE mesh_mapping_module
       
       map%vi( vi_dst) = vi_src
       
-    END DO ! DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    END DO ! DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
     CALL sync
     
   END SUBROUTINE create_remapping_arrays_nearest_neighbour
@@ -984,7 +984,7 @@ MODULE mesh_mapping_module
     REAL(dp), DIMENSION(2)                                 :: ccl, ccr, p1, p2
     REAL(dp)                                               :: l1a, l1b, l1c, l2a, l2b, l2c
 
-    DO aci = mesh%ac1, mesh%ac2
+    DO aci = mesh%ci1, mesh%ci2
     
       via = mesh%Aci( aci, 1)
       vib = mesh%Aci( aci, 2)
@@ -1167,7 +1167,7 @@ MODULE mesh_mapping_module
 
       END IF ! IF (.NOT. is_boundary_segment( mesh, via, vib)) THEN
       
-    END DO ! DO aci = mesh%ac1, mesh%ac2
+    END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
 
   END SUBROUTINE find_Voronoi_boundary_lines
@@ -1374,7 +1374,7 @@ MODULE mesh_mapping_module
     CALL allocate_memory_local( r_top_proc, n_max, mesh_top%nV)
     
     ! Fill the local lists
-    DO vi_top = mesh_top%v1, mesh_top%v2
+    DO vi_top = mesh_top%vi1, mesh_top%vi2
       DO ci_top = 1, mesh_top%nC( vi_top)
 
         aci_top = mesh_top%iAci( vi_top, ci_top)
@@ -1577,9 +1577,9 @@ MODULE mesh_mapping_module
     CALL sync
 
     ! Deallocate r_top
-    r_top%nV(   mesh_top%v1:mesh_top%v2) = 0
-    r_top%vli1( mesh_top%v1:mesh_top%v2) = 0
-    r_top%vli2( mesh_top%v1:mesh_top%v2) = 0
+    r_top%nV(   mesh_top%vi1:mesh_top%vi2) = 0
+    r_top%vli1( mesh_top%vi1:mesh_top%vi2) = 0
+    r_top%vli2( mesh_top%vi1:mesh_top%vi2) = 0
     CALL deallocate_shared( r_top%wvi_opp)
     CALL deallocate_shared( r_top%wLI_xdy)
     CALL deallocate_shared( r_top%wLI_mxydx)
@@ -1832,9 +1832,9 @@ MODULE mesh_mapping_module
       END IF
 
       ! Calculate the three %line integrals
-      LI_xdy   = line_integral_xdy(   p1, p, mesh_top%tol_dist)
-      LI_mxydx = line_integral_mxydx( p1, p, mesh_top%tol_dist)
-      LI_xydy  = line_integral_xydy(  p1, p, mesh_top%tol_dist)
+      CALL line_integral_xdy(   p1, p, mesh_top%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( p1, p, mesh_top%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  p1, p, mesh_top%tol_dist, LI_xydy )
 
       ! Check if this contribution is already listed
       IsListed = .FALSE.
@@ -1997,9 +1997,9 @@ MODULE mesh_mapping_module
       END IF
 
       ! Calculate the three %line integrals
-      LI_xdy   = line_integral_xdy(   p1, p, mesh_top%tol_dist)
-      LI_mxydx = line_integral_mxydx( p1, p, mesh_top%tol_dist)
-      LI_xydy  = line_integral_xydy(  p1, p, mesh_top%tol_dist)
+      CALL line_integral_xdy(   p1, p, mesh_top%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( p1, p, mesh_top%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  p1, p, mesh_top%tol_dist, LI_xydy )
 
       ! Check if this contribution is already listed
       IsListed = .FALSE.
@@ -2162,9 +2162,9 @@ MODULE mesh_mapping_module
       END IF
 
       ! Calculate the three %line integrals
-      LI_xdy   = line_integral_xdy(   p1, p, mesh_top%tol_dist)
-      LI_mxydx = line_integral_mxydx( p1, p, mesh_top%tol_dist)
-      LI_xydy  = line_integral_xydy(  p1, p, mesh_top%tol_dist)
+      CALL line_integral_xdy(   p1, p, mesh_top%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( p1, p, mesh_top%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  p1, p, mesh_top%tol_dist, LI_xydy )
 
       ! Check if this contribution is already listed
       IsListed = .FALSE.
@@ -2327,9 +2327,9 @@ MODULE mesh_mapping_module
       END IF
 
       ! Calculate the three %line integrals
-      LI_xdy   = line_integral_xdy(   p1, p, mesh_top%tol_dist)
-      LI_mxydx = line_integral_mxydx( p1, p, mesh_top%tol_dist)
-      LI_xydy  = line_integral_xydy(  p1, p, mesh_top%tol_dist)
+      CALL line_integral_xdy(   p1, p, mesh_top%tol_dist, LI_xdy  )
+      CALL line_integral_mxydx( p1, p, mesh_top%tol_dist, LI_mxydx)
+      CALL line_integral_xydy(  p1, p, mesh_top%tol_dist, LI_xydy )
 
       ! Check if this contribution is already listed
       IsListed = .FALSE.
@@ -2383,7 +2383,7 @@ MODULE mesh_mapping_module
     
     IF (par%master) map%n_tot = r_top%n_tot
     
-    DO vi_top = mesh_top%v1, mesh_top%v2
+    DO vi_top = mesh_top%vi1, mesh_top%vi2
     
       map%vli1( vi_top) = r_top%vli1( vi_top)
       map%vli2( vi_top) = r_top%vli2( vi_top)
@@ -2412,7 +2412,7 @@ MODULE mesh_mapping_module
       
       END IF ! IF (mesh_top%edge_index( vi_top) > 0) THEN
       
-    END DO !  DO vi_top = mesh_top%v1, mesh_top%v2
+    END DO !  DO vi_top = mesh_top%vi1, mesh_top%vi2
     
     ! Deallocate r_dst
     CALL deallocate_shared( r_top%wn_max   )
@@ -2446,18 +2446,18 @@ MODULE mesh_mapping_module
     CALL allocate_shared_dp_1D( mesh_src%nV, d_src, wd_src)
     CALL allocate_shared_dp_1D( mesh_dst%nV, d_dst, wd_dst)
     
-    d_src( mesh_src%v1:mesh_src%v2) = 1._dp
+    d_src( mesh_src%vi1:mesh_src%vi2) = 1._dp
     CALL remap_cons_2nd_order_2D( mesh_src, mesh_dst, map, d_src, d_dst)
     
     ! Ignore edge vertices, as they're useless, and maybe 99% of remapping errors occur there
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       IF (mesh_dst%edge_index( vi_dst) > 0) d_dst( vi_dst) = 1._dp
     END DO
     CALL sync
     
     ! Check for vertices where conservative remapping went wrong. If there are not too many, replace them with linear interpolation.
     n_wrong = 0
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       IF (ABS(1._dp - d_dst( vi_dst)) > 1E-1_dp) THEN
       
         n_wrong = n_wrong + 1
@@ -2476,10 +2476,10 @@ MODULE mesh_mapping_module
         pc  = mesh_src%V( vic_src,:)
         
         ! Calculate their interpolation weights
-        Atot = find_triangle_area( pa, pb, pc)
-        Aa   = find_triangle_area( pb, pc, p )
-        Ab   = find_triangle_area( pc, pa, p )
-        Ac   = find_triangle_area( pa, pb, p )
+        CALL find_triangle_area( pa, pb, pc, Atot)
+        CALL find_triangle_area( pb, pc, p , Aa  )
+        CALL find_triangle_area( pc, pa, p , Ab  )
+        CALL find_triangle_area( pa, pb, p , Ac  )
         
         ! Add new weights to the list
         IF     (map%vli2( vi_dst) == map%vli1( vi_dst) + 1) THEN
@@ -2652,9 +2652,9 @@ MODULE mesh_mapping_module
         
         r_sng_vi_left(  r_sng_nS) = vi_bot_left
         r_sng_vi_right( r_sng_nS) = vi_bot_right
-        r_sng_LI_xdy(   r_sng_nS) = line_integral_xdy(   p, p_next, mesh_bot%tol_dist)
-        r_sng_LI_mxydx( r_sng_nS) = line_integral_mxydx( p, p_next, mesh_bot%tol_dist)
-        r_sng_LI_xydy(  r_sng_nS) = line_integral_xydy(  p, p_next, mesh_bot%tol_dist)
+        CALL line_integral_xdy(   p, p_next, mesh_bot%tol_dist, r_sng_LI_xdy(   r_sng_nS))
+        CALL line_integral_mxydx( p, p_next, mesh_bot%tol_dist, r_sng_LI_mxydx( r_sng_nS))
+        CALL line_integral_xydy(  p, p_next, mesh_bot%tol_dist, r_sng_LI_xydy(  r_sng_nS))
     
       END IF ! IF (DoAdd) THEN
 
@@ -3819,17 +3819,17 @@ MODULE mesh_mapping_module
     
     ! nV
     CALL allocate_shared_int_1D( mesh%nV, r%nV,    r%wnV   )
-    r%nV( mesh%v1:mesh%v2) = r_proc%nV( mesh%v1:mesh%v2)
+    r%nV( mesh%vi1:mesh%vi2) = r_proc%nV( mesh%vi1:mesh%vi2)
     DEALLOCATE( r_proc%nV)
     
     ! vli1
     CALL allocate_shared_int_1D( mesh%nV, r%vli1,  r%wvli1 )
-    r%vli1( mesh%v1:mesh%v2) = r_proc%vli1( mesh%v1:mesh%v2) + dvli
+    r%vli1( mesh%vi1:mesh%vi2) = r_proc%vli1( mesh%vi1:mesh%vi2) + dvli
     DEALLOCATE( r_proc%vli1)
     
     ! vli2
     CALL allocate_shared_int_1D( mesh%nV, r%vli2,  r%wvli2 )
-    r%vli2( mesh%v1:mesh%v2) = r_proc%vli2( mesh%v1:mesh%v2) + dvli
+    r%vli2( mesh%vi1:mesh%vi2) = r_proc%vli2( mesh%vi1:mesh%vi2) + dvli
     DEALLOCATE( r_proc%vli2)
     
     ! vi_opp
@@ -3869,8 +3869,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst
         
-    d_dst(mesh_dst%v1:mesh_dst%v2) = 0._dp
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst(mesh_dst%vi1:mesh_dst%vi2) = 0._dp
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       d_dst(vi_dst) = (d_src( map%vi( vi_dst,1)) * map%w( vi_dst,1)) + &
                       (d_src( map%vi( vi_dst,2)) * map%w( vi_dst,2)) + &
                       (d_src( map%vi( vi_dst,3)) * map%w( vi_dst,3))
@@ -3893,8 +3893,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst, k
         
-    d_dst(mesh_dst%v1:mesh_dst%v2,:) = 0._dp
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst(mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO k = 1, nz
         d_dst(vi_dst,k) = (d_src( map%vi( vi_dst,1),k) * map%w( vi_dst,1)) + &
                           (d_src( map%vi( vi_dst,2),k) * map%w( vi_dst,2)) + &
@@ -3918,8 +3918,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst, m
         
-    d_dst(mesh_dst%v1:mesh_dst%v2,:) = 0._dp
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst(mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO m = 1, 12
         d_dst(vi_dst,m) = (d_src( map%vi( vi_dst,1),m) * map%w( vi_dst,1)) + &
                           (d_src( map%vi( vi_dst,2),m) * map%w( vi_dst,2)) + &
@@ -3943,8 +3943,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst
         
-    d_dst(mesh_dst%v1:mesh_dst%v2) = 0._dp
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst(mesh_dst%vi1:mesh_dst%vi2) = 0._dp
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       d_dst(vi_dst) = d_src( map%vi( vi_dst))
     END DO
     CALL sync
@@ -3965,8 +3965,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst, k
         
-    d_dst(mesh_dst%v1:mesh_dst%v2,:) = 0._dp
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst(mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO k = 1, nz
         d_dst(vi_dst,k) = d_src( map%vi( vi_dst),k)
       END DO
@@ -3988,8 +3988,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst, vli
     
-    d_dst( mesh_dst%v1:mesh_dst%v2) = 0._dp        
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst( mesh_dst%vi1:mesh_dst%vi2) = 0._dp        
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO vli = map%vli1( vi_dst), map%vli2( vi_dst)
         d_dst( vi_dst) = d_dst( vi_dst) + (d_src( map%vi( vli)) * map%w0( vli))
       END DO
@@ -4012,8 +4012,8 @@ MODULE mesh_mapping_module
     ! Local variables
     INTEGER                                                :: vi_dst, vli, k
     
-    d_dst( mesh_dst%v1:mesh_dst%v2,:) = 0._dp        
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    d_dst( mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp        
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO vli = map%vli1( vi_dst), map%vli2( vi_dst)
         DO k = 1, nz
           d_dst( vi_dst,k) = d_dst( vi_dst,k) + (d_src( map%vi( vli),k) * map%w0( vli))
@@ -4046,9 +4046,9 @@ MODULE mesh_mapping_module
     CALL ddx_a_to_a_2D( mesh_src, d_src, ddx_src)
     CALL ddy_a_to_a_2D( mesh_src, d_src, ddy_src)
     
-    d_dst( mesh_dst%v1:mesh_dst%v2) = 0._dp
+    d_dst( mesh_dst%vi1:mesh_dst%vi2) = 0._dp
         
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO vli = map%vli1( vi_dst), map%vli2( vi_dst)
         d_dst( vi_dst) = d_dst( vi_dst) + (d_src(   map%vi( vli)) * map%w0(  vli)) + &
                                           (ddx_src( map%vi( vli)) * map%w1x( vli)) + &
@@ -4083,9 +4083,9 @@ MODULE mesh_mapping_module
     CALL ddx_a_to_a_3D( mesh_src, d_src, ddx_src)
     CALL ddy_a_to_a_3D( mesh_src, d_src, ddy_src)
     
-    d_dst( mesh_dst%v1:mesh_dst%v2,:) = 0._dp
+    d_dst( mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp
         
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO vli = map%vli1( vi_dst), map%vli2( vi_dst)
         DO m = 1, 12
           d_dst( vi_dst,m) = d_dst( vi_dst,m) + (d_src(   map%vi( vli),m) * map%w0(  vli)) + &
@@ -4123,9 +4123,9 @@ MODULE mesh_mapping_module
     CALL ddx_a_to_a_3D( mesh_src, d_src, ddx_src)
     CALL ddy_a_to_a_3D( mesh_src, d_src, ddy_src)
     
-    d_dst( mesh_dst%v1:mesh_dst%v2,:) = 0._dp
+    d_dst( mesh_dst%vi1:mesh_dst%vi2,:) = 0._dp
         
-    DO vi_dst = mesh_dst%v1, mesh_dst%v2
+    DO vi_dst = mesh_dst%vi1, mesh_dst%vi2
       DO vli = map%vli1( vi_dst), map%vli2( vi_dst)
         DO k = 1, nz
           d_dst( vi_dst,k) = d_dst( vi_dst,k) + (d_src(   map%vi( vli),k) * map%w0(  vli)) + &

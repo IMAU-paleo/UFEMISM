@@ -70,7 +70,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
           C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        BMB%BMB( mesh%v1:mesh%v2) = 0._dp
+        BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
         CALL sync
         RETURN
       ELSE
@@ -80,11 +80,11 @@ CONTAINS
     END IF ! IF (C%do_benchmark_experiment) THEN
       
     ! Initialise everything at zero
-    BMB%BMB(       mesh%v1:mesh%v2) = 0._dp
-    BMB%BMB_sheet( mesh%v1:mesh%v2) = 0._dp
-    BMB%BMB_shelf( mesh%v1:mesh%v2) = 0._dp
-    BMB%sub_angle( mesh%v1:mesh%v2) = 360._dp
-    BMB%dist_open( mesh%v1:mesh%v2) = 0._dp
+    BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
+    BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
+    BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+    BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
+    BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
     w_ins                             = 0._dp
     weight                            = 0._dp
     w_PD                              = 0._dp
@@ -97,7 +97,7 @@ CONTAINS
     BMB_deepocean                     = 0._dp
     
     ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
     END DO
     CALL sync
@@ -178,7 +178,7 @@ CONTAINS
     ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
     ! ====================================================================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       IF (ice%mask_shelf_a( vi) == 1) THEN
         ! Sub-shelf melt
@@ -210,7 +210,7 @@ CONTAINS
     CALL sync
     
     ! Add sheet and shelf melt together
-    BMB%BMB( mesh%v1:mesh%v2) = BMB%BMB_sheet( mesh%v1:mesh%v2) + BMB%BMB_shelf( mesh%v1:mesh%v2)
+    BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
     CALL sync
     
     n2 = par%mem%n

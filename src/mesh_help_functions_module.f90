@@ -43,8 +43,8 @@ MODULE mesh_help_functions_module
     
     ALLOCATE(Vor(mesh%nC_mem+2,2))
 
-    mesh%A(mesh%v1:mesh%v2) = 0._dp
-    DO vi = mesh%v1, mesh%v2
+    mesh%A(mesh%vi1:mesh%vi2) = 0._dp
+    DO vi = mesh%vi1, mesh%vi2
 
       CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
 
@@ -78,12 +78,13 @@ MODULE mesh_help_functions_module
     INTEGER                                       :: nVor
     REAL(dp), DIMENSION(2)                        :: p, q
     REAL(dp)                                      :: LI_mxydx, LI_xydy
+    REAL(dp)                                      :: LI_mxydx_seg, LI_xydy_seg
         
-    mesh%VorGC( mesh%v1:mesh%V2,:) = 0._dp
+    mesh%VorGC( mesh%vi1:mesh%vi2,:) = 0._dp
     
     ALLOCATE(Vor(mesh%nC_mem+2,2))
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
       
@@ -93,23 +94,33 @@ MODULE mesh_help_functions_module
       DO nvi = 2, nVor
         p = Vor( nvi-1,:)
         q = Vor( nvi,:)
-        LI_mxydx = LI_mxydx + line_integral_mxydx( p, q, mesh%tol_dist)
-        LI_xydy  = LI_xydy  + line_integral_xydy(  p, q, mesh%tol_dist)    
+        CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
+        CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg )
+        LI_mxydx = LI_mxydx + LI_mxydx_seg
+        LI_xydy  = LI_xydy  + LI_xydy_seg
       END DO 
       
-      IF (mesh%edge_index(vi)>0) THEN
+      IF (mesh%edge_index( vi) > 0) THEN
+      
         p = Vor( nVor,:)
-        q = mesh%V(vi,:)
-        LI_mxydx = LI_mxydx + line_integral_mxydx( p, q, mesh%tol_dist)
-        LI_xydy  = LI_xydy  + line_integral_xydy(  p, q, mesh%tol_dist)
-        p = mesh%V(vi,:)
-        q = Vor(1,:)
-        LI_mxydx = LI_mxydx + line_integral_mxydx( p, q, mesh%tol_dist)
-        LI_xydy  = LI_xydy  + line_integral_xydy(  p, q, mesh%tol_dist)
+        q = mesh%V( vi,:)
+        CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
+        CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
+        LI_mxydx = LI_mxydx + LI_mxydx_seg
+        LI_xydy  = LI_xydy  + LI_xydy_seg
+        
+        p = mesh%V( vi,:)
+        q = Vor( 1,:)
+        CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
+        CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
+        LI_mxydx = LI_mxydx + LI_mxydx_seg
+        LI_xydy  = LI_xydy  + LI_xydy_seg
+        
       END IF
        
-      mesh%VorGC(vi,:) = [LI_mxydx/mesh%A(vi), LI_xydy/mesh%A(vi)]
-    END DO ! DO vi = mesh%v1, mesh%v2
+      mesh%VorGC( vi,:) = [LI_mxydx / mesh%A( vi), LI_xydy / mesh%A( vi)]
+      
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
     DEALLOCATE(Vor)
@@ -127,13 +138,13 @@ MODULE mesh_help_functions_module
     INTEGER                                       :: v1, nv2, v2, t1, t2, iti, ti, n
     LOGICAL                                       :: hasv2
     
-    mesh%Cw(mesh%v2:mesh%v2,:) = 0._dp
+    mesh%Cw(mesh%vi2:mesh%vi2,:) = 0._dp
     CALL sync
 
     ! The way to go: for each vertex pair, find the two triangles that both
     ! are a part of. If there's only one, there's one Voronoi vertex and its
     ! projection on the map edge.
-    DO v1 = mesh%v1, mesh%v2
+    DO v1 = mesh%vi1, mesh%vi2
 
       DO nv2 = 1, mesh%nC(v1)
         v2 = mesh%C(v1,nv2)
@@ -183,7 +194,7 @@ MODULE mesh_help_functions_module
         END IF ! IF (t2>0) THEN
 
       END DO ! DO nv2 = 1, mesh%nC(v1)
-    END DO ! DO v1 = mesh%v1, mesh%v2
+    END DO ! DO v1 = mesh%vi1, mesh%vi2
     CALL sync
 
   END SUBROUTINE find_connection_widths   
@@ -198,12 +209,12 @@ MODULE mesh_help_functions_module
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: pa, pb, pc
 
-    DO ti = mesh%t1, mesh%t2
-      pa = mesh%V(mesh%Tri(ti,1),:)
-      pb = mesh%V(mesh%Tri(ti,2),:)
-      pc = mesh%V(mesh%Tri(ti,3),:)
-      mesh%TriA(ti) = find_triangle_area(pa,pb,pc)
-    END DO ! DO ti = mesh%t1, mesh%t2
+    DO ti = mesh%ti1, mesh%ti2
+      pa = mesh%V( mesh%Tri( ti,1),:)
+      pb = mesh%V( mesh%Tri( ti,2),:)
+      pc = mesh%V( mesh%Tri( ti,3),:)
+      CALL find_triangle_area( pa, pb, pc, mesh%TriA(ti))
+    END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
 
   END SUBROUTINE find_triangle_areas
@@ -217,9 +228,9 @@ MODULE mesh_help_functions_module
     ! Local variables
     INTEGER                                       :: vi, vj, ci
     
-    mesh%R(mesh%v1:mesh%v2) = mesh%xmax - mesh%xmin
+    mesh%R(mesh%vi1:mesh%vi2) = mesh%xmax - mesh%xmin
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       DO ci = 1, mesh%nC(vi)
         vj = mesh%C(vi,ci)
         mesh%R(vi) = MIN(mesh%R(vi), SQRT((mesh%V(vj,1)-mesh%V(vi,1))**2 + (mesh%V(vj,2)-mesh%V(vi,2))**2))
@@ -241,12 +252,31 @@ MODULE mesh_help_functions_module
     ! Local variables:
     INTEGER                                       :: ti
     
-    DO ti = mesh%t1, mesh%t2
+    DO ti = mesh%ti1, mesh%ti2
       CALL update_triangle_geometric_center( mesh, ti)
     END DO
     CALL sync
     
   END SUBROUTINE calc_triangle_geometric_centres
+  SUBROUTINE calc_triangle_geometric_centres_ac( mesh)
+    ! Find the geometric centres of all the triangles of the "combined" AC-mesh
+    
+    IMPLICIT NONE
+
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    INTEGER                                       :: ati, ati1, ati2
+    
+    ! Partition triangle of over the processors
+    CALL partition_list( mesh%nTriAaAc, par%i, par%n, ati1, ati2)
+    
+    DO ati = ati1, ati2
+      CALL update_triangle_geometric_center_ac( mesh, ati)
+    END DO
+    CALL sync
+    
+  END SUBROUTINE calc_triangle_geometric_centres_ac
   
 ! == Finding the vertices of a vertex' Voronoi cell
   SUBROUTINE find_Voronoi_cell_vertices(        mesh, vi, Vor, nVor)
@@ -531,7 +561,7 @@ MODULE mesh_help_functions_module
     INTEGER                                       :: vi
     
     ! Calculate lat and lon directly from X and Y using inverse projection 
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       CALL inverse_oblique_sg_projection(mesh%V(vi,1), mesh%V(vi,2), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, mesh%lon(vi), mesh%lat(vi))
     END DO
     CALL sync
@@ -947,6 +977,25 @@ MODULE mesh_help_functions_module
     mesh%TriGC( ti,:) = (v1 + v2 + v3) / 3._dp
     
   END SUBROUTINE update_triangle_geometric_center
+  SUBROUTINE update_triangle_geometric_center_ac( mesh, ati)
+    ! Calculate the geometric centre of "combined" AC-mesh triangle ati
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    INTEGER,                    INTENT(IN)        :: ati
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                        :: v1, v2, v3
+    
+    v1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
+    v2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
+    v3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
+    
+    mesh%TriGCAaAc( ati,:) = (v1 + v2 + v3) / 3._dp
+    
+  END SUBROUTINE update_triangle_geometric_center_ac
   
 ! == Routines for merging meshes created by parallel processes
   SUBROUTINE merge_vertices( mesh, nVl, nVr, nTril, nTrir, T, nT, vil, vir, orientation)
@@ -1616,10 +1665,10 @@ MODULE mesh_help_functions_module
         pc   = mesh%V( vi_c,:)
         
         ! Calculate their interpolation weights
-        Atot = find_triangle_area( pa, pb, pc)
-        Aa   = find_triangle_area( pb, pc, p )
-        Ab   = find_triangle_area( pc, pa, p )
-        Ac   = find_triangle_area( pa, pb, p )
+        CALL find_triangle_area( pa, pb, pc, Atot)
+        CALL find_triangle_area( pb, pc, p , Aa  )
+        CALL find_triangle_area( pc, pa, p , Ab  )
+        CALL find_triangle_area( pa, pb, p , Ac  )
         
         ! Save the indices and weights
         mesh%POI_vi( POIi,:) = [vi_a,    vi_b,    vi_c   ]
@@ -2037,20 +2086,20 @@ MODULE mesh_help_functions_module
     z = (a(1)*b(2)) - (a(2)*b(1))
 
   END FUNCTION cross2
-  FUNCTION find_triangle_area( pq, pr, ps) RESULT(TriA)
+  SUBROUTINE find_triangle_area( pq, pr, ps, TriA)
     ! Find the area of the triangle [pq,pr,ps]    
     
     IMPLICIT NONE
     
     REAL(dp), DIMENSION(2), INTENT(IN)  :: pq, pr, ps
-    REAL(dp)                            :: TriA
+    REAL(dp),               INTENT(OUT) :: TriA
     
     TriA = ABS( cross2( [pr(1)-pq(1), pr(2)-pq(2)], [ps(1)-pq(1), ps(2)-pq(2)] )) / 2._dp
     
-  END FUNCTION find_triangle_area
+  END SUBROUTINE find_triangle_area
 
 ! == Three basic line integrals used for conservative remapping
-  FUNCTION line_integral_xdy(   p, q, tol_dist) RESULT( I_pq)
+  SUBROUTINE line_integral_xdy(   p, q, tol_dist, I_pq)
     ! Calculate the line integral x dy from p to q    
     
     IMPLICIT NONE
@@ -2058,7 +2107,7 @@ MODULE mesh_help_functions_module
     ! In/output variables:
     REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
     REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp)                                               :: I_pq
+    REAL(dp),                                INTENT(OUT)   :: I_pq
     
     ! Local variables:
     REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
@@ -2078,8 +2127,8 @@ MODULE mesh_help_functions_module
     
     I_pq = xp*dy - yp*dx + (dx / (2._dp*dy)) * (yq**2 - yp**2)
     
-  END FUNCTION line_integral_xdy
-  FUNCTION line_integral_mxydx( p, q, tol_dist) RESULT( I_pq)
+  END SUBROUTINE line_integral_xdy
+  SUBROUTINE line_integral_mxydx( p, q, tol_dist, I_pq)
     ! Calculate the line integral -xy dx from p to q    
     
     IMPLICIT NONE
@@ -2087,7 +2136,7 @@ MODULE mesh_help_functions_module
     ! In/output variables:
     REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
     REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp)                                               :: I_pq
+    REAL(dp),                                INTENT(OUT)   :: I_pq
     
     ! Local variables:
     REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
@@ -2107,8 +2156,8 @@ MODULE mesh_help_functions_module
     
     I_pq = (1._dp/2._dp * (xp*dy/dx - yp) * (xq**2-xp**2)) - (1._dp/3._dp * dy/dx * (xq**3-xp**3))
     
-  END FUNCTION line_integral_mxydx
-  FUNCTION line_integral_xydy(  p, q, tol_dist) RESULT( I_pq)
+  END SUBROUTINE line_integral_mxydx
+  SUBROUTINE line_integral_xydy(  p, q, tol_dist, I_pq)
     ! Calculate the line integral xy dy from p to q    
     
     IMPLICIT NONE
@@ -2116,7 +2165,7 @@ MODULE mesh_help_functions_module
     ! In/output variables:
     REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
     REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp)                                               :: I_pq
+    REAL(dp),                                INTENT(OUT)   :: I_pq
     
     ! Local variables:
     REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
@@ -2136,7 +2185,7 @@ MODULE mesh_help_functions_module
     
     I_pq = (1._dp/2._dp * (xp - yp*dx/dy) * (yq**2-yp**2)) + (1._dp/3._dp * dx/dy * (yq**3-yp**3))
     
-  END FUNCTION line_integral_xydy
+  END SUBROUTINE line_integral_xydy
       
 ! == Help routines for use in mesh updating
   SUBROUTINE mean_cart_over_Voronoi_cell_dp(  mesh, d, x, y, nx, ny, vi, v)
@@ -2555,6 +2604,7 @@ MODULE mesh_help_functions_module
     REAL(dp),                 INTENT(OUT)         :: v
 
     INTEGER                                       :: via, vib, vic
+    REAL(dp), DIMENSION(2)                        :: pa, pb, pc
     REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc
 
     ! Find the triangle containing p
@@ -2565,9 +2615,13 @@ MODULE mesh_help_functions_module
     vib = mesh%Tri( ti,2)
     vic = mesh%Tri( ti,3)
     
-    Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), p)
-    Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), p)
-    Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), p)
+    pa  = mesh%V( via,:)
+    pb  = mesh%V( vib,:)
+    pc  = mesh%V( vic,:)
+    
+    CALL find_triangle_area( pa, pb, p, Atri_abp)
+    CALL find_triangle_area( pb, pc, p, Atri_bcp)
+    CALL find_triangle_area( pc, pa, p, Atri_cap)
     Atri_abc = Atri_abp + Atri_bcp + Atri_cap
     
     v = (d( via) * Atri_bcp + d( vib) * Atri_cap + d( vic) * Atri_abp) / Atri_abc
@@ -2586,6 +2640,7 @@ MODULE mesh_help_functions_module
     REAL(dp),                 INTENT(OUT)         :: v
 
     INTEGER                                       :: via, vib, vic
+    REAL(dp), DIMENSION(2)                        :: pa, pb, pc
     REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc
 
     ! Find the triangle containing p
@@ -2596,9 +2651,13 @@ MODULE mesh_help_functions_module
     vib = mesh%Tri( ti,2)
     vic = mesh%Tri( ti,3)
     
-    Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), p)
-    Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), p)
-    Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), p)
+    pa  = mesh%V( via,:)
+    pb  = mesh%V( vib,:)
+    pc  = mesh%V( vic,:)
+    
+    CALL find_triangle_area( pa, pb, p, Atri_abp)
+    CALL find_triangle_area( pb, pc, p, Atri_bcp)
+    CALL find_triangle_area( pc, pa, p, Atri_cap)
     Atri_abc = Atri_abp + Atri_bcp + Atri_cap
     
     v = (REAL(d( via),dp) * Atri_bcp + REAL(d( vib),dp) * Atri_cap + REAL(d( vic),dp) * Atri_abp) / Atri_abc
@@ -2620,6 +2679,7 @@ MODULE mesh_help_functions_module
     ! Local variables:
     REAL(dp), DIMENSION(2)                        :: gc, p
     INTEGER                                       :: ti_containing_gc, via, vib, vic
+    REAL(dp), DIMENSION(2)                        :: pia, pib, pic
     REAL(dp)                                      :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc, mdpgc
     INTEGER                                       :: nvi, vi, ci, vc
     
@@ -2641,11 +2701,14 @@ MODULE mesh_help_functions_module
       via = mesh%Tri( ti_containing_gc,1)
       vib = mesh%Tri( ti_containing_gc,2)
       vic = mesh%Tri( ti_containing_gc,3)
-
-      ! Find the mask value at gc by interpolating between these three vertices.
-      Atri_abp = find_triangle_area( mesh%V( via,:), mesh%V( vib,:), gc)
-      Atri_bcp = find_triangle_area( mesh%V( vib,:), mesh%V( vic,:), gc)
-      Atri_cap = find_triangle_area( mesh%V( vic,:), mesh%V( via,:), gc)
+    
+      pia = mesh%V( via,:)
+      pib = mesh%V( vib,:)
+      pic = mesh%V( vic,:)
+      
+      CALL find_triangle_area( pia, pib, gc, Atri_abp)
+      CALL find_triangle_area( pib, pic, gc, Atri_bcp)
+      CALL find_triangle_area( pic, pia, gc, Atri_cap)
       Atri_abc = Atri_abp + Atri_bcp + Atri_cap
     
       mdpgc = (REAL(mask( via),dp) * Atri_bcp + REAL(mask( vib),dp) * Atri_cap + REAL(mask( vic),dp) * Atri_abp) / Atri_abc
@@ -2729,14 +2792,14 @@ MODULE mesh_help_functions_module
 
     ! In/output variables:
     TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:),     INTENT(IN)        :: u_c, v_c
-    REAL(dp), DIMENSION(:),     INTENT(OUT)       :: p_c, o_c
+    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: u_c, v_c
+    REAL(dp), DIMENSION(:    ), INTENT(OUT)       :: p_c, o_c
     
     ! Local variables:
     INTEGER                                       :: ci, vi, vj
     REAL(dp)                                      :: Dx, Dy, D
     
-    DO ci = mesh%ac1, mesh%ac2
+    DO ci = mesh%ci1, mesh%ci2
     
       vi = mesh%Aci( ci,1)
       vj = mesh%Aci( ci,2)
@@ -2748,7 +2811,7 @@ MODULE mesh_help_functions_module
       p_c( ci) = u_c( ci) * Dx/D + v_c( ci) * Dy/D
       o_c( ci) = v_c( ci) * Dx/D - u_c( ci) * Dy/D
       
-    END DO ! DO ci = mesh%ac1, mesh%ac2
+    END DO ! DO ci = mesh%ci1, mesh%ci2
     CALL sync
     
   END SUBROUTINE rotate_xy_to_po_stag

@@ -205,15 +205,23 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
         
     ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start=(/       netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
     
     ! Write data
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start=(/1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start=(/1, 1,  netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start=(/1, 1,  netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start=(/1,     netcdf%ti/)))
+    
+    ! Geometry
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start = (/ 1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start = (/ 1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start = (/ 1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,               region%ice%SL_a,                start = (/ 1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb,              region%ice%dHb_a,               start = (/ 1,     netcdf%ti/)))
+    
+    ! Temperature
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
+    
+    ! SMB
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start = (/ 1, 1,  netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start = (/ 1,     netcdf%ti/)))
     
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
@@ -357,38 +365,36 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a(:,C%nZ), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_pmp_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'A_flow') THEN
+    ELSEIF (field_name == 'A_flow_3D') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_3D_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'A_flow_mean') THEN
+    ELSEIF (field_name == 'A_flow_vav') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_vav_a, start=(/1, netcdf%ti /) ))
       
     ! Velocity fields
-!    ELSEIF (field_name == 'U_SIA') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SIA, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_SIA') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SIA, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'U_SSA') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_SSA, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_SSA') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_SSA, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'U_vav') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_vav, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_vav') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_vav, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'U_surf') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_surf, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_surf') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_surf, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'U_base') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_base, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_base') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_base, start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'U_3D') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%U_3D, start=(/1, 1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'V_3D') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%V_3D, start=(/1, 1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'W_3D') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%W_3D, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_3D') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_a, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_3D') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_3D_a, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'w_3D') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%w_3D_a, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_vav') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_vav_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_vav') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_vav_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_vav') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_vav_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_surf') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_surf_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_surf') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_surf_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_surf') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_surf_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_base_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_base_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_a, start=(/1, netcdf%ti /) ))
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -594,10 +600,18 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [month ], netcdf%id_var_month, long_name='Month', units='1-12')
     
     ! Define model data variables
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice Thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock Height', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface Height', units='m')            
+    
+    ! Geometry
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [vi,        time], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [vi,        time], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
+    
+    ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [vi, zeta,  time], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
+    
+    ! SMB
     CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [vi, month, time], netcdf%id_var_FirnDepth,        long_name='Firn depth', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [vi,        time], netcdf%id_var_MeltPreviousYear, long_name='Melt during previous year', units='mie')
        
@@ -900,42 +914,36 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Ti_basal',                 [vi,    t], id_var, long_name='Ice basal temperature', units='K')
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL create_double_var( netcdf%ncid, 'Ti_pmp',                   [vi, z, t], id_var, long_name='Ice pressure melting point temperature', units='K')
-    ELSEIF (field_name == 'A_flow') THEN
-      CALL create_double_var( netcdf%ncid, 'A_flow',                   [vi, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
-    ELSEIF (field_name == 'A_flow_mean') THEN
-      CALL create_double_var( netcdf%ncid, 'A_flow_mean',              [vi,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
+    ELSEIF (field_name == 'A_flow_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [vi, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
+    ELSEIF (field_name == 'A_flow_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'A_flow_vav',               [vi,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
       
-!    ! Velocity fields
-!    ELSEIF (field_name == 'U_SIA') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_SIA') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_SIA',                    [vi,    t], id_var, long_name='Vertically averaged SIA ice y-velocity', units='m/yr')
-!    ELSEIF (field_name == 'U_SSA') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_SSA') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_SSA',                    [vi,    t], id_var, long_name='Vertically averaged SSA ice y-velocity', units='m/yr')
-!    ELSEIF (field_name == 'U_vav') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_vav') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'U_surf') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_surf',                   [vi,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_surf') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_surf',                   [vi,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
-!    ELSEIF (field_name == 'U_base') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_base',                   [vi,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_base') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_base',                   [vi,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
-!    ELSEIF (field_name == 'U_3D') THEN
-!      CALL create_double_var( netcdf%ncid, 'U_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
-!    ELSEIF (field_name == 'V_3D') THEN
-!      CALL create_double_var( netcdf%ncid, 'V_3D',                     [vi, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
-!    ELSEIF (field_name == 'W_3D') THEN
-!      CALL create_double_var( netcdf%ncid, 'W_3D',                     [vi, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
-!    ELSEIF (field_name == 'D_SIA') THEN
-!      CALL create_double_var( netcdf%ncid, 'D_SIA',                    [vi,    t], id_var, long_name='SIA ice diffusivity')
-!    ELSEIF (field_name == 'D_SIA_3D') THEN
-!      CALL create_double_var( netcdf%ncid, 'D_SIA_3D',                 [vi, z, t], id_var, long_name='3D SIA ice diffusivity')
+    ! Velocity fields
+    ELSEIF (field_name == 'u_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'u_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'v_3D',                     [vi, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'w_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'w_3D',                     [vi, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'u_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'v_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_vav',                 [vi,    t], id_var, long_name='Vertically averaged ice velocity', units='m/yr')
+    ELSEIF (field_name == 'u_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'u_surf',                   [vi,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'v_surf',                   [vi,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_surf',                [vi,    t], id_var, long_name='Surface ice velocity', units='m/yr')
+    ELSEIF (field_name == 'u_base') THEN
+      CALL create_double_var( netcdf%ncid, 'u_base',                   [vi,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_base') THEN
+      CALL create_double_var( netcdf%ncid, 'v_base',                   [vi,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_base') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_base',                [vi,    t], id_var, long_name='Basal ice velocity', units='m/yr')
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1060,10 +1068,18 @@ CONTAINS
     IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,      start=(/         netcdf%ti/)))
     
     ! Map and write data
+    
+    ! Geometry
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a,             netcdf%id_var_Hi,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a,             netcdf%id_var_Hb,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a,             netcdf%id_var_Hs,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,             netcdf%id_var_SL,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a,            netcdf%id_var_dHb,              netcdf%ti      )
+    
+    ! Temperature
     CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a,             netcdf%id_var_Ti,               netcdf%ti, C%nZ)
+    
+    ! SMB
     CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12  )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
     
@@ -1215,65 +1231,63 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a(:,C%nZ), id_var, netcdf%ti)
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_pmp_a, id_var, netcdf%ti, C%nZ)
-    ELSEIF (field_name == 'A_flow') THEN
+    ELSEIF (field_name == 'A_flow_3D') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_3D_a, id_var, netcdf%ti, C%nZ)
-    ELSEIF (field_name == 'A_flow_mean') THEN
+    ELSEIF (field_name == 'A_flow_vav') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_vav_a, id_var, netcdf%ti)
       
-!    ! Velocity fields
-!    ELSEIF (field_name == 'U_SIA') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SIA, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'V_SIA') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SIA, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'U_SSA') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_SSA, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'V_SSA') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_SSA, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'U_vav') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_vav, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'V_vav') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_vav, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'U_surf') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_surf, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'V_surf') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_surf, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'U_base') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_base, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'V_base') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_base, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'U_3D') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%U_3D, id_var, netcdf%ti, C%nZ)
-!    ELSEIF (field_name == 'V_3D') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%V_3D, id_var, netcdf%ti, C%nZ)
-!    ELSEIF (field_name == 'W_3D') THEN
-!      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%W_3D, id_var, netcdf%ti, C%nZ)
+    ! Velocity fields
+    ELSEIF (field_name == 'u_3D') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_3D_a, id_var, netcdf%ti, C%nZ)
+    ELSEIF (field_name == 'v_3D') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_3D_a, id_var, netcdf%ti, C%nZ)
+    ELSEIF (field_name == 'w_3D') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%w_3D_a, id_var, netcdf%ti, C%nZ)
+    ELSEIF (field_name == 'u_vav') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_vav_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'v_vav') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_vav_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_vav') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_vav_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'u_surf') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_surf_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'v_surf') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_surf_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_surf') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_surf_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'u_base') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_base_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'v_base') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_base_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_base') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_base_a, id_var, netcdf%ti)
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%T2m, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'T2m_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Precip') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Precip, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Precip_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%climate%applied%Precip( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_WE, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_WE_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%climate%applied%Wind_WE( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_SN') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_SN, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_SN_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%climate%applied%Wind_SN( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
@@ -1292,49 +1306,49 @@ CONTAINS
     ELSEIF (field_name == 'Snowfall') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Snowfall, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Snowfall_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%Snowfall( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Rainfall') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Rainfall, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Rainfall_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%Rainfall( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'AddedFirn') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%AddedFirn, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'AddedFirn_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%AddedFirn( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Refreezing') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Refreezing, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Refreezing_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%Refreezing( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Runoff') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Runoff, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Runoff_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%Runoff( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'Albedo') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Albedo, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Albedo_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%Albedo( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     ELSEIF (field_name == 'FirnDepth') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'FirnDepth_year') THEN
-      DO vi = region%mesh%v1, region%mesh%v2
+      DO vi = region%mesh%vi1, region%mesh%vi2
         d_year( vi) = SUM( region%SMB%FirnDepth( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
@@ -1367,10 +1381,10 @@ CONTAINS
       
 !    ! Basal conditions
 !    ELSEIF (field_name == 'phi_fric') THEN
-!      d_year( region%mesh%v1:region%mesh%v2) = region%ice%phi_fric_AaAc( region%mesh%v1:region%mesh%v2)
+!      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_AaAc( region%mesh%vi1:region%mesh%vi2)
 !      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
 !    ELSEIF (field_name == 'tau_yield') THEN
-!      d_year( region%mesh%v1:region%mesh%v2) = region%ice%tau_c_AaAc( region%mesh%v1:region%mesh%v2)
+!      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%tau_c_AaAc( region%mesh%vi1:region%mesh%vi2)
 !      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
       
     ! Isotopes
@@ -1381,7 +1395,7 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      d_year( region%mesh%v1:region%mesh%v2) = region%ice%Hb_a( region%mesh%v1:region%mesh%v2) - region%PD%Hb( region%mesh%v1:region%mesh%v2)
+      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%PD%Hb( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     
     ELSE
@@ -1446,14 +1460,18 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_time,             [            t], netcdf%id_var_time,             long_name='Time', units='years'   )
     
     ! Ice model data
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [x, y,       t], netcdf%id_var_Hi,               long_name='Ice Thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [x, y,       t], netcdf%id_var_Hb,               long_name='Bedrock Height', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [x, y,       t], netcdf%id_var_Hs,               long_name='Surface Height', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_U_SIA,            [x, y,       t], netcdf%id_var_U_SIA,            long_name='SIA ice x-velocity', units='m/yr')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_V_SIA,            [x, y,       t], netcdf%id_var_V_SIA,            long_name='SIA ice y-velocity', units='m/yr') 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_U_SSA,            [x, y,       t], netcdf%id_var_U_SSA,            long_name='SSA ice x-velocity', units='m/yr')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_V_SSA,            [x, y,       t], netcdf%id_var_V_SSA,            long_name='SSA ice y-velocity', units='m/yr')              
+    
+    ! Geometry
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [x, y,       t], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [x, y,       t], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [x, y,       t], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [x, y,       t], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [x, y,       t], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
+    
+    ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [x, y, z,    t], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
+    
+    ! SMB
     CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [x, y,    m, t], netcdf%id_var_FirnDepth,        long_name='Firn depth', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [x, y,       t], netcdf%id_var_MeltPreviousYear, long_name='Melt during previous year', units='mie')
        
@@ -1656,42 +1674,36 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Ti_basal',                 [x, y,    t], id_var, long_name='Ice basal temperature', units='K')
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL create_double_var( netcdf%ncid, 'Ti_pmp',                   [x, y, z, t], id_var, long_name='Ice pressure melting point temperature', units='K')
-    ELSEIF (field_name == 'A_flow') THEN
-      CALL create_double_var( netcdf%ncid, 'A_flow',                   [x, y, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
-    ELSEIF (field_name == 'A_flow_mean') THEN
-      CALL create_double_var( netcdf%ncid, 'A_flow_mean',              [x, y,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
+    ELSEIF (field_name == 'A_flow_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [x, y, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
+    ELSEIF (field_name == 'A_flow_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'A_flow_vav',               [x, y,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
       
     ! Velocity fields
-    ELSEIF (field_name == 'U_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'U_SIA',                    [x, y,    t], id_var, long_name='Vertically averaged SIA ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'V_SIA',                    [x, y,    t], id_var, long_name='Vertically averaged SIA ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_SSA') THEN
-      CALL create_double_var( netcdf%ncid, 'U_SSA',                    [x, y,    t], id_var, long_name='Vertically averaged SSA ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_SSA') THEN
-      CALL create_double_var( netcdf%ncid, 'V_SSA',                    [x, y,    t], id_var, long_name='Vertically averaged SSA ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_vav') THEN
-      CALL create_double_var( netcdf%ncid, 'U_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_vav') THEN
-      CALL create_double_var( netcdf%ncid, 'V_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_surf') THEN
-      CALL create_double_var( netcdf%ncid, 'U_surf',                   [x, y,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_surf') THEN
-      CALL create_double_var( netcdf%ncid, 'V_surf',                   [x, y,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_base') THEN
-      CALL create_double_var( netcdf%ncid, 'U_base',                   [x, y,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_base') THEN
-      CALL create_double_var( netcdf%ncid, 'V_base',                   [x, y,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'U_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'U_3D',                     [x, y, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
-    ELSEIF (field_name == 'V_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'V_3D',                     [x, y, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
-    ELSEIF (field_name == 'W_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'W_3D',                     [x, y, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
-    ELSEIF (field_name == 'D_SIA') THEN
-      CALL create_double_var( netcdf%ncid, 'D_SIA',                    [x, y,    t], id_var, long_name='SIA ice diffusivity')
-    ELSEIF (field_name == 'D_SIA_3D') THEN
-      CALL create_double_var( netcdf%ncid, 'D_SIA_3D',                 [x, y, z, t], id_var, long_name='3D SIA ice diffusivity')
+    ELSEIF (field_name == 'u_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'u_3D',                     [x, y, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'v_3D',                     [x, y, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'w_3D') THEN
+      CALL create_double_var( netcdf%ncid, 'w_3D',                     [x, y, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'u_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'v_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_vav') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_vav',                 [x, y,    t], id_var, long_name='Vertically averaged ice velocity', units='m/yr')
+    ELSEIF (field_name == 'u_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'u_surf',                   [x, y,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'v_surf',                   [x, y,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_surf') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_surf',                [x, y,    t], id_var, long_name='Surface ice velocity', units='m/yr')
+    ELSEIF (field_name == 'u_base') THEN
+      CALL create_double_var( netcdf%ncid, 'u_base',                   [x, y,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'v_base') THEN
+      CALL create_double_var( netcdf%ncid, 'v_base',                   [x, y,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_base') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_base',                [x, y,    t], id_var, long_name='Basal ice velocity', units='m/yr')
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1824,7 +1836,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid,    wd_grid   )
     
     ! Convert from integer to real
-    d_mesh_dp( mesh%v1:mesh%v2) = REAL( d_mesh( mesh%v1:mesh%v2), dp)
+    d_mesh_dp( mesh%vi1:mesh%vi2) = REAL( d_mesh( mesh%vi1:mesh%vi2), dp)
     
     ! Map data from the model mesh to the square grid
     CALL map_mesh2grid_2D( mesh, grid, d_mesh_dp, d_grid)
@@ -3287,12 +3299,16 @@ CONTAINS
     DEALLOCATE( zeta)
     
     ! Inquire model data
+    
+    ! Geometry
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
+    
+    ! Temperature
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_U_SSA,            (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_U_SSA           )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_V_SSA,            (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_V_SSA           )
+    
+    ! SMB
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
         
@@ -3369,12 +3385,16 @@ CONTAINS
     DEALLOCATE( time)
     
     ! Read the data
+    
+    ! Geometry
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               init%Hi,               start = (/ 1,    ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               init%Hb,               start = (/ 1,    ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               init%Hs,               start = (/ 1,    ti /) ))
+    
+    ! Temperature
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               init%Ti,               start = (/ 1, 1, ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_U_SSA,            init%U_SSA,            start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V_SSA,            init%V_SSA,            start = (/ 1,    ti /) ))
+    
+    ! SMB
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, init%MeltPreviousYear, start = (/ 1,    ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        init%FirnDepth,        start = (/ 1, 1, ti /) ))
         

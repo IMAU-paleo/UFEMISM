@@ -62,7 +62,7 @@ CONTAINS
       !       until the heat equation is solved again, treat these separately every time step.
     
       ! Prescribe a simple temperature profile to newly ice-covered grid cells.
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         
         IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ice_a_prev( vi) == 0) THEN
           ! This grid cell is newly ice-covered
@@ -146,9 +146,9 @@ CONTAINS
     LOGICAL                                            :: hasnan
     
     ! Allocate shared memory
-    CALL allocate_shared_int_1D(       mesh%nV, is_unstable,           wis_unstable          )
-    CALL allocate_shared_dp_2D(  C%nz, mesh%nV, Ti_new,                wTi_new               )
-    CALL allocate_shared_dp_1D(        mesh%nV, T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
+    CALL allocate_shared_int_1D( mesh%nV,       is_unstable,           wis_unstable          )
+    CALL allocate_shared_dp_2D(  mesh%nV, C%nz, Ti_new,                wTi_new               )
+    CALL allocate_shared_dp_1D(  mesh%nV,       T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
 
     ! Calculate the required derivatives of Hi and Hs   
     CALL ddx_a_to_a_2D( mesh, ice%Hi_a, ice%dHi_dx_a)
@@ -157,7 +157,7 @@ CONTAINS
     CALL ddy_a_to_a_2D( mesh, ice%Hs_a, ice%dHs_dy_a)
     
     ! (dHi_dt and dHb_dt are set in other routines)
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       IF (ice%mask_shelf_a( vi) == 0) THEN
         ice%dHs_dt_a( vi) = ice%dHi_dt_a( vi) + ice%dHb_dt_a( vi)
       ELSE
@@ -170,13 +170,13 @@ CONTAINS
     CALL calculate_zeta_derivatives( mesh, ice)
     
     ! Set ice surface temperature equal to annual mean 2m air temperature
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       ice%Ti_a( vi,1) = MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
     END DO
     CALL sync
     
     ! Find ocean temperature at the shelf base
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       T_ocean_at_shelf_base( vi) = SMT
     
@@ -194,9 +194,9 @@ CONTAINS
     CALL sync
     
     ! Solve the heat equation for all vertices
-    is_unstable( mesh%v1:mesh%v2) = 0
+    is_unstable( mesh%vi1:mesh%vi2) = 0
     n_unstable                    = 0
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Skip the domain boundary
       IF (mesh%edge_index( vi) > 0) CYCLE
@@ -301,7 +301,7 @@ CONTAINS
         !WRITE(0,*) 'instability detected; Hi = ', ice%Hi_a( j,i), ', dHi_dt = ', ice%dHi_dt_a( j,i)
       END IF
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
         
     CALL apply_Neumann_BC_direct_3D( mesh, Ti_new)
@@ -312,7 +312,7 @@ CONTAINS
       ! Instability is limited to an acceptably small number (< 1%) of grid cells;
       ! replace the temperature profile in those cells with the Robin solution
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, SMB, Ti_new, vi)
       END DO
       CALL sync
@@ -326,7 +326,7 @@ CONTAINS
     END IF
     
     ! Move the new temperature field to the ice data structure
-    ice%Ti_a( mesh%v1:mesh%v2,:) = Ti_new( mesh%v1:mesh%v2,:)
+    ice%Ti_a( mesh%vi1:mesh%vi2,:) = Ti_new( mesh%vi1:mesh%vi2,:)
     CALL sync
     
     ! Clean up after yourself
@@ -498,37 +498,32 @@ CONTAINS
   
 ! == Calculate various physical terms
   SUBROUTINE calc_bottom_frictional_heating( mesh, ice)
-    ! Calculation of the frictional heating at the bottom due to sliding at the sheet/Gl - bedrock interface.
-    
-    USE parameters_module,           ONLY: ice_density, grav
+    ! Calculation of the frictional heating at the base due to sliding
     
     IMPLICIT NONE
     
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    ! In- and output variables
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
 
     ! Local variables
-!    INTEGER                                            :: vi
-!    REAL(dp)                                           :: beta_base
+    INTEGER                                            :: vi
     
-!    REAL(dp), PARAMETER                                :: delta_v              = 1E-3_dp       ! Normalisation parameter to prevent errors when velocity is zero
-!    REAL(dp), PARAMETER                                :: q_plastic            = 0.30_dp       ! Parameter used for basal stress (inverse of m_flow)
-!    REAL(dp), PARAMETER                                :: u_threshold          = 100._dp       ! scaling of tau_yield to get the correct unit (function of q_plastic)
-
-    ice%frictional_heating_a( mesh%v1:mesh%v2) = 0._dp
+    ! Exception for when no sliding can occur
+    IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_sliding_law == 'no_sliding') THEN
+      ice%frictional_heating_a( mesh%vi1:mesh%vi2) = 0._dp
+      CALL sync
+      RETURN
+    END IF
+    
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%mask_sheet_a( vi) == 1) THEN
+        ice%frictional_heating_a( vi) = ice%beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
+      ELSE
+        ice%frictional_heating_a( vi) = 0._dp
+      END IF 
+    END DO
     CALL sync
-    
-    IF (par%master) WRITE(0,*) 'calc_bottom_frictional_heating - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    
-!    DO vi = mesh%v1, mesh%v2
-!      IF (ice%mask_sheet_a( vi) == 1) THEN      
-!        beta_base = ice%tau_c_AaAc( vi) * ( (delta_v**2 + ice%U_SSA( vi)**2 + ice%V_SSA( vi)**2)**(0.5_dp * (q_plastic-1._dp)) ) / (u_threshold**q_plastic)
-!        ice%frictional_heating_a( vi) = beta_base * (ice%U_SSA( vi)**2 + ice%V_SSA( vi)**2)          
-!      END IF      
-!    END DO ! DO vi = mesh%v1, mesh%v2
-!    CALL sync
 
   END SUBROUTINE calc_bottom_frictional_heating
   SUBROUTINE calc_heat_capacity( mesh, ice)
@@ -546,13 +541,13 @@ CONTAINS
     IF     (C%choice_ice_heat_capacity == 'uniform') THEN
       ! Apply a uniform value for the heat capacity
       
-      ice%Cpi_a( mesh%v1:mesh%v2,:) = C%uniform_ice_heat_capacity
+      ice%Cpi_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_heat_capacity
       CALL sync
       
     ELSEIF (C%choice_ice_heat_capacity == 'Pounder1965') THEN
       ! Calculate the heat capacity of ice according to Pounder: The Physics of Ice (1965)
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         ice%Cpi_a( vi,:) = 2115.3_dp + 7.79293_dp * (ice%Ti_a( vi,:) - T0)
       END DO
       CALL sync
@@ -581,13 +576,13 @@ CONTAINS
     IF     (C%choice_ice_thermal_conductivity == 'uniform') THEN
       ! Apply a uniform value for the thermal conductivity
       
-      ice%Ki_a( mesh%v1:mesh%v2,:) = C%uniform_ice_thermal_conductivity
+      ice%Ki_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_thermal_conductivity
       CALL sync
       
     ELSEIF (C%choice_ice_thermal_conductivity == 'Ritz1987') THEN
       ! Calculate the thermal conductivity of ice according to Ritz (1987) 
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         ice%Ki_a( vi,:) = 3.101E+08_dp * EXP(-0.0057_dp * ice%Ti_a( vi,:))
       END DO
       CALL sync
@@ -613,7 +608,7 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: vi
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       ice%Ti_pmp_a( vi,:) = T0 - CC * ice%Hi_a( vi) * C%zeta
     END DO
     CALL sync
@@ -646,13 +641,13 @@ CONTAINS
     IF     (C%choice_ice_rheology == 'uniform') THEN
       ! Apply a uniform value for the ice flow factor
       
-      ice%A_flow_3D_a( mesh%v1:mesh%v2,:) = C%uniform_flow_factor
+      ice%A_flow_3D_a( mesh%vi1:mesh%vi2,:) = C%uniform_flow_factor
       CALL sync
       
     ELSEIF (C%choice_ice_rheology == 'Huybrechts1992') THEN
     
       ! Calculate the ice flow factor as a function of the ice temperature according to the Arrhenius relationship (Huybrechts, 1992)
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
       
         DO k = 1, C%nz
           IF (ice%mask_ice_a( vi) == 1) THEN
@@ -690,7 +685,7 @@ CONTAINS
         A_flow_MISMIP = 1.0E-16_dp
       END IF
         
-      ice%A_flow_3D_a(  mesh%v1:mesh%v2,:) = A_flow_MISMIP
+      ice%A_flow_3D_a(  mesh%vi1:mesh%vi2,:) = A_flow_MISMIP
       CALL sync
         
     ELSE
@@ -699,7 +694,7 @@ CONTAINS
     END IF
         
     ! Apply the flow enhancement factors
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       IF     (ice%mask_sheet_a( vi) == 1) THEN
         ice%A_flow_3D_a( vi,:) = ice%A_flow_3D_a( vi,:) * C%m_enh_sheet
       ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
@@ -709,9 +704,9 @@ CONTAINS
     CALL sync
 
     ! Calculate vertical average
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       prof = ice%A_flow_3D_a( vi,:)
-      ice%A_flow_vav_a( vi) = vertical_average( prof)
+      CALL vertical_average( prof, ice%A_flow_vav_a( vi))
     END DO
     CALL sync
     
@@ -768,7 +763,7 @@ CONTAINS
     ! Local variables
     INTEGER                                            :: vi
       
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       IF (ice%Hi_a( vi) > 0._dp) THEN
         ice%Ti_a( vi,:) = C%uniform_ice_temperature
@@ -796,7 +791,7 @@ CONTAINS
     INTEGER                                             :: vi
     REAL(dp)                                            :: T_surf_annual, T_PMP_base
       
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       IF (ice%Hi_a( vi) > 0._dp) THEN
         T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
@@ -830,7 +825,7 @@ CONTAINS
     CALL calc_pressure_melting_point( mesh, ice)
     
     ! Initialise with the Robin solution
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       CALL replace_Ti_with_robin_solution( ice, climate, SMB, ice%Ti_a, vi)    
     END DO
     CALL sync

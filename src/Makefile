@@ -59,6 +59,7 @@ UFEMISM_program_objects = \
         thermodynamics_module.o \
         isotopes_module.o \
         bedrock_ELRA_module.o \
+        tests_and_checks_module.o \
         UFEMISM_main_model.o \
         global_text_output_module.o \
         UFEMISM_program.o

@@ -32,7 +32,7 @@ MODULE UFEMISM_main_model
                                              create_remapping_arrays_mesh_grid, deallocate_remapping_arrays_mesh_grid
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
-                                             associate_debug_fields, reallocate_debug_fields, create_debug_file, write_CSR_matrix_to_NetCDF
+                                             associate_debug_fields, reallocate_debug_fields, create_debug_file
   USE restart_module,                  ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
@@ -125,8 +125,8 @@ CONTAINS
       IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
     
       ! If required, update the mesh
-      IF (meshfitness < C%mesh_fitness_threshold) THEN
-    !  IF (.FALSE.) THEN
+    !  IF (meshfitness < C%mesh_fitness_threshold) THEN
+      IF (.FALSE.) THEN
     !  IF (.TRUE.) THEN 
         IF (par%master) t2 = MPI_WTIME()
         CALL run_model_update_mesh( region, matrix)
@@ -383,13 +383,6 @@ CONTAINS
     CALL associate_debug_fields(  region)
     region%output_file_exists = .TRUE.
     CALL sync
-    
-    
-    ! DENK DROM
-    CALL test_matrix_operators_mesh(      region%mesh)
-    CALL solve_modified_Laplace_equation_c( region%mesh)
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    
     
     ! ===== The "no ice" mask
     ! =======================
@@ -714,7 +707,7 @@ CONTAINS
     
     n1 = par%mem%n
     
-    region%mask_noice( mesh%v1:mesh%v2) = 0
+    region%mask_noice( mesh%vi1:mesh%vi2) = 0
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -741,7 +734,7 @@ CONTAINS
       pa = [ 490000._dp, 1530000._dp]
       pb = [2030000._dp,  570000._dp]
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
         IF (mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) > pa(1) .AND. mesh%V( vi,2) > pb(2)) THEN
           region%mask_noice( vi) = 1
@@ -757,7 +750,7 @@ CONTAINS
       pc = [ -835000._dp, 1135000._dp]
       pd = [ -400000._dp, 1855000._dp]
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
         yl_bc = pb(2) + (mesh%V( vi,1) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
         yl_cd = pc(2) + (mesh%V( vi,1) - pc(1))*(pd(2)-pc(2))/(pd(1)-pc(1))
@@ -776,7 +769,7 @@ CONTAINS
       pa = [-750000._dp,  900000._dp]
       pb = [-250000._dp, 1250000._dp]
       
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
         IF (mesh%V( vi,2) > pa(2) .AND. mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) < pb(1)) THEN
           region%mask_noice( vi) = 1
@@ -811,7 +804,7 @@ CONTAINS
     ice_volume_above_flotation = 0._dp
     
     ! Calculate ice area and volume for processor domain
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
     
       IF (region%ice%mask_ice_a( vi) == 1) THEN
         ice_volume = ice_volume + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
@@ -1043,7 +1036,7 @@ CONTAINS
 !        
 !      END IF
 !
-!      T2m_mean = T2m_mean + SUM(region%climate%applied%T2m(vi,:)) * region%mesh%A(vi) / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
+!      T2m_mean = T2m_mean + SUM(region%climate%applied%ti2m(vi,:)) * region%mesh%A(vi) / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
 !      
 !    END DO
 !    
@@ -1122,616 +1115,5 @@ CONTAINS
 !    END DO
 !    
 !  END SUBROUTINE write_text_output
-  
-! == Test the matrix operators
-  SUBROUTINE test_matrix_operators_mesh( mesh)
-    ! Test all the matrix operators
-    
-    USE mesh_operators_module
-    USE utilities_module
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    
-    ! Local variables:
-    INTEGER                                            :: vi, ti, aci
-    REAL(dp)                                           :: x, y, d, ddx, ddy
-    
-    ! Exact solutions
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_b_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_b_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_c_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_a_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_b_ex
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_ex
-    INTEGER :: wd_a_ex, wd_b_ex, wd_c_ex, wddx_a_ex, wddx_b_ex, wddx_c_ex, wddy_a_ex, wddy_b_ex, wddy_c_ex
-    
-    ! Discretised approximations
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_cc
-    INTEGER :: wd_aa, wd_ab, wd_ac, wd_ba, wd_bb, wd_bc, wd_ca, wd_cb, wd_cc
-    
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_cc
-    INTEGER :: wddx_aa, wddx_ab, wddx_ac, wddx_ba, wddx_bb, wddx_bc, wddx_ca, wddx_cb, wddx_cc
-    
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_cc
-    INTEGER :: wddy_aa, wddy_ab, wddy_ac, wddy_ba, wddy_bb, wddy_bc, wddy_ca, wddy_cb, wddy_cc
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' =================================='
-    IF (par%master) WRITE(0,*) ' == Testing the matrix operators =='
-    IF (par%master) WRITE(0,*) ' =================================='
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  ! Write all the matrix operators to files, for double-checking stuff in Matlab
-  ! ============================================================================
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_a_b, 'M_map_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_a_c, 'M_map_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_b_a, 'M_map_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_b_c, 'M_map_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_c_a, 'M_map_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_c_b, 'M_map_c_b.nc')
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_a, 'M_ddx_a_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_b, 'M_ddx_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_c, 'M_ddx_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_a, 'M_ddx_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_b, 'M_ddx_b_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_c, 'M_ddx_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_a, 'M_ddx_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_b, 'M_ddx_c_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_c, 'M_ddx_c_c.nc')
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_a, 'M_ddy_a_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_b, 'M_ddy_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_c, 'M_ddy_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_a, 'M_ddy_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_b, 'M_ddy_b_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_c, 'M_ddy_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_a, 'M_ddy_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_b, 'M_ddy_c_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_c, 'M_ddy_c_c.nc')
-    
-  ! Allocate shared memory
-  ! ======================
-    
-    ! Exact solutions
-    CALL allocate_shared_dp_1D( mesh%nV,   d_a_ex,   wd_a_ex  )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_b_ex,   wd_b_ex  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_c_ex,   wd_c_ex  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_a_ex, wddx_a_ex)
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b_ex, wddx_b_ex)
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_c_ex, wddx_c_ex)
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_a_ex, wddy_a_ex)
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_b_ex, wddy_b_ex)
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_c_ex, wddy_c_ex)
-    
-    ! Discretised approximations
-    CALL allocate_shared_dp_1D( mesh%nV,   d_aa,     wd_aa    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_ab,     wd_ab    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_ac,     wd_ac    )
-    CALL allocate_shared_dp_1D( mesh%nV,   d_ba,     wd_ba    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_bb,     wd_bb    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_bc,     wd_bc    )
-    CALL allocate_shared_dp_1D( mesh%nV,   d_ca,     wd_ca    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_cb,     wd_cb    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_cc,     wd_cc    )
-    
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_aa,   wddx_aa  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_ab,   wddx_ab  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_ac,   wddx_ac  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_ba,   wddx_ba  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_bb,   wddx_bb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_bc,   wddx_bc  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_ca,   wddx_ca  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_cb,   wddx_cb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_cc,   wddx_cc  )
-    
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_aa,   wddy_aa  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_ab,   wddy_ab  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_ac,   wddy_ac  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_ba,   wddy_ba  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_bb,   wddy_bb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_bc,   wddy_bc  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_ca,   wddy_ca  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_cb,   wddy_cb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_cc,   wddy_cc  )
-    
-  ! Calculate exact solutions
-  ! =========================
-    
-    DO vi = mesh%v1, mesh%v2
-      x = mesh%V( vi,1)
-      y = mesh%V( vi,2)
-      CALL test_matrix_operators_mesh_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
-      d_a_ex(   vi) = d
-      ddx_a_ex( vi) = ddx
-      ddy_a_ex( vi) = ddy
-    END DO
-    DO ti = mesh%t1, mesh%t2
-      x = mesh%TriGC( ti,1)
-      y = mesh%TriGC( ti,2)
-      CALL test_matrix_operators_mesh_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
-      d_b_ex(   ti) = d
-      ddx_b_ex( ti) = ddx
-      ddy_b_ex( ti) = ddy
-    END DO
-    DO aci = mesh%ac1, mesh%ac2
-      x = mesh%VAc( aci,1)
-      y = mesh%VAc( aci,2)
-      CALL test_matrix_operators_mesh_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
-      d_c_ex(   aci) = d
-      ddx_c_ex( aci) = ddx
-      ddy_c_ex( aci) = ddy
-    END DO
-    CALL sync
-    
-  ! Calculate discretised approximations
-  ! ====================================
-  
-    ! Mapping
-    d_aa( mesh%v1:mesh%v2) = d_a_ex( mesh%v1:mesh%v2)
-    CALL map_a_to_b_2D( mesh, d_a_ex, d_ab)
-    CALL map_a_to_c_2D( mesh, d_a_ex, d_ac)
-    
-    CALL map_b_to_a_2D( mesh, d_b_ex, d_ba)
-    d_bb( mesh%t1:mesh%t2) = d_b_ex( mesh%t1:mesh%t2)
-    CALL map_b_to_c_2D( mesh, d_b_ex, d_bc)
-    
-    CALL map_c_to_a_2D( mesh, d_c_ex, d_ca)
-    CALL map_c_to_b_2D( mesh, d_c_ex, d_cb)
-    d_cc( mesh%ac1:mesh%ac2) = d_c_ex( mesh%ac1:mesh%ac2)
-    
-    ! d/dx
-    CALL ddx_a_to_a_2D( mesh, d_a_ex, ddx_aa)
-    CALL ddx_a_to_b_2D( mesh, d_a_ex, ddx_ab)
-    CALL ddx_a_to_c_2D( mesh, d_a_ex, ddx_ac)
-    
-    CALL ddx_b_to_a_2D( mesh, d_b_ex, ddx_ba)
-    CALL ddx_b_to_b_2D( mesh, d_b_ex, ddx_bb)
-    CALL ddx_b_to_c_2D( mesh, d_b_ex, ddx_bc)
-    
-    CALL ddx_c_to_a_2D( mesh, d_c_ex, ddx_ca)
-    CALL ddx_c_to_b_2D( mesh, d_c_ex, ddx_cb)
-    CALL ddx_c_to_c_2D( mesh, d_c_ex, ddx_cc)
-    
-    ! d/dy
-    CALL ddy_a_to_a_2D( mesh, d_a_ex, ddy_aa)
-    CALL ddy_a_to_b_2D( mesh, d_a_ex, ddy_ab)
-    CALL ddy_a_to_c_2D( mesh, d_a_ex, ddy_ac)
-    
-    CALL ddy_b_to_a_2D( mesh, d_b_ex, ddy_ba)
-    CALL ddy_b_to_b_2D( mesh, d_b_ex, ddy_bb)
-    CALL ddy_b_to_c_2D( mesh, d_b_ex, ddy_bc)
-    
-    CALL ddy_c_to_a_2D( mesh, d_c_ex, ddy_ca)
-    CALL ddy_c_to_b_2D( mesh, d_c_ex, ddy_cb)
-    CALL ddy_c_to_c_2D( mesh, d_c_ex, ddy_cc)
-    
-  ! Write to debug file
-  ! ===================
-  
-    IF (par%master) THEN
-    
-      ! a-grid (vertex)
-      debug%dp_2D_a_01 = d_aa   - d_a_ex
-      debug%dp_2D_a_02 = d_ba   - d_a_ex
-      debug%dp_2D_a_03 = d_ca   - d_a_ex
-      debug%dp_2D_a_04 = ddx_aa - ddx_a_ex
-      debug%dp_2D_a_05 = ddx_ba - ddx_a_ex
-      debug%dp_2D_a_06 = ddx_ca - ddx_a_ex
-      debug%dp_2D_a_07 = ddy_aa - ddy_a_ex
-      debug%dp_2D_a_08 = ddy_ba - ddy_a_ex
-      debug%dp_2D_a_09 = ddy_ca - ddy_a_ex
-    
-      ! b-grid (triangle)
-      debug%dp_2D_b_01 = d_ab   - d_b_ex
-      debug%dp_2D_b_02 = d_bb   - d_b_ex
-      debug%dp_2D_b_03 = d_cb   - d_b_ex
-      debug%dp_2D_b_04 = ddx_ab - ddx_b_ex
-      debug%dp_2D_b_05 = ddx_bb - ddx_b_ex
-      debug%dp_2D_b_06 = ddx_cb - ddx_b_ex
-      debug%dp_2D_b_07 = ddy_ab - ddy_b_ex
-      debug%dp_2D_b_08 = ddy_bb - ddy_b_ex
-      debug%dp_2D_b_09 = ddy_cb - ddy_b_ex
-    
-      ! c-grid (edge)
-      debug%dp_2D_c_01 = d_ac   - d_c_ex
-      debug%dp_2D_c_02 = d_bc   - d_c_ex
-      debug%dp_2D_c_03 = d_cc   - d_c_ex
-      debug%dp_2D_c_04 = ddx_ac - ddx_c_ex
-      debug%dp_2D_c_05 = ddx_bc - ddx_c_ex
-      debug%dp_2D_c_06 = ddx_cc - ddx_c_ex
-      debug%dp_2D_c_07 = ddy_ac - ddy_c_ex
-      debug%dp_2D_c_08 = ddy_bc - ddy_c_ex
-      debug%dp_2D_c_09 = ddy_cc - ddy_c_ex
-      
-      CALL write_to_debug_file
-      
-    END IF
-    CALL sync
-    
-  ! Clean up after yourself
-  ! =======================
-    
-    CALL deallocate_shared( wd_a_ex  )
-    CALL deallocate_shared( wd_b_ex  )
-    CALL deallocate_shared( wd_c_ex  )
-    CALL deallocate_shared( wddx_a_ex)
-    CALL deallocate_shared( wddx_b_ex)
-    CALL deallocate_shared( wddx_c_ex)
-    CALL deallocate_shared( wddy_a_ex)
-    CALL deallocate_shared( wddy_b_ex)
-    CALL deallocate_shared( wddy_c_ex)
-    
-    CALL deallocate_shared( wd_aa    )
-    CALL deallocate_shared( wd_ab    )
-    CALL deallocate_shared( wd_ac    )
-    CALL deallocate_shared( wd_ba    )
-    CALL deallocate_shared( wd_bb    )
-    CALL deallocate_shared( wd_bc    )
-    CALL deallocate_shared( wd_ca    )
-    CALL deallocate_shared( wd_cb    )
-    CALL deallocate_shared( wd_cc    )
-    
-    CALL deallocate_shared( wddx_aa  )
-    CALL deallocate_shared( wddx_ab  )
-    CALL deallocate_shared( wddx_ac  )
-    CALL deallocate_shared( wddx_ba  )
-    CALL deallocate_shared( wddx_bb  )
-    CALL deallocate_shared( wddx_bc  )
-    CALL deallocate_shared( wddx_ca  )
-    CALL deallocate_shared( wddx_cb  )
-    CALL deallocate_shared( wddx_cc  )
-    
-    CALL deallocate_shared( wddy_aa  )
-    CALL deallocate_shared( wddy_ab  )
-    CALL deallocate_shared( wddy_ac  )
-    CALL deallocate_shared( wddy_ba  )
-    CALL deallocate_shared( wddy_bb  )
-    CALL deallocate_shared( wddy_bc  )
-    CALL deallocate_shared( wddy_ca  )
-    CALL deallocate_shared( wddy_cb  )
-    CALL deallocate_shared( wddy_cc  )
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' ==========================================='
-    IF (par%master) WRITE(0,*) ' == Finished testing the matrix operators =='
-    IF (par%master) WRITE(0,*) ' ==========================================='
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  END SUBROUTINE test_matrix_operators_mesh
-  SUBROUTINE test_matrix_operators_mesh_test_function( x, y, xmin, xmax, ymin, ymax, d, ddx, ddy)
-    ! Simple function for testing all the matrix operators
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    REAL(dp),                            INTENT(IN)    :: x
-    REAL(dp),                            INTENT(IN)    :: y
-    REAL(dp),                            INTENT(IN)    :: xmin
-    REAL(dp),                            INTENT(IN)    :: xmax
-    REAL(dp),                            INTENT(IN)    :: ymin
-    REAL(dp),                            INTENT(IN)    :: ymax
-    REAL(dp),                            INTENT(OUT)   :: d
-    REAL(dp),                            INTENT(OUT)   :: ddx
-    REAL(dp),                            INTENT(OUT)   :: ddy
-    
-    ! Local variables:
-    REAL(dp)                                           :: xp, yp
-    
-    xp = 2._dp * pi * (x - xmin) / (xmax - xmin)
-    yp = 2._dp * pi * (y - ymin) / (ymax - ymin)
-    
-    d   = SIN( xp) * SIN( yp)
-    ddx = COS( xp) * SIN( yp) * 2._dp * pi / (xmax - xmin)
-    ddy = SIN( xp) * COS( yp) * 2._dp * pi / (xmax - xmin)
-        
-  END SUBROUTINE test_matrix_operators_mesh_test_function
-  SUBROUTINE solve_modified_Laplace_equation( mesh)
-    ! Test the discretisation by solving (a modified version of) the Laplace equation:
-    !
-    ! d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
-    !
-    ! (Modified to include a spatially variable stiffness, making it much more similar to
-    ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-    
-    USE mesh_operators_module
-    USE utilities_module
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    
-    ! Local variables:
-    INTEGER                                            :: vi, ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  f_a,  N_b,  b_a
-    INTEGER                                            :: wf_a, wN_b, wb_a
-    TYPE(type_sparse_matrix_CSR)                       :: M_a, BC_a, mN_b, mNddx_b
-    REAL(dp)                                           :: x, y, xp, yp
-    REAL(dp), PARAMETER                                :: amp = 5._dp
-    INTEGER                                            :: nnz_BC
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' ==========================================='
-    IF (par%master) WRITE(0,*) ' == Solving the modified Laplace equation =='
-    IF (par%master) WRITE(0,*) ' ==========================================='
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  ! Solve the equation on the a-grid (vertex)
-  ! =========================================
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,   f_a, wf_a)
-    CALL allocate_shared_dp_1D( mesh%nV,   b_a, wb_a)
-    CALL allocate_shared_dp_1D( mesh%nTri, N_b, wN_b)
-    
-    ! Set up the spatially variable stiffness N on the b-grid (triangle)
-    DO ti = mesh%t1, mesh%t2
-      x = mesh%TriGC( ti,1)
-      y = mesh%TriGC( ti,2)
-      xp = (x - mesh%xmin) / (mesh%xmax - mesh%xmin)
-      yp = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-      N_b( ti) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
-    END DO
-    CALL sync
-    
-    ! Convert stiffness from vector to diagonal matrix
-    CALL convert_vector_to_diag_CSR( N_b, mN_b)
-    
-    ! Create the operator matrix M
-    CALL multiply_matrix_matrix_CSR( mN_b          , mesh%M_ddx_a_b, mNddx_b)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_b_a, mNddx_b       , M_a    )
-    
-    ! Create the boundary conditions matrix BC
-    
-    ! Find maximum number of non-zero entries
-    nnz_BC = 0
-    DO vi = mesh%v1, mesh%v2
-      IF (mesh%edge_index( vi) > 0) THEN
-        nnz_BC = nnz_BC + 1 + mesh%nC( vi)
-      END IF
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_BC, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)   
-    
-    ! Allocate distributed shared memory
-    CALL allocate_matrix_CSR_dist( BC_a, mesh%nV, mesh%nV, nnz_BC)
-    
-    ! Fill in values
-    BC_a%nnz = 0
-    BC_a%ptr = 1
-    DO vi = mesh%v1, mesh%v2
-    
-      IF (mesh%edge_index( vi) == 0) THEN
-        ! Free vertex: no boundary conditions apply
-      
-      ELSEIF (mesh%edge_index( vi) == 6 .OR. mesh%edge_index( vi) == 7 .OR. mesh%edge_index( vi) == 8) THEN
-        ! West: bump
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        y = mesh%V( vi,2)
-        y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-        b_a( vi) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
-        
-      ELSE
-        ! Otherwise: zero
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        b_a( vi) = 0._dp
-        
-      END IF
-      
-      ! Finalise matrix row
-      BC_a%ptr( vi+1) = BC_a%nnz + 1
-      
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-    
-    ! Finalise matrix
-    CALL finalise_matrix_CSR_dist( BC_a, mesh%v1, mesh%v2)
-    
-    ! Add boundary conditions to the operator matrix
-    CALL overwrite_rows_CSR( M_a, BC_a)
-    
-    ! Solve the equation
-    CALL solve_matrix_equation_CSR( M_a, b_a, f_a, C%DIVA_choice_matrix_solver, &
-      SOR_nit = 5000, SOR_tol = 0.0001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
-      
-    ! Write result to debug file
-    IF (par%master) THEN
-      debug%dp_2D_a_01 = f_a
-      CALL write_to_debug_file
-    END IF
-    CALL sync
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' ===================================================='
-    IF (par%master) WRITE(0,*) ' == Finished solving the modified Laplace equation =='
-    IF (par%master) WRITE(0,*) ' ===================================================='
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  END SUBROUTINE solve_modified_Laplace_equation
-  SUBROUTINE solve_modified_Laplace_equation_c( mesh)
-    ! Test the discretisation by solving (a modified version of) the Laplace equation:
-    !
-    ! d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
-    !
-    ! (Modified to include a spatially variable stiffness, making it much more similar to
-    ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-    
-    USE mesh_operators_module
-    USE utilities_module
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    
-    ! Local variables:
-    INTEGER                                            :: vi, aci
-    REAL(dp), DIMENSION(:    ), POINTER                ::  f_c,  N_a,  b_c
-    INTEGER                                            :: wf_c, wN_a, wb_c
-    TYPE(type_sparse_matrix_CSR)                       :: M_c, BC_c, mN_a, mNddx_a
-    REAL(dp)                                           :: x, y, xp, yp
-    REAL(dp), PARAMETER                                :: amp = 5._dp
-    INTEGER                                            :: nnz_BC
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' ======================================================='
-    IF (par%master) WRITE(0,*) ' == Solving the modified Laplace equation (STAGGERED) =='
-    IF (par%master) WRITE(0,*) ' ======================================================='
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  ! Solve the equation on the a-grid (vertex)
-  ! =========================================
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nAc, f_c, wf_c)
-    CALL allocate_shared_dp_1D( mesh%nAc, b_c, wb_c)
-    CALL allocate_shared_dp_1D( mesh%nV,  N_a, wN_a)
-    
-    ! Set up the spatially variable stiffness N on the a-grid (vertex)
-    DO vi = mesh%v1, mesh%v2
-      x = mesh%V( vi,1)
-      y = mesh%V( vi,2)
-      xp = (x - mesh%xmin) / (mesh%xmax - mesh%xmin)
-      yp = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-      N_a( vi) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
-    END DO
-    CALL sync
-    
-    ! Convert stiffness from vector to diagonal matrix
-    CALL convert_vector_to_diag_CSR( N_a, mN_a)
-    
-    ! Create the operator matrix M
-    CALL multiply_matrix_matrix_CSR( mN_a          , mesh%M_ddx_c_a, mNddx_a)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_a_c, mNddx_a       , M_c    )
-    
-    ! Create the boundary conditions matrix BC
-    
-    ! Find maximum number of non-zero entries
-    nnz_BC = 0
-    DO aci = mesh%ac1, mesh%ac2
-      IF (mesh%edge_index_Ac( aci) > 0) THEN
-        nnz_BC = nnz_BC + 1 + mesh%nC_mem
-      END IF
-    END DO ! DO aci = mesh%ac1, mesh%ac2
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_BC, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)   
-    
-    ! Allocate distributed shared memory
-    CALL allocate_matrix_CSR_dist( BC_c, mesh%nAc, mesh%nAc, nnz_BC)
-    
-    ! Fill in values
-    BC_c%nnz = 0
-    BC_c%ptr = 1
-    DO aci = mesh%ac1, mesh%ac2
-    
-      IF (mesh%edge_index_Ac( aci) == 0) THEN
-        ! Free vertex: no boundary conditions apply
-      
-      ELSEIF (mesh%edge_index_Ac( aci) == 6 .OR. mesh%edge_index_Ac( aci) == 7 .OR. mesh%edge_index_Ac( aci) == 8) THEN
-        ! West: bump
-        
-        ! Matrix
-        BC_c%nnz  = BC_c%nnz+1
-        BC_c%index( BC_c%nnz) = aci
-        BC_c%val(   BC_c%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        y = mesh%VAc( aci,2)
-        y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-        b_c( aci) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
-        
-      ELSE
-        ! Otherwise: zero
-        
-        ! Matrix
-        BC_c%nnz  = BC_c%nnz+1
-        BC_c%index( BC_c%nnz) = aci
-        BC_c%val(   BC_c%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        b_c( aci) = 0._dp
-        
-      END IF
-      
-      ! Finalise matrix row
-      BC_c%ptr( aci+1) = BC_c%nnz + 1
-      
-    END DO ! DO aci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-    ! Finalise matrix
-    CALL finalise_matrix_CSR_dist( BC_c, mesh%ac1, mesh%ac2)
-    
-    ! Add boundary conditions to the operator matrix
-    CALL overwrite_rows_CSR( M_c, BC_c)
-    
-    ! Solve the equation
-    CALL solve_matrix_equation_CSR( M_c, b_c, f_c, C%DIVA_choice_matrix_solver, &
-      SOR_nit = 1, SOR_tol = 0.0001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
-      
-    ! Write result to debug file
-    IF (par%master) THEN
-      debug%dp_2D_c_01 = f_c
-      CALL write_to_debug_file
-    END IF
-    CALL sync
-        
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' ================================================================'
-    IF (par%master) WRITE(0,*) ' == Finished solving the modified Laplace equation (STAGGERED) =='
-    IF (par%master) WRITE(0,*) ' ================================================================'
-    IF (par%master) WRITE(0,*) ''
-    CALL sync
-    
-  END SUBROUTINE solve_modified_Laplace_equation_c
 
 END MODULE UFEMISM_main_model

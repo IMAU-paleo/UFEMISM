@@ -124,21 +124,17 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_Hi
     INTEGER :: id_var_Hb
     INTEGER :: id_var_Hs
-    INTEGER :: id_var_U_SIA
-    INTEGER :: id_var_V_SIA
-    INTEGER :: id_var_U_SSA
-    INTEGER :: id_var_V_SSA
+    INTEGER :: id_var_SL
+    INTEGER :: id_var_dHb
     INTEGER :: id_var_Ti
     INTEGER :: id_var_FirnDepth
     INTEGER :: id_var_MeltPreviousYear  
     
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
-    CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   ' 
-    CHARACTER(LEN=256) :: name_var_U_SIA                 = 'U_SIA                '
-    CHARACTER(LEN=256) :: name_var_V_SIA                 = 'V_SIA                '
-    CHARACTER(LEN=256) :: name_var_U_SSA                 = 'U_SSA                '
-    CHARACTER(LEN=256) :: name_var_V_SSA                 = 'V_SSA                '
+    CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   '
+    CHARACTER(LEN=256) :: name_var_SL                    = 'SL                   '
+    CHARACTER(LEN=256) :: name_var_dHb                   = 'dHb                  '
     CHARACTER(LEN=256) :: name_var_Ti                    = 'Ti                   '
     CHARACTER(LEN=256) :: name_var_FirnDepth             = 'FirnDepth            '
     CHARACTER(LEN=256) :: name_var_MeltPreviousYear      = 'MeltPreviousYear     '

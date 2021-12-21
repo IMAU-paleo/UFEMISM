@@ -45,7 +45,7 @@ CONTAINS
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: inverse_Hi                 ! Contains the inverse of Hi
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       inverse_Hi = 1._dp / ice%Hi_a( vi)
       ice%dzeta_dz_a(vi) = -inverse_Hi                                                      
       DO k = 1, C%NZ

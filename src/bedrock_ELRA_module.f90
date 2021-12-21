@@ -70,7 +70,7 @@ CONTAINS
     END IF
     
     ! Update bedrock with last calculated deformation rate
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
       region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%PD%Hb( vi)
     END DO
@@ -95,7 +95,7 @@ CONTAINS
     Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
     
     ! Calculate the absolute and relative surface loads on the mesh
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Absolute surface load
       IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
@@ -273,7 +273,7 @@ CONTAINS
     INTEGER                                            :: vi
     
     ! Calculate PD reference load on the mesh
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       IF (is_floating( PD%Hi( vi), PD%Hb( vi), 0._dp)) THEN
         ice%surface_load_PD_mesh( vi) = -PD%Hb( vi) * grid%dx**2 * seawater_density
       ELSEIF (PD%Hi( vi) > 0._dp) THEN

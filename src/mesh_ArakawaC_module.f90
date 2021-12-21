@@ -22,7 +22,7 @@ MODULE mesh_ArakawaC_module
   
   ! Import specific functionality           
   USE data_types_module,               ONLY: type_mesh
-  USE mesh_help_functions_module,      ONLY: is_boundary_segment
+  USE mesh_help_functions_module,      ONLY: is_boundary_segment, calc_triangle_geometric_centres_ac
 
   IMPLICIT NONE
 
@@ -42,13 +42,11 @@ MODULE mesh_ArakawaC_module
                 
     ! Allocate memory for the mapping arrays. Aci is stored in temporary memory on the master process first,
     ! once we know how much is needed, we will allocate shared memory and transfer the data there.
-    CALL allocate_shared_int_2D( mesh%nV,     mesh%nC_mem, mesh%iAci,            mesh%wiAci          )
-    CALL allocate_shared_int_0D(                           mesh%nAC,             mesh%wnAC           )
+    CALL allocate_shared_int_2D( mesh%nV, mesh%nC_mem, mesh%iAci, mesh%wiAci)
+    CALL allocate_shared_int_0D(                       mesh%nAC,  mesh%wnAC )
     
     ! Go through all vertex connections, determine the location of the Ac vertex (on the connection midpoint),
     ! the indices of the left and right Aa vertices, and the neighbour functions on the Ac vertex
-    ! Only done by master
-    ! ====================================
     
     vr = 0
     vl = 0
@@ -78,7 +76,7 @@ MODULE mesh_ArakawaC_module
           vj = mesh%C( vi,ci)
           
           ! Skip connections that were already considered in the opposite direction
-          IF (mesh%iAci( vi,ci)>0) CYCLE
+          IF (mesh%iAci( vi,ci) > 0) CYCLE
           
           ! List Ac vertex number in reference array
           mesh%nAc = mesh%nAc + 1
@@ -134,9 +132,7 @@ MODULE mesh_ArakawaC_module
             END DO
             
             ! List relevant Aa vertex indices vor Ac vertex in reference array
-            ! NOTE: fourth entry is set to 1 because it cant be zero, but the fourth
-            !       neighbour function is set to zero, so it doesn't matter...
-            Aci_temp( mesh%nAc,:) = [vi, vj, vl, 1]          
+            Aci_temp( mesh%nAc,:) = [vi, vj, vl, 0]          
           
           END IF
             
@@ -147,8 +143,6 @@ MODULE mesh_ArakawaC_module
     CALL sync
     
     ! Allocate shared memory, move data there
-    ! =======================================
-    
     CALL allocate_shared_dp_2D(  mesh%nAc, 2, mesh%VAc, mesh%wVAc)
     CALL allocate_shared_int_2D( mesh%nAc, 4, mesh%Aci, mesh%wAci)
     
@@ -159,13 +153,11 @@ MODULE mesh_ArakawaC_module
     CALl sync
     
     ! Deallocate temporary memory
-    ! ===========================
-    
     DEALLOCATE( VAc_temp)
     DEALLOCATE( Aci_temp)
     
     ! Determine Ac vertex domains
-    CALL partition_list( mesh%nAc, par%i, par%n, mesh%ac1, mesh%ac2)
+    CALL partition_list( mesh%nAc, par%i, par%n, mesh%ci1, mesh%ci2)
     
     ! Find Ac edge indices
     CALL find_Ac_edge_indices( mesh)
@@ -188,7 +180,7 @@ MODULE mesh_ArakawaC_module
     ! Allocate shared memory
     CALl allocate_shared_int_1D( mesh%nAc, mesh%edge_index_Ac, mesh%wedge_index_Ac)
     
-    DO aci = mesh%ac1, mesh%ac2
+    DO aci = mesh%ci1, mesh%ci2
   
       vi = mesh%Aci( aci,1)
       vj = mesh%Aci( aci,2)
@@ -214,7 +206,7 @@ MODULE mesh_ArakawaC_module
         mesh%edge_index_Ac( aci) = 0
       END IF
       
-    END DO ! DO aci = mesh%ac1, mesh%ac2
+    END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
   END SUBROUTINE find_Ac_edge_indices
@@ -231,6 +223,7 @@ MODULE mesh_ArakawaC_module
     LOGICAL                                       :: switchthem
     INTEGER                                       :: ti, vip, viq, vir, aci_pq, aci_qr, aci_rp, acj, ack, iti
     INTEGER                                       :: n
+    INTEGER                                       :: ai_pq, ai_qr, ai_rp, ai1, ai2, ai3
     
     ! Allocate shared memory
     CALL allocate_shared_int_0D( mesh%nVAaAc,   mesh%wnVAaAc  )
@@ -242,13 +235,15 @@ MODULE mesh_ArakawaC_module
     END IF
     CALL sync
     
-    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   2,             mesh%VAaAc,    mesh%wVAaAc   )
-    CALL allocate_shared_int_1D( mesh%nVAaAc,                  mesh%nCAaAc,   mesh%wnCAaAc  )
-    CALL allocate_shared_int_2D( mesh%nVAaAc,   mesh%nC_mem,   mesh%CAaAc,    mesh%wCAaAc   )
-    CALL allocate_shared_int_2D( mesh%nTriAaAc, 3,             mesh%TriAaAc,  mesh%wTriAaAc )
+    CALL allocate_shared_dp_2D(  mesh%nVAaAc,   2,           mesh%VAaAc,     mesh%wVAaAc    )
+    CALL allocate_shared_int_1D( mesh%nVAaAc,                mesh%nCAaAc,    mesh%wnCAaAc   )
+    CALL allocate_shared_int_2D( mesh%nVAaAc,   mesh%nC_mem, mesh%CAaAc,     mesh%wCAaAc    )
+    CALL allocate_shared_int_2D( mesh%nTriAaAc, 3,           mesh%TriAaAc,   mesh%wTriAaAc  )
+    CALL allocate_shared_int_1D( mesh%nVAaAc,                mesh%niTriAaAc, mesh%wniTriAaAc)
+    CALL allocate_shared_int_2D( mesh%nVAaAc,   mesh%nC_mem, mesh%iTriAaAc,  mesh%wiTriAaAc )
     
     ! List coordinates and connectivity for the regular (Aa) vertices
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       ai = vi
       mesh%VAaAc(  ai,:) = mesh%V(  vi,:)
       mesh%nCAaAc( ai  ) = mesh%nC( vi)
@@ -256,11 +251,11 @@ MODULE mesh_ArakawaC_module
         aci = mesh%iAci( vi,ci)
         mesh%CAaAc( ai,ci) = aci + mesh%nV
       END DO
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
     ! List coordinates and connectivity for the staggered (Ac) vertices
-    DO aci = mesh%ac1, mesh%ac2
+    DO aci = mesh%ci1, mesh%ci2
     
       ai = aci + mesh%nV
       
@@ -354,44 +349,58 @@ MODULE mesh_ArakawaC_module
         
       END IF ! IF (mesh%edge_index_Ac( aci) > 0) THEN
       
-    END DO ! DO aci = mesh%ac1, mesh%ac2
+    END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
-
-    ! Triangles
-    DO ti = mesh%t1, mesh%t2
-    
-      vip = mesh%Tri( ti,1)
-      viq = mesh%Tri( ti,2)
-      vir = mesh%Tri( ti,3)
-      
-      aci_pq = 0
-      aci_qr = 0
-      aci_rp = 0
-      DO ci = 1, mesh%nC( vip)
-        IF (mesh%C( vip,ci) == viq) THEN
-          aci_pq = mesh%iAci( vip,ci)
-          EXIT
-        END IF
-      END DO
-      DO ci = 1, mesh%nC( viq)
-        IF (mesh%C( viq,ci) == vir) THEN
-          aci_qr = mesh%iAci( viq,ci)
-          EXIT
-        END IF
-      END DO
-      DO ci = 1, mesh%nC( vir)
-        IF (mesh%C( vir,ci) == vip) THEN
-          aci_rp = mesh%iAci( vir,ci)
-          EXIT
-        END IF
-      END DO
-      
-      mesh%TriAaAc( ti,:) = [aci_pq, aci_qr, aci_rp] + mesh%nV
-      
-    END DO ! DO ti = mesh%t1, mesh%t2
     
     IF (par%master) THEN
+
+      ! Combi-triangles based on regular triangles
+      DO ti = 1, mesh%nTri
+      
+        vip = mesh%Tri( ti,1)
+        viq = mesh%Tri( ti,2)
+        vir = mesh%Tri( ti,3)
+        
+        aci_pq = 0
+        aci_qr = 0
+        aci_rp = 0
+        DO ci = 1, mesh%nC( vip)
+          IF (mesh%C( vip,ci) == viq) THEN
+            aci_pq = mesh%iAci( vip,ci)
+            EXIT
+          END IF
+        END DO
+        DO ci = 1, mesh%nC( viq)
+          IF (mesh%C( viq,ci) == vir) THEN
+            aci_qr = mesh%iAci( viq,ci)
+            EXIT
+          END IF
+        END DO
+        DO ci = 1, mesh%nC( vir)
+          IF (mesh%C( vir,ci) == vip) THEN
+            aci_rp = mesh%iAci( vir,ci)
+            EXIT
+          END IF
+        END DO
+        
+        mesh%TriAaAc( ti,:) = [aci_pq, aci_qr, aci_rp] + mesh%nV
+        
+        ! List this triangle as an itriangle for the three vertices spanning it
+        ai_pq = aci_pq + mesh%nV
+        ai_qr = aci_qr + mesh%nV
+        ai_rp = aci_rp + mesh%nV
+        
+        mesh%niTriAaAc( ai_pq) = mesh%niTriAaAc( ai_pq) + 1
+        mesh%niTriAaAc( ai_qr) = mesh%niTriAaAc( ai_qr) + 1
+        mesh%niTriAaAc( ai_rp) = mesh%niTriAaAc( ai_rp) + 1
+        
+        mesh%iTriAaAc( ai_pq, mesh%niTriAaAc( ai_pq)) = ti
+        mesh%iTriAaAc( ai_qr, mesh%niTriAaAc( ai_qr)) = ti
+        mesh%iTriAaAc( ai_rp, mesh%niTriAaAc( ai_rp)) = ti
+        
+      END DO ! DO ti = mesh%ti1, mesh%ti2
     
+      ! Combi-triangles based on regular vertices
       ti = mesh%nTri
       DO vi = 1, mesh%nV
         DO iti = 1, mesh%niTri( vi)
@@ -420,6 +429,19 @@ MODULE mesh_ArakawaC_module
           
           ti = ti + 1
           mesh%TriAaAc( ti,:) = [vi, acj+mesh%nV, ack+mesh%nV]
+      
+          ! List this triangle as an itriangle for the three vertices spanning it
+          ai1 = vi
+          ai2 = acj+mesh%nV
+          ai3 = ack+mesh%nV
+          
+          mesh%niTriAaAc( ai1) = mesh%niTriAaAc( ai1) + 1
+          mesh%niTriAaAc( ai2) = mesh%niTriAaAc( ai2) + 1
+          mesh%niTriAaAc( ai3) = mesh%niTriAaAc( ai3) + 1
+          
+          mesh%iTriAaAc( ai1, mesh%niTriAaAc( ai1)) = ti
+          mesh%iTriAaAc( ai2, mesh%niTriAaAc( ai2)) = ti
+          mesh%iTriAaAc( ai3, mesh%niTriAaAc( ai3)) = ti
           
         END DO ! DO iti = 1, mesh%niTri( vi)
       END DO ! DO vi = 1, mesh%nV
@@ -428,7 +450,13 @@ MODULE mesh_ArakawaC_module
     CALL sync
     
     ! Determine process domains
-    CALL partition_list( mesh%nVAaAc, par%i, par%n, mesh%a1, mesh%a2)
+    CALL partition_list(   mesh%nVAaAc,   par%i, par%n, mesh%avi1,  mesh%avi2 )
+    CALL partition_list(   mesh%nTriAaAc, par%i, par%n, mesh%ati1,  mesh%ati2 )
+    CALL partition_list( 2*mesh%nVAaAc,   par%i, par%n, mesh%auvi1, mesh%auvi2)
+    
+    ! Calculate geometric centres of AaAc triangles
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, 2, mesh%TriGCAaAc,  mesh%wTriGCAaAc )
+    CALL calc_triangle_geometric_centres_ac( mesh)
     
   END SUBROUTINE make_combined_AaAc_mesh
 

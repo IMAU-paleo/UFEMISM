@@ -319,7 +319,7 @@ CONTAINS
     dT = 0._dp
     A_reg = (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin)
     
-    DO vi = region%mesh%v1, region%mesh%v2
+    DO vi = region%mesh%vi1, region%mesh%vi2
       dT_lapse_mod = region%ice%Hs_a(              vi) * C%constant_lapserate
       dT_lapse_PD  = region%climate%PD_obs%Hs_ref( vi) * C%constant_lapserate
       DO m = 1, 12
@@ -854,7 +854,7 @@ CONTAINS
     wt1 = 1._dp - wt0
         
     ! Interpolate on the grid
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
      
       ilat_l = FLOOR(mesh%lat( vi) + 91)
       ilat_u = ilat_l + 1

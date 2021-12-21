@@ -1726,8 +1726,8 @@ MODULE mesh_creation_module
     ! ========================================
                 
     ! Determine vertex and triangle domains
-    CALL partition_list( mesh%nV,   par%i, par%n, mesh%v1, mesh%v2)
-    CALL partition_list( mesh%nTri, par%i, par%n, mesh%t1, mesh%t2)
+    CALL partition_list( mesh%nV,   par%i, par%n, mesh%vi1, mesh%vi2)
+    CALL partition_list( mesh%nTri, par%i, par%n, mesh%ti1, mesh%ti2)
     
     ! Calculate extra mesh data
     CALL allocate_mesh_secondary(             mesh)

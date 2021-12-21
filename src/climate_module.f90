@@ -148,7 +148,7 @@ CONTAINS
     CALL ddy_a_to_a_2D( mesh, climate%PD_obs%Hs_ref, dHs_dy_ref)
 
     ! Temperature: constant lapse rate plus global offset
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       dT_lapse = (ice%Hs_a( vi) - climate%PD_obs%Hs_ref( vi)) * C%constant_lapserate
       DO m = 1, 12
@@ -164,7 +164,7 @@ CONTAINS
     
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
     
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
       DO m = 1, 12
         
         CALL precipitation_model_Roe( climate%PD_obs%T2m(  vi,m), dHs_dx_ref(   vi), dHs_dy_ref(   vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_ref( vi,m))
@@ -216,7 +216,7 @@ CONTAINS
     CALL run_climate_model_matrix_PI_LGM_precipitation( mesh, ice, climate, region_name, grid_smooth)
       
     ! Safety checks
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       IF (climate%applied%T2m( vi,m) < 150._dp) THEN
         WRITE(0,*) ' WARNING - run_climate_model_matrix_PI_LGM: excessively low temperatures (<150K) detected!'
@@ -296,8 +296,8 @@ CONTAINS
     ! ===========================================================
     
     ! Calculate modelled absorbed insolation
-    climate%applied%I_abs( mesh%v1:mesh%v2) = 0._dp
-    DO vi = mesh%v1, mesh%v2
+    climate%applied%I_abs( mesh%vi1:mesh%vi2) = 0._dp
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       climate%applied%I_abs( vi) = climate%applied%I_abs( vi) + climate%applied%Q_TOA( vi,m) * (1._dp - SMB%Albedo( vi,m))  ! Berends et al., 2018 - Eq. 2
     END DO
@@ -305,7 +305,7 @@ CONTAINS
     CALL sync
     
     ! Calculate weighting field
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (    climate%applied%I_abs( vi) -     climate%GCM_LGM%I_abs( vi)) / &  ! Berends et al., 2018 - Eq. 3
                                                           (    climate%GCM_PI%I_abs(  vi) -     climate%GCM_LGM%I_abs( vi)) ))
     END DO
@@ -314,31 +314,31 @@ CONTAINS
                                                           (SUM(climate%GCM_PI%I_abs )     - SUM(climate%GCM_LGM%I_abs)    ) ))
    
     ! Smooth the weighting field
-    w_ins_smooth( mesh%v1:mesh%v2) = w_ins( mesh%v1:mesh%v2)
+    w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
     CALL smooth_Gaussian_2D( mesh, grid_smooth, w_ins_smooth, 200000._dp)
     !CALL smooth_Shepard_2D( grid, w_ins_smooth, 200000._dp)
     
     ! Combine unsmoothed, smoothed, and regional average weighting fields (Berends et al., 2018, Eq. 4)
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-      w_ice( mesh%v1:mesh%v2) = (1._dp * w_ins(        mesh%v1:mesh%v2) + &
-                                 3._dp * w_ins_smooth( mesh%v1:mesh%v2) + &
+      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins(        mesh%vi1:mesh%vi2) + &
+                                 3._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
                                  3._dp * w_ins_av) / 7._dp
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-      w_ice( mesh%v1:mesh%v2) = (1._dp * w_ins_smooth( mesh%v1:mesh%v2) + &
+      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
                                  6._dp * w_ins_av) / 7._dp
     END IF
      
     ! Combine interpolation weights from absorbed insolation and CO2 into the final weights fields
     IF     (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-      w_tot( mesh%v1:mesh%v2) = (        w_CO2 + w_ice( mesh%v1:mesh%v2)) / 2._dp  ! Berends et al., 2018 - Eq. 5
+      w_tot( mesh%vi1:mesh%vi2) = (        w_CO2 + w_ice( mesh%vi1:mesh%vi2)) / 2._dp  ! Berends et al., 2018 - Eq. 5
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-      w_tot( mesh%v1:mesh%v2) = (3._dp * w_CO2 + w_ice( mesh%v1:mesh%v2)) / 4._dp  ! Berends et al., 2018 - Eq. 9
+      w_tot( mesh%vi1:mesh%vi2) = (3._dp * w_CO2 + w_ice( mesh%vi1:mesh%vi2)) / 4._dp  ! Berends et al., 2018 - Eq. 9
     END IF
 
     ! Interpolate between the GCM snapshots
     ! =====================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Find matrix-interpolated orography, lapse rate, and temperature
       Hs_ref_GCM(     vi  ) = (w_tot( vi) *  climate%GCM_PI%Hs_ref( vi  )                               ) + ((1._dp - w_tot( vi)) * climate%GCM_LGM%Hs_ref( vi  ))  ! Berends et al., 2018 - Eq. 8
@@ -413,7 +413,7 @@ CONTAINS
       ! Combine total + local ice thicness; Berends et al., 2018, Eq. 12
     
       ! Then the local ice thickness term
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
         
         IF (climate%GCM_PI%Hi( vi) == 0.1_dp) THEN
           IF (climate%GCM_LGM%Hi( vi) == 0.1_dp) THEN
@@ -434,26 +434,26 @@ CONTAINS
       END DO
       CALL sync
       
-      w_LGM( mesh%v1:mesh%v2) = w_LGM( mesh%v1:mesh%v2) * w_tot
+      w_LGM( mesh%vi1:mesh%vi2) = w_LGM( mesh%vi1:mesh%vi2) * w_tot
       
       ! Smooth the weighting field
       CALL smooth_Gaussian_2D( mesh, grid_smooth, w_LGM, 200000._dp) 
       !CALL smooth_Shepard_2D( grid, w_LGM, 200000._dp)
       
-      w_PD( mesh%v1:mesh%v2) = 1._dp - w_LGM( mesh%v1:mesh%v2) 
+      w_PD( mesh%vi1:mesh%vi2) = 1._dp - w_LGM( mesh%vi1:mesh%vi2) 
       
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
       ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
     
-      w_LGM( mesh%v1:mesh%v2) = w_tot
-      w_PD(  mesh%v1:mesh%v2) = 1._dp - w_LGM( mesh%v1:mesh%v2)
+      w_LGM( mesh%vi1:mesh%vi2) = w_tot
+      w_PD(  mesh%vi1:mesh%vi2) = 1._dp - w_LGM( mesh%vi1:mesh%vi2)
       
     END IF
         
     ! Interpolate the GCM snapshots
     ! =============================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       T_ref_GCM(  vi,:) =      (w_PD( vi) *     (climate%GCM_PI%T2m(    vi,:) - climate%GCM_bias_T2m(   vi,:)))  + (w_LGM( vi) *     climate%GCM_LGM%T2m(    vi,:))   ! Berends et al., 2018 - Eq. 6
       lambda_GCM( vi  ) =      (w_PD( vi) *      climate%GCM_PI%lambda( vi  )                                 )  + (w_LGM( vi) *     climate%GCM_LGM%lambda( vi  ))
@@ -525,7 +525,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, T_inv_ref, wT_inv_ref)
     
     ! Calculate inversion layer temperatures
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       T_inv_ref( vi,m) = 88.9_dp + 0.67_dp *  T_ref_GCM( vi,m)
       T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - 0.008_dp * (Hs( vi) - Hs_ref_GCM( vi)))
@@ -536,7 +536,7 @@ CONTAINS
     IF     (region_name == 'GRL') THEN
       ! Method of Jouzel and Merlivat (1984), see equation (4.82) in Huybrechts (1992)
     
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
       DO m = 1, 12
         Precip_GCM( vi,m) = P_ref_GCM( vi,m) * 1.04**(T_inv( vi,m) - T_inv_ref( vi,m))
       END DO
@@ -546,7 +546,7 @@ CONTAINS
     ELSEIF (region_name == 'ANT') THEN
       ! As with Lorius/Jouzel method (also Huybrechts, 2002
     
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
       DO m = 1, 12
         Precip_GCM( vi,m) = P_ref_GCM( vi,m) * (T_inv_ref( vi,m) / T_inv( vi,m))**2 * EXP(22.47_dp * (T0 / T_inv_ref( vi,m) - T0 / T_inv( vi,m)))
       END DO
@@ -600,7 +600,7 @@ CONTAINS
     CALL ddx_a_to_a_2D( mesh, Hs_GCM, dHs_dx_GCM)
     CALL ddy_a_to_a_2D( mesh, Hs_GCM, dHs_dy_GCM)
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
     
       T_mod( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * (Hs( vi) - Hs_ref_GCM( vi))
@@ -695,7 +695,7 @@ CONTAINS
     REAL(dp)                                           :: dT_lapse, d, dT
     
     ! Set precipitation to zero - SMB is parameterised anyway...
-    climate%applied%Precip(mesh%v1:mesh%v2,:) = 0._dp
+    climate%applied%Precip(mesh%vi1:mesh%vi2,:) = 0._dp
     
     ! Surface temperature for fixed or moving margin experiments
     IF     (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
@@ -703,7 +703,7 @@ CONTAINS
             C%choice_benchmark_experiment == 'EISMINT_3') THEN
       ! Moving margin
           
-      DO vi = mesh%v1, mesh%v2    
+      DO vi = mesh%vi1, mesh%vi2    
       
         dT_lapse = ice%Hs_a(vi) * lambda
           
@@ -717,7 +717,7 @@ CONTAINS
             C%choice_benchmark_experiment == 'EISMINT_6') THEN
       ! Fixed margin
     
-      DO vi = mesh%v1, mesh%v2    
+      DO vi = mesh%vi1, mesh%vi2    
         d = MAX( ABS(mesh%V(vi,1)/1000._dp), ABS(mesh%V(vi,2)/1000._dp))
     
         DO m = 1, 12
@@ -733,7 +733,7 @@ CONTAINS
             C%choice_benchmark_experiment == 'EISMINT_5') THEN
       IF (time > 0._dp) THEN
         dT = 10._dp * SIN(2 * pi * time / 20000._dp)
-        DO vi = mesh%v1, mesh%v2 
+        DO vi = mesh%vi1, mesh%vi2 
           climate%applied%T2m(vi,:) = climate%applied%T2m(vi,:) + dT
         END DO
       END IF
@@ -741,7 +741,7 @@ CONTAINS
             C%choice_benchmark_experiment == 'EISMINT_6') THEN
       IF (time > 0._dp) THEN
         dT = 10._dp * SIN(2 * pi * time / 40000._dp)
-        DO vi = mesh%v1, mesh%v2 
+        DO vi = mesh%vi1, mesh%vi2 
           climate%applied%T2m(vi,:) = climate%applied%T2m(vi,:) + dT
         END DO
       END IF
@@ -829,10 +829,10 @@ CONTAINS
         CALL map_subclimate_to_mesh( mesh,  matrix%GCM_LGM, climate%GCM_LGM)
         
         ! Right now, no wind is read from GCM output; just use PD observations everywhere
-        climate%GCM_PI%Wind_WE(  mesh%v1:mesh%v2,:) = climate%PD_obs%Wind_WE( mesh%v1:mesh%v2,:)
-        climate%GCM_PI%Wind_SN(  mesh%v1:mesh%v2,:) = climate%PD_obs%Wind_SN( mesh%v1:mesh%v2,:)
-        climate%GCM_LGM%Wind_WE( mesh%v1:mesh%v2,:) = climate%PD_obs%Wind_WE( mesh%v1:mesh%v2,:)
-        climate%GCM_LGM%Wind_SN( mesh%v1:mesh%v2,:) = climate%PD_obs%Wind_SN( mesh%v1:mesh%v2,:)
+        climate%GCM_PI%Wind_WE(  mesh%vi1:mesh%vi2,:) = climate%PD_obs%Wind_WE( mesh%vi1:mesh%vi2,:)
+        climate%GCM_PI%Wind_SN(  mesh%vi1:mesh%vi2,:) = climate%PD_obs%Wind_SN( mesh%vi1:mesh%vi2,:)
+        climate%GCM_LGM%Wind_WE( mesh%vi1:mesh%vi2,:) = climate%PD_obs%Wind_WE( mesh%vi1:mesh%vi2,:)
+        climate%GCM_LGM%Wind_SN( mesh%vi1:mesh%vi2,:) = climate%PD_obs%Wind_SN( mesh%vi1:mesh%vi2,:)
         
         ! Initialise the ICE5G geometries for these two snapshots
         CALL initialise_subclimate_ICE5G_geometry( mesh, climate%GCM_PI,  PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
@@ -936,7 +936,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_T2m,    climate%wGCM_bias_T2m   )
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_Precip, climate%wGCM_bias_Precip)
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       climate%GCM_bias_T2m(    vi,:) =  climate%GCM_PI%T2m(    vi,:)             -  climate%PD_obs%T2m(    vi,:)
       climate%GCM_bias_Precip( vi,:) = (climate%GCM_PI%Precip( vi,:) + P_offset) / (climate%PD_obs%Precip( vi,:) + P_offset)
@@ -999,7 +999,7 @@ CONTAINS
     END IF
     
     ! Find the GCM and ISM geometry
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Calculate the ICE5G GIA bedrock deformation for this timeframe
       dHb_ICE5G( vi) = Hb_ICE5G( vi) - Hb_ICE5G_PD( vi)
@@ -1024,7 +1024,7 @@ CONTAINS
     END DO
     
     ! Exception: remove unallowed ice
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       IF (mask_noice( vi) == 1) THEN
         snapshot%Hs( vi) = MAX( snapshot%Hb( vi), snapshot%sealevel)
         snapshot%Hi( vi) = 0._dp
@@ -1066,7 +1066,7 @@ CONTAINS
     
     dT_mean_nonice = 0._dp
     n_nonice       = 0
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       IF (snapshot%Hi( vi) <= 0.1_dp) THEN
         dT_mean_nonice = dT_mean_nonice + snapshot%T2m( vi,m) - snapshot_PI%T2m( vi,m)
@@ -1086,7 +1086,7 @@ CONTAINS
     lambda_mean_ice = 0._dp
     n_ice           = 0
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       snapshot%lambda( vi) = 0._dp
       
@@ -1112,7 +1112,7 @@ CONTAINS
     ! Apply mean lapse-rate over ice to the rest of the region
     ! ========================================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       IF (.NOT. (snapshot%Hi( vi) > 100._dp .AND. snapshot%Hs_ref( vi) > snapshot_PI%Hs_ref( vi))) THEN
         snapshot%lambda( vi) = lambda_mean_ice
       END IF
@@ -1124,7 +1124,7 @@ CONTAINS
     !CALL smooth_Shepard_2D( mesh, snapshot%lambda, 160000._dp)
     
     ! Normalise the entire region to a mean lapse rate of 8 K /km
-    snapshot%lambda( mesh%v1:mesh%v2) = snapshot%lambda( mesh%v1:mesh%v2) * (0.008_dp / lambda_mean_ice)
+    snapshot%lambda( mesh%vi1:mesh%vi2) = snapshot%lambda( mesh%vi1:mesh%vi2) * (0.008_dp / lambda_mean_ice)
     
   END SUBROUTINE initialise_subclimate_spatially_variable_lapserate
   SUBROUTINE initialise_subclimate_absorbed_insolation( mesh, snapshot, region_name, mask_noice, GCM_bias_T2m, GCM_bias_Precip)
@@ -1198,7 +1198,7 @@ CONTAINS
     wt1 = 1._dp - wt0
         
     ! Interpolate on the grid
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
      
       ilat_l = FLOOR(mesh%lat( vi) + 91)
       ilat_u = ilat_l + 1
@@ -1234,7 +1234,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV    , ice_dummy%mask_shelf_a, ice_dummy%wmask_shelf_a)
     
     ! Fill in masks for the SMB model
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       IF (snapshot%Hb( vi) < snapshot%sealevel) THEN
         ice_dummy%mask_ocean_a( vi) = 1
@@ -1268,7 +1268,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate_dummy%Q_TOA,  climate_dummy%wQ_TOA)
     
     ! Temperature is downscaled with the GCM-derived variable lapse rate
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       dT_lapse = snapshot%lambda( vi) * (snapshot%Hs( vi) - snapshot%Hs_ref( vi))
       climate_dummy%T2m( vi,:) = snapshot%T2m( vi,:) + dT_lapse
     END DO
@@ -1277,7 +1277,7 @@ CONTAINS
     ! or with the simpler inversion-layer-temperature-based correction (for Greenland and Antarctica).
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
     
-      DO vi = mesh%v1, mesh%v2
+      DO vi = mesh%vi1, mesh%vi2
       DO m = 1, 12
           
         ! RL precipitation for the GCM geometry
@@ -1303,12 +1303,12 @@ CONTAINS
         
     ! Correct for GCM bias (only for the PI snapshot, as the GCM data is still assumed to be The Truth (TM) for the LGM)
     IF (snapshot%name == 'HadCM3_PI') THEN
-      climate_dummy%T2m(    mesh%v1:mesh%v2,:) = climate_dummy%T2m(    mesh%v1:mesh%v2,:) - GCM_bias_T2m(    mesh%v1:mesh%v2,:)
-      climate_dummy%Precip( mesh%v1:mesh%v2,:) = climate_dummy%Precip( mesh%v1:mesh%v2,:) / GCM_bias_Precip( mesh%v1:mesh%v2,:)
+      climate_dummy%T2m(    mesh%vi1:mesh%vi2,:) = climate_dummy%T2m(    mesh%vi1:mesh%vi2,:) - GCM_bias_T2m(    mesh%vi1:mesh%vi2,:)
+      climate_dummy%Precip( mesh%vi1:mesh%vi2,:) = climate_dummy%Precip( mesh%vi1:mesh%vi2,:) / GCM_bias_Precip( mesh%vi1:mesh%vi2,:)
     END IF
     
     ! Copy Q_TOA to the dummy climate
-    climate_dummy%Q_TOA( mesh%v1:mesh%v2,:) = snapshot%Q_TOA( mesh%v1:mesh%v2,:)
+    climate_dummy%Q_TOA( mesh%vi1:mesh%vi2,:) = snapshot%Q_TOA( mesh%vi1:mesh%vi2,:)
     
     ! Create a temporary "dummy" ice & SMB data structure, so we can run the SMB model
     ! and determine the reference albedo field
@@ -1368,11 +1368,11 @@ CONTAINS
     END DO
     
     ! Copy the resulting albedo to the snapshot
-    snapshot%Albedo( mesh%v1:mesh%v2,:) = SMB_dummy%Albedo( mesh%v1:mesh%v2,:)
+    snapshot%Albedo( mesh%vi1:mesh%vi2,:) = SMB_dummy%Albedo( mesh%vi1:mesh%vi2,:)
     
     ! Calculate yearly total absorbed insolation
-    snapshot%I_abs( mesh%v1:mesh%v2) = 0._dp
-    DO vi = mesh%v1, mesh%v2
+    snapshot%I_abs( mesh%vi1:mesh%vi2) = 0._dp
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       snapshot%I_abs( vi) = snapshot%I_abs( vi) + snapshot%Q_TOA( vi,m) * (1._dp - snapshot%Albedo( vi,m))
     END DO
@@ -1718,10 +1718,10 @@ CONTAINS
       CALL map_subclimate_to_mesh( mesh_new, matrix%GCM_LGM, climate%GCM_LGM)
         
       ! Right now, no wind is read from GCM output; just use PD observations everywhere
-      climate%GCM_PI%Wind_WE(  mesh_new%v1:mesh_new%v2,:) = climate%PD_obs%Wind_WE( mesh_new%v1:mesh_new%v2,:)
-      climate%GCM_PI%Wind_SN(  mesh_new%v1:mesh_new%v2,:) = climate%PD_obs%Wind_SN( mesh_new%v1:mesh_new%v2,:)
-      climate%GCM_LGM%Wind_WE( mesh_new%v1:mesh_new%v2,:) = climate%PD_obs%Wind_WE( mesh_new%v1:mesh_new%v2,:)
-      climate%GCM_LGM%Wind_SN( mesh_new%v1:mesh_new%v2,:) = climate%PD_obs%Wind_SN( mesh_new%v1:mesh_new%v2,:)
+      climate%GCM_PI%Wind_WE(  mesh_new%vi1:mesh_new%vi2,:) = climate%PD_obs%Wind_WE( mesh_new%vi1:mesh_new%vi2,:)
+      climate%GCM_PI%Wind_SN(  mesh_new%vi1:mesh_new%vi2,:) = climate%PD_obs%Wind_SN( mesh_new%vi1:mesh_new%vi2,:)
+      climate%GCM_LGM%Wind_WE( mesh_new%vi1:mesh_new%vi2,:) = climate%PD_obs%Wind_WE( mesh_new%vi1:mesh_new%vi2,:)
+      climate%GCM_LGM%Wind_SN( mesh_new%vi1:mesh_new%vi2,:) = climate%PD_obs%Wind_SN( mesh_new%vi1:mesh_new%vi2,:)
       
       ! Initialise ICE5G geometry
       CALL initialise_subclimate_ICE5G_geometry( mesh_new, climate%GCM_PI,  PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
@@ -1797,7 +1797,7 @@ CONTAINS
     ! First find the first longitude which defines the start of quadrant I:
     longitude_start = mesh%lambda_M - 90._dp
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       
       ! calculate x and y from the zonal wind

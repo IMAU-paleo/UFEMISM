@@ -46,7 +46,7 @@ CONTAINS
     n1 = par%mem%n
     
     ! Calculate surface elevation and thickness above floatation
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
       ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
     END DO
@@ -71,20 +71,20 @@ CONTAINS
     INTEGER                                       :: vi, ci, vc
     
     ! Start out with land everywhere, fill in the rest based on input.
-    ice%mask_land_a(   mesh%v1:mesh%v2) = 1
-    ice%mask_ocean_a(  mesh%v1:mesh%v2) = 0
-    ice%mask_lake_a(   mesh%v1:mesh%v2) = 0
-    ice%mask_ice_a(    mesh%v1:mesh%v2) = 0
-    ice%mask_sheet_a(  mesh%v1:mesh%v2) = 0
-    ice%mask_shelf_a(  mesh%v1:mesh%v2) = 0
-    ice%mask_coast_a(  mesh%v1:mesh%v2) = 0
-    ice%mask_margin_a( mesh%v1:mesh%v2) = 0
-    ice%mask_gl_a(     mesh%v1:mesh%v2) = 0
-    ice%mask_cf_a(     mesh%v1:mesh%v2) = 0
-    ice%mask_a(        mesh%v1:mesh%v2) = C%type_land
+    ice%mask_land_a(   mesh%vi1:mesh%vi2) = 1
+    ice%mask_ocean_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_lake_a(   mesh%vi1:mesh%vi2) = 0
+    ice%mask_ice_a(    mesh%vi1:mesh%vi2) = 0
+    ice%mask_sheet_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_shelf_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_coast_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_margin_a( mesh%vi1:mesh%vi2) = 0
+    ice%mask_gl_a(     mesh%vi1:mesh%vi2) = 0
+    ice%mask_cf_a(     mesh%vi1:mesh%vi2) = 0
+    ice%mask_a(        mesh%vi1:mesh%vi2) = C%type_land
     CALL sync
   
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Determine ocean (both open and shelf-covered)
       IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
@@ -110,11 +110,11 @@ CONTAINS
         ice%mask_a(       vi) = C%type_shelf
       END IF
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
   
     ! Determine coast, grounding line and calving front
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
       IF (ice%mask_land_a( vi) == 1) THEN  
         ! Land bordering ocean equals coastline
@@ -164,7 +164,7 @@ CONTAINS
         END DO
         
       END IF
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
   
   END SUBROUTINE determine_masks

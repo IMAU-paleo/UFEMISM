@@ -83,14 +83,14 @@ CONTAINS
     CALL sync
     
     ! Determine vertex and triangle domains
-    CALL partition_list( region%mesh%nV,   par%i, par%n, region%mesh%v1, region%mesh%v2)
-    CALL partition_list( region%mesh%nTri, par%i, par%n, region%mesh%t1, region%mesh%t2)
+    CALL partition_list( region%mesh%nV,   par%i, par%n, region%mesh%vi1, region%mesh%vi2)
+    CALL partition_list( region%mesh%nTri, par%i, par%n, region%mesh%ti1, region%mesh%ti2)
     
     ! Calculate some mesh metadata
-    xmin = MINVAL( region%mesh%V( region%mesh%v1:region%mesh%v2,1) )
-    xmax = MAXVAL( region%mesh%V( region%mesh%v1:region%mesh%v2,1) )
-    ymin = MINVAL( region%mesh%V( region%mesh%v1:region%mesh%v2,2) )
-    ymax = MAXVAL( region%mesh%V( region%mesh%v1:region%mesh%v2,2) )
+    xmin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
+    xmax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
+    ymin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
+    ymax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
     CALL MPI_REDUCE( xmin, region%mesh%xmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_REDUCE( xmax, region%mesh%xmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_REDUCE( ymin, region%mesh%ymin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)

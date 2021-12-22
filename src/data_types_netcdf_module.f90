@@ -626,11 +626,8 @@ MODULE data_types_netcdf_module
         
   END TYPE type_netcdf_debug
     
-  TYPE type_netcdf_PD_data
-    ! For reading an input file describing a present-day model region, on a Cartesian grid
-  
-    ! Integers describing open ports to different variables in an opened NetCDF file,
-    ! plus character strings describing the names of those variables.
+  TYPE type_netcdf_reference_geometry
+    ! For reading an input file describing a reference ice-sheet geometry on a Cartesian grid
     
     CHARACTER(LEN=256) :: filename
     
@@ -643,11 +640,9 @@ MODULE data_types_netcdf_module
     ! Dimensions
     INTEGER :: id_dim_x
     INTEGER :: id_dim_y
-    INTEGER :: id_dim_month
     
     CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
     CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
-    CHARACTER(LEN=256) :: name_dim_month                 = 'month                '
     
     ! Variables:
     INTEGER :: id_var_x
@@ -660,46 +655,9 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
-    CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   ' 
-        
-  END TYPE type_netcdf_PD_data
-    
-  TYPE type_netcdf_init_data
-    ! For reading an input file describing the initial state of a model region, on a Cartesian grid
-    
-    ! Integers describing open ports to different variables in an opened NetCDF file,
-    ! plus character strings describing the names of those variables.
-    
-    CHARACTER(LEN=256) :: filename
-    
-    ! ID for NetCDF file:
-    INTEGER :: ncid
-    
-    ! ID's for variables:
-    ! ===================
-    
-    INTEGER :: id_dim_x
-    INTEGER :: id_dim_y
-    
-    ! Variable names
-    CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
-    CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
-    
-    ! Key output
-    INTEGER :: id_var_x
-    INTEGER :: id_var_y
-    INTEGER :: id_var_Hi
-    INTEGER :: id_var_Hb
-    INTEGER :: id_var_Hs
-    
-    ! Variable names
-    CHARACTER(LEN=256) :: name_var_x                     = 'x                    '
-    CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
-    CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
-    CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
     CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   '
         
-  END TYPE type_netcdf_init_data
+  END TYPE type_netcdf_reference_geometry
     
   TYPE type_netcdf_climate_data
     ! For reading an input file containing either a GCM snapshot or a PD observations data set (e.g. ERA-40),

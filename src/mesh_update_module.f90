@@ -21,7 +21,7 @@ MODULE mesh_update_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region, type_ice_model, type_PD_data_fields
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_ice_model, type_reference_geometry
   USE mesh_help_functions_module,      ONLY: cart_bilinear_dp, max_cart_over_triangle_dp, mesh_bilinear_dp, is_in_triangle, check_mesh, &
                                              partition_domain_regular, partition_domain_x_balanced, partition_domain_y_balanced, is_walltowall, &
                                              new_triangle_contains_old_mask, write_mesh_to_text_file, is_boundary_segment, is_encroached_upon
@@ -37,7 +37,7 @@ MODULE mesh_update_module
   
   ! === Check whether or not a triangle meets all the fitness criteria.
   ! If you want to change the rules for mesh creation, this is where to do it.
-  SUBROUTINE is_good_triangle( mesh_new, ti, mesh_old, ice, PD, IsGood)
+  SUBROUTINE is_good_triangle( mesh_new, ti, mesh_old, ice, refgeo_PD, IsGood)
     ! Check if triangle ti of the mesh is Bad (and should be refined by Ruppert's Algorithm)
     ! A triangle is Bad if:
     !   - its smallest internal angle is too small
@@ -49,7 +49,7 @@ MODULE mesh_update_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_new
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_old       ! The old mesh
     TYPE(type_ice_model),       INTENT(IN)        :: ice
-    TYPE(type_PD_data_fields),  INTENT(IN)        :: PD
+    TYPE(type_reference_geometry), INTENT(IN)     :: refgeo_PD
 
     INTEGER,                    INTENT(IN)        :: ti             ! The triangle we want to check
     LOGICAL,                    INTENT(OUT)       :: IsGood         ! The result
@@ -227,9 +227,9 @@ MODULE mesh_update_module
     ! Ice-free bed topography (higher res for mountains so inception is captured better)
     ! ==================================================================================
     
-    CALL max_cart_over_triangle_dp( p, q, r, PD%Hb_grid, PD%grid%x, PD%grid%y, PD%grid%nx, PD%grid%ny, Hb_max, trinel)
+    CALL max_cart_over_triangle_dp( p, q, r, refgeo_PD%Hb_grid, refgeo_PD%grid%x, refgeo_PD%grid%y, refgeo_PD%grid%nx, refgeo_PD%grid%ny, Hb_max, trinel)
     IF (trinel==0) THEN
-      CALL cart_bilinear_dp( PD%Hb_grid, PD%grid%x, PD%grid%y, PD%grid%nx, PD%grid%ny, (p+q+r)/3._dp, Hb_max)
+      CALL cart_bilinear_dp( refgeo_PD%Hb_grid, refgeo_PD%grid%x, refgeo_PD%grid%y, refgeo_PD%grid%nx, refgeo_PD%grid%ny, (p+q+r)/3._dp, Hb_max)
     END IF
     
     lr_lo = LOG( mesh_new%res_max)
@@ -336,7 +336,7 @@ MODULE mesh_update_module
       IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
       
       ! Refine the process submesh
-      CALL refine_mesh( submesh, region%mesh, region%ice, region%PD) 
+      CALL refine_mesh( submesh, region%mesh, region%ice, region%refgeo_PD) 
       
       ! Align with neighbouring submeshes
       CALL align_all_submeshes( submesh, orientation)
@@ -465,7 +465,7 @@ MODULE mesh_update_module
   END SUBROUTINE widen_high_res_zones
   
   ! == Extended Ruppert's algorithm
-  SUBROUTINE refine_mesh( mesh, mesh_old, ice, PD)
+  SUBROUTINE refine_mesh( mesh, mesh_old, ice, refgeo_PD)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
     
     IMPLICIT NONE
@@ -474,7 +474,7 @@ MODULE mesh_update_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_old
     TYPE(type_ice_model),       INTENT(IN)        :: ice
-    TYPE(type_PD_data_fields),  INTENT(IN)        :: PD
+    TYPE(type_reference_geometry), INTENT(IN)     :: refgeo_PD
     
     ! Local variables
     INTEGER                                       :: ti
@@ -510,7 +510,7 @@ MODULE mesh_update_module
         ! Bad, refine it and add the affected triangles to the RefineStack.
       
         ti = mesh%RefStack( mesh%RefStackN)
-        CALL is_good_triangle(mesh, ti, mesh_old, ice, PD, IsGood)
+        CALL is_good_triangle(mesh, ti, mesh_old, ice, refgeo_PD, IsGood)
               
         IF (IsGood) THEN
           ! Remove this triangle from the stack

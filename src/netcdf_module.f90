@@ -22,8 +22,8 @@ MODULE netcdf_module
   
   ! Import specific functionality
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
-  USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_PD_data_fields, type_forcing_data, &
-                                           type_init_data_fields, type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
+  USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
+                                           type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
                                            type_sparse_matrix_CSR
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -47,6 +47,8 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
+    
+    IF (.NOT. par%master) RETURN
     
     IF (par%master) WRITE(0,*) '  Creating output files...'
     
@@ -492,7 +494,7 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%PD%Hb, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
     
     ELSE
       WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_mesh!'
@@ -1395,7 +1397,7 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%PD%Hb( region%mesh%vi1:region%mesh%vi2)
+      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
     
     ELSE
@@ -3230,32 +3232,35 @@ CONTAINS
     INTEGER,                   INTENT(OUT)   :: nV, nTri, nC_mem
     
     ! Local variables:
-    INTEGER                                  :: int_dummy
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+!    INTEGER                                  :: int_dummy
     
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_vi,    nV,        netcdf%id_dim_vi   )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ti,    nTri,      netcdf%id_dim_ti   )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ci,    nC_mem,    netcdf%id_dim_ci   )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_two,   int_dummy, netcdf%id_dim_two  )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_three, int_dummy, netcdf%id_dim_three)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_V,              (/ netcdf%id_dim_vi, netcdf%id_dim_two  /), netcdf%id_var_V             )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_nC,             (/ netcdf%id_dim_vi                     /), netcdf%id_var_nC            )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_C,              (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_C             )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_niTri,          (/ netcdf%id_dim_vi                     /), netcdf%id_var_niTri         )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_iTri,           (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_iTri          )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_edge_index,     (/ netcdf%id_dim_vi                     /), netcdf%id_var_edge_index    )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri,            (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_Tri           )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Tricc,          (/ netcdf%id_dim_ti, netcdf%id_dim_two  /), netcdf%id_var_Tricc         )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_TriC,           (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_TriC          )
-    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index, (/ netcdf%id_dim_ti                     /), netcdf%id_var_Tri_edge_index)
+    WRITE(0,*) 'inquire_restart_file_mesh - FIXME!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
+!    ! Open the netcdf file
+!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+!    
+!    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_vi,    nV,        netcdf%id_dim_vi   )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ti,    nTri,      netcdf%id_dim_ti   )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ci,    nC_mem,    netcdf%id_dim_ci   )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_two,   int_dummy, netcdf%id_dim_two  )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_three, int_dummy, netcdf%id_dim_three)
+!
+!    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_V,              (/ netcdf%id_dim_vi, netcdf%id_dim_two  /), netcdf%id_var_V             )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_nC,             (/ netcdf%id_dim_vi                     /), netcdf%id_var_nC            )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_C,              (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_C             )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_niTri,          (/ netcdf%id_dim_vi                     /), netcdf%id_var_niTri         )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_iTri,           (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_iTri          )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_edge_index,     (/ netcdf%id_dim_vi                     /), netcdf%id_var_edge_index    )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri,            (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_Tri           )
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Tricc,          (/ netcdf%id_dim_ti, netcdf%id_dim_two  /), netcdf%id_var_Tricc         )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_TriC,           (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_TriC          )
+!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index, (/ netcdf%id_dim_ti                     /), netcdf%id_var_Tri_edge_index)
+!        
+!    ! Close the netcdf file
+!    CALL close_netcdf_file( netcdf%ncid)
     
   END SUBROUTINE inquire_restart_file_mesh
   SUBROUTINE inquire_restart_file_init( netcdf)
@@ -3267,53 +3272,56 @@ CONTAINS
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
     ! Local variables:
-    INTEGER                                  :: nZ, nt, nm, k
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
+!    INTEGER                                  :: nZ, nt, nm, k
+!    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
+    
+    WRITE(0,*) 'inquire_restart_file_init - FIXME!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
-    
-    IF (nZ /= C%nZ) THEN
-      WRITE(0,*) '   ERROR: nZ in restart file doesnt match nZ in config!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
-    
-    ! Read zeta, check if it matches the config zeta
-    ALLOCATE( zeta( nZ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
-    DO k = 1, C%nz
-      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
-        WRITE(0,*) '  WARNING - vertical coordinate zeta in restart file doesnt match zeta in config!'
-      END IF
-      END DO
-    DEALLOCATE( zeta)
-    
-    ! Inquire model data
-    
-    ! Geometry
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
-    
-    ! Temperature
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
-    
-    ! SMB
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
+!    ! Open the netcdf file
+!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+!    
+!    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
+!    
+!    IF (nZ /= C%nZ) THEN
+!      WRITE(0,*) '   ERROR: nZ in restart file doesnt match nZ in config!'
+!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+!    END IF
+!
+!    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
+!    
+!    ! Read zeta, check if it matches the config zeta
+!    ALLOCATE( zeta( nZ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
+!    DO k = 1, C%nz
+!      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
+!        WRITE(0,*) '  WARNING - vertical coordinate zeta in restart file doesnt match zeta in config!'
+!      END IF
+!      END DO
+!    DEALLOCATE( zeta)
+!    
+!    ! Inquire model data
+!    
+!    ! Geometry
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
+!    
+!    ! Temperature
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
+!    
+!    ! SMB
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
+!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
+!        
+!    ! Close the netcdf file
+!    CALL close_netcdf_file( netcdf%ncid)
     
   END SUBROUTINE inquire_restart_file_init
   SUBROUTINE read_restart_file_mesh( mesh, netcdf)
@@ -3325,197 +3333,140 @@ CONTAINS
     TYPE(type_mesh),           INTENT(INOUT) :: mesh
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    WRITE(0,*) 'read_restart_file_mesh - FIXME!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
-    ! Read the data
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
+!    ! Open the netcdf file
+!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+!    
+!    ! Read the data
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
+!        
+!    ! Close the netcdf file
+!    CALL close_netcdf_file( netcdf%ncid)
     
   END SUBROUTINE read_restart_file_mesh
-  SUBROUTINE read_restart_file_init( init, netcdf)
+  SUBROUTINE read_restart_file_init( refgeo_init, netcdf)
     ! Read mesh data from a restart file
    
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_init_data_fields), INTENT(INOUT) :: init
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo_init
     TYPE(type_netcdf_restart),   INTENT(INOUT) :: netcdf
     
     ! Local variables:
-    INTEGER                                    :: nt, ti, ti_min
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
-    REAL(dp)                                   :: dt_min, dt
+!    INTEGER                                    :: nt, ti, ti_min
+!    REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
+!    REAL(dp)                                   :: dt_min, dt
     
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    WRITE(0,*) 'read_restart_file_init - FIXME!'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
-    ! Read time, determine which time frame to read
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-    ALLOCATE( time( nt))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
-    
-    IF (C%time_to_restart_from < MINVAL(time) .OR. C%time_to_restart_from > MAXVAL(time)) THEN
-      WRITE(0,*) '  ERROR - time_to_restart_from ', C%time_to_restart_from, ' outside range of restart file! (range = [', MINVAL( time), ' - ', MAXVAL(time), '])'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF    
-    
-    ti_min = 0
-    dt_min = 1E8_dp
-    DO ti = 1, nt
-      dt = ABS(time( ti) - C%time_to_restart_from)
-      IF (dt < dt_min) THEN
-        ti_min = ti
-        dt_min = dt
-      END IF
-    END DO
-    ti = ti_min
-    
-    DEALLOCATE( time)
-    
-    ! Read the data
-    
-    ! Geometry
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               init%Hi,               start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               init%Hb,               start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               init%Hs,               start = (/ 1,    ti /) ))
-    
-    ! Temperature
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               init%Ti,               start = (/ 1, 1, ti /) ))
-    
-    ! SMB
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, init%MeltPreviousYear, start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        init%FirnDepth,        start = (/ 1, 1, ti /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
+!    ! Open the netcdf file
+!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+!    
+!    ! Read time, determine which time frame to read
+!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+!    ALLOCATE( time( nt))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
+!    
+!    IF (C%time_to_restart_from < MINVAL(time) .OR. C%time_to_restart_from > MAXVAL(time)) THEN
+!      WRITE(0,*) '  ERROR - time_to_restart_from ', C%time_to_restart_from, ' outside range of restart file! (range = [', MINVAL( time), ' - ', MAXVAL(time), '])'
+!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+!    END IF    
+!    
+!    ti_min = 0
+!    dt_min = 1E8_dp
+!    DO ti = 1, nt
+!      dt = ABS(time( ti) - C%time_to_restart_from)
+!      IF (dt < dt_min) THEN
+!        ti_min = ti
+!        dt_min = dt
+!      END IF
+!    END DO
+!    ti = ti_min
+!    
+!    DEALLOCATE( time)
+!    
+!    ! Read the data
+!    
+!    ! Geometry
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               init%Hi,               start = (/ 1,    ti /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               init%Hb,               start = (/ 1,    ti /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               init%Hs,               start = (/ 1,    ti /) ))
+!    
+!    ! Temperature
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               init%Ti,               start = (/ 1, 1, ti /) ))
+!    
+!    ! SMB
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, init%MeltPreviousYear, start = (/ 1,    ti /) ))
+!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        init%FirnDepth,        start = (/ 1, 1, ti /) ))
+!        
+!    ! Close the netcdf file
+!    CALL close_netcdf_file( netcdf%ncid)
     
   END SUBROUTINE read_restart_file_init 
   
-  ! Present-day observed geometry (ice thickness & bed topography)
-  SUBROUTINE inquire_PD_data_file( PD) 
+  ! Reference ice-sheet geometry (ice thickness, bed topography, and surface elevation)
+  SUBROUTINE inquire_reference_geometry_file( refgeo)
     ! Check if the right dimensions and variables are present in the file.
    
     IMPLICIT NONE
     
     ! Input variables:
-    TYPE(type_PD_data_fields), INTENT(INOUT) :: PD
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
         
     ! Open the netcdf file
-    CALL open_netcdf_file(PD%netcdf%filename, PD%netcdf%ncid)
+    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
     
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( PD%netcdf%ncid, PD%netcdf%name_dim_x, PD%grid%nx, PD%netcdf%id_dim_x)
-    CALL inquire_dim( PD%netcdf%ncid, PD%netcdf%name_dim_y, PD%grid%ny, PD%netcdf%id_dim_y)
+    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
+    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( PD%netcdf%ncid, PD%netcdf%name_var_x,  (/ PD%netcdf%id_dim_x                     /), PD%netcdf%id_var_x )
-    CALL inquire_double_var( PD%netcdf%ncid, PD%netcdf%name_var_y,  (/ PD%netcdf%id_dim_y                     /), PD%netcdf%id_var_y )
-    CALL inquire_double_var( PD%netcdf%ncid, PD%netcdf%name_var_Hi, (/ PD%netcdf%id_dim_x, PD%netcdf%id_dim_y /), PD%netcdf%id_var_Hi)
-    CALL inquire_double_var( PD%netcdf%ncid, PD%netcdf%name_var_Hb, (/ PD%netcdf%id_dim_x, PD%netcdf%id_dim_y /), PD%netcdf%id_var_Hb)
-    CALL inquire_double_var( PD%netcdf%ncid, PD%netcdf%name_var_Hs, (/ PD%netcdf%id_dim_x, PD%netcdf%id_dim_y /), PD%netcdf%id_var_Hs)
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
+    
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
         
     ! Close the netcdf file
-    CALL close_netcdf_file(PD%netcdf%ncid)
+    CALL close_netcdf_file( refgeo%netcdf%ncid)
     
-  END SUBROUTINE inquire_PD_data_file
-  SUBROUTINE read_PD_data_file(    PD)
-    ! Read the PD netcdf file
+  END SUBROUTINE inquire_reference_geometry_file
+  SUBROUTINE read_reference_geometry_file(    refgeo)
+    ! Read reference geometry data from a NetCDF file
    
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_PD_data_fields), INTENT(INOUT) :: PD
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
     
     ! Open the netcdf file
-    CALL open_netcdf_file(PD%netcdf%filename, PD%netcdf%ncid)
+    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
     
     ! Read the data
-    CALL handle_error(nf90_get_var( PD%netcdf%ncid, PD%netcdf%id_var_x,      PD%grid%x,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( PD%netcdf%ncid, PD%netcdf%id_var_y,      PD%grid%y,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( PD%netcdf%ncid, PD%netcdf%id_var_Hi,     PD%Hi_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( PD%netcdf%ncid, PD%netcdf%id_var_Hb,     PD%Hb_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( PD%netcdf%ncid, PD%netcdf%id_var_Hs,     PD%Hs_grid, start = (/ 1, 1 /) ))
-    
-    PD%grid%dx = PD%grid%x(2) - PD%grid%x(1)
-    
-    PD%grid%xmin = PD%grid%x(1)
-    PD%grid%xmax = PD%grid%x(PD%grid%nx)
-    PD%grid%ymin = PD%grid%y(1)
-    PD%grid%ymax = PD%grid%y(PD%grid%ny)
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
         
     ! Close the netcdf file
-    CALL close_netcdf_file(PD%netcdf%ncid)
+    CALL close_netcdf_file( refgeo%netcdf%ncid)
     
-  END SUBROUTINE read_PD_data_file 
-  
-  ! Initial observed geometry (ice thickness % bed topography)
-  SUBROUTINE inquire_init_data_file( init) 
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_init_data_fields), INTENT(INOUT) :: init
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file(init%netcdf%filename, init%netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( init%netcdf%ncid, init%netcdf%name_dim_x, init%grid%nx, init%netcdf%id_dim_x)
-    CALL inquire_dim( init%netcdf%ncid, init%netcdf%name_dim_y, init%grid%ny, init%netcdf%id_dim_y)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( init%netcdf%ncid, init%netcdf%name_var_x,  (/ init%netcdf%id_dim_x                       /), init%netcdf%id_var_x)
-    CALL inquire_double_var( init%netcdf%ncid, init%netcdf%name_var_y,  (/ init%netcdf%id_dim_y                       /), init%netcdf%id_var_y)
-    CALL inquire_double_var( init%netcdf%ncid, init%netcdf%name_var_Hi, (/ init%netcdf%id_dim_x, init%netcdf%id_dim_y /), init%netcdf%id_var_Hi)
-    CALL inquire_double_var( init%netcdf%ncid, init%netcdf%name_var_Hb, (/ init%netcdf%id_dim_x, init%netcdf%id_dim_y /), init%netcdf%id_var_Hb)
-    CALL inquire_double_var( init%netcdf%ncid, init%netcdf%name_var_Hs, (/ init%netcdf%id_dim_x, init%netcdf%id_dim_y /), init%netcdf%id_var_Hs)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(init%netcdf%ncid)
-    
-  END SUBROUTINE inquire_init_data_file
-  SUBROUTINE read_init_data_file(    init)
-    ! Read the init netcdf file
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_init_data_fields), INTENT(INOUT) :: init
-    
-    ! Open the netcdf file
-    CALL open_netcdf_file(init%netcdf%filename, init%netcdf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( init%netcdf%ncid, init%netcdf%id_var_x,      init%grid%x,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( init%netcdf%ncid, init%netcdf%id_var_y,      init%grid%y,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( init%netcdf%ncid, init%netcdf%id_var_Hi,     init%Hi_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( init%netcdf%ncid, init%netcdf%id_var_Hb,     init%Hb_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( init%netcdf%ncid, init%netcdf%id_var_Hs,     init%Hs_grid, start = (/ 1, 1 /) ))
-    
-    init%grid%dx = init%grid%x(2) - init%grid%x(1)
-    
-    init%grid%xmin = init%grid%x(1)
-    init%grid%xmax = init%grid%x(init%grid%nx)
-    init%grid%ymin = init%grid%y(1)
-    init%grid%ymax = init%grid%y(init%grid%ny)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(init%netcdf%ncid)
-    
-  END SUBROUTINE read_init_data_file
+  END SUBROUTINE read_reference_geometry_file
   
   ! Present-day observed global climate (e.g. ERA-40)
   SUBROUTINE inquire_PD_obs_data_file( PD_obs) 

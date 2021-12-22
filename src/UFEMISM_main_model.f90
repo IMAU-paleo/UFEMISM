@@ -23,8 +23,7 @@ MODULE UFEMISM_main_model
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping
-  USE reference_fields_module,         ONLY: initialise_PD_data_fields, initialise_init_data_fields, &
-                                             map_PD_data_to_mesh, map_init_data_to_mesh
+  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometry_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
@@ -250,16 +249,26 @@ CONTAINS
     CALL allocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
     CALL initialise_mask_noice(  region, region%mesh_new)
             
-    ! Reallocate and remap reference PD data 
-    CALL deallocate_shared(  region%PD%wHi  )
-    CALL deallocate_shared(  region%PD%wHb  )
-    CALL deallocate_shared(  region%PD%wHs  )
-    CALL map_PD_data_to_mesh(  region%mesh_new,    region%PD)
+    ! Reallocate and remap reference geometries
+    CALL deallocate_shared(  region%refgeo_init%wHi )
+    CALL deallocate_shared(  region%refgeo_init%wHb )
+    CALL deallocate_shared(  region%refgeo_init%wHs )
+    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_init )
+    
+    CALL deallocate_shared(  region%refgeo_PD%wHi   )
+    CALL deallocate_shared(  region%refgeo_PD%wHb   )
+    CALL deallocate_shared(  region%refgeo_PD%wHs   )
+    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_PD   )
+    
+    CALL deallocate_shared(  region%refgeo_GIAeq%wHi)
+    CALL deallocate_shared(  region%refgeo_GIAeq%wHb)
+    CALL deallocate_shared(  region%refgeo_GIAeq%wHs)
+    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_GIAeq)
     
     ! Remap all the submodels
-    CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%PD, region%grid_GIA)
-    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%PD)
-    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate, matrix, region%PD, region%grid_smooth, region%mask_noice, region%name)
+    CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
+    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD)
+    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate, matrix, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
@@ -337,20 +346,19 @@ CONTAINS
     ! ===== PD and init reference data fields =====
     ! =============================================
     
-    CALL initialise_PD_data_fields( region%PD, region%name)
-    CALL calculate_PD_sealevel_contribution( region)
-    
-    ! If we're restarting from a previous run, no need to read an initial file.
-    IF (.NOT. C%is_restart) CALL initialise_init_data_fields( region%init, region%name)
+    CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
     
     ! ===== The mesh =====
     ! ====================
     
-    IF (C%is_restart) THEN
-      CALL read_mesh_from_restart_file( region)
-    ELSE
-      CALL create_mesh_from_cart_data( region)
-    END IF
+    CALL create_mesh_from_cart_data( region)
+    
+    ! ===== Map reference geometries to the mesh =====
+    ! ================================================
+    
+    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_init )
+    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_PD   )
+    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_GIAeq)
     
     ! The different square grids
     ! ==========================
@@ -363,24 +371,12 @@ CONTAINS
     ! ===========================================
     
     CALL initialise_debug_fields( region)
-    
-    ! ===== Map PD and init reference data fields to the mesh =====
-    ! =============================================================
-    
-    CALL map_PD_data_to_mesh(   region%mesh, region%PD  )
-    
-    IF (.NOT. C%is_restart) THEN
-      CALL map_init_data_to_mesh( region%mesh, region%init)
-    ELSE
-      ! Read initial data from the restart file
-      CALL read_init_data_from_restart_file( region)
-    END IF
        
-    ! ===== Output file =====
+    ! ===== Output files =====
     ! =======================
   
-    IF (par%master) CALL create_output_files( region)
-    CALL associate_debug_fields(  region)
+    CALL create_output_files(    region)
+    CALL associate_debug_fields( region)
     region%output_file_exists = .TRUE.
     CALL sync
     
@@ -389,26 +385,26 @@ CONTAINS
 
     CALL allocate_shared_int_1D( region%mesh%nV, region%mask_noice, region%wmask_noice)
     CALL initialise_mask_noice( region, region%mesh)
+  
+    ! ===== The ice dynamics model
+    ! ============================
+    
+    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
         
     ! ===== The climate model =====
     ! =============================    
     
-    CALL initialise_climate_model( region%climate, matrix, region%mesh, region%PD, region%name, region%mask_noice, region%grid_smooth)
+    CALL initialise_climate_model( region%climate, matrix, region%mesh, region%refgeo_PD, region%name, region%mask_noice, region%grid_smooth)
     
     ! ===== The SMB model =====
     ! =========================    
     
-    CALL initialise_SMB_model( region%mesh, region%init, region%SMB, region%name)
+    CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
     
     ! ===== The BMB model =====
     ! =========================    
     
     CALL initialise_BMB_model( region%mesh, region%BMB, region%name) 
-  
-    ! ===== The ice dynamics model
-    ! ============================
-    
-    CALL initialise_ice_model( region%mesh, region%ice, region%init)
     
     ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
     CALL run_climate_model( region%mesh, region%ice, region%SMB, region%climate, C%start_time_of_run, region%name, region%grid_smooth)
@@ -432,7 +428,7 @@ CONTAINS
     ! ==============================
     
     IF (C%choice_GIA_model == 'ELRA') THEN
-      CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%PD)
+      CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
     ELSE
       WRITE(0,*) '  ERROR - choice_GIA_model "', C%choice_GIA_model, '" not implemented in initialise_model!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -789,8 +785,6 @@ CONTAINS
   
   ! Calculate this region's ice sheet's volume and area
   SUBROUTINE calculate_icesheet_volume_and_area( region)
-    
-    USE parameters_module,           ONLY: ocean_area, seawater_density, ice_density
   
     IMPLICIT NONE  
     
@@ -829,8 +823,6 @@ CONTAINS
     
   END SUBROUTINE calculate_icesheet_volume_and_area
   SUBROUTINE calculate_PD_sealevel_contribution( region)
-    
-    USE parameters_module,           ONLY: ocean_area, seawater_density, ice_density
   
     IMPLICIT NONE  
     
@@ -842,19 +834,19 @@ CONTAINS
     ice_volume                 = 0._dp
     ice_volume_above_flotation = 0._dp
     
-    DO i = region%PD%grid%i1, region%PD%grid%i2
-    DO j = 1, region%PD%grid%ny
+    DO i = region%refgeo_PD%grid%i1, region%refgeo_PD%grid%i2
+    DO j = 1, region%refgeo_PD%grid%ny
     
       ! Thickness above flotation
-      IF (region%PD%Hi_grid( i,j) > 0._dp) THEN
-        thickness_above_flotation = MAX(0._dp, region%PD%Hi_grid( i,j) - MAX(0._dp, (0._dp - region%PD%Hb_grid( i,j)) * (seawater_density / ice_density)))
+      IF (region%refgeo_PD%Hi_grid( i,j) > 0._dp) THEN
+        thickness_above_flotation = MAX(0._dp, region%refgeo_PD%Hi_grid( i,j) - MAX(0._dp, (0._dp - region%refgeo_PD%Hb_grid( i,j)) * (seawater_density / ice_density)))
       ELSE
         thickness_above_flotation = 0._dp
       END IF
       
       ! Ice volume (above flotation) in m.s.l.e
-      ice_volume                 = ice_volume                 + region%PD%Hi_grid( i,j)   * region%PD%grid%dx * region%PD%grid%dx * ice_density / (seawater_density * ocean_area)
-      ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation * region%PD%grid%dx * region%PD%grid%dx * ice_density / (seawater_density * ocean_area)
+      ice_volume                 = ice_volume                 + region%refgeo_PD%Hi_grid( i,j)   * region%refgeo_PD%grid%dx * region%refgeo_PD%grid%dx * ice_density / (seawater_density * ocean_area)
+      ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation        * region%refgeo_PD%grid%dx * region%refgeo_PD%grid%dx * ice_density / (seawater_density * ocean_area)
       
     END DO
     END DO

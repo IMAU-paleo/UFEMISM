@@ -22,6 +22,7 @@ MODULE mesh_help_functions_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_model_region
+  USE utilities_module,                ONLY: line_integral_mxydx, line_integral_xydy
 
   IMPLICIT NONE
 
@@ -2097,95 +2098,6 @@ MODULE mesh_help_functions_module
     TriA = ABS( cross2( [pr(1)-pq(1), pr(2)-pq(2)], [ps(1)-pq(1), ps(2)-pq(2)] )) / 2._dp
     
   END SUBROUTINE find_triangle_area
-
-! == Three basic line integrals used for conservative remapping
-  SUBROUTINE line_integral_xdy(   p, q, tol_dist, I_pq)
-    ! Calculate the line integral x dy from p to q    
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
-    REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp),                                INTENT(OUT)   :: I_pq
-    
-    ! Local variables:
-    REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
-        
-    xp = p(1)
-    yp = p(2)
-    xq = q(1)
-    yq = q(2)
-    
-    IF (ABS(yp-yq) < tol_dist) THEN
-      I_pq = 0._dp
-      RETURN
-    END IF
-    
-    dx = q(1)-p(1)
-    dy = q(2)-p(2)
-    
-    I_pq = xp*dy - yp*dx + (dx / (2._dp*dy)) * (yq**2 - yp**2)
-    
-  END SUBROUTINE line_integral_xdy
-  SUBROUTINE line_integral_mxydx( p, q, tol_dist, I_pq)
-    ! Calculate the line integral -xy dx from p to q    
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
-    REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp),                                INTENT(OUT)   :: I_pq
-    
-    ! Local variables:
-    REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
-        
-    xp = p(1)
-    yp = p(2)
-    xq = q(1)
-    yq = q(2)
-    
-    IF (ABS(xp-xq) < tol_dist) THEN
-      I_pq = 0._dp
-      RETURN
-    END IF
-    
-    dx = q(1)-p(1)
-    dy = q(2)-p(2)
-    
-    I_pq = (1._dp/2._dp * (xp*dy/dx - yp) * (xq**2-xp**2)) - (1._dp/3._dp * dy/dx * (xq**3-xp**3))
-    
-  END SUBROUTINE line_integral_mxydx
-  SUBROUTINE line_integral_xydy(  p, q, tol_dist, I_pq)
-    ! Calculate the line integral xy dy from p to q    
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    REAL(dp), DIMENSION(2),                  INTENT(IN)    :: p, q
-    REAL(dp),                                INTENT(IN)    :: tol_dist
-    REAL(dp),                                INTENT(OUT)   :: I_pq
-    
-    ! Local variables:
-    REAL(dp)                                               :: xp, yp, xq, yq, dx, dy
-        
-    xp = p(1)
-    yp = p(2)
-    xq = q(1)
-    yq = q(2)
-    
-    IF (ABS(yp-yq) < tol_dist) THEN
-      I_pq = 0._dp
-      RETURN
-    END IF
-    
-    dx = q(1)-p(1)
-    dy = q(2)-p(2)
-    
-    I_pq = (1._dp/2._dp * (xp - yp*dx/dy) * (yq**2-yp**2)) + (1._dp/3._dp * dx/dy * (yq**3-yp**3))
-    
-  END SUBROUTINE line_integral_xydy
       
 ! == Help routines for use in mesh updating
   SUBROUTINE mean_cart_over_Voronoi_cell_dp(  mesh, d, x, y, nx, ny, vi, v)

@@ -22,7 +22,8 @@ MODULE ice_thickness_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, type_PD_data_fields
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
+                                             type_reference_geometry
   USE utilities_module,                ONLY: is_floating
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag
 
@@ -31,7 +32,7 @@ MODULE ice_thickness_module
 CONTAINS
   
   ! The main routine that is called from "run_ice_model" in the ice_dynamics_module
-  SUBROUTINE calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, PD)
+  SUBROUTINE calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, refgeo_PD)
     ! Use the total ice velocities to update the ice thickness
     
     IMPLICIT NONE
@@ -43,7 +44,7 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(IN)    :: BMB
     REAL(dp),                            INTENT(IN)    :: dt
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Use the specified time integration method to calculate the ice thickness at t+dt
     IF     (C%choice_ice_integration_method == 'none') THEN
@@ -61,7 +62,7 @@ CONTAINS
     END IF
     
     ! Apply boundary conditions
-    CALL apply_ice_thickness_BC( mesh, ice, dt, mask_noice, PD)
+    CALL apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
     
   END SUBROUTINE calc_dHi_dt
   
@@ -224,7 +225,7 @@ CONTAINS
   END SUBROUTINE calc_dHi_dt_explicit
     
   ! Some useful tools
-  SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, PD)
+  SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
     ! Apply ice thickness boundary conditions (at the domain boundary, and through the mask_noice)
     
     IMPLICIT NONE
@@ -234,7 +235,7 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp),                            INTENT(IN)    :: dt
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
     INTEGER                                            :: vi
@@ -347,7 +348,7 @@ CONTAINS
     ! If so specified, remove all floating ice beyond the present-day calving front
     IF (C%remove_shelves_larger_than_PD) THEN
       DO vi = mesh%vi1, mesh%vi2
-        IF (PD%Hi( vi) == 0._dp .AND. PD%Hb( vi) < 0._dp) THEN
+        IF (refgeo_PD%Hi( vi) == 0._dp .AND. refgeo_PD%Hb( vi) < 0._dp) THEN
           ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
           ice%Hi_tplusdt_a( vi) = 0._dp
         END IF

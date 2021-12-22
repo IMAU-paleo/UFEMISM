@@ -19,7 +19,7 @@
   ! Debugging
   ! =========
   
-  do_write_debug_data_config                  = .TRUE.                          ! Whether or not the debug NetCDF file should be created and written to
+  do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
   do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values           
   do_write_memory_tracker_config              = .FALSE.                          ! Whether or not the memory use tracker should be used                
   
@@ -29,16 +29,29 @@
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
   do_GRL_config                               = .FALSE.                          ! Greenland
-  do_ANT_config                               = .TRUE.                           ! Antarctica
+  do_ANT_config                               = .TRUE.                           ! Antarctica                  
+  
+  ! Domain size for the four regions
+  ! ================================
+  
+  xmin_ANT_config                             = -700000.0                        ! Western  boundary     of the Antarctica domain [m]
+  xmax_ANT_config                             =  700000.0                        ! Eastern  boundary     of the Antarctica domain [m]
+  ymin_ANT_config                             = -700000.0                        ! Southern boundary     of the Antarctica domain [m]
+  ymax_ANT_config                             =  700000.0                        ! Northern boundary     of the Antarctica domain [m]
   
   ! Benchmark experiments
   ! =====================
   
   do_benchmark_experiment_config              = .TRUE.
   choice_benchmark_experiment_config          = 'EISMINT_1'
-  halfar_solution_H0_config                   = 5000.0  
-  halfar_solution_R0_config                   = 300000.0  
-  bueler_solution_lambda_config               = 5.0  
+  SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
+  ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
+  ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
+  MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
+  MISMIPplus_xGL_target_config                = 450000.0                         ! Mid-channel GL position to tune the flow factor A for
+  MISMIPplus_A_flow_initial_config            = 2.0E-17                          ! Initial flow factor before tuning (or throughout the run when tuning is not used)
+  MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
+  MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
 
   ! Mesh generation parameters
   ! ==========================
@@ -84,30 +97,38 @@
   create_new_output_dir_config                = .TRUE.
   output_dir_config                           = 'results_UFEMISM'
 
+  ! Reference geometries (initial, present-day, and GIA equilibrium)
+  ! ================================================================
+  
+  ! Initial geometry
+  choice_refgeo_init_ANT_config               = 'idealised'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_idealised_config         = 'flatearth'                      ! Choice of idealised initial geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  dx_refgeo_init_idealised_config             = 5000.0                           ! Resolution of square grid used for idealised initial geometry
+  
+  ! Present-day geometry
+  choice_refgeo_PD_ANT_config                 = 'idealised'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_PD_idealised_config           = 'flatearth'                      ! Choice of idealised present-day geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  dx_refgeo_PD_idealised_config               = 5000.0                           ! Resolution of square grid used for idealised present-day geometry
+  
+  ! GIA equilibrium geometry
+  choice_refgeo_GIAeq_ANT_config              = 'idealised'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_GIAeq_idealised_config        = 'flatearth'                      ! Choice of idealised GIA equilibrium geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  dx_refgeo_GIAeq_idealised_config            = 5000.0                           ! Resolution of square grid used for idealised GIA equilibrium geometry
+
+  remove_Lake_Vostok_config                   = .FALSE.
+
   ! Input data file paths
   ! =====================
-  
-  ! Initial model state
-  filename_init_NAM_config                    = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  filename_init_EAS_config                    = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_init_GRL_config                    = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km_noEllesmere.nc'
-  filename_init_ANT_config                    = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
-  
-  ! PD reference data (NetCDF)
-  filename_PD_NAM_config                      = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  filename_PD_EAS_config                      = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_PD_GRL_config                      = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km_noEllesmere.nc'
-  filename_PD_ANT_config                      = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' 
    
   ! Insolation forcing (NetCDF) (Laskar et al., 2004)
   filename_insolation_config                  = '/Datasets/Insolation_laskar/Insolation_Laskar_etal_2004.nc'
   
   ! CO2 record (ASCII text file, so the number of rows needs to be specified)
-  filename_CO2_record_config                  = '/Users/berends/Documents/Datasets/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
+  filename_CO2_record_config                  = 'Datasets/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
   CO2_record_length_config                    = 8001
   
   ! d18O record (ASCII text file, so the number of rows needs to be specified)
-  filename_d18O_record_config                 = '/Users/berends/Documents/Datasets/d18O/Ahn2017_d18O.dat'
+  filename_d18O_record_config                 = 'Datasets/d18O/Ahn2017_d18O.dat'
   d18O_record_length_config                   = 2051
   
   ! Geothermal heat flux
@@ -144,7 +165,7 @@
   DIVA_boundary_BC_v_east_config              = 'infinite'
   DIVA_boundary_BC_v_south_config             = 'infinite'
   DIVA_boundary_BC_v_north_config             = 'infinite'
-  DIVA_choice_matrix_solver_config            = 'SOR'                          ! Choice of matrix solver for the ice velocity equations: "SOR", "PETSc"
+  DIVA_choice_matrix_solver_config            = 'PETSc'                          ! Choice of matrix solver for the ice velocity equations: "SOR", "PETSc"
   DIVA_SOR_nit_config                         = 10000                            ! DIVA SOR   solver - maximum number of iterations
   DIVA_SOR_tol_config                         = 2.5                              ! DIVA SOR   solver - stop criterion, absolute difference
   DIVA_SOR_omega_config                       = 1.3                              ! DIVA SOR   solver - over-relaxation parameter
@@ -186,7 +207,7 @@
   ! ===========================================
   
   ! Sliding laws
-  choice_sliding_law_config                   = 'Coulomb_regularised'            ! Choice of sliding law: "no_sliding", "idealised", "Coulomb", "Coulomb_regularised", "Weertman", "Tsai2015", "Schoof2005"
+  choice_sliding_law_config                   = 'no_sliding'                     ! Choice of sliding law: "no_sliding", "idealised", "Coulomb", "Coulomb_regularised", "Weertman", "Tsai2015", "Schoof2005"
   choice_idealised_sliding_law_config         = ''                               ! "ISMIP_HOM_C", "ISMIP_HOM_D", "ISMIP_HOM_E", "ISMIP_HOM_F"
   slid_delta_v_config                         = 1.0E-3                           ! Normalisation parameter to prevent errors when velocity is zero
   slid_Weertman_m_config                      = 3.0                              ! Exponent in Weertman sliding law
@@ -219,17 +240,17 @@
   choice_initial_ice_temperature_config       = 'Robin'                          ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
   uniform_ice_temperature_config              = 270.0                            ! Uniform ice temperature (applied when choice_initial_ice_temperature_config = "uniform")
   choice_thermo_model_config                  = '3D_heat_equation'               ! Choice of thermodynamical model: "none", "3D_heat_equation"
-  choice_ice_rheology_config                  = 'Huybrechts1992'                 ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"
+  choice_ice_rheology_config                  = 'uniform'                        ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"
   uniform_flow_factor_config                  = 1E-16                            ! Uniform ice flow factor (applied when choice_ice_rheology_model_config = "uniform")
-  choice_ice_heat_capacity_config             = 'Pounder1965'                    ! Choice of ice heat capacity model: "uniform", "Pounder1965"
+  choice_ice_heat_capacity_config             = 'uniform'                        ! Choice of ice heat capacity model: "uniform", "Pounder1965"
   uniform_ice_heat_capacity_config            = 2009.0                           ! Uniform ice heat capacity (applied when choice_ice_heat_capacity_config = "uniform")
-  choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
+  choice_ice_thermal_conductivity_config      = 'uniform'                        ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   uniform_ice_thermal_conductivity_config     = 6.626958E7                       ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
   
   ! Sea level and GIA
   ! =================
   
-  do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
+  do_ocean_floodfill_config                   = .FALSE.                          ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
   choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0  
   filename_sealevel_record_config             = 'name_of_file.dat'
@@ -244,16 +265,16 @@
   ! ==============
   
   ! Present-day observed climate (ERA40) (NetCDF)
-  filename_PD_obs_climate_config              = '/Users/berends/Documents/Datasets/ERA40/ERA40_climate_global.nc'
+  filename_PD_obs_climate_config              = 'Datasets/ERA40/ERA40_climate_global.nc'
   
   ! GCM snapshots
   choice_climate_matrix_config                = 'PI_LGM'                         ! 'PI_LGM' uses 2 snapshots
-  filename_GCM_snapshot_PI_config             = '/Users/berends/Documents/Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  filename_GCM_snapshot_LGM_config            = '/Users/berends/Documents/Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+  filename_GCM_snapshot_PI_config             = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  filename_GCM_snapshot_LGM_config            = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
   
   ! Ice5G ice-sheet geometry
-  filename_ICE5G_PD_config                    = '/Users/berends/Documents/Datasets/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  filename_ICE5G_LGM_config                   = '/Users/berends/Documents/Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
+  filename_ICE5G_PD_config                    = 'Datasets/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
+  filename_ICE5G_LGM_config                   = 'Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
   
   constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
   
@@ -358,21 +379,21 @@
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
   
-  help_field_01_config                        = 'lat'
-  help_field_02_config                        = 'lon'
-  help_field_03_config                        = 'resolution'
-  help_field_04_config                        = 'u_3D'
-  help_field_05_config                        = 'v_3D'
-  help_field_06_config                        = 'w_3D'
-  help_field_07_config                        = 'u_vav'
-  help_field_08_config                        = 'v_vav'
-  help_field_09_config                        = 'uabs_vav'
-  help_field_10_config                        = 'u_surf'
-  help_field_11_config                        = 'v_surf'
-  help_field_12_config                        = 'uabs_surf'
-  help_field_13_config                        = 'u_base'
-  help_field_14_config                        = 'v_base'
-  help_field_15_config                        = 'uabs_base'
+  help_field_01_config                        = 'resolution'
+  help_field_02_config                        = 'u_3D'
+  help_field_03_config                        = 'v_3D'
+  help_field_04_config                        = 'w_3D'
+  help_field_05_config                        = 'u_vav'
+  help_field_06_config                        = 'v_vav'
+  help_field_07_config                        = 'uabs_vav'
+  help_field_08_config                        = 'u_surf'
+  help_field_09_config                        = 'v_surf'
+  help_field_10_config                        = 'uabs_surf'
+  help_field_11_config                        = 'u_base'
+  help_field_12_config                        = 'v_base'
+  help_field_13_config                        = 'uabs_base'
+  help_field_14_config                        = 'none'
+  help_field_15_config                        = 'none'
   help_field_16_config                        = 'none'
   help_field_17_config                        = 'none'
   help_field_18_config                        = 'none'

@@ -22,7 +22,7 @@ MODULE thermodynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_init_data_fields
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D

@@ -294,11 +294,11 @@ CONTAINS
     ! so that we can calculate the total present-day isotope content of the ice-sheet
     DO vi = region%mesh%vi1, region%mesh%vi2
     
-      IF (region%PD%Hi( vi) > 0._dp) THEN
+      IF (region%refgeo_PD%Hi( vi) > 0._dp) THEN
       
         Ts     = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
         Ts_ref = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
-        Hs     = region%PD%Hs( vi)
+        Hs     = region%refgeo_PD%Hs( vi)
         Hs_ref = region%climate%PD_obs%Hs( vi)
         
         region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
@@ -314,7 +314,7 @@ CONTAINS
     CALL sync
     
     ! Calculate mean isotope content of the whole ice sheet at present-day
-    CALL calculate_isotope_content( region%mesh, region%PD%Hi, region%ice%IsoIce, region%mean_isotope_content_PD, region%d18O_contribution_PD)
+    CALL calculate_isotope_content( region%mesh, region%refgeo_PD%Hi, region%ice%IsoIce, region%mean_isotope_content_PD, region%d18O_contribution_PD)
     
     ! Initialise ice sheet isotope content with the isotope content of annual mean precipitation at the start of the simulation
     ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)

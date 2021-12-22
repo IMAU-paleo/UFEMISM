@@ -57,7 +57,30 @@ MODULE configuration_module
   LOGICAL             :: do_NAM_config                               = .FALSE.                          ! North America
   LOGICAL             :: do_EAS_config                               = .FALSE.                          ! Eurasia
   LOGICAL             :: do_GRL_config                               = .FALSE.                          ! Greenland
-  LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica
+  LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica                  
+  
+  ! Domain size for the four regions
+  ! ================================
+  
+  REAL(dp)            :: xmin_NAM_config                             = -3600000._dp                     ! Western  boundary     of the North America domain [m]
+  REAL(dp)            :: xmax_NAM_config                             =  3600000._dp                     ! Eastern  boundary     of the North America domain [m]
+  REAL(dp)            :: ymin_NAM_config                             = -2400000._dp                     ! Southern boundary     of the North America domain [m]
+  REAL(dp)            :: ymax_NAM_config                             =  2400000._dp                     ! Northern boundary     of the North America domain [m]
+  
+  REAL(dp)            :: xmin_EAS_config                             = -3400000._dp                     ! Western  boundary     of the Eurasia domain [m]
+  REAL(dp)            :: xmax_EAS_config                             =  3400000._dp                     ! Eastern  boundary     of the Eurasia domain [m]
+  REAL(dp)            :: ymin_EAS_config                             = -2080000._dp                     ! Southern boundary     of the Eurasia domain [m]
+  REAL(dp)            :: ymax_EAS_config                             =  2080000._dp                     ! Northern boundary     of the Eurasia domain [m]
+  
+  REAL(dp)            :: xmin_GRL_config                             =  -830000._dp                     ! Western  boundary     of the Greenland domain [m]
+  REAL(dp)            :: xmax_GRL_config                             =   830000._dp                     ! Eastern  boundary     of the Greenland domain [m]
+  REAL(dp)            :: ymin_GRL_config                             = -1430000._dp                     ! Southern boundary     of the Greenland domain [m]
+  REAL(dp)            :: ymax_GRL_config                             =  1430000._dp                     ! Northern boundary     of the Greenland domain [m]
+  
+  REAL(dp)            :: xmin_ANT_config                             = -3300000._dp                     ! Western  boundary     of the Antarctica domain [m]
+  REAL(dp)            :: xmax_ANT_config                             =  3300000._dp                     ! Eastern  boundary     of the Antarctica domain [m]
+  REAL(dp)            :: ymin_ANT_config                             = -3300000._dp                     ! Southern boundary     of the Antarctica domain [m]
+  REAL(dp)            :: ymax_ANT_config                             =  3300000._dp                     ! Northern boundary     of the Antarctica domain [m]
   
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
@@ -76,9 +99,14 @@ MODULE configuration_module
   
   LOGICAL             :: do_benchmark_experiment_config              = .TRUE.
   CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_I'
-  REAL(dp)            :: halfar_solution_H0_config                   = 5000._dp
-  REAL(dp)            :: halfar_solution_R0_config                   = 300000._dp
-  REAL(dp)            :: bueler_solution_lambda_config               = 5._dp
+  REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
+  REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
+  CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
+  LOGICAL             :: MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
+  REAL(dp)            :: MISMIPplus_xGL_target_config                = 450000._dp                       ! Mid-channel GL position to tune the flow factor A for
+  REAL(dp)            :: MISMIPplus_A_flow_initial_config            = 2.0E-17_dp                       ! Initial flow factor before tuning (or throughout the run when tuning is not used)
+  CHARACTER(LEN=256)  :: MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
+  CHARACTER(LEN=256)  :: MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
 
   ! Mesh generation parameters
   ! ==========================
@@ -144,20 +172,53 @@ MODULE configuration_module
      0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp, &
      0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp,  0.00_dp, 0.00_dp  /)
 
+  ! Reference geometries (initial, present-day, and GIA equilibrium)
+  ! ================================================================
+  
+  ! Initial geometry
+  CHARACTER(LEN=256)  :: choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  REAL(dp)            :: time_to_restart_from_NAM_config             = 0._dp                            ! Can be different from C%start_time_of_run, though this will issue a warning
+  REAL(dp)            :: time_to_restart_from_EAS_config             = 0._dp
+  REAL(dp)            :: time_to_restart_from_GRL_config             = 0._dp
+  REAL(dp)            :: time_to_restart_from_ANT_config             = 0._dp
+  CHARACTER(LEN=256)  :: choice_refgeo_init_idealised_config         = 'flatearth'                      ! Choice of idealised initial geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  REAL(dp)            :: dx_refgeo_init_idealised_config             = 5000._dp                         ! Resolution of square grid used for idealised initial geometry
+  CHARACTER(LEN=256)  :: filename_refgeo_init_NAM_config             = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_EAS_config             = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_GRL_config             = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_ANT_config             = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  
+  ! Present-day geometry
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_EAS_config                 = 'realistic'                      ! Choice of present-day geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_GRL_config                 = 'realistic'                      ! Choice of present-day geometry for Greenland    ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_idealised_config           = 'flatearth'                      ! Choice of idealised present-day geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  REAL(dp)            :: dx_refgeo_PD_idealised_config               = 5000._dp                         ! Resolution of square grid used for idealised present-day geometry
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_NAM_config               = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_EAS_config               = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_GRL_config               = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_ANT_config               = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  
+  ! GIA equilibrium geometry
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_NAM_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for North America; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_EAS_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_GRL_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Greenland    ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_idealised_config        = 'flatearth'                      ! Choice of idealised GIA equilibrium geometry; see "generate_idealised_geometry" in reference_fields_module for options
+  REAL(dp)            :: dx_refgeo_GIAeq_idealised_config            = 5000._dp                         ! Resolution of square grid used for idealised GIA equilibrium geometry
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_NAM_config            = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_EAS_config            = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_GRL_config            = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+
+  LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
+
   ! Input data file paths
   ! =====================
-  
-  ! Initial model state
-  CHARACTER(LEN=256)  :: filename_init_NAM_config                    = 'Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_init_EAS_config                    = 'Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_init_GRL_config                    = 'Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km_noEllesmere.nc'
-  CHARACTER(LEN=256)  :: filename_init_ANT_config                    = 'Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
-  
-  ! PD reference data (NetCDF)
-  CHARACTER(LEN=256)  :: filename_PD_NAM_config                      = 'Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_PD_EAS_config                      = 'Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_PD_GRL_config                      = 'Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km_noEllesmere.nc'
-  CHARACTER(LEN=256)  :: filename_PD_ANT_config                      = 'Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' 
    
   ! Insolation forcing (NetCDF) (Laskar et al., 2004)
   CHARACTER(LEN=256)  :: filename_insolation_config                  = '/Datasets/Insolation_laskar/Insolation_Laskar_etal_2004.nc'
@@ -509,7 +570,30 @@ MODULE configuration_module
     LOGICAL                             :: do_NAM
     LOGICAL                             :: do_EAS
     LOGICAL                             :: do_GRL
-    LOGICAL                             :: do_ANT
+    LOGICAL                             :: do_ANT  
+
+    ! Domain size for the four regions
+    ! ================================
+
+    REAL(dp)                            :: xmin_NAM
+    REAL(dp)                            :: xmax_NAM
+    REAL(dp)                            :: ymin_NAM
+    REAL(dp)                            :: ymax_NAM
+
+    REAL(dp)                            :: xmin_EAS
+    REAL(dp)                            :: xmax_EAS
+    REAL(dp)                            :: ymin_EAS
+    REAL(dp)                            :: ymax_EAS
+
+    REAL(dp)                            :: xmin_GRL
+    REAL(dp)                            :: xmax_GRL
+    REAL(dp)                            :: ymin_GRL
+    REAL(dp)                            :: ymax_GRL
+
+    REAL(dp)                            :: xmin_ANT
+    REAL(dp)                            :: xmax_ANT
+    REAL(dp)                            :: ymin_ANT
+    REAL(dp)                            :: ymax_ANT
   
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
@@ -528,10 +612,15 @@ MODULE configuration_module
     
     LOGICAL                             :: do_benchmark_experiment
     CHARACTER(LEN=256)                  :: choice_benchmark_experiment
-    REAL(dp)                            :: halfar_solution_H0
-    REAL(dp)                            :: halfar_solution_R0
-    REAL(dp)                            :: bueler_solution_lambda
-
+    REAL(dp)                            :: SSA_icestream_m
+    REAL(dp)                            :: ISMIP_HOM_L
+    CHARACTER(LEN=256)                  :: ISMIP_HOM_E_Arolla_filename
+    LOGICAL                             :: MISMIPplus_do_tune_A_for_GL
+    REAL(dp)                            :: MISMIPplus_xGL_target
+    REAL(dp)                            :: MISMIPplus_A_flow_initial
+    CHARACTER(LEN=256)                  :: MISMIPplus_scenario
+    CHARACTER(LEN=256)                  :: MISOMIP1_scenario
+    
     ! Mesh generation parameters
     ! ==========================
 
@@ -582,18 +671,53 @@ MODULE configuration_module
     INTEGER                             :: nz       ! Number of grid points in vertical direction for thermodynamics in ice sheet
     REAL(dp), DIMENSION(:), ALLOCATABLE :: zeta
 
+    ! Reference geometries (initial, present-day, and GIA equilibrium)
+    ! ================================================================
+    
+    ! Initial geometry
+    CHARACTER(LEN=256)                  :: choice_refgeo_init_NAM
+    CHARACTER(LEN=256)                  :: choice_refgeo_init_EAS
+    CHARACTER(LEN=256)                  :: choice_refgeo_init_GRL
+    CHARACTER(LEN=256)                  :: choice_refgeo_init_ANT
+    REAL(dp)                            :: time_to_restart_from_NAM
+    REAL(dp)                            :: time_to_restart_from_EAS
+    REAL(dp)                            :: time_to_restart_from_GRL
+    REAL(dp)                            :: time_to_restart_from_ANT
+    CHARACTER(LEN=256)                  :: choice_refgeo_init_idealised
+    REAL(dp)                            :: dx_refgeo_init_idealised
+    CHARACTER(LEN=256)                  :: filename_refgeo_init_NAM
+    CHARACTER(LEN=256)                  :: filename_refgeo_init_EAS
+    CHARACTER(LEN=256)                  :: filename_refgeo_init_GRL
+    CHARACTER(LEN=256)                  :: filename_refgeo_init_ANT
+
+    ! Present-day geometry
+    CHARACTER(LEN=256)                  :: choice_refgeo_PD_NAM
+    CHARACTER(LEN=256)                  :: choice_refgeo_PD_EAS
+    CHARACTER(LEN=256)                  :: choice_refgeo_PD_GRL
+    CHARACTER(LEN=256)                  :: choice_refgeo_PD_ANT
+    CHARACTER(LEN=256)                  :: choice_refgeo_PD_idealised
+    REAL(dp)                            :: dx_refgeo_PD_idealised
+    CHARACTER(LEN=256)                  :: filename_refgeo_PD_NAM
+    CHARACTER(LEN=256)                  :: filename_refgeo_PD_EAS
+    CHARACTER(LEN=256)                  :: filename_refgeo_PD_GRL
+    CHARACTER(LEN=256)                  :: filename_refgeo_PD_ANT
+
+    ! GIA equilibrium geometry
+    CHARACTER(LEN=256)                  :: choice_refgeo_GIAeq_NAM
+    CHARACTER(LEN=256)                  :: choice_refgeo_GIAeq_EAS
+    CHARACTER(LEN=256)                  :: choice_refgeo_GIAeq_GRL
+    CHARACTER(LEN=256)                  :: choice_refgeo_GIAeq_ANT
+    CHARACTER(LEN=256)                  :: choice_refgeo_GIAeq_idealised
+    REAL(dp)                            :: dx_refgeo_GIAeq_idealised
+    CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_NAM
+    CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_EAS
+    CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_GRL
+    CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_ANT
+    
+    LOGICAL                             :: remove_Lake_Vostok
+
     ! Input data file paths
     ! =====================
-                            
-    CHARACTER(LEN=256)                  :: filename_init_NAM
-    CHARACTER(LEN=256)                  :: filename_init_EAS
-    CHARACTER(LEN=256)                  :: filename_init_GRL
-    CHARACTER(LEN=256)                  :: filename_init_ANT
-    
-    CHARACTER(LEN=256)                  :: filename_PD_NAM
-    CHARACTER(LEN=256)                  :: filename_PD_EAS
-    CHARACTER(LEN=256)                  :: filename_PD_GRL
-    CHARACTER(LEN=256)                  :: filename_PD_ANT
     
     CHARACTER(LEN=256)                  :: filename_insolation
     
@@ -963,7 +1087,23 @@ CONTAINS
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
-                     do_ANT_config,                                   &
+                     do_ANT_config,                                   & 
+                     xmin_NAM_config,                                 &
+                     xmax_NAM_config,                                 &
+                     ymin_NAM_config,                                 &
+                     ymax_NAM_config,                                 &
+                     xmin_EAS_config,                                 &
+                     xmax_EAS_config,                                 &
+                     ymin_EAS_config,                                 &
+                     ymax_EAS_config,                                 &
+                     xmin_GRL_config,                                 &
+                     xmax_GRL_config,                                 &
+                     ymin_GRL_config,                                 &
+                     ymax_GRL_config,                                 &
+                     xmin_ANT_config,                                 &
+                     xmax_ANT_config,                                 &
+                     ymin_ANT_config,                                 &
+                     ymax_ANT_config,                                 &
                      is_restart_config,                               &
                      time_to_restart_from_config,                     &
                      filename_restart_NAM_config,                     &
@@ -972,9 +1112,14 @@ CONTAINS
                      filename_restart_ANT_config,                     &
                      do_benchmark_experiment_config,                  &
                      choice_benchmark_experiment_config,              &
-                     halfar_solution_H0_config,                       &
-                     halfar_solution_R0_config,                       &
-                     bueler_solution_lambda_config,                   &
+                     SSA_icestream_m_config,                          &
+                     ISMIP_HOM_L_config,                              &
+                     ISMIP_HOM_E_Arolla_filename_config,              &
+                     MISMIPplus_do_tune_A_for_GL_config,              &
+                     MISMIPplus_xGL_target_config,                    &
+                     MISMIPplus_A_flow_initial_config,                &
+                     MISMIPplus_scenario_config,                      &
+                     MISOMIP1_scenario_config,                        &
                      nconmax_config,                                  &
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
@@ -1004,14 +1149,41 @@ CONTAINS
                      output_dir_config,                               &
                      nz_config,                                       &
                      zeta_config,                                     &
-                     filename_init_NAM_config,                        &
-                     filename_init_EAS_config,                        &
-                     filename_init_GRL_config,                        &
-                     filename_init_ANT_config,                        &
-                     filename_PD_NAM_config,                          &
-                     filename_PD_EAS_config,                          &
-                     filename_PD_GRL_config,                          &
-                     filename_PD_ANT_config,                          &
+                     choice_refgeo_init_NAM_config,                   &
+                     choice_refgeo_init_EAS_config,                   &
+                     choice_refgeo_init_GRL_config,                   &
+                     choice_refgeo_init_ANT_config,                   &
+                     time_to_restart_from_NAM_config,                 &
+                     time_to_restart_from_EAS_config,                 &
+                     time_to_restart_from_GRL_config,                 &
+                     time_to_restart_from_ANT_config,                 &
+                     choice_refgeo_init_idealised_config,             &
+                     dx_refgeo_init_idealised_config,                 &
+                     filename_refgeo_init_NAM_config,                 &
+                     filename_refgeo_init_EAS_config,                 &
+                     filename_refgeo_init_GRL_config,                 &
+                     filename_refgeo_init_ANT_config,                 &
+                     choice_refgeo_PD_NAM_config,                     &
+                     choice_refgeo_PD_EAS_config,                     &
+                     choice_refgeo_PD_GRL_config,                     &
+                     choice_refgeo_PD_ANT_config,                     &
+                     choice_refgeo_PD_idealised_config,               &
+                     dx_refgeo_PD_idealised_config,                   &
+                     filename_refgeo_PD_NAM_config,                   &
+                     filename_refgeo_PD_EAS_config,                   &
+                     filename_refgeo_PD_GRL_config,                   &
+                     filename_refgeo_PD_ANT_config,                   &
+                     choice_refgeo_GIAeq_NAM_config,                  &
+                     choice_refgeo_GIAeq_EAS_config,                  &
+                     choice_refgeo_GIAeq_GRL_config,                  &
+                     choice_refgeo_GIAeq_ANT_config,                  &
+                     choice_refgeo_GIAeq_idealised_config,            &
+                     dx_refgeo_GIAeq_idealised_config,                &
+                     filename_refgeo_GIAeq_NAM_config,                &
+                     filename_refgeo_GIAeq_EAS_config,                &
+                     filename_refgeo_GIAeq_GRL_config,                &
+                     filename_refgeo_GIAeq_ANT_config,                &
+                     remove_Lake_Vostok_config,                       &
                      filename_insolation_config,                      &
                      filename_CO2_record_config,                      &
                      CO2_record_length_config,                        &
@@ -1297,7 +1469,30 @@ CONTAINS
     C%do_NAM                                   = do_NAM_config
     C%do_EAS                                   = do_EAS_config
     C%do_GRL                                   = do_GRL_config
-    C%do_ANT                                   = do_ANT_config
+    C%do_ANT                                   = do_ANT_config 
+
+    ! Domain size for the four regions
+    ! ================================
+
+    C%xmin_NAM                                 = xmin_NAM_config
+    C%xmax_NAM                                 = xmax_NAM_config
+    C%ymin_NAM                                 = ymin_NAM_config
+    C%ymax_NAM                                 = ymax_NAM_config
+
+    C%xmin_EAS                                 = xmin_EAS_config
+    C%xmax_EAS                                 = xmax_EAS_config
+    C%ymin_EAS                                 = ymin_EAS_config
+    C%ymax_EAS                                 = ymax_EAS_config
+
+    C%xmin_GRL                                 = xmin_GRL_config
+    C%xmax_GRL                                 = xmax_GRL_config
+    C%ymin_GRL                                 = ymin_GRL_config
+    C%ymax_GRL                                 = ymax_GRL_config
+
+    C%xmin_ANT                                 = xmin_ANT_config
+    C%xmax_ANT                                 = xmax_ANT_config
+    C%ymin_ANT                                 = ymin_ANT_config
+    C%ymax_ANT                                 = ymax_ANT_config
   
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
@@ -1315,9 +1510,14 @@ CONTAINS
     
     C%do_benchmark_experiment                  = do_benchmark_experiment_config
     C%choice_benchmark_experiment              = choice_benchmark_experiment_config
-    C%halfar_solution_H0                       = halfar_solution_H0_config
-    C%halfar_solution_R0                       = halfar_solution_R0_config
-    C%bueler_solution_lambda                   = bueler_solution_lambda_config
+    C%SSA_icestream_m                          = SSA_icestream_m_config
+    C%ISMIP_HOM_L                              = ISMIP_HOM_L_config
+    C%ISMIP_HOM_E_Arolla_filename              = ISMIP_HOM_E_Arolla_filename_config
+    C%MISMIPplus_do_tune_A_for_GL              = MISMIPplus_do_tune_A_for_GL_config
+    C%MISMIPplus_xGL_target                    = MISMIPplus_xGL_target_config
+    C%MISMIPplus_A_flow_initial                = MISMIPplus_A_flow_initial_config
+    C%MISMIPplus_scenario                      = MISMIPplus_scenario_config
+    C%MISOMIP1_scenario                        = MISOMIP1_scenario_config
 
     ! Mesh generation parameters
     ! ==========================
@@ -1372,18 +1572,53 @@ CONTAINS
     ALLOCATE( C%zeta( C%nz))
     C%zeta   = zeta_config( 1:C%nz)
 
+    ! Reference geometries (initial, present-day, and GIA equilibrium)
+    ! ================================================================
+    
+    ! Initial geometry
+    C%choice_refgeo_init_NAM                   = choice_refgeo_init_NAM_config
+    C%choice_refgeo_init_EAS                   = choice_refgeo_init_EAS_config
+    C%choice_refgeo_init_GRL                   = choice_refgeo_init_GRL_config
+    C%choice_refgeo_init_ANT                   = choice_refgeo_init_ANT_config
+    C%time_to_restart_from_NAM                 = time_to_restart_from_NAM_config
+    C%time_to_restart_from_EAS                 = time_to_restart_from_EAS_config
+    C%time_to_restart_from_GRL                 = time_to_restart_from_GRL_config
+    C%time_to_restart_from_ANT                 = time_to_restart_from_ANT_config
+    C%choice_refgeo_init_idealised             = choice_refgeo_init_idealised_config
+    C%dx_refgeo_init_idealised                 = dx_refgeo_init_idealised_config
+    C%filename_refgeo_init_NAM                 = filename_refgeo_init_NAM_config
+    C%filename_refgeo_init_EAS                 = filename_refgeo_init_EAS_config
+    C%filename_refgeo_init_GRL                 = filename_refgeo_init_GRL_config
+    C%filename_refgeo_init_ANT                 = filename_refgeo_init_ANT_config
+
+    ! Present-day geometry
+    C%choice_refgeo_PD_NAM                     = choice_refgeo_PD_NAM_config
+    C%choice_refgeo_PD_EAS                     = choice_refgeo_PD_EAS_config
+    C%choice_refgeo_PD_GRL                     = choice_refgeo_PD_GRL_config
+    C%choice_refgeo_PD_ANT                     = choice_refgeo_PD_ANT_config
+    C%choice_refgeo_PD_idealised               = choice_refgeo_PD_idealised_config
+    C%dx_refgeo_PD_idealised                   = dx_refgeo_PD_idealised_config
+    C%filename_refgeo_PD_NAM                   = filename_refgeo_PD_NAM_config
+    C%filename_refgeo_PD_EAS                   = filename_refgeo_PD_EAS_config
+    C%filename_refgeo_PD_GRL                   = filename_refgeo_PD_GRL_config
+    C%filename_refgeo_PD_ANT                   = filename_refgeo_PD_ANT_config
+
+    ! GIA equilibrium geometry
+    C%choice_refgeo_GIAeq_NAM                  = choice_refgeo_GIAeq_NAM_config
+    C%choice_refgeo_GIAeq_EAS                  = choice_refgeo_GIAeq_EAS_config
+    C%choice_refgeo_GIAeq_GRL                  = choice_refgeo_GIAeq_GRL_config
+    C%choice_refgeo_GIAeq_ANT                  = choice_refgeo_GIAeq_ANT_config
+    C%choice_refgeo_GIAeq_idealised            = choice_refgeo_GIAeq_idealised_config
+    C%dx_refgeo_GIAeq_idealised                = dx_refgeo_GIAeq_idealised_config
+    C%filename_refgeo_GIAeq_NAM                = filename_refgeo_GIAeq_NAM_config
+    C%filename_refgeo_GIAeq_EAS                = filename_refgeo_GIAeq_EAS_config
+    C%filename_refgeo_GIAeq_GRL                = filename_refgeo_GIAeq_GRL_config
+    C%filename_refgeo_GIAeq_ANT                = filename_refgeo_GIAeq_ANT_config
+    
+    C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
+
     ! Input data file paths
     ! =====================
-    
-    C%filename_init_NAM                        = filename_init_NAM_config
-    C%filename_init_EAS                        = filename_init_EAS_config
-    C%filename_init_GRL                        = filename_init_GRL_config
-    C%filename_init_ANT                        = filename_init_ANT_config
-    
-    C%filename_PD_NAM                          = filename_PD_NAM_config
-    C%filename_PD_EAS                          = filename_PD_EAS_config
-    C%filename_PD_GRL                          = filename_PD_GRL_config
-    C%filename_PD_ANT                          = filename_PD_ANT_config
     
     C%filename_insolation                      = filename_insolation_config
     

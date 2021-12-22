@@ -30,11 +30,10 @@ MODULE mesh_mapping_module
                                              type_remapping_conservative_intermediate_Ac_local, type_remapping_conservative_intermediate_Ac_shared, &
                                              type_remapping_conservative_intermediate_shared, type_remapping_conservative_intermediate_local
   USE mesh_help_functions_module,      ONLY: is_in_triangle, find_Voronoi_cell_vertices, find_containing_triangle, find_triangle_area, find_containing_vertex, &
-                                             line_integral_xdy, line_integral_mxydx, line_integral_xydy, is_boundary_segment, cross2, &
-                                             lies_on_line_segment, segment_intersection, partition_domain_x_balanced, write_mesh_to_text_file, &
-                                             line_from_points, line_line_intersection
+                                             is_boundary_segment, cross2, lies_on_line_segment, segment_intersection, partition_domain_x_balanced, &
+                                             line_from_points, line_line_intersection, write_mesh_to_text_file
   USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_a_to_a_3D, ddy_a_to_a_3D
-  USE utilities_module,                ONLY: smooth_Gaussian_2D_grid, smooth_Gaussian_3D_grid
+  USE utilities_module,                ONLY: line_integral_xdy, line_integral_mxydx, line_integral_xydy, smooth_Gaussian_2D_grid, smooth_Gaussian_3D_grid
 
   IMPLICIT NONE
 

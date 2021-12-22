@@ -25,9 +25,9 @@ MODULE climate_module
   USE utilities_module,                ONLY: error_function
   USE netcdf_module,                   ONLY: inquire_PD_obs_data_file, read_PD_obs_data_file, inquire_GCM_snapshot, &
                                              read_GCM_snapshot, inquire_ICE5G_data, read_ICE5G_data
-  USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_climate_model, type_init_data_fields, &
+  USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_climate_model, type_reference_geometry, &
                                              type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping, &
-                                             type_ICE5G_timeframe, type_remapping_latlon2mesh, type_PD_data_fields, type_SMB_model
+                                             type_ICE5G_timeframe, type_remapping_latlon2mesh, type_SMB_model
   USE mesh_mapping_module,             ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, map_latlon2mesh_3D, &
                                              deallocate_remapping_arrays_glob_mesh, smooth_Gaussian_2D
   USE forcing_module,                  ONLY: forcing, map_insolation_to_mesh
@@ -752,7 +752,7 @@ CONTAINS
   
   ! Initialising the region-specific climate model, containing all the subclimates
   ! (PD observations, GCM snapshots and the applied climate) on the mesh
-  SUBROUTINE initialise_climate_model( climate, matrix, mesh, PD, region_name, mask_noice, grid_smooth)
+  SUBROUTINE initialise_climate_model( climate, matrix, mesh, refgeo_PD, region_name, mask_noice, grid_smooth)
     ! Allocate shared memory for the regional climate models, containing the PD observed,
     ! GCM snapshots and applied climates as "subclimates"
     
@@ -762,7 +762,7 @@ CONTAINS
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
@@ -835,8 +835,8 @@ CONTAINS
         climate%GCM_LGM%Wind_SN( mesh%vi1:mesh%vi2,:) = climate%PD_obs%Wind_SN( mesh%vi1:mesh%vi2,:)
         
         ! Initialise the ICE5G geometries for these two snapshots
-        CALL initialise_subclimate_ICE5G_geometry( mesh, climate%GCM_PI,  PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
-        CALL initialise_subclimate_ICE5G_geometry( mesh, climate%GCM_LGM, PD, matrix%ICE5G_LGM, matrix%ICE5G_PD, mask_noice)
+        CALL initialise_subclimate_ICE5G_geometry( mesh, climate%GCM_PI,  refgeo_PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
+        CALL initialise_subclimate_ICE5G_geometry( mesh, climate%GCM_LGM, refgeo_PD, matrix%ICE5G_LGM, matrix%ICE5G_PD, mask_noice)
         
         ! Calculate spatially variable lapse rate
         climate%GCM_PI%lambda = 0.008_dp
@@ -945,7 +945,7 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE initialise_climate_model_GCM_bias
-  SUBROUTINE initialise_subclimate_ICE5G_geometry( mesh, snapshot, PD, ICE5G, ICE5G_PD, mask_noice)
+  SUBROUTINE initialise_subclimate_ICE5G_geometry( mesh, snapshot, refgeo_PD, ICE5G, ICE5G_PD, mask_noice)
     ! Initialise the GCM snapshot's corresponding ICE5G geometry (which is available at higher resolution than from the GCM itself)
      
     IMPLICIT NONE
@@ -953,7 +953,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh  
     TYPE(type_subclimate_region),        INTENT(INOUT) :: snapshot
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G
     TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G_PD
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
@@ -1008,7 +1008,7 @@ CONTAINS
       ! (seems a little convoluted, but this is how it was done in ANICE2.1 and it works)
       
       ! First, apply ICE5G GIA to high-resolution PD bedrock
-      snapshot%Hb( vi) = PD%Hb( vi) + dHb_ICE5G( vi)
+      snapshot%Hb( vi) = refgeo_PD%Hb( vi) + dHb_ICE5G( vi)
       
       ! Where ICE5G says there's ice, set the surface equal to the (smooth) GCM surface
       ! (this sort of solves the weird "block" structure of the ICE5G ice sheets)
@@ -1675,7 +1675,7 @@ CONTAINS
   END SUBROUTINE initialise_ICE5G_timeframe
   
   ! Remap the regional climate model after a mesh update
-  SUBROUTINE remap_climate_model( mesh_old, mesh_new, map, climate, matrix, PD, grid_smooth, mask_noice, region_name)
+  SUBROUTINE remap_climate_model( mesh_old, mesh_new, map, climate, matrix, refgeo_PD, grid_smooth, mask_noice, region_name)
     ! Reallocate all the data fields (no remapping needed, instead we just run
     ! the climate model immediately after a mesh update)
      
@@ -1687,7 +1687,7 @@ CONTAINS
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
@@ -1724,8 +1724,8 @@ CONTAINS
       climate%GCM_LGM%Wind_SN( mesh_new%vi1:mesh_new%vi2,:) = climate%PD_obs%Wind_SN( mesh_new%vi1:mesh_new%vi2,:)
       
       ! Initialise ICE5G geometry
-      CALL initialise_subclimate_ICE5G_geometry( mesh_new, climate%GCM_PI,  PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
-      CALL initialise_subclimate_ICE5G_geometry( mesh_new, climate%GCM_LGM, PD, matrix%ICE5G_LGM, matrix%ICE5G_PD, mask_noice)
+      CALL initialise_subclimate_ICE5G_geometry( mesh_new, climate%GCM_PI,  refgeo_PD, matrix%ICE5G_PD,  matrix%ICE5G_PD, mask_noice)
+      CALL initialise_subclimate_ICE5G_geometry( mesh_new, climate%GCM_LGM, refgeo_PD, matrix%ICE5G_LGM, matrix%ICE5G_PD, mask_noice)
       
       ! Calculate spatially variable lapse rate
       climate%GCM_PI%lambda = 0.008_dp

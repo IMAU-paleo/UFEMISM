@@ -6,7 +6,7 @@ MODULE data_types_module
 
   USE mpi
   USE configuration_module,        ONLY: dp, C
-  USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_PD_data, type_netcdf_init_data, &
+  USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
                                          type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux
 
@@ -15,9 +15,9 @@ MODULE data_types_module
   TYPE type_sparse_matrix_CSR
     ! Compressed Sparse Row (CSR) format matrix
     
-    INTEGER,                    POINTER     :: m,n             ! A = [m-by-n]
-    INTEGER,                    POINTER     :: nnz_max         ! Maximum number of non-zero entries in A (determines how much memory is allocated)
-    INTEGER,                    POINTER     :: nnz             ! Number         of non-zero entries in A (determines how much memory is allocated)
+    INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
+    INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
+    INTEGER,                    POINTER     :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
     INTEGER,  DIMENSION(:    ), POINTER     :: ptr
     INTEGER,  DIMENSION(:    ), POINTER     :: index
     REAL(dp), DIMENSION(:    ), POINTER     :: val
@@ -38,27 +38,27 @@ MODULE data_types_module
     INTEGER :: wHi_a, wHb_a, wHs_a, wSL_a, wTAF_a, wTi_a
     
     ! Ice velocities
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                ! 3-D ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_c
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_c
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a               ! Vertically averaged ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a              ! Ice velocity at the surface [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a              ! Ice velocity at the base [m yr^-1]
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c            ! Separate fields for the SIA/SSA components, required for the old hybrid method
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c                  ! Separate fields for the SIA/SSA components, required for the old hybrid method
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_c 
     REAL(dp), DIMENSION(:    ), POINTER     :: u_SSA_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_SSA_c
@@ -909,69 +909,39 @@ MODULE data_types_module
   
   END TYPE type_BMB_model
   
-  TYPE type_PD_data_fields
-    ! Data structure containing data fields describing the present-day world.
+  TYPE type_reference_geometry
+    ! Data structure containing a reference ice-sheet geometry (either schematic or read from an external file).
     
     ! NetCDF file containing the data
-    TYPE(type_netcdf_PD_data)               :: netcdf
+    TYPE(type_netcdf_reference_geometry)    :: netcdf
     
-    ! Grid
+    ! Raw data as read from a NetCDF file
     TYPE(type_grid)                         :: grid
-    
-    ! Data on the grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs_grid
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_grid
-    INTEGER :: wHi_grid, wHb_grid, wHs_grid, wmask_grid
+    INTEGER :: wHi_grid, wHb_grid, wHs_grid
     
-    ! Data on the mesh
+    ! Derived data on the grid (surface curvature and masks, needed for mesh creation)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: surf_curv
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_land
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_ocean
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_ice
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_sheet
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_shelf
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_margin
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_gl
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_cf
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_coast
+    INTEGER :: wsurf_curv, wmask_land, wmask_ocean, wmask_ice, wmask_sheet, wmask_shelf, wmask_margin, wmask_gl, wmask_cf, wmask_coast
+    
+    ! Data on the model mesh
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask
-    INTEGER :: wHi, wHb, wHs, wmask
+    INTEGER :: wHi, wHb, wHs
               
-  END TYPE type_PD_data_fields
-  
-  TYPE type_init_data_fields
-    ! Data structure containing data fields describing the present-day world.
-    
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_init_data)             :: netcdf
-    TYPE(type_netcdf_restart)               :: netcdf_restart
-    
-    ! Grid
-    TYPE(type_grid)                         :: grid
-    
-    ! Data on the grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs_grid
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: Ti_grid
-    INTEGER :: wHi_grid, wHb_grid, wHs_grid, wTi_grid
-    
-    ! Derived data on the grid (needed for mesh generation)
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_grid
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_ice_grid
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_gl_grid
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_cf_grid
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_coast_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: surface_curvature_grid
-    INTEGER :: wmask_grid, wmask_ice_grid, wmask_gl_grid, wmask_cf_grid, wmask_coast_grid, wsurface_curvature_grid
-    
-    ! Data on the mesh
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hb
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hs
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
-    REAL(dp), DIMENSION(:    ), POINTER     :: U_SSA
-    REAL(dp), DIMENSION(:    ), POINTER     :: V_SSA
-    REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth
-    INTEGER :: wHi, wHb, wHs, wTi, wU_SSA, wV_SSA, wMeltPreviousYear, wFirnDepth
-              
-  END TYPE type_init_data_fields
+  END TYPE type_reference_geometry
   
   TYPE type_forcing_data
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
@@ -1033,8 +1003,8 @@ MODULE data_types_module
     ! Contains all the different data structures, organised by sub-model (ice, climate)
     
     ! Metadata
-    CHARACTER(LEN=3)                        :: name                  ! NAM, EAS, GRL, ANT
-    CHARACTER(LEN=256)                      :: long_name             ! North America, Eurasia, Greenland, Antarctica
+    CHARACTER(LEN=3)                        :: name                                           ! NAM, EAS, GRL, ANT
+    CHARACTER(LEN=256)                      :: long_name                                      ! North America, Eurasia, Greenland, Antarctica
     
     ! The current time (step) of this particular region.
     REAL(dp), POINTER                       :: time
@@ -1101,21 +1071,22 @@ MODULE data_types_module
     REAL(dp), POINTER                       :: d18O_contribution_PD
     INTEGER :: wmean_isotope_content, wmean_isotope_content_PD, wd18O_contribution, wd18O_contribution_PD
         
-    ! Reference data fields
-    TYPE(type_PD_data_fields)               :: PD               ! The present-day data fields for this model region, on a high-res Cartesian grid
-    TYPE(type_init_data_fields)             :: init             ! The initial     data fields for this model region, on a high-res Cartesian grid
+    ! Reference geometries
+    TYPE(type_reference_geometry)           :: refgeo_init                               ! Initial         ice-sheet geometry
+    TYPE(type_reference_geometry)           :: refgeo_PD                                 ! Present-day     ice-sheet geometry
+    TYPE(type_reference_geometry)           :: refgeo_GIAeq                              ! GIA equilibrium ice-sheet geometry
     
     ! Mask where ice is not allowed to form (so Greenland is not included in NAM and EAS, and Ellesmere is not included in GRL)
     INTEGER,  DIMENSION(:), POINTER         :: mask_noice
     INTEGER                                 :: wmask_noice
         
     ! Sub-models
-    TYPE(type_mesh)                         :: mesh             ! The finite element mesh for this model region
-    TYPE(type_mesh)                         :: mesh_new         ! The new mesh after updating (so that the old one can be kept until data has been mapped)
-    TYPE(type_ice_model)                    :: ice              ! All the ice model data for this model region
-    TYPE(type_climate_model)                :: climate          ! All the climate data for this model region
-    TYPE(type_SMB_model)                    :: SMB              ! The different SMB components for this model region
-    TYPE(type_BMB_model)                    :: BMB              ! The different BMB components for this model region
+    TYPE(type_mesh)                         :: mesh                                      ! The finite element mesh for this model region
+    TYPE(type_mesh)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
+    TYPE(type_ice_model)                    :: ice                                       ! All the ice model data for this model region
+    TYPE(type_climate_model)                :: climate                                   ! All the climate data for this model region
+    TYPE(type_SMB_model)                    :: SMB                                       ! The different SMB components for this model region
+    TYPE(type_BMB_model)                    :: BMB                                       ! The different BMB components for this model region
     
     ! Output netcdf files
     LOGICAL                                 :: output_file_exists
@@ -1125,9 +1096,9 @@ MODULE data_types_module
     TYPE(type_netcdf_help_fields)           :: help_fields_grid
     
     ! Different square grids
-    TYPE(type_grid)                         :: grid_output      ! For the "_grid" output files
-    TYPE(type_grid)                         :: grid_GIA         ! For either the ELRA model or SELEN
-    TYPE(type_grid)                         :: grid_smooth      ! For smoothing data fields (used in the climate matrix)
+    TYPE(type_grid)                         :: grid_output                               ! For the "_grid" output files
+    TYPE(type_grid)                         :: grid_GIA                                  ! For either the ELRA model or SELEN
+    TYPE(type_grid)                         :: grid_smooth                               ! For smoothing data fields (used in the climate matrix)
     
     ! Computation times
     REAL(dp), POINTER                       :: tcomp_total

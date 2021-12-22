@@ -22,7 +22,8 @@ MODULE bedrock_ELRA_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, type_PD_data_fields, type_remapping
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, &
+                                             type_reference_geometry, type_remapping
   USE mesh_mapping_module,             ONLY: map_mesh2grid_2D, map_grid2mesh_2D
   USE utilities_module,                ONLY: is_floating
 
@@ -72,7 +73,7 @@ CONTAINS
     ! Update bedrock with last calculated deformation rate
     DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
-      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%PD%Hb( vi)
+      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%refgeo_PD%Hb( vi)
     END DO
     CALL sync
     
@@ -172,7 +173,7 @@ CONTAINS
     
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
   
-  SUBROUTINE initialise_ELRA_model( mesh, grid, ice, PD)
+  SUBROUTINE initialise_ELRA_model( mesh, grid, ice, refgeo_PD)
     ! Allocate and initialise the ELRA GIA model
       
     IMPLICIT NONE
@@ -181,7 +182,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
     CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_ELRA_model'
@@ -253,13 +254,13 @@ CONTAINS
     ! Calculate the PD reference load
     ! ===============================
     
-    CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, PD)
+    CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)
         
   END SUBROUTINE initialise_ELRA_model
-  SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, PD)
+  SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
       
     IMPLICIT NONE
     
@@ -267,23 +268,23 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
     INTEGER                                            :: vi
     
     ! Calculate PD reference load on the mesh
     DO vi = mesh%vi1, mesh%vi2
-      IF (is_floating( PD%Hi( vi), PD%Hb( vi), 0._dp)) THEN
-        ice%surface_load_PD_mesh( vi) = -PD%Hb( vi) * grid%dx**2 * seawater_density
-      ELSEIF (PD%Hi( vi) > 0._dp) THEN
-        ice%surface_load_PD_mesh( vi) =  PD%Hi( vi) * grid%dx**2 * ice_density
+      IF (is_floating( refgeo_PD%Hi( vi), refgeo_PD%Hb( vi), 0._dp)) THEN
+        ice%surface_load_PD_mesh( vi) = -refgeo_PD%Hb( vi) * grid%dx**2 * seawater_density
+      ELSEIF (refgeo_PD%Hi( vi) > 0._dp) THEN
+        ice%surface_load_PD_mesh( vi) =  refgeo_PD%Hi( vi) * grid%dx**2 * ice_density
       END IF
     END DO
     CALL sync
     
   END SUBROUTINE initialise_ELRA_PD_reference_load
-  SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, PD, grid)
+  SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, refgeo_PD, grid)
     ! Remap or reallocate all the data fields
   
     ! In/output variables:
@@ -291,7 +292,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_grid),                     INTENT(IN)    :: grid
     
     ! Local variables:
@@ -324,7 +325,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_rel_mesh, ice%wsurface_load_rel_mesh)
     
     ! Recalculate the PD reference load on the GIA grid
-    CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, PD)
+    CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, refgeo_PD)
     
   END SUBROUTINE remap_ELRA_model
 

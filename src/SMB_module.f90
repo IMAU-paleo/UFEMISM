@@ -22,7 +22,7 @@ MODULE SMB_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_init_data_fields, &
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, &
                                              type_SMB_model, type_remapping
   USE forcing_module,                  ONLY: forcing
   USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_monthly
@@ -81,7 +81,7 @@ CONTAINS
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
         DO vi = mesh%vi1, mesh%vi2
-          SMB%SMB_year( vi  ) = Bueler_solution_MB( C%halfar_solution_H0, C%halfar_solution_R0, C%bueler_solution_lambda, mesh%V(vi,1), mesh%V(vi,2), time)
+          SMB%SMB_year( vi  ) = Bueler_solution_MB( mesh%V(vi,1), mesh%V(vi,2), time)
           SMB%SMB(      vi,:) = SMB%SMB_year( vi) / 12._dp
         END DO
         RETURN
@@ -249,15 +249,12 @@ CONTAINS
     CALL sync
           
   END SUBROUTINE EISMINT_SMB
-  FUNCTION Bueler_solution_MB( H0, R0, lambda, x, y, t) RESULT(M)
+  FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
     ! Describes an ice-sheet at time t (in years) conforming to the Bueler solution
     ! with dome thickness H0 and margin radius R0 at t0, with a surface mass balance
     ! determined by lambda.
     
     ! Input variables
-    REAL(dp), INTENT(IN) :: H0      ! Ice dome thickness at t=0 [m]
-    REAL(dp), INTENT(IN) :: R0      ! Ice margin radius  at t=0 [m]
-    REAL(dp), INTENT(IN) :: lambda  ! Mass balance parameter
     REAL(dp), INTENT(IN) :: x       ! x coordinate [m]
     REAL(dp), INTENT(IN) :: y       ! y coordinate [m]
     REAL(dp), INTENT(IN) :: t       ! Time from t0 [years]
@@ -267,6 +264,10 @@ CONTAINS
     
     ! Local variables
     REAL(dp) :: A_flow, rho, g, n, alpha, beta, Gamma, f1, f2, t0, tp, f3, f4, H
+    
+    REAL(dp), PARAMETER :: H0     = 3000._dp    ! Ice dome thickness at t=0 [m]
+    REAL(dp), PARAMETER :: R0     = 500000._dp  ! Ice margin radius  at t=0 [m]
+    REAL(dp), PARAMETER :: lambda = 5.0_dp      ! Mass balance parameter
   
     A_flow  = 1E-16_dp
     rho     = 910._dp
@@ -295,14 +296,14 @@ CONTAINS
   END FUNCTION Bueler_solution_MB
   
   ! Initialise the SMB model (allocating shared memory)
-  SUBROUTINE initialise_SMB_model( mesh, init, SMB, region_name)
+  SUBROUTINE initialise_SMB_model( mesh, ice, SMB, region_name)
     ! Allocate memory for the data fields of the SMB model.
     
     IMPLICIT NONE
     
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    TYPE(type_init_data_fields),         INTENT(IN)    :: init
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
@@ -367,13 +368,13 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       
       ! Background albedo
-      IF (init%Hb(vi) < 0._dp) THEN
-        SMB%AlbedoSurf(vi) = albedo_water
+      IF (ice%mask_ocean_a( vi) ==  1) THEN
+        SMB%AlbedoSurf( vi) = albedo_water
       ELSE
-        SMB%AlbedoSurf(vi) = albedo_soil
+        SMB%AlbedoSurf( vi) = albedo_soil
       END IF
       
-      IF (init%Hi(vi) > 0._dp) THEN
+      IF (ice%mask_ice_a( vi) == 1) THEN
         SMB%AlbedoSurf(vi) = albedo_snow
         SMB%FirnDepth(vi,:) = initial_snow_depth   
       END IF
@@ -383,33 +384,6 @@ CONTAINS
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
-    
-    ! If we're doing a restart, initialise with that
-    IF (C%is_restart) THEN
-    
-      SMB%FirnDepth(        mesh%vi1:mesh%vi2,:) = init%FirnDepth(        mesh%vi1:mesh%vi2,:)
-      SMB%MeltPreviousYear( mesh%vi1:mesh%vi2  ) = init%MeltPreviousYear( mesh%vi1:mesh%vi2  )
-      
-      DO vi = mesh%vi1, mesh%vi2
-        
-        ! Background albedo
-        IF (init%Hb(vi) < 0._dp) THEN
-          SMB%AlbedoSurf(vi) = albedo_water
-        ELSE
-          SMB%AlbedoSurf(vi) = albedo_soil
-        END IF
-        
-        IF (SMB%FirnDepth( vi,12) > 0._dp) THEN
-          SMB%AlbedoSurf(vi)  = albedo_snow
-        END IF
-        
-        SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
-        SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
-        
-      END DO
-      CALL sync
-      
-    END IF ! IF (C%is_restart) THEN
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)

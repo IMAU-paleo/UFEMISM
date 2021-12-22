@@ -25,9 +25,9 @@ MODULE ice_dynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality                     
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_init_data_fields, &
-                                             type_remapping, type_PD_data_fields
-  USE utilities_module,                ONLY: vertical_average                    
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
+                                             type_remapping
+  USE utilities_module,                ONLY: vertical_average, surface_elevation                 
   USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_3D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
@@ -170,7 +170,7 @@ CONTAINS
       region%ice%dHi_dt_a( region%mesh%vi1 : region%mesh%vi2) = 0._dp
       CALL sync
     ELSE
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
     END IF
     
   END SUBROUTINE run_ice_dynamics_direct
@@ -231,7 +231,7 @@ CONTAINS
       
       ! Calculate new ice geometry
       region%ice%pc_f2(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
       region%ice%pc_f1(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
       region%ice%Hi_pred( vi1:vi2) = MAX(0._dp, region%ice%Hi_a(     vi1:vi2) + region%dt_crit_ice * region%ice%dHi_dt_a( vi1:vi2))
       CALL sync
@@ -304,7 +304,7 @@ CONTAINS
       CALL update_general_ice_model_data( region%mesh, region%ice)
       
       ! Calculate "corrected" ice thickness based on new velocities
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%PD)
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
       region%ice%pc_f3(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
       region%ice%pc_f4(   vi1:vi2) = region%ice%pc_f1(    vi1:vi2)
       region%ice%Hi_corr( vi1:vi2) = MAX(0._dp, region%ice%Hi_a( vi1:vi2) + 0.5_dp * region%dt_crit_ice * (region%ice%pc_f3( vi1:vi2) + region%ice%pc_f4( vi1:vi2)))
@@ -635,7 +635,7 @@ CONTAINS
   END SUBROUTINE determine_timesteps_and_actions
   
 ! == Administration: allocation, initialisation, and remapping
-  SUBROUTINE initialise_ice_model( mesh, ice, init)
+  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init)
     ! Allocate shared memory for all the data fields of the ice dynamical module, and
     ! initialise some of them    
       
@@ -644,11 +644,12 @@ CONTAINS
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_init_data_fields),         INTENT(IN)    :: init
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
     
     ! Local variables:
     CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_ice_model'
     INTEGER                                            :: n1, n2
+    INTEGER                                            :: vi
     
     n1 = par%mem%n
     
@@ -658,9 +659,11 @@ CONTAINS
     CALL allocate_ice_model( mesh, ice)
         
     ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
-    ice%Hi_a( mesh%vi1:mesh%vi2) = init%Hi( mesh%vi1:mesh%vi2)
-    ice%Hb_a( mesh%vi1:mesh%vi2) = init%Hb( mesh%vi1:mesh%vi2)
-    ice%Hs_a( mesh%vi1:mesh%vi2) = MAX( ice%SL_a( mesh%vi1:mesh%vi2), ice%Hb_a( mesh%vi1:mesh%vi2) + ice%Hi_a( mesh%vi1:mesh%vi2))
+    DO vi = mesh%vi1, mesh%vi2
+      ice%Hi_a( vi) = refgeo_init%Hi( vi)
+      ice%Hb_a( vi) = refgeo_init%Hb( vi)
+      ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), 0._dp)
+    END DO
     CALL sync
     
     ! Initialise masks and slopes
@@ -830,7 +833,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(  mesh%nV,        ice%log_velocity,           ice%wlog_velocity         )
     
   END SUBROUTINE allocate_ice_model
-  SUBROUTINE remap_ice_model( mesh_old, mesh_new, map, ice, PD)
+  SUBROUTINE remap_ice_model( mesh_old, mesh_new, map, ice, refgeo_PD)
     ! Remap or reallocate all the data fields
   
     ! In/output variables:
@@ -838,7 +841,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_PD_data_fields),           INTENT(IN)    :: PD
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
         
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
     CALL remap_field_dp(         mesh_old, mesh_new, map, ice%Hi_a,                ice%wHi_a,                'cons_1st_order')
@@ -848,7 +851,7 @@ CONTAINS
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
     CALL remap_field_dp(         mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
     CALL reallocate_shared_dp_1D(    mesh_new%nV,  ice%Hb_a,                   ice%wHb_a                     )
-    ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
+    ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
       
 !    ! Slightly reduce SSA velocities to prevent numerical instability after updating the mesh
 !    ice%U_SSA( mesh_new%vi1:mesh_new%vi2) = ice%U_SSA( mesh_new%vi1:mesh_new%vi2) * 0.9_dp

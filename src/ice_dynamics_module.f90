@@ -798,7 +798,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(  mesh%nV,         ice%dzeta_dz_a,             ice%wdzeta_dz_a           )
     
     ! Ice dynamics - physical terms in the SSA/DIVA
-    CALL allocate_shared_dp_1D(  mesh%nV,         ice%beta_a,                 ice%wbeta_a               )
+    CALL allocate_shared_dp_1D(  mesh%nVAaAc,     ice%beta_aca,               ice%wbeta_aca             )
     
     ! Ice dynamics - ice thickness calculation
     CALL allocate_shared_dp_2D(  mesh%nV, mesh%nC_mem,   ice%dVi_in,         ice%wdVi_in               )

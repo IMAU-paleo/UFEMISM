@@ -405,6 +405,7 @@ CONTAINS
     INTEGER :: wddy_aa, wddy_ab, wddy_ac, wddy_ba, wddy_bb, wddy_bc, wddy_ca, wddy_cb, wddy_cc
     
     ! Data on the combined mesh
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_aca
     REAL(dp), DIMENSION(:    ), POINTER                :: d_acau
     REAL(dp), DIMENSION(:    ), POINTER                :: d_acav
     REAL(dp), DIMENSION(:    ), POINTER                :: d_acau_acb
@@ -419,7 +420,7 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acb_acav
     REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acb_acau
     REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acb_acav
-    INTEGER :: wd_acau, wd_acav
+    INTEGER :: wd_aca, wd_acau, wd_acav
     INTEGER :: wd_acau_acb, wd_acav_acb, wddx_acau_acb, wddx_acav_acb, wddy_acau_acb, wddy_acav_acb
     INTEGER :: wd_acb_acau, wd_acb_acav, wddx_acb_acau, wddx_acb_acav, wddy_acb_acau, wddy_acb_acav
         
@@ -503,6 +504,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nAc,  ddy_cc,   wddy_cc  )
     
     ! Data on the combined mesh
+    CALL allocate_shared_dp_1D(   mesh%nVAaac,   d_aca         , wd_aca         )
     CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acau        , wd_acau        )
     CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acav        , wd_acav        )
     CALL allocate_shared_dp_1D(   mesh%nTriAaac, d_acau_acb    , wd_acau_acb    )
@@ -636,8 +638,9 @@ CONTAINS
     CALL partition_list( 2*mesh%nVAaAc, par%i, par%n, auvi1, auvi2)
   
     ! Map data from regular a/c-grids to combined ac-grid (same data on u- and v-fields)
-    CALL map_a_and_c_to_acau( mesh, d_a_ex, d_c_ex, d_acau)
-    CALL map_a_and_c_to_acav( mesh, d_a_ex, d_c_ex, d_acav)
+    CALL map_a_to_aca_2D( mesh, d_a_ex, d_aca)
+    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acau, d_aca, d_acau)
+    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acav, d_aca, d_acav)
     
     ! Calculate mapped data and derivatives on the combi-triangles
     CALL multiply_matrix_vector_CSR( mesh%M_ddx_acau_acb, d_acau, ddx_acau_acb)
@@ -719,6 +722,7 @@ CONTAINS
     CALL deallocate_shared( wddy_cb  )
     CALL deallocate_shared( wddy_cc  )
     
+    CALL deallocate_shared( wd_aca         )
     CALL deallocate_shared( wd_acau        )
     CALL deallocate_shared( wd_acav        )
     CALL deallocate_shared( wd_acau_acb    )

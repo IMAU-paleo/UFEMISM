@@ -25,7 +25,7 @@ MODULE thermodynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
-  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, map_aca_to_a_2D
   USE mesh_help_functions_module,      ONLY: CROSS2
   
   IMPLICIT NONE
@@ -508,6 +508,8 @@ CONTAINS
 
     ! Local variables
     INTEGER                                            :: vi
+    REAL(dp), DIMENSION(:    ), POINTER                ::  beta_a
+    INTEGER                                            :: wbeta_a
     
     ! Exception for when no sliding can occur
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_sliding_law == 'no_sliding') THEN
@@ -516,14 +518,24 @@ CONTAINS
       RETURN
     END IF
     
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, beta_a, wbeta_a)
+    
+    ! Map beta from the combi-mesh to the regular mesh
+    CALL map_aca_to_a_2D( mesh, ice%beta_aca, beta_a)
+    
+    ! Calculate frictional heating
     DO vi = mesh%vi1, mesh%vi2
       IF (ice%mask_sheet_a( vi) == 1) THEN
-        ice%frictional_heating_a( vi) = ice%beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
+        ice%frictional_heating_a( vi) = beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
       ELSE
         ice%frictional_heating_a( vi) = 0._dp
       END IF 
     END DO
     CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wbeta_a)
 
   END SUBROUTINE calc_bottom_frictional_heating
   SUBROUTINE calc_heat_capacity( mesh, ice)

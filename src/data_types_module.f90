@@ -117,6 +117,19 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dzeta_dz_a
     INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
     
+    ! Ice dynamics - basal hydrology
+    REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a ! Overburden pressure ( = H * rho_i * g) [Pa]
+    REAL(dp), DIMENSION(:    ), POINTER     :: pore_water_pressure_a ! Pore water pressure (determined by basal hydrology model) [Pa]
+    REAL(dp), DIMENSION(:    ), POINTER     :: Neff_a                ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
+    INTEGER :: woverburden_pressure_a, wpore_water_pressure_a, wNeff_a
+    
+    ! Ice dynamics - basal roughness / friction
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a            ! Till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
+    REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a            ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a             ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
+    INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
+    
     ! Ice dynamics - physical terms in the SSA/DIVA
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dx_b
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dy_b
@@ -132,7 +145,7 @@ MODULE data_types_module
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cx
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cy
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_aca
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: F2_a
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_a
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_cx
@@ -140,7 +153,7 @@ MODULE data_types_module
 !    REAL(dp), DIMENSION(:,:,:), POINTER     :: F1_3D_a
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cx
 !    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cy
-    INTEGER :: wbeta_a
+    INTEGER :: wbeta_aca
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in

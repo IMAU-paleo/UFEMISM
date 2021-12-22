@@ -25,7 +25,7 @@ MODULE ice_velocity_module
   ! Import specific functionality 
   USE data_types_module,               ONLY: type_mesh, type_ice_model
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, map_a_to_c_3D, ddx_a_to_c_2D, ddy_a_to_c_2D, &
-                                             ddx_a_to_a_2D, ddy_a_to_a_2D
+                                             ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_c_to_a_3D, ddy_c_to_a_3D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average
 
   IMPLICIT NONE
@@ -379,34 +379,80 @@ CONTAINS
     
     ! Local variables:
     INTEGER                                            :: vi, k
-    REAL(dp), DIMENSION(:    ), POINTER                ::  dHi_dx_a,  dHi_dy_a,  dHb_dx_a,  dHb_dy_a,  dHs_dx_a,  dHs_dy_a
-    INTEGER                                            :: wdHi_dx_a, wdHi_dy_a, wdHb_dx_a, wdHb_dy_a, wdHs_dx_a, wdHs_dy_a
-    REAL(dp)                                           :: u_base_a, v_base_a
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHi_dx_a,  dHi_dy_a,  dHs_dx_a,  dHs_dy_a
+    INTEGER                                            :: wdHi_dx_a, wdHi_dy_a, wdHs_dx_a, wdHs_dy_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  du_dx_3D_a,  dv_dy_3D_a
+    INTEGER                                            :: wdu_dx_3D_a, wdv_dy_3D_a
+    REAL(dp)                                           :: dHbase_dx, dHbase_dy
     REAL(dp)                                           :: du_dx_k,   dv_dy_k
     REAL(dp)                                           :: du_dx_kp1, dv_dy_kp1
     REAL(dp)                                           :: w1, w2, w3, w4
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV, dHi_dx_a, wdHi_dx_a)
-    CALL allocate_shared_dp_1D( mesh%nV, dHi_dy_a, wdHi_dy_a)
-    CALL allocate_shared_dp_1D( mesh%nV, dHb_dx_a, wdHb_dx_a)
-    CALL allocate_shared_dp_1D( mesh%nV, dHb_dy_a, wdHb_dy_a)
-    CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
-    CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
+    CALL allocate_shared_dp_1D( mesh%nV,       dHi_dx_a  , wdHi_dx_a  )
+    CALL allocate_shared_dp_1D( mesh%nV,       dHi_dy_a  , wdHi_dy_a  )
+    CALL allocate_shared_dp_1D( mesh%nV,       dHs_dx_a  , wdHs_dx_a  )
+    CALL allocate_shared_dp_1D( mesh%nV,       dHs_dy_a  , wdHs_dy_a  )
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, du_dx_3D_a, wdu_dx_3D_a)
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz, dv_dy_3D_a, wdv_dy_3D_a)
     
     ! Calculate surface & ice thickness gradients
-    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
-    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
-    CALL ddx_a_to_a_2D( mesh, ice%Hi_a, dHi_dx_a)
-    CALL ddy_a_to_a_2D( mesh, ice%Hi_a, dHi_dy_a)
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a  , dHs_dx_a  )
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a  , dHs_dy_a  )
+    CALL ddx_a_to_a_2D( mesh, ice%Hi_a  , dHi_dx_a  )
+    CALL ddy_a_to_a_2D( mesh, ice%Hi_a  , dHi_dy_a  )
+    
+    ! Calculate strain rates
+    CALL ddx_c_to_a_3D( mesh, ice%u_3D_c, du_dx_3D_a)
+    CALL ddy_c_to_a_3D( mesh, ice%v_3D_c, dv_dy_3D_a)
+    
+    ! Integrate over the incompressibility condition to find the vertical velocity profiles
+    DO vi = mesh%vi1, mesh%vi2
+    
+      IF (ice%mask_ice_a( vi) == 0) CYCLE
+      
+      ! Calculate the ice basal surface slope (not the same as bedrock slope when ice is floating!)
+      dHbase_dx = dHs_dx_a( vi) - dHi_dx_a( vi)
+      dHbase_dy = dHs_dy_a( vi) - dHi_dy_a( vi)   
+      
+      ! Calculate the vertical velocity at the ice base
+      IF (ice%mask_sheet_a( vi) == 1) THEN
+        ice%w_3D_a( vi,C%nz) = (ice%u_3D_a( vi,C%nz) * dHbase_dx) + (ice%v_3D_a( vi,C%nz) * dHbase_dy) + ice%dHb_dt_a( vi)
+      ELSE
+        ice%w_3D_a( vi,C%nz) = (ice%u_3D_a( vi,C%nz) * dHbase_dx) + (ice%v_3D_a( vi,C%nz) * dHbase_dy) ! Should this include the ice thinning rate?
+      END IF
+                           
+      ! The integrant is calculated half way the layer of integration at k+1/2. This integrant is multiplied with the layer thickness and added to the integral
+      ! of all layers below, giving the integral up to and including this layer:
+      DO k = C%nz - 1, 1, -1
+        
+        du_dx_k   = du_dx_3D_a( vi,k  )
+        du_dx_kp1 = du_dx_3D_a( vi,k+1)
+        dv_dy_k   = dv_dy_3D_a( vi,k  )
+        dv_dy_kp1 = dv_dy_3D_a( vi,k+1)
+        
+        w1 = (du_dx_k + du_dx_kp1) / 2._dp
+        w2 = (dv_dy_k + dv_dy_kp1) / 2._dp   
+        
+        w3 = ((dHs_dx_a( vi) - 0.5_dp * (C%zeta(k+1) + C%zeta(k)) * dHi_dx_a( vi)) / MAX(0.1_dp, ice%Hi_a( vi))) *   &
+             ((ice%u_3D_a( vi,k+1) - ice%u_3D_a( vi,k)) / (C%zeta(k+1) - C%zeta(k)))
+        w4 = ((dHs_dy_a( vi) - 0.5_dp * (C%zeta(k+1) + C%zeta(k)) * dHi_dy_a( vi)) / MAX(0.1_dp, ice%Hi_a( vi))) *   &
+             ((ice%v_3D_a( vi,k+1) - ice%v_3D_a( vi,k)) / (C%zeta(k+1) - C%zeta(k)))
+
+        ice%w_3D_a( vi,k) = ice%w_3D_a( vi,k+1) - ice%Hi_a( vi) * (w1 + w2 + w3 + w4) * (C%zeta(k+1) - C%zeta(k))
+        
+      END DO ! DO k = C%nZ - 1, 1, -1
+
+    END DO ! DO vi = mesh%v1, mesh%v2
+    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wdHi_dx_a)
-    CALL deallocate_shared( wdHi_dy_a)
-    CALL deallocate_shared( wdHb_dx_a)
-    CALL deallocate_shared( wdHb_dy_a)
-    CALL deallocate_shared( wdHs_dx_a)
-    CALL deallocate_shared( wdHs_dy_a)
+    CALL deallocate_shared( wdHi_dx_a  )
+    CALL deallocate_shared( wdHi_dy_a  )
+    CALL deallocate_shared( wdHs_dx_a  )
+    CALL deallocate_shared( wdHs_dy_a  )
+    CALL deallocate_shared( wdu_dx_3D_a)
+    CALL deallocate_shared( wdv_dy_3D_a)
     
   END SUBROUTINE calc_3D_vertical_velocities
   
@@ -445,7 +491,7 @@ CONTAINS
         
       END DO
       
-      uav = uav / w
+      u_a( vi) = uav / w
       
     END DO
     CALL sync

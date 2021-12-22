@@ -997,6 +997,50 @@ CONTAINS
     
   END SUBROUTINE remove_Lake_Vostok
   
+! == Analytical solution by Schoof 2006 for the "SSA_icestream" benchmark experiment
+  SUBROUTINE SSA_Schoof2006_analytical_solution( tantheta, h0, A_flow, y, U, tauc)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: tantheta   ! Surface slope in the x-direction
+    REAL(dp),                            INTENT(IN)    :: h0         ! Ice thickness
+    REAL(dp),                            INTENT(IN)    :: A_flow     ! Ice flow factor
+    REAL(dp),                            INTENT(IN)    :: y          ! y-coordinate
+    REAL(dp),                            INTENT(OUT)   :: U          ! Ice velocity in the x-direction
+    REAL(dp),                            INTENT(OUT)   :: tauc       ! Till yield stress
+    
+    ! Local variables:
+    REAL(dp)                                           :: m, B, f, W, ua, ub, uc, ud, ue
+    REAL(dp)                                           :: L = 40000._dp     ! Ice-stream width (m)
+    
+    m = C%SSA_icestream_m
+    
+    ! Calculate the gravitational driving stress f
+    f = ice_density * grav * h0 * tantheta
+    
+    ! Calculate the ice hardness factor B
+    B = A_flow**(-1._dp/C%n_flow)
+    
+    ! Calculate the "ice stream half-width" W
+    W = L * (m+1._dp)**(1._dp/m)
+    
+    ! Calculate the till yield stress across the stream
+    tauc = f * ABS(y/L)**m
+    
+    ! Calculate the analytical solution for u
+    ua = -2._dp * f**3 * L**4 / (B**3 * h0**3)
+    ub = ( 1._dp / 4._dp                           ) * (   (y/L)**     4._dp  - (m+1._dp)**(       4._dp/m) )
+    uc = (-3._dp / ((m+1._dp)    * (      m+4._dp))) * (ABS(y/L)**(  m+4._dp) - (m+1._dp)**(1._dp+(4._dp/m)))
+    ud = ( 3._dp / ((m+1._dp)**2 * (2._dp*m+4._dp))) * (ABS(y/L)**(2*m+4._dp) - (m+1._dp)**(2._dp+(4._dp/m)))
+    ue = (-1._dp / ((m+1._dp)**3 * (3._dp*m+4._dp))) * (ABS(y/L)**(3*m+4._dp) - (m+1._dp)**(3._dp+(4._dp/m)))
+    u = ua * (ub + uc + ud + ue)
+    
+    ! Outside the ice-stream, velocity is zero
+    IF (ABS(y) > w) U = 0._dp
+    
+  END SUBROUTINE SSA_Schoof2006_analytical_solution
+  
 ! == Some operations on sparse matrices in CSR format
   SUBROUTINE multiply_matrix_matrix_CSR( AA, BB, CC)
     ! Perform the matrix multiplication C = A*B, where all three

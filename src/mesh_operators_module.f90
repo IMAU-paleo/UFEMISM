@@ -281,6 +281,114 @@ MODULE mesh_operators_module
   END SUBROUTINE map_c_to_b_3D
   
   ! Combined ACUV-mesh
+  SUBROUTINE map_a_to_aca_2D( mesh, d_a, d_aca)
+    ! Map data fields provided on the regular a (vertex) grid
+    ! to the vertices of the combined AC-mesh (including the contributions
+    ! from c-grid vertices)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_aca
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_c
+    INTEGER                                            :: wd_c
+    
+    ! Safety
+    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_aca,1) /= mesh%nVAaAc) THEN
+      IF (par%master) WRITE(0,*) 'map_a_to_aca_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nAc, d_c, wd_c)
+    
+    ! Get data on the c-grid
+    CALL map_a_to_c_2D( mesh, d_a, d_c)
+    
+    ! Map data to the aca-grid
+    CALL map_a_and_c_to_aca( mesh, d_a, d_c, d_aca)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_c)
+    
+  END SUBROUTINE map_a_to_aca_2D
+  SUBROUTINE map_c_to_aca_2D( mesh, d_c, d_aca)
+    ! Map data fields provided on the regular c (edge) grid
+    ! to the vertices of the combined AC-mesh (including the contributions
+    ! from a-grid vertices)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_aca
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_a
+    INTEGER                                            :: wd_a
+    
+    ! Safety
+    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_aca,1) /= mesh%nVAaAc) THEN
+      IF (par%master) WRITE(0,*) 'map_c_to_aca_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, d_a, wd_a)
+    
+    ! Get data on the c-grid
+    CALL map_c_to_a_2D( mesh, d_c, d_a)
+    
+    ! Map data to the aca-grid
+    CALL map_a_and_c_to_aca( mesh, d_a, d_c, d_aca)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_a)
+    
+  END SUBROUTINE map_c_to_aca_2D
+  SUBROUTINE map_aca_to_a_2D( mesh, d_aca, d_a)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_aca
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_a
+    
+    ! Safety
+    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_aca,1) /= mesh%nVAaAc) THEN
+      IF (par%master) WRITE(0,*) 'map_aca_to_a_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Perform the mapping as a matrix multiplication
+    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_a, d_aca, d_a)
+    
+  END SUBROUTINE map_aca_to_a_2D
+  SUBROUTINE map_aca_to_c_2D( mesh, d_aca, d_c)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_aca
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_c
+    
+    ! Safety
+    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_aca,1) /= mesh%nVAaAc) THEN
+      IF (par%master) WRITE(0,*) 'map_aca_to_c_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Perform the mapping as a matrix multiplication
+    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_c, d_aca, d_c)
+    
+  END SUBROUTINE map_aca_to_c_2D
   SUBROUTINE map_a_and_c_to_aca( mesh, d_a, d_c, d_aca)
     ! Map data fields provided on the regular a (vertex) and c (edge) grids
     ! to the vertices of the combined AC-mesh
@@ -323,68 +431,6 @@ MODULE mesh_operators_module
     CALL deallocate_shared( wd_from_c)
     
   END SUBROUTINE map_a_and_c_to_aca
-  SUBROUTINE map_a_and_c_to_acau( mesh, d_a, d_c, d_acau)
-    ! Map data fields provided on the regular a (vertex) and c (edge) grids
-    ! to the u-field of the combined ACUV-mesh
-    !
-    ! NOTE: leaves the data in the v-field unchanged!
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_acau
-    
-    ! Local variables
-    REAL(dp), DIMENSION(:    ), POINTER                ::  d_aca
-    INTEGER                                            :: wd_aca
-    
-    ! Allocate temporary shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, d_aca, wd_aca)
-    
-    ! Map data from the regular a/c grids to the combined AC-grid
-    CALL map_a_and_c_to_aca( mesh, d_a, d_c, d_aca)
-    
-    ! Map data from the combined AC-grid to the u-field of the ACUV-mesh
-    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acau, d_aca, d_acau)
-    
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_aca)
-    
-  END SUBROUTINE map_a_and_c_to_acau
-  SUBROUTINE map_a_and_c_to_acav( mesh, d_a, d_c, d_acav)
-    ! Map data fields provided on the regular a (vertex) and c (edge) grids
-    ! to the v-field of the combined ACUV-mesh
-    !
-    ! NOTE: leaves the data in the u-field unchanged!
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_acav
-    
-    ! Local variables
-    REAL(dp), DIMENSION(:    ), POINTER                ::  d_aca
-    INTEGER                                            :: wd_aca
-    
-    ! Allocate temporary shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, d_aca, wd_aca)
-    
-    ! Map data from the regular a/c grids to the combined AC-grid
-    CALL map_a_and_c_to_aca( mesh, d_a, d_c, d_aca)
-    
-    ! Map data from the combined AC-grid to the u-field of the ACUV-mesh
-    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acav, d_aca, d_acav)
-    
-    ! Clean up after yourself
-    CALL deallocate_shared( wd_aca)
-    
-  END SUBROUTINE map_a_and_c_to_acav
   
 ! == d/dx
 

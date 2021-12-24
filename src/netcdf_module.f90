@@ -320,14 +320,7 @@ CONTAINS
     INTEGER,                        INTENT(IN)    :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
-    ! Local variables
-    REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
-    INTEGER                                       :: wdp_2D_a
-    
     IF (field_name == 'none') RETURN
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( region%mesh%nV, dp_2D_a, wdp_2D_a)
       
     ! Fields with no time dimension
     ! =============================
@@ -358,12 +351,6 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'SL') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'dHs_dx') THEN
-      CALL ddx_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, dp_2D_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'dHs_dy') THEN
-      CALL ddy_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, dp_2D_a, start=(/1, netcdf%ti /) ))
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -509,9 +496,6 @@ CONTAINS
       WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_mesh!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
-    
-    ! Clean up after yourself
-    CALL deallocate_shared( wdp_2D_a)
     
   END SUBROUTINE write_help_field_mesh
   
@@ -912,10 +896,6 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [vi,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [vi,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
-    ELSEIF (field_name == 'dHs_dx') THEN
-      CALL create_double_var( netcdf%ncid, 'dHs_dx',                   [vi,    t], id_var, long_name='Surface slope in x-direction', units='m/m')
-    ELSEIF (field_name == 'dHs_dy') THEN
-      CALL create_double_var( netcdf%ncid, 'dHs_dy',                   [vi,    t], id_var, long_name='Surface slope in y-direction', units='m/m')
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1229,12 +1209,6 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'SL') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a, id_var, netcdf%ti)
-    ELSEIF (field_name == 'dHs_dx') THEN
-      CALL ddx_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-    ELSEIF (field_name == 'dHs_dy') THEN
-      CALL ddy_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1674,10 +1648,6 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [x, y,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [x, y,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
-    ELSEIF (field_name == 'dHs_dx') THEN
-      CALL create_double_var( netcdf%ncid, 'dHs_dx',                   [x, y,    t], id_var, long_name='Surface slope in x-direction', units='m/m')
-    ELSEIF (field_name == 'dHs_dy') THEN
-      CALL create_double_var( netcdf%ncid, 'dHs_dy',                   [x, y,    t], id_var, long_name='Surface slope in y-direction', units='m/m')
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN

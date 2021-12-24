@@ -1214,6 +1214,8 @@ CONTAINS
   SUBROUTINE add_matrix_matrix_CSR( AA, BB, CC, alpha, beta)
     ! Perform the matrix multiplication C = (alpha*A)+(beta*B), where all three
     ! matrices are provided in CSR format (parallelised)
+    ! 
+    ! NOTE: assumes column entries and A and B are sorted ascending!
       
     IMPLICIT NONE
     
@@ -1223,11 +1225,12 @@ CONTAINS
     REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
     
     ! Local variables:
-    INTEGER                                            :: i1, i2, ic, jc
-    INTEGER                                            :: ka1, ka2, ka, ja
-    INTEGER                                            :: kb1, kb2, kb, jb
-    LOGICAL                                            :: is_nonzero
-    REAL(dp)                                           :: Cij, alphap, betap
+    REAL(dp)                                           :: alphap, betap
+    INTEGER                                            :: i1, i2, ic
+    INTEGER                                            :: ka1, ka2, nnz_row_a
+    INTEGER                                            :: kb1, kb2, nnz_row_b
+    INTEGER                                            :: ka, kb, ja, jb
+    LOGICAL                                            :: finished_a, finished_b
     
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
@@ -1259,46 +1262,85 @@ CONTAINS
     
     DO ic = i1, i2
       
-      DO jc = 1, CC%n
+      ka1 = AA%ptr( ic)
+      ka2 = AA%ptr( ic+1) - 1
+      nnz_row_a = ka2 + 1 - ka1
+      
+      kb1 = BB%ptr( ic)
+      kb2 = BB%ptr( ic+1) - 1
+      nnz_row_b = kb2 + 1 - kb1
+      
+      IF (nnz_row_a == 0 .AND. nnz_row_b == 0) THEN
+        ! Neither A nor B has entries in this row
+        CYCLE
+      ELSEIF (nnz_row_a == 0 .AND. nnz_row_b > 0) THEN
+        ! A has no entries in this row, but B does; copy data from B
+        CC%index( CC%nnz+1: CC%nnz+nnz_row_b) = BB%index( kb1:kb2)
+        CC%val(   CC%nnz+1: CC%nnz+nnz_row_b) = BB%val(   kb1:kb2)
+        CC%nnz = CC%nnz + nnz_row_b
+      ELSEIF (nnz_row_a > 0 .AND. nnz_row_b == 0) THEN
+        ! B has no entries in this row, but A does; copy data from A
+        CC%index( CC%nnz+1: CC%nnz+nnz_row_a) = AA%index( ka1:ka2)
+        CC%val(   CC%nnz+1: CC%nnz+nnz_row_a) = AA%val(   ka1:ka2)
+        CC%nnz = CC%nnz + nnz_row_a
+      ELSE
+        ! Both A and B have entries in this row
         
-        is_nonzero = .FALSE.
-        Cij        = 0._dp
+        ka = ka1
+        kb = kb1
+        finished_a = .FALSE.
+        finished_b = .FALSE.
         
-        ! Check if this column has an entry in A; if so, add it
-        ka1 = AA%ptr( ic)
-        ka2 = AA%ptr( ic+1) - 1
-        DO ka = ka1, ka2
-          ja = AA%index( ka)
-          IF (ja == jc) THEN
-            is_nonzero = .TRUE.
-            Cij = Cij + alphap * AA%val( ka)
-            EXIT
-          END IF
-        END DO
+        DO WHILE ((.NOT. finished_a) .OR. (.NOT. finished_b))
+          
+          IF ((.NOT. finished_a) .AND. (.NOT. finished_b)) THEN
+          
+            ja = AA%index( ka)
+            jb = BB%index( kb)
+            
+            IF (ja < jb) THEN
+              CC%nnz =  CC%nnz + 1
+              CC%index( CC%nnz) = AA%index( ka)
+              CC%val(   CC%nnz) = alphap * AA%val( ka)
+              ka = ka + 1
+            ELSEIF (jb < ja) THEN
+              CC%nnz =  CC%nnz + 1
+              CC%index( CC%nnz) = BB%index( kb)
+              CC%val(   CC%nnz) = betap  * BB%val( kb)
+              kb = kb + 1
+            ELSEIF (jb == ja) THEN
+              CC%nnz =  CC%nnz + 1
+              CC%index( CC%nnz) = AA%index( ka)
+              CC%val(   CC%nnz) = alphap * AA%val( ka) + betap * BB%val( kb)
+              ka = ka + 1
+              kb = kb + 1
+            END IF
+          
+          ELSEIF (.NOT. finished_a) THEN
+          
+            CC%nnz =  CC%nnz + 1
+            CC%index( CC%nnz) = AA%index( ka)
+            CC%val(   CC%nnz) = alphap * AA%val( ka)
+            ka = ka + 1
+            
+          ELSEIF (.NOT. finished_b) THEN
+          
+            CC%nnz =  CC%nnz + 1
+            CC%index( CC%nnz) = BB%index( kb)
+            CC%val(   CC%nnz) = betap * BB%val( kb)
+            kb = kb + 1
+            
+          END IF ! IF ((.NOT. finished_a) .AND. (.NOT. finished_b)) THEN
+          
+          IF (ka == ka2 + 1) finished_a = .TRUE.
+          IF (kb == kb2 + 1) finished_b = .TRUE.
+          
+        END DO ! DO WHILE ((.NOT. finished_a) .OR. (.NOT. finished_b))
         
-        ! Check if this column has an entry in B; if so, add it
-        kb1 = BB%ptr( ic)
-        kb2 = BB%ptr( ic+1) - 1
-        DO kb = kb1, kb2
-          jb = BB%index( kb)
-          IF (jb == jc) THEN
-            is_nonzero = .TRUE.
-            Cij = Cij + betap * BB%val( kb)
-            EXIT
-          END IF
-        END DO
-        
-        ! If the result is non-zero, list it in C
-        IF (is_nonzero) THEN
-          CC%nnz  = CC%nnz + 1
-          CC%index( CC%nnz) = jc
-          CC%val(   CC%nnz) = Cij
-        END IF
-        
-      END DO ! DO j = 1, CC%n
+      END IF ! IF (nnz_row_a == 0 .AND. nnz_row_b == 0) THEN
       
       ! Finalise this row of C
-      CC%ptr( ic+1) = CC%nnz+1
+      CC%ptr( ic+1:CC%m+1) = CC%nnz+1
       
     END DO ! DO i = i1, i2
     CALL sync
@@ -1531,6 +1573,49 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE convert_vector_to_diag_CSR
+  SUBROUTINE are_identical_matrices_CSR( AA, BB, isso)
+    ! Check if CSR-formatted matrices A and B are identical
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
+    LOGICAL,                             INTENT(OUT)   :: isso
+    
+    ! Local variables:
+    INTEGER                                            :: i1, i2, k1, k2, i, k
+    
+    isso = .TRUE.
+    
+    ! Simple dimension check
+    IF (AA%m /= BB%m .OR. AA%n /= BB%n .OR. AA%nnz /= BB%nnz) THEN
+      isso = .FALSE.
+      RETURN
+    END IF
+    
+    ! ptr
+    CALL partition_list( AA%m  , par%i, par%n, i1, i2)
+    DO i = i1, i2
+      IF (AA%ptr( i) /= BB%ptr( i)) THEN
+        isso = .FALSE.
+        EXIT
+      END IF
+    END DO
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, isso, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+    IF (.NOT. isso) RETURN
+    
+    ! index, val
+    CALL partition_list( AA%nnz, par%i, par%n, k1, k2)
+    DO k = k1, k2
+      IF (AA%index( k) /= BB%index( k) .OR. AA%val( k) /= BB%val( k)) THEN
+        isso = .FALSE.
+        EXIT
+      END IF
+    END DO
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, isso, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+    IF (.NOT. isso) RETURN
+    
+  END SUBROUTINE are_identical_matrices_CSR
   
   SUBROUTINE solve_matrix_equation_CSR( AA, b, x, choice_matrix_solver, SOR_nit, SOR_tol, SOR_omega, PETSc_rtol, PETSc_abstol, colour_v1, colour_v2, colour_vi)
     ! Solve the matrix equation Ax = b
@@ -1881,6 +1966,66 @@ CONTAINS
     CALL adapt_shared_dist_dp_1D(  A%nnz, A%nnz_max, A%val,   A%wval  )
   
   END SUBROUTINE extend_matrix_CSR_dist
+  SUBROUTINE sort_columns_in_CSR_dist( A)
+    ! Sort the columns in each row of CSR-formatted matrix A in ascending order
+    ! 
+    ! NOTE: A is still stored distributed over the processes
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    
+    ! Local variables:
+    INTEGER                                            :: i,k1,k2,nnz_row,k,kk,jk,jkk
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: index_row
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_row
+    
+    DO i = 1, A%m
+      
+      k1 = A%ptr( i)
+      k2 = A%ptr( i+1) - 1
+      nnz_row = k2 + 1 - k1
+      
+      IF (nnz_row <= 0) CYCLE
+      
+      ! Allocate temporary memory for this row
+      ALLOCATE( index_row( nnz_row))
+      ALLOCATE( val_row(   nnz_row))
+      
+      ! Copy data for this row to temporary memory
+      index_row = A%index( k1:k2)
+      val_row   = A%val(   k1:k2)
+      
+      ! Sort the data
+      DO k = 1, nnz_row
+        jk = index_row( k)
+        DO kk = k+1, nnz_row
+          jkk = index_row( kk)
+          IF (jkk < jk) THEN
+            ! Switch columns
+            index_row( kk) = index_row( kk) + index_row( k)
+            index_row( k ) = index_row( kk) - index_row( k)
+            index_row( kk) = index_row( kk) - index_row( k)
+            val_row(   kk) = val_row(   kk) + val_row(   k)
+            val_row(   k ) = val_row(   kk) - val_row(   k)
+            val_row(   kk) = val_row(   kk) - val_row(   k)
+          END IF
+        END DO
+      END DO ! DO k = 1, nnz_row
+      
+      ! Copy sorted data back
+      A%index( k1:k2) = index_row
+      A%val(   k1:k2) = val_row
+      
+      ! Clean up after yourself
+      DEALLOCATE( index_row)
+      DEALLOCATE( val_row  )
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE sort_columns_in_CSR_dist
   SUBROUTINE finalise_matrix_CSR_dist( A, i1, i2)
     ! Finalise a CSR-format sparse m-by-n matrix A from distributed to shared memory
     !

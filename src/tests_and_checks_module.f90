@@ -115,69 +115,49 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC
+    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
+    LOGICAL                                            :: are_identical
     
     IF (par%master) WRITE(0,*) '   Testing matrix addition (C = A+B)...'
     
     ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    CALL allocate_matrix_CSR_shared( BBB, 4, 4, 8)
+    CALL allocate_matrix_CSR_shared( AAA   , 64, 3, 96)
+    CALL allocate_matrix_CSR_shared( BBB   , 64, 3, 96)
+    CALL allocate_matrix_CSR_shared( CCC_ex, 64, 3, 144)
     
     IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! B
-      BBB%nnz   = 8
-      BBB%ptr   = [1,3,5,7,9]
-      BBB%index = [1,3,3,4,2,3,2,4]
-      BBB%val   = [9,10,11,12,13,14,15,16]
+AAA%nnz = 96
+AAA%ptr   = [1,1,1,1,1,1,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,76,79,82,85,88,91,94,97]
+AAA%index = [1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
+AAA%val   = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+BBB%nnz = 96
+BBB%ptr   = [1,1,2,3,4,6,8,10,13,13,14,15,16,18,20,22,25,25,26,27,28,30,32,34,37,37,38,39,40,42,44,46,49,49,50,51,52,54,56,58,61,61,62,63,64,66,68,70,73,73,74,75,76,78,80,82,85,85,86,87,88,90,92,94,97]
+BBB%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3]
+BBB%val   = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
+CCC_ex%nnz = 144
+CCC_ex%ptr   = [1,1,2,3,4,6,8,10,13,14,15,17,19,21,23,26,29,30,32,33,35,37,40,42,45,46,48,50,51,54,56,58,61,63,65,67,70,72,75,78,81,83,85,88,90,93,95,98,101,103,106,108,110,113,116,118,121,124,127,130,133,136,139,142,145]
+CCC_ex%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,1,1,2,1,3,1,2,1,3,1,2,3,1,2,3,2,1,2,2,2,3,1,2,1,2,3,2,3,1,2,3,3,1,3,2,3,3,1,2,3,1,3,2,3,1,2,3,1,2,1,2,1,2,1,2,3,1,2,1,2,3,1,2,3,1,2,3,1,3,1,3,1,2,3,1,3,1,2,3,1,3,1,2,3,1,2,3,2,3,1,2,3,2,3,2,3,1,2,3,1,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
+CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,1,2,2,3,2,1,2,3,2,2,3,2,1,2,1,2,1,3,2,2,1,2,3,2,3,2,2,3,1,1,3,1,1,3,1,1,2,3,3,3,1,2,1,3,2,3,3,2,1,1,3,1,1,2,1,1,3,3,2,1,3,3,1,2,3,3,2,3,1,1,2,1,1,3,1,1,3,2,3,1,2,1,3,3,3,2,3,3,1,1,1,3,1,1,1,3,1,1,1,3,3,3,1,3,1,3,1,3,3,3,3,3]
     END IF
     CALL sync
     
+    CALL write_CSR_matrix_to_NetCDF( AAA,'A.nc')
+    CALL write_CSR_matrix_to_NetCDF( BBB,'B.nc')
+    CALL write_CSR_matrix_to_NetCDF( CCC_ex,'C_ex.nc')
+    
     ! Perform multiplication
     CALL add_matrix_matrix_CSR( AAA, BBB, CCC)
+    CALL write_CSR_matrix_to_NetCDF( CCC,'C.nc')
     
     ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (CCC%nnz == 11 .AND. &
-          CCC%ptr(    1) ==  1 .AND. &
-          CCC%ptr(    2) ==  3 .AND. &
-          CCC%ptr(    3) ==  6 .AND. &
-          CCC%ptr(    4) ==  8 .AND. &
-          CCC%ptr(    5) == 12 .AND. &
-          CCC%index(  1) == 1 .AND. &
-          CCC%index(  2) == 3 .AND. &
-          CCC%index(  3) == 1 .AND. &
-          CCC%index(  4) == 3 .AND. &
-          CCC%index(  5) == 4 .AND. &
-          CCC%index(  6) == 2 .AND. &
-          CCC%index(  7) == 3 .AND. &
-          CCC%index(  8) == 1 .AND. &
-          CCC%index(  9) == 2 .AND. &
-          CCC%index( 10) == 3 .AND. &
-          CCC%index( 11) == 4 .AND. &
-          CCC%val(    1) ==  10._dp .AND. &
-          CCC%val(    2) ==  12._dp .AND. &
-          CCC%val(    3) ==   3._dp .AND. &
-          CCC%val(    4) ==  11._dp .AND. &
-          CCC%val(    5) ==  16._dp .AND. &
-          CCC%val(    6) ==  18._dp .AND. &
-          CCC%val(    7) ==  14._dp .AND. &
-          CCC%val(    8) ==   6._dp .AND. &
-          CCC%val(    9) ==  15._dp .AND. &
-          CCC%val(   10) ==   7._dp .AND. &
-          CCC%val(   11) ==  24._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_add - ERROR: CSR matrix addition gave wrong answer!'
-        WRITE(0,*) '  C%nnz   = ', CCC%nnz
-        WRITE(0,*) '  C%ptr   = ', CCC%ptr
-        WRITE(0,*) '  C%index = ', CCC%index
-        WRITE(0,*) '  C%val   = ', CCC%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
+    CALL are_identical_matrices_CSR( CCC, CCC_ex, are_identical)
+    IF (par%master .AND. (.NOT. are_identical)) THEN
+      WRITE(0,*) 'test_CSR_matrix_operations_add - ERROR: CSR matrix addition gave wrong answer!'
+      WRITE(0,*) '  C%nnz   = ', CCC%nnz
+      WRITE(0,*) '  C%ptr   = ', CCC%ptr
+      WRITE(0,*) '  C%index = ', CCC%index
+      WRITE(0,*) '  C%val   = ', CCC%val
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     CALL sync
     
@@ -185,6 +165,7 @@ CONTAINS
     CALL deallocate_matrix_CSR( AAA)
     CALL deallocate_matrix_CSR( BBB)
     CALL deallocate_matrix_CSR( CCC)
+    CALL deallocate_matrix_CSR( CCC_ex)
     
   END SUBROUTINE test_CSR_matrix_operations_add
   SUBROUTINE test_CSR_matrix_operations_overwrite_rows
@@ -707,6 +688,49 @@ CONTAINS
     CALL d2dx2_a_to_a_2D(  mesh, d_a_ex, d2dx2_a_to_a )
     CALL d2dxdy_a_to_a_2D( mesh, d_a_ex, d2dxdy_a_to_a)
     CALL d2dy2_a_to_a_2D(  mesh, d_a_ex, d2dy2_a_to_a )
+    
+  ! Write results to debug file
+  ! ===========================
+  
+!    IF (par%master) THEN
+!      
+!      ! Mapping
+!      debug%dp_2D_a_01 = d_a_to_a
+!      debug%dp_2D_a_02 = d_b_to_a
+!      debug%dp_2D_a_03 = d_c_to_a
+!      debug%dp_2D_b_01 = d_a_to_b
+!      debug%dp_2D_b_02 = d_b_to_b
+!      debug%dp_2D_b_03 = d_c_to_b
+!      debug%dp_2D_c_01 = d_a_to_c
+!      debug%dp_2D_c_02 = d_b_to_c
+!      debug%dp_2D_c_03 = d_c_to_c
+!      
+!      ! d/dx
+!      debug%dp_2D_a_04 = ddx_a_to_a
+!      debug%dp_2D_a_05 = ddx_b_to_a
+!      debug%dp_2D_a_06 = ddx_c_to_a
+!      debug%dp_2D_b_04 = ddx_a_to_b
+!      debug%dp_2D_b_05 = ddx_b_to_b
+!      debug%dp_2D_b_06 = ddx_c_to_b
+!      debug%dp_2D_c_04 = ddx_a_to_c
+!      debug%dp_2D_c_05 = ddx_b_to_c
+!      debug%dp_2D_c_06 = ddx_c_to_c
+!      
+!      ! d/dy
+!      debug%dp_2D_a_07 = ddy_a_to_a
+!      debug%dp_2D_a_08 = ddy_b_to_a
+!      debug%dp_2D_a_09 = ddy_c_to_a
+!      debug%dp_2D_b_07 = ddy_a_to_b
+!      debug%dp_2D_b_08 = ddy_b_to_b
+!      debug%dp_2D_b_09 = ddy_c_to_b
+!      debug%dp_2D_c_07 = ddy_a_to_c
+!      debug%dp_2D_c_08 = ddy_b_to_c
+!      debug%dp_2D_c_09 = ddy_c_to_c
+!      
+!      CALL write_to_debug_file
+!      
+!    END IF
+!    CALL sync
     
   ! Clean up after yourself
   ! =======================

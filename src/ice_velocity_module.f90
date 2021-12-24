@@ -306,8 +306,6 @@ CONTAINS
 !      CALL write_to_debug_file
 !    END IF
 !    CALL sync
-!    
-!    IF (viscosity_iteration_i == 20) CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       
     END DO viscosity_iteration
     
@@ -774,12 +772,10 @@ CONTAINS
     
     ! Convert sliding term beta from vector to diagonal matrix
     CALL convert_vector_to_diag_CSR( beta_over_N_acuv, mbeta_over_N_acuv)
-    !CALL write_CSR_matrix_to_NetCDF( mbeta_over_N_acuv, 'mbeta_over_N_acuv.nc' )
     CALL deallocate_shared( wbeta_over_N_acuv)
     
     ! Subtract beta / N from the unchanging part of the matrix to get A
     CALL add_matrix_matrix_CSR( ice%M_SSA_sans_no_beta_ac, mbeta_over_N_acuv, A, alpha = 1._dp, beta = -1._dp)
-    !CALL write_CSR_matrix_to_NetCDF( A, 'A.nc' )
     CALL deallocate_matrix_CSR( mbeta_over_N_acuv)
     
   ! Construct the right-hand side, initial guess, and boundary conditions
@@ -831,12 +827,10 @@ CONTAINS
     
     ! Construct the boundary conditions matrix, and adapt the right-hand side and initial guess accordingly
     CALL construct_BC_SSA( mesh, BC, b_acuv, uv_acuv)
-    !CALL write_CSR_matrix_to_NetCDF( BC, 'BC.nc')
     
     ! Add the boundary conditions to A
     CALL overwrite_rows_CSR( A, BC)
     CALL deallocate_matrix_CSR( BC)
-    !CALL write_CSR_matrix_to_NetCDF( A, 'A_BC.nc')
     
   ! Solve the matrix equation
   ! =========================
@@ -1003,9 +997,12 @@ CONTAINS
     
     ! Mu = M1 + 3*M_d2dxdy_acv_acu
     CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acv_acu, Mu, alpha = 1._dp, beta = 3._dp)
+    CALL deallocate_matrix_CSR( M_d2dx2_acu_acu )
+    CALL deallocate_matrix_CSR( M_d2dy2_acu_acu )
+    CALL deallocate_matrix_CSR( M_d2dxdy_acv_acu)
     CALL deallocate_matrix_CSR( M1)
     
-  ! Equation 1
+  ! Equation 2
   ! ==========
     
     ! M_d2dy2_acv_acv = M_move_ac_acv * M_d2dy2_ac_ac * M_move_acv_ac
@@ -1028,6 +1025,9 @@ CONTAINS
     
     ! Mv = M1 + 3*M_d2dxdy_acu_acv
     CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acu_acv, Mv, alpha = 1._dp, beta = 3._dp)
+    CALL deallocate_matrix_CSR( M_d2dy2_acv_acv )
+    CALL deallocate_matrix_CSR( M_d2dx2_acv_acv )
+    CALL deallocate_matrix_CSR( M_d2dxdy_acu_acv)
     CALL deallocate_matrix_CSR( M1)
     
   ! Add them together

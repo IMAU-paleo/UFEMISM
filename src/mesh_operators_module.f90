@@ -28,7 +28,8 @@ MODULE mesh_operators_module
   USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR
   USE utilities_module,                ONLY: allocate_matrix_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
                                              deallocate_matrix_CSR, multiply_matrix_matrix_CSR, multiply_matrix_vector_CSR, &
-                                             multiply_matrix_vector_2D_CSR, calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3
+                                             multiply_matrix_vector_2D_CSR, calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, &
+                                             sort_columns_in_CSR_dist
 
   IMPLICIT NONE
 
@@ -2996,6 +2997,8 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     
@@ -3099,6 +3102,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
@@ -3205,6 +3211,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
@@ -3310,6 +3319,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
@@ -3416,6 +3428,8 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     
@@ -3548,6 +3562,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
@@ -3653,6 +3670,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
@@ -3798,6 +3818,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
@@ -3910,6 +3933,8 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     
@@ -4148,6 +4173,8 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)
     
@@ -4251,6 +4278,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ati1, mesh%ati2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ati1, mesh%ati2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ati1, mesh%ati2)
@@ -4356,6 +4386,9 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( M_map)
+    CALL sort_columns_in_CSR_dist( M_ddx)
+    CALL sort_columns_in_CSR_dist( M_ddy)
     CALL finalise_matrix_CSR_dist( M_map, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)

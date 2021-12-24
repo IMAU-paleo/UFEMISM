@@ -179,7 +179,7 @@ CONTAINS
           CALL create_output_files( region)
           CALL sync
           region%output_file_exists = .TRUE.
-        END IF  
+        END IF
         CALL write_to_output_files( region)
       END IF
 

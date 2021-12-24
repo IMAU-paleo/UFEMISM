@@ -134,6 +134,9 @@ CONTAINS
       CALL solve_SSA_sans(  mesh, ice)
     END IF
     
+    ! Calculate secondary velocities (surface, base, etc.)
+    CALL calc_secondary_velocities( mesh, ice)
+    
   END SUBROUTINE solve_SSA
   SUBROUTINE solve_SSA_sans(  mesh, ice)
     ! Calculate ice velocities using the SSA sans the "cross-terms"
@@ -309,9 +312,6 @@ CONTAINS
       
     END DO viscosity_iteration
     
-    ! Calculate secondary velocities (surface, base, etc.)
-    CALL calc_secondary_velocities( mesh, ice)
-    
     ! Clean up after yourself
     CALL deallocate_shared( wu_ac_prev)
     CALL deallocate_shared( wv_ac_prev)
@@ -406,8 +406,6 @@ CONTAINS
       ! Hybrid SIA/SSA
       
       ! Set basal velocity equal to SSA answer
-      CALL move_aca_to_a_2D( mesh, ice%u_SSA_ac, ice%u_base_a)
-      CALL move_aca_to_a_2D( mesh, ice%v_SSA_ac, ice%v_base_a)
       CALL move_acc_to_c_2D( mesh, ice%u_SSA_ac, ice%u_base_c)
       CALL move_acc_to_c_2D( mesh, ice%v_SSA_ac, ice%v_base_c)
       
@@ -435,15 +433,32 @@ CONTAINS
       END DO
       CALL sync
       
-      ! Map 3-D SIA velocities to the a-grid
+      ! Map velocities to the a-grid
+      CALL move_aca_to_a_2D( mesh, ice%u_SSA_ac, ice%u_base_a)
+      CALL move_aca_to_a_2D( mesh, ice%v_SSA_ac, ice%v_base_a)
       CALL map_velocity_from_c_to_a_3D( mesh, ice, ice%u_3D_SIA_c, ice%u_3D_a)
       CALL map_velocity_from_c_to_a_3D( mesh, ice, ice%v_3D_SIA_c, ice%v_3D_a)
       
-      ! Add SSA component
-      DO vi = mesh%vi1, mesh%vi2
-        ice%u_3D_a( vi,:) = ice%u_3D_a( vi,:) + ice%u_base_a( vi)
-        ice%v_3D_a( vi,:) = ice%v_3D_a( vi,:) + ice%v_base_a( vi)
+      ! Add SIA and SSA contributions together
+      DO k = 1, C%nz
+        ice%u_3D_a( mesh%vi1:mesh%vi2,k) = ice%u_3D_a( mesh%vi1:mesh%vi2,k) + ice%u_base_a( mesh%vi1:mesh%vi2)
+        ice%v_3D_a( mesh%vi1:mesh%vi2,k) = ice%v_3D_a( mesh%vi1:mesh%vi2,k) + ice%v_base_a( mesh%vi1:mesh%vi2)
       END DO
+      CALL sync
+      
+      ! Get surface velocity from the 3D fields
+      ice%u_surf_a( mesh%vi1:mesh%vi2) = ice%u_3D_a( mesh%vi1:mesh%vi2,1)
+      ice%v_surf_a( mesh%vi1:mesh%vi2) = ice%v_3D_a( mesh%vi1:mesh%vi2,1)
+      CALL sync
+      
+      ! Get vertically averaged velocities
+      DO vi = mesh%vi1, mesh%vi2
+        prof = ice%u_3D_a( vi,:)
+        CALL vertical_average( prof, ice%u_vav_a( vi))
+        prof = ice%v_3D_a( vi,:)
+        CALL vertical_average( prof, ice%v_vav_a( vi))
+      END DO
+      CALL sync
     
     ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
       ! DIVA

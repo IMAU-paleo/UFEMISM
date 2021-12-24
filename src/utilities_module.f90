@@ -1211,8 +1211,8 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE multiply_matrix_vector_2D_CSR
-  SUBROUTINE add_matrix_matrix_CSR( AA, BB, CC)
-    ! Perform the matrix multiplication C = A+B, where all three
+  SUBROUTINE add_matrix_matrix_CSR( AA, BB, CC, alpha, beta)
+    ! Perform the matrix multiplication C = (alpha*A)+(beta*B), where all three
     ! matrices are provided in CSR format (parallelised)
       
     IMPLICIT NONE
@@ -1220,18 +1220,31 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
     TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
     
     ! Local variables:
     INTEGER                                            :: i1, i2, ic, jc
     INTEGER                                            :: ka1, ka2, ka, ja
     INTEGER                                            :: kb1, kb2, kb, jb
     LOGICAL                                            :: is_nonzero
-    REAL(dp)                                           :: Cij
+    REAL(dp)                                           :: Cij, alphap, betap
     
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'append_overwrite_CSR - ERROR: A and B are not of the same size!'
+      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR - ERROR: A and B are not of the same size!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! If no coefficients are provided, assume unity
+    IF (PRESENT( alpha)) THEN
+      alphap = alpha
+    ELSE
+      alphap = 1._dp
+    END IF
+    IF (PRESENT( beta )) THEN
+      betap  = beta
+    ELSE
+      betap  = 1._dp
     END IF
     
     ! Partition rows over the processors
@@ -1258,7 +1271,7 @@ CONTAINS
           ja = AA%index( ka)
           IF (ja == jc) THEN
             is_nonzero = .TRUE.
-            Cij = Cij + AA%val( ka)
+            Cij = Cij + alphap * AA%val( ka)
             EXIT
           END IF
         END DO
@@ -1270,7 +1283,7 @@ CONTAINS
           jb = BB%index( kb)
           IF (jb == jc) THEN
             is_nonzero = .TRUE.
-            Cij = Cij + BB%val( kb)
+            Cij = Cij + betap * BB%val( kb)
             EXIT
           END IF
         END DO
@@ -1312,7 +1325,7 @@ CONTAINS
     
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'append_overwrite_CSR - ERROR: A and B are not of the same size!'
+      IF (par%master) WRITE(0,*) 'overwrite_rows_CSR - ERROR: A and B are not of the same size!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
@@ -1437,6 +1450,50 @@ CONTAINS
     CALL finalise_matrix_CSR_dist( AAT, i1, i2)
     
   END SUBROUTINE transpose_matrix_CSR
+  SUBROUTINE multiply_matrix_rows_with_vector( AA, BB, CC)
+    ! Multiply the rows of the m-by-n matrix A with the elements
+    ! of the m-by-1 vector B, call the result C
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: BB
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    
+    ! Local variables:
+    INTEGER                                            :: i1,i2,i,k
+    
+    ! Safety
+    IF (SIZE(BB,1) /= AA%m) THEN
+      IF (par%master) WRITE(0,*) 'multiply_matrix_rows_with_vector - ERROR: sizes of A and B dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory for C
+    CALL allocate_matrix_CSR_shared( CC, AA%m, AA%n, AA%nnz)
+    
+    ! Partition rows over the processors
+    CALL partition_list( AA%m, par%i, par%n, i1, i2)
+    IF (par%master) THEN
+      CC%m       = AA%m
+      CC%n       = AA%n
+      CC%nnz     = AA%nnz
+      CC%nnz_max = AA%nnz_max
+      CC%ptr( CC%m+1) = AA%ptr( AA%m+1)
+    END IF
+    CALL sync
+    
+    DO i = i1, i2
+      CC%ptr( i) = AA%ptr( i)
+      DO k = AA%ptr( i), AA%ptr( i+1)-1
+        CC%index( k) = AA%index( k)
+        CC%val(   k) = AA%val(   k) * BB( i)
+      END DO
+    END DO
+    CALL sync
+    
+  END SUBROUTINE multiply_matrix_rows_with_vector
   SUBROUTINE convert_vector_to_diag_CSR( A_vec, AA)
     ! Convert the vector A_vec to the diagonal matrix A
       
@@ -1475,7 +1532,7 @@ CONTAINS
     
   END SUBROUTINE convert_vector_to_diag_CSR
   
-  SUBROUTINE solve_matrix_equation_CSR( AA, b, x, choice_matrix_solver, SOR_nit, SOR_tol, SOR_omega, PETSc_rtol, PETSc_abstol)
+  SUBROUTINE solve_matrix_equation_CSR( AA, b, x, choice_matrix_solver, SOR_nit, SOR_tol, SOR_omega, PETSc_rtol, PETSc_abstol, colour_v1, colour_v2, colour_vi)
     ! Solve the matrix equation Ax = b
     ! The matrix A is provided in Compressed Sparse Row (CSR) format
       
@@ -1491,6 +1548,8 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: SOR_omega
     REAL(dp),                            INTENT(IN)    :: PETSc_rtol
     REAL(dp),                            INTENT(IN)    :: PETSc_abstol
+    INTEGER,  DIMENSION(5)    , OPTIONAL, INTENT(IN)   :: colour_v1, colour_v2
+    INTEGER,  DIMENSION(:,:  ), OPTIONAL, INTENT(IN)   :: colour_vi
     
     ! Safety
     IF (AA%m /= AA%n .OR. AA%m /= SIZE( b,1) .OR. AA%m /= SIZE( x,1)) THEN
@@ -1505,7 +1564,7 @@ CONTAINS
     IF (choice_matrix_solver == 'SOR') THEN
       ! Use the old simple SOR solver
       
-      CALL solve_matrix_equation_CSR_SOR( AA, b, x, SOR_nit, SOR_tol, SOR_omega)
+      CALL solve_matrix_equation_CSR_SOR( AA, b, x, SOR_nit, SOR_tol, SOR_omega, colour_v1, colour_v2, colour_vi)
       
     ELSEIF (choice_matrix_solver == 'PETSc') THEN
       ! Use the PETSc solver (much preferred, this is way faster and more stable!)
@@ -1521,7 +1580,35 @@ CONTAINS
     END IF
     
   END SUBROUTINE solve_matrix_equation_CSR
-  SUBROUTINE solve_matrix_equation_CSR_SOR( AA, b, x, nit, tol, omega)
+  SUBROUTINE solve_matrix_equation_CSR_SOR( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
+    ! Solve the matrix equation Ax = b using successive over-relaxation (SOR)
+    ! The matrix A is provided in Compressed Sparse Row (CSR) format
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: x
+    INTEGER,                             INTENT(IN)    :: nit
+    REAL(dp),                            INTENT(IN)    :: tol
+    REAL(dp),                            INTENT(IN)    :: omega
+    INTEGER,  DIMENSION(5)    , OPTIONAL, INTENT(IN)   :: colour_v1, colour_v2
+    INTEGER,  DIMENSION(:,:  ), OPTIONAL, INTENT(IN)   :: colour_vi
+    
+    IF (PRESENT( colour_v1)) THEN
+      ! Safety
+      IF ((.NOT. PRESENT( colour_v2)) .OR. (.NOT. PRESENT( colour_vi))) THEN
+        IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: needs all three colour arguments!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      CALL solve_matrix_equation_CSR_SOR_coloured( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
+    ELSE
+      CALL solve_matrix_equation_CSR_SOR_regular(  AA, b, x, nit, tol, omega)
+    END IF
+    
+  END SUBROUTINE solve_matrix_equation_CSR_SOR
+  SUBROUTINE solve_matrix_equation_CSR_SOR_regular( AA, b, x, nit, tol, omega)
     ! Solve the matrix equation Ax = b using successive over-relaxation (SOR)
     ! The matrix A is provided in Compressed Sparse Row (CSR) format
       
@@ -1537,11 +1624,35 @@ CONTAINS
     
     ! Local variables:
     INTEGER                                            :: i,j,k,it,i1,i2
-    REAL(dp)                                           :: lhs, res, cij, res_max, omega_dyn
+    REAL(dp)                                           :: lhs, res, res_max, omega_dyn
+    REAL(dp), DIMENSION(:    ), POINTER                ::  diagA
+    INTEGER                                            :: wdiagA
+    LOGICAL                                            :: found_it
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( AA%m, diagA, wdiagA)
     
     ! Partition equations over the processors
     CALL partition_list( AA%m, par%i, par%n, i1, i2)
     
+    ! Store the central diagonal separately for faster access
+    DO i = i1, i2
+      found_it = .FALSE.
+      DO k = AA%ptr( i), AA%ptr( i+1)-1
+        j = AA%index( k)
+        IF (j == i) THEN
+          diagA( i) = AA%val( k)
+          found_it = .TRUE.
+        END IF
+      END DO
+      IF (.NOT. found_it) THEN
+        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
+    CALL sync
+    
+    ! Perform the successive over-relaxation
     omega_dyn = omega
     
     res_max = tol * 2._dp
@@ -1554,14 +1665,12 @@ CONTAINS
       DO i = i1, i2
       
         lhs = 0._dp
-        cij = 0._dp
         DO k = AA%ptr( i), AA%ptr( i+1)-1
           j = AA%index( k)
           lhs = lhs + AA%val( k) * x( j)
-          IF (j == i) cij = AA%val( k)
         END DO
         
-        res = (lhs - b( i)) / cij
+        res = (lhs - b( i)) / diagA( i)
         res_max = MAX( res_max, res)
         
         x( i) = x( i) - omega_dyn * res
@@ -1591,7 +1700,114 @@ CONTAINS
       
     END DO SOR_iterate
     
-  END SUBROUTINE solve_matrix_equation_CSR_SOR
+    ! Clean up after yourself
+    CALL deallocate_shared( wdiagA)
+    
+  END SUBROUTINE solve_matrix_equation_CSR_SOR_regular
+  SUBROUTINE solve_matrix_equation_CSR_SOR_coloured( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
+    ! Solve the matrix equation Ax = b using successive over-relaxation (SOR)
+    ! The matrix A is provided in Compressed Sparse Row (CSR) format
+    ! 
+    ! Use a five-colouring map for perfect parallelisation
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: x
+    INTEGER,                             INTENT(IN)    :: nit
+    REAL(dp),                            INTENT(IN)    :: tol
+    REAL(dp),                            INTENT(IN)    :: omega
+    INTEGER,  DIMENSION(5)    ,          INTENT(IN)   :: colour_v1, colour_v2
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)   :: colour_vi
+    
+    ! Local variables:
+    INTEGER                                            :: fci,fcvi,i,j,k,it,i1,i2
+    REAL(dp)                                           :: lhs, res, res_max, omega_dyn
+    REAL(dp), DIMENSION(:    ), POINTER                ::  diagA
+    INTEGER                                            :: wdiagA
+    LOGICAL                                            :: found_it
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( AA%m, diagA, wdiagA)
+    
+    ! Partition equations over the processors
+    CALL partition_list( AA%m, par%i, par%n, i1, i2)
+    
+    ! Store the central diagonal separately for faster access
+    DO i = i1, i2
+      found_it = .FALSE.
+      DO k = AA%ptr( i), AA%ptr( i+1)-1
+        j = AA%index( k)
+        IF (j == i) THEN
+          diagA( i) = AA%val( k)
+          found_it = .TRUE.
+        END IF
+      END DO
+      IF (.NOT. found_it) THEN
+        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
+    CALL sync
+    
+    ! Perform the successive over-relaxation
+    omega_dyn = omega
+    
+    res_max = tol * 2._dp
+    it = 0
+    SOR_iterate: DO WHILE (res_max > tol .AND. it < nit)
+      it = it+1
+      
+      res_max = 0._dp
+
+      DO fci = 1, 5
+        DO fcvi = colour_v1( fci), colour_v2( fci)
+        
+          i = colour_vi( fcvi, fci)
+      
+          lhs = 0._dp
+          DO k = AA%ptr( i), AA%ptr( i+1)-1
+            j = AA%index( k)
+            lhs = lhs + AA%val( k) * x( j)
+          END DO
+          
+          res = (lhs - b( i)) / diagA( i)
+          res_max = MAX( res_max, res)
+          
+          x( i) = x( i) - omega_dyn * res
+        
+        END DO ! DO fcvi = fcvi1, fcvi2
+        CALL sync
+      END DO ! DO fci = 1, 5
+      
+      ! Check if we've reached a stable solution
+      CALL MPI_ALLREDUCE( MPI_IN_PLACE, res_max, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+      
+      !IF (par%master) WRITE(0,*) '      SOR iteration ', it, ': res_max = ', res_max
+      
+      IF (it > 100 .AND. res_max > 1E3_dp ) THEN
+        
+        ! Divergence detected - decrease omega, reset solution to zero, restart SOR.
+        IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - divergence detected; decrease omega, reset solution to zero, restart SOR'
+        omega_dyn = omega_dyn - 0.1_dp
+        it = 0
+        x( i1:i2) = 0._dp
+        CALL sync
+        
+        IF (omega_dyn <= 0.1_dp) THEN
+          IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - ERROR: divergence detected even with extremely low relaxation parameter!'
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        END IF
+      END IF
+      
+    END DO SOR_iterate
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wdiagA)
+    
+  END SUBROUTINE solve_matrix_equation_CSR_SOR_coloured
   
   SUBROUTINE allocate_matrix_CSR_shared( A, m, n, nnz_max)
     ! Allocate shared memory for a CSR-format sparse m-by-n matrix A

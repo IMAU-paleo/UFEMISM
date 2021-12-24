@@ -25,7 +25,7 @@ MODULE thermodynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
-  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, map_aca_to_a_2D
+  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, move_aca_to_a_2D
   USE mesh_help_functions_module,      ONLY: CROSS2
   
   IMPLICIT NONE
@@ -97,10 +97,9 @@ CONTAINS
       CALL sync
     
       ! Calculate various physical terms
-      CALL calc_bottom_frictional_heating( mesh, ice)
-      CALL calc_heat_capacity(                  mesh, ice)
-      CALL calc_thermal_conductivity(           mesh, ice)
-      CALL calc_pressure_melting_point(         mesh, ice)
+      CALL calc_heat_capacity(          mesh, ice)
+      CALL calc_thermal_conductivity(   mesh, ice)
+      CALL calc_pressure_melting_point( mesh, ice)
       
       ! If so specified, solve the heat equation
       IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, SMB)
@@ -149,25 +148,14 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV,       is_unstable,           wis_unstable          )
     CALL allocate_shared_dp_2D(  mesh%nV, C%nz, Ti_new,                wTi_new               )
     CALL allocate_shared_dp_1D(  mesh%nV,       T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
-
-    ! Calculate the required derivatives of Hi and Hs   
-    CALL ddx_a_to_a_2D( mesh, ice%Hi_a, ice%dHi_dx_a)
-    CALL ddy_a_to_a_2D( mesh, ice%Hi_a, ice%dHi_dy_a)
-    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, ice%dHs_dx_a)
-    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, ice%dHs_dy_a)
-    
-    ! (dHi_dt and dHb_dt are set in other routines)
-    DO vi = mesh%vi1, mesh%vi2
-      IF (ice%mask_shelf_a( vi) == 0) THEN
-        ice%dHs_dt_a( vi) = ice%dHi_dt_a( vi) + ice%dHb_dt_a( vi)
-      ELSE
-        ice%dHs_dt_a( vi) = ice%dHi_dt_a( vi) * (1._dp - ice_density / seawater_density)
-      END IF
-    END DO
     CALL sync
     
     ! Calculate zeta derivatives required for solving the heat equation
     CALL calculate_zeta_derivatives( mesh, ice)
+    
+    ! Calculate heating terms
+    CALL calc_internal_heating(   mesh, ice)
+    CALL calc_frictional_heating( mesh, ice)
     
     ! Set ice surface temperature equal to annual mean 2m air temperature
     DO vi = mesh%vi1, mesh%vi2
@@ -214,14 +202,6 @@ CONTAINS
   
       ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
       DO k = 2, C%nz-1
-        
-        IF (ice%mask_sheet_a( vi) == 1) THEN
-          internal_heating = ((- grav * C%zeta(k)) / ice%Cpi_a( vi,k)) * ( &
-               (p_zeta%a_zeta(k) * ice%u_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%u_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%u_3D_a( vi,k+1)) * ice%dHs_dx_a( vi) + &
-               (p_zeta%a_zeta(k) * ice%v_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%v_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%v_3D_a( vi,k+1)) * ice%dHs_dy_a( vi) )
-        ELSE
-          internal_heating = 0._dp
-        END IF
       
         CALL calc_upwind_heat_flux_derivatives_vertex( mesh, ice%u_3D_c, ice%v_3D_c, ice%Ti_a, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
 
@@ -229,7 +209,7 @@ CONTAINS
 
         f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a(vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
  
-        f3 = internal_heating + (u_times_dT_dx_upwind + v_times_dT_dy_upwind) - ice%Ti_a( vi,k) / C%dt_thermo
+        f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind + v_times_dT_dy_upwind) - ice%Ti_a( vi,k) / C%dt_thermo
 
         alpha(k) = f1 * p_zeta%a_zetazeta(k) - f2 * p_zeta%a_zeta(k)
         beta (k) = f1 * p_zeta%b_zetazeta(k) - f2 * p_zeta%b_zeta(k) - 1._dp / C%dt_thermo
@@ -497,8 +477,53 @@ CONTAINS
   END SUBROUTINE replace_Ti_with_robin_solution  
   
 ! == Calculate various physical terms
-  SUBROUTINE calc_bottom_frictional_heating( mesh, ice)
-    ! Calculation of the frictional heating at the base due to sliding
+  SUBROUTINE calc_internal_heating( mesh, ice)
+    ! Calculate internal heating due to deformation
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: vi, k
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx_a,  dHs_dy_a
+    INTEGER                                            :: wdHs_dx_a, wdHs_dy_a
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
+    
+    ! Calculate surface slopes
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
+    
+    ! Calculate internal heating
+    DO vi = mesh%vi1, mesh%vi2
+      
+      ice%internal_heating_a( vi,:) = 0._dp
+      
+      IF (mesh%edge_index( vi) > 0) CYCLE ! Skip the domain boundary
+      IF (ice%mask_ice_a( vi) == 0) CYCLE ! Skip ice-less elements
+  
+      ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
+      DO k = 2, C%nz-1
+        ice%internal_heating_a( vi,k) = ((- grav * C%zeta(k)) / ice%Cpi_a( vi,k)) * ( &
+             (p_zeta%a_zeta(k) * ice%u_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%u_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%u_3D_a( vi,k+1)) * dHs_dx_a( vi) + &
+             (p_zeta%a_zeta(k) * ice%v_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%v_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%v_3D_a( vi,k+1)) * dHs_dy_a( vi) )
+      END DO
+      
+    END DO
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wdHs_dx_a)
+    CALL deallocate_shared( wdHs_dy_a)
+    
+  END SUBROUTINE calc_internal_heating
+  SUBROUTINE calc_frictional_heating( mesh, ice)
+    ! Calculate frictional heating at the base due to sliding
     
     IMPLICIT NONE
     
@@ -522,7 +547,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV, beta_a, wbeta_a)
     
     ! Map beta from the combi-mesh to the regular mesh
-    CALL map_aca_to_a_2D( mesh, ice%beta_aca, beta_a)
+    CALL move_aca_to_a_2D( mesh, ice%beta_ac, beta_a)
     
     ! Calculate frictional heating
     DO vi = mesh%vi1, mesh%vi2
@@ -537,7 +562,7 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wbeta_a)
 
-  END SUBROUTINE calc_bottom_frictional_heating
+  END SUBROUTINE calc_frictional_heating
   SUBROUTINE calc_heat_capacity( mesh, ice)
     ! Calculate the heat capacity of the ice
       

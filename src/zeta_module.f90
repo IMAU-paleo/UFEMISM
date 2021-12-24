@@ -1,8 +1,24 @@
 MODULE zeta_module
 
-  USE configuration_module,        ONLY: dp, C
-  USE data_types_module,           ONLY: type_mesh, type_ice_model
-  USE parallel_module,             ONLY: par, sync, ierr, cerr
+  ! Import basic functionality
+  USE mpi
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  
+  ! Import specific functionality 
+  USE data_types_module,               ONLY: type_mesh, type_ice_model
+  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
   
   IMPLICIT NONE
   
@@ -43,18 +59,52 @@ CONTAINS
 
     ! Local variables:
     INTEGER                                            :: vi, k
-    REAL(dp)                                           :: inverse_Hi                 ! Contains the inverse of Hi
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dt_a,  dHs_dx_a,  dHs_dy_a,  dHi_dx_a,  dHi_dy_a
+    INTEGER                                            :: wdHs_dt_a, wdHs_dx_a, wdHs_dy_a, wdHi_dx_a, wdHi_dy_a
     
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dt_a, wdHs_dt_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHi_dx_a, wdHi_dx_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHi_dy_a, wdHi_dy_a)
+    
+    ! Calculate dHs_dt
     DO vi = mesh%vi1, mesh%vi2
-      inverse_Hi = 1._dp / ice%Hi_a( vi)
-      ice%dzeta_dz_a(vi) = -inverse_Hi                                                      
+      IF (ice%mask_land_a( vi) == 1) THEN
+        dHs_dt_a( vi) = ice%dHb_dt_a( vi) + ice%dHi_dt_a( vi)
+      ELSE
+        dHs_dt_a( vi) = (1._dp - ice_density / seawater_density) * ice%dHi_dt_a( vi)
+      END IF
+    END DO
+    CALL sync
+    
+    ! Calculate spatial derivatives of Hi and Hs
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
+    CALL ddx_a_to_a_2D( mesh, ice%Hi_a, dHi_dx_a)
+    CALL ddy_a_to_a_2D( mesh, ice%Hi_a, dHi_dy_a)
+    
+    ! Calculate derivatives of zeta
+    DO vi = mesh%vi1, mesh%vi2
+    
+      ice%dzeta_dz_a(vi) = -1._dp / ice%Hi_a( vi)   
+                                                         
       DO k = 1, C%NZ
-        ice%dzeta_dt_a( vi,k)  =  inverse_Hi * (ice%dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi))
-        ice%dzeta_dx_a( vi,k)  =  inverse_Hi * (ice%dHs_dx_a( vi)  - C%zeta(k) * ice%dHi_dx_a( vi))
-        ice%dzeta_dy_a( vi,k)  =  inverse_Hi * (ice%dHs_dy_a( vi)  - C%zeta(k) * ice%dHi_dy_a( vi))
+        ice%dzeta_dt_a( vi,k)  =  (dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi)) / ice%Hi_a( vi)
+        ice%dzeta_dx_a( vi,k)  =  (dHs_dx_a( vi)  - C%zeta(k) *     dHi_dx_a( vi)) / ice%Hi_a( vi)
+        ice%dzeta_dy_a( vi,k)  =  (dHs_dy_a( vi)  - C%zeta(k) *     dHi_dy_a( vi)) / ice%Hi_a( vi)
       END DO
+      
     END DO ! DO vi = mesh%v1, mesh%v2
     CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wdHs_dt_a)
+    CALL deallocate_shared( wdHs_dx_a)
+    CALL deallocate_shared( wdHs_dy_a)
+    CALL deallocate_shared( wdHi_dx_a)
+    CALL deallocate_shared( wdHi_dy_a)
     
   END SUBROUTINE calculate_zeta_derivatives
   SUBROUTINE initialize_zeta_discretization

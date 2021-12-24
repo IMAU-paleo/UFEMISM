@@ -41,6 +41,7 @@ MODULE UFEMISM_main_model
   USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
   USE isotopes_module,                 ONLY: initialise_isotopes_model, remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,     remap_ELRA_model,     run_ELRA_model
+  USE tests_and_checks_module,         ONLY: run_all_matrix_tests
 
   IMPLICIT NONE
 
@@ -380,6 +381,17 @@ CONTAINS
     region%output_file_exists = .TRUE.
     CALL sync
     
+    
+    
+    
+    
+    ! DENK DROM
+    !CALL run_all_matrix_tests( region%mesh)
+    
+    
+    
+    
+    
     ! ===== The "no ice" mask
     ! =======================
 
@@ -716,10 +728,16 @@ CONTAINS
           C%choice_benchmark_experiment == 'Halfar' .OR. &
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod') THEN
+          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_mask_remove_land!'
+        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_mask_noice!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN

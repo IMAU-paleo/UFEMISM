@@ -256,6 +256,9 @@ CONTAINS
         ELSEIF (C%ice_thickness_west_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
+        ELSEIF (C%ice_thickness_west_BC == 'fixed') THEN
+          ice%dHi_dt_a(     vi) = 0._dp
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
           IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_west_BC "', TRIM(C%ice_thickness_west_BC), '"!'
           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -276,6 +279,9 @@ CONTAINS
         ELSEIF (C%ice_thickness_east_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
+        ELSEIF (C%ice_thickness_east_BC == 'fixed') THEN
+          ice%dHi_dt_a(     vi) = 0._dp
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
           IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_east_BC "', TRIM(C%ice_thickness_east_BC), '"!'
           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -296,6 +302,9 @@ CONTAINS
         ELSEIF (C%ice_thickness_south_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
+        ELSEIF (C%ice_thickness_south_BC == 'fixed') THEN
+          ice%dHi_dt_a(     vi) = 0._dp
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
           IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_south_BC "', TRIM(C%ice_thickness_south_BC), '"!'
           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -316,6 +325,9 @@ CONTAINS
         ELSEIF (C%ice_thickness_north_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
+        ELSEIF (C%ice_thickness_north_BC == 'fixed') THEN
+          ice%dHi_dt_a(     vi) = 0._dp
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
           IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_north_BC "', TRIM(C%ice_thickness_north_BC), '"!'
           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)

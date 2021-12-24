@@ -43,30 +43,34 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_c
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_c
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
+    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_c, wv_3D_c, ww_3D_a
+    
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
+    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_c, wv_vav_c, wuabs_vav_a
+    
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
+    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_c, wv_surf_c, wuabs_surf_a
+    
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_c
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_c
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c                  ! Separate fields for the SIA/SSA components, required for the old hybrid method
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_c 
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_SSA_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_SSA_c
-    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_c, wv_3D_c, ww_3D_a
-    INTEGER :: wu_vav_a,  wv_vav_a,  wu_vav_c,  wv_vav_c,  wuabs_vav_a
-    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_c, wv_surf_c, wuabs_surf_a
     INTEGER :: wu_base_a, wv_base_a, wu_base_c, wv_base_c, wuabs_base_a
-    INTEGER :: wu_3D_SIA_c, wv_3D_SIA_c, wu_SSA_c, wv_SSA_c
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c                  ! Separate fields for the SIA/SSA components, required for the old hybrid method
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_SSA_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_SSA_ac
+    INTEGER :: wu_3D_SIA_c, wv_3D_SIA_c, wu_SSA_ac, wv_SSA_ac
     
     ! Different masks
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a
@@ -91,25 +95,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
     INTEGER :: wA_flow_3D_a, wA_flow_vav_a, wTi_pmp_a, wCpi_a, wKi_a
     
-    ! Spatial and temporal derivatives
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_a    
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dSL_dt_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dTi_dx_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dTi_dy_a
-    INTEGER ::         wdHi_dt_a, wdHi_dx_a, wdHi_dy_a
-    INTEGER :: wdHb_a, wdHb_dt_a, wdHb_dx_a, wdHb_dy_a
-    INTEGER ::         wdHs_dt_a, wdHs_dx_a, wdHs_dy_a
-    INTEGER :: wdSL_dt_a, wdTi_dx_a, wdTi_dy_a
-    
     ! Zeta derivatives
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dt_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_a
@@ -118,48 +103,42 @@ MODULE data_types_module
     INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
     
     ! Ice dynamics - basal hydrology
-    REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a ! Overburden pressure ( = H * rho_i * g) [Pa]
-    REAL(dp), DIMENSION(:    ), POINTER     :: pore_water_pressure_a ! Pore water pressure (determined by basal hydrology model) [Pa]
-    REAL(dp), DIMENSION(:    ), POINTER     :: Neff_a                ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
+    REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
+    REAL(dp), DIMENSION(:    ), POINTER     :: pore_water_pressure_a       ! Pore water pressure (determined by basal hydrology model) [Pa]
+    REAL(dp), DIMENSION(:    ), POINTER     :: Neff_a                      ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
     INTEGER :: woverburden_pressure_a, wpore_water_pressure_a, wNeff_a
     
     ! Ice dynamics - basal roughness / friction
-    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a            ! Till friction angle (degrees)
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
-    REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a            ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a             ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
+    REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
     
-    ! Ice dynamics - physical terms in the SSA/DIVA
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dx_b
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dy_b
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dx_b
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dy_b
-!    REAL(dp), DIMENSION(:,:,:), POINTER     :: du_dz_3D_cx
-!    REAL(dp), DIMENSION(:,:,:), POINTER     :: dv_dz_3D_cy
-!    REAL(dp), DIMENSION(:,:,:), POINTER     :: visc_eff_3D_a
-!    REAL(dp), DIMENSION(:,:,:), POINTER     :: visc_eff_3D_b
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_int_a
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_int_b
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_a
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cx
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_cy
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: N_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_aca
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: F2_a
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_a
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_cx
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: beta_eff_cy
-!    REAL(dp), DIMENSION(:,:,:), POINTER     :: F1_3D_a
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cx
-!    REAL(dp), DIMENSION(:,:  ), POINTER     :: taub_cy
-    INTEGER :: wbeta_aca
+    ! Ice dynamics - physical terms in the SSA
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_ac
+    TYPE(type_sparse_matrix_CSR)            :: M_SSA_sans_no_beta_ac
+    INTEGER :: wHi_ac, wtaudx_ac, wtaudy_ac, wdu_dx_ac, wdu_dy_ac, wdv_dx_ac, wdv_dy_ac
+    INTEGER :: wA_flow_3D_ac, wvisc_eff_3D_ac, wvisc_eff_int_ac, wN_ac, wbeta_ac, wbeta_eff_ac
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
-    INTEGER :: wdVi_in, wdVi_out, wHi_tplusdt_a
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wHi_tplusdt_a
     
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp),                   POINTER     :: pc_zeta
@@ -183,9 +162,10 @@ MODULE data_types_module
     
     ! Thermodynamics
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_ice_a_prev        ! Ice mask from previous time step
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: internal_heating_a     ! Internal heating due to deformation
     REAL(dp), DIMENSION(:    ), POINTER     :: frictional_heating_a   ! Friction heating due to basal sliding
     REAL(dp), DIMENSION(:    ), POINTER     :: GHF_a                  ! Geothermal heat flux
-    INTEGER :: wmask_ice_a_prev, wfrictional_heating_a, wGHF_a
+    INTEGER :: wmask_ice_a_prev, winternal_heating_a, wfrictional_heating_a, wGHF_a
     
     ! Isotope content
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_a_prev
@@ -207,9 +187,13 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_eq_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_dt_grid
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dSL_dt_a
     INTEGER :: wflex_prof_rad, wflex_prof_grid
     INTEGER :: wsurface_load_PD_mesh, wsurface_load_mesh, wsurface_load_rel_mesh, wsurface_load_rel_grid, wsurface_load_rel_ext_grid
     INTEGER :: wdHb_eq_grid, wdHb_grid, wdHb_dt_grid
+    INTEGER :: wdHb_a, wdHb_dt_a, wdSL_dt_a
     
     ! Mesh adaptation data
     REAL(dp), DIMENSION(:    ), POINTER     :: surf_curv
@@ -329,85 +313,78 @@ MODULE data_types_module
     INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc, wTriGCAaAc, wniTriAaAc, wiTriAaAc
     
     ! Matrix operators: mapping
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Matrix operator for mapping data    from the a (vertex)   to the b (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Matrix operator for mapping data    from the a (vertex)   to the c (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_a                     ! Matrix operator for mapping data    from the b (triangle) to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_c                     ! Matrix operator for mapping data    from the b (triangle) to the c (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_a                     ! Matrix operator for mapping data    from the c (edge)     to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_b                     ! Matrix operator for mapping data    from the c (edge)     to the b (triangle) grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
    
     ! Matrix operators: d/dx
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_a                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_b                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_c                     ! Matrix operator for finding d/dx    from the a (vertex)   to the a (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_a                     ! Matrix operator for finding d/dx    from the a (triangle) to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_b                     ! Matrix operator for finding d/dx    from the a (triangle) to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_c                     ! Matrix operator for finding d/dx    from the a (triangle) to the a (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_a                     ! Matrix operator for finding d/dx    from the a (edge)     to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_b                     ! Matrix operator for finding d/dx    from the a (edge)     to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_c                     ! Matrix operator for finding d/dx    from the a (edge)     to the a (edge)     grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
    
     ! Matrix operators: d/dy
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_a                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_b                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_c                     ! Matrix operator for finding d/dy    from the a (vertex)   to the a (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_a                     ! Matrix operator for finding d/dy    from the a (triangle) to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_b                     ! Matrix operator for finding d/dy    from the a (triangle) to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_c                     ! Matrix operator for finding d/dy    from the a (triangle) to the a (edge)     grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_a                     ! Matrix operator for finding d/dy    from the a (edge)     to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Matrix operator for finding d/dy    from the a (edge)     to the a (triangle) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Matrix operator for finding d/dy    from the a (edge)     to the a (edge)     grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
     ! Matrix operators: second derivatives on a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_a_a                   ! Matrix operator for finding d2/dx2  from the a (vertex)   to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_a_a                  ! Matrix operator for finding d2/dxdy from the a (vertex)   to the a (vertex)   grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_a_a                   ! Matrix operator for finding d2/dy2  from the a (vertex)   to the a (vertex)   grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_a_a                   ! Operation: d2/dx2  from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_a_a                  ! Operation: d2/dxdy from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_a_a                   ! Operation: d2/dy2  from the a-grid to the a-grid
     
-    ! Matrix operators: some operations involving the combined ACUV mesh
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_a
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_c
+    ! Matrix operators: move data between the a/c-grids and the combined ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_a_aca                  ! Operation: move    from the a-grid to the a-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_aca_a                  ! Operation: move    from the a-part of the ac-grid to the a (vertex) grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_c_acc                  ! Operation: move    from the c-grid to the c-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_acc_c                  ! Operation: move    from the c-part of the ac-grid to the c (edge) grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_aca_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_aca_acb 
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_ac_ac                   ! Operation: d/dx    from the ac-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_ac_ac                   ! Operation: d/dy    from the ac-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_ac_ac                 ! Operation: d2/dx2  from the ac-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_ac_ac                ! Operation: d2/dxdy from the ac-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_ac_ac                 ! Operation: d2/dy2  from the ac-grid to the ac-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_map_ac_bb                   ! Operation: map     from the ac-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_ac_bb                   ! Operation: d/dx    from the ac-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_ac_bb                   ! Operation: d/dy    from the ac-grid to the bb-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_aca_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_aca_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_aca_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_ac                   ! Operation: map     from the bb-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_ac                   ! Operation: d/dx    from the bb-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_ac                   ! Operation: d/dy    from the bb-grid to the ac-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_map_aca_acav
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_aca
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_aca
+    TYPE(type_sparse_matrix_CSR)            :: M_move_ac_acu                 ! Operation: move    from the ac-grid to the u-part of the acuv-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_ac_acv                 ! Operation: move    from the ac-grid to the v-part of the acuv-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_acu_ac                 ! Operation: move    from the u-part of the acuv-grid to the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_move_acv_ac                 ! Operation: move    from the v-part of the acuv-grid to the ac-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_acav
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_a
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_a
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_acav
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_c
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_c
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acu_bb                  ! Operation: map     from the u-part of the acuv-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_acv_bb                  ! Operation: map     from the v-part of the acuv-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acu_bb                  ! Operation: d/dx    from the u-part of the acuv-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acv_bb                  ! Operation: d/dx    from the v-part of the acuv-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acu_bb                  ! Operation: d/dy    from the u-part of the acuv-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acv_bb                  ! Operation: d/dy    from the v-part of the acuv-grid to the bb-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acau_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acav_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acau_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acav_acb
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acau_acb 
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acav_acb
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acb_acav
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acb_acav
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_acau
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acb_acav
+    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_acu                  ! Operation: map     from the bb-grid to the u-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_acv                  ! Operation: map     from the bb-grid to the v-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_acu                  ! Operation: d/dx    from the bb-grid to the u-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_acv                  ! Operation: d/dx    from the bb-grid to the v-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acu                  ! Operation: d/dy    from the bb-grid to the u-part of the ac-grid
+    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acv                  ! Operation: d/dy    from the bb-grid to the v-part of the ac-grid
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat

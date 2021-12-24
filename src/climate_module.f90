@@ -72,7 +72,13 @@ CONTAINS
       ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
               C%choice_benchmark_experiment == 'Bueler' .OR. &
               C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-              C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+              C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! Parameterised SMB and no thermodynamics; no climate needed
         RETURN
       ELSE
@@ -129,21 +135,26 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: vi,m
     
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHs_dx_ref, dHs_dy_ref
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_ref,  dHs_dy_ref
+    INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_ref, wdHs_dy_ref
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Precip_RL_ref,  Precip_RL_mod,  dPrecip_RL
+    INTEGER                                            :: wPrecip_RL_ref, wPrecip_RL_mod, wdPrecip_RL
     REAL(dp)                                           :: dT_lapse
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: Precip_RL_ref, Precip_RL_mod, dPrecip_RL
-    INTEGER                                            :: wdHs_dx_ref, wdHs_dy_ref, wPrecip_RL_ref, wPrecip_RL_mod, wdPrecip_RL
     
     REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
     
     ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx       , wdHs_dx       )
+    CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy       , wdHs_dy       )
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx_ref   , wdHs_dx_ref   )
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy_ref   , wdHs_dy_ref   )
     CALL allocate_shared_dp_2D( mesh%nV, 12, Precip_RL_ref, wPrecip_RL_ref)
     CALL allocate_shared_dp_2D( mesh%nV, 12, Precip_RL_mod, wPrecip_RL_mod)
     CALL allocate_shared_dp_2D( mesh%nV, 12, dPrecip_RL   , wdPrecip_RL   )
     
-    ! Get surface slopes for the PD_obs reference orography
+    ! Calculate surface slopes for both geometries
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a             , dHs_dx    )
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a             , dHs_dy    )
     CALL ddx_a_to_a_2D( mesh, climate%PD_obs%Hs_ref, dHs_dx_ref)
     CALL ddy_a_to_a_2D( mesh, climate%PD_obs%Hs_ref, dHs_dy_ref)
 
@@ -167,8 +178,8 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
       DO m = 1, 12
         
-        CALL precipitation_model_Roe( climate%PD_obs%T2m(  vi,m), dHs_dx_ref(   vi), dHs_dy_ref(   vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_ref( vi,m))
-        CALL precipitation_model_Roe( climate%applied%T2m( vi,m), ice%dHs_dx_a( vi), ice%dHs_dy_a( vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_mod( vi,m))
+        CALL precipitation_model_Roe( climate%PD_obs%T2m(  vi,m), dHs_dx_ref( vi), dHs_dy_ref( vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_ref( vi,m))
+        CALL precipitation_model_Roe( climate%applied%T2m( vi,m), dHs_dx(     vi), dHs_dy(     vi), climate%PD_obs%Wind_LR( vi,m), climate%PD_obs%Wind_DU( vi,m), Precip_RL_mod( vi,m))
         dPrecip_RL( vi,m) = MIN( 2._dp, Precip_RL_mod( vi,m) / Precip_RL_ref( vi,m) )
         
         climate%applied%Precip( vi,m) = climate%PD_obs%Precip( vi,m) * dPrecip_RL( vi,m)
@@ -184,6 +195,8 @@ CONTAINS
     END IF
     
     ! Clean up after yourself
+    CALL deallocate_shared( wdHs_dx)
+    CALL deallocate_shared( wdHs_dy)
     CALL deallocate_shared( wdHs_dx_ref)
     CALL deallocate_shared( wdHs_dy_ref)
     CALL deallocate_shared( wPrecip_RL_ref)
@@ -478,7 +491,7 @@ CONTAINS
     
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
       ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
-      CALL adapt_precip_Roe( mesh, ice%Hs_a, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, ice%dHs_dx_a, ice%dHs_dy_a, climate%PD_obs%Wind_LR, climate%PD_obs%Wind_DU, climate%applied%Precip)
+      CALL adapt_precip_Roe( mesh, ice%Hs_a, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, climate%PD_obs%Wind_LR, climate%PD_obs%Wind_DU, climate%applied%Precip)
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
       ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
       CALL adapt_precip_CC( mesh, ice%Hs_a, Hs_ref_GCM, T_ref_GCM, P_ref_GCM, climate%applied%Precip, region_name)
@@ -563,7 +576,7 @@ CONTAINS
     CALL deallocate_shared( wT_inv_ref)
     
   END SUBROUTINE adapt_precip_CC
-  SUBROUTINE adapt_precip_Roe( mesh, Hs, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, dHs_dx, dHs_dy, Wind_LR, Wind_DU, Precip_GCM)
+  SUBROUTINE adapt_precip_Roe( mesh, Hs, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, Wind_LR, Wind_DU, Precip_GCM)
      
     IMPLICIT NONE
     
@@ -575,20 +588,20 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: lambda_GCM
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: T_ref_GCM
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: P_ref_GCM
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: dHs_dx
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: dHs_dy
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Wind_LR
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Wind_DU
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM
     
     ! Local variables:
     INTEGER                                            :: vi,m
-    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx_GCM,  dHs_dy_GCM
-    INTEGER                                            :: wdHs_dx_GCM, wdHs_dy_GCM
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_GCM,  dHs_dy_GCM
+    INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_GCM, wdHs_dy_GCM
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_mod,  P_RL_ref_GCM,  P_RL_mod,  dP_RL
     INTEGER                                            :: wT_mod, wP_RL_ref_GCM, wP_RL_mod, wdP_RL
     
     ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx    ,     wdHs_dx        )
+    CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy    ,     wdHs_dy        )
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx_GCM,     wdHs_dx_GCM    )
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dy_GCM,     wdHs_dy_GCM    )
     CALL allocate_shared_dp_2D( mesh%nV, 12, T_mod,          wT_mod         )
@@ -596,7 +609,9 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, P_RL_mod,       wP_RL_mod      )
     CALL allocate_shared_dp_2D( mesh%nV, 12, dP_RL,          wdP_RL         )
     
-    ! Get the surface slopes of the coarse-resolution reference GCM orography
+    ! Calculate surface slopes for both geometries
+    CALL ddx_a_to_a_2D( mesh, Hs    , dHs_dx    )
+    CALL ddy_a_to_a_2D( mesh, Hs    , dHs_dy    )
     CALL ddx_a_to_a_2D( mesh, Hs_GCM, dHs_dx_GCM)
     CALL ddy_a_to_a_2D( mesh, Hs_GCM, dHs_dy_GCM)
     
@@ -622,6 +637,8 @@ CONTAINS
     CALL sync
    
     ! Clean up after yourself
+    CALL deallocate_shared( wdHs_dx)
+    CALL deallocate_shared( wdHs_dy)
     CALL deallocate_shared( wdHs_dx_GCM)
     CALL deallocate_shared( wdHs_dy_GCM)
     CALL deallocate_shared( wT_mod)
@@ -786,7 +803,13 @@ CONTAINS
           C%choice_benchmark_experiment == 'Halfar' .OR. &
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'MISMIP_mod'.OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
           
         ! Entirely parameterised climate
         CALL allocate_subclimate( mesh, climate%applied, 'applied')
@@ -1479,7 +1502,13 @@ CONTAINS
           C%choice_benchmark_experiment == 'Halfar' .OR. &
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'MISMIP_mod'.OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! Entirely parameterised climate, no need to read anything here
         RETURN
       ELSE

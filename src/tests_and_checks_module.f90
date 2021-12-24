@@ -1,6 +1,6 @@
 MODULE tests_and_checks_module
 
-  ! The main regional ice-sheet model
+  ! A bunch of tests and checks of the CSR matrix operators
 
   ! Import basic functionality
   USE mpi
@@ -22,11 +22,73 @@ MODULE tests_and_checks_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
+  USE mesh_operators_module
+  USE utilities_module
   USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
 
   IMPLICIT NONE
 
 CONTAINS
+
+  SUBROUTINE run_all_matrix_tests( mesh)
+    ! Test all the matrix operators
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    IF (par%master) WRITE(0,*) ''
+    IF (par%master) WRITE(0,*) '========================================'
+    IF (par%master) WRITE(0,*) '=== Testing all the matrix operators ==='
+    IF (par%master) WRITE(0,*) '========================================'
+    IF (par%master) WRITE(0,*) ''
+    
+  ! Test basic CSR matrix operations
+  ! ================================
+    
+    CALL test_CSR_matrix_operations
+    
+  ! Test all the matrix operators
+  ! =============================
+    
+    ! Between the a,b,c-grids
+    CALL test_matrix_operators_abc_2D(     mesh)
+    CALL test_matrix_operators_abc_3D(     mesh)
+    
+    ! Between the a/c-grids and the ac-grid
+    CALL test_matrix_operators_a_c_ac_2D(  mesh)
+    CALL test_matrix_operators_a_c_ac_3D(  mesh)
+    
+    ! On the ac-grid
+    CALL test_matrix_operators_ac_ac_2D(   mesh)
+    CALL test_matrix_operators_ac_ac_3D(   mesh)
+    
+    ! Between the ac-grid and the bb-grid
+    CALL test_matrix_operators_ac_bb_2D(   mesh)
+    CALL test_matrix_operators_ac_bb_3D(   mesh)
+    
+    ! Between the ac-grid and the acu/acv-grids
+    CALL test_matrix_operators_ac_acuv_2D( mesh)
+    CALL test_matrix_operators_ac_acuv_3D( mesh)
+  
+    ! Between the acu/acv-grids and the bb-grid
+    CALL test_matrix_operators_acuv_bb_2D( mesh)
+    CALL test_matrix_operators_acuv_bb_3D( mesh)
+    
+  ! Solve the (modified) Laplace equation as the ultimate test
+  ! ==========================================================
+  
+    CALL solve_modified_Laplace_equation( mesh)
+    CALL solve_modified_Laplace_equation_combi( mesh)
+    
+    IF (par%master) WRITE(0,*) ''
+    IF (par%master) WRITE(0,*) '================================================='
+    IF (par%master) WRITE(0,*) '=== Finished testing all the matrix operators ==='
+    IF (par%master) WRITE(0,*) '================================================='
+    IF (par%master) WRITE(0,*) ''
+    
+  END SUBROUTINE run_all_matrix_tests
   
 ! == Test basic CSR matrix operations
   SUBROUTINE test_CSR_matrix_operations
@@ -34,15 +96,13 @@ CONTAINS
     
     IMPLICIT NONE
         
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Testing basic CSR matrix operations...'
+    IF (par%master) WRITE(0,*) '  Testing basic CSR matrix operations...'
     
     CALL test_CSR_matrix_operations_add    
     CALL test_CSR_matrix_operations_overwrite_rows
     CALL test_CSR_matrix_operations_multiply_vector
     CALL test_CSR_matrix_operations_multiply_matrix
-        
-    IF (par%master) WRITE(0,*) ' Finished testing basic CSR matrix operations!'
+    CALL test_CSR_matrix_operations_multiply_matrix_rows_with_vector
     
   END SUBROUTINE test_CSR_matrix_operations
   
@@ -57,7 +117,7 @@ CONTAINS
     ! Local variables:
     TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC
     
-    IF (par%master) WRITE(0,*) '  Testing matrix addition (C = A+B)...'
+    IF (par%master) WRITE(0,*) '   Testing matrix addition (C = A+B)...'
     
     ! Define some simple matrices
     CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
@@ -138,7 +198,7 @@ CONTAINS
     ! Local variables:
     TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB
     
-    IF (par%master) WRITE(0,*) '  Testing matrix row overwriting (C = A (+O) B)...'
+    IF (par%master) WRITE(0,*) '   Testing matrix row overwriting (C = A (+O) B)...'
     
     ! Define some simple matrices
     CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
@@ -216,7 +276,7 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                ::  x,  b
     INTEGER                                            :: wx, wb
     
-    IF (par%master) WRITE(0,*) '  Testing matrix-vector multiplication (b = A*x)...'
+    IF (par%master) WRITE(0,*) '   Testing matrix-vector multiplication (b = A*x)...'
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( 4, x, wx)
@@ -267,7 +327,7 @@ CONTAINS
     ! Local variables:
     TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC
     
-    IF (par%master) WRITE(0,*) '  Testing matrix-matrix multiplication (C = A*B)...'
+    IF (par%master) WRITE(0,*) '   Testing matrix-matrix multiplication (C = A*B)...'
     
     ! Define some simple matrices
     CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
@@ -341,24 +401,129 @@ CONTAINS
     CALL deallocate_matrix_CSR( CCC)
     
   END SUBROUTINE test_CSR_matrix_operations_multiply_matrix
-  
-! == Test all the matrix operators (mapping+gradients)
-  SUBROUTINE test_matrix_operators( mesh)
-    ! Test all the matrix operators
+  SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
+    ! Testing some basic CSR-formatted matrix operations
     
     USE mesh_operators_module
     USE utilities_module
+    
+    IMPLICIT NONE
+    
+    ! Local variables:
+    TYPE(type_sparse_matrix_CSR)                       :: AAA, CCC
+    REAL(dp), DIMENSION(:    ), POINTER                ::  BB
+    INTEGER                                            :: wBB
+    
+    IF (par%master) WRITE(0,*) '   Testing multiplication of matrix rows with vector elements (C = DIAG(B) * A)...'
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( 4, BB, wBB)
+    
+    ! Define some simple matrices
+    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
+    
+    IF (par%master) THEN
+      ! A
+      AAA%nnz   = 8
+      AAA%ptr   = [1,3,5,6,9]
+      AAA%index = [1,3,1,4,2,1,3,4]
+      AAA%val   = [1,2,3,4,5,6,7,8]
+      ! BB
+      BB = [1,2,3,4]
+    END IF
+    CALL sync
+    
+    ! Perform multiplication
+    CALL multiply_matrix_rows_with_vector( AAA, BB, CCC)
+    
+    ! Check if operation gave the correct result
+    IF (par%master) THEN
+      IF (CCC%nnz == 8 .AND. &
+          CCC%ptr(    1) ==  1 .AND. &
+          CCC%ptr(    2) ==  3 .AND. &
+          CCC%ptr(    3) ==  5 .AND. &
+          CCC%ptr(    4) ==  6 .AND. &
+          CCC%ptr(    5) ==  9 .AND. &
+          CCC%index(  1) == 1 .AND. &
+          CCC%index(  2) == 3 .AND. &
+          CCC%index(  3) == 1 .AND. &
+          CCC%index(  4) == 4 .AND. &
+          CCC%index(  5) == 2 .AND. &
+          CCC%index(  6) == 1 .AND. &
+          CCC%index(  7) == 3 .AND. &
+          CCC%index(  8) == 4 .AND. &
+          CCC%val(    1) ==   1._dp .AND. &
+          CCC%val(    2) ==   2._dp .AND. &
+          CCC%val(    3) ==   6._dp .AND. &
+          CCC%val(    4) ==   8._dp .AND. &
+          CCC%val(    5) ==  15._dp .AND. &
+          CCC%val(    6) ==  24._dp .AND. &
+          CCC%val(    7) ==  28._dp .AND. &
+          CCC%val(    8) ==  32._dp) THEN
+      ELSE
+        WRITE(0,*) 'test_CSR_matrix_operations_multiply_matrix - ERROR: CSR matrix rows with vector elements multiplication gave wrong answer!'
+        WRITE(0,*) '  C%nnz   = ', CCC%nnz
+        WRITE(0,*) '  C%ptr   = ', CCC%ptr
+        WRITE(0,*) '  C%index = ', CCC%index
+        WRITE(0,*) '  C%val   = ', CCC%val
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END IF
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR( AAA)
+    CALL deallocate_shared(     wBB)
+    CALL deallocate_matrix_CSR( CCC)
+    
+  END SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
+  
+! == Test all the matrix operators (mapping+gradients)
+
+  ! Between the a,b,c-grids
+  SUBROUTINE test_matrix_operators_abc_2D( mesh)
+    ! Test all the matrix operators on the three basic grids (a,b,c)
+    ! 
+    ! map_a_to_b_2D
+    ! map_a_to_c_2D
+    ! map_b_to_a_2D
+    ! map_b_to_c_2D
+    ! map_c_to_a_2D
+    ! map_c_to_b_2D
+    ! 
+    ! ddx_a_to_a_2D
+    ! ddx_a_to_b_2D
+    ! ddx_a_to_c_2D
+    ! ddx_b_to_a_2D
+    ! ddx_b_to_b_2D
+    ! ddx_b_to_c_2D
+    ! ddx_c_to_a_2D
+    ! ddx_c_to_b_2D
+    ! ddx_c_to_c_2D
+    ! 
+    ! ddy_a_to_a_2D
+    ! ddy_a_to_b_2D
+    ! ddy_a_to_c_2D
+    ! ddy_b_to_a_2D
+    ! ddy_b_to_b_2D
+    ! ddy_b_to_c_2D
+    ! ddy_c_to_a_2D
+    ! ddy_c_to_b_2D
+    ! ddy_c_to_c_2D
+    ! 
+    ! d2dx2_a_to_a_2D
+    ! d2dxdy_a_to_a_2D
+    ! d2dy2_a_to_a_2D
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
-    INTEGER                                            :: vi, ti, aci, ai, auvi, auvi1, auvi2
-    REAL(dp)                                           :: x, y, d, ddx, ddy
+    INTEGER                                            :: vi, ti, aci
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
     
-    ! Exact solutions
     REAL(dp), DIMENSION(:    ), POINTER                :: d_a_ex
     REAL(dp), DIMENSION(:    ), POINTER                :: d_b_ex
     REAL(dp), DIMENSION(:    ), POINTER                :: d_c_ex
@@ -370,155 +535,99 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_ex
     INTEGER :: wd_a_ex, wd_b_ex, wd_c_ex, wddx_a_ex, wddx_b_ex, wddx_c_ex, wddy_a_ex, wddy_b_ex, wddy_c_ex
     
-    ! Discretised approximations
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_cc
-    INTEGER :: wd_aa, wd_ab, wd_ac, wd_ba, wd_bb, wd_bc, wd_ca, wd_cb, wd_cc
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_b_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_b_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_b_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_to_c
+    INTEGER :: wd_a_to_a, wd_a_to_b, wd_a_to_c, wd_b_to_a, wd_b_to_b, wd_b_to_c, wd_c_to_a, wd_c_to_b, wd_c_to_c
     
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_cc
-    INTEGER :: wddx_aa, wddx_ab, wddx_ac, wddx_ba, wddx_bb, wddx_bc, wddx_ca, wddx_cb, wddx_cc
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_a_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_a_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_a_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_b_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_b_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_b_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_c_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_c_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_c_to_c
+    INTEGER :: wddx_a_to_a, wddx_a_to_b, wddx_a_to_c, wddx_b_to_a, wddx_b_to_b, wddx_b_to_c, wddx_c_to_a, wddx_c_to_b, wddx_c_to_c
     
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_aa
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ab
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ba
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bc
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ca
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_cb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_cc
-    INTEGER :: wddy_aa, wddy_ab, wddy_ac, wddy_ba, wddy_bb, wddy_bc, wddy_ca, wddy_cb, wddy_cc
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_a_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_a_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_a_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_b_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_b_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_b_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_to_b
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_c_to_c
+    INTEGER :: wddy_a_to_a, wddy_a_to_b, wddy_a_to_c, wddy_b_to_a, wddy_b_to_b, wddy_b_to_c, wddy_c_to_a, wddy_c_to_b, wddy_c_to_c
     
-    ! Data on the combined mesh
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_aca
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acau
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acav
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acau_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acav_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acau_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acav_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acau_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acav_acb
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acb_acau
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_acb_acav
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acb_acau
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acb_acav
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acb_acau
-    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acb_acav
-    INTEGER :: wd_aca, wd_acau, wd_acav
-    INTEGER :: wd_acau_acb, wd_acav_acb, wddx_acau_acb, wddx_acav_acb, wddy_acau_acb, wddy_acav_acb
-    INTEGER :: wd_acb_acau, wd_acb_acav, wddx_acb_acau, wddx_acb_acav, wddy_acb_acau, wddy_acb_acav
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dx2_a_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_a_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_a_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dx2_a_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_a_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_a_to_a
+    INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
         
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Testing the matrix operators...'
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/b/c - a/b/c, 2D)...'
     CALL sync
-    
-  ! Write all the matrix operators to files, for double-checking stuff in Matlab
-  ! ============================================================================
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_a_b, 'M_map_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_a_c, 'M_map_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_b_a, 'M_map_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_b_c, 'M_map_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_c_a, 'M_map_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_map_c_b, 'M_map_c_b.nc')
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_a, 'M_ddx_a_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_b, 'M_ddx_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_a_c, 'M_ddx_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_a, 'M_ddx_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_b, 'M_ddx_b_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_b_c, 'M_ddx_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_a, 'M_ddx_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_b, 'M_ddx_c_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddx_c_c, 'M_ddx_c_c.nc')
-    
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_a, 'M_ddy_a_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_b, 'M_ddy_a_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_a_c, 'M_ddy_a_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_a, 'M_ddy_b_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_b, 'M_ddy_b_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_b_c, 'M_ddy_b_c.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_a, 'M_ddy_c_a.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_b, 'M_ddy_c_b.nc')
-    CALL write_CSR_matrix_to_NetCDF( mesh%M_ddy_c_c, 'M_ddy_c_c.nc')
     
   ! Allocate shared memory
   ! ======================
     
-    ! Exact solutions
-    CALL allocate_shared_dp_1D( mesh%nV,   d_a_ex,   wd_a_ex  )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_b_ex,   wd_b_ex  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_c_ex,   wd_c_ex  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_a_ex, wddx_a_ex)
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b_ex, wddx_b_ex)
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_c_ex, wddx_c_ex)
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_a_ex, wddy_a_ex)
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_b_ex, wddy_b_ex)
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_c_ex, wddy_c_ex)
+    CALL allocate_shared_dp_1D( mesh%nV,   d_a_ex,          wd_a_ex         )
+    CALL allocate_shared_dp_1D( mesh%nTri, d_b_ex,          wd_b_ex         )
+    CALL allocate_shared_dp_1D( mesh%nAc,  d_c_ex,          wd_c_ex         )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddx_a_ex,        wddx_a_ex       )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b_ex,        wddx_b_ex       )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_c_ex,        wddx_c_ex       )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddy_a_ex,        wddy_a_ex       )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddy_b_ex,        wddy_b_ex       )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_c_ex,        wddy_c_ex       )
     
-    ! Discretised approximations
-    CALL allocate_shared_dp_1D( mesh%nV,   d_aa,     wd_aa    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_ab,     wd_ab    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_ac,     wd_ac    )
-    CALL allocate_shared_dp_1D( mesh%nV,   d_ba,     wd_ba    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_bb,     wd_bb    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_bc,     wd_bc    )
-    CALL allocate_shared_dp_1D( mesh%nV,   d_ca,     wd_ca    )
-    CALL allocate_shared_dp_1D( mesh%nTri, d_cb,     wd_cb    )
-    CALL allocate_shared_dp_1D( mesh%nAc,  d_cc,     wd_cc    )
+    CALL allocate_shared_dp_1D( mesh%nV,   d_a_to_a,        wd_a_to_a       )
+    CALL allocate_shared_dp_1D( mesh%nTri, d_a_to_b,        wd_a_to_b       )
+    CALL allocate_shared_dp_1D( mesh%nAc,  d_a_to_c,        wd_a_to_c       )
+    CALL allocate_shared_dp_1D( mesh%nV,   d_b_to_a,        wd_b_to_a       )
+    CALL allocate_shared_dp_1D( mesh%nTri, d_b_to_b,        wd_b_to_b       )
+    CALL allocate_shared_dp_1D( mesh%nAc,  d_b_to_c,        wd_b_to_c       )
+    CALL allocate_shared_dp_1D( mesh%nV,   d_c_to_a,        wd_c_to_a       )
+    CALL allocate_shared_dp_1D( mesh%nTri, d_c_to_b,        wd_c_to_b       )
+    CALL allocate_shared_dp_1D( mesh%nAc,  d_c_to_c,        wd_c_to_c       )
     
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_aa,   wddx_aa  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_ab,   wddx_ab  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_ac,   wddx_ac  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_ba,   wddx_ba  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_bb,   wddx_bb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_bc,   wddx_bc  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddx_ca,   wddx_ca  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_cb,   wddx_cb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_cc,   wddx_cc  )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddx_a_to_a,      wddx_a_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddx_a_to_b,      wddx_a_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_a_to_c,      wddx_a_to_c     )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddx_b_to_a,      wddx_b_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b_to_b,      wddx_b_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_b_to_c,      wddx_b_to_c     )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddx_c_to_a,      wddx_c_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddx_c_to_b,      wddx_c_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddx_c_to_c,      wddx_c_to_c     )
     
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_aa,   wddy_aa  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_ab,   wddy_ab  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_ac,   wddy_ac  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_ba,   wddy_ba  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_bb,   wddy_bb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_bc,   wddy_bc  )
-    CALL allocate_shared_dp_1D( mesh%nV,   ddy_ca,   wddy_ca  )
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_cb,   wddy_cb  )
-    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_cc,   wddy_cc  )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddy_a_to_a,      wddy_a_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddy_a_to_b,      wddy_a_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_a_to_c,      wddy_a_to_c     )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddy_b_to_a,      wddy_b_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddy_b_to_b,      wddy_b_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_b_to_c,      wddy_b_to_c     )
+    CALL allocate_shared_dp_1D( mesh%nV,   ddy_c_to_a,      wddy_c_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nTri, ddy_c_to_b,      wddy_c_to_b     )
+    CALL allocate_shared_dp_1D( mesh%nAc,  ddy_c_to_c,      wddy_c_to_c     )
     
-    ! Data on the combined mesh
-    CALL allocate_shared_dp_1D(   mesh%nVAaac,   d_aca         , wd_aca         )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acau        , wd_acau        )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acav        , wd_acav        )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, d_acau_acb    , wd_acau_acb    )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, d_acav_acb    , wd_acav_acb    )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, ddx_acau_acb  , wddx_acau_acb  )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, ddx_acav_acb  , wddx_acav_acb  )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, ddy_acau_acb  , wddy_acau_acb  )
-    CALL allocate_shared_dp_1D(   mesh%nTriAaac, ddy_acav_acb  , wddy_acav_acb  )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acb_acau    , wd_acb_acau    )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   d_acb_acav    , wd_acb_acav    )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   ddx_acb_acau  , wddx_acb_acau  )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   ddx_acb_acav  , wddx_acb_acav  )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   ddy_acb_acau  , wddy_acb_acau  )
-    CALL allocate_shared_dp_1D( 2*mesh%nVAaac,   ddy_acb_acav  , wddy_acb_acav  )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dx2_a_ex,      wd2dx2_a_ex     )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dxdy_a_ex,     wd2dxdy_a_ex    )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dy2_a_ex,      wd2dy2_a_ex     )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dx2_a_to_a,    wd2dx2_a_to_a   )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dxdy_a_to_a,   wd2dxdy_a_to_a  )
+    CALL allocate_shared_dp_1D( mesh%nV,   d2dy2_a_to_a,    wd2dy2_a_to_a   )
     
   ! Calculate exact solutions
   ! =========================
@@ -526,15 +635,18 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1)
       y = mesh%V( vi,2)
-      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
-      d_a_ex(   vi) = d
-      ddx_a_ex( vi) = ddx
-      ddy_a_ex( vi) = ddy
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_a_ex(      vi) = d
+      ddx_a_ex(    vi) = ddx
+      ddy_a_ex(    vi) = ddy
+      d2dx2_a_ex(  vi) = d2dx2
+      d2dxdy_a_ex( vi) = d2dxdy
+      d2dy2_a_ex(  vi) = d2dy2
     END DO
     DO ti = mesh%ti1, mesh%ti2
       x = mesh%TriGC( ti,1)
       y = mesh%TriGC( ti,2)
-      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
       d_b_ex(   ti) = d
       ddx_b_ex( ti) = ddx
       ddy_b_ex( ti) = ddy
@@ -542,7 +654,7 @@ CONTAINS
     DO aci = mesh%ci1, mesh%ci2
       x = mesh%VAc( aci,1)
       y = mesh%VAc( aci,2)
-      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
       d_c_ex(   aci) = d
       ddx_c_ex( aci) = ddx
       ddy_c_ex( aci) = ddy
@@ -553,196 +665,1540 @@ CONTAINS
   ! ====================================
   
     ! Mapping
-    d_aa( mesh%vi1:mesh%vi2) = d_a_ex( mesh%vi1:mesh%vi2)
-    CALL map_a_to_b_2D( mesh, d_a_ex, d_ab)
-    CALL map_a_to_c_2D( mesh, d_a_ex, d_ac)
+    d_a_to_a( mesh%vi1:mesh%vi2) = d_a_ex( mesh%vi1:mesh%vi2)
+    CALL map_a_to_b_2D( mesh, d_a_ex, d_a_to_b)
+    CALL map_a_to_c_2D( mesh, d_a_ex, d_a_to_c)
     
-    CALL map_b_to_a_2D( mesh, d_b_ex, d_ba)
-    d_bb( mesh%ti1:mesh%ti2) = d_b_ex( mesh%ti1:mesh%ti2)
-    CALL map_b_to_c_2D( mesh, d_b_ex, d_bc)
+    CALL map_b_to_a_2D( mesh, d_b_ex, d_b_to_a)
+    d_b_to_b( mesh%ti1:mesh%ti2) = d_b_ex( mesh%ti1:mesh%ti2)
+    CALL map_b_to_c_2D( mesh, d_b_ex, d_b_to_c)
     
-    CALL map_c_to_a_2D( mesh, d_c_ex, d_ca)
-    CALL map_c_to_b_2D( mesh, d_c_ex, d_cb)
-    d_cc( mesh%ci1:mesh%ci2) = d_c_ex( mesh%ci1:mesh%ci2)
+    CALL map_c_to_a_2D( mesh, d_c_ex, d_c_to_a)
+    CALL map_c_to_b_2D( mesh, d_c_ex, d_c_to_b)
+    d_c_to_c( mesh%ci1:mesh%ci2) = d_c_ex( mesh%ci1:mesh%ci2)
     
     ! d/dx
-    CALL ddx_a_to_a_2D( mesh, d_a_ex, ddx_aa)
-    CALL ddx_a_to_b_2D( mesh, d_a_ex, ddx_ab)
-    CALL ddx_a_to_c_2D( mesh, d_a_ex, ddx_ac)
+    CALL ddx_a_to_a_2D( mesh, d_a_ex, ddx_a_to_a)
+    CALL ddx_a_to_b_2D( mesh, d_a_ex, ddx_a_to_b)
+    CALL ddx_a_to_c_2D( mesh, d_a_ex, ddx_a_to_c)
     
-    CALL ddx_b_to_a_2D( mesh, d_b_ex, ddx_ba)
-    CALL ddx_b_to_b_2D( mesh, d_b_ex, ddx_bb)
-    CALL ddx_b_to_c_2D( mesh, d_b_ex, ddx_bc)
+    CALL ddx_b_to_a_2D( mesh, d_b_ex, ddx_b_to_a)
+    CALL ddx_b_to_b_2D( mesh, d_b_ex, ddx_b_to_b)
+    CALL ddx_b_to_c_2D( mesh, d_b_ex, ddx_b_to_c)
     
-    CALL ddx_c_to_a_2D( mesh, d_c_ex, ddx_ca)
-    CALL ddx_c_to_b_2D( mesh, d_c_ex, ddx_cb)
-    CALL ddx_c_to_c_2D( mesh, d_c_ex, ddx_cc)
+    CALL ddx_c_to_a_2D( mesh, d_c_ex, ddx_c_to_a)
+    CALL ddx_c_to_b_2D( mesh, d_c_ex, ddx_c_to_b)
+    CALL ddx_c_to_c_2D( mesh, d_c_ex, ddx_c_to_c)
     
     ! d/dy
-    CALL ddy_a_to_a_2D( mesh, d_a_ex, ddy_aa)
-    CALL ddy_a_to_b_2D( mesh, d_a_ex, ddy_ab)
-    CALL ddy_a_to_c_2D( mesh, d_a_ex, ddy_ac)
+    CALL ddy_a_to_a_2D( mesh, d_a_ex, ddy_a_to_a)
+    CALL ddy_a_to_b_2D( mesh, d_a_ex, ddy_a_to_b)
+    CALL ddy_a_to_c_2D( mesh, d_a_ex, ddy_a_to_c)
     
-    CALL ddy_b_to_a_2D( mesh, d_b_ex, ddy_ba)
-    CALL ddy_b_to_b_2D( mesh, d_b_ex, ddy_bb)
-    CALL ddy_b_to_c_2D( mesh, d_b_ex, ddy_bc)
+    CALL ddy_b_to_a_2D( mesh, d_b_ex, ddy_b_to_a)
+    CALL ddy_b_to_b_2D( mesh, d_b_ex, ddy_b_to_b)
+    CALL ddy_b_to_c_2D( mesh, d_b_ex, ddy_b_to_c)
     
-    CALL ddy_c_to_a_2D( mesh, d_c_ex, ddy_ca)
-    CALL ddy_c_to_b_2D( mesh, d_c_ex, ddy_cb)
-    CALL ddy_c_to_c_2D( mesh, d_c_ex, ddy_cc)
+    CALL ddy_c_to_a_2D( mesh, d_c_ex, ddy_c_to_a)
+    CALL ddy_c_to_b_2D( mesh, d_c_ex, ddy_c_to_b)
+    CALL ddy_c_to_c_2D( mesh, d_c_ex, ddy_c_to_c)
     
-    ! Write results to debug file
-    IF (par%master) THEN
-    
-      ! a-grid (vertex)
-      debug%dp_2D_a_01 = d_aa   - d_a_ex
-      debug%dp_2D_a_02 = d_ba   - d_a_ex
-      debug%dp_2D_a_03 = d_ca   - d_a_ex
-      debug%dp_2D_a_04 = ddx_aa - ddx_a_ex
-      debug%dp_2D_a_05 = ddx_ba - ddx_a_ex
-      debug%dp_2D_a_06 = ddx_ca - ddx_a_ex
-      debug%dp_2D_a_07 = ddy_aa - ddy_a_ex
-      debug%dp_2D_a_08 = ddy_ba - ddy_a_ex
-      debug%dp_2D_a_09 = ddy_ca - ddy_a_ex
-    
-      ! b-grid (triangle)
-      debug%dp_2D_b_01 = d_ab   - d_b_ex
-      debug%dp_2D_b_02 = d_bb   - d_b_ex
-      debug%dp_2D_b_03 = d_cb   - d_b_ex
-      debug%dp_2D_b_04 = ddx_ab - ddx_b_ex
-      debug%dp_2D_b_05 = ddx_bb - ddx_b_ex
-      debug%dp_2D_b_06 = ddx_cb - ddx_b_ex
-      debug%dp_2D_b_07 = ddy_ab - ddy_b_ex
-      debug%dp_2D_b_08 = ddy_bb - ddy_b_ex
-      debug%dp_2D_b_09 = ddy_cb - ddy_b_ex
-    
-      ! c-grid (edge)
-      debug%dp_2D_c_01 = d_ac   - d_c_ex
-      debug%dp_2D_c_02 = d_bc   - d_c_ex
-      debug%dp_2D_c_03 = d_cc   - d_c_ex
-      debug%dp_2D_c_04 = ddx_ac - ddx_c_ex
-      debug%dp_2D_c_05 = ddx_bc - ddx_c_ex
-      debug%dp_2D_c_06 = ddx_cc - ddx_c_ex
-      debug%dp_2D_c_07 = ddy_ac - ddy_c_ex
-      debug%dp_2D_c_08 = ddy_bc - ddy_c_ex
-      debug%dp_2D_c_09 = ddy_cc - ddy_c_ex
-      
-      CALL write_to_debug_file
-      
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
-  ! Stuff on the combined ACUV-mesh
-  ! ===============================
-    
-    CALL partition_list( 2*mesh%nVAaAc, par%i, par%n, auvi1, auvi2)
-  
-    ! Map data from regular a/c-grids to combined ac-grid (same data on u- and v-fields)
-    CALL map_a_to_aca_2D( mesh, d_a_ex, d_aca)
-    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acau, d_aca, d_acau)
-    CALL multiply_matrix_vector_CSR( mesh%M_map_aca_acav, d_aca, d_acav)
-    
-    ! Calculate mapped data and derivatives on the combi-triangles
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acau_acb, d_acau, ddx_acau_acb)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acav_acb, d_acav, ddx_acav_acb)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_acau_acb, d_acau, ddy_acau_acb)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_acav_acb, d_acav, ddy_acav_acb)
-    
-    ! Map everything back to the combi-vertices for writing to output
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acb_acau, ddx_acau_acb, ddx_acb_acau)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acb_acav, ddx_acav_acb, ddx_acb_acav)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acb_acau, ddy_acau_acb, ddy_acb_acau)
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_acb_acav, ddy_acav_acb, ddy_acb_acav)
-    
-    ! Map data to single-field AC-mesh for writing to debug output
-    DO auvi = auvi1, auvi2
-      IF (MOD( auvi,2) == 1) THEN
-        ! u
-        ai = (auvi+1) / 2
-        debug%dp_2D_ac_01( ai) = d_acau(       auvi)
-        debug%dp_2D_ac_03( ai) = ddx_acb_acau( auvi)
-        debug%dp_2D_ac_05( ai) = ddy_acb_acau( auvi)
-      ELSE
-        ! v
-        ai =  auvi    / 2
-        debug%dp_2D_ac_02( ai) = -d_acav(      auvi)
-        debug%dp_2D_ac_04( ai) = ddx_acb_acav( auvi)
-        debug%dp_2D_ac_06( ai) = ddy_acb_acav( auvi)
-      END IF
-    END DO ! DO auvi = auvi1, auvi2
-    CALL sync
-    
-    IF (par%master) THEN
-      
-      CALL write_to_debug_file
-      
-    END IF ! IF (par%master) THEN
-    CALL sync
+    ! second partial derivatives
+    CALL d2dx2_a_to_a_2D(  mesh, d_a_ex, d2dx2_a_to_a )
+    CALL d2dxdy_a_to_a_2D( mesh, d_a_ex, d2dxdy_a_to_a)
+    CALL d2dy2_a_to_a_2D(  mesh, d_a_ex, d2dy2_a_to_a )
     
   ! Clean up after yourself
   ! =======================
     
-    CALL deallocate_shared( wd_a_ex  )
-    CALL deallocate_shared( wd_b_ex  )
-    CALL deallocate_shared( wd_c_ex  )
-    CALL deallocate_shared( wddx_a_ex)
-    CALL deallocate_shared( wddx_b_ex)
-    CALL deallocate_shared( wddx_c_ex)
-    CALL deallocate_shared( wddy_a_ex)
-    CALL deallocate_shared( wddy_b_ex)
-    CALL deallocate_shared( wddy_c_ex)
+    CALL deallocate_shared( wd_a_ex      )
+    CALL deallocate_shared( wd_b_ex      )
+    CALL deallocate_shared( wd_c_ex      )
+    CALL deallocate_shared( wddx_a_ex    )
+    CALL deallocate_shared( wddx_b_ex    )
+    CALL deallocate_shared( wddx_c_ex    )
+    CALL deallocate_shared( wddy_a_ex    )
+    CALL deallocate_shared( wddy_b_ex    )
+    CALL deallocate_shared( wddy_c_ex    )
     
-    CALL deallocate_shared( wd_aa    )
-    CALL deallocate_shared( wd_ab    )
-    CALL deallocate_shared( wd_ac    )
-    CALL deallocate_shared( wd_ba    )
-    CALL deallocate_shared( wd_bb    )
-    CALL deallocate_shared( wd_bc    )
-    CALL deallocate_shared( wd_ca    )
-    CALL deallocate_shared( wd_cb    )
-    CALL deallocate_shared( wd_cc    )
+    CALL deallocate_shared( wd_a_to_a    )
+    CALL deallocate_shared( wd_a_to_b    )
+    CALL deallocate_shared( wd_a_to_c    )
+    CALL deallocate_shared( wd_b_to_a    )
+    CALL deallocate_shared( wd_b_to_b    )
+    CALL deallocate_shared( wd_b_to_c    )
+    CALL deallocate_shared( wd_c_to_a    )
+    CALL deallocate_shared( wd_c_to_b    )
+    CALL deallocate_shared( wd_c_to_c    )
     
-    CALL deallocate_shared( wddx_aa  )
-    CALL deallocate_shared( wddx_ab  )
-    CALL deallocate_shared( wddx_ac  )
-    CALL deallocate_shared( wddx_ba  )
-    CALL deallocate_shared( wddx_bb  )
-    CALL deallocate_shared( wddx_bc  )
-    CALL deallocate_shared( wddx_ca  )
-    CALL deallocate_shared( wddx_cb  )
-    CALL deallocate_shared( wddx_cc  )
+    CALL deallocate_shared( wddx_a_to_a  )
+    CALL deallocate_shared( wddx_a_to_b  )
+    CALL deallocate_shared( wddx_a_to_c  )
+    CALL deallocate_shared( wddx_b_to_a  )
+    CALL deallocate_shared( wddx_b_to_b  )
+    CALL deallocate_shared( wddx_b_to_c  )
+    CALL deallocate_shared( wddx_c_to_a  )
+    CALL deallocate_shared( wddx_c_to_b  )
+    CALL deallocate_shared( wddx_c_to_c  )
     
-    CALL deallocate_shared( wddy_aa  )
-    CALL deallocate_shared( wddy_ab  )
-    CALL deallocate_shared( wddy_ac  )
-    CALL deallocate_shared( wddy_ba  )
-    CALL deallocate_shared( wddy_bb  )
-    CALL deallocate_shared( wddy_bc  )
-    CALL deallocate_shared( wddy_ca  )
-    CALL deallocate_shared( wddy_cb  )
-    CALL deallocate_shared( wddy_cc  )
+    CALL deallocate_shared( wddy_a_to_a  )
+    CALL deallocate_shared( wddy_a_to_b  )
+    CALL deallocate_shared( wddy_a_to_c  )
+    CALL deallocate_shared( wddy_b_to_a  )
+    CALL deallocate_shared( wddy_b_to_b  )
+    CALL deallocate_shared( wddy_b_to_c  )
+    CALL deallocate_shared( wddy_c_to_a  )
+    CALL deallocate_shared( wddy_c_to_b  )
+    CALL deallocate_shared( wddy_c_to_c  )
     
-    CALL deallocate_shared( wd_aca         )
-    CALL deallocate_shared( wd_acau        )
-    CALL deallocate_shared( wd_acav        )
-    CALL deallocate_shared( wd_acau_acb    )
-    CALL deallocate_shared( wd_acav_acb    )
-    CALL deallocate_shared( wddx_acau_acb  )
-    CALL deallocate_shared( wddx_acav_acb  )
-    CALL deallocate_shared( wddy_acau_acb  )
-    CALL deallocate_shared( wddy_acav_acb  )
-    CALL deallocate_shared( wd_acb_acau    )
-    CALL deallocate_shared( wd_acb_acav    )
-    CALL deallocate_shared( wddx_acb_acau  )
-    CALL deallocate_shared( wddx_acb_acav  )
-    CALL deallocate_shared( wddy_acb_acau  )
-    CALL deallocate_shared( wddy_acb_acav  )
+    CALL deallocate_shared( wd2dx2_a_ex     )
+    CALL deallocate_shared( wd2dxdy_a_ex    )
+    CALL deallocate_shared( wd2dy2_a_ex     )
+    CALL deallocate_shared( wd2dx2_a_to_a   )
+    CALL deallocate_shared( wd2dxdy_a_to_a  )
+    CALL deallocate_shared( wd2dy2_a_to_a   )
+    
+  END SUBROUTINE test_matrix_operators_abc_2D
+  SUBROUTINE test_matrix_operators_abc_3D( mesh)
+    ! Test all the matrix operators on the three basic grids (a,b,c)
+    ! 
+    ! map_a_to_b_3D
+    ! map_a_to_c_3D
+    ! map_b_to_a_3D
+    ! map_b_to_c_3D
+    ! map_c_to_a_3D
+    ! map_c_to_b_3D
+    ! 
+    ! ddx_a_to_a_3D
+    ! ddx_a_to_b_3D
+    ! ddx_a_to_c_3D
+    ! ddx_b_to_a_3D
+    ! ddx_b_to_b_3D
+    ! ddx_b_to_c_3D
+    ! ddx_c_to_a_3D
+    ! ddx_c_to_b_3D
+    ! ddx_c_to_c_3D
+    ! 
+    ! ddy_a_to_a_3D
+    ! ddy_a_to_b_3D
+    ! ddy_a_to_c_3D
+    ! ddy_b_to_a_3D
+    ! ddy_b_to_b_3D
+    ! ddy_b_to_c_3D
+    ! ddy_c_to_a_3D
+    ! ddy_c_to_b_3D
+    ! ddy_c_to_c_3D
+    ! 
+    ! d3Dx2_a_to_a_3D
+    ! d3Dxdy_a_to_a_3D
+    ! d3Dy2_a_to_a_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: vi, ti, aci
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_b_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_b_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_c_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_b_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_c_ex
+    INTEGER :: wd_a_ex, wd_b_ex, wd_c_ex, wddx_a_ex, wddx_b_ex, wddx_c_ex, wddy_a_ex, wddy_b_ex, wddy_c_ex
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_b_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_b_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_b_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_to_c
+    INTEGER :: wd_a_to_a, wd_a_to_b, wd_a_to_c, wd_b_to_a, wd_b_to_b, wd_b_to_c, wd_c_to_a, wd_c_to_b, wd_c_to_c
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_a_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_a_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_a_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_b_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_b_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_b_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_c_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_c_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_c_to_c
+    INTEGER :: wddx_a_to_a, wddx_a_to_b, wddx_a_to_c, wddx_b_to_a, wddx_b_to_b, wddx_b_to_c, wddx_c_to_a, wddx_c_to_b, wddx_c_to_c
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_a_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_a_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_a_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_b_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_b_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_b_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_c_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_c_to_b
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_c_to_c
+    INTEGER :: wddy_a_to_a, wddy_a_to_b, wddy_a_to_c, wddy_b_to_a, wddy_b_to_b, wddy_b_to_c, wddy_c_to_a, wddy_c_to_b, wddy_c_to_c
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dx2_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dx2_a_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_a_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_a_to_a
+    INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
         
-    IF (par%master) WRITE(0,*) ' Finished testing the matrix operators!'
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/b/c - a/b/c, 3D)...'
     CALL sync
     
-  END SUBROUTINE test_matrix_operators
-  SUBROUTINE test_matrix_operators_test_function( x, y, xmin, xmax, ymin, ymax, d, ddx, ddy)
+  ! Allocate shared memory
+  ! ======================
+    
+    ! Exact solutions
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d_a_ex,          wd_a_ex         )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, d_b_ex,          wd_b_ex         )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, d_c_ex,          wd_c_ex         )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddx_a_ex,        wddx_a_ex       )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddx_b_ex,        wddx_b_ex       )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddx_c_ex,        wddx_c_ex       )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddy_a_ex,        wddy_a_ex       )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddy_b_ex,        wddy_b_ex       )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddy_c_ex,        wddy_c_ex       )
+    
+    ! Discretised approximations
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d_a_to_a,        wd_a_to_a       )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, d_a_to_b,        wd_a_to_b       )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, d_a_to_c,        wd_a_to_c       )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d_b_to_a,        wd_b_to_a       )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, d_b_to_b,        wd_b_to_b       )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, d_b_to_c,        wd_b_to_c       )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d_c_to_a,        wd_c_to_a       )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, d_c_to_b,        wd_c_to_b       )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, d_c_to_c,        wd_c_to_c       )
+    
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddx_a_to_a,      wddx_a_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddx_a_to_b,      wddx_a_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddx_a_to_c,      wddx_a_to_c     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddx_b_to_a,      wddx_b_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddx_b_to_b,      wddx_b_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddx_b_to_c,      wddx_b_to_c     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddx_c_to_a,      wddx_c_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddx_c_to_b,      wddx_c_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddx_c_to_c,      wddx_c_to_c     )
+    
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddy_a_to_a,      wddy_a_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddy_a_to_b,      wddy_a_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddy_a_to_c,      wddy_a_to_c     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddy_b_to_a,      wddy_b_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddy_b_to_b,      wddy_b_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddy_b_to_c,      wddy_b_to_c     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, ddy_c_to_a,      wddy_c_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, ddy_c_to_b,      wddy_c_to_b     )
+    CALL allocate_shared_dp_2D( mesh%nAc,  C%nz, ddy_c_to_c,      wddy_c_to_c     )
+    
+    ! Second partial derivatives
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dx2_a_ex,      wd2dx2_a_ex     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dxdy_a_ex,     wd2dxdy_a_ex    )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dy2_a_ex,      wd2dy2_a_ex     )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dx2_a_to_a,    wd2dx2_a_to_a   )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dxdy_a_to_a,   wd2dxdy_a_to_a  )
+    CALL allocate_shared_dp_2D( mesh%nV,   C%nz, d2dy2_a_to_a,    wd2dy2_a_to_a   )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,1)
+      y = mesh%V( vi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_a_ex(      vi,:) = d
+      ddx_a_ex(    vi,:) = ddx
+      ddy_a_ex(    vi,:) = ddy
+      d2dx2_a_ex(  vi,:) = d2dx2
+      d2dxdy_a_ex( vi,:) = d2dxdy
+      d2dy2_a_ex(  vi,:) = d2dy2
+    END DO
+    DO ti = mesh%ti1, mesh%ti2
+      x = mesh%TriGC( ti,1)
+      y = mesh%TriGC( ti,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_b_ex(   ti,:) = d
+      ddx_b_ex( ti,:) = ddx
+      ddy_b_ex( ti,:) = ddy
+    END DO
+    DO aci = mesh%ci1, mesh%ci2
+      x = mesh%VAc( aci,1)
+      y = mesh%VAc( aci,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_c_ex(   aci,:) = d
+      ddx_c_ex( aci,:) = ddx
+      ddy_c_ex( aci,:) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+  
+    ! Mapping
+    d_a_to_a( mesh%vi1:mesh%vi2,:) = d_a_ex( mesh%vi1:mesh%vi2,:)
+    CALL map_a_to_b_3D( mesh, d_a_ex, d_a_to_b)
+    CALL map_a_to_c_3D( mesh, d_a_ex, d_a_to_c)
+    
+    CALL map_b_to_a_3D( mesh, d_b_ex, d_b_to_a)
+    d_b_to_b( mesh%ti1:mesh%ti2,:) = d_b_ex( mesh%ti1:mesh%ti2,:)
+    CALL map_b_to_c_3D( mesh, d_b_ex, d_b_to_c)
+    
+    CALL map_c_to_a_3D( mesh, d_c_ex, d_c_to_a)
+    CALL map_c_to_b_3D( mesh, d_c_ex, d_c_to_b)
+    d_c_to_c( mesh%ci1:mesh%ci2,:) = d_c_ex( mesh%ci1:mesh%ci2,:)
+    
+    ! d/dx
+    CALL ddx_a_to_a_3D( mesh, d_a_ex, ddx_a_to_a)
+    CALL ddx_a_to_b_3D( mesh, d_a_ex, ddx_a_to_b)
+    CALL ddx_a_to_c_3D( mesh, d_a_ex, ddx_a_to_c)
+    
+    CALL ddx_b_to_a_3D( mesh, d_b_ex, ddx_b_to_a)
+    CALL ddx_b_to_b_3D( mesh, d_b_ex, ddx_b_to_b)
+    CALL ddx_b_to_c_3D( mesh, d_b_ex, ddx_b_to_c)
+    
+    CALL ddx_c_to_a_3D( mesh, d_c_ex, ddx_c_to_a)
+    CALL ddx_c_to_b_3D( mesh, d_c_ex, ddx_c_to_b)
+    CALL ddx_c_to_c_3D( mesh, d_c_ex, ddx_c_to_c)
+    
+    ! d/dy
+    CALL ddy_a_to_a_3D( mesh, d_a_ex, ddy_a_to_a)
+    CALL ddy_a_to_b_3D( mesh, d_a_ex, ddy_a_to_b)
+    CALL ddy_a_to_c_3D( mesh, d_a_ex, ddy_a_to_c)
+    
+    CALL ddy_b_to_a_3D( mesh, d_b_ex, ddy_b_to_a)
+    CALL ddy_b_to_b_3D( mesh, d_b_ex, ddy_b_to_b)
+    CALL ddy_b_to_c_3D( mesh, d_b_ex, ddy_b_to_c)
+    
+    CALL ddy_c_to_a_3D( mesh, d_c_ex, ddy_c_to_a)
+    CALL ddy_c_to_b_3D( mesh, d_c_ex, ddy_c_to_b)
+    CALL ddy_c_to_c_3D( mesh, d_c_ex, ddy_c_to_c)
+    
+    ! second partial derivatives
+    CALL d2dx2_a_to_a_3D(  mesh, d_a_ex, d2dx2_a_to_a )
+    CALL d2dxdy_a_to_a_3D( mesh, d_a_ex, d2dxdy_a_to_a)
+    CALL d2dy2_a_to_a_3D(  mesh, d_a_ex, d2dy2_a_to_a )
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_a_ex      )
+    CALL deallocate_shared( wd_b_ex      )
+    CALL deallocate_shared( wd_c_ex      )
+    CALL deallocate_shared( wddx_a_ex    )
+    CALL deallocate_shared( wddx_b_ex    )
+    CALL deallocate_shared( wddx_c_ex    )
+    CALL deallocate_shared( wddy_a_ex    )
+    CALL deallocate_shared( wddy_b_ex    )
+    CALL deallocate_shared( wddy_c_ex    )
+    
+    CALL deallocate_shared( wd_a_to_a    )
+    CALL deallocate_shared( wd_a_to_b    )
+    CALL deallocate_shared( wd_a_to_c    )
+    CALL deallocate_shared( wd_b_to_a    )
+    CALL deallocate_shared( wd_b_to_b    )
+    CALL deallocate_shared( wd_b_to_c    )
+    CALL deallocate_shared( wd_c_to_a    )
+    CALL deallocate_shared( wd_c_to_b    )
+    CALL deallocate_shared( wd_c_to_c    )
+    
+    CALL deallocate_shared( wddx_a_to_a  )
+    CALL deallocate_shared( wddx_a_to_b  )
+    CALL deallocate_shared( wddx_a_to_c  )
+    CALL deallocate_shared( wddx_b_to_a  )
+    CALL deallocate_shared( wddx_b_to_b  )
+    CALL deallocate_shared( wddx_b_to_c  )
+    CALL deallocate_shared( wddx_c_to_a  )
+    CALL deallocate_shared( wddx_c_to_b  )
+    CALL deallocate_shared( wddx_c_to_c  )
+    
+    CALL deallocate_shared( wddy_a_to_a  )
+    CALL deallocate_shared( wddy_a_to_b  )
+    CALL deallocate_shared( wddy_a_to_c  )
+    CALL deallocate_shared( wddy_b_to_a  )
+    CALL deallocate_shared( wddy_b_to_b  )
+    CALL deallocate_shared( wddy_b_to_c  )
+    CALL deallocate_shared( wddy_c_to_a  )
+    CALL deallocate_shared( wddy_c_to_b  )
+    CALL deallocate_shared( wddy_c_to_c  )
+    
+    CALL deallocate_shared( wd2dx2_a_ex     )
+    CALL deallocate_shared( wd2dxdy_a_ex    )
+    CALL deallocate_shared( wd2dy2_a_ex     )
+    CALL deallocate_shared( wd2dx2_a_to_a   )
+    CALL deallocate_shared( wd2dxdy_a_to_a  )
+    CALL deallocate_shared( wd2dy2_a_to_a   )
+    
+  END SUBROUTINE test_matrix_operators_abc_3D
+  
+  ! Between the a/c-grids and the ac-grid
+  SUBROUTINE test_matrix_operators_a_c_ac_2D( mesh)
+    ! Test all the matrix operators between the a/c-grids and the ac-grid
+    !
+    ! move_a_to_aca_2D
+    ! move_c_to_acc_2D
+    ! move a_and_c_to_ac_2D
+    ! map_a_to_ac_2D
+    ! map_c_to_ac_2D
+    ! ddx_a_to_ac_2D
+    ! ddy_a_to_ac_2D
+    ! d_aca_to_a_2D
+    ! d_acc_to_c_2D
+    ! d_ac_to_a_and_c_2D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: vi, aci, avi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac_ex
+    INTEGER :: wd_a_ex, wd_c_ex, wd_ac_ex, wddx_ac_ex, wddy_ac_ex
+
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_to_aca
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_to_acc
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_and_c_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_a_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_c_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_a_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_a_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_aca_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acc_to_c
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_to_a
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_to_c
+    INTEGER :: wd_a_to_aca, wd_c_to_acc, wd_a_and_c_to_ac, wd_a_to_ac, wd_c_to_ac, wddx_a_to_ac, wddy_a_to_ac, wd_aca_to_a, wd_acc_to_c, wd_ac_to_a, wd_ac_to_c
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/c - ac, 2D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_1D( mesh%nV    ,   d_a_ex         , wd_a_ex         )
+    CALL allocate_shared_dp_1D( mesh%nAc   ,   d_c_ex         , wd_c_ex         )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_ac_ex      , wddy_ac_ex      )
+    
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_a_to_aca     , wd_a_to_aca     )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_c_to_acc     , wd_c_to_acc     )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_a_and_c_to_ac, wd_a_and_c_to_ac)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_a_to_ac      , wd_a_to_ac      )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_c_to_ac      , wd_c_to_ac      )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_a_to_ac    , wddx_a_to_ac    )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_a_to_ac    , wddy_a_to_ac    )
+    CALL allocate_shared_dp_1D( mesh%nV    ,   d_aca_to_a     , wd_aca_to_a     )
+    CALL allocate_shared_dp_1D( mesh%nAc   ,   d_acc_to_c     , wd_acc_to_c     )
+    CALL allocate_shared_dp_1D( mesh%nV    ,   d_ac_to_a      , wd_ac_to_a      )
+    CALL allocate_shared_dp_1D( mesh%nAc   ,   d_ac_to_c      , wd_ac_to_c      )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,1)
+      y = mesh%V( vi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_a_ex(      vi) = d
+    END DO
+    DO aci = mesh%ci1, mesh%ci2
+      x = mesh%VAc( aci,1)
+      y = mesh%VAc( aci,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_c_ex(   aci) = d
+    END DO
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(   avi) = d
+      ddx_ac_ex( avi) = ddx
+      ddy_ac_ex( avi) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL move_a_to_aca_2D(      mesh, d_a_ex,         d_a_to_aca                )
+    CALL move_c_to_acc_2D(      mesh, d_c_ex,         d_c_to_acc                )
+    CALL move_a_and_c_to_ac_2D( mesh, d_a_ex, d_c_ex, d_a_and_c_to_ac           )
+    CALL map_a_to_ac_2D(        mesh, d_a_ex,         d_a_to_ac                 )
+    CALL map_c_to_ac_2D(        mesh, d_c_ex,         d_c_to_ac                 )
+    CALL ddx_a_to_ac_2D(        mesh, d_a_ex,         ddx_a_to_ac               )
+    CALL ddy_a_to_ac_2D(        mesh, d_a_ex,         ddy_a_to_ac               )
+    CALL move_aca_to_a_2D(      mesh, d_ac_ex,        d_aca_to_a                )
+    CALL move_acc_to_c_2D(      mesh, d_ac_ex,        d_acc_to_c                )
+    CALL move_ac_to_a_and_c_2D( mesh, d_ac_ex,        d_ac_to_a      , d_ac_to_c)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_a_ex         )
+    CALL deallocate_shared( wd_c_ex         )
+    CALL deallocate_shared( wd_ac_ex        )
+    CALL deallocate_shared( wddx_ac_ex      )
+    CALL deallocate_shared( wddy_ac_ex      )
+    
+    CALL deallocate_shared( wd_a_to_aca     )
+    CALL deallocate_shared( wd_c_to_acc     )
+    CALL deallocate_shared( wd_a_and_c_to_ac)
+    CALL deallocate_shared( wd_a_to_ac      )
+    CALL deallocate_shared( wd_c_to_ac      )
+    CALL deallocate_shared( wddx_a_to_ac    )
+    CALL deallocate_shared( wddy_a_to_ac    )
+    CALL deallocate_shared( wd_aca_to_a     )
+    CALL deallocate_shared( wd_acc_to_c     )
+    CALL deallocate_shared( wd_ac_to_a      )
+    CALL deallocate_shared( wd_ac_to_c      )
+    
+  END SUBROUTINE test_matrix_operators_a_c_ac_2D
+  SUBROUTINE test_matrix_operators_a_c_ac_3D( mesh)
+    ! Test all the matrix operators between the a/c-grids and the ac-grid
+    !
+    ! move_a_to_aca_3D
+    ! move_c_to_acc_3D
+    ! move a_and_c_to_ac_3D
+    ! map_a_to_ac_3D
+    ! map_c_to_ac_3D
+    ! ddx_a_to_ac_3D
+    ! ddy_a_to_ac_3D
+    ! d_aca_to_a_3D
+    ! d_acc_to_c_3D
+    ! d_ac_to_a_and_c_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: vi, aci, avi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_ac_ex
+    INTEGER :: wd_a_ex, wd_c_ex, wd_ac_ex, wddx_ac_ex, wddy_ac_ex
+
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_to_aca
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_to_acc
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_and_c_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_a_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_c_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_a_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_a_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_aca_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acc_to_c
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_to_a
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_to_c
+    INTEGER :: wd_a_to_aca, wd_c_to_acc, wd_a_and_c_to_ac, wd_a_to_ac, wd_c_to_ac, wddx_a_to_ac, wddy_a_to_ac, wd_aca_to_a, wd_acc_to_c, wd_ac_to_a, wd_ac_to_c
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/c - ac, 3D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_2D( mesh%nV    , C%nz,   d_a_ex         , wd_a_ex         )
+    CALL allocate_shared_dp_2D( mesh%nAc   , C%nz,   d_c_ex         , wd_c_ex         )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   ddy_ac_ex      , wddy_ac_ex      )
+    
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_a_to_aca     , wd_a_to_aca     )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_c_to_acc     , wd_c_to_acc     )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_a_and_c_to_ac, wd_a_and_c_to_ac)
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_a_to_ac      , wd_a_to_ac      )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   d_c_to_ac      , wd_c_to_ac      )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   ddx_a_to_ac    , wddx_a_to_ac    )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz,   ddy_a_to_ac    , wddy_a_to_ac    )
+    CALL allocate_shared_dp_2D( mesh%nV    , C%nz,   d_aca_to_a     , wd_aca_to_a     )
+    CALL allocate_shared_dp_2D( mesh%nAc   , C%nz,   d_acc_to_c     , wd_acc_to_c     )
+    CALL allocate_shared_dp_2D( mesh%nV    , C%nz,   d_ac_to_a      , wd_ac_to_a      )
+    CALL allocate_shared_dp_2D( mesh%nAc   , C%nz,   d_ac_to_c      , wd_ac_to_c      )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,1)
+      y = mesh%V( vi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_a_ex(      vi,:) = d
+    END DO
+    DO aci = mesh%ci1, mesh%ci2
+      x = mesh%VAc( aci,1)
+      y = mesh%VAc( aci,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_c_ex(   aci,:) = d
+    END DO
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_ac_ex(   avi,:) = d
+      ddx_ac_ex( avi,:) = ddx
+      ddy_ac_ex( avi,:) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL move_a_to_aca_3D(      mesh, d_a_ex,         d_a_to_aca                )
+    CALL move_c_to_acc_3D(      mesh, d_c_ex,         d_c_to_acc                )
+    CALL move_a_and_c_to_ac_3D( mesh, d_a_ex, d_c_ex, d_a_and_c_to_ac           )
+    CALL map_a_to_ac_3D(        mesh, d_a_ex,         d_a_to_ac                 )
+    CALL map_c_to_ac_3D(        mesh, d_c_ex,         d_c_to_ac                 )
+    CALL ddx_a_to_ac_3D(        mesh, d_a_ex,         ddx_a_to_ac               )
+    CALL ddy_a_to_ac_3D(        mesh, d_a_ex,         ddy_a_to_ac               )
+    CALL move_aca_to_a_3D(      mesh, d_ac_ex,        d_aca_to_a                )
+    CALL move_acc_to_c_3D(      mesh, d_ac_ex,        d_acc_to_c                )
+    CALL move_ac_to_a_and_c_3D( mesh, d_ac_ex,        d_ac_to_a      , d_ac_to_c)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_a_ex         )
+    CALL deallocate_shared( wd_c_ex         )
+    CALL deallocate_shared( wd_ac_ex        )
+    CALL deallocate_shared( wddx_ac_ex      )
+    CALL deallocate_shared( wddy_ac_ex      )
+    
+    CALL deallocate_shared( wd_a_to_aca     )
+    CALL deallocate_shared( wd_c_to_acc     )
+    CALL deallocate_shared( wd_a_and_c_to_ac)
+    CALL deallocate_shared( wd_a_to_ac      )
+    CALL deallocate_shared( wd_c_to_ac      )
+    CALL deallocate_shared( wddx_a_to_ac    )
+    CALL deallocate_shared( wddy_a_to_ac    )
+    CALL deallocate_shared( wd_aca_to_a     )
+    CALL deallocate_shared( wd_acc_to_c     )
+    CALL deallocate_shared( wd_ac_to_a      )
+    CALL deallocate_shared( wd_ac_to_c      )
+    
+  END SUBROUTINE test_matrix_operators_a_c_ac_3D
+    
+  ! On the ac-grid
+  SUBROUTINE test_matrix_operators_ac_ac_2D( mesh)
+    ! Test all the matrix operators on the ac-grid
+    ! 
+    ! ddx_ac_to_ac_2D
+    ! ddy_ac_to_ac_2D
+    ! d2dx2_ac_to_ac_2D
+    ! d2dxdy_ac_to_ac_2D
+    ! d2dy2_ac_to_ac_2D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac_ex
+    INTEGER :: wd_ac_ex, wddx_ac_ex, wddy_ac_ex
+
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dx2_ac_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_ac_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_ac_to_ac
+    INTEGER :: wddx_ac_to_ac, wddy_ac_to_ac, wd2dx2_ac_to_ac, wd2dxdy_ac_to_ac, wd2dy2_ac_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac - ac, 2D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_ac_ex      , wddy_ac_ex      )
+    
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_ac_to_ac   , wddx_ac_to_ac   )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_ac_to_ac   , wddy_ac_to_ac   )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d2dx2_ac_to_ac , wd2dx2_ac_to_ac )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d2dxdy_ac_to_ac, wd2dxdy_ac_to_ac)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d2dy2_ac_to_ac , wd2dy2_ac_to_ac )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(   avi) = d
+      ddx_ac_ex( avi) = ddx
+      ddy_ac_ex( avi) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL ddx_ac_to_ac_2D(    mesh, d_ac_ex, ddx_ac_to_ac   )
+    CALL ddy_ac_to_ac_2D(    mesh, d_ac_ex, ddy_ac_to_ac   )
+    CALL d2dx2_ac_to_ac_2D(  mesh, d_ac_ex, d2dx2_ac_to_ac )
+    CALL d2dxdy_ac_to_ac_2D( mesh, d_ac_ex, d2dxdy_ac_to_ac)
+    CALL d2dy2_ac_to_ac_2D(  mesh, d_ac_ex, d2dy2_ac_to_ac )
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex        )
+    CALL deallocate_shared( wddx_ac_ex      )
+    CALL deallocate_shared( wddy_ac_ex      )
+    
+    CALL deallocate_shared( wddx_ac_to_ac   )
+    CALL deallocate_shared( wddy_ac_to_ac   )
+    CALL deallocate_shared( wd2dx2_ac_to_ac )
+    CALL deallocate_shared( wd2dxdy_ac_to_ac)
+    CALL deallocate_shared( wd2dy2_ac_to_ac )
+    
+  END SUBROUTINE test_matrix_operators_ac_ac_2D
+  SUBROUTINE test_matrix_operators_ac_ac_3D( mesh)
+    ! Test all the matrix operators on the ac-grid
+    ! 
+    ! ddx_ac_to_ac_3D
+    ! ddy_ac_to_ac_3D
+    ! d2dx2_ac_to_ac_3D
+    ! d2dxdy_ac_to_ac_3D
+    ! d2dy2_ac_to_ac_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_ac_ex
+    INTEGER :: wd_ac_ex, wddx_ac_ex, wddy_ac_ex
+
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_ac_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_ac_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dx2_ac_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_ac_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_ac_to_ac
+    INTEGER :: wddx_ac_to_ac, wddy_ac_to_ac, wd2dx2_ac_to_ac, wd2dxdy_ac_to_ac, wd2dy2_ac_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac - ac, 3D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, ddy_ac_ex      , wddy_ac_ex      )
+    
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, ddx_ac_to_ac   , wddx_ac_to_ac   )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, ddy_ac_to_ac   , wddy_ac_to_ac   )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, d2dx2_ac_to_ac , wd2dx2_ac_to_ac )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, d2dxdy_ac_to_ac, wd2dxdy_ac_to_ac)
+    CALL allocate_shared_dp_2D( mesh%nVAaAc, C%nz, d2dy2_ac_to_ac , wd2dy2_ac_to_ac )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(   avi,:) = d
+      ddx_ac_ex( avi,:) = ddx
+      ddy_ac_ex( avi,:) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL ddx_ac_to_ac_3D(    mesh, d_ac_ex, ddx_ac_to_ac   )
+    CALL ddy_ac_to_ac_3D(    mesh, d_ac_ex, ddy_ac_to_ac   )
+    CALL d2dx2_ac_to_ac_3D(  mesh, d_ac_ex, d2dx2_ac_to_ac )
+    CALL d2dxdy_ac_to_ac_3D( mesh, d_ac_ex, d2dxdy_ac_to_ac)
+    CALL d2dy2_ac_to_ac_3D(  mesh, d_ac_ex, d2dy2_ac_to_ac )
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex        )
+    CALL deallocate_shared( wddx_ac_ex      )
+    CALL deallocate_shared( wddy_ac_ex      )
+    
+    CALL deallocate_shared( wddx_ac_to_ac   )
+    CALL deallocate_shared( wddy_ac_to_ac   )
+    CALL deallocate_shared( wd2dx2_ac_to_ac )
+    CALL deallocate_shared( wd2dxdy_ac_to_ac)
+    CALL deallocate_shared( wd2dy2_ac_to_ac )
+    
+  END SUBROUTINE test_matrix_operators_ac_ac_3D
+    
+  ! Between the ac-grid and the bb-grid
+  SUBROUTINE test_matrix_operators_ac_bb_2D( mesh)
+    ! Test all the matrix operators between the ac-grid and the bb-grid
+    ! 
+    ! map_ac_to_bb_2D
+    ! ddx_ac_to_bb_2D
+    ! ddy_ac_to_bb_2D
+    ! map_bb_to_ac_2D
+    ! ddx_bb_to_ac_2D
+    ! ddy_bb_to_ac_2D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi, ati
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb_ex
+    INTEGER :: wd_ac_ex, wddx_ac_ex, wddy_ac_ex, wd_bb_ex, wddx_bb_ex, wddy_bb_ex
+
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_ac_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_ac_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb_to_ac
+    INTEGER :: wd_ac_to_bb, wddx_ac_to_bb, wddy_ac_to_bb, wd_bb_to_ac, wddx_bb_to_ac, wddy_bb_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac to bb, 2D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_ac_ex      , wddy_ac_ex      )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, d_bb_ex        , wd_bb_ex        )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, ddx_bb_ex      , wddx_bb_ex      )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, ddy_bb_ex      , wddy_bb_ex      )
+    
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, d_ac_to_bb     , wd_ac_to_bb     )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, ddx_ac_to_bb   , wddx_ac_to_bb   )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, ddy_ac_to_bb   , wddy_ac_to_bb   )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   d_bb_to_ac     , wd_bb_to_ac     )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddx_bb_to_ac   , wddx_bb_to_ac   )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   ddy_bb_to_ac   , wddy_bb_to_ac   )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(   avi) = d
+      ddx_ac_ex( avi) = ddx
+      ddy_ac_ex( avi) = ddy
+    END DO
+    DO ati = mesh%ati1, mesh%ati2
+      x = mesh%TriGCAaAc( ati,1)
+      y = mesh%TriGCAaAc( ati,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_bb_ex(   ati) = d
+      ddx_bb_ex( ati) = ddx
+      ddy_bb_ex( ati) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL map_ac_to_bb_2D( mesh, d_ac_ex, d_ac_to_bb  )
+    CALL ddx_ac_to_bb_2D( mesh, d_ac_ex, ddx_ac_to_bb)
+    CALL ddy_ac_to_bb_2D( mesh, d_ac_ex, ddy_ac_to_bb)
+    CALL map_bb_to_ac_2D( mesh, d_bb_ex, d_bb_to_ac  )
+    CALL ddx_bb_to_ac_2D( mesh, d_bb_ex, ddx_bb_to_ac)
+    CALL ddy_bb_to_ac_2D( mesh, d_bb_ex, ddy_bb_to_ac)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex     )
+    CALL deallocate_shared( wddx_ac_ex   )
+    CALL deallocate_shared( wddy_ac_ex   )
+    CALL deallocate_shared( wd_bb_ex     )
+    CALL deallocate_shared( wddx_bb_ex   ) 
+    CALL deallocate_shared( wddy_bb_ex   )
+      
+    CALL deallocate_shared( wd_ac_to_bb  )
+    CALL deallocate_shared( wddx_ac_to_bb)
+    CALL deallocate_shared( wddy_ac_to_bb)
+    CALL deallocate_shared( wd_bb_to_ac  )
+    CALL deallocate_shared( wddx_bb_to_ac)
+    CALL deallocate_shared( wddy_bb_to_ac)
+    
+  END SUBROUTINE test_matrix_operators_ac_bb_2D
+  SUBROUTINE test_matrix_operators_ac_bb_3D( mesh)
+    ! Test all the matrix operators between the ac-grid and the bb-grid
+    ! 
+    ! map_ac_to_bb_3D
+    ! ddx_ac_to_bb_3D
+    ! ddy_ac_to_bb_3D
+    ! map_bb_to_ac_3D
+    ! ddx_bb_to_ac_3D
+    ! ddy_bb_to_ac_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi, ati
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_bb_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_bb_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_bb_ex
+    INTEGER :: wd_ac_ex, wddx_ac_ex, wddy_ac_ex, wd_bb_ex, wddx_bb_ex, wddy_bb_ex
+
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_ac_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_ac_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_bb_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_bb_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_bb_to_ac
+    INTEGER :: wd_ac_to_bb, wddx_ac_to_bb, wddy_ac_to_bb, wd_bb_to_ac, wddx_bb_to_ac, wddy_bb_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac to bb, 3D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, d_ac_ex        , wd_ac_ex        )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, ddx_ac_ex      , wddx_ac_ex      )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, ddy_ac_ex      , wddy_ac_ex      )
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, d_bb_ex        , wd_bb_ex        )
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, ddx_bb_ex      , wddx_bb_ex      )
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, ddy_bb_ex      , wddy_bb_ex      )
+    
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, d_ac_to_bb     , wd_ac_to_bb     )
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, ddx_ac_to_bb   , wddx_ac_to_bb   )
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, C%nz, ddy_ac_to_bb   , wddy_ac_to_bb   )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, d_bb_to_ac     , wd_bb_to_ac     )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, ddx_bb_to_ac   , wddx_bb_to_ac   )
+    CALL allocate_shared_dp_2D( mesh%nVAaAc,   C%nz, ddy_bb_to_ac   , wddy_bb_to_ac   )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_ac_ex(   avi,:) = d
+      ddx_ac_ex( avi,:) = ddx
+      ddy_ac_ex( avi,:) = ddy
+    END DO
+    DO ati = mesh%ati1, mesh%ati2
+      x = mesh%TriGCAaAc( ati,1)
+      y = mesh%TriGCAaAc( ati,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_bb_ex(   ati,:) = d
+      ddx_bb_ex( ati,:) = ddx
+      ddy_bb_ex( ati,:) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL map_ac_to_bb_3D( mesh, d_ac_ex, d_ac_to_bb  )
+    CALL ddx_ac_to_bb_3D( mesh, d_ac_ex, ddx_ac_to_bb)
+    CALL ddy_ac_to_bb_3D( mesh, d_ac_ex, ddy_ac_to_bb)
+    CALL map_bb_to_ac_3D( mesh, d_bb_ex, d_bb_to_ac  )
+    CALL ddx_bb_to_ac_3D( mesh, d_bb_ex, ddx_bb_to_ac)
+    CALL ddy_bb_to_ac_3D( mesh, d_bb_ex, ddy_bb_to_ac)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex     )
+    CALL deallocate_shared( wddx_ac_ex   )
+    CALL deallocate_shared( wddy_ac_ex   )
+    CALL deallocate_shared( wd_bb_ex     )
+    CALL deallocate_shared( wddx_bb_ex   ) 
+    CALL deallocate_shared( wddy_bb_ex   )
+      
+    CALL deallocate_shared( wd_ac_to_bb  )
+    CALL deallocate_shared( wddx_ac_to_bb)
+    CALL deallocate_shared( wddy_ac_to_bb)
+    CALL deallocate_shared( wd_bb_to_ac  )
+    CALL deallocate_shared( wddx_bb_to_ac)
+    CALL deallocate_shared( wddy_bb_to_ac)
+    
+  END SUBROUTINE test_matrix_operators_ac_bb_3D
+    
+  ! Between the ac-grid and the acu/acv-grids
+  SUBROUTINE test_matrix_operators_ac_acuv_2D( mesh)
+    ! Test all the matrix operators between the ac-grid and the acu/acv-grids
+    !
+    ! move_ac_to_acu_2D
+    ! move_ac_to_acv_2D
+    ! move_acu_to_ac_2D
+    ! move_acv_to_ac_2D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi, auvi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acu_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acv_ex
+    INTEGER :: wd_ac_ex, wd_acu_ex, wd_acv_ex
+
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_to_acu
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_ac_to_acv
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acu_to_ac
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acv_to_ac
+    INTEGER :: wd_ac_to_acu, wd_ac_to_acv, wd_acu_to_ac, wd_acv_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac - acu/acv, 2D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_1D(   mesh%nVAaAc, d_ac_ex         , wd_ac_ex         )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_acu_ex        , wd_acu_ex        )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_acv_ex        , wd_acv_ex        )
+    
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_ac_to_acu     , wd_ac_to_acu     )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_ac_to_acv     , wd_ac_to_acv     )
+    CALL allocate_shared_dp_1D(   mesh%nVAaAc, d_acu_to_ac     , wd_acu_to_ac     )
+    CALL allocate_shared_dp_1D(   mesh%nVAaAc, d_acv_to_ac     , wd_acv_to_ac     )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(      avi) = d
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 1) THEN
+        ! u
+        avi = (auvi+1)/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acu_ex(   auvi) = d
+      END IF
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 0) THEN
+        ! v
+        avi = auvi/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acv_ex(   auvi) = d
+      END IF
+    END DO
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL move_ac_to_acu_2D( mesh, d_ac_ex , d_ac_to_acu)
+    CALL move_ac_to_acv_2D( mesh, d_ac_ex , d_ac_to_acv)
+    CALL move_acu_to_ac_2D( mesh, d_acu_ex, d_acu_to_ac)
+    CALL move_acv_to_ac_2D( mesh, d_acv_ex, d_acv_to_ac)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex         )
+    CALL deallocate_shared( wd_acu_ex        )
+    CALL deallocate_shared( wd_acv_ex        )
+    
+    CALL deallocate_shared( wd_ac_to_acu     )
+    CALL deallocate_shared( wd_ac_to_acv     )
+    CALL deallocate_shared( wd_acu_to_ac     )
+    CALL deallocate_shared( wd_acv_to_ac     )
+    
+  END SUBROUTINE test_matrix_operators_ac_acuv_2D
+  SUBROUTINE test_matrix_operators_ac_acuv_3D( mesh)
+    ! Test all the matrix operators between the ac-grid and the acu/acv-grids
+    !
+    ! move_ac_to_acu_3D
+    ! move_ac_to_acv_3D
+    ! move_acu_to_ac_3D
+    ! move_acv_to_ac_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: avi, auvi
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acu_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acv_ex
+    INTEGER :: wd_ac_ex, wd_acu_ex, wd_acv_ex
+
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_to_acu
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_ac_to_acv
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acu_to_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acv_to_ac
+    INTEGER :: wd_ac_to_acu, wd_ac_to_acv, wd_acu_to_ac, wd_acv_to_ac
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (ac - acu/acv, 3D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_2D(   mesh%nVAaAc, C%nz, d_ac_ex         , wd_ac_ex         )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc, C%nz, d_acu_ex        , wd_acu_ex        )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc, C%nz, d_acv_ex        , wd_acv_ex        )
+    
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc, C%nz, d_ac_to_acu     , wd_ac_to_acu     )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc, C%nz, d_ac_to_acv     , wd_ac_to_acv     )
+    CALL allocate_shared_dp_2D(   mesh%nVAaAc, C%nz, d_acu_to_ac     , wd_acu_to_ac     )
+    CALL allocate_shared_dp_2D(   mesh%nVAaAc, C%nz, d_acv_to_ac     , wd_acv_to_ac     )
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO avi = mesh%avi1, mesh%avi2
+      x = mesh%VAaAc( avi,1)
+      y = mesh%VAaAc( avi,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_ac_ex(      avi,:) = d
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 1) THEN
+        ! u
+        avi = (auvi+1)/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acu_ex(   auvi,:) = d
+      END IF
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 0) THEN
+        ! v
+        avi = auvi/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acv_ex(   auvi,:) = d
+      END IF
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL move_ac_to_acu_3D( mesh, d_ac_ex , d_ac_to_acu)
+    CALL move_ac_to_acv_3D( mesh, d_ac_ex , d_ac_to_acv)
+    CALL move_acu_to_ac_3D( mesh, d_acu_ex, d_acu_to_ac)
+    CALL move_acv_to_ac_3D( mesh, d_acv_ex, d_acv_to_ac)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_ac_ex         )
+    CALL deallocate_shared( wd_acu_ex        )
+    CALL deallocate_shared( wd_acv_ex        )
+    
+    CALL deallocate_shared( wd_ac_to_acu     )
+    CALL deallocate_shared( wd_ac_to_acv     )
+    CALL deallocate_shared( wd_acu_to_ac     )
+    CALL deallocate_shared( wd_acv_to_ac     )
+    
+  END SUBROUTINE test_matrix_operators_ac_acuv_3D
+  
+  ! Between the acu/acv-grids and the bb-grid
+  SUBROUTINE test_matrix_operators_acuv_bb_2D( mesh)
+    ! Test all the matrix operators between the acu/acv-grids and the bb-grid
+    !
+    ! map_acu_to_bb_2D
+    ! ddx_acu_to_bb_2D
+    ! ddy_acu_to_bb_2D
+    ! map_acv_to_bb_2D
+    ! ddx_acv_to_bb_2D
+    ! ddy_acv_to_bb_2D
+    ! 
+    ! map_bb_to_acu_2D
+    ! ddx_bb_to_acu_2D
+    ! ddy_bb_to_acu_2D
+    ! map_bb_to_acv_2D
+    ! ddx_bb_to_acv_2D
+    ! ddy_bb_to_acv_2D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: auvi, avi, ati
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acu_ex    
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acu_ex    
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acu_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acv_ex    
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acv_ex    
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acv_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb_ex
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb_ex
+    INTEGER :: wd_acu_ex, wddx_acu_ex, wddy_acu_ex, wd_acv_ex, wddx_acv_ex, wddy_acv_ex, wd_bb_ex, wddx_bb_ex, wddy_bb_ex
+
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acu_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acu_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acu_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_acv_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_acv_to_bb
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_acv_to_bb
+    INTEGER :: wd_acu_to_bb, wddx_acu_to_bb, wddy_acu_to_bb, wd_acv_to_bb, wddx_acv_to_bb, wddy_acv_to_bb
+    
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb_to_acu
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb_to_acu
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb_to_acu
+    REAL(dp), DIMENSION(:    ), POINTER                :: d_bb_to_acv
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddx_bb_to_acv
+    REAL(dp), DIMENSION(:    ), POINTER                :: ddy_bb_to_acv
+    INTEGER :: wd_bb_to_acu, wddx_bb_to_acu, wddy_bb_to_acu, wd_bb_to_acv, wddx_bb_to_acv, wddy_bb_to_acv
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (acu/acv - bb, 2D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   d_acu_ex     , wd_acu_ex     )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddx_acu_ex   , wddx_acu_ex   )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddy_acu_ex   , wddy_acu_ex   )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   d_acv_ex     , wd_acv_ex     )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddx_acv_ex   , wddx_acv_ex   )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddy_acv_ex   , wddy_acv_ex   )
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, d_bb_ex      , wd_bb_ex      )
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddx_bb_ex    , wddx_bb_ex    )
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddy_bb_ex    , wddy_bb_ex    )
+    
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, d_acu_to_bb  , wd_acu_to_bb  )
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddx_acu_to_bb, wddx_acu_to_bb)
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddy_acu_to_bb, wddy_acu_to_bb)
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, d_acv_to_bb  , wd_acv_to_bb  )
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddx_acv_to_bb, wddx_acv_to_bb)
+    CALL allocate_shared_dp_1D(   mesh%nTriAaAc, ddy_acv_to_bb, wddy_acv_to_bb)
+    
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   d_bb_to_acu  , wd_bb_to_acu  )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddx_bb_to_acu, wddx_bb_to_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddy_bb_to_acu, wddy_bb_to_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   d_bb_to_acv  , wd_bb_to_acv  )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddx_bb_to_acv, wddx_bb_to_acv)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc,   ddy_bb_to_acv, wddy_bb_to_acv)
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 1) THEN
+        ! u
+        avi = (auvi+1)/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acu_ex(   auvi) = d
+        ddx_acu_ex( auvi) = ddx
+        ddy_acu_ex( auvi) = ddy
+      END IF
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 0) THEN
+        ! v
+        avi = auvi/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+        d_acv_ex(   auvi) = d
+        ddx_acv_ex( auvi) = ddx
+        ddy_acv_ex( auvi) = ddy
+      END IF
+    END DO
+    DO ati = mesh%ati1, mesh%ati2
+      x = mesh%TriGCAaAc( ati,1)
+      y = mesh%TriGCAaAc( ati,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
+      d_bb_ex(   ati) = d
+      ddx_bb_ex( ati) = ddx
+      ddy_bb_ex( ati) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL map_acu_to_bb_2D( mesh, d_acu_ex, d_acu_to_bb  )
+    CALL ddx_acu_to_bb_2D( mesh, d_acu_ex, ddx_acu_to_bb)
+    CALL ddy_acu_to_bb_2D( mesh, d_acu_ex, ddy_acu_to_bb)
+    CALL map_acv_to_bb_2D( mesh, d_acv_ex, d_acv_to_bb  )
+    CALL ddx_acv_to_bb_2D( mesh, d_acv_ex, ddx_acv_to_bb)
+    CALL ddy_acv_to_bb_2D( mesh, d_acv_ex, ddy_acv_to_bb)
+    
+    CALL map_bb_to_acu_2D( mesh, d_bb_ex , d_bb_to_acu  )
+    CALL ddx_bb_to_acu_2D( mesh, d_bb_ex , ddx_bb_to_acu)
+    CALL ddy_bb_to_acu_2D( mesh, d_bb_ex , ddy_bb_to_acu)
+    CALL map_bb_to_acv_2D( mesh, d_bb_ex , d_bb_to_acv  )
+    CALL ddx_bb_to_acv_2D( mesh, d_bb_ex , ddx_bb_to_acv)
+    CALL ddy_bb_to_acv_2D( mesh, d_bb_ex , ddy_bb_to_acv)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_acu_ex     )
+    CALL deallocate_shared( wddx_acu_ex   )
+    CALL deallocate_shared( wddy_acu_ex   )
+    CALL deallocate_shared( wd_acv_ex     )
+    CALL deallocate_shared( wddx_acv_ex   )
+    CALL deallocate_shared( wddy_acv_ex   )
+    CALL deallocate_shared( wd_bb_ex      )
+    CALL deallocate_shared( wddx_bb_ex    )
+    CALL deallocate_shared( wddy_bb_ex    )
+    
+    CALL deallocate_shared( wd_acu_to_bb  )
+    CALL deallocate_shared( wddx_acu_to_bb)
+    CALL deallocate_shared( wddy_acu_to_bb)
+    CALL deallocate_shared( wd_acv_to_bb  )
+    CALL deallocate_shared( wddx_acv_to_bb)
+    CALL deallocate_shared( wddy_acv_to_bb)
+    
+    CALL deallocate_shared( wd_bb_to_acu  )
+    CALL deallocate_shared( wddx_bb_to_acu)
+    CALL deallocate_shared( wddy_bb_to_acu)
+    CALL deallocate_shared( wd_bb_to_acv  )
+    CALL deallocate_shared( wddx_bb_to_acv)
+    CALL deallocate_shared( wddy_bb_to_acv)
+    
+  END SUBROUTINE test_matrix_operators_acuv_bb_2D
+  SUBROUTINE test_matrix_operators_acuv_bb_3D( mesh)
+    ! Test all the matrix operators between the acu/acv-grids and the bb-grid
+    !
+    ! map_acu_to_bb_3D
+    ! ddx_acu_to_bb_3D
+    ! ddy_acu_to_bb_3D
+    ! map_acv_to_bb_3D
+    ! ddx_acv_to_bb_3D
+    ! ddy_acv_to_bb_3D
+    ! 
+    ! map_bb_to_acu_3D
+    ! ddx_bb_to_acu_3D
+    ! ddy_bb_to_acu_3D
+    ! map_bb_to_acv_3D
+    ! ddx_bb_to_acv_3D
+    ! ddy_bb_to_acv_3D
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: auvi, avi, ati
+    REAL(dp)                                           :: x, y, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acu_ex    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_acu_ex    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_acu_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acv_ex    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_acv_ex    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_acv_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_bb_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_bb_ex
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_bb_ex
+    INTEGER :: wd_acu_ex, wddx_acu_ex, wddy_acu_ex, wd_acv_ex, wddx_acv_ex, wddy_acv_ex, wd_bb_ex, wddx_bb_ex, wddy_bb_ex
+
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acu_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_acu_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_acu_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_acv_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_acv_to_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_acv_to_bb
+    INTEGER :: wd_acu_to_bb, wddx_acu_to_bb, wddy_acu_to_bb, wd_acv_to_bb, wddx_acv_to_bb, wddy_acv_to_bb
+    
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_bb_to_acu
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_bb_to_acu
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_bb_to_acu
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_bb_to_acv
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddx_bb_to_acv
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: ddy_bb_to_acv
+    INTEGER :: wd_bb_to_acu, wddx_bb_to_acu, wddy_bb_to_acu, wd_bb_to_acv, wddx_bb_to_acv, wddy_bb_to_acv
+        
+    IF (par%master) WRITE(0,*) '  Testing the matrix operators (acu/acv - bb, 3D)...'
+    CALL sync
+    
+  ! Allocate shared memory
+  ! ======================
+  
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, d_acu_ex     , wd_acu_ex     )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddx_acu_ex   , wddx_acu_ex   )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddy_acu_ex   , wddy_acu_ex   )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, d_acv_ex     , wd_acv_ex     )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddx_acv_ex   , wddx_acv_ex   )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddy_acv_ex   , wddy_acv_ex   )
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, d_bb_ex      , wd_bb_ex      )
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddx_bb_ex    , wddx_bb_ex    )
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddy_bb_ex    , wddy_bb_ex    )
+    
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, d_acu_to_bb  , wd_acu_to_bb  )
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddx_acu_to_bb, wddx_acu_to_bb)
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddy_acu_to_bb, wddy_acu_to_bb)
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, d_acv_to_bb  , wd_acv_to_bb  )
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddx_acv_to_bb, wddx_acv_to_bb)
+    CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz, ddy_acv_to_bb, wddy_acv_to_bb)
+    
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, d_bb_to_acu  , wd_bb_to_acu  )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddx_bb_to_acu, wddx_bb_to_acu)
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddy_bb_to_acu, wddy_bb_to_acu)
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, d_bb_to_acv  , wd_bb_to_acv  )
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddx_bb_to_acv, wddx_bb_to_acv)
+    CALL allocate_shared_dp_2D( 2*mesh%nVAaAc  , C%nz, ddy_bb_to_acv, wddy_bb_to_acv)
+    
+  ! Calculate exact solutions
+  ! =========================
+    
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 1) THEN
+        ! u
+        avi = (auvi+1)/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+        d_acu_ex(   auvi,:) = d
+        ddx_acu_ex( auvi,:) = ddx
+        ddy_acu_ex( auvi,:) = ddy
+      END IF
+    END DO
+    DO auvi = mesh%auvi1, mesh%auvi2
+      IF (MOD( auvi,2) == 0) THEN
+        ! v
+        avi = auvi/2
+        x = mesh%VAaAc( avi,1)
+        y = mesh%VAaAc( avi,2)
+        CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+        d_acv_ex(   auvi,:) = d
+        ddx_acv_ex( auvi,:) = ddx
+        ddy_acv_ex( auvi,:) = ddy
+      END IF
+    END DO
+    DO ati = mesh%ati1, mesh%ati2
+      x = mesh%TriGCAaAc( ati,1)
+      y = mesh%TriGCAaAc( ati,2)
+      CALL test_matrix_operators_test_function( x, y, mesh%xmin, mesh%xmax, mesh%ymin, mesh%ymax, d, ddx, ddy, d3Dx2, d3Dxdy, d3Dy2)
+      d_bb_ex(   ati,:) = d
+      ddx_bb_ex( ati,:) = ddx
+      ddy_bb_ex( ati,:) = ddy
+    END DO
+    CALL sync
+    
+  ! Calculate discretised approximations
+  ! ====================================
+    
+    CALL map_acu_to_bb_3D( mesh, d_acu_ex, d_acu_to_bb  )
+    CALL ddx_acu_to_bb_3D( mesh, d_acu_ex, ddx_acu_to_bb)
+    CALL ddy_acu_to_bb_3D( mesh, d_acu_ex, ddy_acu_to_bb)
+    CALL map_acv_to_bb_3D( mesh, d_acv_ex, d_acv_to_bb  )
+    CALL ddx_acv_to_bb_3D( mesh, d_acv_ex, ddx_acv_to_bb)
+    CALL ddy_acv_to_bb_3D( mesh, d_acv_ex, ddy_acv_to_bb)
+    
+    CALL map_bb_to_acu_3D( mesh, d_bb_ex , d_bb_to_acu  )
+    CALL ddx_bb_to_acu_3D( mesh, d_bb_ex , ddx_bb_to_acu)
+    CALL ddy_bb_to_acu_3D( mesh, d_bb_ex , ddy_bb_to_acu)
+    CALL map_bb_to_acv_3D( mesh, d_bb_ex , d_bb_to_acv  )
+    CALL ddx_bb_to_acv_3D( mesh, d_bb_ex , ddx_bb_to_acv)
+    CALL ddy_bb_to_acv_3D( mesh, d_bb_ex , ddy_bb_to_acv)
+    
+  ! Clean up after yourself
+  ! =======================
+    
+    CALL deallocate_shared( wd_acu_ex     )
+    CALL deallocate_shared( wddx_acu_ex   )
+    CALL deallocate_shared( wddy_acu_ex   )
+    CALL deallocate_shared( wd_acv_ex     )
+    CALL deallocate_shared( wddx_acv_ex   )
+    CALL deallocate_shared( wddy_acv_ex   )
+    CALL deallocate_shared( wd_bb_ex      )
+    CALL deallocate_shared( wddx_bb_ex    )
+    CALL deallocate_shared( wddy_bb_ex    )
+    
+    CALL deallocate_shared( wd_acu_to_bb  )
+    CALL deallocate_shared( wddx_acu_to_bb)
+    CALL deallocate_shared( wddy_acu_to_bb)
+    CALL deallocate_shared( wd_acv_to_bb  )
+    CALL deallocate_shared( wddx_acv_to_bb)
+    CALL deallocate_shared( wddy_acv_to_bb)
+    
+    CALL deallocate_shared( wd_bb_to_acu  )
+    CALL deallocate_shared( wddx_bb_to_acu)
+    CALL deallocate_shared( wddy_bb_to_acu)
+    CALL deallocate_shared( wd_bb_to_acv  )
+    CALL deallocate_shared( wddx_bb_to_acv)
+    CALL deallocate_shared( wddy_bb_to_acv)
+    
+  END SUBROUTINE test_matrix_operators_acuv_bb_3D
+  
+  SUBROUTINE test_matrix_operators_test_function( x, y, xmin, xmax, ymin, ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
     ! Simple function for testing all the matrix operators
       
     IMPLICIT NONE
@@ -757,6 +2213,9 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: d
     REAL(dp),                            INTENT(OUT)   :: ddx
     REAL(dp),                            INTENT(OUT)   :: ddy
+    REAL(dp),                            INTENT(OUT)   :: d2dx2
+    REAL(dp),                            INTENT(OUT)   :: d2dxdy
+    REAL(dp),                            INTENT(OUT)   :: d2dy2
     
     ! Local variables:
     REAL(dp)                                           :: xp, yp
@@ -764,9 +2223,12 @@ CONTAINS
     xp = 2._dp * pi * (x - xmin) / (xmax - xmin)
     yp = 2._dp * pi * (y - ymin) / (ymax - ymin)
     
-    d   = SIN( xp) * SIN( yp)
-    ddx = COS( xp) * SIN( yp) * 2._dp * pi / (xmax - xmin)
-    ddy = SIN( xp) * COS( yp) * 2._dp * pi / (xmax - xmin)
+    d      =  SIN( xp) * SIN( yp)
+    ddx    =  COS( xp) * SIN( yp) *  2._dp * pi / (xmax - xmin)
+    ddy    =  SIN( xp) * COS( yp) *  2._dp * pi / (xmax - xmin)
+    d2dx2  = -SIN( xp) * SIN( yp) * (2._dp * pi / (xmax - xmin))**2
+    d2dxdy =  COS( xp) * COS( yp) * (2._dp * pi / (xmax - xmin))**2
+    d2dy2  = -SIN( xp) * SIN( yp) * (2._dp * pi / (xmax - xmin))**2
         
   END SUBROUTINE test_matrix_operators_test_function
   
@@ -778,27 +2240,22 @@ CONTAINS
     !
     ! (Modified to include a spatially variable stiffness, making it much more similar to
     ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-    
-    USE mesh_operators_module
-    USE utilities_module
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
     INTEGER                                            :: vi, ti
     REAL(dp), DIMENSION(:    ), POINTER                ::  f_a,  N_b,  b_a
     INTEGER                                            :: wf_a, wN_b, wb_a
-    TYPE(type_sparse_matrix_CSR)                       :: M_a, BC_a, mN_b, mNddx_b
+    TYPE(type_sparse_matrix_CSR)                       :: M_a, BC_a, mNddx_b
     REAL(dp)                                           :: x, y, xp, yp
     REAL(dp), PARAMETER                                :: amp = 0._dp
     INTEGER                                            :: nnz_BC
         
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Solving the modified Laplace equation...'
-    CALL sync
+    IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation...'
     
   ! Solve the equation on the a-grid (vertex)
   ! =========================================
@@ -818,12 +2275,9 @@ CONTAINS
     END DO
     CALL sync
     
-    ! Convert stiffness from vector to diagonal matrix
-    CALL convert_vector_to_diag_CSR( N_b, mN_b)
-    
     ! Create the operator matrix M
-    CALL multiply_matrix_matrix_CSR( mN_b          , mesh%M_ddx_a_b, mNddx_b)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_b_a, mNddx_b       , M_a    )
+    CALL multiply_matrix_rows_with_vector( mesh%M_ddx_a_b, N_b, mNddx_b     )
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_b_a,      mNddx_b, M_a)
     
     ! Create the boundary conditions matrix BC
     
@@ -896,9 +2350,6 @@ CONTAINS
       CALL write_to_debug_file
     END IF
     CALL sync
-        
-    IF (par%master) WRITE(0,*) ' Finished solving the modified Laplace equation!'
-    CALL sync
     
   END SUBROUTINE solve_modified_Laplace_equation
   SUBROUTINE solve_modified_Laplace_equation_combi( mesh)
@@ -908,59 +2359,44 @@ CONTAINS
     !
     ! (Modified to include a spatially variable stiffness, making it much more similar to
     ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-    
-    USE mesh_operators_module
-    USE utilities_module
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
     INTEGER                                            :: avi, ati, vi, aci, edge_index
-    REAL(dp), DIMENSION(:    ), POINTER                ::  f_aca,  N_acb,  b_aca
-    INTEGER                                            :: wf_aca, wN_acb, wb_aca
-    TYPE(type_sparse_matrix_CSR)                       :: M_aca, BC_aca, mN_acb, mNddx_acb
+    REAL(dp), DIMENSION(:    ), POINTER                ::  f_ac,  N_bb,  b_ac
+    INTEGER                                            :: wf_ac, wN_bb, wb_ac
+    TYPE(type_sparse_matrix_CSR)                       :: M_ac, BC_ac, mNddx_bb
     REAL(dp)                                           :: x, y, xp, yp
     REAL(dp), PARAMETER                                :: amp = 0._dp
     INTEGER                                            :: nnz_BC
         
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Solving the modified Laplace equation on the combined AC-mesh...'
-    CALL sync
+    IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation on the combined ac-grid...'
     
   ! Solve the equation on the a-grid (vertex)
   ! =========================================
     
     ! Allocate shared memory
-    IF (par%master) WRITE(0,*) '    Allocate shared memory for f, b, and N...'
-    CALL allocate_shared_dp_1D( mesh%nVAaAc,   f_aca, wf_aca)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc,   b_aca, wb_aca)
-    CALL allocate_shared_dp_1D( mesh%nTriAaAc, N_acb, wN_acb )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   f_ac, wf_ac)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc,   b_ac, wb_ac)
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, N_bb, wN_bb)
     
-    ! Set up the spatially variable stiffness N on the b-grid (triangle)
-    IF (par%master) WRITE(0,*) '    Set up the spatially variable stiffness on the b-grid...'
+    ! Set up the spatially variable stiffness N on the bb-grid
     DO ati = mesh%ati1, mesh%ati2
       x = mesh%TriGCAaAc( ati,1)
       y = mesh%TriGCAaAc( ati,2)
       xp = (x - mesh%xmin) / (mesh%xmax - mesh%xmin)
       yp = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-      N_acb( ati) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
+      N_bb( ati) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
     END DO
     CALL sync
     
-    ! Convert stiffness from vector to diagonal matrix
-    IF (par%master) WRITE(0,*) '    Convert stiffness from vector to diagonal matrix...'
-    CALL convert_vector_to_diag_CSR( N_acb, mN_acb)
-    
     ! Create the operator matrix M
-    IF (par%master) WRITE(0,*) '    Multiply N with ddx...'
-    CALL multiply_matrix_matrix_CSR( mN_acb            , mesh%M_ddx_aca_acb, mNddx_acb)
-    IF (par%master) WRITE(0,*) '    Multiply with ddx again to find the operator matrix M...'
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_acb_aca, mNddx_acb          , M_aca   )
-    CALL write_CSR_matrix_to_NetCDF( M_aca, 'M_aca.nc')
-    
+    CALL multiply_matrix_rows_with_vector( mesh%M_ddx_ac_bb, N_bb, mNddx_bb      )
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_bb_ac,       mNddx_bb, M_ac)
     
     ! Create the boundary conditions matrix BC
     
@@ -984,12 +2420,11 @@ CONTAINS
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_BC, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)   
     
     ! Allocate distributed shared memory
-    CALL allocate_matrix_CSR_dist( BC_aca, mesh%nVAaAc, mesh%nVAaAc, nnz_BC)
+    CALL allocate_matrix_CSR_dist( BC_ac, mesh%nVAaAc, mesh%nVAaAc, nnz_BC)
     
     ! Fill in values
-    IF (par%master) WRITE(0,*) '    Filling in BC matrix...'
-    BC_aca%nnz = 0
-    BC_aca%ptr = 1
+    BC_ac%nnz = 0
+    BC_ac%ptr = 1
     DO avi = mesh%avi1, mesh%avi2
     
       IF (avi <= mesh%nV) THEN
@@ -1007,58 +2442,50 @@ CONTAINS
         ! West: bump
         
         ! Matrix
-        BC_aca%nnz  = BC_aca%nnz+1
-        BC_aca%index( BC_aca%nnz) = avi
-        BC_aca%val(   BC_aca%nnz) = 1._dp
+        BC_ac%nnz  = BC_ac%nnz+1
+        BC_ac%index( BC_ac%nnz) = avi
+        BC_ac%val(   BC_ac%nnz) = 1._dp
         
         ! Right-hand side vector
         y = mesh%VAaAc( avi,2)
         y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-        b_aca( avi) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
+        b_ac( avi) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
         
       ELSE
         ! Otherwise: zero
         
         ! Matrix
-        BC_aca%nnz  = BC_aca%nnz+1
-        BC_aca%index( BC_aca%nnz) = avi
-        BC_aca%val(   BC_aca%nnz) = 1._dp
+        BC_ac%nnz  = BC_ac%nnz+1
+        BC_ac%index( BC_ac%nnz) = avi
+        BC_ac%val(   BC_ac%nnz) = 1._dp
         
         ! Right-hand side vector
-        b_aca( avi) = 0._dp
+        b_ac( avi) = 0._dp
         
       END IF
       
       ! Finalise matrix row
-      BC_aca%ptr( avi+1 : mesh%nVAaAc) = BC_aca%nnz + 1
+      BC_ac%ptr( avi+1 : mesh%nVAaAc) = BC_ac%nnz + 1
       
     END DO ! DO avi = mesh%avi1, mesh%avi2
     CALL sync
     
     ! Finalise matrix
-    CALL finalise_matrix_CSR_dist( BC_aca, mesh%avi1, mesh%avi2)
-    CALL write_CSR_matrix_to_NetCDF( BC_aca, 'BC_aca.nc')
+    CALL finalise_matrix_CSR_dist( BC_ac, mesh%avi1, mesh%avi2)
     
     ! Add boundary conditions to the operator matrix
-    IF (par%master) WRITE(0,*) '    Add boundary conditions to the operator matrix...'
-    CALL overwrite_rows_CSR( M_aca, BC_aca)
-    CALL write_CSR_matrix_to_NetCDF( M_aca, 'M_aca_final.nc')
+    CALL overwrite_rows_CSR( M_ac, BC_ac)
     
     ! Solve the equation
-    IF (par%master) WRITE(0,*) '    Solve matrix equation...'
-    CALL solve_matrix_equation_CSR( M_aca, b_aca, f_aca, C%DIVA_choice_matrix_solver, &
+    CALL solve_matrix_equation_CSR( M_ac, b_ac, f_ac, C%DIVA_choice_matrix_solver, &
       SOR_nit = 5000, SOR_tol = 0.0001_dp, SOR_omega = 1.7_dp, &
       PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
       
     ! Write result to debug file
-    IF (par%master) WRITE(0,*) '    Map solution to debug field...'
     IF (par%master) THEN
-      debug%dp_2D_ac_03 = f_aca
+      debug%dp_2D_ac_01 = f_ac
       CALL write_to_debug_file
     END IF
-    CALL sync
-        
-    IF (par%master) WRITE(0,*) ' Finished solving the modified Laplace equation on the combined AC-mesh!!'
     CALL sync
     
   END SUBROUTINE solve_modified_Laplace_equation_combi

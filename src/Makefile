@@ -34,7 +34,6 @@ UFEMISM_program_objects = \
         parallel_module.o \
         parameters_module.o \
         utilities_module.o \
-        zeta_module.o \
         mesh_memory_module.o \
         mesh_help_functions_module.o \
         mesh_Delaunay_module.o \
@@ -44,6 +43,7 @@ UFEMISM_program_objects = \
         mesh_five_colour_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
+        zeta_module.o \
         netcdf_module.o \
         restart_module.o \
         forcing_module.o \

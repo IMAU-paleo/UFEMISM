@@ -30,6 +30,7 @@ MODULE netcdf_module
                                            nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
                                            nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
   USE mesh_mapping_module,           ONLY: map_mesh2grid_2D, map_mesh2grid_3D, map_mesh2grid_2D_min
+  USE mesh_operators_module,         ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
   
   IMPLICIT NONE
   
@@ -319,14 +320,20 @@ CONTAINS
     INTEGER,                        INTENT(IN)    :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
-    IF (field_name == 'none') THEN
-      RETURN
+    ! Local variables
+    REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
+    INTEGER                                       :: wdp_2D_a
+    
+    IF (field_name == 'none') RETURN
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( region%mesh%nV, dp_2D_a, wdp_2D_a)
       
     ! Fields with no time dimension
     ! =============================
       
     ! Lat/lon
-    ELSEIF (field_name == 'lat') THEN
+    IF     (field_name == 'lat') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lat, start=(/1 /) ))
     ELSEIF (field_name == 'lon') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lon, start=(/1 /) ))
@@ -352,9 +359,11 @@ CONTAINS
     ELSEIF (field_name == 'SL') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dHs_dx') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dx_a, start=(/1, netcdf%ti /) ))
+      CALL ddx_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, dp_2D_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dHs_dy') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_dy_a, start=(/1, netcdf%ti /) ))
+      CALL ddy_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, dp_2D_a, start=(/1, netcdf%ti /) ))
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -500,6 +509,9 @@ CONTAINS
       WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_mesh!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wdp_2D_a)
     
   END SUBROUTINE write_help_field_mesh
   
@@ -1180,13 +1192,13 @@ CONTAINS
     
     ! Local variables:
     INTEGER                                       :: vi
-    REAL(dp), DIMENSION(:    ), POINTER           :: d_year
-    INTEGER                                       :: wd_year
+    REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
+    INTEGER                                       :: wdp_2D_a
     
     IF (field_name == 'none') RETURN
     
-    ! Allocate temporary memory for SMB fields where we want only the yearly mean but don't have that available
-    CALL allocate_shared_dp_1D( region%mesh%nV, d_year, wd_year)
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( region%mesh%nV, dp_2D_a, wdp_2D_a)
       
     ! Fields with no time dimension
     ! =============================
@@ -1218,9 +1230,11 @@ CONTAINS
     ELSEIF (field_name == 'SL') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dHs_dx') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dx_a, id_var, netcdf%ti)
+      CALL ddx_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dHs_dy') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_dy_a, id_var, netcdf%ti)
+      CALL ddy_a_to_a_2D( region%mesh, region%ice%Hs_a, dp_2D_a)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1269,30 +1283,30 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%T2m, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'T2m_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Precip') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Precip, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Precip_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%climate%applied%Precip( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate%applied%Precip( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_WE, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_WE_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%climate%applied%Wind_WE( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate%applied%Wind_WE( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_SN') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_SN, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_SN_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%climate%applied%Wind_SN( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate%applied%Wind_SN( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
@@ -1309,51 +1323,51 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Snowfall, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Snowfall_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%Snowfall( vi,:))
+        dp_2D_a( vi) = SUM( region%SMB%Snowfall( vi,:))
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Rainfall') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Rainfall, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Rainfall_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%Rainfall( vi,:))
+        dp_2D_a( vi) = SUM( region%SMB%Rainfall( vi,:))
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'AddedFirn') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%AddedFirn, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'AddedFirn_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%AddedFirn( vi,:))
+        dp_2D_a( vi) = SUM( region%SMB%AddedFirn( vi,:))
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Refreezing') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Refreezing, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Refreezing_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%Refreezing( vi,:))
+        dp_2D_a( vi) = SUM( region%SMB%Refreezing( vi,:))
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Runoff') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Runoff, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Runoff_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%Runoff( vi,:))
+        dp_2D_a( vi) = SUM( region%SMB%Runoff( vi,:))
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Albedo') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Albedo, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Albedo_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%Albedo( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%SMB%Albedo( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'FirnDepth') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'FirnDepth_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        d_year( vi) = SUM( region%SMB%FirnDepth( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%SMB%FirnDepth( vi,:)) / 12._dp
       END DO
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
       ! NOTE: masks commented out; mapping masks between grids is meaningless
       
@@ -1383,11 +1397,11 @@ CONTAINS
       
 !    ! Basal conditions
 !    ELSEIF (field_name == 'phi_fric') THEN
-!      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_AaAc( region%mesh%vi1:region%mesh%vi2)
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+!      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_AaAc( region%mesh%vi1:region%mesh%vi2)
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
 !    ELSEIF (field_name == 'tau_yield') THEN
-!      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%tau_c_AaAc( region%mesh%vi1:region%mesh%vi2)
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+!      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%tau_c_AaAc( region%mesh%vi1:region%mesh%vi2)
+!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -1397,8 +1411,8 @@ CONTAINS
     
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
-      d_year( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, d_year, id_var, netcdf%ti)
+      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     
     ELSE
       WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_grid!'
@@ -1406,7 +1420,7 @@ CONTAINS
     END IF
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_year)
+    CALL deallocate_shared( wdp_2D_a)
     
   END SUBROUTINE write_help_field_grid
 

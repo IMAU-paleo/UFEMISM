@@ -75,7 +75,13 @@ CONTAINS
         CALL EISMINT_SMB( mesh, time, SMB)
         RETURN
         
-      ELSEIF (C%choice_benchmark_experiment == 'Halfar') THEN
+      ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0._dp
         SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0._dp
         RETURN

@@ -40,7 +40,7 @@ MODULE mesh_creation_module
   USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
-  USE mesh_five_colour_module,         ONLY: calculate_five_colouring_AaAc
+  USE mesh_five_colour_module,         ONLY: calculcate_five_colouring_acuv
   
   IMPLICIT NONE
   
@@ -381,7 +381,13 @@ MODULE mesh_creation_module
               C%choice_benchmark_experiment == 'EISMINT_6' ) THEN
         submesh%res_max = MAX(C%res_min * 2._dp, 16._dp)
       ELSEIF (C%choice_benchmark_experiment == 'Bueler'.OR. &
-              C%choice_benchmark_experiment == 'Halfar') THEN
+              C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! No need for an exception here, as this one starts with a (small) ice sheet
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
               C%choice_benchmark_experiment == 'mesh_generation_test') THEN
@@ -1708,7 +1714,7 @@ MODULE mesh_creation_module
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
     CALL create_transect(                     mesh)
-    CALL calculate_five_colouring_AaAc(       mesh)
+    CALL calculcate_five_colouring_acuv(      mesh)
     
     CALL check_mesh( mesh)
     

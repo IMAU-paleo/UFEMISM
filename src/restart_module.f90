@@ -34,7 +34,7 @@ MODULE restart_module
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
-  USE mesh_five_colour_module,         ONLY: calculate_five_colouring_AaAc
+  USE mesh_five_colour_module,         ONLY: calculcate_five_colouring_acuv
   
   IMPLICIT NONE
 

@@ -249,6 +249,10 @@ CONTAINS
             
       ! Calculate the sliding term beta
       CALL calc_sliding_term_beta( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      
+      ! Simplify the DIVA to the SSA by letting beta_eff = beta
+      ice%beta_eff_ac( mesh%avi1:mesh%avi2) = ice%beta_ac( mesh%avi1:mesh%avi2)
+      CALL sync
     
 !    ! DENK DROM
 !    IF (par%master) THEN
@@ -712,33 +716,10 @@ CONTAINS
     
   END SUBROUTINE calc_sliding_term_beta
   
-  ! Routines for solving the "linearised" SSA
+  ! Routines for solving the "linearised" SSA/DIVA
   SUBROUTINE solve_SSA_sans_linearised( mesh, ice, u_ac, v_ac)
     ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
-    ! constant rather than functions of velocity).
-    ! 
-    ! The full SSA reads:
-    ! 
-    !   d/dx[ 2N (2*du/dx + dv/dy)] + d/dy[ N (du/dy + dv/dx)] - beta*u = -taud_x
-    !   d/dy[ 2N (2*dv/dy + du/dx)] + d/dx[ N (dv/dx + du/dy)] - beta*v = -taud_y
-    !
-    ! Using the chain rule, this expands to:
-    !
-    !   4*N*d2u/dx2 + 4*dN/dx*du/dx + 2*N*d2v/dxdy + 2*dN/dx*dv/dy + N*d2u/dy2 + dN/dy*du/dy + N*d2v/dxdy + dN/dy*dv/dx - beta*u = -taud_x
-    !   4*N*d2v/dy2 + 4*dN/dy*dv/dy + 2*N*d2u/dxdy + 2*dN/dy*du/dx + N*d2v/dx2 + dN/dx*dv/dx + N*d2u/dxdy + dN/dx*du/dy - beta*v = -taud_y
-    !
-    ! By neglecting all the "cross-terms" involving gradients of N, this simplifies to:
-    !
-    !   4*N*d2u/dx2 + N*d2u/dy2 + 3*N*d2v/dxdy - beta*u = -taud_x
-    !   4*N*d2v/dy2 + N*d2v/dx2 + 3*N*d2u/dxdy - beta*v = -taud_y
-    ! 
-    ! Lastly, the left and right sides of the equations can be divided by N to yield:
-    ! 
-    ! 4*d2u/dx2 + d2u/dy2 + 3*d2v/dxdy - beta*u/N = -taud_x/N
-    ! 4*d2v/dy2 + d2v/dx2 + 3*d2u/dxdy - beta*v/N = -taud_y/N
-    ! 
-    ! By happy coincidence, this equation is much easier to solve, especially because (for unclear reasons)
-    ! it doesn't require N to be defined on a staggered grid relative to u,v in order to achieve a stable solution.
+    ! constant rather than functions of velocity) without the "cross-terms".
       
     IMPLICIT NONE
     
@@ -769,7 +750,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, beta_over_N_acuv, wbeta_over_N_acuv)
     
     DO avi = mesh%avi1, mesh%avi2
-      beta_over_N_ac( avi) = ice%beta_ac( avi) / ice%N_ac( avi)
+      beta_over_N_ac( avi) = ice%beta_eff_ac( avi) / ice%N_ac( avi)
     END DO
     CALL sync
     
@@ -968,93 +949,8 @@ CONTAINS
     CALL finalise_matrix_CSR_dist( BC, mesh%auvi1, mesh%auvi2)
     
   END SUBROUTINE construct_BC_SSA
-  SUBROUTINE initialise_matrix_SSA_sans( mesh, ice)
-    ! Initialise the unchanging part (i.e. without the beta/N term) of
-    ! the big matrix equation representing the SSA without the "cross-terms"
-      
-    IMPLICIT NONE
     
-    ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: M1
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dx2_acu_acu
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dy2_acu_acu
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dxdy_acv_acu
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dy2_acv_acv
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dx2_acv_acv
-    TYPE(type_sparse_matrix_CSR)                       :: M_d2dxdy_acu_acv
-    TYPE(type_sparse_matrix_CSR)                       :: Mu
-    TYPE(type_sparse_matrix_CSR)                       :: Mv
-    
-  ! Equation 1
-  ! ==========
-    
-    ! M_d2dx2_acu_acu = M_move_ac_acu * M_d2dx2_ac_ac * M_move_acu_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dx2_ac_ac , mesh%M_move_acu_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dx2_acu_acu )
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M_d2dy2_acu_acu = M_move_ac_acu * M_d2dy2_ac_ac * M_move_acu_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dy2_ac_ac , mesh%M_move_acu_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dy2_acu_acu )
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M_d2dxdy_acv_acu = M_move_ac_acu * M_d2dxdy_ac_ac * M_move_acv_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dxdy_ac_ac, mesh%M_move_acv_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dxdy_acv_acu)
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M1 = 4*M_d2dx2_acu_acu + M_d2dy2_acu_acu
-    CALL add_matrix_matrix_CSR( M_d2dx2_acu_acu, M_d2dy2_acu_acu , M1, alpha = 4._dp, beta = 1._dp)
-    
-    ! Mu = M1 + 3*M_d2dxdy_acv_acu
-    CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acv_acu, Mu, alpha = 1._dp, beta = 3._dp)
-    CALL deallocate_matrix_CSR( M_d2dx2_acu_acu )
-    CALL deallocate_matrix_CSR( M_d2dy2_acu_acu )
-    CALL deallocate_matrix_CSR( M_d2dxdy_acv_acu)
-    CALL deallocate_matrix_CSR( M1)
-    
-  ! Equation 2
-  ! ==========
-    
-    ! M_d2dy2_acv_acv = M_move_ac_acv * M_d2dy2_ac_ac * M_move_acv_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dy2_ac_ac , mesh%M_move_acv_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dy2_acv_acv )
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M_d2dx2_acv_acv = M_move_ac_acv * M_d2dx2_ac_ac * M_move_acv_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dx2_ac_ac , mesh%M_move_acv_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dx2_acv_acv )
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M_d2dxdy_acu_acv = M_move_ac_acv * M_d2dxdy_ac_ac * M_move_acu_ac
-    CALL multiply_matrix_matrix_CSR( mesh%M_d2dxdy_ac_ac, mesh%M_move_acu_ac, M1              )
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dxdy_acu_acv)
-    CALL deallocate_matrix_CSR( M1)
-    
-    ! M1 = 4*M_d2dy2_acv_acv + M_d2dx2_acv_acv
-    CALL add_matrix_matrix_CSR( M_d2dy2_acv_acv, M_d2dx2_acv_acv , M1, alpha = 4._dp, beta = 1._dp)
-    
-    ! Mv = M1 + 3*M_d2dxdy_acu_acv
-    CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acu_acv, Mv, alpha = 1._dp, beta = 3._dp)
-    CALL deallocate_matrix_CSR( M_d2dy2_acv_acv )
-    CALL deallocate_matrix_CSR( M_d2dx2_acv_acv )
-    CALL deallocate_matrix_CSR( M_d2dxdy_acu_acv)
-    CALL deallocate_matrix_CSR( M1)
-    
-  ! Add them together
-  ! =================
-  
-    CALL add_matrix_matrix_CSR( Mu, Mv, ice%M_SSA_sans_no_beta_ac)
-    CALL deallocate_matrix_CSR( Mu)
-    CALL deallocate_matrix_CSR( Mv)
-    
-  END SUBROUTINE initialise_matrix_SSA_sans
-    
-  ! Some "administration" routines that help speed up and stabilise the solver
+  ! Some "administration" routines that help speed up and stabilise the SSA/DIVA solver
   SUBROUTINE apply_velocity_limits( mesh, u_ac, v_ac)
     ! Apply a velocity limit (for stability)
 
@@ -1254,5 +1150,177 @@ CONTAINS
     CALL deallocate_shared( wu_a_k)
     
   END SUBROUTINE map_velocity_from_c_to_a_3D
+  
+  ! Initialise data and matrices for the velocity solver(s)
+  SUBROUTINE initialise_velocity_solver( mesh, ice)
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    IF     (C%choice_ice_dynamics == 'none') THEN
+      ! Nothing to be done
+    ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
+      ! Shallow Ice Approximation
+      
+      ! Allocate shared memory
+      CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
+      CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
+      
+    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+      ! Shallow Shelf Approximation
+      
+      ! Allocate shared memory
+      CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%u_SSA_ac              , ice%wu_SSA_ac             )
+      CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%v_SSA_ac              , ice%wv_SSA_ac             )
+      
+      IF (C%include_SSADIVA_crossterms) THEN
+        ! Version of the solver including the "cross-terms"
+        IF (par%master) WRITE(0,*) 'initialise_velocity_solver - ERROR: SSA with cross-terms - FIXME!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSE
+        ! Version of the solver without the "cross-terms"
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dx_ac              , ice%wdu_dx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dy_ac              , ice%wdu_dy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dx_ac              , ice%wdv_dx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dy_ac              , ice%wdv_dy_ac             )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%visc_eff_3D_ac        , ice%wvisc_eff_3D_ac       )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%visc_eff_int_ac       , ice%wvisc_eff_int_ac      )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%N_ac                  , ice%wN_ac                 )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
+        ! Initialise the unchanging part of the solution matrix (greatly improves computational speed)
+        CALL initialise_matrix_SSA_sans( mesh, ice)
+      END IF
+      
+    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      ! Hybrid SIA/SSA
+      
+      ! Allocate shared memory
+      CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
+      CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
+      CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%u_SSA_ac              , ice%wu_SSA_ac             )
+      CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%v_SSA_ac              , ice%wv_SSA_ac             )
+      
+      IF (C%include_SSADIVA_crossterms) THEN
+        ! Version of the solver including the "cross-terms"
+        IF (par%master) WRITE(0,*) 'initialise_velocity_solver - ERROR: SSA with cross-terms - FIXME!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSE
+        ! Version of the solver without the "cross-terms"
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dx_ac              , ice%wdu_dx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dy_ac              , ice%wdu_dy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dx_ac              , ice%wdv_dx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dy_ac              , ice%wdv_dy_ac             )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%visc_eff_3D_ac        , ice%wvisc_eff_3D_ac       )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%visc_eff_int_ac       , ice%wvisc_eff_int_ac      )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%N_ac                  , ice%wN_ac                 )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
+        ! Initialise the unchanging part of the solution matrix (greatly improves computational speed)
+        CALL initialise_matrix_SSA_sans( mesh, ice)
+      END IF
+      
+    ELSE
+      IF (par%master) WRITE(0,*) 'initialise_velocity_solver - ERROR: unknown choice_ice_dynamics "', TRIM(C%choice_ice_dynamics), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE initialise_velocity_solver
+  SUBROUTINE initialise_matrix_SSA_sans( mesh, ice)
+    ! Initialise the unchanging part (i.e. without the beta/N term) of
+    ! the big matrix equation representing the SSA without the "cross-terms"
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    TYPE(type_sparse_matrix_CSR)                       :: M1
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dx2_acu_acu
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dy2_acu_acu
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dxdy_acv_acu
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dy2_acv_acv
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dx2_acv_acv
+    TYPE(type_sparse_matrix_CSR)                       :: M_d2dxdy_acu_acv
+    TYPE(type_sparse_matrix_CSR)                       :: Mu
+    TYPE(type_sparse_matrix_CSR)                       :: Mv
+    
+  ! Equation 1
+  ! ==========
+    
+    ! M_d2dx2_acu_acu = M_move_ac_acu * M_d2dx2_ac_ac * M_move_acu_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dx2_ac_ac , mesh%M_move_acu_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dx2_acu_acu )
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M_d2dy2_acu_acu = M_move_ac_acu * M_d2dy2_ac_ac * M_move_acu_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dy2_ac_ac , mesh%M_move_acu_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dy2_acu_acu )
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M_d2dxdy_acv_acu = M_move_ac_acu * M_d2dxdy_ac_ac * M_move_acv_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dxdy_ac_ac, mesh%M_move_acv_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu , M1                , M_d2dxdy_acv_acu)
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M1 = 4*M_d2dx2_acu_acu + M_d2dy2_acu_acu
+    CALL add_matrix_matrix_CSR( M_d2dx2_acu_acu, M_d2dy2_acu_acu , M1, alpha = 4._dp, beta = 1._dp)
+    
+    ! Mu = M1 + 3*M_d2dxdy_acv_acu
+    CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acv_acu, Mu, alpha = 1._dp, beta = 3._dp)
+    CALL deallocate_matrix_CSR( M_d2dx2_acu_acu )
+    CALL deallocate_matrix_CSR( M_d2dy2_acu_acu )
+    CALL deallocate_matrix_CSR( M_d2dxdy_acv_acu)
+    CALL deallocate_matrix_CSR( M1)
+    
+  ! Equation 2
+  ! ==========
+    
+    ! M_d2dy2_acv_acv = M_move_ac_acv * M_d2dy2_ac_ac * M_move_acv_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dy2_ac_ac , mesh%M_move_acv_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dy2_acv_acv )
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M_d2dx2_acv_acv = M_move_ac_acv * M_d2dx2_ac_ac * M_move_acv_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dx2_ac_ac , mesh%M_move_acv_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dx2_acv_acv )
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M_d2dxdy_acu_acv = M_move_ac_acv * M_d2dxdy_ac_ac * M_move_acu_ac
+    CALL multiply_matrix_matrix_CSR( mesh%M_d2dxdy_ac_ac, mesh%M_move_acu_ac, M1              )
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv , M1                , M_d2dxdy_acu_acv)
+    CALL deallocate_matrix_CSR( M1)
+    
+    ! M1 = 4*M_d2dy2_acv_acv + M_d2dx2_acv_acv
+    CALL add_matrix_matrix_CSR( M_d2dy2_acv_acv, M_d2dx2_acv_acv , M1, alpha = 4._dp, beta = 1._dp)
+    
+    ! Mv = M1 + 3*M_d2dxdy_acu_acv
+    CALL add_matrix_matrix_CSR( M1             , M_d2dxdy_acu_acv, Mv, alpha = 1._dp, beta = 3._dp)
+    CALL deallocate_matrix_CSR( M_d2dy2_acv_acv )
+    CALL deallocate_matrix_CSR( M_d2dx2_acv_acv )
+    CALL deallocate_matrix_CSR( M_d2dxdy_acu_acv)
+    CALL deallocate_matrix_CSR( M1)
+    
+  ! Add them together
+  ! =================
+  
+    CALL add_matrix_matrix_CSR( Mu, Mv, ice%M_SSA_sans_no_beta_ac)
+    CALL deallocate_matrix_CSR( Mu)
+    CALL deallocate_matrix_CSR( Mv)
+    
+  END SUBROUTINE initialise_matrix_SSA_sans
   
 END MODULE ice_velocity_module

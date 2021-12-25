@@ -31,7 +31,7 @@ MODULE ice_dynamics_module
   USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_3D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, initialise_matrix_SSA_sans
+  USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, initialise_velocity_solver
   USE ice_thickness_module,            ONLY: calc_dHi_dt
   USE basal_conditions_and_sliding_module, ONLY: initialise_basal_conditions
 
@@ -682,8 +682,8 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-    ! Initialise data fields/matrices for the velocity solution
-    CALL initialise_matrix_SSA_sans( mesh, ice)
+    ! Initialise data and matrices for the velocity solver(s)
+    CALL initialise_velocity_solver( mesh, ice)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)
@@ -761,11 +761,6 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nAc     ,              ice%v_base_c              , ice%wv_base_c             )
     CALL allocate_shared_dp_1D(   mesh%nV      ,              ice%uabs_base_a           , ice%wuabs_base_a          )
     
-    CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
-    CALL allocate_shared_dp_2D(   mesh%nAc     , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%u_SSA_ac              , ice%wu_SSA_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%v_SSA_ac              , ice%wv_SSA_ac             )
-    
     ! Different masks
     CALL allocate_shared_int_1D(  mesh%nV      ,              ice%mask_land_a           , ice%wmask_land_a          )
     CALL allocate_shared_int_1D(  mesh%nV      ,              ice%mask_ocean_a          , ice%wmask_ocean_a         )
@@ -791,21 +786,6 @@ CONTAINS
     CALL allocate_shared_dp_2D(   mesh%nV      , C%nz       , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
     CALL allocate_shared_dp_2D(   mesh%nV      , C%nz       , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
     CALL allocate_shared_dp_1D(   mesh%nV      ,              ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
-    
-    ! Ice dynamics - physical terms in the SSA
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dx_ac              , ice%wdu_dx_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%du_dy_ac              , ice%wdu_dy_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dx_ac              , ice%wdv_dx_ac             )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%dv_dy_ac              , ice%wdv_dy_ac             )
-    CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
-    CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%visc_eff_3D_ac        , ice%wvisc_eff_3D_ac       )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%visc_eff_int_ac       , ice%wvisc_eff_int_ac      )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%N_ac                  , ice%wN_ac                 )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
-    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
     
     ! Ice dynamics - ice thickness calculation
     CALL allocate_shared_dp_2D(   mesh%nV      , mesh%nC_mem, ice%dVi_in                , ice%wdVi_in               )

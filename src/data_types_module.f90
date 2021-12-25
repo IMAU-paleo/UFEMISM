@@ -115,7 +115,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
     
-    ! Ice dynamics - physical terms in the SSA
+    ! Ice dynamics - physical terms in the SSA/DIVA (sans cross-terms)
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: taudy_ac

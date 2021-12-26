@@ -1042,11 +1042,151 @@ CONTAINS
   END SUBROUTINE SSA_Schoof2006_analytical_solution
   
 ! == Some operations on sparse matrices in CSR format
-  SUBROUTINE multiply_matrix_matrix_CSR( AA, BB, CC)
+  SUBROUTINE multiply_matrix_matrix_CSR( AA, BB, CC, nz_template)
     ! Perform the matrix multiplication C = A*B, where all three
     ! matrices are provided in CSR format (parallelised)
     !
     ! NOTE: probably not very efficient, better to use PETSc in the future!
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
+    TYPE(type_sparse_matrix_CSR), OPTIONAL, INTENT(IN) :: nz_template
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    
+    ! Safety
+    IF (AA%n /= BB%m) THEN
+      IF (par%master) WRITE(0,*) 'multiply_matrix_matrix_CSR - ERROR: sizes of A and B dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    IF (PRESENT( nz_template)) THEN
+      CALL multiply_matrix_matrix_CSR_template( AA, BB, CC, nz_template)
+    ELSE
+      CALL multiply_matrix_matrix_CSR_notemplate( AA, BB, CC)
+    END IF
+    
+  END SUBROUTINE multiply_matrix_matrix_CSR
+  SUBROUTINE multiply_matrix_matrix_CSR_template( AA, BB, CC, nz_template)
+    ! Perform the matrix multiplication C = A*B, where all three
+    ! matrices are provided in CSR format (parallelised)
+    ! 
+    ! Only calculate entries in the provided non-zero-structure
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
+    TYPE(type_sparse_matrix_CSR), OPTIONAL, INTENT(IN) :: nz_template
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    
+    ! Local variables:
+    TYPE(type_sparse_matrix_CSR)                       :: BBT
+    INTEGER                                            :: i1,i2,k1,k2,ic,kc1,kc2,kc,jc
+    INTEGER                                            :: ka1 , ka2,  nnz_row_a,  ja1,  ja2
+    INTEGER                                            :: kbt1, kbt2, nnz_row_bt, jbt1, jbt2
+    INTEGER                                            :: ka, kbt, ja, jbt
+    LOGICAL                                            :: finished
+    REAL(dp)                                           :: Cij
+    
+    ! Safety
+    IF (AA%n /= BB%m .OR. nz_template%m /= AA%m .OR. nz_template%n /= BB%n) THEN
+      IF (par%master) WRITE(0,*) 'multiply_matrix_matrix_CSR - ERROR: sizes of A and B dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared distributed memory for C
+    CALL allocate_matrix_CSR_shared( CC, AA%m, BB%n, nz_template%nnz)
+    
+    ! Copy non-zero structure from template
+    CALL partition_list( CC%m           , par%i, par%n, i1, i2)
+    CALL partition_list( nz_template%nnz, par%i, par%n, k1, k2)
+    CC%ptr(   i1:i2) = nz_template%ptr(   i1:i2)
+    CC%index( k1:k2) = nz_template%index( k1:k2)
+    IF (par%master) THEN
+      CC%ptr( CC%m+1) = nz_template%ptr( CC%m+1)
+      CC%nnz = nz_template%nnz
+    END IF
+    
+    ! Calculate the transpose BT of B
+    CALL transpose_matrix_CSR( BB, BBT)
+    
+    ! Calculate entries in C
+    DO ic = i1, i2
+    
+      kc1 = CC%ptr( ic)
+      kc2 = CC%ptr( ic+1) - 1
+    
+      DO kc = kc1, kc2
+        
+        jc = CC%index( kc)
+      
+        Cij = 0._dp
+        
+        ka1 = AA%ptr( ic)
+        ka2 = AA%ptr( ic+1) - 1
+        nnz_row_a = ka2 + 1 - ka1
+        
+        kbt1 = BBT%ptr( jc)
+        kbt2 = BBT%ptr( jc+1) - 1
+        nnz_row_bt = kbt2 + 1 - kbt1
+        
+        IF (nnz_row_a == 0 .OR. nnz_row_bt == 0) THEN
+          ! Either A nor BT has no entries in this row, so the dot product is zero
+          CYCLE
+        END IF
+        
+        ja1  = AA%index(  ka1)
+        ja2  = AA%index(  ka2)
+        jbt1 = BBT%index( kbt1)
+        jbt2 = BBT%index( kbt2)
+        
+        IF (ja1 > jbt2 .OR. jbt1 > ja2) THEN
+          ! No overlap in column ranges of A and BT, so the dot product is zero
+          CYCLE
+        END IF 
+        
+        ka        = ka1
+        kbt       = kbt1
+        finished  = .FALSE.
+        
+        DO WHILE (.NOT. finished)
+          
+          ja  = AA%index(  ka )
+          jbt = BBT%index( kbt)
+          
+          IF (ja < jbt) THEN
+            ka = ka + 1
+          ELSEIF (jbt < ja) THEN
+            kbt = kbt + 1
+          ELSEIF (jbt == ja) THEN
+            Cij = Cij + (AA%val( ka) * BBT%val( kbt))
+            ka  = ka + 1
+            kbt = kbt + 1
+          END IF
+          
+          IF (ka > ka2 .OR. kbt > kbt2 .OR. ja > jbt2 .OR. jbt > ja2) finished = .TRUE.
+          
+        END DO ! DO WHILE ((.NOT. finished_a) .OR. (.NOT. finished_b))
+        
+        ! Write the result to C
+        CC%val( kc) = Cij
+        
+      END DO ! DO kc = 1, CC%n
+      
+    END DO ! DO ic = i1, i2
+    CALL sync
+    
+    ! Deallocate BT
+    CALL deallocate_matrix_CSR( BBT)
+    
+  END SUBROUTINE multiply_matrix_matrix_CSR_template
+  SUBROUTINE multiply_matrix_matrix_CSR_notemplate( AA, BB, CC)
+    ! Perform the matrix multiplication C = A*B, where all three
+    ! matrices are provided in CSR format (parallelised)
+    ! 
+    ! When no non-zero-structure is supplied, perform a general (= slow) multiplication
       
     IMPLICIT NONE
     
@@ -1058,8 +1198,10 @@ CONTAINS
     INTEGER                                            :: nnz_max
     TYPE(type_sparse_matrix_CSR)                       :: BBT
     INTEGER                                            :: i1, i2, ic, jc
-    INTEGER                                            :: ia,  ka1,  ka2,  ka,  ja1,  ja2,  ja
-    INTEGER                                            :: ibt, kbt1, kbt2, kbt, jbt1, jbt2, jbt
+    INTEGER                                            :: ka1 , ka2 , nnz_row_a,  ja1,  ja2
+    INTEGER                                            :: kbt1, kbt2, nnz_row_bt, jbt1, jbt2
+    INTEGER                                            :: ka, kbt, ja, jbt
+    LOGICAL                                            :: finished_a, finished_bt
     LOGICAL                                            :: is_nonzero
     REAL(dp)                                           :: Cij
     
@@ -1079,45 +1221,69 @@ CONTAINS
     ! Partition rows of over the processors
     CALL partition_list( CC%m, par%i, par%n, i1, i2)
     
-    CC%nnz = 0
+    ! Initialise
     CC%ptr = 1
+    CC%nnz = 0
+    
     DO ic = i1, i2
     
       DO jc = 1, CC%n
+      
+        is_nonzero = .FALSE.
+        Cij        = 0._dp
         
-        ! Calculate dot product between the i-th row of A and the j-th row of BT
-        ia   = ic
-        ka1  = AA%ptr( ia)
-        ka2  = AA%ptr( ia+1) - 1
-        IF (ka2 < ka1) CYCLE ! This row of A has no entries
-        ja1  = AA%index( ka1)
-        ja2  = AA%index( ka2)
+        ka1 = AA%ptr( ic)
+        ka2 = AA%ptr( ic+1) - 1
+        nnz_row_a = ka2 + 1 - ka1
         
-        ibt  = jc
-        kbt1 = BBT%ptr( ibt)
-        kbt2 = BBT%ptr( ibt+1) - 1
-        IF (kbt2 < kbt1) CYCLE ! This row of BT has no entries
+        kbt1 = BBT%ptr( jc)
+        kbt2 = BBT%ptr( jc+1) - 1
+        nnz_row_bt = kbt2 + 1 - kbt1
+        
+        IF (nnz_row_a == 0 .OR. nnz_row_bt == 0) THEN
+          ! Either A nor BT has no entries in this row, so the dot product is zero
+          CYCLE
+        END IF
+        
+        ja1  = AA%index(  ka1)
+        ja2  = AA%index(  ka2)
         jbt1 = BBT%index( kbt1)
         jbt2 = BBT%index( kbt2)
         
-        ! Compute the dot product
-        Cij = 0._dp
-        is_nonzero = .FALSE.
-        DO ka = ka1, ka2
-          ja = AA%index( ka)
-          DO kbt = kbt1, kbt2
-            jbt = BBT%index( kbt)
-            IF (jbt == ja) THEN
-              is_nonzero = .TRUE.
-              Cij = Cij + (AA%val( ka) * BBT%val( kbt))
-              EXIT
-            END IF
-          END DO
-        END DO
+        IF (ja1 > jbt2 .OR. jbt1 > ja2) THEN
+          ! No overlap in column ranges of A and BT, so the dot product is zero
+          CYCLE
+        END IF 
         
-        ! If the dot product is non-zero, list it in C
+        ka          = ka1
+        kbt         = kbt1
+        finished_a  = .FALSE.
+        finished_bt = .FALSE.
+        
+        DO WHILE ((.NOT. finished_a) .AND. (.NOT. finished_bt))
+          
+          ja  = AA%index(  ka)
+          jbt = BBT%index( kbt)
+          
+          IF (ja < jbt) THEN
+            ka = ka + 1
+          ELSEIF (jbt < ja) THEN
+            kbt = kbt + 1
+          ELSEIF (jbt == ja) THEN
+            is_nonzero = .TRUE.
+            Cij = Cij + (AA%val( ka) * BBT%val( kbt))
+            ka  = ka + 1
+            kbt = kbt + 1
+          END IF
+          
+          IF (ka  > ka2  .OR. ja  > jbt2) finished_a  = .TRUE.
+          IF (kbt > kbt2 .OR. jbt > ja2 ) finished_bt = .TRUE.
+          
+        END DO ! DO WHILE ((.NOT. finished_a) .OR. (.NOT. finished_b))
+        
+        ! If the dot product is non-zero, add the result to C
         IF (is_nonzero) THEN
-          CC%nnz  = CC%nnz + 1
+          CC%nnz =  CC%nnz + 1
           CC%index( CC%nnz) = jc
           CC%val(   CC%nnz) = Cij
         END IF
@@ -1125,9 +1291,9 @@ CONTAINS
       END DO ! DO jc = 1, CC%n
       
       ! Finalise this row of C
-      CC%ptr( ic+1) = CC%nnz + 1
+      CC%ptr( ic+1:CC%m+1) = CC%nnz+1
       
-    END DO ! DO i = i1, i2
+    END DO ! DO ic = i1, i2
     CALL sync
     
     ! Combine results from the different processes
@@ -1136,7 +1302,7 @@ CONTAINS
     ! Deallocate BT
     CALL deallocate_matrix_CSR( BBT)
     
-  END SUBROUTINE multiply_matrix_matrix_CSR
+  END SUBROUTINE multiply_matrix_matrix_CSR_notemplate
   SUBROUTINE multiply_matrix_vector_CSR( AA, BB, CC)
     ! Perform the matrix multiplication C = A*B, where 
     ! A is a CSR-format matrix, and B and C are regular vectors.
@@ -1903,6 +2069,9 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
     INTEGER,                             INTENT(IN)    :: m, n, nnz_max
     
+    ! Local variables:
+    INTEGER                                            :: i1,i2
+    
     CALL allocate_shared_int_0D( A%m,       A%wm      )
     CALL allocate_shared_int_0D( A%n,       A%wn      )
     CALL allocate_shared_int_0D( A%nnz_max, A%wnnz_max)
@@ -1919,6 +2088,11 @@ CONTAINS
     CALL allocate_shared_int_1D( A%m+1,     A%ptr,   A%wptr  )
     CALL allocate_shared_int_1D( A%nnz_max, A%index, A%windex)
     CALL allocate_shared_dp_1D(  A%nnz_max, A%val,   A%wval  )
+    
+    CALL partition_list( A%m, par%i, par%n, i1, i2)
+    A%ptr(i1:i2) = 1
+    IF (par%master) A%ptr( A%m+1) = 1
+    CALL sync
     
   END SUBROUTINE allocate_matrix_CSR_shared
   SUBROUTINE allocate_matrix_CSR_dist( A, m, n, nnz_max_loc)
@@ -1947,6 +2121,8 @@ CONTAINS
     CALL allocate_shared_dist_int_1D( A%nnz_max, A%index, A%windex)
     CALL allocate_shared_dist_dp_1D(  A%nnz_max, A%val,   A%wval  )
     
+    A%ptr = 1
+    
   END SUBROUTINE allocate_matrix_CSR_dist
   SUBROUTINE extend_matrix_CSR_dist( A, nnz_max_loc_new)
     ! Extend shared memory for a CSR-format sparse m-by-n matrix A
@@ -1966,7 +2142,7 @@ CONTAINS
     CALL adapt_shared_dist_dp_1D(  A%nnz, A%nnz_max, A%val,   A%wval  )
   
   END SUBROUTINE extend_matrix_CSR_dist
-  SUBROUTINE sort_columns_in_CSR_dist( A)
+  SUBROUTINE sort_columns_in_CSR_dist( A, i1, i2)
     ! Sort the columns in each row of CSR-formatted matrix A in ascending order
     ! 
     ! NOTE: A is still stored distributed over the processes
@@ -1975,52 +2151,35 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    INTEGER,                             INTENT(IN)    :: i1, i2
     
     ! Local variables:
-    INTEGER                                            :: i,k1,k2,nnz_row,k,kk,jk,jkk
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: index_row
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_row
+    INTEGER                                            :: i,k1,k2,k,kk,jk,jkk
+    REAL(dp)                                           :: vk, vkk
     
-    DO i = 1, A%m
+    DO i = i1, i2
       
       k1 = A%ptr( i)
       k2 = A%ptr( i+1) - 1
-      nnz_row = k2 + 1 - k1
-      
-      IF (nnz_row <= 0) CYCLE
-      
-      ! Allocate temporary memory for this row
-      ALLOCATE( index_row( nnz_row))
-      ALLOCATE( val_row(   nnz_row))
-      
-      ! Copy data for this row to temporary memory
-      index_row = A%index( k1:k2)
-      val_row   = A%val(   k1:k2)
       
       ! Sort the data
-      DO k = 1, nnz_row
-        jk = index_row( k)
-        DO kk = k+1, nnz_row
-          jkk = index_row( kk)
+      DO k = k1, k2-1
+        jk = A%index( k)
+        vk = A%val(   k)
+        DO kk = k+1, k2
+          jkk = A%index( kk)
+          vkk = A%val(   kk)
           IF (jkk < jk) THEN
             ! Switch columns
-            index_row( kk) = index_row( kk) + index_row( k)
-            index_row( k ) = index_row( kk) - index_row( k)
-            index_row( kk) = index_row( kk) - index_row( k)
-            val_row(   kk) = val_row(   kk) + val_row(   k)
-            val_row(   k ) = val_row(   kk) - val_row(   k)
-            val_row(   kk) = val_row(   kk) - val_row(   k)
+            A%index( k ) = jkk
+            A%index( kk) = jk
+            A%val(   k ) = vkk
+            A%val(   kk) = vk
+            jk = jkk
+            vk = vkk
           END IF
         END DO
       END DO ! DO k = 1, nnz_row
-      
-      ! Copy sorted data back
-      A%index( k1:k2) = index_row
-      A%val(   k1:k2) = val_row
-      
-      ! Clean up after yourself
-      DEALLOCATE( index_row)
-      DEALLOCATE( val_row  )
       
     END DO
     CALL sync
@@ -2133,39 +2292,78 @@ CONTAINS
     NULLIFY( A%val    )
   
   END SUBROUTINE deallocate_matrix_CSR
-  SUBROUTINE check_CSR_for_double_entries( A)
-    ! Check a CSR matrix representation for double entries
+  SUBROUTINE check_CSR( A, matname)
+    ! Check a CSR matrix for consistency
       
     IMPLICIT NONE
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: A
+    CHARACTER(LEN=*),                    INTENT(IN)    :: matname
     
     ! Local variables:
-    INTEGER                                            :: i,j,k,i1,i2,k2,j2
+    INTEGER                                            :: i1,i2,i,k1,k2,k,j1,j2
     
-    ! Partition equations over the processors
+    ! Dimensions
+    IF (SIZE( A%ptr,1)-1 /= A%m) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': m = ', A%m, ', but SIZE( ptr,1) = ', SIZE( A%ptr,1)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (MAXVAL( A%ptr) > A%nnz+1) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', A%nnz, ', but MAXVAL( ptr) = ', MAXVAL( A%ptr)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (A%ptr( A%m+1) /= A%nnz+1) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', A%nnz, ', but ptr( end)) = ', A%ptr( A%m+1)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (MAXVAL( A%index) > A%n) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': n = ', A%n, ', but MAXVAL( index) = ', MAXVAL( A%index)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (SIZE( A%index,1) /= A%nnz) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', A%nnz, ', but SIZE( index,1) = ', SIZE( A%index,1)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (SIZE( A%val,1) /= A%nnz) THEN
+      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', A%nnz, ', but SIZE( val,1) = ', SIZE( A%val,1)
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Check if the ptr values are ascending
     CALL partition_list( A%m, par%i, par%n, i1, i2)
-
-    DO i = i1, i2  
+    DO i = i1, i2
+      IF (A%ptr( i+1) < A%ptr( i)) THEN
+        WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': ptr not ascending!'
+        WRITE(0,*) 'check : row ', i, ': k1 = ', k1, ', k2 = ', k2
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
     
-      DO k = A%ptr( i), A%ptr( i+1)-1
-        j = A%index( k)
+    ! Check if the columns of each row are listed in ascending order
+    CALL partition_list( A%m, par%i, par%n, i1, i2)
+    DO i = i1, i2
+      
+      k1 = A%ptr( i)
+      k2 = A%ptr( i+1)-1
+      
+      DO k = k1, k2-1
+      
+        j1 = A%index( k)
+        j2 = A%index( k+1)
         
-        DO k2 = A%ptr( i), A%ptr( i+1)-1
-          IF (k2 == k) CYCLE
-          j2 = A%index( k2)
-          IF (j2 == j) THEN
-            WRITE(0,*) 'check_CSR_for_double_entries - ERROR: double entry detected!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-          END IF
-        END DO
+        IF (j2 <= j1) THEN
+          WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': columns not sorted in ascending order!'
+          WRITE(0,*) '    row ', i, ': index = ', A%index(k1:k2)
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        END IF
         
       END DO
       
-    END DO ! DO 
+    END DO ! DO i = i1, i2
+    CALL sync
     
-  END SUBROUTINE check_CSR_for_double_entries
+  END SUBROUTINE check_CSR
   
 ! == Some wrappers for LAPACK matrix functionality
   FUNCTION tridiagonal_solve( ldiag, diag, udiag, rhs) RESULT(x)

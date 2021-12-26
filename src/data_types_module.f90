@@ -399,6 +399,9 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acu                  ! Operation: d/dy    from the bb-grid to the u-part of the ac-grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acv                  ! Operation: d/dy    from the bb-grid to the v-part of the ac-grid
     
+    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acu          ! Non-zero-structure template for matrix multiplication from the acu-grid to the bb-grid
+    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acv          ! Non-zero-structure template for matrix multiplication from the acu-grid to the bb-grid
+    
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
     REAL(dp), DIMENSION(:    ), POINTER     :: lon

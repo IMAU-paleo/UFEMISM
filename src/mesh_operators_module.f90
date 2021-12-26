@@ -29,9 +29,11 @@ MODULE mesh_operators_module
   USE utilities_module,                ONLY: allocate_matrix_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
                                              deallocate_matrix_CSR, multiply_matrix_matrix_CSR, multiply_matrix_vector_CSR, &
                                              multiply_matrix_vector_2D_CSR, calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, &
-                                             sort_columns_in_CSR_dist
+                                             sort_columns_in_CSR_dist, check_CSR, add_matrix_matrix_CSR
 
   IMPLICIT NONE
+  
+  LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
 
   CONTAINS
   
@@ -2890,6 +2892,13 @@ MODULE mesh_operators_module
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_b_a, mesh%M_ddx_a_b, mesh%M_d2dxdy_a_a)
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_b_a, mesh%M_ddy_a_b, mesh%M_d2dy2_a_a )
     
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_d2dx2_a_a , 'mesh%M_d2dx2_a_a' )
+      CALL check_CSR( mesh%M_d2dxdy_a_a, 'mesh%M_d2dxdy_a_a')
+      CALL check_CSR( mesh%M_d2dy2_a_a , 'mesh%M_d2dy2_a_a' )
+    END IF
+    
     ! Calculate matrix operators involving the "combined" mesh (vertex+edge ac-grid, triangle-X-4 bb-grid)
     CALL calc_matrix_operators_move_to_combi( mesh)
     
@@ -2900,6 +2909,13 @@ MODULE mesh_operators_module
     CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_ac, mesh%M_ddx_ac_bb, mesh%M_d2dx2_ac_ac )
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_ac, mesh%M_ddx_ac_bb, mesh%M_d2dxdy_ac_ac)
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_ac, mesh%M_ddy_ac_bb, mesh%M_d2dy2_ac_ac )
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_d2dx2_ac_ac , 'mesh%M_d2dx2_ac_ac' )
+      CALL check_CSR( mesh%M_d2dxdy_ac_ac, 'mesh%M_d2dxdy_ac_ac')
+      CALL check_CSR( mesh%M_d2dy2_ac_ac , 'mesh%M_d2dy2_ac_ac' )
+    END IF
     
     CALL calc_matrix_operators_combi_acuv( mesh)
     
@@ -2938,11 +2954,7 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%vi1:mesh%vi2) = 1
-
     k = 0
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
 
     DO vi = mesh%vi1, mesh%vi2
       
@@ -2950,7 +2962,6 @@ MODULE mesh_operators_module
       n = 0
       DO ci = 1, mesh%nC( vi)
         vj = mesh%C( vi,ci)
-!        IF (mask_valid_in( vj) == 0) CYCLE
         n = n+1
         i_c( n) = vj
         x_c( n) = mesh%V( vj,1)
@@ -2958,10 +2969,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 2) THEN
-!        mask_valid_out( vi) = 0
-        CYCLE
-      END IF
+      IF (n < 2) CYCLE
       
       ! Destination point: the vertex
       x = mesh%V( vi,1)
@@ -2997,10 +3005,16 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_a')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_a')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3044,12 +3058,7 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ti1:mesh%ti2) = 1
-
     k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
 
     DO ti = mesh%ti1, mesh%ti2
       
@@ -3057,7 +3066,6 @@ MODULE mesh_operators_module
       n = 0
       DO vii = 1, 3
         vi = mesh%Tri( ti, vii)
-!        IF (mask_valid_in( vi) == 0) CYCLE
         n = n+1
         i_c( n) = vi
         x_c( n) = mesh%V( vi,1)
@@ -3065,10 +3073,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( ti) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the triangle's geometric centre
       x = mesh%TriGC( ti,1)
@@ -3102,12 +3107,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%ti1, mesh%ti2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_a_b')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_b')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_b')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3152,12 +3164,7 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ci1:mesh%ci2) = 1
-
     k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
 
     DO aci = mesh%ci1, mesh%ci2
       
@@ -3166,7 +3173,6 @@ MODULE mesh_operators_module
       DO acii = 1, 4
         vi = mesh%Aci( aci, acii)
         IF (vi == 0) CYCLE
-!        IF (mask_valid_in( vi) == 0) CYCLE
         n = n+1
         i_c( n) = vi
         x_c( n) = mesh%V( vi,1)
@@ -3174,10 +3180,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( aci) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the staggered vertex
       x = mesh%VAc( aci,1)
@@ -3211,12 +3214,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%ci1, mesh%ci2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_a_c')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_c')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_c')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3261,12 +3271,7 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%vi1:mesh%vi2) = 1
-
     k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
 
     DO vi = mesh%vi1, mesh%vi2
       
@@ -3274,7 +3279,6 @@ MODULE mesh_operators_module
       n = 0
       DO iti = 1, mesh%niTri( vi)
         ti = mesh%iTri( vi, iti)
-!        IF (mask_valid_in( ti) == 0) CYCLE
         n = n+1
         i_c( n) = ti
         x_c( n) = mesh%TriGC( ti,1)
@@ -3282,10 +3286,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( vi) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the regular vertex
       x = mesh%V( vi,1)
@@ -3319,12 +3320,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%vi1, mesh%vi2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_b_a')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_a')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_a')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3368,11 +3376,7 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ti1:mesh%ti2) = 1
-
     k = 0
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
 
     DO ti = mesh%ti1, mesh%ti2
       
@@ -3381,7 +3385,6 @@ MODULE mesh_operators_module
       DO tii = 1, 3
         tj = mesh%TriC( ti,tii)
         IF (tj == 0) CYCLE
-!        IF (mask_valid_in( tj) == 0) CYCLE
         n = n+1
         i_c( n) = tj
         x_c( n) = mesh%TriGC( tj,1)
@@ -3389,10 +3392,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 2) THEN
-!        mask_valid_out( ti) = 0
-        CYCLE
-      END IF
+      IF (n < 2) CYCLE
       
       ! Destination point: the triangle's geometric centre
       x = mesh%TriGC( ti,1)
@@ -3428,10 +3428,16 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_b')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_b')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3476,8 +3482,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ci1:mesh%ci2) = 1
-
     k = 0
     M_map%ptr = 1
     M_ddx%ptr = 1
@@ -3493,8 +3497,6 @@ MODULE mesh_operators_module
         
         DO iti = 1, mesh%niTri( vi)
           ti = mesh%iTri( vi,iti)
-          
-!          IF (mask_valid_in( ti) == 0) CYCLE
           
           n_match = 0
           DO vii = 1, 3
@@ -3525,10 +3527,7 @@ MODULE mesh_operators_module
       END DO ! DO acii = 1, 4
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( aci) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the staggered vertex
       x = mesh%VAc( aci,1)
@@ -3562,12 +3561,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%ci1, mesh%ci2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_b_c')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_c')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_c')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3612,8 +3618,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%vi1:mesh%vi2) = 1
-
     k = 0
     M_map%ptr = 1
     M_ddx%ptr = 1
@@ -3625,7 +3629,6 @@ MODULE mesh_operators_module
       n = 0
       DO ci = 1, mesh%nC( vi)
         aci = mesh%iAci( vi, ci)
-!        IF (mask_valid_in( aci) == 0) CYCLE
         n = n+1
         i_c( n) = aci
         x_c( n) = mesh%VAc( aci,1)
@@ -3633,10 +3636,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( vi) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the regular vertex
       x = mesh%V( vi,1)
@@ -3670,12 +3670,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%vi1, mesh%vi2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_c_a')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_a')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_a')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3720,8 +3727,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ti1:mesh%ti2) = 1
-
     k = 0
     M_map%ptr = 1
     M_ddx%ptr = 1
@@ -3744,12 +3749,11 @@ MODULE mesh_operators_module
           EXIT
         END IF
       END DO
-!      IF (mask_valid_in( acab) == 1) THEN
-        n = n+1
-        i_c( n) = acab
-        x_c( n) = mesh%VAc( acab,1)
-        y_c( n) = mesh%VAc( acab,2)
-!      END IF
+      
+      n = n+1
+      i_c( n) = acab
+      x_c( n) = mesh%VAc( acab,1)
+      y_c( n) = mesh%VAc( acab,2)
       
       acbc = 0
       DO ci = 1, mesh%nC( vib)
@@ -3759,12 +3763,11 @@ MODULE mesh_operators_module
           EXIT
         END IF
       END DO
-!      IF (mask_valid_in( acbc) == 1) THEN
-        n = n+1
-        i_c( n) = acbc
-        x_c( n) = mesh%VAc( acbc,1)
-        y_c( n) = mesh%VAc( acbc,2)
-!      END IF
+      
+      n = n+1
+      i_c( n) = acbc
+      x_c( n) = mesh%VAc( acbc,1)
+      y_c( n) = mesh%VAc( acbc,2)
       
       acca = 0
       DO ci = 1, mesh%nC( vic)
@@ -3774,17 +3777,15 @@ MODULE mesh_operators_module
           EXIT
         END IF
       END DO
-!      IF (mask_valid_in( acca) == 1) THEN
-        n = n+1
-        i_c( n) = acca
-        x_c( n) = mesh%VAc( acca,1)
-        y_c( n) = mesh%VAc( acca,2)
-!      END IF
+      
+      n = n+1
+      i_c( n) = acca
+      x_c( n) = mesh%VAc( acca,1)
+      y_c( n) = mesh%VAc( acca,2)
+      
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the triangle's geometric centre
       x = mesh%TriGC( ti,1)
@@ -3818,12 +3819,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%ti1, mesh%ti2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_c_b')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_b')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_b')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3867,8 +3875,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ci1:mesh%ci2) = 1
-
     k = 0
     M_ddx%ptr = 1
     M_ddy%ptr = 1
@@ -3883,7 +3889,6 @@ MODULE mesh_operators_module
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           acj = mesh%iAci( vi,ci)
-!          IF (mask_valid_in( acj) == 0) CYCLE
           IF (vc == mesh%Aci( aci,3) .OR. vc == mesh%Aci( aci,4)) THEN
             n = n+1
             i_c( n) = acj
@@ -3894,10 +3899,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 2) THEN
-!        mask_valid_out( aci) = 0
-        CYCLE
-      END IF
+      IF (n < 2) CYCLE
       
       ! Destination point: the staggered vertex
       x = mesh%VAc( aci,1)
@@ -3933,10 +3935,16 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_c')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_c')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -3989,7 +3997,13 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_a_aca, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_a_aca, mesh%avi1, mesh%avi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_a_aca, 'mesh%M_move_a_aca')
+    END IF
     
   ! aca_a: from the a-part of the combined mesh (ac-grid) to the regular mesh a (vertex) grid
   ! =========================================================================================
@@ -4018,7 +4032,13 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_aca_a, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_aca_a, mesh%vi1, mesh%vi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_aca_a, 'mesh%M_move_aca_a')
+    END IF
     
   ! c_acc: from the regular mesh c (edge) grid to the c-part of the combined mesh (ac-grid)
   ! =======================================================================================
@@ -4049,7 +4069,13 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_c_acc, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_c_acc, mesh%avi1, mesh%avi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_c_acc, 'mesh%M_move_c_acc')
+    END IF
     
   ! acc_c: from the c-part of the combined mesh (ac-grid) to the regular mesh c (edge) grid
   ! =======================================================================================
@@ -4078,7 +4104,13 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_acc_c, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_acc_c, mesh%ci1, mesh%ci2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_acc_c, 'mesh%M_move_acc_c')
+    END IF
     
   END SUBROUTINE calc_matrix_operators_move_to_combi
   SUBROUTINE calc_matrix_operators_ac_ac( mesh,        M_ddx, M_ddy)
@@ -4114,8 +4146,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%vi1:mesh%vi2) = 1
-
     k = 0
     M_ddx%ptr = 1
     M_ddy%ptr = 1
@@ -4126,7 +4156,6 @@ MODULE mesh_operators_module
       n = 0
       DO ci = 1, mesh%nCAaAc( avi)
         avj = mesh%CAaAc( avi,ci)
-!        IF (mask_valid_in( vj) == 0) CYCLE
         n = n+1
         i_c( n) = avj
         x_c( n) = mesh%VAaAc( avj,1)
@@ -4134,10 +4163,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 2) THEN
-!        mask_valid_out( vi) = 0
-        CYCLE
-      END IF
+      IF (n < 2) CYCLE
       
       ! Destination point: the vertex
       x = mesh%VAaAc( avi,1)
@@ -4173,10 +4199,16 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_ac_ac')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_ac_ac')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -4220,8 +4252,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%ti1:mesh%ti2) = 1
-
     k = 0
     M_map%ptr = 1
     M_ddx%ptr = 1
@@ -4233,7 +4263,6 @@ MODULE mesh_operators_module
       n = 0
       DO vii = 1, 3
         avi = mesh%TriAaAc( ati, vii)
-!        IF (mask_valid_in( vi) == 0) CYCLE
         n = n+1
         i_c( n) = avi
         x_c( n) = mesh%VAaAc( avi,1)
@@ -4241,10 +4270,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( ti) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the triangle's geometric centre
       x = mesh%TriGCAaAc( ati,1)
@@ -4278,12 +4304,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%ati1, mesh%ati2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ati1, mesh%ati2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ati1, mesh%ati2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ati1, mesh%ati2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ati1, mesh%ati2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ati1, mesh%ati2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_ac_bb')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_ac_bb')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_ac_bb')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -4328,8 +4361,6 @@ MODULE mesh_operators_module
     CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
     CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
 
-!    mask_valid_out( mesh%vi1:mesh%vi2) = 1
-
     k = 0
     M_map%ptr = 1
     M_ddx%ptr = 1
@@ -4341,7 +4372,6 @@ MODULE mesh_operators_module
       n = 0
       DO iti = 1, mesh%niTriAaAc( avi)
         ati = mesh%iTriAaAc( avi, iti)
-!        IF (mask_valid_in( ti) == 0) CYCLE
         n = n+1
         i_c( n) = ati
         x_c( n) = mesh%TriGCAaAc( ati,1)
@@ -4349,10 +4379,7 @@ MODULE mesh_operators_module
       END DO
       
       ! If not enough valid source points are found, a gradient cannot be calculated here
-      IF (n < 3) THEN
-!        mask_valid_out( vi) = 0
-        CYCLE
-      END IF
+      IF (n < 3) CYCLE
       
       ! Destination point: the regular vertex
       x = mesh%VAaAc( avi,1)
@@ -4386,12 +4413,19 @@ MODULE mesh_operators_module
     M_ddy%nnz = k
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map)
-    CALL sort_columns_in_CSR_dist( M_ddx)
-    CALL sort_columns_in_CSR_dist( M_ddy)
+    CALL sort_columns_in_CSR_dist( M_map, mesh%avi1, mesh%avi2)
+    CALL sort_columns_in_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
+    CALL sort_columns_in_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%avi1, mesh%avi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_map, 'mesh%M_map_bb_ac')
+      CALL check_CSR( M_ddx, 'mesh%M_ddx_bb_ac')
+      CALL check_CSR( M_ddy, 'mesh%M_ddy_bb_ac')
+    END IF
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -4413,6 +4447,7 @@ MODULE mesh_operators_module
     ! Local variables:
     INTEGER                                            :: nrows, ncols, nnz_max
     INTEGER                                            :: avi, auvi
+    TYPE(type_sparse_matrix_CSR)                       :: M_acuv_bb
     
   ! ac_acu/ac_acv: from the ac-grid to the u/v-parts of the acuv-grid
   ! =================================================================
@@ -4454,8 +4489,16 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_ac_acu, mesh%auvi1, mesh%auvi2)
+    CALL sort_columns_in_CSR_dist( mesh%M_move_ac_acv, mesh%auvi1, mesh%auvi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_ac_acu, mesh%auvi1, mesh%auvi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_ac_acv, mesh%auvi1, mesh%auvi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_ac_acu, 'mesh%M_move_ac_acu')
+      CALL check_CSR( mesh%M_move_ac_acv, 'mesh%M_move_ac_acv')
+    END IF
     
   ! acau_aca/acav_aca: from the u/v-parts of the acuv-grid to the ac-grid
   ! =====================================================================
@@ -4495,8 +4538,16 @@ MODULE mesh_operators_module
     CALL sync
     
     ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_move_acu_ac, mesh%avi1, mesh%avi2)
+    CALL sort_columns_in_CSR_dist( mesh%M_move_acv_ac, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_acu_ac, mesh%avi1, mesh%avi2)
     CALL finalise_matrix_CSR_dist( mesh%M_move_acv_ac, mesh%avi1, mesh%avi2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_move_acu_ac, 'mesh%M_move_acu_ac')
+      CALL check_CSR( mesh%M_move_acv_ac, 'mesh%M_move_acv_ac')
+    END IF
     
   ! acu_bb/acv_bb: from the u/v-parts of the acuv-grid to the bb-grid
   ! =================================================================
@@ -4510,8 +4561,18 @@ MODULE mesh_operators_module
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acu_ac, mesh%M_ddy_acu_bb)
     CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acv_ac, mesh%M_ddy_acv_bb)
     
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_map_acu_bb, 'mesh%M_map_acu_bb')
+      CALL check_CSR( mesh%M_map_acv_bb, 'mesh%M_map_acv_bb')
+      CALL check_CSR( mesh%M_ddx_acu_bb, 'mesh%M_ddx_acu_bb')
+      CALL check_CSR( mesh%M_ddx_acv_bb, 'mesh%M_ddx_acv_bb')
+      CALL check_CSR( mesh%M_ddy_acu_bb, 'mesh%M_ddy_acu_bb')
+      CALL check_CSR( mesh%M_ddy_acv_bb, 'mesh%M_ddy_acv_bb')
+    END IF
+    
   ! acu_bb/acv_bb: from the bb-grid to the u/v-parts of the ac-grid
-  ! ===========================================================================================
+  ! ===============================================================
     
     ! These can be defined as product of first mapping/gradient from bb to ac, then moving from ac to acu/acv
     
@@ -4521,6 +4582,25 @@ MODULE mesh_operators_module
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddx_bb_ac, mesh%M_ddx_bb_acv)
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acu)
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acv)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_map_bb_acu, 'mesh%M_map_bb_acu')
+      CALL check_CSR( mesh%M_map_bb_acv, 'mesh%M_map_bb_acv')
+      CALL check_CSR( mesh%M_ddx_bb_acu, 'mesh%M_ddx_bb_acu')
+      CALL check_CSR( mesh%M_ddx_bb_acv, 'mesh%M_ddx_bb_acv')
+      CALL check_CSR( mesh%M_ddy_bb_acu, 'mesh%M_ddy_bb_acu')
+      CALL check_CSR( mesh%M_ddy_bb_acv, 'mesh%M_ddy_bb_acv')
+    END IF
+    
+  ! Set up non-zero-structure templates for matrix multiplications from the acuv-grid to the acu/acv-grids
+  ! ======================================================================================================
+    
+    ! These are very useful for speeding up matrix assembly in the SSA/DIVA
+    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acu_bb, mesh%M_ddy_acv_bb, M_acuv_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acu, M_acuv_bb        , mesh%nz_template_acuv_acu)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acv, M_acuv_bb        , mesh%nz_template_acuv_acv)
+    CALL deallocate_matrix_CSR( M_acuv_bb)
     
   END SUBROUTINE calc_matrix_operators_combi_acuv
   

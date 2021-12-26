@@ -763,7 +763,8 @@ CONTAINS
 
     ! Local variables
     INTEGER                                            :: auvi
-    TYPE(type_sparse_matrix_CSR)                       :: mN_bb, m2N_bb
+    REAL(dp), DIMENSION(:    ), POINTER                ::  N_bb,  N2_bb
+    INTEGER                                            :: wN_bb, wN2_bb
     TYPE(type_sparse_matrix_CSR)                       :: M_2ddx_ddy, M_2N_2ddx_ddy, M_ddx_2N_2ddx_ddy
     TYPE(type_sparse_matrix_CSR)                       :: M_ddy_ddx , M_N_ddy_ddx  , M_ddy_N_ddy_ddx, Mu, Au
     TYPE(type_sparse_matrix_CSR)                       :: M_2ddy_ddx, M_2N_2ddy_ddx, M_ddy_2N_2ddy_ddx
@@ -780,27 +781,26 @@ CONTAINS
   ! Construct the big matrix A
   ! ==========================
     
-    ! Convert N_bb and 2N_bb to diagonal matrices
-    ice%N_bb( mesh%ati1:mesh%ati2) = 2._dp  * ice%N_bb( mesh%ati1:mesh%ati2)
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, N_bb , wN_bb )
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, N2_bb, wN2_bb)
+    
+    N_bb(  mesh%ati1:mesh%ati2) = ice%N_bb( mesh%ati1:mesh%ati2)
+    N2_bb( mesh%ati1:mesh%ati2) = ice%N_bb( mesh%ati1:mesh%ati2) * 2._dp
     CALL sync
-    CALL convert_vector_to_diag_CSR( ice%N_bb, m2N_bb)
-    ice%N_bb( mesh%ati1:mesh%ati2) = 0.5_dp * ice%N_bb( mesh%ati1:mesh%ati2)
-    CALL sync
-    CALL convert_vector_to_diag_CSR( ice%N_bb, mN_bb)
     
     ! Equation 1
     
     !  d/dx[ 2N (2*du/dx + dv/dy)]
-    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acu_bb, mesh%M_ddy_acv_bb, M_2ddx_ddy       , alpha = 2._dp, beta = 1._dp)
-    CALL multiply_matrix_matrix_CSR( m2N_bb           , M_2ddx_ddy       , M_2N_2ddx_ddy    )
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acu, M_2N_2ddx_ddy    , M_ddx_2N_2ddx_ddy)
+    CALL add_matrix_matrix_CSR(            mesh%M_ddx_acu_bb, mesh%M_ddy_acv_bb, M_2ddx_ddy       , alpha = 2._dp, beta = 1._dp)
+    CALL multiply_matrix_rows_with_vector( M_2ddx_ddy       , N2_bb            , M_2N_2ddx_ddy)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_bb_acu, M_2N_2ddx_ddy    , M_ddx_2N_2ddx_ddy, nz_template = mesh%nz_template_acuv_acu)
     CALL deallocate_matrix_CSR( M_2ddx_ddy   )
     CALL deallocate_matrix_CSR( M_2N_2ddx_ddy)
     
     ! d/dy[ N (du/dy + dv/dx)]
-    CALL add_matrix_matrix_CSR(      mesh%M_ddy_acu_bb, mesh%M_ddx_acv_bb, M_ddy_ddx        )
-    CALL multiply_matrix_matrix_CSR( mN_bb            , M_ddy_ddx        , M_N_ddy_ddx      )
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_acu, M_N_ddy_ddx      , M_ddy_N_ddy_ddx  )
+    CALL add_matrix_matrix_CSR(            mesh%M_ddy_acu_bb, mesh%M_ddx_acv_bb, M_ddy_ddx        )
+    CALL multiply_matrix_rows_with_vector( M_ddy_ddx        , N_bb             , M_N_ddy_ddx)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddy_bb_acu, M_N_ddy_ddx      , M_ddy_N_ddy_ddx  , nz_template = mesh%nz_template_acuv_acu)
     CALL deallocate_matrix_CSR( M_ddy_ddx  )
     CALL deallocate_matrix_CSR( M_N_ddy_ddx)
     
@@ -821,16 +821,16 @@ CONTAINS
     ! Equation 2
     
     !  d/dy[ 2N (2*dv/dy + du/dx)]
-    CALL add_matrix_matrix_CSR(      mesh%M_ddy_acv_bb, mesh%M_ddx_acu_bb, M_2ddy_ddx       , alpha = 2._dp, beta = 1._dp)
-    CALL multiply_matrix_matrix_CSR( m2N_bb           , M_2ddy_ddx       , M_2N_2ddy_ddx    )
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_acv, M_2N_2ddy_ddx    , M_ddy_2N_2ddy_ddx)
+    CALL add_matrix_matrix_CSR(            mesh%M_ddy_acv_bb, mesh%M_ddx_acu_bb, M_2ddy_ddx       , alpha = 2._dp, beta = 1._dp)
+    CALL multiply_matrix_rows_with_vector( M_2ddy_ddx       , N2_bb            , M_2N_2ddy_ddx)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddy_bb_acv, M_2N_2ddy_ddx    , M_ddy_2N_2ddy_ddx, nz_template = mesh%nz_template_acuv_acv)
     CALL deallocate_matrix_CSR( M_2ddy_ddx   )
     CALL deallocate_matrix_CSR( M_2N_2ddy_ddx)
     
     ! d/dx[ N (dv/dx + du/dy)]
-    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acv_bb, mesh%M_ddy_acu_bb, M_ddx_ddy        )
-    CALL multiply_matrix_matrix_CSR( mN_bb            , M_ddx_ddy        , M_N_ddx_ddy      )
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acv, M_N_ddx_ddy      , M_ddx_N_ddx_ddy  )
+    CALL add_matrix_matrix_CSR(            mesh%M_ddx_acv_bb, mesh%M_ddy_acu_bb, M_ddx_ddy        )
+    CALL multiply_matrix_rows_with_vector( M_ddx_ddy        , N_bb             , M_N_ddx_ddy)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_bb_acv, M_N_ddx_ddy      , M_ddx_N_ddx_ddy  , nz_template = mesh%nz_template_acuv_acv)
     CALL deallocate_matrix_CSR( M_ddx_ddy  )
     CALL deallocate_matrix_CSR( M_N_ddx_ddy)
     
@@ -852,6 +852,8 @@ CONTAINS
     CALL add_matrix_matrix_CSR( Au, Av, A)
     CALL deallocate_matrix_CSR( Au)
     CALL deallocate_matrix_CSR( Av)
+    CALL deallocate_shared( wN_bb )
+    CALL deallocate_shared( wN2_bb)
     
   ! Construct the right-hand side, initial guess, and boundary conditions
   ! =====================================================================

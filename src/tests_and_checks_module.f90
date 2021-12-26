@@ -141,13 +141,8 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     END IF
     CALL sync
     
-    CALL write_CSR_matrix_to_NetCDF( AAA,'A.nc')
-    CALL write_CSR_matrix_to_NetCDF( BBB,'B.nc')
-    CALL write_CSR_matrix_to_NetCDF( CCC_ex,'C_ex.nc')
-    
     ! Perform multiplication
     CALL add_matrix_matrix_CSR( AAA, BBB, CCC)
-    CALL write_CSR_matrix_to_NetCDF( CCC,'C.nc')
     
     ! Check if operation gave the correct result
     CALL are_identical_matrices_CSR( CCC, CCC_ex, are_identical)
@@ -306,13 +301,15 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     IMPLICIT NONE
     
     ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC
+    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
+    LOGICAL                                            :: are_identical
     
     IF (par%master) WRITE(0,*) '   Testing matrix-matrix multiplication (C = A*B)...'
     
     ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    CALL allocate_matrix_CSR_shared( BBB, 4, 4, 8)
+    CALL allocate_matrix_CSR_shared( AAA   , 4, 4, 8 )
+    CALL allocate_matrix_CSR_shared( BBB   , 4, 4, 8 )
+    CALL allocate_matrix_CSR_shared( CCC_ex, 4, 4, 13)
     
     IF (par%master) THEN
       ! A
@@ -325,54 +322,31 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
       BBB%ptr   = [1,3,5,7,9]
       BBB%index = [1,3,3,4,2,3,2,4]
       BBB%val   = [9,10,11,12,13,14,15,16]
+      ! C
+CCC_ex%nnz = 13
+CCC_ex%ptr   = [1,4,8,10,14]
+CCC_ex%index = [1,2,3,1,2,3,4,3,4,1,2,3,4]
+CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     END IF
     CALL sync
     
+    CALL write_CSR_matrix_to_NetCDF( AAA, 'A.nc')
+    CALL write_CSR_matrix_to_NetCDF( BBB, 'B.nc')
+    CALL write_CSR_matrix_to_NetCDF( CCC_ex, 'C_ex.nc')
+    
     ! Perform multiplication
     CALL multiply_matrix_matrix_CSR( AAA, BBB, CCC)
+    CALL write_CSR_matrix_to_NetCDF( CCC, 'C.nc')
     
     ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (CCC%nnz == 13 .AND. &
-          CCC%ptr(    1) ==  1 .AND. &
-          CCC%ptr(    2) ==  4 .AND. &
-          CCC%ptr(    3) ==  8 .AND. &
-          CCC%ptr(    4) == 10 .AND. &
-          CCC%ptr(    5) == 14 .AND. &
-          CCC%index(  1) == 1 .AND. &
-          CCC%index(  2) == 2 .AND. &
-          CCC%index(  3) == 3 .AND. &
-          CCC%index(  4) == 1 .AND. &
-          CCC%index(  5) == 2 .AND. &
-          CCC%index(  6) == 3 .AND. &
-          CCC%index(  7) == 4 .AND. &
-          CCC%index(  8) == 3 .AND. &
-          CCC%index(  9) == 4 .AND. &
-          CCC%index( 10) == 1 .AND. &
-          CCC%index( 11) == 2 .AND. &
-          CCC%index( 12) == 3 .AND. &
-          CCC%index( 13) == 4 .AND. &
-          CCC%val(    1) ==   9._dp .AND. &
-          CCC%val(    2) ==  26._dp .AND. &
-          CCC%val(    3) ==  38._dp .AND. &
-          CCC%val(    4) ==  27._dp .AND. &
-          CCC%val(    5) ==  60._dp .AND. &
-          CCC%val(    6) ==  30._dp .AND. &
-          CCC%val(    7) ==  64._dp .AND. &
-          CCC%val(    8) ==  55._dp .AND. &
-          CCC%val(    9) ==  60._dp .AND. &
-          CCC%val(   10) ==  54._dp .AND. &
-          CCC%val(   11) == 211._dp .AND. &
-          CCC%val(   12) == 158._dp .AND. &
-          CCC%val(   13) == 128._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_multiply_matrix - ERROR: CSR matrix-matrix multiplication gave wrong answer!'
-        WRITE(0,*) '  C%nnz   = ', CCC%nnz
-        WRITE(0,*) '  C%ptr   = ', CCC%ptr
-        WRITE(0,*) '  C%index = ', CCC%index
-        WRITE(0,*) '  C%val   = ', CCC%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
+    CALL are_identical_matrices_CSR( CCC, CCC_ex, are_identical)
+    IF (par%master .AND. (.NOT. are_identical)) THEN
+      WRITE(0,*) 'test_CSR_matrix_operations_add - ERROR: CSR matrix addition gave wrong answer!'
+      WRITE(0,*) '  C%nnz   = ', CCC%nnz
+      WRITE(0,*) '  C%ptr   = ', CCC%ptr
+      WRITE(0,*) '  C%index = ', CCC%index
+      WRITE(0,*) '  C%val   = ', CCC%val
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     CALL sync
     
@@ -380,6 +354,7 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     CALL deallocate_matrix_CSR( AAA)
     CALL deallocate_matrix_CSR( BBB)
     CALL deallocate_matrix_CSR( CCC)
+    CALL deallocate_matrix_CSR( CCC_ex)
     
   END SUBROUTINE test_CSR_matrix_operations_multiply_matrix
   SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
@@ -2301,7 +2276,7 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     
     ! Create the operator matrix M
     CALL multiply_matrix_rows_with_vector( mesh%M_ddx_a_b, N_b, mNddx_b     )
-    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_b_a,      mNddx_b, M_a)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_b_a,      mNddx_b, M_a, nz_template = mesh%M_ddx_a_a)
     
     ! Create the boundary conditions matrix BC
     
@@ -2420,7 +2395,7 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     
     ! Create the operator matrix M
     CALL multiply_matrix_rows_with_vector( mesh%M_ddx_ac_bb, N_bb, mNddx_bb      )
-    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_bb_ac,       mNddx_bb, M_ac)
+    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_bb_ac,       mNddx_bb, M_ac, nz_template = mesh%M_ddx_ac_ac)
     
     ! Create the boundary conditions matrix BC
     

@@ -28,7 +28,8 @@ MODULE ice_velocity_module
                                              move_aca_to_a_2D, move_acc_to_c_2D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_c_to_a_3D, ddy_c_to_a_3D, map_a_to_ac_2D, map_a_to_ac_3D, &
                                              ddx_a_to_ac_2D, ddy_a_to_ac_2D, ddx_ac_to_ac_2D, ddy_ac_to_ac_2D, &
-                                             move_ac_to_acu_2D, move_ac_to_acv_2D, move_acu_to_ac_2D, move_acv_to_ac_2D
+                                             move_ac_to_acu_2D, move_ac_to_acv_2D, move_acu_to_ac_2D, move_acv_to_ac_2D, &
+                                             map_ac_to_bb_2D, map_ac_to_bb_3D, ddx_ac_to_bb_2D, ddy_ac_to_bb_2D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
                                              vertical_integrate, multiply_matrix_matrix_CSR, convert_vector_to_diag_CSR, &
                                              add_matrix_matrix_CSR, multiply_matrix_rows_with_vector, &
@@ -127,49 +128,6 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
-    IF (C%include_SSADIVA_crossterms) THEN
-      IF (par%master) WRITE(0,*) 'solve_SSA - ERROR: full SSA solver not yet implemented!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ELSE
-      CALL solve_SSA_sans(  mesh, ice)
-    END IF
-    
-    ! Calculate secondary velocities (surface, base, etc.)
-    CALL calc_secondary_velocities( mesh, ice)
-    
-  END SUBROUTINE solve_SSA
-  SUBROUTINE solve_SSA_sans(  mesh, ice)
-    ! Calculate ice velocities using the SSA sans the "cross-terms"
-    ! 
-    ! The full SSA reads:
-    ! 
-    !   d/dx[ 2N (2*du/dx + dv/dy)] + d/dy[ N (du/dy + dv/dx)] - beta*u = -taud_x
-    !   d/dy[ 2N (2*dv/dy + du/dx)] + d/dx[ N (dv/dx + du/dy)] - beta*v = -taud_y
-    !
-    ! Using the chain rule, this expands to:
-    !
-    !   4*N*d2u/dx2 + 4*dN/dx*du/dx + 2*N*d2v/dxdy + 2*dN/dx*dv/dy + N*d2u/dy2 + dN/dy*du/dy + N*d2v/dxdy + dN/dy*dv/dx - beta*u = -taud_x
-    !   4*N*d2v/dy2 + 4*dN/dy*dv/dy + 2*N*d2u/dxdy + 2*dN/dy*du/dx + N*d2v/dx2 + dN/dx*dv/dx + N*d2u/dxdy + dN/dx*du/dy - beta*v = -taud_y
-    !
-    ! By neglecting all the "cross-terms" involving gradients of N, this simplifies to:
-    !
-    !   4*N*d2u/dx2 + N*d2u/dy2 + 3*N*d2v/dxdy - beta*u = -taud_x
-    !   4*N*d2v/dy2 + N*d2v/dx2 + 3*N*d2u/dxdy - beta*v = -taud_y
-    ! 
-    ! Lastly, the left and right sides of the equations can be divided by N to yield:
-    ! 
-    ! 4*d2u/dx2 + d2u/dy2 + 3*d2v/dxdy - beta*u/N = -taud_x/N
-    ! 4*d2v/dy2 + d2v/dx2 + 3*d2u/dxdy - beta*v/N = -taud_y/N
-    ! 
-    ! By happy coincidence, this equation is much easier to solve, especially because (for unclear reasons)
-    ! it doesn't require N to be defined on a staggered grid relative to u,v in order to achieve a stable solution.
-      
-    IMPLICIT NONE
-    
-    ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
     ! Local variables:
     LOGICAL                                            :: set_velocities_to_zero
     LOGICAL                                            :: has_converged
@@ -237,7 +195,11 @@ CONTAINS
       viscosity_iteration_i = viscosity_iteration_i + 1
       
       ! Calculate the effective viscosity and the product term N = eta * H
-      CALL calc_effective_viscosity_ac( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      IF (C%include_SSADIVA_crossterms) THEN
+        CALL calc_effective_viscosity_bb( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      ELSE
+        CALL calc_effective_viscosity_ac( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      END IF
     
 !    ! DENK DROM
 !    IF (par%master) THEN
@@ -276,7 +238,11 @@ CONTAINS
       CALL sync
       
       ! Solve the linearised SSA
-      CALL solve_SSA_sans_linearised( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      IF (C%include_SSADIVA_crossterms) THEN
+        CALL solve_SSADIVA_full_linearised( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      ELSE
+        CALL solve_SSADIVA_sans_linearised( mesh, ice, ice%u_SSA_ac, ice%v_SSA_ac)
+      END IF
     
 !    ! DENK DROM
 !    IF (par%master) THEN
@@ -320,7 +286,7 @@ CONTAINS
     CALL deallocate_shared( wu_ac_prev)
     CALL deallocate_shared( wv_ac_prev)
     
-  END SUBROUTINE solve_SSA_sans
+  END SUBROUTINE solve_SSA
   
   ! Calculate "secondary" velocities (surface, basal, vertically averaged, on the A-mesh, etc.)
   SUBROUTINE calc_secondary_velocities( mesh, ice)
@@ -636,11 +602,11 @@ CONTAINS
     REAL(dp), PARAMETER                                :: epsilon_sq_0 = 1E-15_dp   ! Normalisation term so that zero velocity gives non-zero viscosity
     REAL(dp), DIMENSION(C%nz)                          :: prof
     
-    ! Map ice thickness and ice flow factor to the aca-grid
+    ! Map ice thickness and ice flow factor to the ac-grid
     CALL map_a_to_ac_2D( mesh, ice%Hi_a       , ice%Hi_ac       )
     CALL map_a_to_ac_3D( mesh, ice%A_flow_3D_a, ice%A_flow_3D_ac)
 
-    ! Calculate effective strain components from horizontal stretching on the regular mesh
+    ! Calculate effective strain components from horizontal stretching
     CALL ddx_ac_to_ac_2D( mesh, u_ac, ice%du_dx_ac)
     CALL ddy_ac_to_ac_2D( mesh, u_ac, ice%du_dy_ac)
     CALL ddx_ac_to_ac_2D( mesh, v_ac, ice%dv_dx_ac)
@@ -678,6 +644,67 @@ CONTAINS
     CALL check_for_NaN_dp_1D( ice%N_ac,            'ice%N_ac'           , 'calc_effective_viscosity')
 
   END SUBROUTINE calc_effective_viscosity_ac
+  SUBROUTINE calc_effective_viscosity_bb( mesh, ice, u_ac, v_ac)
+    ! Calculate 3D effective viscosity following Lipscomb et al. (2019), Eq. 2
+
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
+    
+    ! Local variables
+    INTEGER                                            :: ati,k
+    REAL(dp)                                           :: eps_sq
+    REAL(dp), PARAMETER                                :: epsilon_sq_0 = 1E-15_dp   ! Normalisation term so that zero velocity gives non-zero viscosity
+    REAL(dp), DIMENSION(C%nz)                          :: prof
+    
+    ! Map ice thickness and ice flow factor to the bb-grid
+    CALL map_a_to_ac_2D(  mesh, ice%Hi_a        , ice%Hi_ac       )
+    CALL map_ac_to_bb_2D( mesh, ice%Hi_ac       , ice%Hi_bb       )
+    CALL map_a_to_ac_3D(  mesh, ice%A_flow_3D_a , ice%A_flow_3D_ac)
+    CALL map_ac_to_bb_3D( mesh, ice%A_flow_3D_ac, ice%A_flow_3D_bb)
+
+    ! Calculate effective strain components from horizontal stretching
+    CALL ddx_ac_to_bb_2D( mesh, u_ac, ice%du_dx_bb)
+    CALL ddy_ac_to_bb_2D( mesh, u_ac, ice%du_dy_bb)
+    CALL ddx_ac_to_bb_2D( mesh, v_ac, ice%dv_dx_bb)
+    CALL ddy_ac_to_bb_2D( mesh, v_ac, ice%dv_dy_bb)
+
+    DO ati = mesh%ati1, mesh%ati2
+
+      DO k = 1, C%nz
+    
+        ! Calculate the total effective strain rate from L19, Eq. 21 
+        eps_sq = ice%du_dx_bb( ati)**2 + &
+                 ice%dv_dy_bb( ati)**2 + &
+                 ice%du_dx_bb( ati) * ice%dv_dy_bb( ati) + &
+                 0.25_dp * (ice%du_dy_bb( ati) + ice%dv_dx_bb( ati))**2 + &  ! + 0.25_dp * (du_dz_a**2 + dv_dz_a**2) + &
+                 epsilon_sq_0
+        
+        ! Calculate effective viscosity on ab-nodes
+        ice%visc_eff_3D_bb( ati,k) = 0.5_dp * ice%A_flow_3D_bb( ati,k)**(-1._dp/C%n_flow) * (eps_sq)**((1._dp - C%n_flow)/(2._dp*C%n_flow))
+
+      END DO ! DO k = 1, C%nz
+      
+      ! Vertical integral
+      prof = ice%visc_eff_3D_bb( ati,:)
+      CALL vertical_integrate( prof, ice%visc_eff_int_bb( ati))
+      
+      ! Product term N = eta * H
+      ice%N_bb( ati) = ice%visc_eff_int_bb( ati) * MAX( 0.1_dp, ice%Hi_bb( ati))
+
+    END DO  
+    CALL sync
+    
+    ! Safety
+    CALL check_for_NaN_dp_2D( ice%visc_eff_3D_bb,  'ice%visc_eff_3D_bb' , 'calc_effective_viscosity')
+    CALL check_for_NaN_dp_1D( ice%visc_eff_int_bb, 'ice%visc_eff_int_bb', 'calc_effective_viscosity')
+    CALL check_for_NaN_dp_1D( ice%N_bb,            'ice%N_bb'           , 'calc_effective_viscosity')
+
+  END SUBROUTINE calc_effective_viscosity_bb
   SUBROUTINE calc_sliding_term_beta( mesh, ice, u_ac, v_ac)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
       
@@ -717,9 +744,207 @@ CONTAINS
   END SUBROUTINE calc_sliding_term_beta
   
   ! Routines for solving the "linearised" SSA/DIVA
-  SUBROUTINE solve_SSA_sans_linearised( mesh, ice, u_ac, v_ac)
+  SUBROUTINE solve_SSADIVA_full_linearised( mesh, ice, u_ac, v_ac)
+    ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
+    ! constant rather than functions of velocity).
+    ! 
+    ! The full SSA reads:
+    ! 
+    !   d/dx[ 2N (2*du/dx + dv/dy)] + d/dy[ N (du/dy + dv/dx)] - beta*u = -taud_x
+    !   d/dy[ 2N (2*dv/dy + du/dx)] + d/dx[ N (dv/dx + du/dy)] - beta*v = -taud_y
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_ac
+
+    ! Local variables
+    INTEGER                                            :: auvi
+    TYPE(type_sparse_matrix_CSR)                       :: mN_bb, m2N_bb
+    TYPE(type_sparse_matrix_CSR)                       :: M_2ddx_ddy, M_2N_2ddx_ddy, M_ddx_2N_2ddx_ddy
+    TYPE(type_sparse_matrix_CSR)                       :: M_ddy_ddx , M_N_ddy_ddx  , M_ddy_N_ddy_ddx, Mu, Au
+    TYPE(type_sparse_matrix_CSR)                       :: M_2ddy_ddx, M_2N_2ddy_ddx, M_ddy_2N_2ddy_ddx
+    TYPE(type_sparse_matrix_CSR)                       :: M_ddx_ddy , M_N_ddx_ddy  , M_ddx_N_ddx_ddy, Mv, Av
+    REAL(dp), DIMENSION(:    ), POINTER                ::  beta_acu,  beta_acv
+    INTEGER                                            :: wbeta_acu, wbeta_acv
+    TYPE(type_sparse_matrix_CSR)                       :: mbeta_acu, mbeta_acv
+    REAL(dp), DIMENSION(:    ), POINTER                ::  taudx_acu,  taudy_acv,  b_acuv
+    INTEGER                                            :: wtaudx_acu, wtaudy_acv, wb_acuv
+    TYPE(type_sparse_matrix_CSR)                       :: A, BC
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_acu,  v_acv,  uv_acuv
+    INTEGER                                            :: wu_acu, wv_acv, wuv_acuv
+    
+  ! Construct the big matrix A
+  ! ==========================
+    
+    ! Convert N_bb and 2N_bb to diagonal matrices
+    ice%N_bb( mesh%ati1:mesh%ati2) = 2._dp  * ice%N_bb( mesh%ati1:mesh%ati2)
+    CALL sync
+    CALL convert_vector_to_diag_CSR( ice%N_bb, m2N_bb)
+    ice%N_bb( mesh%ati1:mesh%ati2) = 0.5_dp * ice%N_bb( mesh%ati1:mesh%ati2)
+    CALL sync
+    CALL convert_vector_to_diag_CSR( ice%N_bb, mN_bb)
+    
+    ! Equation 1
+    
+    !  d/dx[ 2N (2*du/dx + dv/dy)]
+    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acu_bb, mesh%M_ddy_acv_bb, M_2ddx_ddy       , alpha = 2._dp, beta = 1._dp)
+    CALL multiply_matrix_matrix_CSR( m2N_bb           , M_2ddx_ddy       , M_2N_2ddx_ddy    )
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acu, M_2N_2ddx_ddy    , M_ddx_2N_2ddx_ddy)
+    CALL deallocate_matrix_CSR( M_2ddx_ddy   )
+    CALL deallocate_matrix_CSR( M_2N_2ddx_ddy)
+    
+    ! d/dy[ N (du/dy + dv/dx)]
+    CALL add_matrix_matrix_CSR(      mesh%M_ddy_acu_bb, mesh%M_ddx_acv_bb, M_ddy_ddx        )
+    CALL multiply_matrix_matrix_CSR( mN_bb            , M_ddy_ddx        , M_N_ddy_ddx      )
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_acu, M_N_ddy_ddx      , M_ddy_N_ddy_ddx  )
+    CALL deallocate_matrix_CSR( M_ddy_ddx  )
+    CALL deallocate_matrix_CSR( M_N_ddy_ddx)
+    
+    CALL add_matrix_matrix_CSR( M_ddx_2N_2ddx_ddy, M_ddy_N_ddy_ddx, Mu)
+    CALL deallocate_matrix_CSR( M_ddx_2N_2ddx_ddy)
+    CALL deallocate_matrix_CSR( M_ddy_N_ddy_ddx  )
+    
+    ! - beta*u
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, beta_acu, wbeta_acu)
+    CALL move_ac_to_acu_2D( mesh, ice%beta_eff_ac, beta_acu)
+    CALL convert_vector_to_diag_CSR( beta_acu, mbeta_acu)
+    CALL deallocate_shared( wbeta_acu)
+    
+    CALL add_matrix_matrix_CSR( Mu, mbeta_acu, Au, alpha = 1._dp, beta = -1._dp)
+    CALL deallocate_matrix_CSR( Mu       )
+    CALL deallocate_matrix_CSR( mbeta_acu)
+    
+    ! Equation 2
+    
+    !  d/dy[ 2N (2*dv/dy + du/dx)]
+    CALL add_matrix_matrix_CSR(      mesh%M_ddy_acv_bb, mesh%M_ddx_acu_bb, M_2ddy_ddx       , alpha = 2._dp, beta = 1._dp)
+    CALL multiply_matrix_matrix_CSR( m2N_bb           , M_2ddy_ddx       , M_2N_2ddy_ddx    )
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_bb_acv, M_2N_2ddy_ddx    , M_ddy_2N_2ddy_ddx)
+    CALL deallocate_matrix_CSR( M_2ddy_ddx   )
+    CALL deallocate_matrix_CSR( M_2N_2ddy_ddx)
+    
+    ! d/dx[ N (dv/dx + du/dy)]
+    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acv_bb, mesh%M_ddy_acu_bb, M_ddx_ddy        )
+    CALL multiply_matrix_matrix_CSR( mN_bb            , M_ddx_ddy        , M_N_ddx_ddy      )
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acv, M_N_ddx_ddy      , M_ddx_N_ddx_ddy  )
+    CALL deallocate_matrix_CSR( M_ddx_ddy  )
+    CALL deallocate_matrix_CSR( M_N_ddx_ddy)
+    
+    CALL add_matrix_matrix_CSR( M_ddy_2N_2ddy_ddx, M_ddx_N_ddx_ddy, Mv)
+    CALL deallocate_matrix_CSR( M_ddy_2N_2ddy_ddx)
+    CALL deallocate_matrix_CSR( M_ddx_N_ddx_ddy  )
+    
+    ! - beta*v
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, beta_acv, wbeta_acv)
+    CALL move_ac_to_acv_2D( mesh, ice%beta_eff_ac, beta_acv)
+    CALL convert_vector_to_diag_CSR( beta_acv, mbeta_acv)
+    CALL deallocate_shared( wbeta_acv)
+    
+    CALL add_matrix_matrix_CSR( Mv, mbeta_acv, Av, alpha = 1._dp, beta = -1._dp)
+    CALL deallocate_matrix_CSR( Mv       )
+    CALL deallocate_matrix_CSR( mbeta_acv)
+    
+    ! Combine the two equations
+    CALL add_matrix_matrix_CSR( Au, Av, A)
+    CALL deallocate_matrix_CSR( Au)
+    CALL deallocate_matrix_CSR( Av)
+    
+  ! Construct the right-hand side, initial guess, and boundary conditions
+  ! =====================================================================
+    
+    ! Fill in the right-hand side b = -taudx,y
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, taudx_acu, wtaudx_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, taudy_acv, wtaudy_acv)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, b_acuv   , wb_acuv   )
+    
+    CALL move_ac_to_acu_2D( mesh, ice%taudx_ac, taudx_acu)
+    CALL move_ac_to_acv_2D( mesh, ice%taudy_ac, taudy_acv)
+    
+    DO auvi = mesh%auvi1, mesh%auvi2
+      b_acuv( auvi) = -1._dp * (taudx_acu( auvi) + taudy_acv( auvi))
+    END DO
+    CALL sync
+    
+    CALL deallocate_shared( wtaudx_acu)
+    CALL deallocate_shared( wtaudy_acv)
+    
+    ! Fill in the initial guess with the current velocity solution
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, u_acu  , wu_acu  )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, v_acv  , wv_acv  )
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, uv_acuv, wuv_acuv)
+    
+    CALL move_ac_to_acu_2D( mesh, u_ac, u_acu)
+    CALL move_ac_to_acv_2D( mesh, v_ac, v_acv)
+    
+    DO auvi = mesh%auvi1, mesh%auvi2
+      uv_acuv( auvi) = u_acu( auvi) + v_acv( auvi)
+    END DO
+    CALL sync
+    
+    CALL deallocate_shared( wu_acu)
+    CALL deallocate_shared( wv_acv)
+    
+    ! Construct the boundary conditions matrix, and adapt the right-hand side and initial guess accordingly
+    CALL construct_BC_SSA( mesh, BC, b_acuv, uv_acuv)
+    
+    ! Add the boundary conditions to A
+    CALL overwrite_rows_CSR( A, BC)
+    CALL deallocate_matrix_CSR( BC)
+    
+  ! Solve the matrix equation
+  ! =========================
+    
+    CALL solve_matrix_equation_CSR( A, b_acuv, uv_acuv, &
+      C%DIVA_choice_matrix_solver, &
+      C%DIVA_SOR_nit             , &
+      C%DIVA_SOR_tol             , &
+      C%DIVA_SOR_omega           , &
+      C%DIVA_PETSc_rtol          , &
+      C%DIVA_PETSc_abstol        , &
+      colour_v1 = mesh%colour_v1, &
+      colour_v2 = mesh%colour_v2, &
+      colour_vi = mesh%colour_vi)
+    CALL deallocate_matrix_CSR( A)
+    CALL deallocate_shared( wb_acuv )
+    
+  ! Get solution back on the ac-grid
+  ! ================================
+    
+    CALL move_acu_to_ac_2D( mesh, uv_acuv, u_ac)
+    CALL move_acv_to_ac_2D( mesh, uv_acuv, v_ac)
+    CALL deallocate_shared( wuv_acuv)
+
+  END SUBROUTINE solve_SSADIVA_full_linearised
+  SUBROUTINE solve_SSADIVA_sans_linearised( mesh, ice, u_ac, v_ac)
     ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
     ! constant rather than functions of velocity) without the "cross-terms".
+    ! 
+    ! The full SSA reads:
+    ! 
+    !   d/dx[ 2N (2*du/dx + dv/dy)] + d/dy[ N (du/dy + dv/dx)] - beta*u = -taud_x
+    !   d/dy[ 2N (2*dv/dy + du/dx)] + d/dx[ N (dv/dx + du/dy)] - beta*v = -taud_y
+    !
+    ! Using the chain rule, this expands to:
+    !
+    !   4*N*d2u/dx2 + 4*dN/dx*du/dx + 2*N*d2v/dxdy + 2*dN/dx*dv/dy + N*d2u/dy2 + dN/dy*du/dy + N*d2v/dxdy + dN/dy*dv/dx - beta*u = -taud_x
+    !   4*N*d2v/dy2 + 4*dN/dy*dv/dy + 2*N*d2u/dxdy + 2*dN/dy*du/dx + N*d2v/dx2 + dN/dx*dv/dx + N*d2u/dxdy + dN/dx*du/dy - beta*v = -taud_y
+    !
+    ! By neglecting all the "cross-terms" involving gradients of N, this simplifies to:
+    !
+    !   4*N*d2u/dx2 + N*d2u/dy2 + 3*N*d2v/dxdy - beta*u = -taud_x
+    !   4*N*d2v/dy2 + N*d2v/dx2 + 3*N*d2u/dxdy - beta*v = -taud_y
+    ! 
+    ! Lastly, the left and right sides of the equations can be divided by N to yield:
+    ! 
+    ! 4*d2u/dx2 + d2u/dy2 + 3*d2v/dxdy - beta*u/N = -taud_x/N
+    ! 4*d2v/dy2 + d2v/dx2 + 3*d2u/dxdy - beta*v/N = -taud_y/N
+    ! 
+    ! By happy coincidence, this equation is much easier to solve, especially because (for unclear reasons)
+    ! it doesn't require N to be defined on a staggered grid relative to u,v in order to achieve a stable solution.
       
     IMPLICIT NONE
     
@@ -851,7 +1076,7 @@ CONTAINS
     CALL move_acv_to_ac_2D( mesh, uv_acuv, v_ac)
     CALL deallocate_shared( wuv_acuv)
 
-  END SUBROUTINE solve_SSA_sans_linearised
+  END SUBROUTINE solve_SSADIVA_sans_linearised
   SUBROUTINE construct_BC_SSA( mesh, BC, b_acuv, uv_acuv)
     ! Construct the boundary conditions matrix, and adapt the right-hand side and initial guess accordingly
       
@@ -1178,8 +1403,21 @@ CONTAINS
       
       IF (C%include_SSADIVA_crossterms) THEN
         ! Version of the solver including the "cross-terms"
-        IF (par%master) WRITE(0,*) 'initialise_velocity_solver - ERROR: SSA with cross-terms - FIXME!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%Hi_bb                 , ice%wHi_bb                )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%du_dx_bb              , ice%wdu_dx_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%du_dy_bb              , ice%wdu_dy_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%dv_dx_bb              , ice%wdv_dx_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%dv_dy_bb              , ice%wdv_dy_bb             )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
+        CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz,        ice%A_flow_3D_bb          , ice%wA_flow_3D_bb         )
+        CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz,        ice%visc_eff_3D_bb        , ice%wvisc_eff_3D_bb       )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%visc_eff_int_bb       , ice%wvisc_eff_int_bb      )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%N_bb                  , ice%wN_bb                 )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
       ELSE
         ! Version of the solver without the "cross-terms"
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
@@ -1196,7 +1434,7 @@ CONTAINS
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
         ! Initialise the unchanging part of the solution matrix (greatly improves computational speed)
-        CALL initialise_matrix_SSA_sans( mesh, ice)
+        CALL initialise_matrix_SSADIVA_sans( mesh, ice)
       END IF
       
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
@@ -1210,8 +1448,21 @@ CONTAINS
       
       IF (C%include_SSADIVA_crossterms) THEN
         ! Version of the solver including the "cross-terms"
-        IF (par%master) WRITE(0,*) 'initialise_velocity_solver - ERROR: SSA with cross-terms - FIXME!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%Hi_bb                 , ice%wHi_bb                )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%du_dx_bb              , ice%wdu_dx_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%du_dy_bb              , ice%wdu_dy_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%dv_dx_bb              , ice%wdv_dx_bb             )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%dv_dy_bb              , ice%wdv_dy_bb             )
+        CALL allocate_shared_dp_2D(   mesh%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
+        CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz,        ice%A_flow_3D_bb          , ice%wA_flow_3D_bb         )
+        CALL allocate_shared_dp_2D(   mesh%nTriAaAc, C%nz,        ice%visc_eff_3D_bb        , ice%wvisc_eff_3D_bb       )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%visc_eff_int_bb       , ice%wvisc_eff_int_bb      )
+        CALL allocate_shared_dp_1D(   mesh%nTriAaAc,              ice%N_bb                  , ice%wN_bb                 )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
+        CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
       ELSE
         ! Version of the solver without the "cross-terms"
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
@@ -1228,7 +1479,7 @@ CONTAINS
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
         CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
         ! Initialise the unchanging part of the solution matrix (greatly improves computational speed)
-        CALL initialise_matrix_SSA_sans( mesh, ice)
+        CALL initialise_matrix_SSADIVA_sans( mesh, ice)
       END IF
       
     ELSE
@@ -1237,7 +1488,7 @@ CONTAINS
     END IF
     
   END SUBROUTINE initialise_velocity_solver
-  SUBROUTINE initialise_matrix_SSA_sans( mesh, ice)
+  SUBROUTINE initialise_matrix_SSADIVA_sans( mesh, ice)
     ! Initialise the unchanging part (i.e. without the beta/N term) of
     ! the big matrix equation representing the SSA without the "cross-terms"
       
@@ -1321,6 +1572,6 @@ CONTAINS
     CALL deallocate_matrix_CSR( Mu)
     CALL deallocate_matrix_CSR( Mv)
     
-  END SUBROUTINE initialise_matrix_SSA_sans
+  END SUBROUTINE initialise_matrix_SSADIVA_sans
   
 END MODULE ice_velocity_module

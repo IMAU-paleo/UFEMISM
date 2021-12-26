@@ -133,6 +133,19 @@ MODULE data_types_module
     INTEGER :: wHi_ac, wtaudx_ac, wtaudy_ac, wdu_dx_ac, wdu_dy_ac, wdv_dx_ac, wdv_dy_ac
     INTEGER :: wA_flow_3D_ac, wvisc_eff_3D_ac, wvisc_eff_int_ac, wN_ac, wbeta_ac, wbeta_eff_ac
     
+    ! Ice dynamics - physical terms in the SSA/DIVA (with cross-terms)
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_bb
+    INTEGER :: wHi_bb, wdu_dx_bb, wdu_dy_bb, wdv_dx_bb, wdv_dy_bb
+    INTEGER :: wA_flow_3D_bb, wvisc_eff_3D_bb, wvisc_eff_int_bb, wN_bb
+    
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out

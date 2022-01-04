@@ -1198,7 +1198,6 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                ::  b_acuv,  uv_acuv
     INTEGER                                            :: wb_acuv, wuv_acuv
     TYPE(type_sparse_matrix_CSR)                       :: A
-    INTEGER                                            :: ka1, ka2, nnz_row_a, km1, km2, nnz_row_m, ka, km, kk
     
     ! Calculate N, dN/dx, and dN/dy on the acuv-grid
     CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, N_acuv    , wN_acuv    )
@@ -1237,197 +1236,28 @@ CONTAINS
         aci = avi - mesh%nV
         edge_index = mesh%edge_index_ac( aci)
       END IF
-        
-      ka1 = A%ptr( auvi)
-      ka2 = A%ptr( auvi+1) - 1
-      nnz_row_a = ka2 + 1 - ka1
       
       IF (edge_index == 0) THEN
         ! Free vertex/edge: fill in matrix row for the SSA/DIVA
         
         IF (MOD(auvi,2) == 1) THEN
           ! u
-          
-          ! 4 N d2u/dx2
-          km1 = mesh%M_d2dx2_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dx2_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 4._dp * N_acuv( auvi) * mesh%M_d2dx2_ac_ac%val( km)
-          END DO
-          
-          ! 4 dN/dx du/dx
-          km1 = mesh%M_ddx_ac_ac%ptr( avi)
-          km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 4._dp * dN_dx_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
-          END DO
-          
-          ! 3 N d2v/dxdy
-          km1 = mesh%M_d2dxdy_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dxdy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 3._dp * N_acuv( auvi) * mesh%M_d2dxdy_ac_ac%val( km)
-          END DO
-          
-          ! 2 dN/dx dv/dy
-          km1 = mesh%M_ddy_ac_ac%ptr( avi)
-          km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 2._dp * dN_dx_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
-          END DO
-          
-          ! N d2u/dy2
-          km1 = mesh%M_d2dy2_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dy2_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + N_acuv( auvi) * mesh%M_d2dy2_ac_ac%val( km)
-          END DO
-          
-          ! dN/dy du/dy
-          km1 = mesh%M_ddy_ac_ac%ptr( avi)
-          km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + dN_dy_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
-          END DO
-          
-          ! dN/dy dv/dx
-          km1 = mesh%M_ddx_ac_ac%ptr( avi)
-          km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + dN_dy_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
-          END DO
-          
-          ! -beta*u
-          DO ka = ka1, ka2
-            IF (A%index( ka) == auvi) THEN
-              A%val( ka) = A%val( ka) - ice%beta_eff_ac( avi)
-            END IF
-          END DO
-          
-          ! Right hand-side and initial guess
-          b_acuv(  auvi) = -ice%taudx_ac( avi)
-          uv_acuv( auvi) = u_ac( avi)
-          
+          CALL list_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_ac, auvi, avi, N_acuv, dN_dx_acuv, dN_dy_acuv, A, b_acuv, uv_acuv)
         ELSE ! IF (MOD(auvi,2) == 1) THEN
           ! v
-          
-          ! 4 N d2v/dy2
-          km1 = mesh%M_d2dy2_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dy2_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 4._dp * N_acuv( auvi) * mesh%M_d2dy2_ac_ac%val( km)
-          END DO
-          
-          ! 4 dN/dy dv/dy
-          km1 = mesh%M_ddy_ac_ac%ptr( avi)
-          km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 4._dp * dN_dy_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
-          END DO
-          
-          ! 3 N d2u/dxdy
-          km1 = mesh%M_d2dxdy_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dxdy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 3._dp * N_acuv( auvi) * mesh%M_d2dxdy_ac_ac%val( km)
-          END DO
-          
-          ! 2 dN/dy du/dx
-          km1 = mesh%M_ddx_ac_ac%ptr( avi)
-          km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + 2._dp * dN_dy_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
-          END DO
-          
-          ! N d2v/dx2
-          km1 = mesh%M_d2dx2_ac_ac%ptr( avi)
-          km2 = mesh%M_d2dx2_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + N_acuv( auvi) * mesh%M_d2dx2_ac_ac%val( km)
-          END DO
-          
-          ! dN/dx dv/dx
-          km1 = mesh%M_ddx_ac_ac%ptr( avi)
-          km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 1
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + dN_dx_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
-          END DO
-          
-          ! dN/dx du/dy
-          km1 = mesh%M_ddy_ac_ac%ptr( avi)
-          km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
-          nnz_row_m = km2 + 1 - km1
-          DO kk = 1, nnz_row_m
-            ka = ka1 + 2*kk - 2
-            km = km1 +   kk - 1
-            A%val( ka) = A%val( ka) + dN_dx_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
-          END DO
-          
-          ! -beta*v
-          DO ka = ka1, ka2
-            IF (A%index( ka) == auvi) THEN
-              A%val( ka) = A%val( ka) - ice%beta_eff_ac( avi)
-            END IF
-          END DO
-          
-          ! Right hand-side and initial guess
-          b_acuv(  auvi) = -ice%taudy_ac( avi)
-          uv_acuv( auvi) = v_ac( avi)
-          
+          CALL list_DIVA_matrix_coefficients_eq_2_free( mesh, ice, v_ac, auvi, avi, N_acuv, dN_dx_acuv, dN_dy_acuv, A, b_acuv, uv_acuv)
         END IF ! IF (MOD(auvi,2) == 1) THEN
         
       ELSE ! (edge_index == 0) THEN
         ! Border vertex/edge: apply boundary conditions
         
-        DO ka = ka1, ka2
-          IF (A%index( ka) == auvi) THEN
-            A%val( ka) = 1._dp  ! Diagonal element = 1, off-diagonal elements = 0
-          ELSE
-            A%val( ka) = 0._dp
-          END IF
-        END DO
-        
-        b_acuv(  auvi) = 0._dp
-        uv_acuv( auvi) = 0._dp
+        IF (MOD(auvi,2) == 1) THEN
+          ! u
+          CALL list_DIVA_matrix_coefficients_eq_1_boundary( mesh, u_ac, auvi, avi, edge_index, A, b_acuv, uv_acuv)
+        ELSE ! IF (MOD(auvi,2) == 1) THEN
+          ! v
+          CALL list_DIVA_matrix_coefficients_eq_2_boundary( mesh, v_ac, auvi, avi, edge_index, A, b_acuv, uv_acuv)
+        END IF ! IF (MOD(auvi,2) == 1) THEN
         
       END IF ! (edge_index == 0) THEN
       
@@ -1463,6 +1293,444 @@ CONTAINS
     CALL deallocate_shared( wuv_acuv   )
 
   END SUBROUTINE solve_SSADIVA_full_linearised
+  SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free(     mesh, ice, u_ac, auvi, avi, N_acuv, dN_dx_acuv, dN_dy_acuv, A, b_acuv, uv_acuv)
+    ! Find the matrix coefficients of equation n and add them to the lists
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
+    INTEGER,                             INTENT(IN)    :: auvi, avi
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_acuv, dN_dx_acuv, dN_dy_acuv
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_acuv, uv_acuv
+    
+    ! Local variables:
+    INTEGER                                            :: ka1, ka2, km1, km2, nnz_row_m, kk, ka, km
+        
+    ka1 = A%ptr( auvi)
+    ka2 = A%ptr( auvi+1) - 1
+          
+    ! 4 N d2u/dx2
+    km1 = mesh%M_d2dx2_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dx2_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 4._dp * N_acuv( auvi) * mesh%M_d2dx2_ac_ac%val( km)
+    END DO
+    
+    ! 4 dN/dx du/dx
+    km1 = mesh%M_ddx_ac_ac%ptr( avi)
+    km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 4._dp * dN_dx_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
+    END DO
+    
+    ! 3 N d2v/dxdy
+    km1 = mesh%M_d2dxdy_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dxdy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 3._dp * N_acuv( auvi) * mesh%M_d2dxdy_ac_ac%val( km)
+    END DO
+    
+    ! 2 dN/dx dv/dy
+    km1 = mesh%M_ddy_ac_ac%ptr( avi)
+    km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 2._dp * dN_dx_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
+    END DO
+    
+    ! N d2u/dy2
+    km1 = mesh%M_d2dy2_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dy2_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + N_acuv( auvi) * mesh%M_d2dy2_ac_ac%val( km)
+    END DO
+    
+    ! dN/dy du/dy
+    km1 = mesh%M_ddy_ac_ac%ptr( avi)
+    km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + dN_dy_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
+    END DO
+    
+    ! dN/dy dv/dx
+    km1 = mesh%M_ddx_ac_ac%ptr( avi)
+    km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + dN_dy_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
+    END DO
+    
+    ! -beta*u
+    DO ka = ka1, ka2
+      IF (A%index( ka) == auvi) THEN
+        A%val( ka) = A%val( ka) - ice%beta_eff_ac( avi)
+      END IF
+    END DO
+    
+    ! Right hand-side and initial guess
+    b_acuv(  auvi) = -ice%taudx_ac( avi)
+    uv_acuv( auvi) = u_ac( avi)
+    
+  END SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free
+  SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free(     mesh, ice, v_ac, auvi, avi, N_acuv, dN_dx_acuv, dN_dy_acuv, A, b_acuv, uv_acuv)
+    ! Find the matrix coefficients of equation n and add them to the lists
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
+    INTEGER,                             INTENT(IN)    :: auvi, avi
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_acuv, dN_dx_acuv, dN_dy_acuv
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_acuv, uv_acuv
+    
+    ! Local variables:
+    INTEGER                                            :: ka1, ka2, km1, km2, nnz_row_m, kk, ka, km
+        
+    ka1 = A%ptr( auvi)
+    ka2 = A%ptr( auvi+1) - 1
+          
+    ! 4 N d2v/dy2
+    km1 = mesh%M_d2dy2_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dy2_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 4._dp * N_acuv( auvi) * mesh%M_d2dy2_ac_ac%val( km)
+    END DO
+    
+    ! 4 dN/dy dv/dy
+    km1 = mesh%M_ddy_ac_ac%ptr( avi)
+    km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 4._dp * dN_dy_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
+    END DO
+    
+    ! 3 N d2u/dxdy
+    km1 = mesh%M_d2dxdy_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dxdy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 3._dp * N_acuv( auvi) * mesh%M_d2dxdy_ac_ac%val( km)
+    END DO
+    
+    ! 2 dN/dy du/dx
+    km1 = mesh%M_ddx_ac_ac%ptr( avi)
+    km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + 2._dp * dN_dy_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
+    END DO
+    
+    ! N d2v/dx2
+    km1 = mesh%M_d2dx2_ac_ac%ptr( avi)
+    km2 = mesh%M_d2dx2_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + N_acuv( auvi) * mesh%M_d2dx2_ac_ac%val( km)
+    END DO
+    
+    ! dN/dx dv/dx
+    km1 = mesh%M_ddx_ac_ac%ptr( avi)
+    km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 1
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + dN_dx_acuv( auvi) * mesh%M_ddx_ac_ac%val( km)
+    END DO
+    
+    ! dN/dx du/dy
+    km1 = mesh%M_ddy_ac_ac%ptr( avi)
+    km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+    nnz_row_m = km2 + 1 - km1
+    DO kk = 1, nnz_row_m
+      ka = ka1 + 2*kk - 2
+      km = km1 +   kk - 1
+      A%val( ka) = A%val( ka) + dN_dx_acuv( auvi) * mesh%M_ddy_ac_ac%val( km)
+    END DO
+    
+    ! -beta*v
+    DO ka = ka1, ka2
+      IF (A%index( ka) == auvi) THEN
+        A%val( ka) = A%val( ka) - ice%beta_eff_ac( avi)
+      END IF
+    END DO
+    
+    ! Right hand-side and initial guess
+    b_acuv(  auvi) = -ice%taudy_ac( avi)
+    uv_acuv( auvi) = v_ac( avi)
+    
+  END SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free
+  SUBROUTINE list_DIVA_matrix_coefficients_eq_1_boundary( mesh, u_ac, auvi, avi, edge_index, A, b_acuv, uv_acuv)
+    ! Find the matrix coefficients of equation n and add them to the lists
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
+    INTEGER,                             INTENT(IN)    :: auvi, avi, edge_index
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_acuv, uv_acuv
+    
+    ! Local variables:
+    INTEGER                                            :: ka1, ka2, ka, km1, km2, nnz_row_m, kk, km
+    CHARACTER(LEN=256)                                 :: BC
+    
+    ! Determine what kind of boundary conditions to apply 
+    IF     (edge_index == 8 .OR. edge_index == 1 .OR. edge_index == 2) THEN
+      ! North
+      IF     (C%DIVA_boundary_BC_u_north == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_north == 'infinite') THEN
+        BC = 'infinite_y'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_north "', TRIM(C%DIVA_boundary_BC_u_north), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 3) THEN
+      ! East
+      IF     (C%DIVA_boundary_BC_u_east == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_east == 'infinite') THEN
+        BC = 'infinite_x'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_east "', TRIM(C%DIVA_boundary_BC_u_east), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 4 .OR. edge_index == 5 .OR. edge_index == 6) THEN
+      ! South
+      IF     (C%DIVA_boundary_BC_u_south == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_south == 'infinite') THEN
+        BC = 'infinite_y'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_south "', TRIM(C%DIVA_boundary_BC_u_south), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 7) THEN
+      ! West
+      IF     (C%DIVA_boundary_BC_u_west == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_west == 'infinite') THEN
+        BC = 'infinite_x'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_west "', TRIM(C%DIVA_boundary_BC_u_west), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSE
+      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid edge_index ', edge_index, ' at avi = ', avi
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Add entries to sparse matrix lists
+    ka1 = A%ptr( auvi)
+    ka2 = A%ptr( auvi+1) - 1
+    
+    IF (BC == 'zero') THEN
+      ! Let u = 0 at this domain boundary
+      
+      DO ka = ka1, ka2
+        IF (A%index( ka) == auvi) THEN
+          A%val( ka) = 1._dp  ! Diagonal element = 1, off-diagonal elements = 0
+        ELSE
+          A%val( ka) = 0._dp
+        END IF
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = 0._dp
+      
+    ELSEIF (BC == 'infinite_x') THEN
+      ! Let du/dx = 0 at this domain boundary
+    
+      km1 = mesh%M_ddx_ac_ac%ptr( avi)
+      km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+      nnz_row_m = km2 + 1 - km1
+      
+      DO kk = 1, nnz_row_m
+        ka = ka1 + 2*kk - 2
+        km = km1 +   kk - 1
+        A%val( ka) = mesh%M_ddx_ac_ac%val( km)
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = u_ac( avi)
+      
+    ELSEIF (BC == 'infinite_y') THEN
+      ! Let du/dy = 0 at this domain boundary
+    
+      km1 = mesh%M_ddy_ac_ac%ptr( avi)
+      km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+      nnz_row_m = km2 + 1 - km1
+      DO kk = 1, nnz_row_m
+        ka = ka1 + 2*kk - 2
+        km = km1 +   kk - 1
+        A%val( ka) = mesh%M_ddy_ac_ac%val( km)
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = u_ac( avi)
+      
+    ELSE
+      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid BC = "', BC, '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE list_DIVA_matrix_coefficients_eq_1_boundary
+  SUBROUTINE list_DIVA_matrix_coefficients_eq_2_boundary( mesh, v_ac, auvi, avi, edge_index, A, b_acuv, uv_acuv)
+    ! Find the matrix coefficients of equation n and add them to the lists
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
+    INTEGER,                             INTENT(IN)    :: auvi, avi, edge_index
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_acuv, uv_acuv
+    
+    ! Local variables:
+    INTEGER                                            :: ka1, ka2, ka, km1, km2, nnz_row_m, kk, km
+    CHARACTER(LEN=256)                                 :: BC
+    
+    ! Determine what kind of boundary conditions to apply 
+    IF     (edge_index == 8 .OR. edge_index == 1 .OR. edge_index == 2) THEN
+      ! North
+      IF     (C%DIVA_boundary_BC_u_north == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_north == 'infinite') THEN
+        BC = 'infinite_y'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_u_north "', TRIM(C%DIVA_boundary_BC_u_north), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 3) THEN
+      ! East
+      IF     (C%DIVA_boundary_BC_u_east == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_east == 'infinite') THEN
+        BC = 'infinite_x'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_u_east "', TRIM(C%DIVA_boundary_BC_u_east), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 4 .OR. edge_index == 5 .OR. edge_index == 6) THEN
+      ! South
+      IF     (C%DIVA_boundary_BC_u_south == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_south == 'infinite') THEN
+        BC = 'infinite_y'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_u_south "', TRIM(C%DIVA_boundary_BC_u_south), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSEIF (edge_index == 7) THEN
+      ! West
+      IF     (C%DIVA_boundary_BC_u_west == 'zero') THEN
+        BC = 'zero'
+      ELSEIF (C%DIVA_boundary_BC_u_west == 'infinite') THEN
+        BC = 'infinite_x'
+      ELSE
+        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_u_west "', TRIM(C%DIVA_boundary_BC_u_west), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    ELSE
+      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid edge_index ', edge_index, ' at avi = ', avi
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Add entries to sparse matrix lists
+    ka1 = A%ptr( auvi)
+    ka2 = A%ptr( auvi+1) - 1
+    
+    IF (BC == 'zero') THEN
+      ! Let v = 0 at this domain boundary
+      
+      DO ka = ka1, ka2
+        IF (A%index( ka) == auvi) THEN
+          A%val( ka) = 1._dp  ! Diagonal element = 1, off-diagonal elements = 0
+        ELSE
+          A%val( ka) = 0._dp
+        END IF
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = 0._dp
+      
+    ELSEIF (BC == 'infinite_x') THEN
+      ! Let dv/dx = 0 at this domain boundary
+    
+      km1 = mesh%M_ddx_ac_ac%ptr( avi)
+      km2 = mesh%M_ddx_ac_ac%ptr( avi+1) - 1
+      nnz_row_m = km2 + 1 - km1
+      DO kk = 1, nnz_row_m
+        ka = ka1 + 2*kk - 1
+        km = km1 +   kk - 1
+        A%val( ka) = mesh%M_ddx_ac_ac%val( km)
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = v_ac( avi)
+      
+    ELSEIF (BC == 'infinite_y') THEN
+      ! Let dv/dy = 0 at this domain boundary
+    
+      km1 = mesh%M_ddy_ac_ac%ptr( avi)
+      km2 = mesh%M_ddy_ac_ac%ptr( avi+1) - 1
+      nnz_row_m = km2 + 1 - km1
+      DO kk = 1, nnz_row_m
+        ka = ka1 + 2*kk - 1
+        km = km1 +   kk - 1
+        A%val( ka) = mesh%M_ddy_ac_ac%val( km)
+      END DO
+      
+      b_acuv(  auvi) = 0._dp
+      uv_acuv( auvi) = v_ac( avi)
+      
+    ELSE
+      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid BC = "', BC, '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE list_DIVA_matrix_coefficients_eq_2_boundary
+  
   SUBROUTINE solve_SSADIVA_full_linearised_old( mesh, ice, u_ac, v_ac)
     ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
     ! constant rather than functions of velocity).

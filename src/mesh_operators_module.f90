@@ -4555,8 +4555,8 @@ MODULE mesh_operators_module
     
     ! Local variables:
     INTEGER                                            :: nrows, ncols, nnz_max
-    INTEGER                                            :: avi, auvi, k1, k2
-    TYPE(type_sparse_matrix_CSR)                       :: M1, M_acu_ac, M_acv_ac, M_acuv_ac
+    INTEGER                                            :: avi, auvi, k1, k2, ci, avj, auvj
+    TYPE(type_sparse_matrix_CSR)                       :: M_acu_ac, M_acv_ac, M_acuv_ac
     
   ! ac_acu/ac_acv: from the ac-grid to the u/v-parts of the acuv-grid
   ! =================================================================
@@ -4572,8 +4572,6 @@ MODULE mesh_operators_module
     ! Initialise
     mesh%M_move_ac_acu%nnz = 0
     mesh%M_move_ac_acv%nnz = 0
-    mesh%M_move_ac_acu%ptr = 1
-    mesh%M_move_ac_acv%ptr = 1
     
     ! Fill the matrices
     DO auvi = mesh%auvi1, mesh%auvi2
@@ -4623,8 +4621,6 @@ MODULE mesh_operators_module
     ! Initialise
     mesh%M_move_acu_ac%nnz = 0
     mesh%M_move_acv_ac%nnz = 0
-    mesh%M_move_acu_ac%ptr = 1
-    mesh%M_move_acv_ac%ptr = 1
     
     ! Fill the matrices
     DO avi = mesh%avi1, mesh%avi2
@@ -4717,8 +4713,6 @@ MODULE mesh_operators_module
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, M_acuv_ac, mesh%nz_template_acuv_acv)
     CALL deallocate_matrix_CSR( M_acuv_ac)
     
-    CALL add_matrix_matrix_CSR( mesh%nz_template_acuv_acu, mesh%nz_template_acuv_acv, mesh%nz_template_acuv_acuv)
-    
     ! Set values to zeros
     DO auvi = mesh%auvi1, mesh%auvi2
     
@@ -4729,13 +4723,77 @@ MODULE mesh_operators_module
       k1 = mesh%nz_template_acuv_acv%ptr(  auvi)
       k2 = mesh%nz_template_acuv_acv%ptr(  auvi+1)-1
       mesh%nz_template_acuv_acv%val(  k1:k2) = 0._dp
-    
-      k1 = mesh%nz_template_acuv_acuv%ptr(  auvi)
-      k2 = mesh%nz_template_acuv_acuv%ptr(  auvi+1)-1
-      mesh%nz_template_acuv_acuv%val(  k1:k2) = 0._dp
       
     END DO
     CALL sync
+        
+  ! Set up non-zero-structure templates for matrix operations from the acuv-grid to the acuv-grid
+  ! =============================================================================================
+    
+    ! Add exceptions at the domain boundary
+    ncols   = 2*mesh%nVAaAc   ! from
+    nrows   = 2*mesh%nVAaAc ! to
+    nnz_max = 4*(mesh%nVAaAc + SUM(mesh%nCAaAc))
+    
+    ! Allocate distributed shared memory
+    CALL allocate_matrix_CSR_dist( mesh%nz_template_acuv_acuv, nrows, ncols, nnz_max)
+    
+    ! Initialise
+    mesh%nz_template_acuv_acuv%nnz = 0
+    
+    ! Fill the matrix rows for the boundary vertices/edges
+    DO auvi = mesh%auvi1, mesh%auvi2
+      
+      IF (MOD(auvi,2)==1) THEN
+        ! u
+        avi = (auvi+1) / 2
+      ELSE
+        ! v
+        avi = auvi / 2
+      END IF
+        
+      ! Add entries for neighbours
+      DO ci = 1, mesh%nCAaAc( avi)
+        avj = mesh%CAaAc( avi,ci)
+        
+        ! u-field
+        auvj = 2*avj - 1
+        mesh%nz_template_acuv_acuv%nnz =  mesh%nz_template_acuv_acuv%nnz + 1
+        mesh%nz_template_acuv_acuv%index( mesh%nz_template_acuv_acuv%nnz) = auvj
+        mesh%nz_template_acuv_acuv%val(   mesh%nz_template_acuv_acuv%nnz) = 1._dp
+        mesh%nz_template_acuv_acuv%ptr( auvi+1 : nrows+1) = mesh%nz_template_acuv_acuv%nnz + 1
+        
+        ! v-field
+        auvj = 2*avj
+        mesh%nz_template_acuv_acuv%nnz =  mesh%nz_template_acuv_acuv%nnz + 1
+        mesh%nz_template_acuv_acuv%index( mesh%nz_template_acuv_acuv%nnz) = auvj
+        mesh%nz_template_acuv_acuv%val(   mesh%nz_template_acuv_acuv%nnz) = 1._dp
+        mesh%nz_template_acuv_acuv%ptr( auvi+1 : nrows+1) = mesh%nz_template_acuv_acuv%nnz + 1
+        
+      END DO
+      
+      ! Add entries for the home vertex
+        
+      ! u-field
+      auvj = 2*avi - 1
+      mesh%nz_template_acuv_acuv%nnz =  mesh%nz_template_acuv_acuv%nnz + 1
+      mesh%nz_template_acuv_acuv%index( mesh%nz_template_acuv_acuv%nnz) = auvj
+      mesh%nz_template_acuv_acuv%val(   mesh%nz_template_acuv_acuv%nnz) = 1._dp
+      mesh%nz_template_acuv_acuv%ptr( auvi+1 : nrows+1) = mesh%nz_template_acuv_acuv%nnz + 1
+        
+      ! v-field
+      auvj = 2*avi
+      mesh%nz_template_acuv_acuv%nnz =  mesh%nz_template_acuv_acuv%nnz + 1
+      mesh%nz_template_acuv_acuv%index( mesh%nz_template_acuv_acuv%nnz) = auvj
+      mesh%nz_template_acuv_acuv%val(   mesh%nz_template_acuv_acuv%nnz) = 1._dp
+      mesh%nz_template_acuv_acuv%ptr( auvi+1 : nrows+1) = mesh%nz_template_acuv_acuv%nnz + 1
+      
+    END DO ! DO auvi = mesh%auvi1, mesh%auvi2
+    CALL sync
+    
+    ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%nz_template_acuv_acuv, mesh%auvi1, mesh%auvi2)
+    CALL finalise_matrix_CSR_dist( mesh%nz_template_acuv_acuv, mesh%auvi1, mesh%auvi2)
     
   END SUBROUTINE calc_matrix_operators_combi_acuv
   

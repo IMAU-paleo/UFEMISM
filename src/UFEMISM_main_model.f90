@@ -439,7 +439,9 @@ CONTAINS
     ! ===== The ELRA GIA model =====
     ! ==============================
     
-    IF (C%choice_GIA_model == 'ELRA') THEN
+    IF     (C%choice_GIA_model == 'none') THEN
+      ! Nothing to be done
+    ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
     ELSE
       WRITE(0,*) '  ERROR - choice_GIA_model "', C%choice_GIA_model, '" not implemented in initialise_model!'

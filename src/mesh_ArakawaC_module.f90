@@ -22,7 +22,7 @@ MODULE mesh_ArakawaC_module
   
   ! Import specific functionality           
   USE data_types_module,               ONLY: type_mesh
-  USE mesh_help_functions_module,      ONLY: is_boundary_segment, calc_triangle_geometric_centres_ac
+  USE mesh_help_functions_module,      ONLY: is_boundary_segment, calc_triangle_geometric_centres_ac, update_triangle_circumcenters_bb
 
   IMPLICIT NONE
 
@@ -454,9 +454,12 @@ MODULE mesh_ArakawaC_module
     CALL partition_list(   mesh%nTriAaAc, par%i, par%n, mesh%ati1,  mesh%ati2 )
     CALL partition_list( 2*mesh%nVAaAc,   par%i, par%n, mesh%auvi1, mesh%auvi2)
     
-    ! Calculate geometric centres of AaAc triangles
+    ! Calculate circumcentres and geometric centres of AaAc triangles
+    CALL allocate_shared_dp_2D( mesh%nTriAaAc, 2, mesh%TriccAaAc,  mesh%wTriccAaAc )
     CALL allocate_shared_dp_2D( mesh%nTriAaAc, 2, mesh%TriGCAaAc,  mesh%wTriGCAaAc )
+    
     CALL calc_triangle_geometric_centres_ac( mesh)
+    CALL update_triangle_circumcenters_bb(   mesh)
     
   END SUBROUTINE make_combined_AaAc_mesh
 

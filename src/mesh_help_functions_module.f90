@@ -959,6 +959,67 @@ MODULE mesh_help_functions_module
     mesh%Tricc(ti,:) = cc
     
   END SUBROUTINE update_triangle_circumcenter
+  SUBROUTINE update_triangle_circumcenters_bb( mesh)
+    ! Calculate the circumcenters of all mesh bb-triangles
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    INTEGER                                       :: ati
+    
+    DO ati = mesh%ati1, mesh%ati2
+      CALL update_triangle_circumcenter_bb( mesh, ati)
+    END DO
+    CALL sync
+    
+  END SUBROUTINE update_triangle_circumcenters_bb
+  SUBROUTINE update_triangle_circumcenter_bb( mesh, ati)
+    ! Calculate the circumcenter of mesh bb-triangle ati
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    INTEGER,                    INTENT(IN)        :: ati
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                        :: av1, av2, av3, cc
+    
+    av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
+    av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
+    av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:)     
+    CALL find_circumcenter( av1, av2, av3, cc)
+    
+    ! If find_circumcenter yields infinity, it's because p and q have the
+    ! same y-coordinate. Rearrange vertices in triangle matrix (maintaining
+    ! counter-clockwise orientation) and try again.
+    
+    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*10000._dp) THEN
+      mesh%TriAaAc( ati,:) = [mesh%TriAaAc( ati,2), mesh%TriAaAc( ati,3), mesh%TriAaAc( ati,1)]
+      av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
+      av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
+      av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
+      CALL find_circumcenter( av1, av2, av3, cc)
+    END IF
+    
+    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*100000._dp) THEN
+      mesh%TriAaAc( ati,:) = [mesh%TriAaAc( ati,2), mesh%TriAaAc( ati,3), mesh%TriAaAc( ati,1)]
+      av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
+      av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
+      av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
+      CALL find_circumcenter( av1, av2, av3, cc)
+    END IF
+    
+    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*100000._dp) THEN
+      WRITE(0,*) '  update_bb_triangle_circumcenter - ERROR: triangle  doesn''t yield a valid circumcenter!'
+    END IF
+    
+    mesh%TriccAaAc( ati,:) = cc
+    
+  END SUBROUTINE update_triangle_circumcenter_bb
   SUBROUTINE update_triangle_geometric_center( mesh, ti)
     ! Calculate the geometric centre of mesh triangle ti    
     

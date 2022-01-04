@@ -86,8 +86,9 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_gl_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_cf_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_ac
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a
+    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_ac
     
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
@@ -332,10 +333,11 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: nCAaAc
     INTEGER,  DIMENSION(:,:  ), POINTER     :: CAaAc
     INTEGER,  DIMENSION(:,:  ), POINTER     :: TriAaAc
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: TriccAaAc
     REAL(dp), DIMENSION(:,:  ), POINTER     :: TriGCAaAc
     INTEGER,  DIMENSION(:    ), POINTER     :: niTriAaAc
     INTEGER,  DIMENSION(:,:  ), POINTER     :: iTriAaAc
-    INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc, wTriGCAaAc, wniTriAaAc, wiTriAaAc
+    INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc, wTriccAaAc, wTriGCAaAc, wniTriAaAc, wiTriAaAc
     
     ! Matrix operators: mapping
     TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid

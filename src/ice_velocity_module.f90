@@ -32,7 +32,7 @@ MODULE ice_velocity_module
                                              map_ac_to_bb_2D, map_ac_to_bb_3D, ddx_ac_to_bb_2D, ddy_ac_to_bb_2D, &
                                              map_bb_to_ac_3D, map_bb_to_acuv_2D, ddx_bb_to_acuv_2D, ddy_bb_to_acuv_2D, &
                                              map_bb_to_ac_2D
-  USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
+  USE utilities_module,                ONLY: is_floating, vertical_integration_from_bottom_to_zeta, vertical_average, &
                                              vertical_integrate, multiply_matrix_matrix_CSR, convert_vector_to_diag_CSR, &
                                              add_matrix_matrix_CSR, multiply_matrix_rows_with_vector, &
                                              deallocate_matrix_CSR, overwrite_rows_CSR, solve_matrix_equation_CSR, &
@@ -40,6 +40,7 @@ MODULE ice_velocity_module
   USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
   USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
+  USE general_ice_model_data_module,   ONLY: determine_grounded_fractions_ac
 
   IMPLICIT NONE
   
@@ -198,8 +199,8 @@ CONTAINS
     ! Calculate the basal yield stress tau_c
     CALL calc_basal_conditions( mesh, ice)
     
-!    ! Determine sub-mesh grounded fractions for scaling the basal friction
-!    CALL determine_grounded_fractions( mesh, ice)
+    ! Determine sub-mesh grounded fractions for scaling the basal friction
+    CALL determine_grounded_fractions_ac( mesh, ice)
     
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
     CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
@@ -224,14 +225,9 @@ CONTAINS
       ice%beta_eff_ac( mesh%avi1:mesh%avi2) = ice%beta_ac( mesh%avi1:mesh%avi2)
       CALL sync
     
-!      ! Apply the sub-mesh grounded fraction
-!      DO i = mesh%i1, mesh%i2
-!      DO j = 1, mesh%ny
-!        IF (i < mesh%nx) ice%beta_eff_cx( j,i) = ice%beta_eff_cx( j,i) * ice%f_grnd_cx( j,i)**2
-!        IF (j < mesh%ny) ice%beta_eff_cy( j,i) = ice%beta_eff_cy( j,i) * ice%f_grnd_cy( j,i)**2
-!      END DO
-!      END DO
-!      CALL sync
+      ! Apply the sub-mesh grounded fraction
+      ice%beta_eff_ac( mesh%avi1:mesh%avi2) = ice%beta_eff_ac( mesh%avi1:mesh%avi2) * ice%f_grnd_ac( mesh%avi1:mesh%avi2)**2
+      CALL sync
       
       ! Store the previous solution so we can check for convergence later
       u_ac_prev( mesh%avi1:mesh%avi2) = u_ac( mesh%avi1:mesh%avi2)
@@ -366,8 +362,8 @@ CONTAINS
     ! Calculate the basal yield stress tau_c
     CALL calc_basal_conditions( mesh, ice)
     
-!    ! Determine sub-mesh grounded fractions for scaling the basal friction
-!    CALL determine_grounded_fractions( mesh, ice)
+    ! Determine sub-mesh grounded fractions for scaling the basal friction
+    CALL determine_grounded_fractions_ac( mesh, ice)
     
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
     CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
@@ -397,14 +393,9 @@ CONTAINS
       ! Calculate beta_eff
       CALL calc_beta_eff( mesh, ice)
     
-!      ! Apply the sub-mesh grounded fraction
-!      DO i = mesh%i1, mesh%i2
-!      DO j = 1, mesh%ny
-!        IF (i < mesh%nx) ice%beta_eff_cx( j,i) = ice%beta_eff_cx( j,i) * ice%f_grnd_cx( j,i)**2
-!        IF (j < mesh%ny) ice%beta_eff_cy( j,i) = ice%beta_eff_cy( j,i) * ice%f_grnd_cy( j,i)**2
-!      END DO
-!      END DO
-!      CALL sync
+      ! Apply the sub-mesh grounded fraction
+      ice%beta_eff_ac( mesh%avi1:mesh%avi2) = ice%beta_eff_ac( mesh%avi1:mesh%avi2) * ice%f_grnd_ac( mesh%avi1:mesh%avi2)!**2
+      CALL sync
       
       ! Store the previous solution so we can check for convergence later
       u_ac_prev( mesh%avi1:mesh%avi2) = u_ac( mesh%avi1:mesh%avi2)
@@ -735,13 +726,20 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     
     ! Local variables:
+    INTEGER                                            :: avi
     REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx_ac,  dHs_dy_ac
     INTEGER                                            :: wdHs_dx_ac, wdHs_dy_ac
-    INTEGER                                            :: avi
+    REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_ac,  Hb_ac,  SL_ac,  dHi_dx_ac,  dHi_dy_ac
+    INTEGER                                            :: wHi_ac, wHb_ac, wSL_ac, wdHi_dx_ac, wdHi_dy_ac
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nVAaAc, dHs_dx_ac, wdHs_dx_ac)
     CALL allocate_shared_dp_1D( mesh%nVAaAc, dHs_dy_ac, wdHs_dy_ac)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, Hi_ac    , wHi_ac    )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, Hb_ac    , wHb_ac    )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, SL_ac    , wSL_ac    )
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, dHi_dx_ac, wdHi_dx_ac)
+    CALL allocate_shared_dp_1D( mesh%nVAaAc, dHi_dy_ac, wdHi_dy_ac)
     
     ! Map ice thickness to the aca-grid
     CALL map_a_to_ac_2D( mesh, ice%Hi_a, ice%Hi_ac)
@@ -749,6 +747,21 @@ CONTAINS
     ! Calculate surface slopes on the aca-grid
     CALL ddx_a_to_ac_2D( mesh, ice%Hs_a, dHs_dx_ac)
     CALL ddy_a_to_ac_2D( mesh, ice%Hs_a, dHs_dy_ac)
+    
+    ! "Correct" surface slopes near the grounding line
+    CALL map_a_to_ac_2D( mesh, ice%Hi_a, Hi_ac    )
+    CALL map_a_to_ac_2D( mesh, ice%Hb_a, Hb_ac    )
+    CALL map_a_to_ac_2D( mesh, ice%SL_a, SL_ac    )
+    CALL ddx_a_to_ac_2D( mesh, ice%Hi_a, dHi_dx_ac)
+    CALL ddy_a_to_ac_2D( mesh, ice%Hi_a, dHi_dy_ac)
+    
+    DO avi = mesh%avi1, mesh%avi2
+      IF (is_floating( Hi_ac( avi), Hb_ac( avi), SL_ac( avi))) THEN
+        dHs_dx_ac( avi) = (1._dp - ice_density / seawater_density) * dHi_dx_ac( avi)
+        dHs_dy_ac( avi) = (1._dp - ice_density / seawater_density) * dHi_dy_ac( avi)
+      END IF
+    END DO
+    CALL sync
     
     ! Calculate driving stresses on the aca-grid
     DO avi =  mesh%avi1, mesh%avi2
@@ -760,6 +773,11 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wdHs_dx_ac)
     CALL deallocate_shared( wdHs_dy_ac)
+    CALL deallocate_shared( wHi_ac    )
+    CALL deallocate_shared( wHb_ac    )
+    CALL deallocate_shared( wSL_ac    )
+    CALL deallocate_shared( wdHi_dx_ac)
+    CALL deallocate_shared( wdHi_dy_ac)
     
   END SUBROUTINE calculate_driving_stress
   SUBROUTINE calc_vertical_shear_strain_rates( mesh, ice)

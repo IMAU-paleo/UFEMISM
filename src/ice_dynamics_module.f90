@@ -766,6 +766,7 @@ CONTAINS
     CALL allocate_shared_int_1D(  mesh%nV      ,              ice%mask_gl_a             , ice%wmask_gl_a            )
     CALL allocate_shared_int_1D(  mesh%nV      ,              ice%mask_cf_a             , ice%wmask_cf_a            )
     CALL allocate_shared_int_1D(  mesh%nV      ,              ice%mask_a                , ice%wmask_a               )
+    CALL allocate_shared_dp_1D(   mesh%nVAaAc  ,              ice%f_grnd_ac             , ice%wf_grnd_ac            )
     
     ! Ice physical properties
     CALL allocate_shared_dp_2D(   mesh%nV      , C%nz       , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )

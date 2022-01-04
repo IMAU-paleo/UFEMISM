@@ -24,6 +24,8 @@ MODULE general_ice_model_data_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model
   USE utilities_module,                ONLY: is_floating, surface_elevation, thickness_above_floatation
+  USE mesh_help_functions_module,      ONLY: find_triangle_area
+  USE mesh_operators_module,           ONLY: map_a_to_ac_2D, map_ac_to_bb_2D
 
   IMPLICIT NONE
 
@@ -168,5 +170,210 @@ CONTAINS
     CALL sync
   
   END SUBROUTINE determine_masks
+  
+! == Routines for calculating sub-grid grounded fractions
+  SUBROUTINE determine_grounded_fractions_ac( mesh, ice)
+    ! Determine the grounded fraction of next-to-grounding-line pixels on the ac-grid
+    ! (used for determining basal friction in the DIVA)
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  TAF_ac,  TAF_bb
+    INTEGER                                            :: wTAF_ac, wTAF_bb
+    INTEGER                                            :: avi, ci, avj, iati, iati2, ati1, ati2
+    REAL(dp)                                           :: TAF_max, TAF_min
+    REAL(dp), DIMENSION(2)                             :: vac, ccbb1, ccbb2
+    REAL(dp)                                           :: TAFa, TAFb, TAFc, A_vor_ac, A_subtri_bb, A_grnd_ac, A_grnd_bb
+    
+    ! Map thickness-above-floatation to the ac- and bb-grids
+    CALL allocate_shared_dp_1D( mesh%nVAaAc  , TAF_ac, wTAF_ac)
+    CALL allocate_shared_dp_1D( mesh%nTriAaAc, TAF_bb, wTAF_bb)
+    CALL map_a_to_ac_2D(  mesh, ice%TAF_a, TAF_ac)
+    CALL map_ac_to_bb_2D( mesh, TAF_ac, TAF_bb)
+    
+    DO avi = mesh%avi1, mesh%avi2
+      
+      ! Determine maximum and minimum TAF of the local neighbourhood
+      TAF_max = -1E6_dp
+      TAF_min =  1E6_dp
+      
+      TAF_max = MAX( TAF_max, TAF_ac( avi))
+      TAF_min = MIN( TAF_min, TAF_ac( avi))
+      
+      DO ci = 1, mesh%nCAaAc( avi)
+        avj = mesh%CAaAc( avi,ci)
+        TAF_max = MAX( TAF_max, TAF_ac( avj))
+        TAF_min = MIN( TAF_min, TAF_ac( avj))
+      END DO
+      
+      ! If the entire local neighbourhood is grounded, the answer is trivial
+      IF (TAF_min >= 0._dp) THEN
+        ice%f_grnd_ac( avi) = 1._dp
+        CYCLE
+      END IF
+      
+      ! If the entire local neighbourhood is floating, the answer is trivial
+      IF (TAF_max <= 0._dp) THEN
+        ice%f_grnd_ac( avi) = 0._dp
+        CYCLE
+      END IF
+      
+      ! The local neighbourhood contains both grounded and floating vertices.
+      A_vor_ac  = 0._dp
+      A_grnd_ac = 0._dp
+      
+      vac  = mesh%VAaAc( avi,:)
+      TAFa = TAF_ac( avi)
+      
+      DO iati = 1, mesh%niTriAaAc( avi)
+        
+        iati2 = iati + 1
+        IF (iati == mesh%niTriAaAc( avi)) iati2 = 1
+        
+        ati1 = mesh%iTriAaAc( avi,iati )
+        ati2 = mesh%iTriAaAc( avi,iati2)
+        
+        ccbb1 = mesh%TriccAaAc( ati1,:)
+        ccbb2 = mesh%TriccAaAc( ati2,:)
+        
+        TAFb = TAF_bb( ati1)
+        TAFc = TAF_bb( ati2)
+        
+        ! Determine total area of, and grounded area within, this subtriangle
+        CALL determine_grounded_fraction_subtri_bb( vac, ccbb1, ccbb2, TAFa, TAFb, TAFc, A_subtri_bb, A_grnd_bb)
+        
+        A_vor_ac  = A_vor_ac  + A_subtri_bb
+        A_grnd_ac = A_grnd_ac + A_grnd_bb
+        
+      END DO ! DO iati = 1, mesh%niTriAaAc( avi)
+      
+      ! Calculate the grounded fraction of this Voronoi cell
+      ice%f_grnd_ac( avi) = A_grnd_ac / A_vor_ac
+      
+    END DO ! DO avi = mesh%avi1, mesh%avi2
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wTAF_ac)
+    CALL deallocate_shared( wTAF_bb)
+    
+    
+    ! DENK DROM
+    IF (par%master) THEN
+      debug%dp_2D_ac_01 = ice%f_grnd_ac
+      CALL write_to_debug_file
+    END IF
+    CALL sync
+    !CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    
+  END SUBROUTINE determine_grounded_fractions_ac
+  SUBROUTINE determine_grounded_fraction_subtri_bb( va, vb, vc, TAFa, TAFb, TAFc, A_subtri, A_grnd)
+    ! Determine the grounded area of the triangle [va,vb,vc], where the thickness-above-floatation is given at all three corners
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_subtri, A_grnd
+    
+    ! Local variables:
+    REAL(dp)                                           :: A_flt
+    
+    ! Determine total area of this subtriangle
+    CALL find_triangle_area( va, vb, vc, A_subtri)
+        
+    IF     (TAFa >= 0._dp .AND. TAFb >= 0._dp .AND. TAFc >= 0._dp) THEN
+      ! If all three corners are grounded, the answer is trivial
+      A_grnd = A_subtri
+    ELSEIF (TAFa <= 0._dp .AND. TAFb <= 0._dp .AND. TAFc <= 0._dp) THEN
+      ! If all three corners are floating, the answer is trivial
+      A_grnd = 0._dp
+    ELSE
+      ! At least one corner is grounded and at least one corner is floating
+      
+      IF     (TAFa >= 0._dp .AND. TAFb <= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! a is grounded, b and c are floating
+        CALL determine_grounded_fraction_subtri_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb >= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! b is grounded, a and c are floating
+        CALL determine_grounded_fraction_subtri_1grnd_2flt( vb, vc, va, TAFb, TAFc, TAFa, A_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb <= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! c is grounded, a and b are floating
+        CALL determine_grounded_fraction_subtri_1grnd_2flt( vc, va, vb, TAFc, TAFa, TAFb, A_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb >= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! a is floating, b and c are grounded
+        CALL determine_grounded_fraction_subtri_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_flt)
+        A_grnd = A_subtri - A_flt
+      ELSEIF (TAFa >= 0._dp .AND. TAFb <= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! b is floating, c and a are grounded
+        CALL determine_grounded_fraction_subtri_1flt_2grnd( vb, vc, va, TAFb, TAFc, TAFa, A_flt)
+        A_grnd = A_subtri - A_flt
+      ELSEIF (TAFa >= 0._dp .AND. TAFb >= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! c is floating, a and b are grounded
+        CALL determine_grounded_fraction_subtri_1flt_2grnd( vc, va, vb, TAFc, TAFa, TAFb, A_flt)
+        A_grnd = A_subtri - A_flt
+      ELSE
+        A_grnd = 0._dp
+        WRITE(0,*) 'determine_grounded_fraction_subtri_bb - ERROR: TAF = [', TAFa, ',', TAFb, ',', TAFc, ']'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    END IF
+    
+  END SUBROUTINE determine_grounded_fraction_subtri_bb
+  SUBROUTINE determine_grounded_fraction_subtri_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_grnd)
+    ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is grounded
+    ! and b and c are floating
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_grnd
+    
+    ! Local variables:
+    REAL(dp)                                           :: lambda_ab, lambda_ac
+    REAL(dp), DIMENSION(2)                             :: pab, pac
+    
+    lambda_ab = TAFa / (TAFa - TAFb)
+    pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
+    
+    lambda_ac = TAFa / (TAFa - TAFc)
+    pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
+    
+    CALL find_triangle_area( va, pab, pac, A_grnd)
+    
+  END SUBROUTINE determine_grounded_fraction_subtri_1grnd_2flt
+  SUBROUTINE determine_grounded_fraction_subtri_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_flt)
+    ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is floating
+    ! and b and c are grounded
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_flt
+    
+    ! Local variables:
+    REAL(dp)                                           :: lambda_ab, lambda_ac
+    REAL(dp), DIMENSION(2)                             :: pab, pac
+    
+    lambda_ab = TAFa / (TAFa - TAFb)
+    pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
+    
+    lambda_ac = TAFa / (TAFa - TAFc)
+    pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
+    
+    CALL find_triangle_area( va, pab, pac, A_flt)
+    
+  END SUBROUTINE determine_grounded_fraction_subtri_1flt_2grnd
 
 END MODULE general_ice_model_data_module

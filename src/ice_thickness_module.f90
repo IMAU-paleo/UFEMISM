@@ -25,7 +25,7 @@ MODULE ice_thickness_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
                                              type_reference_geometry
   USE utilities_module,                ONLY: is_floating
-  USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag
+  USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex
 
   IMPLICIT NONE
   
@@ -150,7 +150,7 @@ CONTAINS
     ! Correct outfluxes for possible resulting negative ice thicknesses
     ! =================================================================
     
-    Vi_SMB( mesh%vi1:mesh%vi2) = (SMB%SMB_year( mesh%vi1:mesh%vi2) + BMB%BMB( mesh%vi1:mesh%vi2))  * mesh%A( mesh%vi1:mesh%vi2) * dt! * ice_density / 1000._dp     ! m3 ice equivalent
+    Vi_SMB( mesh%vi1:mesh%vi2) = (SMB%SMB_year( mesh%vi1:mesh%vi2) + BMB%BMB( mesh%vi1:mesh%vi2))  * mesh%A( mesh%vi1:mesh%vi2) * dt
     CALL sync
     
     DO vi = mesh%vi1, mesh%vi2
@@ -213,7 +213,7 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       dVi  = SUM( ice%dVi_in( vi,:))
       ice%dHi_dt_a(     vi) = (dVi + Vi_SMB( vi)) / (mesh%A( vi) * dt)  
-      ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi))
+      ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi) * dt)
       ice%dHi_dt_a(     vi) = (ice%Hi_tplusdt_a( vi) - ice%Hi_a( vi)) / dt
     END DO    
     CALL sync

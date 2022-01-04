@@ -726,7 +726,7 @@ CONTAINS
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
       
-      IF (is_floating( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), refgeo%Hs_grid( i,j))) THEN
+      IF (is_floating( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)) THEN
         refgeo%mask_land(  i,j) = 1
       ELSE
         refgeo%mask_ocean( i,j) = 1

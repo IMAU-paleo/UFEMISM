@@ -1303,82 +1303,102 @@ CONTAINS
     CALL deallocate_matrix_CSR( BBT)
     
   END SUBROUTINE multiply_matrix_matrix_CSR_notemplate
-  SUBROUTINE multiply_matrix_vector_CSR( AA, BB, CC)
-    ! Perform the matrix multiplication C = A*B, where 
-    ! A is a CSR-format matrix, and B and C are regular vectors.
+  SUBROUTINE add_matrix_matrix_CSR( AA, BB, CC, alpha, beta, same_structure)
+    ! Perform the matrix addition C = (alpha*A) + (beta*B), where all three
+    ! matrices are provided in CSR format (parallelised)
       
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: BB
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: CC
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
+    LOGICAL,  OPTIONAL,                  INTENT(IN)    :: same_structure
     
     ! Local variables:
-    INTEGER                                            :: mb, mc, i1, i2, i, k, j
-    
-    mb = SIZE( BB,1)
-    mc = SIZE( CC,1)
+    LOGICAL                                            :: same_structurep
     
     ! Safety
-    IF (mb /= AA%n .OR. mc /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
+    IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
+      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR - ERROR: A and B are not of the same size!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-    ! Partition rows over the processors
-    CALL partition_list( mc, par%i, par%n, i1, i2)
+    IF (PRESENT( same_structure)) THEN
+      same_structurep = same_structure
+    ELSE
+      same_structurep = .FALSE.
+    END IF
     
-    DO i = i1, i2
-      CC( i) = 0._dp
-      DO k = AA%ptr( i), AA%ptr( i+1)-1
-        j = AA%index( k)
-        CC( i) = CC( i) + AA%val( k) * BB( j)
-      END DO
-    END DO
-    CALL sync
+    IF (same_structurep) THEN
+      CALL add_matrix_matrix_CSR_template(   AA, BB, CC, alpha, beta)
+    ELSE
+      CALL add_matrix_matrix_CSR_notemplate( AA, BB, CC, alpha, beta)
+    END IF
     
-  END SUBROUTINE multiply_matrix_vector_CSR
-  SUBROUTINE multiply_matrix_vector_2D_CSR( AA, BB, CC)
-    ! Perform the matrix multiplication C = A*B, where 
-    ! A is a CSR-format matrix, and B and C are regular vectors.
+  END SUBROUTINE add_matrix_matrix_CSR
+  SUBROUTINE add_matrix_matrix_CSR_template( AA, BB, CC, alpha, beta)
+    ! Perform the matrix addition C = (alpha*A) + (beta*B), where all three
+    ! matrices are provided in CSR format (parallelised)
     ! 
-    ! NOTE: A = [m-by-n], B,C = [n-by-nz]
+    ! NOTE: assumes A and B (and therefore C) have the same non-zero structure
       
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: BB
-    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: CC
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA, BB
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: CC
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
     
     ! Local variables:
-    INTEGER                                            :: mb, mc, i1, i2, i, k, j
-    
-    mb = SIZE( BB,1)
-    mc = SIZE( CC,1)
+    REAL(dp)                                           :: alphap, betap
+    INTEGER                                            :: i1,i2,k1,k2
     
     ! Safety
-    IF (mb /= AA%n .OR. mc /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
+    IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
+      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR_template - ERROR: A and B are not of the same size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    IF (AA%nnz /= BB%nnz) THEN
+      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR_template - ERROR: A and B dont have the same non-zero structure!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-    ! Partition rows over the processors
-    CALL partition_list( mc, par%i, par%n, i1, i2)
+    ! If no coefficients are provided, assume unity
+    IF (PRESENT( alpha)) THEN
+      alphap = alpha
+    ELSE
+      alphap = 1._dp
+    END IF
+    IF (PRESENT( beta )) THEN
+      betap  = beta
+    ELSE
+      betap  = 1._dp
+    END IF
     
-    DO i = i1, i2
-      CC( i,:) = 0._dp
-      DO k = AA%ptr( i), AA%ptr( i+1)-1
-        j = AA%index( k)
-        CC( i,:) = CC( i,:) + AA%val( k) * BB( j,:)
-      END DO
-    END DO
+    ! Allocate shared memory for C
+    CALL allocate_matrix_CSR_shared( CC, AA%m, AA%n, AA%nnz)
+    
+    ! Copy non-zero structure from A (or B, since, you know, they're the same)
+    CALL partition_list( CC%m  , par%i, par%n, i1, i2)
+    CALL partition_list( CC%nnz, par%i, par%n, k1, k2)
+    
+    CC%ptr(   i1:i2) = AA%ptr(   i1:i2)
+    CC%index( k1:k2) = AA%index( k1:k2)
+    
+    IF (par%master) THEN
+      CC%nnz = AA%nnz
+      CC%ptr( CC%m+1) = CC%nnz+1
+    END IF
     CALL sync
     
-  END SUBROUTINE multiply_matrix_vector_2D_CSR
-  SUBROUTINE add_matrix_matrix_CSR( AA, BB, CC, alpha, beta)
-    ! Perform the matrix multiplication C = (alpha*A)+(beta*B), where all three
+    ! Add data from A and B
+    CC%val( k1:k2) = alphap * AA%val( k1:k2) + betap * BB%val( k1:k2)
+    CALL sync
+    
+  END SUBROUTINE add_matrix_matrix_CSR_template
+  SUBROUTINE add_matrix_matrix_CSR_notemplate( AA, BB, CC, alpha, beta)
+    ! Perform the matrix addition C = (alpha*A) + (beta*B), where all three
     ! matrices are provided in CSR format (parallelised)
     ! 
     ! NOTE: assumes column entries and A and B are sorted ascending!
@@ -1514,7 +1534,81 @@ CONTAINS
     ! Combine results from the different processes
     CALL finalise_matrix_CSR_dist( CC, i1, i2)
     
-  END SUBROUTINE add_matrix_matrix_CSR
+  END SUBROUTINE add_matrix_matrix_CSR_notemplate
+  SUBROUTINE multiply_matrix_vector_CSR( AA, BB, CC)
+    ! Perform the matrix multiplication C = A*B, where 
+    ! A is a CSR-format matrix, and B and C are regular vectors.
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: BB
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: CC
+    
+    ! Local variables:
+    INTEGER                                            :: mb, mc, i1, i2, i, k, j
+    
+    mb = SIZE( BB,1)
+    mc = SIZE( CC,1)
+    
+    ! Safety
+    IF (mb /= AA%n .OR. mc /= AA%m) THEN
+      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Partition rows over the processors
+    CALL partition_list( mc, par%i, par%n, i1, i2)
+    
+    DO i = i1, i2
+      CC( i) = 0._dp
+      DO k = AA%ptr( i), AA%ptr( i+1)-1
+        j = AA%index( k)
+        CC( i) = CC( i) + AA%val( k) * BB( j)
+      END DO
+    END DO
+    CALL sync
+    
+  END SUBROUTINE multiply_matrix_vector_CSR
+  SUBROUTINE multiply_matrix_vector_2D_CSR( AA, BB, CC)
+    ! Perform the matrix multiplication C = A*B, where 
+    ! A is a CSR-format matrix, and B and C are regular vectors.
+    ! 
+    ! NOTE: A = [m-by-n], B,C = [n-by-nz]
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: BB
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: CC
+    
+    ! Local variables:
+    INTEGER                                            :: mb, mc, i1, i2, i, k, j
+    
+    mb = SIZE( BB,1)
+    mc = SIZE( CC,1)
+    
+    ! Safety
+    IF (mb /= AA%n .OR. mc /= AA%m) THEN
+      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Partition rows over the processors
+    CALL partition_list( mc, par%i, par%n, i1, i2)
+    
+    DO i = i1, i2
+      CC( i,:) = 0._dp
+      DO k = AA%ptr( i), AA%ptr( i+1)-1
+        j = AA%index( k)
+        CC( i,:) = CC( i,:) + AA%val( k) * BB( j,:)
+      END DO
+    END DO
+    CALL sync
+    
+  END SUBROUTINE multiply_matrix_vector_2D_CSR
   SUBROUTINE overwrite_rows_CSR( AA, BB)
     ! Given sparse matrices B and A (both represented in CSR format),
     ! whenever a row in B has a non-zero entry, overwrite that row in A with that row in B
@@ -2124,6 +2218,36 @@ CONTAINS
     A%ptr = 1
     
   END SUBROUTINE allocate_matrix_CSR_dist
+  SUBROUTINE initialise_matrix_CSR_from_nz_template( A, nz_template)
+    ! Allocate shared memory and initialise row/column indices from a non-zero-structure template
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: nz_template
+    
+    ! Local variables:
+    INTEGER                                            :: i1,i2,k1,k2
+    
+    ! Allocate shared memory
+    CALL allocate_matrix_CSR_shared( A, nz_template%m, nz_template%n, nz_template%nnz)
+    
+    ! Copy row/column indices
+    CALL partition_list( nz_template%m  , par%i, par%n, i1, i2)
+    CALL partition_list( nz_template%nnz, par%i, par%n, k1, k2)
+    
+    A%ptr(   i1:i2) = nz_template%ptr(   i1:i2)
+    A%index( k1:k2) = nz_template%index( k1:k2)
+    A%val(   k1:k2) = 0._dp
+    
+    IF (par%master) THEN
+      A%nnz = nz_template%nnz
+      A%ptr( A%m+1) = A%nnz+1
+    END IF
+    CALL sync
+    
+  END SUBROUTINE initialise_matrix_CSR_from_nz_template
   SUBROUTINE extend_matrix_CSR_dist( A, nnz_max_loc_new)
     ! Extend shared memory for a CSR-format sparse m-by-n matrix A
     ! 

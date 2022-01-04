@@ -509,7 +509,15 @@ CONTAINS
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
       refgeo%Hs_grid( i,j) = 5000._dp - grid%x( i) * TAN( 3._dp * pi / 180._dp)
-      refgeo%Hb_grid( i,j) = refgeo%Hs_grid( i,j) - H0 + a0 * EXP( -(grid%x( i)**2 + grid%y( j)**2) / sigma**2)
+      refgeo%Hb_grid( i,j) = refgeo%Hs_grid( i,j) - H0 + a0 * EXP( -((grid%x( i) - 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 1._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) - 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 0._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) - 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) + 1._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) - 0._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 1._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) - 0._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 0._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) - 0._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) + 1._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) + 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 1._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) + 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) - 0._dp * C%ISMIP_HOM_L)**2) / sigma**2) &
+                                                       + a0 * EXP( -((grid%x( i) + 1._dp * C%ISMIP_HOM_L)**2 + (grid%y( j) + 1._dp * C%ISMIP_HOM_L)**2) / sigma**2)
       refgeo%Hi_grid( i,j) = refgeo%Hs_grid( i,j) - refgeo%Hb_grid( i,j)
     END DO
     END DO
@@ -603,32 +611,32 @@ CONTAINS
   
       ! Resolution, domain size, and projection parameters for this region are determined from the config
       IF     (region_name == 'NAM') THEN
-        xmin              = C%xmin_NAM
-        xmax              = C%xmax_NAM
-        ymin              = C%ymin_NAM
-        ymax              = C%ymax_NAM
+        xmin = C%xmin_NAM
+        xmax = C%xmax_NAM
+        ymin = C%ymin_NAM
+        ymax = C%ymax_NAM
       ELSEIF (region_name == 'EAS') THEN
-        xmin              = C%xmin_EAS
-        xmax              = C%xmax_EAS
-        ymin              = C%ymin_EAS
-        ymax              = C%ymax_EAS
+        xmin = C%xmin_EAS
+        xmax = C%xmax_EAS
+        ymin = C%ymin_EAS
+        ymax = C%ymax_EAS
       ELSEIF (region_name == 'GRL') THEN
-        xmin              = C%xmin_GRL
-        xmax              = C%xmax_GRL
-        ymin              = C%ymin_GRL
-        ymax              = C%ymax_GRL
+        xmin = C%xmin_GRL
+        xmax = C%xmax_GRL
+        ymin = C%ymin_GRL
+        ymax = C%ymax_GRL
       ELSEIF (region_name == 'ANT') THEN
-        xmin              = C%xmin_ANT
-        xmax              = C%xmax_ANT
-        ymin              = C%ymin_ANT
-        ymax              = C%ymax_ANT
+        xmin = C%xmin_ANT
+        xmax = C%xmax_ANT
+        ymin = C%ymin_ANT
+        ymax = C%ymax_ANT
       END IF
       
       ! Determine the number of grid cells we can fit in this domain
       xmid = (xmax + xmin) / 2._dp
       ymid = (ymax + ymin) / 2._dp
-      nsx = FLOOR( (xmax - xmid) / grid%dx)
-      nsy = FLOOR( (ymax - ymid) / grid%dx)
+      nsx  = FLOOR( (xmax - xmid) / grid%dx)
+      nsy  = FLOOR( (ymax - ymid) / grid%dx)
       
       ! Small exceptions for very weird benchmark experiments
       IF (C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') nsx = 3

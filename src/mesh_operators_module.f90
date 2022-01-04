@@ -33,7 +33,7 @@ MODULE mesh_operators_module
 
   IMPLICIT NONE
   
-  LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
+  LOGICAL, PARAMETER :: do_check_matrices = .FALSE.
 
   CONTAINS
   
@@ -2700,6 +2700,42 @@ MODULE mesh_operators_module
     CALL multiply_matrix_vector_2D_CSR( mesh%M_map_bb_acv, d_bb, d_acv)
     
   END SUBROUTINE map_bb_to_acv_3D
+  SUBROUTINE map_bb_to_acuv_2D( mesh, d_bb, d_acuv)
+    ! Map data from the bb-grid to the acuv-grid
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_bb
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_acuv
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_acu,  d_acv
+    INTEGER                                            :: wd_acu, wd_acv
+    
+    ! Safety
+    IF (SIZE( d_acuv,1) /= 2*mesh%nVAaAc .OR. SIZE( d_bb,1) /= mesh%nTriAaAc) THEN
+      IF (par%master) WRITE(0,*) 'map_bb_to_acuv_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_acu, wd_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, d_acv, wd_acv)
+    
+    ! Perform the operation as a matrix multiplication
+    CALL multiply_matrix_vector_CSR( mesh%M_map_bb_acu, d_bb, d_acu)
+    CALL multiply_matrix_vector_CSR( mesh%M_map_bb_acv, d_bb, d_acv)
+    
+    ! Add them together
+    d_acuv( mesh%auvi1:mesh%auvi2) = d_acu( mesh%auvi1:mesh%auvi2) + d_acv( mesh%auvi1:mesh%auvi2)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_acu)
+    CALL deallocate_shared( wd_acv)
+    
+  END SUBROUTINE map_bb_to_acuv_2D
   
   SUBROUTINE ddx_bb_to_acu_2D( mesh, d_bb, ddx_acu)
     ! Calculate d/dx from the bb-grid to the u-part of the acuv-grid
@@ -2781,6 +2817,42 @@ MODULE mesh_operators_module
     CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_bb_acv, d_bb, ddx_acv)
     
   END SUBROUTINE ddx_bb_to_acv_3D
+  SUBROUTINE ddx_bb_to_acuv_2D( mesh, d_bb, ddx_acuv)
+    ! Calculate d/dx from the bb-grid to the acuv-grid
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_bb
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_acuv
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  ddx_acu,  ddx_acv
+    INTEGER                                            :: wddx_acu, wddx_acv
+    
+    ! Safety
+    IF (SIZE( ddx_acuv,1) /= 2*mesh%nVAaAc .OR. SIZE( d_bb,1) /= mesh%nTriAaAc) THEN
+      IF (par%master) WRITE(0,*) 'ddx_bb_to_acuv_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, ddx_acu, wddx_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, ddx_acv, wddx_acv)
+    
+    ! Perform the operation as a matrix multiplication
+    CALL multiply_matrix_vector_CSR( mesh%M_ddx_bb_acu, d_bb, ddx_acu)
+    CALL multiply_matrix_vector_CSR( mesh%M_ddx_bb_acv, d_bb, ddx_acv)
+    
+    ! Add them together
+    ddx_acuv( mesh%auvi1:mesh%auvi2) = ddx_acu( mesh%auvi1:mesh%auvi2) + ddx_acv( mesh%auvi1:mesh%auvi2)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wddx_acu)
+    CALL deallocate_shared( wddx_acv)
+    
+  END SUBROUTINE ddx_bb_to_acuv_2D
   
   SUBROUTINE ddy_bb_to_acu_2D( mesh, d_bb, ddy_acu)
     ! Calculate d/dy from the bb-grid to the u-part of the acuv-grid
@@ -2862,8 +2934,45 @@ MODULE mesh_operators_module
     CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_bb_acv, d_bb, ddy_acv)
     
   END SUBROUTINE ddy_bb_to_acv_3D
+  SUBROUTINE ddy_bb_to_acuv_2D( mesh, d_bb, ddy_acuv)
+    ! Calculate d/dy from the bb-grid to the acuv-grid
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_bb
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_acuv
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  ddy_acu,  ddy_acv
+    INTEGER                                            :: wddy_acu, wddy_acv
+    
+    ! Safety
+    IF (SIZE( ddy_acuv,1) /= 2*mesh%nVAaAc .OR. SIZE( d_bb,1) /= mesh%nTriAaAc) THEN
+      IF (par%master) WRITE(0,*) 'ddy_bb_to_acuv_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, ddy_acu, wddy_acu)
+    CALL allocate_shared_dp_1D( 2*mesh%nVAaAc, ddy_acv, wddy_acv)
+    
+    ! Perform the operation as a matrix multiplication
+    CALL multiply_matrix_vector_CSR( mesh%M_ddy_bb_acu, d_bb, ddy_acu)
+    CALL multiply_matrix_vector_CSR( mesh%M_ddy_bb_acv, d_bb, ddy_acv)
+    
+    ! Add them together
+    ddy_acuv( mesh%auvi1:mesh%auvi2) = ddy_acu( mesh%auvi1:mesh%auvi2) + ddy_acv( mesh%auvi1:mesh%auvi2)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wddy_acu)
+    CALL deallocate_shared( wddy_acv)
+    
+  END SUBROUTINE ddy_bb_to_acuv_2D
   
 ! == Calculate the matrix operators for mapping and gradients
+
   SUBROUTINE calc_matrix_operators_mesh( mesh)
     ! Calculate all the matrix operators
       
@@ -4446,8 +4555,8 @@ MODULE mesh_operators_module
     
     ! Local variables:
     INTEGER                                            :: nrows, ncols, nnz_max
-    INTEGER                                            :: avi, auvi
-    TYPE(type_sparse_matrix_CSR)                       :: M_acuv_bb
+    INTEGER                                            :: avi, auvi, k1, k2
+    TYPE(type_sparse_matrix_CSR)                       :: M1, M_acu_ac, M_acv_ac, M_acuv_ac
     
   ! ac_acu/ac_acv: from the ac-grid to the u/v-parts of the acuv-grid
   ! =================================================================
@@ -4556,10 +4665,10 @@ MODULE mesh_operators_module
     
     CALL multiply_matrix_matrix_CSR( mesh%M_map_ac_bb, mesh%M_move_acu_ac, mesh%M_map_acu_bb)
     CALL multiply_matrix_matrix_CSR( mesh%M_map_ac_bb, mesh%M_move_acv_ac, mesh%M_map_acv_bb)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_bb, mesh%M_move_acu_ac, mesh%M_ddx_acu_bb)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_bb, mesh%M_move_acv_ac, mesh%M_ddx_acv_bb)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acu_ac, mesh%M_ddy_acu_bb)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acv_ac, mesh%M_ddy_acv_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_bb, mesh%M_move_acu_ac, mesh%M_ddx_acu_bb, nz_template = mesh%M_map_acu_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_bb, mesh%M_move_acv_ac, mesh%M_ddx_acv_bb, nz_template = mesh%M_map_acv_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acu_ac, mesh%M_ddy_acu_bb, nz_template = mesh%M_map_acu_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddy_ac_bb, mesh%M_move_acv_ac, mesh%M_ddy_acv_bb, nz_template = mesh%M_map_acv_bb)
     
     ! Safety
     IF (do_check_matrices) THEN
@@ -4578,10 +4687,10 @@ MODULE mesh_operators_module
     
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_map_bb_ac, mesh%M_map_bb_acu)
     CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_map_bb_ac, mesh%M_map_bb_acv)
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_ddx_bb_ac, mesh%M_ddx_bb_acu)
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddx_bb_ac, mesh%M_ddx_bb_acv)
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acu)
-    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acv)
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_ddx_bb_ac, mesh%M_ddx_bb_acu, nz_template = mesh%M_map_bb_acu)
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddx_bb_ac, mesh%M_ddx_bb_acv, nz_template = mesh%M_map_bb_acv)
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acu, nz_template = mesh%M_map_bb_acu)
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, mesh%M_ddy_bb_ac, mesh%M_ddy_bb_acv, nz_template = mesh%M_map_bb_acv)
     
     ! Safety
     IF (do_check_matrices) THEN
@@ -4592,15 +4701,41 @@ MODULE mesh_operators_module
       CALL check_CSR( mesh%M_ddy_bb_acu, 'mesh%M_ddy_bb_acu')
       CALL check_CSR( mesh%M_ddy_bb_acv, 'mesh%M_ddy_bb_acv')
     END IF
-    
+        
   ! Set up non-zero-structure templates for matrix multiplications from the acuv-grid to the acu/acv-grids
   ! ======================================================================================================
     
     ! These are very useful for speeding up matrix assembly in the SSA/DIVA
-    CALL add_matrix_matrix_CSR(      mesh%M_ddx_acu_bb, mesh%M_ddy_acv_bb, M_acuv_bb)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acu, M_acuv_bb        , mesh%nz_template_acuv_acu)
-    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_bb_acv, M_acuv_bb        , mesh%nz_template_acuv_acv)
-    CALL deallocate_matrix_CSR( M_acuv_bb)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_ac, mesh%M_move_acu_ac, M_acu_ac)
+    CALL multiply_matrix_matrix_CSR( mesh%M_ddx_ac_ac, mesh%M_move_acv_ac, M_acv_ac)
+    
+    CALL add_matrix_matrix_CSR( M_acu_ac, M_acv_ac, M_acuv_ac)
+    CALL deallocate_matrix_CSR( M_acu_ac)
+    CALL deallocate_matrix_CSR( M_acv_ac)
+    
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acu, M_acuv_ac, mesh%nz_template_acuv_acu)
+    CALL multiply_matrix_matrix_CSR( mesh%M_move_ac_acv, M_acuv_ac, mesh%nz_template_acuv_acv)
+    CALL deallocate_matrix_CSR( M_acuv_ac)
+    
+    CALL add_matrix_matrix_CSR( mesh%nz_template_acuv_acu, mesh%nz_template_acuv_acv, mesh%nz_template_acuv_acuv)
+    
+    ! Set values to zeros
+    DO auvi = mesh%auvi1, mesh%auvi2
+    
+      k1 = mesh%nz_template_acuv_acu%ptr(  auvi)
+      k2 = mesh%nz_template_acuv_acu%ptr(  auvi+1)-1
+      mesh%nz_template_acuv_acu%val(  k1:k2) = 0._dp
+    
+      k1 = mesh%nz_template_acuv_acv%ptr(  auvi)
+      k2 = mesh%nz_template_acuv_acv%ptr(  auvi+1)-1
+      mesh%nz_template_acuv_acv%val(  k1:k2) = 0._dp
+    
+      k1 = mesh%nz_template_acuv_acuv%ptr(  auvi)
+      k2 = mesh%nz_template_acuv_acuv%ptr(  auvi+1)-1
+      mesh%nz_template_acuv_acuv%val(  k1:k2) = 0._dp
+      
+    END DO
+    CALL sync
     
   END SUBROUTINE calc_matrix_operators_combi_acuv
   

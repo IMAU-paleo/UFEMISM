@@ -31,7 +31,7 @@ MODULE ice_dynamics_module
   USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_3D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, initialise_velocity_solver
+  USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver
   USE ice_thickness_module,            ONLY: calc_dHi_dt
   USE basal_conditions_and_sliding_module, ONLY: initialise_basal_conditions
 
@@ -279,12 +279,9 @@ CONTAINS
         CALL sync
         
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-        
-        IF (par%master) WRITE(0,*) 'run_ice_dynamics_pc - ERROR: DIVA is not yet available in UFEMISM!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       
-!        ! Calculate velocities
-!        CALL solve_DIVA( region%grid, region%ice)
+        ! Calculate velocities
+        CALL solve_DIVA( region%mesh, region%ice)
         
         ! Update timer
         IF (par%master) region%t_last_DIVA = region%time
@@ -544,10 +541,6 @@ CONTAINS
         t_next = MIN( t_next, region%t_next_SIA)
         t_next = MIN( t_next, region%t_next_SSA)
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-      
-        IF (par%master) WRITE(0,*) 'determine_timesteps_and_actions - ERROR: DIVA is not yet available in UFEMISM!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
         t_next = MIN( t_next, region%t_next_DIVA)
       ELSE
         WRITE(0,*) 'determine_timesteps_and_actions_direct - ERROR: unknown choice_ice_dynamics "', C%choice_ice_dynamics, '"!'

@@ -122,42 +122,30 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: taudy_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_ac
-    TYPE(type_sparse_matrix_CSR)            :: M_SSA_sans_no_beta_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: F1_3D_ac
-    INTEGER :: wHi_ac, wtaudx_ac, wtaudy_ac, wdu_dx_ac, wdu_dy_ac, wdv_dx_ac, wdv_dy_ac, wdu_dz_3D_ac, wdv_dz_3D_ac
-    INTEGER :: wA_flow_3D_ac, wvisc_eff_3D_ac, wvisc_eff_int_ac, wN_ac, wbeta_ac, wbeta_eff_ac, wtaubx_ac, wtauby_ac, wF2_ac, wF1_3D_ac
-    
-    ! Ice dynamics - physical terms in the SSA/DIVA (with cross-terms)
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_bb
     REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_bb
     REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_bb
     REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_bb
     REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dz_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dz_bb
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_bb
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_ac
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_bb
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_ac
     REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_ac
     REAL(dp), DIMENSION(:    ), POINTER     :: N_bb
-    INTEGER :: wHi_bb, wdu_dx_bb, wdu_dy_bb, wdv_dx_bb, wdv_dy_bb, wdu_dz_bb, wdv_dz_bb
-    INTEGER :: wA_flow_3D_bb, wvisc_eff_3D_bb, wvisc_eff_int_bb, wN_bb
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: F2_ac
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: F1_3D_ac
+    INTEGER :: wHi_ac, wtaudx_ac, wtaudy_ac, wHi_bb,wdu_dx_bb, wdu_dy_bb, wdv_dx_bb, wdv_dy_bb, wdu_dz_3D_ac, wdv_dz_3D_ac
+    INTEGER :: wA_flow_3D_ac, wA_flow_3D_bb, wvisc_eff_3D_ac, wvisc_eff_3D_bb, wvisc_eff_int_ac, wvisc_eff_int_bb, wN_ac, wN_bb
+    INTEGER :: wbeta_ac, wbeta_eff_ac, wtaubx_ac, wtauby_ac, wF2_ac, wF1_3D_ac
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -399,23 +387,7 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_move_acu_ac                 ! Operation: move    from the acu-grid to the ac-grid
     TYPE(type_sparse_matrix_CSR)            :: M_move_acv_ac                 ! Operation: move    from the acv-grid to the ac-grid
     
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acu_bb                  ! Operation: map     from the acu-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_acv_bb                  ! Operation: map     from the acv-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acu_bb                  ! Operation: d/dx    from the acu-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_acv_bb                  ! Operation: d/dx    from the acv-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acu_bb                  ! Operation: d/dy    from the acu-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_acv_bb                  ! Operation: d/dy    from the acv-grid to the bb-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_acu                  ! Operation: map     from the bb-grid to the acu-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_acv                  ! Operation: map     from the bb-grid to the acv-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_acu                  ! Operation: d/dx    from the bb-grid to the acu-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_acv                  ! Operation: d/dx    from the bb-grid to the acv-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acu                  ! Operation: d/dy    from the bb-grid to the acu-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_acv                  ! Operation: d/dy    from the bb-grid to the acv-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acu          ! Non-zero-structure template for matrix multiplication from the acuv-grid to the acu-grid
-    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acv          ! Non-zero-structure template for matrix multiplication from the acuv-grid to the acv-grid
-    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acuv         ! Non-zero-structure template for matrix multiplication from the acuv-grid to the acuv-grid
+    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acuv         ! Non-zero-structure template for matrix operations on the acuv-grid
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat

@@ -322,7 +322,14 @@ MODULE configuration_module
   REAL(dp)            :: Martin2011_hydro_Hb_max_config              = 1000._dp                         ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
   
   ! Basal roughness / friction
-  CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'parameterised'                  ! "parameterised", "prescribed"
+  CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
+  REAL(dp)            :: slid_Weertman_beta_sq_uniform_config        = 1.0E4_dp                         ! Uniform value for beta_sq  in Weertman sliding law
+  REAL(dp)            :: slid_Coulomb_phi_fric_uniform_config        = 15._dp                           ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  REAL(dp)            :: slid_Tsai2015_alpha_sq_uniform_config       = 0.5_dp                           ! Uniform value for alpha_sq in the Tsai2015 sliding law
+  REAL(dp)            :: slid_Tsai2015_beta_sq_uniform_config        = 1.0E4_dp                         ! Uniform value for beta_sq  in the Tsai2015 sliding law
+  REAL(dp)            :: slid_Schoof2005_alpha_sq_uniform_config     = 0.5_dp                           ! Uniform value for alpha_sq in the Schoof2005 sliding law
+  REAL(dp)            :: slid_Schoof2005_beta_sq_uniform_config      = 1.0E4_dp                         ! Uniform value for beta_sq  in the Schoof2005 sliding law
+  REAL(dp)            :: slid_ZI_phi_fric_uniform_config             = 15._dp                           ! Uniform value for phi_fric in the Zoet-Iverson sliding law
   CHARACTER(LEN=256)  :: choice_param_basal_roughness_config         = 'Martin2011'                     ! "Martin2011", "SSA_icestream", "MISMIP+", "BIVMIP_A", "BIVMIP_B", "BIVMIP_C"
   REAL(dp)            :: Martin2011till_phi_Hb_min_config            = -1000._dp                        ! Martin et al. (2011) bed roughness model: low-end  Hb  value of bedrock-dependent till friction angle
   REAL(dp)            :: Martin2011till_phi_Hb_max_config            = 0._dp                            ! Martin et al. (2011) bed roughness model: high-end Hb  value of bedrock-dependent till friction angle
@@ -803,10 +810,10 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_mask_noice_EAS
     CHARACTER(LEN=256)                  :: choice_mask_noice_GRL
     CHARACTER(LEN=256)                  :: choice_mask_noice_ANT
-
+    
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
-  
+
     ! Sliding laws
     CHARACTER(LEN=256)                  :: choice_sliding_law
     CHARACTER(LEN=256)                  :: choice_idealised_sliding_law
@@ -816,21 +823,28 @@ MODULE configuration_module
     REAL(dp)                            :: slid_Coulomb_reg_u_threshold
     REAL(dp)                            :: slid_ZI_ut
     REAL(dp)                            :: slid_ZI_p
-  
+
     ! Basal hydrology
     CHARACTER(LEN=256)                  :: choice_basal_hydrology
     REAL(dp)                            :: Martin2011_hydro_Hb_min
     REAL(dp)                            :: Martin2011_hydro_Hb_max
-  
+
     ! Basal roughness / friction
     CHARACTER(LEN=256)                  :: choice_basal_roughness
+    REAL(dp)                            :: slid_Weertman_beta_sq_uniform
+    REAL(dp)                            :: slid_Coulomb_phi_fric_uniform
+    REAL(dp)                            :: slid_Tsai2015_alpha_sq_uniform
+    REAL(dp)                            :: slid_Tsai2015_beta_sq_uniform
+    REAL(dp)                            :: slid_Schoof2005_alpha_sq_uniform
+    REAL(dp)                            :: slid_Schoof2005_beta_sq_uniform
+    REAL(dp)                            :: slid_ZI_phi_fric_uniform
     CHARACTER(LEN=256)                  :: choice_param_basal_roughness
     REAL(dp)                            :: Martin2011till_phi_Hb_min
     REAL(dp)                            :: Martin2011till_phi_Hb_max
     REAL(dp)                            :: Martin2011till_phi_min
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
-  
+    
     ! Ice dynamics - calving
     ! ======================
     
@@ -1269,6 +1283,13 @@ CONTAINS
                      Martin2011_hydro_Hb_min_config,                  &
                      Martin2011_hydro_Hb_max_config,                  &
                      choice_basal_roughness_config,                   &
+                     slid_Weertman_beta_sq_uniform_config,            &
+                     slid_Coulomb_phi_fric_uniform_config,            &
+                     slid_Tsai2015_alpha_sq_uniform_config,           &
+                     slid_Tsai2015_beta_sq_uniform_config,            &
+                     slid_Schoof2005_alpha_sq_uniform_config,         &
+                     slid_Schoof2005_beta_sq_uniform_config,          &
+                     slid_ZI_phi_fric_uniform_config,                 &
                      choice_param_basal_roughness_config,             &
                      Martin2011till_phi_Hb_min_config,                &
                      Martin2011till_phi_Hb_max_config,                &
@@ -1717,7 +1738,7 @@ CONTAINS
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
-  
+
     ! Sliding laws
     C%choice_sliding_law                       = choice_sliding_law_config
     C%choice_idealised_sliding_law             = choice_idealised_sliding_law_config
@@ -1727,14 +1748,21 @@ CONTAINS
     C%slid_Coulomb_reg_u_threshold             = slid_Coulomb_reg_u_threshold_config
     C%slid_ZI_ut                               = slid_ZI_ut_config
     C%slid_ZI_p                                = slid_ZI_p_config
-  
+
     ! Basal hydrology
     C%choice_basal_hydrology                   = choice_basal_hydrology_config
     C%Martin2011_hydro_Hb_min                  = Martin2011_hydro_Hb_min_config
     C%Martin2011_hydro_Hb_max                  = Martin2011_hydro_Hb_max_config
-  
+
     ! Basal roughness / friction
     C%choice_basal_roughness                   = choice_basal_roughness_config
+    C%slid_Weertman_beta_sq_uniform            = slid_Weertman_beta_sq_uniform_config
+    C%slid_Coulomb_phi_fric_uniform            = slid_Coulomb_phi_fric_uniform_config
+    C%slid_Tsai2015_alpha_sq_uniform           = slid_Tsai2015_alpha_sq_uniform_config
+    C%slid_Tsai2015_beta_sq_uniform            = slid_Tsai2015_beta_sq_uniform_config
+    C%slid_Schoof2005_alpha_sq_uniform         = slid_Schoof2005_alpha_sq_uniform_config
+    C%slid_Schoof2005_beta_sq_uniform          = slid_Schoof2005_beta_sq_uniform_config
+    C%slid_ZI_phi_fric_uniform                 = slid_ZI_phi_fric_uniform_config
     C%choice_param_basal_roughness             = choice_param_basal_roughness_config
     C%Martin2011till_phi_Hb_min                = Martin2011till_phi_Hb_min_config
     C%Martin2011till_phi_Hb_max                = Martin2011till_phi_Hb_max_config

@@ -432,8 +432,9 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
     CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
     
-    ! Remap the actual isotope content of the ice sheet
-    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce, region%ice%wIsoIce, 'cons_1st_order')
+    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
+    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
+    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
     
   END SUBROUTINE remap_isotopes_model
 

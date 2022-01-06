@@ -370,7 +370,14 @@ CONTAINS
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      refgeo%Hi_grid( i,j) = 100._dp
+      
+      ! Create a nice circular ice shelf
+      IF (SQRT(grid%x( i)**2 + grid%y( j)**2) < grid%xmax * 0.95_dp) THEN
+        refgeo%Hi_grid( i,j) = 100._dp
+      ELSE
+        refgeo%Hi_grid( i,j) = 0._dp
+      END IF
+      
       refgeo%Hb_grid( i,j) = 720._dp - 778.5_dp * SQRT( grid%x(i)**2 + grid%y(j)**2)/ 750000._dp
       refgeo%Hs_grid( i,j) = surface_elevation( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)
     END DO

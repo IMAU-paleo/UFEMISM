@@ -33,7 +33,7 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
                                              associate_debug_fields, reallocate_debug_fields, create_debug_file
   USE restart_module,                  ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
-  USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
+  USE general_ice_model_data_module,   ONLY: update_general_ice_model_data, initialise_mask_noice
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
   USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
   USE climate_module,                  ONLY: initialise_climate_model,  remap_climate_model,  run_climate_model, map_subclimate_to_mesh
@@ -103,6 +103,27 @@ CONTAINS
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_GIA = region%tcomp_GIA + t2 - t1
       
+    ! Mesh update
+    ! ===========
+      
+      ! Check if the mesh needs to be updated
+      IF (par%master) t2 = MPI_WTIME()
+      meshfitness = 1._dp
+      IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
+        CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)    
+      END IF
+      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
+    
+      ! If required, update the mesh
+      IF (meshfitness < C%mesh_fitness_threshold) THEN
+    !  IF (.FALSE.) THEN
+    !  IF (.TRUE.) THEN 
+        region%t_last_mesh = region%time
+        IF (par%master) t2 = MPI_WTIME()
+        CALL run_model_update_mesh( region, matrix)
+        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+      END IF
+      
     ! Ice dynamics
     ! ============
     
@@ -112,26 +133,6 @@ CONTAINS
       CALL run_ice_model( region, t_end)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_ice = region%tcomp_ice + t2 - t1
-      
-    ! Mesh update
-    ! ===========
-      
-      ! Check if the mesh needs to be updated
-      IF (par%master) t2 = MPI_WTIME()
-      meshfitness = 1._dp
-      IF (region%time > region%t_last_mesh) THEN
-        CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)    
-      END IF
-      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
-    
-      ! If required, update the mesh
-    !  IF (meshfitness < C%mesh_fitness_threshold) THEN
-      IF (.FALSE.) THEN
-    !  IF (.TRUE.) THEN 
-        IF (par%master) t2 = MPI_WTIME()
-        CALL run_model_update_mesh( region, matrix)
-        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
-      END IF
       
     ! Climate , SMB and BMB
     ! =====================
@@ -246,8 +247,7 @@ CONTAINS
     CALL create_remapping_arrays_mesh_grid( region%mesh_new, region%grid_smooth)
     
     ! Recalculate the "no ice" mask (also needed for the climate model)
-    CALL deallocate_shared(      region%wmask_noice)
-    CALL allocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
+    CALL reallocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
     CALL initialise_mask_noice(  region, region%mesh_new)
             
     ! Reallocate and remap reference geometries
@@ -268,7 +268,7 @@ CONTAINS
     
     ! Remap all the submodels
     CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
-    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD)
+    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
     CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate, matrix, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
@@ -292,15 +292,23 @@ CONTAINS
     CALL calculate_reference_isotopes( region)
     
     ! Run all model components again after updating the mesh
-    region%do_SIA     = .TRUE.
-    region%do_SSA     = .TRUE.
-    region%do_DIVA    = .TRUE.
-    region%do_thermo  = .TRUE.
-    region%do_climate = .TRUE.
-    region%do_SMB     = .TRUE.
-    region%do_BMB     = .TRUE.
-    region%do_output  = .TRUE.
-    region%do_ELRA    = .TRUE.
+    region%t_next_SIA     = region%time
+    region%t_next_SSA     = region%time
+    region%t_next_DIVA    = region%time
+    region%t_next_thermo  = region%time
+    region%t_next_climate = region%time
+    region%t_next_SMB     = region%time
+    region%t_next_BMB     = region%time
+    region%t_next_ELRA    = region%time
+    
+    region%do_SIA         = .TRUE.
+    region%do_SSA         = .TRUE.
+    region%do_DIVA        = .TRUE.
+    region%do_thermo      = .TRUE.
+    region%do_climate     = .TRUE.
+    region%do_SMB         = .TRUE.
+    region%do_BMB         = .TRUE.
+    region%do_ELRA        = .TRUE.
       
   END SUBROUTINE run_model_update_mesh
   
@@ -380,17 +388,6 @@ CONTAINS
     CALL associate_debug_fields( region)
     region%output_file_exists = .TRUE.
     CALL sync
-    
-    
-    
-    
-    
-    ! DENK DROM
-    !CALL run_all_matrix_tests( region%mesh)
-    
-    
-    
-    
     
     ! ===== The "no ice" mask
     ! =======================
@@ -698,110 +695,6 @@ CONTAINS
     CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE initialise_model_square_grid
-  SUBROUTINE initialise_mask_noice( region, mesh)
-    ! Mask a certain area where no ice is allowed to grow. This is used to "remove"
-    ! Greenland from NAM and EAS, and Ellesmere Island from GRL.
-  
-    IMPLICIT NONE  
-    
-    ! In/output variables:
-    TYPE(type_model_region),         INTENT(INOUT)     :: region
-    TYPE(type_mesh),                 INTENT(IN)        :: mesh
-    
-    ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_mask_noice'
-    INTEGER                                            :: n1, n2
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
-    REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
-    
-    n1 = par%mem%n
-    
-    region%mask_noice( mesh%vi1:mesh%vi2) = 0
-    
-    ! Exceptions for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_mask_noice!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    IF (region%name == 'NAM') THEN
-      ! North America: remove Greenland
-      
-      pa = [ 490000._dp, 1530000._dp]
-      pb = [2030000._dp,  570000._dp]
-      
-      DO vi = mesh%vi1, mesh%vi2
-        yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
-        IF (mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) > pa(1) .AND. mesh%V( vi,2) > pb(2)) THEN
-          region%mask_noice( vi) = 1
-        END IF
-      END DO
-      CALL sync
-    
-    ELSEIF (region%name == 'EAS') THEN
-      ! Eurasia: remove Greenland
-    
-      pa = [-2900000._dp, 1300000._dp]
-      pb = [-1895000._dp,  900000._dp]
-      pc = [ -835000._dp, 1135000._dp]
-      pd = [ -400000._dp, 1855000._dp]
-      
-      DO vi = mesh%vi1, mesh%vi2
-        yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
-        yl_bc = pb(2) + (mesh%V( vi,1) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
-        yl_cd = pc(2) + (mesh%V( vi,1) - pc(1))*(pd(2)-pc(2))/(pd(1)-pc(1))
-        IF ((mesh%V( vi,1) <  pa(1) .AND. mesh%V( vi,2) > pa(2)) .OR. &
-            (mesh%V( vi,1) >= pa(1) .AND. mesh%V( vi,1) < pb(1) .AND. mesh%V( vi,2) > yl_ab) .OR. &
-            (mesh%V( vi,1) >= pb(1) .AND. mesh%V( vi,1) < pc(1) .AND. mesh%V( vi,2) > yl_bc) .OR. &
-            (mesh%V( vi,1) >= pc(1) .AND. mesh%V( vi,1) < pd(1) .AND. mesh%V( vi,2) > yl_cd)) THEN
-          region%mask_noice( vi) = 1
-        END IF
-      END DO
-      CALL sync
-      
-    ELSEIF (region%name == 'GRL') THEN
-      ! Greenland: remove Ellesmere island
-      
-      pa = [-750000._dp,  900000._dp]
-      pb = [-250000._dp, 1250000._dp]
-      
-      DO vi = mesh%vi1, mesh%vi2
-        yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
-        IF (mesh%V( vi,2) > pa(2) .AND. mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) < pb(1)) THEN
-          region%mask_noice( vi) = 1
-        END IF
-      END DO
-      CALL sync
-      
-    ELSEIF (region%name == 'ANT') THEN
-      ! Antarctica: no changes needed
-      
-    END IF ! IF (region%name == 'NAM') THEN
-    
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
-    
-  END SUBROUTINE initialise_mask_noice
   
   ! Calculate this region's ice sheet's volume and area
   SUBROUTINE calculate_icesheet_volume_and_area( region)

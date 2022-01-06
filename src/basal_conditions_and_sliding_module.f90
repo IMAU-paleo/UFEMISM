@@ -22,7 +22,7 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping
   USE mesh_operators_module,           ONLY: map_a_to_ac_2D
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
 
@@ -188,7 +188,37 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
-    IF (C%choice_basal_roughness == 'parameterised') THEN
+    IF (C%choice_basal_roughness == 'uniform') THEN
+      ! Apply a uniform bed roughness
+      
+      IF     (C%choice_sliding_law == 'no_sliding') THEN
+        ! No sliding; do nothing
+      ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+        ! Weertman sliding law; bed roughness is described by beta_sq
+        ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
+        ! Coulomb sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+      ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
+        ! Regularised Coulomb sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+      ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+        ! Tsai2015 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
+        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
+        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Tsai2015_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+        ! Schoof2005 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
+        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
+        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Schoof2005_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+        ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
+      ELSE
+        IF (par%master) WRITE(0,*) 'calc_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    
+    ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
       ! Apply the chosen parameterisation of bed roughness
       
       IF     (C%choice_param_basal_roughness == 'none') THEN
@@ -264,6 +294,117 @@ CONTAINS
     END IF
     
   END SUBROUTINE initialise_bed_roughness
+  
+  ! The Martin et al. (2011) till parameterisation
+  SUBROUTINE calc_bed_roughness_Martin2011( mesh, ice)
+    ! Calculate the till friction angle phi_fric and till yield stress tauc,
+    ! using the till model by Martin et al. (2011).
+    ! 
+    ! Only applicable when choice_sliding_law = "Coulomb" or "Coulomb_regularised"
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: w_Hb
+    
+    ! Safety
+    IF (.NOT. (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson')) THEN
+      IF (par%master) WRITE(0,*) 'calc_bed_roughness_Martin2011 - ERROR: only applicable when choice_sliding_law = "Coulomb", "Coulomb_regularised", or "Zoet-Iverson"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+  
+    DO vi = mesh%vi1, mesh%vi2
+  
+      ! Martin et al. (2011) Eq. 10
+      w_Hb = MIN( 1._dp, MAX( 0._dp, (ice%Hb_a( vi) - C%Martin2011till_phi_Hb_min) / (C%Martin2011till_phi_Hb_max - C%Martin2011till_phi_Hb_min) ))
+      ice%phi_fric_a( vi) = (1._dp - w_Hb) * C%Martin2011till_phi_min + w_Hb * C%Martin2011till_phi_max
+    
+    END DO
+    CALL sync
+    
+    ! Safety
+    CALL check_for_NaN_dp_1D( ice%phi_fric_a, 'ice%phi_fric_a', 'Martin_2011_till_model')
+    
+  END SUBROUTINE calc_bed_roughness_Martin2011
+  
+  ! Idealised cases
+  SUBROUTINE calc_bed_roughness_SSA_icestream( mesh, ice)
+    ! Determine the basal conditions underneath the ice
+    ! 
+    ! Idealised case: SSA_icestream (i.e. the Schoof 2006 analytical solution)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: y, dummy1
+  
+    DO vi = mesh%vi1, mesh%vi2
+      y = mesh%V( vi,2)
+      CALL SSA_Schoof2006_analytical_solution( 0.001_dp, ice%Hi_a( vi), ice%A_flow_vav_a( vi), y, dummy1, ice%tauc_a( vi))
+    END DO
+    CALL sync
+    
+  END SUBROUTINE calc_bed_roughness_SSA_icestream
+  SUBROUTINE calc_bed_roughness_MISMIPplus( mesh, ice)
+    ! Determine the basal conditions underneath the ice
+    ! 
+    ! Idealised case: MISMIP+ (see Asay-Davis et al., 2016)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp), PARAMETER                                :: MISMIPplus_alpha_sq = 0.5_dp   ! Coulomb-law friction coefficient [unitless];         see Asay-Davis et al., 2016
+    REAL(dp), PARAMETER                                :: MISMIPplus_beta_sq  = 1.0E4_dp ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3]; idem dito
+  
+    IF     (C%choice_sliding_law == 'Weertman') THEN
+      ! Uniform sliding factor for the MISMIP+ configuration, using the first (Weertman) sliding law option
+       
+      DO vi = mesh%vi1, mesh%vi2
+        ice%beta_sq_a( vi) = MISMIPplus_beta_sq
+      END DO
+      CALL sync
+          
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      ! Uniform sliding factor for the MISMIP+ configuration, using the second (Tsai et al., 2015) sliding law option
+       
+      DO vi = mesh%vi1, mesh%vi2
+        ice%alpha_sq_a( vi) = MISMIPplus_alpha_sq
+        ice%beta_sq_a(  vi) = MISMIPplus_beta_sq
+      END DO
+      CALL sync
+      
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      ! Uniform sliding factor for the MISMIP+ configuration, using the third (Schoof, 2005) sliding law option
+       
+      DO vi = mesh%vi1, mesh%vi2
+        ice%alpha_sq_a( vi) = MISMIPplus_alpha_sq
+        ice%beta_sq_a(  vi) = MISMIPplus_beta_sq
+      END DO
+      CALL sync
+      
+    ELSE
+      IF (par%master) WRITE(0,*) 'calc_bed_roughness_MISMIPplus - ERROR: only defined when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE calc_bed_roughness_MISMIPplus
+  
+  ! Initialise bed roughness from a file
   SUBROUTINE initialise_bed_roughness_from_file( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
 
@@ -605,115 +746,6 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wphi_fric)
   
   END SUBROUTINE initialise_bed_roughness_from_file_ZoetIverson
-  
-  ! The Martin et al. (2011) till parameterisation
-  SUBROUTINE calc_bed_roughness_Martin2011( mesh, ice)
-    ! Calculate the till friction angle phi_fric and till yield stress tauc,
-    ! using the till model by Martin et al. (2011).
-    ! 
-    ! Only applicable when choice_sliding_law = "Coulomb" or "Coulomb_regularised"
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-
-    ! Local variables:
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: w_Hb
-    
-    ! Safety
-    IF (.NOT. (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson')) THEN
-      IF (par%master) WRITE(0,*) 'calc_bed_roughness_Martin2011 - ERROR: only applicable when choice_sliding_law = "Coulomb", "Coulomb_regularised", or "Zoet-Iverson"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-  
-    DO vi = mesh%vi1, mesh%vi2
-  
-      ! Martin et al. (2011) Eq. 10
-      w_Hb = MIN( 1._dp, MAX( 0._dp, (ice%Hb_a( vi) - C%Martin2011till_phi_Hb_min) / (C%Martin2011till_phi_Hb_max - C%Martin2011till_phi_Hb_min) ))
-      ice%phi_fric_a( vi) = (1._dp - w_Hb) * C%Martin2011till_phi_min + w_Hb * C%Martin2011till_phi_max
-    
-    END DO
-    CALL sync
-    
-    ! Safety
-    CALL check_for_NaN_dp_1D( ice%phi_fric_a, 'ice%phi_fric_a', 'Martin_2011_till_model')
-    
-  END SUBROUTINE calc_bed_roughness_Martin2011
-  
-  ! Idealised cases
-  SUBROUTINE calc_bed_roughness_SSA_icestream( mesh, ice)
-    ! Determine the basal conditions underneath the ice
-    ! 
-    ! Idealised case: SSA_icestream (i.e. the Schoof 2006 analytical solution)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
-    ! Local variables:
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: y, dummy1
-  
-    DO vi = mesh%vi1, mesh%vi2
-      y = mesh%V( vi,2)
-      CALL SSA_Schoof2006_analytical_solution( 0.001_dp, ice%Hi_a( vi), ice%A_flow_vav_a( vi), y, dummy1, ice%tauc_a( vi))
-    END DO
-    CALL sync
-    
-  END SUBROUTINE calc_bed_roughness_SSA_icestream
-  SUBROUTINE calc_bed_roughness_MISMIPplus( mesh, ice)
-    ! Determine the basal conditions underneath the ice
-    ! 
-    ! Idealised case: MISMIP+ (see Asay-Davis et al., 2016)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
-    ! Local variables:
-    INTEGER                                            :: vi
-    REAL(dp), PARAMETER                                :: MISMIPplus_alpha_sq = 0.5_dp   ! Coulomb-law friction coefficient [unitless];         see Asay-Davis et al., 2016
-    REAL(dp), PARAMETER                                :: MISMIPplus_beta_sq  = 1.0E4_dp ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3]; idem dito
-  
-    IF     (C%choice_sliding_law == 'Weertman') THEN
-      ! Uniform sliding factor for the MISMIP+ configuration, using the first (Weertman) sliding law option
-       
-      DO vi = mesh%vi1, mesh%vi2
-        ice%beta_sq_a( vi) = MISMIPplus_beta_sq
-      END DO
-      CALL sync
-          
-    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
-      ! Uniform sliding factor for the MISMIP+ configuration, using the second (Tsai et al., 2015) sliding law option
-       
-      DO vi = mesh%vi1, mesh%vi2
-        ice%alpha_sq_a( vi) = MISMIPplus_alpha_sq
-        ice%beta_sq_a(  vi) = MISMIPplus_beta_sq
-      END DO
-      CALL sync
-      
-    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
-      ! Uniform sliding factor for the MISMIP+ configuration, using the third (Schoof, 2005) sliding law option
-       
-      DO vi = mesh%vi1, mesh%vi2
-        ice%alpha_sq_a( vi) = MISMIPplus_alpha_sq
-        ice%beta_sq_a(  vi) = MISMIPplus_beta_sq
-      END DO
-      CALL sync
-      
-    ELSE
-      IF (par%master) WRITE(0,*) 'calc_bed_roughness_MISMIPplus - ERROR: only defined when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-    
-  END SUBROUTINE calc_bed_roughness_MISMIPplus
   
 ! == Sliding laws
 ! ===============
@@ -1197,5 +1229,116 @@ CONTAINS
     CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_idealised_ISMIP_HOM_F')
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F
+  
+! == Remapping
+! ============
+  
+  SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Basal hydrology
+    CALL remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+    
+    ! Bed roughness
+    CALL remap_bed_roughness( mesh_old, mesh_new, map, ice)
+    
+  END SUBROUTINE remap_basal_conditions
+  SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: int_dummy
+    
+    ! To prevent compiler warnings for unused variables
+    int_dummy = mesh_old%nV
+    int_dummy = mesh_new%nV
+    int_dummy = map%trilin%vi( 1,1)
+    
+    ! Allocate shared memory
+    IF     (C%choice_basal_hydrology == 'saturated') THEN
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
+    ELSEIF (C%choice_basal_hydrology == 'Martin2011') THEN
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
+    ELSE
+      IF (par%master) WRITE(0,*) 'remap_basal_hydrology - ERROR: unknown choice_basal_hydrology "', TRIM(C%choice_basal_hydrology), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE remap_basal_hydrology
+  SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: int_dummy
+    
+    ! To prevent compiler warnings for unused variables
+    int_dummy = mesh_old%nV
+    int_dummy = mesh_new%nV
+    int_dummy = map%trilin%vi( 1,1)
+    
+    ! Allocate shared memory
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      ! No sliding allowed
+    ELSEIF (C%choice_sliding_law == 'idealised') THEN
+      ! Sliding laws for some idealised experiments
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      ! Weertman-type ("power law") sliding law
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      ! Regularised Coulomb-type sliding law
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      ! Modified power-law relation according to Tsai et al. (2015)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      ! Modified power-law relation according to Schoof (2005)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+    ELSE
+      IF (par%master) WRITE(0,*) 'remap_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! If bed roughness is prescribed, read it from the provided NetCDF file
+    IF (C%choice_basal_roughness == 'prescribed') THEN
+      CALL initialise_bed_roughness_from_file( mesh_new, ice)
+    END IF
+    
+  END SUBROUTINE remap_bed_roughness
   
 END MODULE basal_conditions_and_sliding_module

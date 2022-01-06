@@ -55,8 +55,8 @@ UFEMISM_program_objects = \
         general_ice_model_data_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
-        ice_dynamics_module.o \
         thermodynamics_module.o \
+        ice_dynamics_module.o \
         isotopes_module.o \
         bedrock_ELRA_module.o \
         tests_and_checks_module.o \

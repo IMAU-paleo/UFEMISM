@@ -130,7 +130,7 @@ CONTAINS
 
     ! Local variables:
     INTEGER                                            :: vi, k
-    REAL(dp)                                           :: u_times_dT_dx_upwind, v_times_dT_dy_upwind, internal_heating, f1, f2, f3
+    REAL(dp)                                           :: u_times_dT_dx_upwind, v_times_dT_dy_upwind, f1, f2, f3
     REAL(dp), DIMENSION(2:C%nz)                        :: alpha
     REAL(dp), DIMENSION(C%nz)                          :: beta
     REAL(dp), DIMENSION(C%nz-1)                        :: gamma

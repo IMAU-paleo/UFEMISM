@@ -1991,7 +1991,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. found_it) THEN
-        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element!'
+        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element in row ', i, '!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     END DO
@@ -2016,7 +2016,7 @@ CONTAINS
         END DO
         
         res = (lhs - b( i)) / diagA( i)
-        res_max = MAX( res_max, res)
+        res_max = MAX( res_max, ABS(res))
         
         x( i) = x( i) - omega_dyn * res
         
@@ -2119,7 +2119,7 @@ CONTAINS
           END DO
           
           res = (lhs - b( i)) / diagA( i)
-          res_max = MAX( res_max, res)
+          res_max = MAX( res_max, ABS(res))
           
           x( i) = x( i) - omega_dyn * res
         
@@ -2621,6 +2621,47 @@ CONTAINS
     Ainv = Ainv / detA
     
   END SUBROUTINE calc_matrix_inverse_3_by_3
+  SUBROUTINE calc_matrix_inverse_general( A, Ainv)
+    ! Calculate the inverse Ainv of an n-by-n matrix A using LAPACK
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: A
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Ainv
+    
+    ! Local variables:
+    REAL(dp), DIMENSION( SIZE( A,1))                   :: work     ! work array for LAPACK
+    INTEGER,  DIMENSION( SIZE( A,1))                   :: ipiv     ! pivot indices
+    INTEGER                                            :: n,info
+
+    ! LAPACK subroutines:     
+    EXTERNAL DGETRF, DGETRI
+
+    n = size( A,1)
+    
+    ! Store A in Ainv to prevent it from being overwritten by LAPACK
+    Ainv = A
+    
+    ! DGETRF computes an LU factorization of a general M-by-N matrix A using partial pivoting with row interchanges.
+    CALL DGETRF( n, n, Ainv, n, ipiv, info)
+    
+    ! Safety
+    IF (info /= 0) THEN
+      WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! DGETRI computes the inverse of a matrix using the LU factorization computed by DGETRF.
+    CALL DGETRI( n, Ainv, n, ipiv, work, n, info)
+    
+    ! Safety
+    IF (info /= 0) THEN
+      WRITE(0,*) 'calc_matrix_inverse_general - DGETRI error: matrix inversion failed!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE calc_matrix_inverse_general
   
 ! == Debugging
   SUBROUTINE check_for_NaN_dp_1D(  d, d_name, routine_name)

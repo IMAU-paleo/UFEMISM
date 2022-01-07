@@ -40,7 +40,7 @@ MODULE mesh_creation_module
   USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
-  USE mesh_five_colour_module,         ONLY: calculcate_five_colouring_acuv
+  USE mesh_five_colour_module,         ONLY: calculate_five_colouring
   
   IMPLICIT NONE
   
@@ -1714,7 +1714,7 @@ MODULE mesh_creation_module
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
     CALL create_transect(                     mesh)
-    CALL calculcate_five_colouring_acuv(      mesh)
+    CALL calculate_five_colouring(            mesh)
     
     CALL check_mesh( mesh)
     

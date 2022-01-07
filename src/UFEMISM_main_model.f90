@@ -389,6 +389,18 @@ CONTAINS
     region%output_file_exists = .TRUE.
     CALL sync
     
+    
+    
+    
+    
+!    ! DENK DROM
+!    CALL run_all_matrix_tests( region%mesh)
+!    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    
+    
+    
+    
+    
     ! ===== The "no ice" mask
     ! =======================
 

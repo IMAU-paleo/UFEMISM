@@ -25,11 +25,10 @@ MODULE ice_velocity_module
   ! Import specific functionality 
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR, type_remapping             
   USE mesh_mapping_module,             ONLY: remap_field_dp
-  USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D, map_a_to_c_3D, &
-                                             map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
+  USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
-                                             ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_c_to_a_3D, ddy_c_to_a_3D, &
-                                             map_c_to_a_2D, map_c_to_a_3D, map_a_to_b_3D, map_b_to_c_3D
+                                             ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
+                                             map_a_to_b_3D, map_b_to_c_3D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
                                              vertical_integrate, allocate_matrix_CSR_dist, sort_columns_in_CSR_dist, &
                                              finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
@@ -53,13 +52,11 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
       
     ! Local variables:
-    INTEGER                                            :: aci, vi, vj
-    REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_c,  dHs_dx_c,  dHs_dy_c
-    INTEGER                                            :: wHi_c, wdHs_dx_c, wdHs_dy_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  A_flow_3D_c
-    INTEGER                                            :: wA_flow_3D_c
-    REAL(dp)                                           :: D_0
-    REAL(dp), DIMENSION(C%nZ)                          :: D_prof, D_deformation
+    INTEGER                                            :: ti, via, vib, vic
+    REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_b,  dHs_dx_b,  dHs_dy_b
+    INTEGER                                            :: wHi_b, wdHs_dx_b, wdHs_dy_b
+    REAL(dp)                                           :: D_0, w
+    REAL(dp), DIMENSION(C%nZ)                          :: A_flow_3D_b, D_prof, D_deformation
     REAL(dp), DIMENSION(C%nZ)                          :: D_SIA_3D
     REAL(dp), PARAMETER                                :: D_uv_3D_cutoff = -1E5_dp
     
@@ -70,39 +67,55 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nAc,       Hi_c       , wHi_c       )
-    CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dx_c   , wdHs_dx_c   )
-    CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dy_c   , wdHs_dy_c   )
-    CALL allocate_shared_dp_2D( mesh%nAc, C%nz, A_flow_3D_c, wA_flow_3D_c)
+    CALL allocate_shared_dp_1D( mesh%nTri,       Hi_b       , wHi_b       )
+    CALL allocate_shared_dp_1D( mesh%nTri,       dHs_dx_b   , wdHs_dx_b   )
+    CALL allocate_shared_dp_1D( mesh%nTri,       dHs_dy_b   , wdHs_dy_b   )
     
-    ! Get ice thickness, surface slopes, and ice flow factor on the staggered mesh
-    CALL map_a_to_c_2D( mesh, ice%Hi_a       , Hi_c       )
-    CALL ddx_a_to_c_2D( mesh, ice%Hs_a       , dHs_dx_c   )
-    CALL ddy_a_to_c_2D( mesh, ice%Hs_a       , dHs_dy_c   )
-    CALL map_a_to_c_3D( mesh, ice%A_flow_3D_a, A_flow_3D_c)
+    ! Get ice thickness, surface slopes, and ice flow factor on the b-grid
+    CALL map_a_to_b_2D( mesh, ice%Hi_a       , Hi_b       )
+    CALL ddx_a_to_b_2D( mesh, ice%Hs_a       , dHs_dx_b   )
+    CALL ddy_a_to_b_2D( mesh, ice%Hs_a       , dHs_dy_b   )
 
-    ! Calculate 3D horizontal velocities (on the c-part of the ac-grid)
-    DO aci = mesh%ci1, mesh%ci2
+    ! Calculate 3D horizontal velocities on the b-grid
+    DO ti = mesh%ti1, mesh%ti2
       
-      vi   = mesh%Aci( aci,1)
-      vj   = mesh%Aci( aci,2)
+      via = mesh%Tri( ti,1)      
+      vib = mesh%Tri( ti,2)      
+      vic = mesh%Tri( ti,3)
       
-      IF (ice%mask_sheet_a( vi) == 0 .AND. ice%mask_sheet_a( vj) == 0) THEN
-        ! No ice at either regular vertex; set velocity to zero
+      IF (ice%mask_sheet_a( via) == 0 .AND. ice%mask_sheet_a( vib) == 0 .AND. ice%mask_sheet_a( vic) == 0) THEN
+        ! No ice at any of the three triangle corners; set velocity to zero
   
-        ice%u_3D_SIA_c( aci,:) = 0._dp
-        ice%v_3D_SIA_c( aci,:) = 0._dp
+        ice%u_3D_SIA_b( ti,:) = 0._dp
+        ice%v_3D_SIA_b( ti,:) = 0._dp
       
       ELSE
+      
+        ! Calculate staggered ice flow factor
+        w           = 0._dp
+        A_flow_3D_b = 0._dp
+        IF (ice%mask_sheet_a( via) == 1) THEN
+          w           = w           + 1._dp
+          A_flow_3D_b = A_flow_3D_b + ice%A_flow_3D_a( via,:)
+        END IF
+        IF (ice%mask_sheet_a( vib) == 1) THEN
+          w           = w           + 1._dp
+          A_flow_3D_b = A_flow_3D_b + ice%A_flow_3D_a( vib,:)
+        END IF
+        IF (ice%mask_sheet_a( vic) == 1) THEN
+          w           = w           + 1._dp
+          A_flow_3D_b = A_flow_3D_b + ice%A_flow_3D_a( vic,:)
+        END IF
+        A_flow_3D_b = A_flow_3D_b / w
         
-        D_0           = (ice_density * grav * Hi_c( aci))**C%n_flow * ((dHs_dx_c( aci)**2 + dHs_dy_c( aci)**2))**((C%n_flow - 1._dp) / 2._dp)
-        D_prof        = A_flow_3D_c( aci,:) * C%zeta**C%n_flow
+        D_0           = (ice_density * grav * Hi_b( ti))**C%n_flow * ((dHs_dx_b( ti)**2 + dHs_dy_b( ti)**2))**((C%n_flow - 1._dp) / 2._dp)
+        D_prof        = A_flow_3D_b * C%zeta**C%n_flow
         CALL vertical_integration_from_bottom_to_zeta( D_prof, D_deformation)
-        D_deformation = 2._dp * Hi_c( aci) * D_deformation
+        D_deformation = 2._dp * Hi_b( ti) * D_deformation
         D_SIA_3D      = MAX( D_0 * D_deformation, D_uv_3D_cutoff)
        
-        ice%u_3D_SIA_c( aci,:) = D_SIA_3D * dHs_dx_c( aci)
-        ice%v_3D_SIA_c( aci,:) = D_SIA_3D * dHs_dy_c( aci)
+        ice%u_3D_SIA_b( ti,:) = D_SIA_3D * dHs_dx_b( ti)
+        ice%v_3D_SIA_b( ti,:) = D_SIA_3D * dHs_dy_b( ti)
       
       END IF
       
@@ -113,10 +126,9 @@ CONTAINS
     CALL calc_secondary_velocities( mesh, ice)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wHi_c       )
-    CALL deallocate_shared( wdHs_dx_c   )
-    CALL deallocate_shared( wdHs_dy_c   )
-    CALL deallocate_shared( wA_flow_3D_c)
+    CALL deallocate_shared( wHi_b       )
+    CALL deallocate_shared( wdHs_dx_b   )
+    CALL deallocate_shared( wdHs_dy_b   )
 
   END SUBROUTINE solve_SIA
   SUBROUTINE solve_SSA(  mesh, ice)
@@ -264,8 +276,8 @@ CONTAINS
     IF (SUM( ice%mask_sheet_a) == 0) set_velocities_to_zero = .TRUE.
     
     IF (set_velocities_to_zero) THEN
-      ice%u_vav_DIVA_b( mesh%ti1:mesh%ti2) = 0._dp
-      ice%v_vav_DIVA_b( mesh%ti1:mesh%ti2) = 0._dp
+      ice%u_vav_b( mesh%ti1:mesh%ti2) = 0._dp
+      ice%v_vav_b( mesh%ti1:mesh%ti2) = 0._dp
       CALL sync
       CALL calc_secondary_velocities( mesh, ice)
       RETURN
@@ -296,10 +308,10 @@ CONTAINS
       CALL calc_vertical_shear_strain_rates( mesh, ice)
       
       ! Calculate the effective viscosity and the product term N = eta * H
-      CALL calc_effective_viscosity( mesh, ice, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b)
+      CALL calc_effective_viscosity( mesh, ice, ice%u_vav_b, ice%v_vav_b)
             
       ! Calculate the sliding term beta
-      CALL calc_sliding_term_beta( mesh, ice, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b)
+      CALL calc_sliding_term_beta( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
       ! Calculate the F-integral F2
       CALL calc_F_integral( mesh, ice, n = 2._dp)
@@ -308,25 +320,25 @@ CONTAINS
       CALL calc_beta_eff( mesh, ice)
       
       ! Store the previous solution so we can check for convergence later
-      ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_vav_DIVA_b( mesh%ti1:mesh%ti2)
-      ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_vav_DIVA_b( mesh%ti1:mesh%ti2)
+      ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_vav_b( mesh%ti1:mesh%ti2)
+      ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_vav_b( mesh%ti1:mesh%ti2)
       CALL sync
       
       ! Solve the linearised DIVA
-      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b)
+      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
       ! Apply velocity limits (both overflow and underflow) for improved stability
-      CALL apply_velocity_limits( mesh, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b)
+      CALL apply_velocity_limits( mesh, ice%u_vav_b, ice%v_vav_b)
       
       ! "relax" subsequent viscosity iterations for improved stability
-      CALL relax_DIVA_visc_iterations( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, C%DIVA_visc_it_relax)
+      CALL relax_DIVA_visc_iterations( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_b, ice%v_vav_b, C%DIVA_visc_it_relax)
       
       ! Check if the viscosity iteration has converged
-      CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, resid_UV)
-      IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_DIVA_b), ' - ', MAXVAL(ice%u_vav_DIVA_b), ']'
+      CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_b, ice%v_vav_b, resid_UV)
+      IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_b), ' - ', MAXVAL(ice%u_vav_b), ']'
       
       IF (par%master .AND. C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') &
-        WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_vav_DIVA_b) / umax_analytical), ': resid_UV = ', resid_UV
+        WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_vav_b) / umax_analytical), ': resid_UV = ', resid_UV
 
       has_converged = .FALSE.
       IF     (resid_UV < C%DIVA_visc_it_norm_dUV_tol) THEN
@@ -336,7 +348,7 @@ CONTAINS
       END IF
 
       ! Calculate basal stress 
-      CALL calc_basal_stress_DIVA( mesh, ice, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b)
+      CALL calc_basal_stress_DIVA( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
     END DO viscosity_iteration
     
@@ -356,105 +368,76 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
-    INTEGER                                            :: aci, vi, k
+    INTEGER                                            :: ti, vi, k
     REAL(dp), DIMENSION(C%nz)                          :: prof
     
     IF (C%choice_ice_dynamics == 'SIA') THEN
       ! No SSA or sliding, just the SIA
       
       ! Set 3D velocity field equal to SIA answer
-      ice%u_3D_c( mesh%ci1:mesh%ci2,:) = ice%u_3D_SIA_c( mesh%ci1:mesh%ci2,:)
-      ice%v_3D_c( mesh%ci1:mesh%ci2,:) = ice%v_3D_SIA_c( mesh%ci1:mesh%ci2,:)
+      ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
+      ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
       CALL sync
       
       ! Basal velocity is zero
-      ice%u_base_c( mesh%ci1:mesh%ci2) = 0._dp
-      ice%v_base_c( mesh%ci1:mesh%ci2) = 0._dp
+      ice%u_base_b( mesh%ti1:mesh%ti2) = 0._dp
+      ice%v_base_b( mesh%ti1:mesh%ti2) = 0._dp
       CALL sync
     
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
       
       ! Copy surface velocity from the 3D fields
-      ice%u_surf_c( mesh%ci1:mesh%ci2) = ice%u_3D_c( mesh%ci1:mesh%ci2,1)
-      ice%v_surf_c( mesh%ci1:mesh%ci2) = ice%v_3D_c( mesh%ci1:mesh%ci2,1)
+      ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+      ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
       CALL sync
       
       ! Calculate vertically averaged velocities
-      DO aci = mesh%ci1, mesh%ci2
-        prof = ice%u_3D_c( aci,:)
-        CALL vertical_average( prof, ice%u_vav_c( aci))
-        prof = ice%v_3D_c( aci,:)
-        CALL vertical_average( prof, ice%v_vav_c( aci))
+      DO ti = mesh%ti1, mesh%ti2
+        prof = ice%u_3D_b( ti,:)
+        CALL vertical_average( prof, ice%u_vav_b( ti))
+        prof = ice%v_3D_b( ti,:)
+        CALL vertical_average( prof, ice%v_vav_b( ti))
       END DO
       CALL sync
-      
-      ! Map velocity components to the a-grid for writing to output
-      CALL map_c_to_a_3D( mesh, ice%u_3D_c,   ice%u_3D_a  )
-      CALL map_c_to_a_3D( mesh, ice%v_3D_c,   ice%v_3D_a  )
-      CALL map_c_to_a_2D( mesh, ice%u_vav_c,  ice%u_vav_a )
-      CALL map_c_to_a_2D( mesh, ice%v_vav_c,  ice%v_vav_a )
-      CALL map_c_to_a_2D( mesh, ice%u_surf_c, ice%u_surf_a)
-      CALL map_c_to_a_2D( mesh, ice%v_surf_c, ice%v_surf_a)
       
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
       ! No SIA, just the SSA
       
-    ! == From the b-grid to the c-grid (used in the model)
-      
-      ! Set basal velocity equal to SSA answer
-!      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
-!      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
-      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_c, ice%v_base_c)
-      
-      ! No vertical variations in velocity
-      DO aci = mesh%ci1, mesh%ci2
-        ice%u_vav_c(  aci   ) = ice%u_base_c( aci)
-        ice%v_vav_c(  aci   ) = ice%v_base_c( aci)
-        ice%u_surf_c( aci   ) = ice%u_base_c( aci)
-        ice%v_surf_c( aci   ) = ice%v_base_c( aci)
-        ice%u_3D_c(   aci ,:) = ice%u_base_c( aci)
-        ice%v_3D_c(   aci ,:) = ice%v_base_c( aci)
+      ! No vertical variations in velocity; all fields are equal to the SSA answer
+      DO ti = mesh%ti1, mesh%ti2
+        ice%u_3D_b(   ti,:) = ice%u_base_SSA_b( ti)
+        ice%v_3D_b(   ti,:) = ice%v_base_SSA_b( ti)
+        ice%u_vav_b(  ti  ) = ice%u_base_SSA_b( ti)
+        ice%v_vav_b(  ti  ) = ice%v_base_SSA_b( ti)
+        ice%u_surf_b( ti  ) = ice%u_base_SSA_b( ti)
+        ice%v_surf_b( ti  ) = ice%v_base_SSA_b( ti)
+        ice%u_base_b( ti  ) = ice%u_base_SSA_b( ti)
+        ice%v_base_b( ti  ) = ice%v_base_SSA_b( ti)
       END DO
       CALL sync
       
-    ! == From the b-grid to the a-grid (only for writing to output)
-      
-      ! Set basal velocity equal to SSA answer
-!      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
-!      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
-      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_a, ice%v_base_a)
-      
-      ! No vertical variations in velocity
-      DO vi = mesh%vi1, mesh%vi2
-        ice%u_vav_a(  vi   ) = ice%u_base_a( vi)
-        ice%v_vav_a(  vi   ) = ice%v_base_a( vi)
-        ice%u_surf_a( vi   ) = ice%u_base_a( vi)
-        ice%v_surf_a( vi   ) = ice%v_base_a( vi)
-        ice%u_3D_a(   vi ,:) = ice%u_base_a( vi)
-        ice%v_3D_a(   vi ,:) = ice%v_base_a( vi)
-      END DO
+      ! No vertical velocity
+      ice%w_3D_a( mesh%vi1:mesh%vi2,:) = 0._dp
       CALL sync
       
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Hybrid SIA/SSA
       
-    ! == From the b-grid to the c-grid (used in the model)
-      
       ! Set basal velocity equal to SSA answer
-!      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
-!      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
-      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_c, ice%v_base_c)
+      ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
+      ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
+      CALL sync
       
       ! Set 3-D velocities equal to the SIA solution
-      ice%u_3D_c( mesh%ci1:mesh%ci2,:) = ice%u_3D_SIA_c( mesh%ci1:mesh%ci2,:)
-      ice%v_3D_c( mesh%ci1:mesh%ci2,:) = ice%v_3D_SIA_c( mesh%ci1:mesh%ci2,:)
+      ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
+      ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
       CALL sync
       
       ! Add the SSA contributions to the 3-D velocities
       DO k = 1, C%nz
-        ice%u_3D_c( mesh%ci1:mesh%ci2,k) = ice%u_3D_c( mesh%ci1:mesh%ci2,k) + ice%u_base_c( mesh%ci1:mesh%ci2)
-        ice%v_3D_c( mesh%ci1:mesh%ci2,k) = ice%v_3D_c( mesh%ci1:mesh%ci2,k) + ice%v_base_c( mesh%ci1:mesh%ci2)
+        ice%u_3D_b( mesh%ti1:mesh%ti2,k) = ice%u_3D_b( mesh%ti1:mesh%ti2,k) + ice%u_base_b( mesh%ti1:mesh%ti2)
+        ice%v_3D_b( mesh%ti1:mesh%ti2,k) = ice%v_3D_b( mesh%ti1:mesh%ti2,k) + ice%v_base_b( mesh%ti1:mesh%ti2)
       END DO
       CALL sync
       
@@ -462,48 +445,16 @@ CONTAINS
       CALL calc_3D_vertical_velocities( mesh, ice)
       
       ! Copy surface velocity from the 3D fields
-      ice%u_surf_c( mesh%ci1:mesh%ci2) = ice%u_3D_c( mesh%ci1:mesh%ci2,1)
-      ice%v_surf_c( mesh%ci1:mesh%ci2) = ice%v_3D_c( mesh%ci1:mesh%ci2,1)
+      ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+      ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
       CALL sync
       
       ! Calculate vertically averaged velocities
-      DO aci = mesh%ci1, mesh%ci2
-        prof = ice%u_3D_c( aci,:)
-        CALL vertical_average( prof, ice%u_vav_c( aci))
-        prof = ice%v_3D_c( aci,:)
-        CALL vertical_average( prof, ice%v_vav_c( aci))
-      END DO
-      CALL sync
-      
-    ! == From the b-grid to the a-grid (only for writing to output)
-      
-      ! Set basal velocity equal to SSA answer
-!      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
-!      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
-      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_a, ice%v_base_a)
-      
-      ! Set 3-D velocities equal to the SIA solution
-      CALL map_c_to_a_3D( mesh, ice%u_3D_SIA_c, ice%u_3D_a)
-      CALL map_c_to_a_3D( mesh, ice%v_3D_SIA_c, ice%v_3D_a)
-      
-      ! Add the SSA contributions to the 3-D velocities
-      DO k = 1, C%nz
-        ice%u_3D_a( mesh%vi1:mesh%vi2,k) = ice%u_3D_a( mesh%vi1:mesh%vi2,k) + ice%u_base_a( mesh%vi1:mesh%vi2)
-        ice%v_3D_a( mesh%vi1:mesh%vi2,k) = ice%v_3D_a( mesh%vi1:mesh%vi2,k) + ice%v_base_a( mesh%vi1:mesh%vi2)
-      END DO
-      CALL sync
-      
-      ! Copy surface velocity from the 3D fields
-      ice%u_surf_a( mesh%vi1:mesh%vi2) = ice%u_3D_a( mesh%vi1:mesh%vi2,1)
-      ice%v_surf_a( mesh%vi1:mesh%vi2) = ice%v_3D_a( mesh%vi1:mesh%vi2,1)
-      CALL sync
-      
-      ! Calculate vertically averaged velocities
-      DO vi = mesh%vi1, mesh%vi2
-        prof = ice%u_3D_a( vi,:)
-        CALL vertical_average( prof, ice%u_vav_a( vi))
-        prof = ice%v_3D_a( vi,:)
-        CALL vertical_average( prof, ice%v_vav_a( vi))
+      DO ti = mesh%ti1, mesh%ti2
+        prof = ice%u_3D_b( ti,:)
+        CALL vertical_average( prof, ice%u_vav_b( ti))
+        prof = ice%v_3D_b( ti,:)
+        CALL vertical_average( prof, ice%v_vav_b( ti))
       END DO
       CALL sync
     
@@ -516,52 +467,13 @@ CONTAINS
       ! Calculate 3-D velocity solution from the DIVA
       CALL calc_3D_horizontal_velocities_DIVA( mesh, ice)
       
+      ! Copy surface velocity from the 3D fields
+      ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+      ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
+      CALL sync
+      
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
-      
-    ! == From the b-grid to the c-grid (used in the model)
-      
-      ! Map 3-D velocity from the b-grid to the c-grid
-!      CALL map_b_to_c_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_c)
-!      CALL map_b_to_c_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_c)
-      CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_DIVA_b, ice%v_3D_DIVA_b, ice%u_3D_c, ice%v_3D_c)
-      
-      ! Map vertically averaged velocity from the b-grid to the c-grid
-!      CALL map_b_to_c_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_c)
-!      CALL map_b_to_c_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_c)
-      CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, ice%u_vav_c, ice%v_vav_c)
-      
-      ! Map basal velocity from the b-grid to the c-grid
-!      CALL map_b_to_c_2D( mesh, ice%u_base_DIVA_b, ice%u_base_c)
-!      CALL map_b_to_c_2D( mesh, ice%v_base_DIVA_b, ice%v_base_c)
-      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_DIVA_b, ice%v_base_DIVA_b, ice%u_base_c, ice%v_base_c)
-      
-      ! Copy surface velocity from the 3-D fields
-      ice%u_surf_c( mesh%ti1:mesh%ti2) = ice%u_3D_c( mesh%ti1:mesh%ti2,1)
-      ice%v_surf_c( mesh%ti1:mesh%ti2) = ice%v_3D_c( mesh%ti1:mesh%ti2,1)
-      CALL sync
-      
-    ! == From the b-grid to the a-grid (only for writing to output)
-      
-      ! Map 3-D velocity from the b-grid to the a-grid
-!      CALL map_b_to_a_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_a)
-!      CALL map_b_to_a_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_a)
-      CALL map_velocities_b_to_a_3D( mesh, ice%u_3D_DIVA_b, ice%v_3D_DIVA_b, ice%u_3D_a, ice%v_3D_a)
-      
-      ! Map vertically averaged velocity from the b-grid to the a-grid
-!      CALL map_b_to_a_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_a)
-!      CALL map_b_to_a_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_a)
-      CALL map_velocities_b_to_a_2D( mesh, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, ice%u_vav_a, ice%v_vav_a)
-      
-      ! Map basal velocity from the b-grid to the a-grid
-!      CALL map_b_to_a_2D( mesh, ice%u_base_DIVA_b, ice%u_base_a)
-!      CALL map_b_to_a_2D( mesh, ice%v_base_DIVA_b, ice%v_base_a)
-      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_DIVA_b, ice%v_base_DIVA_b, ice%u_base_a, ice%v_base_a)
-      
-      ! Copy surface velocity from the 3-D fields
-      ice%u_surf_a( mesh%vi1:mesh%vi2) = ice%u_3D_a( mesh%vi1:mesh%vi2,1)
-      ice%v_surf_a( mesh%vi1:mesh%vi2) = ice%v_3D_a( mesh%vi1:mesh%vi2,1)
-      CALL sync
       
     ELSE ! IF (C%choice_ice_dynamics == 'SIA')
     
@@ -569,8 +481,19 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       
     END IF ! IF (C%choice_ice_dynamics == 'SIA')
+      
+    ! Map velocity components to the a-grid
+    CALL map_velocities_b_to_a_3D( mesh, ice%u_3D_b  , ice%v_3D_b  , ice%u_3D_a  , ice%v_3D_a  )
+    CALL map_velocities_b_to_a_2D( mesh, ice%u_vav_b , ice%v_vav_b , ice%u_vav_a , ice%v_vav_a )
+    CALL map_velocities_b_to_a_2D( mesh, ice%u_surf_b, ice%v_surf_b, ice%u_surf_a, ice%v_surf_a)
+    CALL map_velocities_b_to_a_2D( mesh, ice%u_base_b, ice%v_base_b, ice%u_base_a, ice%v_base_a)
     
-    ! Get absolute velocities on the a-grid (only used for writing to output)
+    ! Calculate absolute velocities
+    DO ti = mesh%ti1, mesh%ti2
+      ice%uabs_vav_b(  ti) = SQRT( ice%u_vav_b(  ti)**2 + ice%v_vav_b(  ti)**2)
+      ice%uabs_surf_b( ti) = SQRT( ice%u_surf_b( ti)**2 + ice%v_surf_b( ti)**2)
+      ice%uabs_base_b( ti) = SQRT( ice%u_base_b( ti)**2 + ice%v_base_b( ti)**2)
+    END DO
     DO vi = mesh%vi1, mesh%vi2
       ice%uabs_vav_a(  vi) = SQRT( ice%u_vav_a(  vi)**2 + ice%v_vav_a(  vi)**2)
       ice%uabs_surf_a( vi) = SQRT( ice%u_surf_a( vi)**2 + ice%v_surf_a( vi)**2)
@@ -614,8 +537,8 @@ CONTAINS
     CALL ddy_a_to_a_2D( mesh, ice%Hi_a  , dHi_dy_a  )
     
     ! Calculate strain rates
-    CALL ddx_c_to_a_3D( mesh, ice%u_3D_c, du_dx_3D_a)
-    CALL ddy_c_to_a_3D( mesh, ice%v_3D_c, dv_dy_3D_a)
+    CALL ddx_b_to_a_3D( mesh, ice%u_3D_b, du_dx_3D_a)
+    CALL ddy_b_to_a_3D( mesh, ice%v_3D_b, dv_dy_3D_a)
     
     ! Integrate over the incompressibility condition to find the vertical velocity profiles
     DO vi = mesh%vi1, mesh%vi2
@@ -986,8 +909,8 @@ CONTAINS
       ! Set basal velocities to zero 
       ! (this comes out naturally more or less with beta_eff set as above, 
       !  but ensuring basal velocity is zero adds stability)
-      ice%u_base_DIVA_b( mesh%ti1:mesh%ti2) = 0._dp
-      ice%v_base_DIVA_b( mesh%ti1:mesh%ti2) = 0._dp
+      ice%u_base_b( mesh%ti1:mesh%ti2) = 0._dp
+      ice%v_base_b( mesh%ti1:mesh%ti2) = 0._dp
       CALL sync
       RETURN
     END IF
@@ -1000,8 +923,8 @@ CONTAINS
     
     ! Calculate basal velocities on the b-grid
     DO ti = mesh%ti1, mesh%ti2
-      ice%u_base_DIVA_b( ti) = ice%u_vav_DIVA_b( ti) - ice%taubx_b( ti) * F2_b( ti)
-      ice%v_base_DIVA_b( ti) = ice%v_vav_DIVA_b( ti) - ice%tauby_b( ti) * F2_b( ti)
+      ice%u_base_b( ti) = ice%u_vav_b( ti) - ice%taubx_b( ti) * F2_b( ti)
+      ice%v_base_b( ti) = ice%v_vav_b( ti) - ice%tauby_b( ti) * F2_b( ti)
     END DO
     CALL sync
     
@@ -1009,8 +932,8 @@ CONTAINS
     CALL deallocate_shared( wF2_b    )
     
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%u_base_DIVA_b, 'ice%u_base_DIVA_b', 'calc_basal_velocities_DIVA')
-    CALL check_for_NaN_dp_1D( ice%v_base_DIVA_b, 'ice%v_base_DIVA_b', 'calc_basal_velocities_DIVA')
+    CALL check_for_NaN_dp_1D( ice%u_base_b, 'ice%u_base_b', 'calc_basal_velocities_DIVA')
+    CALL check_for_NaN_dp_1D( ice%v_base_b, 'ice%v_base_b', 'calc_basal_velocities_DIVA')
         
   END SUBROUTINE calc_basal_velocities_DIVA
   SUBROUTINE calc_3D_horizontal_velocities_DIVA( mesh, ice)
@@ -1049,14 +972,14 @@ CONTAINS
 
     ! Calculate 3D horizontal velocity components
     DO ti = mesh%ti1, mesh%ti2
-      ice%u_3D_DIVA_b( ti,:) = ice%u_base_DIVA_b( ti) + ice%taubx_b( ti) * F1_3D_b( ti,:)
-      ice%v_3D_DIVA_b( ti,:) = ice%v_base_DIVA_b( ti) + ice%tauby_b( ti) * F1_3D_b( ti,:)
+      ice%u_3D_b( ti,:) = ice%u_base_b( ti) + ice%taubx_b( ti) * F1_3D_b( ti,:)
+      ice%v_3D_b( ti,:) = ice%v_base_b( ti) + ice%tauby_b( ti) * F1_3D_b( ti,:)
     END DO
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%u_3D_DIVA_b, 'ice%u_3D_DIVA_b', 'calc_3D_horizontal_velocities_DIVA')
-    CALL check_for_NaN_dp_2D( ice%v_3D_DIVA_b, 'ice%v_3D_DIVA_b', 'calc_3D_horizontal_velocities_DIVA')
+    CALL check_for_NaN_dp_2D( ice%u_3D_b, 'ice%u_3D_b', 'calc_3D_horizontal_velocities_DIVA')
+    CALL check_for_NaN_dp_2D( ice%v_3D_b, 'ice%v_3D_b', 'calc_3D_horizontal_velocities_DIVA')
 
   END SUBROUTINE calc_3D_horizontal_velocities_DIVA
   
@@ -2032,8 +1955,8 @@ CONTAINS
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Data fields for the SIA
       
-      CALL allocate_shared_dp_2D(   mesh%nAc , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
-      CALL allocate_shared_dp_2D(   mesh%nAc , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
+      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
       
     END IF
       
@@ -2044,14 +1967,6 @@ CONTAINS
         ! Velocity fields containing the SSA solution on the b-grid
         CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
         CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-        ! Velocity fields containing the DIVA solution on the b-grid
-        CALL allocate_shared_dp_2D(   mesh%nTri, C%nz,        ice%u_3D_DIVA_b           , ice%wu_3D_DIVA_b          )
-        CALL allocate_shared_dp_2D(   mesh%nTri, C%nz,        ice%v_3D_DIVA_b           , ice%wv_3D_DIVA_b          )
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_vav_DIVA_b          , ice%wu_vav_DIVA_b         )
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_vav_DIVA_b          , ice%wv_vav_DIVA_b         )
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_DIVA_b         , ice%wu_base_DIVA_b        )
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_DIVA_b         , ice%wv_base_DIVA_b        )
       END IF
       
       ! Useful data fields for solving the SSA/DIVA
@@ -2096,8 +2011,8 @@ CONTAINS
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Data fields for the SIA
       
-      CALL reallocate_shared_dp_2D(   mesh_new%nAc , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
-      CALL reallocate_shared_dp_2D(   mesh_new%nAc , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
+      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz       , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz       , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
       
     END IF
       
@@ -2143,24 +2058,16 @@ CONTAINS
         CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
         
         ! Map velocities to the a-grid
-        CALL map_b_to_a_2D( mesh_old, ice%u_vav_DIVA_b, u_a)
-        CALL map_b_to_a_2D( mesh_old, ice%v_vav_DIVA_b, v_a)
+        CALL map_b_to_a_2D( mesh_old, ice%u_vav_b, u_a)
+        CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
         
         ! Remap a-grid velocities
         CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_1st_order')
         CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_1st_order')
         
-        ! Reallocate b-grid velocities
-        CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%u_3D_DIVA_b           , ice%wu_3D_DIVA_b          )
-        CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%v_3D_DIVA_b           , ice%wv_3D_DIVA_b          )
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_vav_DIVA_b          , ice%wu_vav_DIVA_b         )
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_vav_DIVA_b          , ice%wv_vav_DIVA_b         )
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_base_DIVA_b         , ice%wu_base_DIVA_b        )
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_base_DIVA_b         , ice%wv_base_DIVA_b        )
-        
         ! Map remapped velocities to the b-grid
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_DIVA_b)
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_DIVA_b)
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_b)
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_b)
         
         ! Clean up after yourself
         CALL deallocate_shared( wu_a)

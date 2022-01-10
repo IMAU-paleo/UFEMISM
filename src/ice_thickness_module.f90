@@ -26,6 +26,7 @@ MODULE ice_thickness_module
                                              type_reference_geometry
   USE utilities_module,                ONLY: is_floating
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex
+  USE ice_velocity_module,             ONLY: map_velocities_b_to_c_2D
 
   IMPLICIT NONE
   
@@ -80,8 +81,8 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: dt
     
     ! Local variables
-    REAL(dp), DIMENSION(:    ), POINTER                ::  up_c,  uo_c
-    INTEGER                                            :: wup_c, wuo_c
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
+    INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_SMB
@@ -97,9 +98,13 @@ CONTAINS
     Vi_SMB         = 0._dp
     
     ! Calculate vertically averaged ice velocities along vertex connections
+    CALL allocate_shared_dp_1D( mesh%nAc, u_c , wu_c )
+    CALL allocate_shared_dp_1D( mesh%nAc, v_c , wv_c )
     CALL allocate_shared_dp_1D( mesh%nAc, up_c, wup_c)
     CALL allocate_shared_dp_1D( mesh%nAc, uo_c, wuo_c)
-    CALL rotate_xy_to_po_stag( mesh, ice%u_vav_c, ice%v_vav_c, up_c, uo_c)
+    
+    CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
+    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
         
     ! Calculate ice fluxes across all Aa vertex connections
     ! based on ice velocities calculated on Ac mesh
@@ -219,6 +224,8 @@ CONTAINS
     CALL sync
     
     ! Clean up after yourself
+    CALL deallocate_shared( wu_c )
+    CALL deallocate_shared( wv_c )
     CALL deallocate_shared( wup_c)
     CALL deallocate_shared( wuo_c)
     

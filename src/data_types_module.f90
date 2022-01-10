@@ -40,45 +40,41 @@ MODULE data_types_module
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_c
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
-    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_c, wv_3D_c, ww_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_b
+    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a, ww_3D_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
-    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_c, wv_vav_c, wuabs_vav_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_b
+    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wuabs_vav_a, wuabs_vav_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
-    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_c, wv_surf_c, wuabs_surf_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_b
+    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, wuabs_surf_a, wuabs_surf_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
-    INTEGER :: wu_base_a, wv_base_a, wu_base_c, wv_base_c, wuabs_base_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
+    INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, wuabs_base_a, wuabs_base_b
     
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_c
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_SSA_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_SSA_b
-    INTEGER :: wu_3D_SIA_c, wv_3D_SIA_c, wu_base_SSA_b, wv_base_SSA_b
-    
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_DIVA_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_DIVA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_DIVA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_DIVA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_DIVA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_DIVA_b
-    INTEGER :: wu_3D_DIVA_b, wv_3D_DIVA_b, wu_vav_DIVA_b, wv_vav_DIVA_b, wu_base_DIVA_b, wv_base_DIVA_b
+    INTEGER :: wu_3D_SIA_b, wv_3D_SIA_b, wu_base_SSA_b, wv_base_SSA_b
     
     ! Different masks
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a

@@ -25,7 +25,8 @@ MODULE thermodynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
-  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
+                                             ddx_a_to_b_3D, ddy_a_to_b_3D
   USE mesh_help_functions_module,      ONLY: CROSS2
   
   IMPLICIT NONE
@@ -130,6 +131,8 @@ CONTAINS
 
     ! Local variables:
     INTEGER                                            :: vi, k
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  dTi_dx_3D_b,  dTi_dy_3D_b
+    INTEGER                                            :: wdTi_dx_3D_b, wdTi_dy_3D_b
     REAL(dp)                                           :: u_times_dT_dx_upwind, v_times_dT_dy_upwind, f1, f2, f3
     REAL(dp), DIMENSION(2:C%nz)                        :: alpha
     REAL(dp), DIMENSION(C%nz)                          :: beta
@@ -145,10 +148,15 @@ CONTAINS
     LOGICAL                                            :: hasnan
     
     ! Allocate shared memory
-    CALL allocate_shared_int_1D( mesh%nV,       is_unstable,           wis_unstable          )
-    CALL allocate_shared_dp_2D(  mesh%nV, C%nz, Ti_new,                wTi_new               )
-    CALL allocate_shared_dp_1D(  mesh%nV,       T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
-    CALL sync
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dx_3D_b          , wdTi_dx_3D_b          )
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dy_3D_b          , wdTi_dy_3D_b          )
+    CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable          , wis_unstable          )
+    CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new               , wTi_new               )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
+    
+    ! Calculate temperature gradients on the b-grid
+    CALL ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b)
+    CALL ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b)
     
     ! Calculate zeta derivatives required for solving the heat equation
     CALL calculate_zeta_derivatives( mesh, ice)
@@ -203,7 +211,7 @@ CONTAINS
       ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
       DO k = 2, C%nz-1
       
-        CALL calc_upwind_heat_flux_derivatives_vertex( mesh, ice%u_3D_c, ice%v_3D_c, ice%Ti_a, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
+        CALL calc_upwind_heat_flux_derivatives_vertex( mesh, ice%u_3D_b, ice%v_3D_b, dTi_dx_3D_b, dTi_dy_3D_b, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
 
         f1 = (ice%Ki_a( vi,k) * ice%dzeta_dz_a( vi)**2) / (ice_density * ice%Cpi_a( vi,k))
 
@@ -310,8 +318,10 @@ CONTAINS
     CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wTi_new)
-    CALL deallocate_shared( wis_unstable)
+    CALL deallocate_shared( wdTi_dx_3D_b          )
+    CALL deallocate_shared( wdTi_dy_3D_b          )
+    CALL deallocate_shared( wTi_new               )
+    CALL deallocate_shared( wis_unstable          )
     CALL deallocate_shared( wT_ocean_at_shelf_base)
     
     ! Safety
@@ -320,35 +330,36 @@ CONTAINS
   END SUBROUTINE solve_3D_heat_equation
   
 ! == Calculate upwind heat flux derivatives
-  SUBROUTINE calc_upwind_heat_flux_derivatives_vertex( mesh, u_3D_c, v_3D_c, Ti_a, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
+  SUBROUTINE calc_upwind_heat_flux_derivatives_vertex( mesh, u_3D_b, v_3D_b, dTi_dx_3D_b, dTi_dy_3D_b, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
     ! Calculate upwind heat flux derivatives at vertex vi, vertical layer k
     
     IMPLICIT NONE
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_3D_c
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: v_3D_c
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Ti_a
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_3D_b, v_3D_b
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: dTi_dx_3D_b, dTi_dy_3D_b
     INTEGER,                             INTENT(IN)    :: vi
     INTEGER,                             INTENT(IN)    :: k
-    REAL(dp),                            INTENT(OUT)   :: u_times_dT_dx_upwind
-    REAL(dp),                            INTENT(OUT)   :: v_times_dT_dy_upwind
+    REAL(dp),                            INTENT(OUT)   :: u_times_dT_dx_upwind, v_times_dT_dy_upwind
     
     ! Local variables:
-    INTEGER                                            :: iti, ti, n1, n2, n3, vib, vic, ti_upwind
+    INTEGER                                            :: vti, ti, n1, n2, n3, vib, vic, ti_upwind
     REAL(dp), DIMENSION(2)                             :: u_upwind, ab, ac
-    INTEGER                                            :: kk, vj
     
     ! Upwind velocity vector
-    u_upwind = [u_3D_c( vi,k), v_3D_c( vi,k)]
+    u_upwind = 0._dp
+    DO vti = 1, mesh%niTri( vi)
+      ti = mesh%iTri( vi,vti)
+      u_upwind = u_upwind + [u_3D_b( ti,k), v_3D_b( ti,k)] / REAL( mesh%niTri( vi), dp)
+    END DO
     
     ! Find the upwind triangle
     ti_upwind = 0
-    DO iti = 1, mesh%niTri( vi)
+    DO vti = 1, mesh%niTri( vi)
       
       ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
-      ti  = mesh%iTri( vi,iti)
+      ti  = mesh%iTri( vi,vti)
       vib = 0
       vic = 0
       DO n1 = 1, 3
@@ -381,19 +392,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-    ! Calculate derivatives on this triangle
-    
-    u_times_dT_dx_upwind = 0._dp
-    DO kk = mesh%M_ddx_a_b%ptr( ti_upwind), mesh%M_ddx_a_b%ptr( ti_upwind+1)-1
-      vj = mesh%M_ddx_a_b%index( kk)
-      u_times_dT_dx_upwind = u_times_dT_dx_upwind + Ti_a( vj,k) * mesh%M_ddx_a_b%val( kk)
-    END DO
-    
-    v_times_dT_dy_upwind = 0._dp
-    DO kk = mesh%M_ddy_a_b%ptr( ti_upwind), mesh%M_ddy_a_b%ptr( ti_upwind+1)-1
-      vj = mesh%M_ddy_a_b%index( kk)
-      v_times_dT_dy_upwind = v_times_dT_dy_upwind + Ti_a( vj,k) * mesh%M_ddy_a_b%val( kk)
-    END DO
+    ! Calculate u * dT/dx, v * dT/dy
+    u_times_dT_dx_upwind = u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
+    v_times_dT_dy_upwind = v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
     
   END SUBROUTINE calc_upwind_heat_flux_derivatives_vertex
   

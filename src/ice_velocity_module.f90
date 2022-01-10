@@ -23,7 +23,8 @@ MODULE ice_velocity_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality 
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR, type_remapping
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR, type_remapping             
+  USE mesh_mapping_module,             ONLY: remap_field_dp
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D, map_a_to_c_3D, &
                                              map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
@@ -402,8 +403,9 @@ CONTAINS
     ! == From the b-grid to the c-grid (used in the model)
       
       ! Set basal velocity equal to SSA answer
-      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
-      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
+      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_c, ice%v_base_c)
       
       ! No vertical variations in velocity
       DO aci = mesh%ci1, mesh%ci2
@@ -419,8 +421,9 @@ CONTAINS
     ! == From the b-grid to the a-grid (only for writing to output)
       
       ! Set basal velocity equal to SSA answer
-      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
-      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_a, ice%v_base_a)
       
       ! No vertical variations in velocity
       DO vi = mesh%vi1, mesh%vi2
@@ -439,8 +442,9 @@ CONTAINS
     ! == From the b-grid to the c-grid (used in the model)
       
       ! Set basal velocity equal to SSA answer
-      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
-      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%u_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%v_base_SSA_b, ice%v_base_c)
+      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_c, ice%v_base_c)
       
       ! Set 3-D velocities equal to the SIA solution
       ice%u_3D_c( mesh%ci1:mesh%ci2,:) = ice%u_3D_SIA_c( mesh%ci1:mesh%ci2,:)
@@ -474,8 +478,9 @@ CONTAINS
     ! == From the b-grid to the a-grid (only for writing to output)
       
       ! Set basal velocity equal to SSA answer
-      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
-      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%u_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%v_base_SSA_b, ice%v_base_a)
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b, ice%u_base_a, ice%v_base_a)
       
       ! Set 3-D velocities equal to the SIA solution
       CALL map_c_to_a_3D( mesh, ice%u_3D_SIA_c, ice%u_3D_a)
@@ -517,16 +522,19 @@ CONTAINS
     ! == From the b-grid to the c-grid (used in the model)
       
       ! Map 3-D velocity from the b-grid to the c-grid
-      CALL map_b_to_c_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_c)
-      CALL map_b_to_c_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_c)
+!      CALL map_b_to_c_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_c)
+!      CALL map_b_to_c_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_c)
+      CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_DIVA_b, ice%v_3D_DIVA_b, ice%u_3D_c, ice%v_3D_c)
       
       ! Map vertically averaged velocity from the b-grid to the c-grid
-      CALL map_b_to_c_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_c)
-      CALL map_b_to_c_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_c)
+!      CALL map_b_to_c_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_c)
+!      CALL map_b_to_c_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_c)
+      CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, ice%u_vav_c, ice%v_vav_c)
       
       ! Map basal velocity from the b-grid to the c-grid
-      CALL map_b_to_c_2D( mesh, ice%u_base_DIVA_b, ice%u_base_c)
-      CALL map_b_to_c_2D( mesh, ice%v_base_DIVA_b, ice%v_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%u_base_DIVA_b, ice%u_base_c)
+!      CALL map_b_to_c_2D( mesh, ice%v_base_DIVA_b, ice%v_base_c)
+      CALL map_velocities_b_to_c_2D( mesh, ice%u_base_DIVA_b, ice%v_base_DIVA_b, ice%u_base_c, ice%v_base_c)
       
       ! Copy surface velocity from the 3-D fields
       ice%u_surf_c( mesh%ti1:mesh%ti2) = ice%u_3D_c( mesh%ti1:mesh%ti2,1)
@@ -536,16 +544,19 @@ CONTAINS
     ! == From the b-grid to the a-grid (only for writing to output)
       
       ! Map 3-D velocity from the b-grid to the a-grid
-      CALL map_b_to_a_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_a)
-      CALL map_b_to_a_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_a)
+!      CALL map_b_to_a_3D( mesh, ice%u_3D_DIVA_b, ice%u_3D_a)
+!      CALL map_b_to_a_3D( mesh, ice%v_3D_DIVA_b, ice%v_3D_a)
+      CALL map_velocities_b_to_a_3D( mesh, ice%u_3D_DIVA_b, ice%v_3D_DIVA_b, ice%u_3D_a, ice%v_3D_a)
       
       ! Map vertically averaged velocity from the b-grid to the a-grid
-      CALL map_b_to_a_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_a)
-      CALL map_b_to_a_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_a)
+!      CALL map_b_to_a_2D( mesh, ice%u_vav_DIVA_b, ice%u_vav_a)
+!      CALL map_b_to_a_2D( mesh, ice%v_vav_DIVA_b, ice%v_vav_a)
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_vav_DIVA_b, ice%v_vav_DIVA_b, ice%u_vav_a, ice%v_vav_a)
       
       ! Map basal velocity from the b-grid to the a-grid
-      CALL map_b_to_a_2D( mesh, ice%u_base_DIVA_b, ice%u_base_a)
-      CALL map_b_to_a_2D( mesh, ice%v_base_DIVA_b, ice%v_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%u_base_DIVA_b, ice%u_base_a)
+!      CALL map_b_to_a_2D( mesh, ice%v_base_DIVA_b, ice%v_base_a)
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_DIVA_b, ice%v_base_DIVA_b, ice%u_base_a, ice%v_base_a)
       
       ! Copy surface velocity from the 3-D fields
       ice%u_surf_a( mesh%vi1:mesh%vi2) = ice%u_3D_a( mesh%vi1:mesh%vi2,1)
@@ -1805,6 +1816,210 @@ CONTAINS
 
   END SUBROUTINE calc_visc_iter_UV_resid
   
+  ! Map velocity fields from the b-grid to the a- and c-grids
+  SUBROUTINE map_velocities_b_to_a_2D( mesh, u_b, v_b, u_a, v_a)
+    ! Map velocity fields from the b-grid to the a-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_a, v_a
+    
+    ! Local variables:
+    INTEGER                                            :: vi, vti, ti
+    
+    DO vi = mesh%vi1, mesh%vi2
+      
+      u_a( vi) = 0._dp
+      v_a( vi) = 0._dp
+      
+      DO vti = 1, mesh%niTri( vi)
+        ti = mesh%iTri( vi,vti)
+        u_a( vi) = u_a( vi) + (u_b( ti) / REAL( mesh%niTri( vi),dp))
+        v_a( vi) = v_a( vi) + (v_b( ti) / REAL( mesh%niTri( vi),dp))
+      END DO
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE map_velocities_b_to_a_2D
+  SUBROUTINE map_velocities_b_to_a_3D( mesh, u_b, v_b, u_a, v_a)
+    ! Map velocity fields from the b-grid to the a-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_a, v_a
+    
+    ! Local variables:
+    INTEGER                                            :: vi, vti, ti
+    
+    DO vi = mesh%vi1, mesh%vi2
+      
+      u_a( vi,:) = 0._dp
+      v_a( vi,:) = 0._dp
+      
+      DO vti = 1, mesh%niTri( vi)
+        ti = mesh%iTri( vi,vti)
+        u_a( vi,:) = u_a( vi,:) + (u_b( ti,:) / REAL( mesh%niTri( vi),dp))
+        v_a( vi,:) = v_a( vi,:) + (v_b( ti,:) / REAL( mesh%niTri( vi),dp))
+      END DO
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE map_velocities_b_to_a_3D
+  SUBROUTINE map_velocities_b_to_c_2D( mesh, u_b, v_b, u_c, v_c)
+    ! Map velocity fields from the b-grid to the c-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c, v_c
+    
+    ! Local variables:
+    INTEGER                                            :: aci, vi, vj, vl, vr, vti, ti, n1, n2, n3, til, tir
+    
+    DO aci = mesh%ci1, mesh%ci2
+      
+      IF (mesh%edge_index_ac( aci) == 0) THEN
+        ! Free edge
+        
+        ! Find the two adjacent triangles
+        vi = mesh%Aci( aci,1)
+        vj = mesh%Aci( aci,2)
+        vl = mesh%Aci( aci,3)
+        vr = mesh%Aci( aci,4)
+        
+        til = 0
+        tir = 0
+        DO vti = 1, mesh%niTri( vi)
+          ti = mesh%iTri( vi,vti)
+          DO n1 = 1, 3
+            n2 = n1 + 1
+            IF (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            IF (n3 == 4) n3 = 1
+            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) til = ti
+            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vr .AND. mesh%Tri( ti,n3) == vj) tir = ti
+          END DO
+        END DO
+        
+        u_c( aci) = (u_b( til) + u_b( tir)) / 2._dp
+        v_c( aci) = (v_b( til) + v_b( tir)) / 2._dp
+        
+      ELSE
+        ! Border edge
+        
+        ! Find the adjacent triangle
+        vi = mesh%Aci( aci,1)
+        vj = mesh%Aci( aci,2)
+        vl = mesh%Aci( aci,3)
+        
+        til = 0
+        DO vti = 1, mesh%niTri( vi)
+          ti = mesh%iTri( vi,vti)
+          DO n1 = 1, 3
+            n2 = n1 + 1
+            IF (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            IF (n3 == 4) n3 = 1
+            IF ((mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) .OR. &
+                (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vl .AND. mesh%Tri( ti,n3) == vj)) THEN
+              til = ti
+            END IF
+          END DO
+        END DO
+        
+        u_c( aci) = u_b( til)
+        v_c( aci) = v_b( til)
+        
+      END IF
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE map_velocities_b_to_c_2D
+  SUBROUTINE map_velocities_b_to_c_3D( mesh, u_b, v_b, u_c, v_c)
+    ! Map velocity fields from the b-grid to the c-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_c, v_c
+    
+    ! Local variables:
+    INTEGER                                            :: aci, vi, vj, vl, vr, vti, ti, n1, n2, n3, til, tir
+    
+    DO aci = mesh%ci1, mesh%ci2
+      
+      IF (mesh%edge_index_ac( aci) == 0) THEN
+        ! Free edge
+        
+        ! Find the two adjacent triangles
+        vi = mesh%Aci( aci,1)
+        vj = mesh%Aci( aci,2)
+        vl = mesh%Aci( aci,3)
+        vr = mesh%Aci( aci,4)
+        
+        til = 0
+        tir = 0
+        DO vti = 1, mesh%niTri( vi)
+          ti = mesh%iTri( vi,vti)
+          DO n1 = 1, 3
+            n2 = n1 + 1
+            IF (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            IF (n3 == 4) n3 = 1
+            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) til = ti
+            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vr .AND. mesh%Tri( ti,n3) == vj) tir = ti
+          END DO
+        END DO
+        
+        u_c( aci,:) = (u_b( til,:) + u_b( tir,:)) / 2._dp
+        v_c( aci,:) = (v_b( til,:) + v_b( tir,:)) / 2._dp
+        
+      ELSE
+        ! Border edge
+        
+        ! Find the adjacent triangle
+        vi = mesh%Aci( aci,1)
+        vj = mesh%Aci( aci,2)
+        vl = mesh%Aci( aci,3)
+        
+        til = 0
+        DO vti = 1, mesh%niTri( vi)
+          ti = mesh%iTri( vi,vti)
+          DO n1 = 1, 3
+            n2 = n1 + 1
+            IF (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            IF (n3 == 4) n3 = 1
+            IF ((mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) .OR. &
+                (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vl .AND. mesh%Tri( ti,n3) == vj)) THEN
+              til = ti
+            END IF
+          END DO
+        END DO
+        
+        u_c( aci,:) = u_b( til,:)
+        v_c( aci,:) = v_b( til,:)
+        
+      END IF
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE map_velocities_b_to_c_3D
+  
   ! Initialise/remap data fields for the velocity solver(s)
   SUBROUTINE initialise_velocity_solver( mesh, ice)
       
@@ -1874,58 +2089,107 @@ CONTAINS
     TYPE(type_remapping),                INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
-!    ! Local variables:
-!    INTEGER                                            :: int_dummy
-!    
-!    ! To prevent compiler warnings for unused variables
-!    int_dummy = mesh_old%nV
-!    int_dummy = mesh_new%nV
-!    int_dummy = map%trilin%vi( 1,1)
-!    
-!    IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
-!      ! Data fields for the SIA
-!      
-!      CALL reallocate_shared_dp_2D(   mesh_new%nAc     , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nAc     , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
-!      
-!    END IF
-!      
-!    IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA' .OR. C%choice_ice_dynamics == 'DIVA') THEN
-!      ! Data fields for the SSA / DIVA
-!      
-!      IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
-!        ! Velocity fields containing the SSA solution
-!        CALL reallocate_shared_dp_1D(   mesh_new%nV      ,              ice%u_SSA_a               , ice%wu_SSA_a              )
-!        CALL reallocate_shared_dp_1D(   mesh_new%nV      ,              ice%v_SSA_a               , ice%wv_SSA_a              )
-!        CALL reallocate_shared_dp_1D(   mesh_new%nAc     ,              ice%u_SSA_c               , ice%wu_SSA_c              )
-!        CALL reallocate_shared_dp_1D(   mesh_new%nAc     ,              ice%v_SSA_c               , ice%wv_SSA_c              )
-!      END IF
-!      
-!      ! Useful data fields for solving the SSA/DIVA
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%Hi_ac                 , ice%wHi_ac                )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%taudx_ac              , ice%wtaudx_ac             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%taudy_ac              , ice%wtaudy_ac             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%Hi_bb                 , ice%wHi_bb                )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%du_dx_bb              , ice%wdu_dx_bb             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%du_dy_bb              , ice%wdu_dy_bb             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%dv_dx_bb              , ice%wdv_dx_bb             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%dv_dy_bb              , ice%wdv_dy_bb             )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nVAaAc  , C%nz,        ice%du_dz_3D_ac           , ice%wdu_dz_3D_ac          )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nVAaAc  , C%nz,        ice%dv_dz_3D_ac           , ice%wdv_dz_3D_ac          )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nVAaAc  , C%nz,        ice%A_flow_3D_ac          , ice%wA_flow_3D_ac         )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nTriAaAc, C%nz,        ice%A_flow_3D_bb          , ice%wA_flow_3D_bb         )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nTriAaAc, C%nz,        ice%visc_eff_3D_bb        , ice%wvisc_eff_3D_bb       )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nVAaAc  , C%nz,        ice%visc_eff_3D_ac        , ice%wvisc_eff_3D_ac       )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%visc_eff_int_bb       , ice%wvisc_eff_int_bb      )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nTriAaAc,              ice%N_bb                  , ice%wN_bb                 )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%beta_ac               , ice%wbeta_ac              )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%beta_eff_ac           , ice%wbeta_eff_ac          )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%taubx_ac              , ice%wtaubx_ac             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%tauby_ac              , ice%wtauby_ac             )
-!      CALL reallocate_shared_dp_1D(   mesh_new%nVAaAc  ,              ice%F2_ac                 , ice%wF2_ac                )
-!      CALL reallocate_shared_dp_2D(   mesh_new%nVAaAc  , C%nz,        ice%F1_3D_ac              , ice%wF1_3D_ac             )
-!      
-!    END IF
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
+    INTEGER                                            :: wu_a, wv_a
+    
+    IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
+      ! Data fields for the SIA
+      
+      CALL reallocate_shared_dp_2D(   mesh_new%nAc , C%nz       , ice%u_3D_SIA_c            , ice%wu_3D_SIA_c           )
+      CALL reallocate_shared_dp_2D(   mesh_new%nAc , C%nz       , ice%v_3D_SIA_c            , ice%wv_3D_SIA_c           )
+      
+    END IF
+      
+    IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA' .OR. C%choice_ice_dynamics == 'DIVA') THEN
+      ! Data fields for the SSA / DIVA
+      
+      IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
+        ! Velocity fields containing the SSA solution on the b-grid
+        
+        ! Remap velocities so that the velocity solver doesn't have to start from scratch after a mesh update
+        
+        ! Allocate shared memory
+        CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+        CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+        
+        ! Map velocities to the a-grid
+        CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
+        CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
+        
+        ! Remap a-grid velocities
+        CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_1st_order')
+        CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_1st_order')
+        
+        ! Reallocate b-grid velocities
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+        
+        ! Map remapped velocities to the b-grid
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
+        
+        ! Clean up after yourself
+        CALL deallocate_shared( wu_a)
+        CALL deallocate_shared( wv_a)
+    
+      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+        ! Velocity fields containing the DIVA solution on the b-grid
+        
+        ! Remap velocities so that the velocity solver doesn't have to start from scratch after a mesh update
+        
+        ! Allocate shared memory
+        CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+        CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+        
+        ! Map velocities to the a-grid
+        CALL map_b_to_a_2D( mesh_old, ice%u_vav_DIVA_b, u_a)
+        CALL map_b_to_a_2D( mesh_old, ice%v_vav_DIVA_b, v_a)
+        
+        ! Remap a-grid velocities
+        CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_1st_order')
+        CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_1st_order')
+        
+        ! Reallocate b-grid velocities
+        CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%u_3D_DIVA_b           , ice%wu_3D_DIVA_b          )
+        CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%v_3D_DIVA_b           , ice%wv_3D_DIVA_b          )
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_vav_DIVA_b          , ice%wu_vav_DIVA_b         )
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_vav_DIVA_b          , ice%wv_vav_DIVA_b         )
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_base_DIVA_b         , ice%wu_base_DIVA_b        )
+        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_base_DIVA_b         , ice%wv_base_DIVA_b        )
+        
+        ! Map remapped velocities to the b-grid
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_DIVA_b)
+        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_DIVA_b)
+        
+        ! Clean up after yourself
+        CALL deallocate_shared( wu_a)
+        CALL deallocate_shared( wv_a)
+        
+      END IF
+      
+      ! Useful data fields for solving the SSA/DIVA
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taudx_b               , ice%wtaudx_b              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taudy_b               , ice%wtaudy_b              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%du_dx_a               , ice%wdu_dx_a              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%du_dy_a               , ice%wdu_dy_a              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%dv_dx_a               , ice%wdv_dx_a              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%dv_dy_a               , ice%wdv_dy_a              )
+      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+      CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,        ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%N_a                   , ice%wN_a                  )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%beta_a                , ice%wbeta_a               )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%beta_eff_a            , ice%wbeta_eff_a           )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%beta_eff_b            , ice%wbeta_eff_b           )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taubx_b               , ice%wtaubx_b              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%tauby_b               , ice%wtauby_b              )
+      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%F2_a                  , ice%wF2_a                 )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_prev_b              , ice%wu_prev_b             )
+      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_prev_b              , ice%wv_prev_b             )
+      
+    END IF
     
   END SUBROUTINE remap_velocity_solver
   

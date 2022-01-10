@@ -407,18 +407,15 @@ CONTAINS
     NULLIFY( mesh%vi_transect)
     NULLIFY( mesh%w_transect )
     
-    CALL deallocate_shared( mesh%wcolour   )
-    CALL deallocate_shared( mesh%wcolour_vi)
-    CALL deallocate_shared( mesh%wcolour_nV)
-    
-    NULLIFY( mesh%colour   )
-    NULLIFY( mesh%colour_vi)
-    NULLIFY( mesh%colour_nV)
+!    CALL deallocate_shared( mesh%wcolour   )
+!    CALL deallocate_shared( mesh%wcolour_vi)
+!    CALL deallocate_shared( mesh%wcolour_nV)
+!    
+!    NULLIFY( mesh%colour   )
+!    NULLIFY( mesh%colour_vi)
+!    NULLIFY( mesh%colour_nV)
     
     ! Matrix operators
-    
-    WRITE(0,*) 'deallocate_mesh_all - remember to deallocate matrix operators!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
     CALL deallocate_matrix_CSR( mesh%M_map_a_b)
     CALL deallocate_matrix_CSR( mesh%M_map_a_c)
@@ -446,6 +443,12 @@ CONTAINS
     CALL deallocate_matrix_CSR( mesh%M_ddy_c_a)
     CALL deallocate_matrix_CSR( mesh%M_ddy_c_b)
     CALL deallocate_matrix_CSR( mesh%M_ddy_c_c)
+    
+    CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b   )
+    CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b   )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b)
+    CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b )
  
    END SUBROUTINE deallocate_mesh_all
   

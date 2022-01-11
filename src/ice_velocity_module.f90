@@ -643,7 +643,7 @@ CONTAINS
     INTEGER                                            :: ti,k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  visc_eff_3D_b
     INTEGER                                            :: wvisc_eff_3D_b
-    REAL(dp), PARAMETER                                :: visc_min = 1E3_dp
+    REAL(dp), PARAMETER                                :: visc_min = 1E4_dp
     
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nTri, C%nz, visc_eff_3D_b, wvisc_eff_3D_b)
@@ -682,7 +682,7 @@ CONTAINS
     ! Local variables
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: eps_sq
-    REAL(dp), PARAMETER                                :: epsilon_sq_0 = 1E-15_dp   ! Normalisation term so that zero velocity gives non-zero viscosity
+    REAL(dp), PARAMETER                                :: epsilon_sq_0 = 1E-12_dp   ! Normalisation term so that zero velocity gives non-zero viscosity
     REAL(dp), DIMENSION(C%nz)                          :: prof
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  du_dz_3D_a,  dv_dz_3D_a
     INTEGER                                            :: wdu_dz_3D_a, wdv_dz_3D_a

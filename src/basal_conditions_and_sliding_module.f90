@@ -192,6 +192,8 @@ CONTAINS
       
       IF     (C%choice_sliding_law == 'no_sliding') THEN
         ! No sliding; do nothing
+      ELSEIF (C%choice_sliding_law == 'idealised') THEN
+        ! Idealised sliding; do nothing
       ELSEIF (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform

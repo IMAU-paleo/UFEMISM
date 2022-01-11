@@ -44,20 +44,43 @@ MODULE configuration_module
   REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
   REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   
-  ! Debugging
-  ! =========
-  
-  LOGICAL             :: do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
-  LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values           
-  LOGICAL             :: do_write_memory_tracker_config              = .FALSE.                          ! Whether or not the memory use tracker should be used                
-  
   ! Which ice sheets do we simulate?
   ! ================================
   
   LOGICAL             :: do_NAM_config                               = .FALSE.                          ! North America
   LOGICAL             :: do_EAS_config                               = .FALSE.                          ! Eurasia
   LOGICAL             :: do_GRL_config                               = .FALSE.                          ! Greenland
-  LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica                  
+  LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica  
+  
+  ! Benchmark experiments
+  ! =====================
+  
+  LOGICAL             :: do_benchmark_experiment_config              = .TRUE.
+  CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_I'
+  REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
+  REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
+  CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
+  LOGICAL             :: MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
+  REAL(dp)            :: MISMIPplus_xGL_target_config                = 450000._dp                       ! Mid-channel GL position to tune the flow factor A for
+  REAL(dp)            :: MISMIPplus_A_flow_initial_config            = 2.0E-17_dp                       ! Initial flow factor before tuning (or throughout the run when tuning is not used)
+  CHARACTER(LEN=256)  :: MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
+  CHARACTER(LEN=256)  :: MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
+
+  ! Whether or not to let UFEMISM dynamically create its own output folder
+  ! =======================================================================
+  
+  LOGICAL             :: create_procedural_output_dir_config         = .TRUE.                           ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+  CHARACTER(LEN=256)  :: fixed_output_dir_config                     = 'results_UFEMISM'                ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  CHARACTER(LEN=256)  :: fixed_output_dir_suffix_config              = ''                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
+  LOGICAL             :: do_write_regional_scalar_output_config      = .TRUE.
+  LOGICAL             :: do_write_global_scalar_output_config        = .TRUE.
+  
+  ! Debugging
+  ! =========
+  
+  LOGICAL             :: do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
+  LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
+  LOGICAL             :: do_write_memory_tracker_config              = .FALSE.                          ! Whether or not the memory use tracker should be used                
   
   ! Domain size for the four regions
   ! ================================
@@ -82,32 +105,6 @@ MODULE configuration_module
   REAL(dp)            :: ymin_ANT_config                             = -3300000._dp                     ! Southern boundary     of the Antarctica domain [m]
   REAL(dp)            :: ymax_ANT_config                             =  3300000._dp                     ! Northern boundary     of the Antarctica domain [m]
   
-  ! Whether or not the simulation is a restart of a previous simulation
-  ! ===================================================================
-  
-  LOGICAL             :: is_restart_config                           = .FALSE.
-  REAL(dp)            :: time_to_restart_from_config                 = 0._dp                            ! Can be different from C%start_time_of_run, though this will issue a warning
-  
-  ! Initial model state when restarting from a previous run
-  CHARACTER(LEN=256)  :: filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
-  CHARACTER(LEN=256)  :: filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
-  CHARACTER(LEN=256)  :: filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  CHARACTER(LEN=256)  :: filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
-  
-  ! Benchmark experiments
-  ! =====================
-  
-  LOGICAL             :: do_benchmark_experiment_config              = .TRUE.
-  CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_I'
-  REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
-  REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
-  CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
-  LOGICAL             :: MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
-  REAL(dp)            :: MISMIPplus_xGL_target_config                = 450000._dp                       ! Mid-channel GL position to tune the flow factor A for
-  REAL(dp)            :: MISMIPplus_A_flow_initial_config            = 2.0E-17_dp                       ! Initial flow factor before tuning (or throughout the run when tuning is not used)
-  CHARACTER(LEN=256)  :: MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
-  CHARACTER(LEN=256)  :: MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
-
   ! Mesh generation parameters
   ! ==========================
   
@@ -144,13 +141,6 @@ MODULE configuration_module
   REAL(dp), DIMENSION(100)   :: POI_EAS_resolutions_config           = 0._dp
   REAL(dp), DIMENSION(100)   :: POI_GRL_resolutions_config           = 0._dp
   REAL(dp), DIMENSION(100)   :: POI_ANT_resolutions_config           = 0._dp
-  
-  ! Whether or not to let UFEMISM dynamically create its own output folder.
-  ! This works fine locally, on LISA its better to use a fixed folder name.
-  ! =======================================================================
-  
-  LOGICAL             :: create_new_output_dir_config                = .TRUE.
-  CHARACTER(LEN=256)  :: output_dir_config                           = 'results_UFEMISM'
 
   ! The scaled vertical coordinate zeta, used mainly in thermodynamics
   ! ==================================================================
@@ -216,6 +206,18 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
+  
+  ! Whether or not the simulation is a restart of a previous simulation
+  ! ===================================================================
+  
+  LOGICAL             :: is_restart_config                           = .FALSE.
+  REAL(dp)            :: time_to_restart_from_config                 = 0._dp                            ! Can be different from C%start_time_of_run, though this will issue a warning
+  
+  ! Initial model state when restarting from a previous run
+  CHARACTER(LEN=256)  :: filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
+  CHARACTER(LEN=256)  :: filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
+  CHARACTER(LEN=256)  :: filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
+  CHARACTER(LEN=256)  :: filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
 
   ! Input data file paths
   ! =====================
@@ -253,10 +255,8 @@ MODULE configuration_module
   REAL(dp)            :: DIVA_visc_it_norm_dUV_tol_config            = 1E-2_dp                          ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
   INTEGER             :: DIVA_visc_it_nit_config                     = 50                               ! Maximum number of effective viscosity iterations
   REAL(dp)            :: DIVA_visc_it_relax_config                   = 0.7_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
-  REAL(dp)            :: DIVA_beta_max_config                        = 1E20_dp                          ! The DIVA is not solved (i.e. velocities are assumed to be zero) for beta values larger than this
-  REAL(dp)            :: DIVA_err_lim_config                         = 1E-5_dp                          ! The DIVA is not refined (i.e. velocities are no longer updated with SOR) wherever successive velocity iterations change the velocity by less than this amount
-  REAL(dp)            :: DIVA_vel_max_config                         = 5000._dp                         ! DIVA velocities are limited to this value (u,v evaluated separately)
-  REAL(dp)            :: DIVA_vel_min_config                         = 1E-5_dp                          ! DIVA velocities below this value are set to zero (u,v evaluated separately)
+  REAL(dp)            :: DIVA_beta_max_config                        = 1E20_dp                          ! beta values     are limited to this value
+  REAL(dp)            :: DIVA_vel_max_config                         = 5000._dp                         ! DIVA velocities are limited to this value
   CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_west_config              = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain boundary in the DIVA
   CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_east_config              = 'infinite'                       ! Allowed choices: "infinite", "periodic", "zero"
   CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_south_config             = 'infinite'
@@ -495,27 +495,27 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: help_field_01_config                        = 'lat'
   CHARACTER(LEN=256)  :: help_field_02_config                        = 'lon'
   CHARACTER(LEN=256)  :: help_field_03_config                        = 'resolution'
-  CHARACTER(LEN=256)  :: help_field_04_config                        = 'U_surf'
-  CHARACTER(LEN=256)  :: help_field_05_config                        = 'V_surf'
-  CHARACTER(LEN=256)  :: help_field_06_config                        = 'U_base'
-  CHARACTER(LEN=256)  :: help_field_07_config                        = 'V_base'
-  CHARACTER(LEN=256)  :: help_field_08_config                        = 'U_vav'
-  CHARACTER(LEN=256)  :: help_field_09_config                        = 'V_vav'
-  CHARACTER(LEN=256)  :: help_field_10_config                        = 'U_3D'
-  CHARACTER(LEN=256)  :: help_field_11_config                        = 'V_3D'
-  CHARACTER(LEN=256)  :: help_field_12_config                        = 'W_3D'
+  CHARACTER(LEN=256)  :: help_field_04_config                        = 'u_surf'
+  CHARACTER(LEN=256)  :: help_field_05_config                        = 'v_surf'
+  CHARACTER(LEN=256)  :: help_field_06_config                        = 'u_base'
+  CHARACTER(LEN=256)  :: help_field_07_config                        = 'u_base'
+  CHARACTER(LEN=256)  :: help_field_08_config                        = 'u_vav'
+  CHARACTER(LEN=256)  :: help_field_09_config                        = 'u_vav'
+  CHARACTER(LEN=256)  :: help_field_10_config                        = 'u_3D'
+  CHARACTER(LEN=256)  :: help_field_11_config                        = 'u_3D'
+  CHARACTER(LEN=256)  :: help_field_12_config                        = 'w_3D'
   CHARACTER(LEN=256)  :: help_field_13_config                        = 'mask'
-  CHARACTER(LEN=256)  :: help_field_14_config                        = 'dHs_dx'
-  CHARACTER(LEN=256)  :: help_field_15_config                        = 'dHs_dy'
-  CHARACTER(LEN=256)  :: help_field_16_config                        = 'T2m_year'
-  CHARACTER(LEN=256)  :: help_field_17_config                        = 'Precip_year'
-  CHARACTER(LEN=256)  :: help_field_18_config                        = 'Albedo_year'
-  CHARACTER(LEN=256)  :: help_field_19_config                        = 'SMB_year'
-  CHARACTER(LEN=256)  :: help_field_20_config                        = 'BMB'
-  CHARACTER(LEN=256)  :: help_field_21_config                        = 'T2m'
-  CHARACTER(LEN=256)  :: help_field_22_config                        = 'Precip'
-  CHARACTER(LEN=256)  :: help_field_23_config                        = 'Albedo'
-  CHARACTER(LEN=256)  :: help_field_24_config                        = 'SMB'
+  CHARACTER(LEN=256)  :: help_field_14_config                        = 'T2m_year'
+  CHARACTER(LEN=256)  :: help_field_15_config                        = 'Precip_year'
+  CHARACTER(LEN=256)  :: help_field_16_config                        = 'Albedo_year'
+  CHARACTER(LEN=256)  :: help_field_17_config                        = 'SMB_year'
+  CHARACTER(LEN=256)  :: help_field_18_config                        = 'BMB'
+  CHARACTER(LEN=256)  :: help_field_19_config                        = 'T2m'
+  CHARACTER(LEN=256)  :: help_field_20_config                        = 'Precip'
+  CHARACTER(LEN=256)  :: help_field_21_config                        = 'Albedo'
+  CHARACTER(LEN=256)  :: help_field_22_config                        = 'SMB'
+  CHARACTER(LEN=256)  :: help_field_23_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_24_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_25_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_26_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_27_config                        = 'none'
@@ -569,13 +569,6 @@ MODULE configuration_module
     REAL(dp)                            :: dt_output
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
-  
-    ! Debugging
-    ! =========
-    
-    LOGICAL                             :: do_write_debug_data
-    LOGICAL                             :: do_check_for_NaN
-    LOGICAL                             :: do_write_memory_tracker
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -583,7 +576,37 @@ MODULE configuration_module
     LOGICAL                             :: do_NAM
     LOGICAL                             :: do_EAS
     LOGICAL                             :: do_GRL
-    LOGICAL                             :: do_ANT  
+    LOGICAL                             :: do_ANT 
+    
+    ! Benchmark experiments
+    ! =====================
+    
+    LOGICAL                             :: do_benchmark_experiment
+    CHARACTER(LEN=256)                  :: choice_benchmark_experiment
+    REAL(dp)                            :: SSA_icestream_m
+    REAL(dp)                            :: ISMIP_HOM_L
+    CHARACTER(LEN=256)                  :: ISMIP_HOM_E_Arolla_filename
+    LOGICAL                             :: MISMIPplus_do_tune_A_for_GL
+    REAL(dp)                            :: MISMIPplus_xGL_target
+    REAL(dp)                            :: MISMIPplus_A_flow_initial
+    CHARACTER(LEN=256)                  :: MISMIPplus_scenario
+    CHARACTER(LEN=256)                  :: MISOMIP1_scenario
+    
+    ! Whether or not to let UFEMISM dynamically create its own output folder
+    ! =======================================================================
+    
+    LOGICAL                             :: create_procedural_output_dir
+    CHARACTER(LEN=256)                  :: fixed_output_dir
+    CHARACTER(LEN=256)                  :: fixed_output_dir_suffix
+    LOGICAL                             :: do_write_regional_scalar_output
+    LOGICAL                             :: do_write_global_scalar_output
+  
+    ! Debugging
+    ! =========
+    
+    LOGICAL                             :: do_write_debug_data
+    LOGICAL                             :: do_check_for_NaN
+    LOGICAL                             :: do_write_memory_tracker 
 
     ! Domain size for the four regions
     ! ================================
@@ -607,32 +630,6 @@ MODULE configuration_module
     REAL(dp)                            :: xmax_ANT
     REAL(dp)                            :: ymin_ANT
     REAL(dp)                            :: ymax_ANT
-  
-    ! Whether or not the simulation is a restart of a previous simulation
-    ! ===================================================================
-    
-    LOGICAL                             :: is_restart
-    REAL(dp)                            :: time_to_restart_from
-    
-    ! Initial model state when restarting from a previous run
-    CHARACTER(LEN=256)                  :: filename_restart_NAM
-    CHARACTER(LEN=256)                  :: filename_restart_EAS
-    CHARACTER(LEN=256)                  :: filename_restart_GRL
-    CHARACTER(LEN=256)                  :: filename_restart_ANT
-    
-    ! Benchmark experiments
-    ! =====================
-    
-    LOGICAL                             :: do_benchmark_experiment
-    CHARACTER(LEN=256)                  :: choice_benchmark_experiment
-    REAL(dp)                            :: SSA_icestream_m
-    REAL(dp)                            :: ISMIP_HOM_L
-    CHARACTER(LEN=256)                  :: ISMIP_HOM_E_Arolla_filename
-    LOGICAL                             :: MISMIPplus_do_tune_A_for_GL
-    REAL(dp)                            :: MISMIPplus_xGL_target
-    REAL(dp)                            :: MISMIPplus_A_flow_initial
-    CHARACTER(LEN=256)                  :: MISMIPplus_scenario
-    CHARACTER(LEN=256)                  :: MISOMIP1_scenario
     
     ! Mesh generation parameters
     ! ==========================
@@ -671,12 +668,6 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)            :: POI_EAS_resolutions
     REAL(dp), DIMENSION(100)            :: POI_GRL_resolutions
     REAL(dp), DIMENSION(100)            :: POI_ANT_resolutions
-
-    ! Whether or not to let UFEMISM dynamically create its own output folder
-   ! =======================================================================
-   
-    LOGICAL                             :: create_new_output_dir
-    CHARACTER(LEN=256)                  :: output_dir
 
     ! Scaled vertical coordinate zeta  
     ! ===============================
@@ -728,6 +719,18 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_ANT
     
     LOGICAL                             :: remove_Lake_Vostok
+  
+    ! Whether or not the simulation is a restart of a previous simulation
+    ! ===================================================================
+    
+    LOGICAL                             :: is_restart
+    REAL(dp)                            :: time_to_restart_from
+    
+    ! Initial model state when restarting from a previous run
+    CHARACTER(LEN=256)                  :: filename_restart_NAM
+    CHARACTER(LEN=256)                  :: filename_restart_EAS
+    CHARACTER(LEN=256)                  :: filename_restart_GRL
+    CHARACTER(LEN=256)                  :: filename_restart_ANT
 
     ! Input data file paths
     ! =====================
@@ -762,9 +765,7 @@ MODULE configuration_module
     INTEGER                             :: DIVA_visc_it_nit
     REAL(dp)                            :: DIVA_visc_it_relax
     REAL(dp)                            :: DIVA_beta_max
-    REAL(dp)                            :: DIVA_err_lim
     REAL(dp)                            :: DIVA_vel_max
-    REAL(dp)                            :: DIVA_vel_min
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_u_west
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_u_east
     CHARACTER(LEN=256)                  :: DIVA_boundary_BC_u_south
@@ -1069,6 +1070,11 @@ MODULE configuration_module
     REAL(dp)                            :: alpha_stereo_EAS
     REAL(dp)                            :: alpha_stereo_GRL
     REAL(dp)                            :: alpha_stereo_ANT
+    
+    ! The output directory
+    ! ====================
+    
+    CHARACTER(LEN=256)                  :: output_dir
 
   END TYPE constants_type
 
@@ -1081,7 +1087,177 @@ MODULE configuration_module
 
 
 CONTAINS
-  SUBROUTINE read_main_config_file( config_filename)
+
+  SUBROUTINE initialise_model_configuration( version_number)
+    ! Initialise the C (configuration) structure from one or two external config text files,
+    ! set up the output directory (either procedurally from the current date, or directly
+    ! from the config-specified folder name), and copy the config file(s) there.
+    
+    ! In/output variables:
+    CHARACTER(LEN=256),                  INTENT(IN)    :: version_number
+    
+    ! Local variables:
+    INTEGER                                            :: ierr, cerr, process_rank, number_of_processes, p
+    LOGICAL                                            :: master
+    CHARACTER(LEN=256)                                 :: config_filename, template_filename, variation_filename, config_mode
+    INTEGER                                            :: n
+    CHARACTER(LEN=20)                                  :: output_dir_procedural
+    LOGICAL                                            :: ex
+  
+    ! Get rank of current process and total number of processes
+    ! (needed because the configuration_module cannot access the par structure)
+    CALL MPI_COMM_RANK( MPI_COMM_WORLD, process_rank, ierr)
+    CALL MPI_COMM_SIZE( MPI_COMM_WORLD, number_of_processes, ierr)
+    master = (process_rank == 0)
+    
+  ! ===== Set up the config structure =====
+  ! =======================================
+    
+    ! The name(s) of the config file(s) are provided as input arguments when calling the UFEMISM_program
+    ! executable. After calling MPI_INIT, only the master process "sees" these arguments, so they need to be
+    ! broadcast to the other processes.
+    
+    IF (master) THEN
+    
+      config_filename       = ''
+      template_filename     = ''
+      variation_filename    = ''
+      config_mode           = ''
+      
+      IF     (iargc() == 0) THEN
+      
+        WRITE(0,*) ' ERROR: IMAU-ICE v', TRIM(version_number), ' needs at least one config file to run!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        
+      ELSEIF (iargc() == 1) THEN
+      
+        ! Run the model with a single config file
+        CALL getarg( 1, config_filename)
+        config_mode = 'single_config'
+        
+      ELSEIF (iargc() == 2) THEN
+      
+        ! Run the model with two config files (template+variation)
+        CALL getarg( 1, template_filename )
+        CALL getarg( 2, variation_filename)
+        config_mode = 'template+variation'
+        
+      ELSE
+      
+        WRITE(0,*) ' ERROR: IMAU-ICE v', TRIM(version_number), ' can take either one or two config files to run!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        
+      END IF
+      
+    END IF ! IF (master) THEN
+    
+    CALL MPI_BCAST( config_filename,    256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( template_filename,  256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( variation_filename, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( config_mode,        256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+    
+    ! Let each of the processors read the config file in turns so there's no access conflicts
+    IF (config_mode == 'single_config') THEN
+      ! Read only a single config file
+      
+      DO p = 0, number_of_processes-1
+        IF (p == process_rank) THEN
+        
+          ! Read the external file, use a Fortran NAMELIST to overwrite the default
+          ! values of the XXX_config variables
+          CALL read_config_file( config_filename)
+          
+          ! Copy values from the XXX_config variables to the C structure
+          CALL copy_variables_to_struct
+          
+        END IF
+        CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
+      END DO
+      
+    ELSEIF (config_mode == 'template+variation') THEN
+      ! Read two config file consecutively: one "template" and one "variation"
+      
+      DO p = 0, number_of_processes-1
+        IF (p == process_rank) THEN
+        
+          ! Read the external file, use a Fortran NAMELIST to overwrite the default
+          ! values of the XXX_config variables
+          
+          ! First the template, then the variation
+          CALL read_config_file( template_filename)
+          CALL read_config_file( variation_filename)
+          
+          ! Copy values from the XXX_config variables to the C structure
+          CALL copy_variables_to_struct
+          
+        END IF
+        CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
+      END DO
+      
+    ELSE ! IF (config_mode == 'single_config') THEN
+      
+      IF (master) WRITE(0,*) 'initialise_model_configuration - ERROR: unknown config_mode "', TRIM(config_mode), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        
+    END IF ! IF (config_mode == 'single_config') THEN
+    
+  ! ===== Set up the output directory =====
+  ! =======================================
+    
+    ! First get the name of the output directory (either procedural, or provided in the config file)
+    
+    DO n = 1, 256
+      C%output_dir(n:n) = ' '
+    END DO
+    
+    IF (C%create_procedural_output_dir) THEN
+      ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+      
+      IF (master) THEN  
+        CALL get_procedural_output_dir_name( output_dir_procedural)
+        C%output_dir(1:21) = TRIM(output_dir_procedural) // '/'
+      END IF
+      CALL MPI_BCAST( C%output_dir, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+      
+    ELSE
+      ! Use the provided name (return an error if this directory already exists)
+
+      C%output_dir = TRIM(C%fixed_output_dir) // TRIM(C%fixed_output_dir_suffix) // '/'
+      
+      INQUIRE( FILE = TRIM(C%output_dir)//'/.', EXIST=ex)
+      IF (ex) THEN
+        WRITE(0,*) ' ERROR: fixed_output_dir_config ', TRIM(C%output_dir), ' already exists!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    END IF
+    
+    ! Create the directory
+    IF (master) THEN
+      CALL system('mkdir ' // TRIM(C%output_dir))
+      WRITE(0,*) ''
+      WRITE(0,*) ' Output directory: ', TRIM(C%output_dir)
+      WRITE(0,*) ''
+    END IF
+    CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    
+    ! Copy the config file to the output directory
+    IF (master) THEN
+      IF     (config_mode == 'single_config') THEN
+        CALL system('cp ' // config_filename    // ' ' // TRIM(C%output_dir))
+      ELSEIF (config_mode == 'template+variation') THEN
+        CALL system('cp ' // template_filename  // ' ' // TRIM(C%output_dir))
+        CALL system('cp ' // variation_filename // ' ' // TRIM(C%output_dir))
+      ELSE
+        WRITE(0,*) ' initialise_model_configuration - ERROR: unknown config_mode "', TRIM(config_mode), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF ! IF (config_mode == 'single_config') THEN
+    END IF ! IF (master) THEN
+    CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    
+  END SUBROUTINE initialise_model_configuration
+  
+  SUBROUTINE read_config_file( config_filename)
     ! Use a NAMELIST containing all the "_config" variables to read
     ! an external config file, and overwrite the default values of
     ! the specified variables with the values from the file.
@@ -1107,13 +1283,28 @@ CONTAINS
                      dt_output_config,                                &
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
-                     do_write_debug_data_config,                      &
-                     do_check_for_NaN_config,                         &
-                     do_write_memory_tracker_config,                  &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
                      do_ANT_config,                                   & 
+                     do_benchmark_experiment_config,                  &
+                     choice_benchmark_experiment_config,              &
+                     SSA_icestream_m_config,                          &
+                     ISMIP_HOM_L_config,                              &
+                     ISMIP_HOM_E_Arolla_filename_config,              &
+                     MISMIPplus_do_tune_A_for_GL_config,              &
+                     MISMIPplus_xGL_target_config,                    &
+                     MISMIPplus_A_flow_initial_config,                &
+                     MISMIPplus_scenario_config,                      &
+                     MISOMIP1_scenario_config,                        &
+                     create_procedural_output_dir_config,             &
+                     fixed_output_dir_config,                         &
+                     fixed_output_dir_suffix_config,                  &
+                     do_write_regional_scalar_output_config,          &
+                     do_write_global_scalar_output_config,            &
+                     do_write_debug_data_config,                      &
+                     do_check_for_NaN_config,                         &
+                     do_write_memory_tracker_config,                  &
                      xmin_NAM_config,                                 &
                      xmax_NAM_config,                                 &
                      ymin_NAM_config,                                 &
@@ -1130,49 +1321,6 @@ CONTAINS
                      xmax_ANT_config,                                 &
                      ymin_ANT_config,                                 &
                      ymax_ANT_config,                                 &
-                     is_restart_config,                               &
-                     time_to_restart_from_config,                     &
-                     filename_restart_NAM_config,                     &
-                     filename_restart_EAS_config,                     &
-                     filename_restart_GRL_config,                     &
-                     filename_restart_ANT_config,                     &
-                     do_benchmark_experiment_config,                  &
-                     choice_benchmark_experiment_config,              &
-                     SSA_icestream_m_config,                          &
-                     ISMIP_HOM_L_config,                              &
-                     ISMIP_HOM_E_Arolla_filename_config,              &
-                     MISMIPplus_do_tune_A_for_GL_config,              &
-                     MISMIPplus_xGL_target_config,                    &
-                     MISMIPplus_A_flow_initial_config,                &
-                     MISMIPplus_scenario_config,                      &
-                     MISOMIP1_scenario_config,                        &
-                     nconmax_config,                                  &
-                     alpha_min_config,                                &
-                     dz_max_ice_config,                               &
-                     res_max_config,                                  &
-                     res_max_margin_config,                           &
-                     res_max_gl_config,                               &
-                     res_max_cf_config,                               &
-                     res_max_mountain_config,                         &
-                     res_max_coast_config,                            &
-                     mesh_fitness_threshold_config,                   &
-                     dx_grid_output_config,                           &
-                     dx_grid_GIA_config,                              &
-                     dx_grid_smooth_config,                           &
-                     nPOI_NAM_config,                                 &
-                     nPOI_EAS_config,                                 &
-                     nPOI_GRL_config,                                 &
-                     nPOI_ANT_config,                                 &
-                     POI_NAM_coordinates_config,                      &
-                     POI_EAS_coordinates_config,                      &
-                     POI_GRL_coordinates_config,                      &
-                     POI_ANT_coordinates_config,                      &
-                     POI_NAM_resolutions_config,                      &
-                     POI_EAS_resolutions_config,                      &
-                     POI_GRL_resolutions_config,                      &
-                     POI_ANT_resolutions_config,                      &
-                     create_new_output_dir_config,                    &
-                     output_dir_config,                               &
                      nz_config,                                       &
                      zeta_config,                                     &
                      choice_refgeo_init_NAM_config,                   &
@@ -1210,6 +1358,12 @@ CONTAINS
                      filename_refgeo_GIAeq_GRL_config,                &
                      filename_refgeo_GIAeq_ANT_config,                &
                      remove_Lake_Vostok_config,                       &
+                     is_restart_config,                               &
+                     time_to_restart_from_config,                     &
+                     filename_restart_NAM_config,                     &
+                     filename_restart_EAS_config,                     &
+                     filename_restart_GRL_config,                     &
+                     filename_restart_ANT_config,                     &
                      filename_insolation_config,                      &
                      filename_CO2_record_config,                      &
                      CO2_record_length_config,                        &
@@ -1231,9 +1385,7 @@ CONTAINS
                      DIVA_visc_it_nit_config,                         &
                      DIVA_visc_it_relax_config,                       &
                      DIVA_beta_max_config,                            &
-                     DIVA_err_lim_config,                             &
                      DIVA_vel_max_config,                             &
-                     DIVA_vel_min_config,                             &
                      DIVA_boundary_BC_u_west_config,                  &
                      DIVA_boundary_BC_u_east_config,                  &
                      DIVA_boundary_BC_u_south_config,                 &
@@ -1302,6 +1454,31 @@ CONTAINS
                      remove_shelves_larger_than_PD_config,            &
                      continental_shelf_calving_config,                &
                      continental_shelf_min_height_config,             &
+                     nconmax_config,                                  &
+                     alpha_min_config,                                &
+                     dz_max_ice_config,                               &
+                     res_max_config,                                  &
+                     res_max_margin_config,                           &
+                     res_max_gl_config,                               &
+                     res_max_cf_config,                               &
+                     res_max_mountain_config,                         &
+                     res_max_coast_config,                            &
+                     mesh_fitness_threshold_config,                   &
+                     dx_grid_output_config,                           &
+                     dx_grid_GIA_config,                              &
+                     dx_grid_smooth_config,                           &
+                     nPOI_NAM_config,                                 &
+                     nPOI_EAS_config,                                 &
+                     nPOI_GRL_config,                                 &
+                     nPOI_ANT_config,                                 &
+                     POI_NAM_coordinates_config,                      &
+                     POI_EAS_coordinates_config,                      &
+                     POI_GRL_coordinates_config,                      &
+                     POI_ANT_coordinates_config,                      &
+                     POI_NAM_resolutions_config,                      &
+                     POI_EAS_resolutions_config,                      &
+                     POI_GRL_resolutions_config,                      &
+                     POI_ANT_resolutions_config,                      &
                      choice_initial_ice_temperature_config,           &
                      uniform_ice_temperature_config,                  &
                      choice_thermo_model_config,                      &
@@ -1468,9 +1645,9 @@ CONTAINS
        STOP
      END IF     
 
-  END SUBROUTINE read_main_config_file
+  END SUBROUTINE read_config_file
 
-  SUBROUTINE initialize_main_constants
+  SUBROUTINE copy_variables_to_struct
     ! Overwrite the values in the fields of the "C" type with the values
     ! of the "_config" variables, some which by now have had their default
     ! values overwritten by the values specified in the external config file.
@@ -1492,13 +1669,6 @@ CONTAINS
     C%dt_output                                = dt_output_config
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
-  
-    ! Debugging
-    ! =========
-    
-    C%do_write_debug_data                      = do_write_debug_data_config
-    C%do_check_for_NaN                         = do_check_for_NaN_config
-    C%do_write_memory_tracker                  = do_write_memory_tracker_config
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -1506,7 +1676,37 @@ CONTAINS
     C%do_NAM                                   = do_NAM_config
     C%do_EAS                                   = do_EAS_config
     C%do_GRL                                   = do_GRL_config
-    C%do_ANT                                   = do_ANT_config 
+    C%do_ANT                                   = do_ANT_config
+    
+    ! Benchmark experiments
+    ! =====================
+    
+    C%do_benchmark_experiment                  = do_benchmark_experiment_config
+    C%choice_benchmark_experiment              = choice_benchmark_experiment_config
+    C%SSA_icestream_m                          = SSA_icestream_m_config
+    C%ISMIP_HOM_L                              = ISMIP_HOM_L_config
+    C%ISMIP_HOM_E_Arolla_filename              = ISMIP_HOM_E_Arolla_filename_config
+    C%MISMIPplus_do_tune_A_for_GL              = MISMIPplus_do_tune_A_for_GL_config
+    C%MISMIPplus_xGL_target                    = MISMIPplus_xGL_target_config
+    C%MISMIPplus_A_flow_initial                = MISMIPplus_A_flow_initial_config
+    C%MISMIPplus_scenario                      = MISMIPplus_scenario_config
+    C%MISOMIP1_scenario                        = MISOMIP1_scenario_config
+    
+    ! Whether or not to let UFEMISM dynamically create its own output folder
+    ! =======================================================================
+    
+    C%create_procedural_output_dir             = create_procedural_output_dir_config
+    C%fixed_output_dir                         = fixed_output_dir_config
+    C%fixed_output_dir_suffix                  = fixed_output_dir_suffix_config
+    C%do_write_regional_scalar_output          = do_write_regional_scalar_output_config
+    C%do_write_global_scalar_output            = do_write_global_scalar_output_config
+  
+    ! Debugging
+    ! =========
+    
+    C%do_write_debug_data                      = do_write_debug_data_config
+    C%do_check_for_NaN                         = do_check_for_NaN_config
+    C%do_write_memory_tracker                  = do_write_memory_tracker_config
 
     ! Domain size for the four regions
     ! ================================
@@ -1530,31 +1730,6 @@ CONTAINS
     C%xmax_ANT                                 = xmax_ANT_config
     C%ymin_ANT                                 = ymin_ANT_config
     C%ymax_ANT                                 = ymax_ANT_config
-  
-    ! Whether or not the simulation is a restart of a previous simulation
-    ! ===================================================================
-    
-    C%is_restart                               = is_restart_config
-    C%time_to_restart_from                     = time_to_restart_from_config
-    
-    C%filename_restart_NAM                     = filename_restart_NAM_config
-    C%filename_restart_EAS                     = filename_restart_EAS_config
-    C%filename_restart_GRL                     = filename_restart_GRL_config
-    C%filename_restart_ANT                     = filename_restart_ANT_config
-    
-    ! Benchmark experiments
-    ! =====================
-    
-    C%do_benchmark_experiment                  = do_benchmark_experiment_config
-    C%choice_benchmark_experiment              = choice_benchmark_experiment_config
-    C%SSA_icestream_m                          = SSA_icestream_m_config
-    C%ISMIP_HOM_L                              = ISMIP_HOM_L_config
-    C%ISMIP_HOM_E_Arolla_filename              = ISMIP_HOM_E_Arolla_filename_config
-    C%MISMIPplus_do_tune_A_for_GL              = MISMIPplus_do_tune_A_for_GL_config
-    C%MISMIPplus_xGL_target                    = MISMIPplus_xGL_target_config
-    C%MISMIPplus_A_flow_initial                = MISMIPplus_A_flow_initial_config
-    C%MISMIPplus_scenario                      = MISMIPplus_scenario_config
-    C%MISOMIP1_scenario                        = MISOMIP1_scenario_config
 
     ! Mesh generation parameters
     ! ==========================
@@ -1595,12 +1770,6 @@ CONTAINS
     C%POI_EAS_resolutions                      = POI_EAS_resolutions_config
     C%POI_GRL_resolutions                      = POI_GRL_resolutions_config
     C%POI_ANT_resolutions                      = POI_ANT_resolutions_config
-    
-    ! Whether or not to let UFEMISM dynamically create its own output folder
-   ! =======================================================================
-   
-    C%create_new_output_dir                    = create_new_output_dir_config
-    C%output_dir                               = output_dir_config
 
     ! Scaled vertical coordinate zeta  
     ! ===============================
@@ -1653,6 +1822,17 @@ CONTAINS
     C%filename_refgeo_GIAeq_ANT                = filename_refgeo_GIAeq_ANT_config
     
     C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
+  
+    ! Whether or not the simulation is a restart of a previous simulation
+    ! ===================================================================
+    
+    C%is_restart                               = is_restart_config
+    C%time_to_restart_from                     = time_to_restart_from_config
+    
+    C%filename_restart_NAM                     = filename_restart_NAM_config
+    C%filename_restart_EAS                     = filename_restart_EAS_config
+    C%filename_restart_GRL                     = filename_restart_GRL_config
+    C%filename_restart_ANT                     = filename_restart_ANT_config
 
     ! Input data file paths
     ! =====================
@@ -1687,9 +1867,7 @@ CONTAINS
     C%DIVA_visc_it_nit                         = DIVA_visc_it_nit_config
     C%DIVA_visc_it_relax                       = DIVA_visc_it_relax_config
     C%DIVA_beta_max                            = DIVA_beta_max_config
-    C%DIVA_err_lim                             = DIVA_err_lim_config
     C%DIVA_vel_max                             = DIVA_vel_max_config
-    C%DIVA_vel_min                             = DIVA_vel_min_config
     C%DIVA_boundary_BC_u_west                  = DIVA_boundary_BC_u_west_config
     C%DIVA_boundary_BC_u_east                  = DIVA_boundary_BC_u_east_config
     C%DIVA_boundary_BC_u_south                 = DIVA_boundary_BC_u_south_config
@@ -1995,226 +2173,255 @@ CONTAINS
     C%alpha_stereo_GRL                         = 164.85_dp
     C%alpha_stereo_ANT                         = 165.0263_dp
 
-  END SUBROUTINE initialize_main_constants
+  END SUBROUTINE copy_variables_to_struct
 
-  SUBROUTINE create_output_dir
+  SUBROUTINE get_procedural_output_dir_name( output_dir)
+    ! Generate a procedural output directory for the current date (e.g. results_20210721_001)
+    ! Keep increasing the counter at the end until a directory is available.
 
     IMPLICIT NONE
+    
+    ! In/output variables:
+    CHARACTER(20),                       INTENT(INOUT) :: output_dir
 
-    CHARACTER(20)              :: output_folder_name
-
-    INTEGER,    DIMENSION(8)   :: values
-    LOGICAL                    :: ex
+    ! Local variables:
+    INTEGER,  DIMENSION(8)                             :: values
+    LOGICAL                                            :: ex
 
     CALL date_and_time(VALUES=values)
 
     ! Get proper year (assume we're still in the 21st century...)
-    output_folder_name(1:10) = 'results_20'
+    output_dir(1:10) = 'results_20'
     SELECT CASE( FLOOR(REAL(values(1))/10._dp)-200)
-     CASE(0)
-     output_folder_name(11:11) = '0'
-     CASE(1)
-     output_folder_name(11:11) = '1'
-     CASE(2)
-     output_folder_name(11:11) = '2'
-     CASE(3)
-     output_folder_name(11:11) = '3'
-     CASE(4)
-     output_folder_name(11:11) = '4'
-     CASE(5)
-     output_folder_name(11:11) = '5'
-     CASE(6)
-     output_folder_name(11:11) = '6'
-     CASE(7)
-     output_folder_name(11:11) = '7'
-     CASE(8)
-     output_folder_name(11:11) = '8'
-     CASE(9)
-     output_folder_name(11:11) = '9'
-     CASE DEFAULT
-     WRITE(0,*) 'make_output_folder: ERROR retrieving date and time!'
+    CASE(0)
+      output_dir(11:11) = '0'
+    CASE(1)
+      output_dir(11:11) = '1'
+    CASE(2)
+      output_dir(11:11) = '2'
+    CASE(3)
+      output_dir(11:11) = '3'
+    CASE(4)
+      output_dir(11:11) = '4'
+    CASE(5)
+      output_dir(11:11) = '5'
+    CASE(6)
+      output_dir(11:11) = '6'
+    CASE(7)
+      output_dir(11:11) = '7'
+    CASE(8)
+      output_dir(11:11) = '8'
+    CASE(9)
+      output_dir(11:11) = '9'
+    CASE DEFAULT
+      WRITE(0,*) 'get_procedural_output_dir: ERROR retrieving date and time!'
     END SELECT
 
     SELECT CASE( MOD(values(1),10))
-     CASE(0)
-     output_folder_name(12:12) = '0'
-     CASE(1)
-     output_folder_name(12:12) = '1'
-     CASE(2)
-     output_folder_name(12:12) = '2'
-     CASE(3)
-     output_folder_name(12:12) = '3'
-     CASE(4)
-     output_folder_name(12:12) = '4'
-     CASE(5)
-     output_folder_name(12:12) = '5'
-     CASE(6)
-     output_folder_name(12:12) = '6'
-     CASE(7)
-     output_folder_name(12:12) = '7'
-     CASE(8)
-     output_folder_name(12:12) = '8'
-     CASE(9)
-     output_folder_name(12:12) = '9'
-     CASE DEFAULT
-     WRITE(0,*) 'make_output_folder: ERROR retrieving date and time!'
+    CASE(0)
+      output_dir(12:12) = '0'
+    CASE(1)
+      output_dir(12:12) = '1'
+    CASE(2)
+      output_dir(12:12) = '2'
+    CASE(3)
+      output_dir(12:12) = '3'
+    CASE(4)
+      output_dir(12:12) = '4'
+    CASE(5)
+      output_dir(12:12) = '5'
+    CASE(6)
+      output_dir(12:12) = '6'
+    CASE(7)
+      output_dir(12:12) = '7'
+    CASE(8)
+      output_dir(12:12) = '8'
+    CASE(9)
+      output_dir(12:12) = '9'
+    CASE DEFAULT
+      WRITE(0,*) 'get_procedural_output_dir: ERROR retrieving date and time!'
     END SELECT
 
     SELECT CASE( values(2))
-     CASE(1)
-     output_folder_name(13:14) = '01'
-     CASE(2)
-     output_folder_name(13:14) = '02'
-     CASE(3)
-     output_folder_name(13:14) = '03'
-     CASE(4)
-     output_folder_name(13:14) = '04'
-     CASE(5)
-     output_folder_name(13:14) = '05'
-     CASE(6)
-     output_folder_name(13:14) = '06'
-     CASE(7)
-     output_folder_name(13:14) = '07'
-     CASE(8)
-     output_folder_name(13:14) = '08'
-     CASE(9)
-     output_folder_name(13:14) = '09'
-     CASE(10)
-     output_folder_name(13:14) = '10'
-     CASE(11)
-     output_folder_name(13:14) = '11'
-     CASE(12)
-     output_folder_name(13:14) = '12'
-     CASE DEFAULT
-     WRITE(0,*) 'make_output_folder: ERROR retrieving date and time!'
+    CASE(1)
+      output_dir(13:14) = '01'
+    CASE(2)
+      output_dir(13:14) = '02'
+    CASE(3)
+      output_dir(13:14) = '03'
+    CASE(4)
+      output_dir(13:14) = '04'
+    CASE(5)
+      output_dir(13:14) = '05'
+    CASE(6)
+      output_dir(13:14) = '06'
+    CASE(7)
+      output_dir(13:14) = '07'
+    CASE(8)
+      output_dir(13:14) = '08'
+    CASE(9)
+      output_dir(13:14) = '09'
+    CASE(10)
+      output_dir(13:14) = '10'
+    CASE(11)
+      output_dir(13:14) = '11'
+    CASE(12)
+      output_dir(13:14) = '12'
+    CASE DEFAULT
+      WRITE(0,*) 'get_procedural_output_dir: ERROR retrieving date and time!'
     END SELECT
 
     SELECT CASE( FLOOR(REAL(values(3))/10._dp))
-     CASE(0)
-     output_folder_name(15:15) = '0'
-     CASE(1)
-     output_folder_name(15:15) = '1'
-     CASE(2)
-     output_folder_name(15:15) = '2'
-     CASE(3)
-     output_folder_name(15:15) = '3'
-     CASE DEFAULT
-     WRITE(0,*) 'make_output_folder: ERROR retrieving date and time!'
+    CASE(0)
+      output_dir(15:15) = '0'
+    CASE(1)
+      output_dir(15:15) = '1'
+    CASE(2)
+      output_dir(15:15) = '2'
+    CASE(3)
+      output_dir(15:15) = '3'
+    CASE DEFAULT
+      WRITE(0,*) 'get_procedural_output_dir: ERROR retrieving date and time!'
     END SELECT
 
     SELECT CASE( MOD(values(3),10))
-     CASE(0)
-     output_folder_name(16:16) = '0'
-     CASE(1)
-     output_folder_name(16:16) = '1'
-     CASE(2)
-     output_folder_name(16:16) = '2'
-     CASE(3)
-     output_folder_name(16:16) = '3'
-     CASE(4)
-     output_folder_name(16:16) = '4'
-     CASE(5)
-     output_folder_name(16:16) = '5'
-     CASE(6)
-     output_folder_name(16:16) = '6'
-     CASE(7)
-     output_folder_name(16:16) = '7'
-     CASE(8)
-     output_folder_name(16:16) = '8'
-     CASE(9)
-     output_folder_name(16:16) = '9'
-     CASE DEFAULT
-     WRITE(0,*) 'make_output_folder: ERROR retrieving date and time!'
+    CASE(0)
+      output_dir(16:16) = '0'
+    CASE(1)
+      output_dir(16:16) = '1'
+    CASE(2)
+      output_dir(16:16) = '2'
+    CASE(3)
+      output_dir(16:16) = '3'
+    CASE(4)
+      output_dir(16:16) = '4'
+    CASE(5)
+      output_dir(16:16) = '5'
+    CASE(6)
+      output_dir(16:16) = '6'
+    CASE(7)
+      output_dir(16:16) = '7'
+    CASE(8)
+      output_dir(16:16) = '8'
+    CASE(9)
+      output_dir(16:16) = '9'
+    CASE DEFAULT
+      WRITE(0,*) 'get_procedural_output_dir: ERROR retrieving date and time!'
     END SELECT
 
-    output_folder_name(17:20) = '_001'
+    output_dir(17:20) = '_001'
 
-    INQUIRE( FILE=TRIM(output_folder_name)//'/.', EXIST=ex )
+    INQUIRE( FILE = TRIM(output_dir)//'/.', EXIST=ex )
 
     DO WHILE (ex)
 
-     IF      (output_folder_name(20:20) == '0') THEN
-      output_folder_name(20:20) = '1'
-     ELSE IF (output_folder_name(20:20) == '1') THEN
-      output_folder_name(20:20) = '2'
-     ELSE IF (output_folder_name(20:20) == '2') THEN
-      output_folder_name(20:20) = '3'
-     ELSE IF (output_folder_name(20:20) == '3') THEN
-      output_folder_name(20:20) = '4'
-     ELSE IF (output_folder_name(20:20) == '4') THEN
-      output_folder_name(20:20) = '5'
-     ELSE IF (output_folder_name(20:20) == '5') THEN
-      output_folder_name(20:20) = '6'
-     ELSE IF (output_folder_name(20:20) == '6') THEN
-      output_folder_name(20:20) = '7'
-     ELSE IF (output_folder_name(20:20) == '7') THEN
-      output_folder_name(20:20) = '8'
-     ELSE IF (output_folder_name(20:20) == '8') THEN
-      output_folder_name(20:20) = '9'
-     ELSE IF (output_folder_name(20:20) == '9') THEN
-      output_folder_name(20:20) = '0'
+     IF      (output_dir(20:20) == '0') THEN
+       output_dir(20:20) = '1'
+     ELSE IF (output_dir(20:20) == '1') THEN
+       output_dir(20:20) = '2'
+     ELSE IF (output_dir(20:20) == '2') THEN
+       output_dir(20:20) = '3'
+     ELSE IF (output_dir(20:20) == '3') THEN
+       output_dir(20:20) = '4'
+     ELSE IF (output_dir(20:20) == '4') THEN
+       output_dir(20:20) = '5'
+     ELSE IF (output_dir(20:20) == '5') THEN
+       output_dir(20:20) = '6'
+     ELSE IF (output_dir(20:20) == '6') THEN
+       output_dir(20:20) = '7'
+     ELSE IF (output_dir(20:20) == '7') THEN
+       output_dir(20:20) = '8'
+     ELSE IF (output_dir(20:20) == '8') THEN
+       output_dir(20:20) = '9'
+     ELSE IF (output_dir(20:20) == '9') THEN
+       output_dir(20:20) = '0'
 
-      IF      (output_folder_name(19:19) == '0') THEN
-       output_folder_name(19:19) = '1'
-      ELSE IF (output_folder_name(19:19) == '1') THEN
-       output_folder_name(19:19) = '2'
-      ELSE IF (output_folder_name(19:19) == '2') THEN
-       output_folder_name(19:19) = '3'
-      ELSE IF (output_folder_name(19:19) == '3') THEN
-       output_folder_name(19:19) = '4'
-      ELSE IF (output_folder_name(19:19) == '4') THEN
-       output_folder_name(19:19) = '5'
-      ELSE IF (output_folder_name(19:19) == '5') THEN
-       output_folder_name(19:19) = '6'
-      ELSE IF (output_folder_name(19:19) == '6') THEN
-       output_folder_name(19:19) = '7'
-      ELSE IF (output_folder_name(19:19) == '7') THEN
-       output_folder_name(19:19) = '8'
-      ELSE IF (output_folder_name(19:19) == '8') THEN
-       output_folder_name(19:19) = '9'
-      ELSE IF (output_folder_name(19:19) == '9') THEN
-       output_folder_name(19:19) = '0'
-
-       IF      (output_folder_name(18:18) == '0') THEN
-        output_folder_name(18:18) = '1'
-       ELSE IF (output_folder_name(18:18) == '1') THEN
-        output_folder_name(18:18) = '2'
-       ELSE IF (output_folder_name(18:18) == '2') THEN
-        output_folder_name(18:18) = '3'
-       ELSE IF (output_folder_name(18:18) == '3') THEN
-        output_folder_name(18:18) = '4'
-       ELSE IF (output_folder_name(18:18) == '4') THEN
-        output_folder_name(18:18) = '5'
-       ELSE IF (output_folder_name(18:18) == '5') THEN
-        output_folder_name(18:18) = '6'
-       ELSE IF (output_folder_name(18:18) == '6') THEN
-        output_folder_name(18:18) = '7'
-       ELSE IF (output_folder_name(18:18) == '7') THEN
-        output_folder_name(18:18) = '8'
-       ELSE IF (output_folder_name(18:18) == '8') THEN
-        output_folder_name(18:18) = '9'
-       ELSE IF (output_folder_name(18:18) == '9') THEN
-        output_folder_name(18:18) = '0'
+       IF      (output_dir(19:19) == '0') THEN
+         output_dir(19:19) = '1'
+       ELSE IF (output_dir(19:19) == '1') THEN
+         output_dir(19:19) = '2'
+       ELSE IF (output_dir(19:19) == '2') THEN
+         output_dir(19:19) = '3'
+       ELSE IF (output_dir(19:19) == '3') THEN
+         output_dir(19:19) = '4'
+       ELSE IF (output_dir(19:19) == '4') THEN
+         output_dir(19:19) = '5'
+       ELSE IF (output_dir(19:19) == '5') THEN
+         output_dir(19:19) = '6'
+       ELSE IF (output_dir(19:19) == '6') THEN
+         output_dir(19:19) = '7'
+       ELSE IF (output_dir(19:19) == '7') THEN
+         output_dir(19:19) = '8'
+       ELSE IF (output_dir(19:19) == '8') THEN
+         output_dir(19:19) = '9'
+       ELSE IF (output_dir(19:19) == '9') THEN
+         output_dir(19:19) = '0'
+ 
+         IF      (output_dir(18:18) == '0') THEN
+           output_dir(18:18) = '1'
+         ELSE IF (output_dir(18:18) == '1') THEN
+           output_dir(18:18) = '2'
+         ELSE IF (output_dir(18:18) == '2') THEN
+           output_dir(18:18) = '3'
+         ELSE IF (output_dir(18:18) == '3') THEN
+           output_dir(18:18) = '4'
+         ELSE IF (output_dir(18:18) == '4') THEN
+           output_dir(18:18) = '5'
+         ELSE IF (output_dir(18:18) == '5') THEN
+           output_dir(18:18) = '6'
+         ELSE IF (output_dir(18:18) == '6') THEN
+           output_dir(18:18) = '7'
+         ELSE IF (output_dir(18:18) == '7') THEN
+           output_dir(18:18) = '8'
+         ELSE IF (output_dir(18:18) == '8') THEN
+           output_dir(18:18) = '9'
+         ELSE IF (output_dir(18:18) == '9') THEN
+           output_dir(18:18) = '0'
+         END IF
+ 
        END IF
-
-      END IF
 
      END IF
 
-     INQUIRE( FILE=TRIM(output_folder_name)//'/.', EXIST=ex )
+     INQUIRE( FILE=TRIM(output_dir)//'/.', EXIST=ex )
 
     END DO
 
-    IF (C%create_new_output_dir) THEN
-      C%output_dir = TRIM(output_folder_name)
-    END IF
+  END SUBROUTINE get_procedural_output_dir_name
+  
+  SUBROUTINE write_total_model_time_to_screen( tstart, tstop)
+
+    IMPLICIT NONE
     
-    C%output_dir = TRIM(C%output_dir(1:255)) // '/'
-
-    CALL system('mkdir ' // TRIM(C%output_dir))
-    WRITE(0,*) 'Output directory: ', TRIM(C%output_dir)
-    WRITE(0,*) ''
-
-  END SUBROUTINE create_output_dir
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: tstart, tstop
+    
+    ! Local variables
+    REAL(dp)                                           :: dt
+    INTEGER                                            :: nr, ns, nm, nh, nd
+      
+    dt = tstop - tstart
+    
+    ns = CEILING(dt)
+    
+    nr = MOD(ns, 60*60*24)
+    nd = (ns - nr) / (60*60*24)
+    ns = ns - (nd*60*60*24)
+    
+    nr = MOD(ns, 60*60)
+    nh = (ns - nr) / (60*60)
+    ns = ns - (nh*60*60)
+    
+    nr = MOD(ns, 60)
+    nm = (ns - nr) / (60)
+    ns = ns - (nm*60) 
+    
+    WRITE(0,'(A)') ''
+    WRITE(0,'(A)') ' ================================================================================'
+    WRITE(0,'(A,I2,A,I2,A,I2,A,I2,A)') ' ===== Simulation finished in ', nd, ' days, ', nh, ' hours, ', nm, ' minutes and ', ns, ' seconds! ====='
+    WRITE(0,'(A)') ' ================================================================================'
+    WRITE(0,'(A)') ''
+    
+  END SUBROUTINE write_total_model_time_to_screen
 
 END MODULE configuration_module

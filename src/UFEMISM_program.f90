@@ -33,6 +33,7 @@ PROGRAM UFEMISM_program
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
+  USE petsc_module,                ONLY: initialise_petsc, finalise_petsc
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
                                          initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
@@ -69,6 +70,12 @@ PROGRAM UFEMISM_program
   IF (par%master) WRITE(0,*) ''
   
   tstart = MPI_WTIME()
+  
+  ! PETSc Initialisation
+  ! ====================
+  
+  ! Basically just a call to PetscInitialize
+  CALL initialise_petsc
     
   ! Set up the model configuration from the provided config file(s) and create an output directory
   ! ==============================================================================================
@@ -243,8 +250,9 @@ PROGRAM UFEMISM_program
   tstop = MPI_WTIME()
   IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
   CALL sync
-    
-  ! Finalise MPI
+  
+  ! Finalise MPI and PETSc
+  CALL finalise_petsc
   CALL MPI_FINALIZE( ierr)
     
 END PROGRAM UFEMISM_program

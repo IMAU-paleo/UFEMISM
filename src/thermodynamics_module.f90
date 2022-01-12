@@ -22,12 +22,13 @@ MODULE thermodynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_remapping
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_a_to_b_3D, ddy_a_to_b_3D
-  USE mesh_help_functions_module,      ONLY: CROSS2
+  USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex      
+  USE mesh_mapping_module,             ONLY: remap_field_dp_3D
   
   IMPLICIT NONE
   
@@ -49,7 +50,10 @@ CONTAINS
     LOGICAL,                              INTENT(IN)    :: do_solve_heat_equation
 
     ! Local variables:
-    INTEGER                                             :: vi
+    INTEGER                                             :: vi, vvi, vj
+    LOGICAL                                             :: found_source_neighbour
+    INTEGER                                             ::  n_source_neighbours
+    REAL(dp), DIMENSION(C%nz)                           :: Ti_source_neighbours
     REAL(dp)                                            :: T_surf_annual
     
     IF     (C%choice_thermo_model == 'none') THEN
@@ -65,34 +69,54 @@ CONTAINS
       ! Prescribe a simple temperature profile to newly ice-covered grid cells.
       DO vi = mesh%vi1, mesh%vi2
         
-        IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ice_a_prev( vi) == 0) THEN
-          ! This grid cell is newly ice-covered
-          ! If one of its neighbours was already ice-covered, assume the temperature
-          ! profile here is equal to the profile from the upstream neighbour (due to advection).
-          ! If no neighbours were ice-covered, the new ice must come from accumulation;
-          ! just set a simple linear profile instead.
-          
-!          IF     (ice%u_vav_cx( j  ,i-1) > 0._dp .AND. ice%mask_ice_a_prev( j  ,i-1) == 1) THEN
-!            ! Ice probably came from the west
-!            ice%Ti_a( :,j,i) = ice%Ti_a( :,j  ,i-1)
-!          ELSEIF (ice%u_vav_cx( j  ,i  ) < 0._dp .AND. ice%mask_ice_a_prev( j  ,i+1) == 1) THEN
-!            ! Ice probably came from the east
-!            ice%Ti_a( :,j,i) = ice%Ti_a( :,j  ,i+1)
-!          ELSEIF (ice%v_vav_cy( j-1,i  ) > 0._dp .AND. ice%mask_ice_a_prev( j-1,i  ) == 1) THEN
-!            ! Ice probably came from the south
-!            ice%Ti_a( :,j,i) = ice%Ti_a( :,j-1,i  )
-!          ELSEIF (ice%v_vav_cy( j  ,i  ) < 0._dp .AND. ice%mask_ice_a_prev( j+1,i  ) == 1) THEN
-!            ! Ice probably came from the north
-!            ice%Ti_a( :,j,i) = ice%Ti_a( :,j+1,i  )
-!          ELSE
-            ! Ice probably came from surface accumulation; initialise with a vertically uniform temperature.
+        IF (ice%mask_ice_a( vi) == 1) THEN
+        
+          IF (ice%mask_ice_a_prev( vi) == 0) THEN
+            ! This grid cell is newly ice-covered
+            ! If one of its neighbours was already ice-covered, assume the temperature
+            ! profile here is equal to the profile from the upstream neighbour (due to advection).
+            ! If no neighbours were ice-covered, the new ice must come from accumulation;
+            ! just set a simple linear profile instead.
             
-            T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
-            ice%Ti_a( vi,:) = T_surf_annual
+            found_source_neighbour = .FALSE.
+            Ti_source_neighbours   = 0._dp
+            n_source_neighbours    = 0
+            DO vvi = 1, mesh%nC( vi)
+              
+              vj = mesh%C( vi,vvi)
+              
+              IF (ice%mask_ice_a_prev( vj) == 1) THEN
+                found_source_neighbour = .TRUE.
+                n_source_neighbours    = n_source_neighbours  + 1
+                Ti_source_neighbours   = Ti_source_neighbours + ice%Ti_a( vj,:)
+              END IF
+              
+            END DO
             
-!          END IF
+            IF     (found_source_neighbour) THEN
+              ! Ice probably was advected from neighbouring grid cells; copy temperature profile from there
+              
+              Ti_source_neighbours = Ti_source_neighbours / REAL( n_source_neighbours,dp)
+              ice%Ti_a( vi,:) = Ti_source_neighbours
+              
+            ELSE
+              ! Ice probably came from surface accumulation; set temperature profile to annual mean surface temperature
+              
+              T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
+              ice%Ti_a( vi,:) = T_surf_annual
+              
+            END IF
+            
+          ELSE
+            ! This grid cell was already ice-covered in the previous time step, no need to do anything
+          END IF ! IF (ice%mask_ice_a_prev( j,i) == 0) THEN
           
-        END IF ! IF (ice%mask_ice_a( j,i) == 1 .AND. ice%mask_ice_a_prev( j,i) == 0) THEN
+        ELSE ! IF (ice%mask_ice_a( vi) == 1) THEN
+          ! This pixel is ice-free; set temperature profile to zero
+          
+          ice%Ti_a( vi,:) = 0._dp
+          
+        END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
         
       END DO
       CALL sync
@@ -131,9 +155,9 @@ CONTAINS
 
     ! Local variables:
     INTEGER                                            :: vi, k
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  dTi_dx_3D_b,  dTi_dy_3D_b
-    INTEGER                                            :: wdTi_dx_3D_b, wdTi_dy_3D_b
-    REAL(dp)                                           :: u_times_dT_dx_upwind, v_times_dT_dy_upwind, f1, f2, f3
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_times_dT_dx_upwind_a,  v_times_dT_dy_upwind_a
+    INTEGER                                            :: wu_times_dT_dx_upwind_a, wv_times_dT_dy_upwind_a
+    REAL(dp)                                           :: f1, f2, f3
     REAL(dp), DIMENSION(2:C%nz)                        :: alpha
     REAL(dp), DIMENSION(C%nz)                          :: beta
     REAL(dp), DIMENSION(C%nz-1)                        :: gamma
@@ -148,15 +172,14 @@ CONTAINS
     LOGICAL                                            :: hasnan
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dx_3D_b          , wdTi_dx_3D_b          )
-    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dy_3D_b          , wdTi_dy_3D_b          )
-    CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable          , wis_unstable          )
-    CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new               , wTi_new               )
-    CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base, wT_ocean_at_shelf_base)
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, u_times_dT_dx_upwind_a, wu_times_dT_dx_upwind_a)
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, v_times_dT_dy_upwind_a, wv_times_dT_dy_upwind_a)
+    CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable           , wis_unstable           )
+    CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new                , wTi_new                )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base , wT_ocean_at_shelf_base )
     
-    ! Calculate temperature gradients on the b-grid
-    CALL ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b)
-    CALL ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b)
+    ! Calculate upwind heat flux
+    CALL calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
     
     ! Calculate zeta derivatives required for solving the heat equation
     CALL calculate_zeta_derivatives( mesh, ice)
@@ -194,14 +217,8 @@ CONTAINS
     n_unstable                    = 0
     DO vi = mesh%vi1, mesh%vi2
       
-      ! Skip the domain boundary
-      IF (mesh%edge_index( vi) > 0) CYCLE
-      
-      ! Skip ice-less elements
-      IF (ice%mask_ice_a( vi) == 0) THEN
-         Ti_new( vi,:) = ice%Ti_a( vi,1)
-         CYCLE
-      END IF
+      ! Skip ice-free vertices
+      IF (ice%mask_ice_a( vi) == 0) CYCLE
       
       ! Ice surface boundary condition
       beta(  1) = 1._dp
@@ -210,14 +227,12 @@ CONTAINS
   
       ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
       DO k = 2, C%nz-1
-      
-        CALL calc_upwind_heat_flux_derivatives_vertex( mesh, ice%u_3D_b, ice%v_3D_b, dTi_dx_3D_b, dTi_dy_3D_b, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
 
         f1 = (ice%Ki_a( vi,k) * ice%dzeta_dz_a( vi)**2) / (ice_density * ice%Cpi_a( vi,k))
 
-        f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a(vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
+        f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a( vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
  
-        f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind + v_times_dT_dy_upwind) - ice%Ti_a( vi,k) / C%dt_thermo
+        f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind_a( vi,k) + v_times_dT_dy_upwind_a( vi,k)) - ice%Ti_a( vi,k) / C%dt_thermo
 
         alpha(k) = f1 * p_zeta%a_zetazeta(k) - f2 * p_zeta%a_zeta(k)
         beta (k) = f1 * p_zeta%b_zetazeta(k) - f2 * p_zeta%b_zeta(k) - 1._dp / C%dt_thermo
@@ -308,7 +323,14 @@ CONTAINS
     ELSE
       ! An unacceptably large number of grid cells was unstable; throw an error.
       
-      IF (par%master) WRITE(0,*) '   solve_heat_equation - ERROR:  heat equation solver unstable for more than 1% of grid cells!'
+      IF (par%master) THEN
+        WRITE(0,*) '   solve_heat_equation - ERROR:  heat equation solver unstable for more than 1% of grid cells!'
+        debug%dp_2D_a_01  = ice%Hi_a
+        debug%int_2D_a_01 = ice%mask_ice_a
+        debug%dp_3D_a_01  = ice%Ti_a
+        debug%dp_3D_a_02  = Ti_new
+        CALL write_to_debug_file
+      END IF
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       
     END IF
@@ -318,11 +340,11 @@ CONTAINS
     CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wdTi_dx_3D_b          )
-    CALL deallocate_shared( wdTi_dy_3D_b          )
-    CALL deallocate_shared( wTi_new               )
-    CALL deallocate_shared( wis_unstable          )
-    CALL deallocate_shared( wT_ocean_at_shelf_base)
+    CALL deallocate_shared( wu_times_dT_dx_upwind_a)
+    CALL deallocate_shared( wv_times_dT_dy_upwind_a)
+    CALL deallocate_shared( wTi_new                )
+    CALL deallocate_shared( wis_unstable           )
+    CALL deallocate_shared( wT_ocean_at_shelf_base )
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a', 'solve_heat_equation')
@@ -330,74 +352,97 @@ CONTAINS
   END SUBROUTINE solve_3D_heat_equation
   
 ! == Calculate upwind heat flux derivatives
-  SUBROUTINE calc_upwind_heat_flux_derivatives_vertex( mesh, u_3D_b, v_3D_b, dTi_dx_3D_b, dTi_dy_3D_b, vi, k, u_times_dT_dx_upwind, v_times_dT_dy_upwind)
+  SUBROUTINE calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
     ! Calculate upwind heat flux derivatives at vertex vi, vertical layer k
     
     IMPLICIT NONE
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_3D_b, v_3D_b
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: dTi_dx_3D_b, dTi_dy_3D_b
-    INTEGER,                             INTENT(IN)    :: vi
-    INTEGER,                             INTENT(IN)    :: k
-    REAL(dp),                            INTENT(OUT)   :: u_times_dT_dx_upwind, v_times_dT_dy_upwind
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a
     
     ! Local variables:
-    INTEGER                                            :: vti, ti, n1, n2, n3, vib, vic, ti_upwind
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  dTi_dx_3D_b,  dTi_dy_3D_b
+    INTEGER                                            :: wdTi_dx_3D_b, wdTi_dy_3D_b
+    INTEGER                                            :: vi, k, vti, ti, n1, n2, n3, vib, vic, ti_upwind
     REAL(dp), DIMENSION(2)                             :: u_upwind, ab, ac
     
-    ! Upwind velocity vector
-    u_upwind = 0._dp
-    DO vti = 1, mesh%niTri( vi)
-      ti = mesh%iTri( vi,vti)
-      u_upwind = u_upwind + [u_3D_b( ti,k), v_3D_b( ti,k)] / REAL( mesh%niTri( vi), dp)
-    END DO
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dx_3D_b, wdTi_dx_3D_b)
+    CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dy_3D_b, wdTi_dy_3D_b)
     
-    ! Find the upwind triangle
-    ti_upwind = 0
-    DO vti = 1, mesh%niTri( vi)
-      
-      ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
-      ti  = mesh%iTri( vi,vti)
-      vib = 0
-      vic = 0
-      DO n1 = 1, 3
-        n2 = n1 + 1
-        IF (n2 == 4) n2 = 1
-        n3 = n2 + 1
-        IF (n3 == 4) n3 = 1
+    ! Calculate temperature gradients on the b-grid
+    CALL ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b)
+    CALL ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b)
+    
+    ! Initialise
+    u_times_dT_dx_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
+    v_times_dT_dy_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
+    CALL sync
+    
+    DO vi = mesh%vi1, mesh%vi2
+    
+      IF (ice%mask_ice_a( vi) == 1) THEN
         
-        IF (mesh%Tri( ti,n1) == vi) THEN
-          vib = mesh%Tri( ti,n2)
-          vic = mesh%Tri( ti,n3)
-          EXIT
+        ! The upwind velocity vector
+        u_upwind = [-ice%u_vav_a( vi), -ice%v_vav_a( vi)]
+        
+        ! Find the upwind triangle
+        ti_upwind = 0
+        DO vti = 1, mesh%niTri( vi)
+          
+          ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
+          ti  = mesh%iTri( vi,vti)
+          vib = 0
+          vic = 0
+          DO n1 = 1, 3
+            n2 = n1 + 1
+            IF (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            IF (n3 == 4) n3 = 1
+            
+            IF (mesh%Tri( ti,n1) == vi) THEN
+              vib = mesh%Tri( ti,n2)
+              vic = mesh%Tri( ti,n3)
+              EXIT
+            END IF
+          END DO
+          
+          ! Check if the upwind velocity vector points into this triangle
+          ab = mesh%V( vib,:) - mesh%V( vi,:)
+          ac = mesh%V( vic,:) - mesh%V( vi,:)
+          
+          IF (CROSS2( ab, u_upwind) >= 0._dp .AND. CROSS2( u_upwind, ac) >= 0._dp) THEN
+            ti_upwind = ti
+            EXIT
+          END IF
+          
+        END DO ! DO iti = 1, mesh%niTri( vi)
+        
+        ! Safety
+        IF (ti_upwind == 0) THEN
+          WRITE(0,*) 'calc_upwind_heat_flux_derivatives_vertex - ERROR: couldnt find upwind triangle!'
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         END IF
-      END DO
+        
+        ! Calculate u * dT/dx, v * dT/dy
+        DO k = 1, C%nz
+          u_times_dT_dx_upwind_a( vi,k) = ice%u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
+          v_times_dT_dy_upwind_a( vi,k) = ice%v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
+        END DO
+        
+      END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
       
-      ! Check if the upwind velocity vector points into this triangle
-      ab = mesh%V( vib,:) - mesh%V( vi,:)
-      ac = mesh%V( vic,:) - mesh%V( vi,:)
-      
-      IF (CROSS2( ab, u_upwind) >= 0._dp .AND. CROSS2( u_upwind, ac) >= 0._dp) THEN
-        ti_upwind = ti
-        EXIT
-      END IF
-      
-    END DO ! DO iti = 1, mesh%niTri( vi)
+    END DO ! DO vi = mesh%vi1, mesh%vi2
+    CALL sync
     
-    ! Safety
-    IF (ti_upwind == 0) THEN
-      WRITE(0,*) 'calc_upwind_heat_flux_derivatives_vertex - ERROR: couldnt find upwind triangle!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
+    ! Clean up after yourself
+    CALL deallocate_shared( wdTi_dx_3D_b          )
+    CALL deallocate_shared( wdTi_dy_3D_b          )
     
-    ! Calculate u * dT/dx, v * dT/dy
-    u_times_dT_dx_upwind = u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
-    v_times_dT_dy_upwind = v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
-    
-  END SUBROUTINE calc_upwind_heat_flux_derivatives_vertex
-  
+  END SUBROUTINE calc_upwind_heat_flux_derivatives
+
 ! == The Robin temperature solution
   SUBROUTINE replace_Ti_with_robin_solution( ice, climate, SMB, Ti, vi)
     ! This function calculates for one horizontal grid point the temperature profiles
@@ -938,5 +983,171 @@ CONTAINS
 !    CALL deallocate_shared( restart%wTi              )
     
   END SUBROUTINE initialise_ice_temperature_restart
+  
+! == Remap englacial temperature
+  SUBROUTINE remap_ice_temperature( mesh_old, mesh_new, map, ice)
+    ! Remap englacial temperature
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER,  DIMENSION(:    ), POINTER                ::  mask_ice_a_old,  mask_ice_a_new
+    INTEGER                                            :: wmask_ice_a_old, wmask_ice_a_new
+    INTEGER                                            :: vi, vvi, vj
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Ti_ext
+    INTEGER                                            :: wTi_ext
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: Vmap, Vstack1, Vstack2
+    INTEGER                                            :: VstackN1, VstackN2
+    INTEGER                                            :: sti, n, it
+    REAL(dp), DIMENSION(C%nz)                          :: Ti_av
+    
+    ! Allocate shared memory
+    CALL allocate_shared_int_1D( mesh_old%nV,       mask_ice_a_old, wmask_ice_a_old)
+    CALL allocate_shared_int_1D( mesh_new%nV,       mask_ice_a_new, wmask_ice_a_new)
+    CALL allocate_shared_dp_2D(  mesh_old%nV, C%nz, Ti_ext        , wTi_ext       )
+    
+    ! Fill in the old and new ice masks
+    DO vi = mesh_old%vi1, mesh_old%vi2
+      mask_ice_a_old( vi) = ice%mask_ice_a( vi)
+    END DO
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      IF (ice%Hi_a( vi) > 0._dp) THEN
+        mask_ice_a_new( vi) = 1
+      ELSE
+        mask_ice_a_new( vi) = 0
+      END IF
+    END DO
+    
+  ! Extrapolate old ice temperature outside the ice to fill the entire domain
+  ! =========================================================================
+  
+    ! Initialise
+    Ti_ext( mesh_old%vi1:mesh_old%vi2,:) = ice%Ti_a( mesh_old%vi1:mesh_old%vi2,:)
+    CALL sync
+  
+    IF (par%master) THEN
+      
+      ! Allocate map and stacks for extrapolation
+      ALLOCATE( Vmap(    mesh_old%nV))
+      ALLOCATE( Vstack1( mesh_old%nV))
+      ALLOCATE( Vstack2( mesh_old%nV))
+      
+      ! Initialise the stack with all ice-free-next-to-ice-covered vertices
+      ! (and also initialise the map)
+      Vmap     = 0
+      Vstack2  = 0
+      VstackN2 = 0
+      
+      DO vi = 1, mesh_old%nV
+        IF (mask_ice_a_old( vi) == 1) THEN
+          Vmap( vi) = 2
+        ELSE
+          DO vvi = 1, mesh_old%nC( vi)
+            vj = mesh_old%C( vi,vvi)
+            IF (mask_ice_a_old( vj) == 1) THEN
+              ! Vertex vi is ice-free, but adjacent to ice-covered vertex vj
+              VMap( vi) = 1
+              VstackN2 = VstackN2 + 1
+              Vstack2(   VstackN2) = vi
+              EXIT
+            END IF
+          END DO
+        END IF
+      END DO
+      
+      ! Perform a flood-fill-style extrapolation
+      it = 0
+      DO WHILE (VstackN2 > 0)
+        
+        it = it + 1
+        
+        ! Cycle stacks
+        Vstack1( 1:VstackN2) = Vstack2( 1:VstackN2)
+        VstackN1 = VstackN2
+        Vstack2( 1:VstackN2) = 0
+        VstackN2 = 0
+        
+        ! Extrapolate temperature values into data-less-next-to-data-filled pixels
+        DO sti = 1, VstackN1
+          
+          vi = Vstack1( sti)
+          
+          n     = 0
+          Ti_av = 0._dp
+          
+          DO vvi = 1, mesh_old%nC( vi)
+          
+            vj = mesh_old%C( vi,vvi)
+            
+            IF (VMap( vj) == 2) THEN
+              n     = n     + 1
+              Ti_av = Ti_av + Ti_ext( vj,:)
+            END IF
+            
+          END DO ! DO vvi = 1, mesh_old%nC( vi)
+          
+          ! Extrapolate temperature by averaging over data-filled neighbours
+          Ti_av = Ti_av / REAL( n,dp)
+          Ti_ext( vi,:) = Ti_av
+          
+        END DO ! DO sti = 1: VstackN1
+        
+        ! Create new stack of data-less-next-to-data-filled pixels
+        DO sti = 1, VstackN1
+        
+          vi = Vstack1( sti)
+          
+          ! Mark this pixel as data-filled on the Map
+          Vmap( vi) = 2
+          
+          ! Add its data-less neighbours to the Stack
+          DO vvi = 1, mesh_old%nC( vi)
+          
+            vj = mesh_old%C( vi,vvi)
+            
+            IF (Vmap( vj) == 0) THEN
+              Vmap( vj) = 1
+              VstackN2 = VstackN2 + 1
+              Vstack2(   VstackN2) = vj
+            END IF
+            
+          END DO ! DO vvi = 1, mesh_old%nC( vi)
+        END DO ! DO sti = 1: VstackN1
+        
+      END DO ! DO WHILE (VstackN2 > 0)
+      
+      ! Clean up after yourself
+      DEALLOCATE( Vmap   )
+      DEALLOCATE( Vstack1)
+      DEALLOCATE( Vstack2)
+      
+    END IF ! IF (par%master) THEN
+    CALL sync
+    
+    ! Remap the extrapolated temperature field
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext, wTi_ext, 'cons_1st_order')
+    
+    ! Reallocate ice temperature field, copy remapped data only for ice-covered pixels
+    CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz, ice%Ti_a, ice%wTi_a)
+    
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      IF (mask_ice_a_new( vi) == 1) ice%Ti_a( vi,:) = Ti_ext( vi,:)
+    END DO
+    
+    ! Reallocate mask_ice_a_prev, fill it in (needed for the generic temperature update)
+    CALL reallocate_shared_int_1D( mesh_new%nV, ice%mask_ice_a_prev, ice%wmask_ice_a_prev)
+    ice%mask_ice_a_prev( mesh_new%vi1:mesh_new%vi2) = mask_ice_a_new( mesh_new%vi1:mesh_new%vi2)
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wmask_ice_a_old)
+    CALL deallocate_shared( wmask_ice_a_new)
+    CALL deallocate_shared( wTi_ext        )
+    
+  END SUBROUTINE remap_ice_temperature
   
 END MODULE thermodynamics_module

@@ -35,7 +35,7 @@ MODULE ice_dynamics_module
                                              map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
   USE ice_thickness_module,            ONLY: calc_dHi_dt
   USE basal_conditions_and_sliding_module, ONLY: initialise_basal_conditions, remap_basal_conditions
-  USE thermodynamics_module,           ONLY: calc_ice_rheology
+  USE thermodynamics_module,           ONLY: calc_ice_rheology, remap_ice_temperature
 
   IMPLICIT NONE
   
@@ -848,14 +848,26 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     REAL(dp),                            INTENT(IN)    :: time
+    
+    ! Local variables:
+    INTEGER                                            :: vi
         
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
     CALL remap_field_dp(    mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_1st_order')
     CALL remap_field_dp(    mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_1st_order')
     CALL remap_field_dp(    mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_1st_order')
-    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_1st_order')
+   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_1st_order')
     
-    ! NOTE: at the end of the routine, recalculate ice flow factor!
+    ! Remove very thin ice resulting from remapping errors
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      IF (ice%Hi_a( vi) < 0.1_dp) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
+    
+    ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
+    CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
     
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
     CALL remap_field_dp(         mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
@@ -968,7 +980,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_corr               , ice%wHi_corr              )
     
     ! Thermodynamics
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
+   !CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%internal_heating_a    , ice%winternal_heating_a   )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%frictional_heating_a  , ice%wfrictional_heating_a )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%GHF_a                 , ice%wGHF_a                )
@@ -990,6 +1002,9 @@ CONTAINS
     
     ! Recalculate ice flow factor
     CALL calc_ice_rheology( mesh_new, ice, time)
+    
+    ! Update masks
+    CALL update_general_ice_model_data( mesh_new, ice)
     
   END SUBROUTINE remap_ice_model
   

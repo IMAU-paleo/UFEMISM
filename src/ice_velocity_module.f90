@@ -1952,6 +1952,13 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    LOGICAL                                            :: is_ISMIP_HOM
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_ISMIP_HOM
+    INTEGER                                            :: wu_ISMIP_HOM
+    INTEGER                                            :: ti
+    REAL(dp)                                           :: umin, umax, x, y
+    
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Data fields for the SIA
       
@@ -1991,6 +1998,157 @@ CONTAINS
       CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_prev_b              , ice%wv_prev_b             )
       
     END IF
+    
+    ! Initialise the ISMIP-HOM experiments for faster convergence
+    is_ISMIP_HOM = .FALSE.
+    IF (C%choice_refgeo_init_ANT == 'idealised' .AND. &
+       (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A' .OR. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_B' .OR. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_C' .OR. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_D')) THEN
+      is_ISMIP_HOM = .TRUE.
+    END IF
+    
+    IF (is_ISMIP_HOM) THEN
+      
+      ! Allocate shared memory
+      CALL allocate_shared_dp_1D( mesh%nTri, u_ISMIP_HOM, wu_ISMIP_HOM)
+        
+      umin = 0._dp
+      umax = 0._dp
+      
+      ! Calculate an approximation of the solution
+      IF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A') THEN
+        
+        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+          umin = 1.6_dp
+          umax = 108.84_dp
+        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+          umin = 1.75_dp
+          umax = 95.73_dp
+        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+          umin = 2.27_dp
+          umax = 74.45_dp
+        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+          umin = 4.49_dp
+          umax = 49.99_dp
+        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+          umin = 11.09_dp
+          umax = 32.74_dp
+        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+          umin = 18.38_dp
+          umax = 24.79_dp
+        END IF
+        
+        DO ti = mesh%ti1, mesh%ti2
+          x = mesh%TriGC( ti,1)
+          y = mesh%TriGC( ti,2)
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
+        END DO
+        CALL sync
+        
+      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_B') THEN
+      
+        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+          umin = 1.57_dp
+          umax = 111.41_dp
+        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+          umin = 1.69_dp
+          umax = 100.73_dp
+        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+          umin = 2.09_dp
+          umax = 82.3_dp
+        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+          umin = 3.92_dp
+          umax = 57.84_dp
+        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+          umin = 10.23_dp
+          umax = 35.2_dp
+        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+          umin = 17.22_dp
+          umax = 23.53_dp
+        END IF
+        
+        DO ti = mesh%ti1, mesh%ti2
+          x = mesh%TriGC( ti,1)
+          y = mesh%TriGC( ti,2)
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
+        END DO
+        CALL sync
+        
+      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_C') THEN
+      
+        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+          umin = 8.77_dp
+          umax = 143.45_dp
+        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+          umin = 9.8_dp
+          umax = 60.28_dp
+        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+          umin = 11.84_dp
+          umax = 28.57_dp
+        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+          umin = 14.55_dp
+          umax = 18.48_dp
+        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+          umin = 15.7_dp
+          umax = 16.06_dp
+        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+          umin = 13.38_dp
+          umax = 13.51_dp
+        END IF
+        
+        DO ti = mesh%ti1, mesh%ti2
+          x = mesh%TriGC( ti,1)
+          y = mesh%TriGC( ti,2)
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
+        END DO
+        CALL sync
+        
+      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_D') THEN
+      
+        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+          umin = 8.62_dp
+          umax = 227.23_dp
+        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+          umin = 9.65_dp
+          umax = 94.79_dp
+        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+          umin = 12.18_dp
+          umax = 40.06_dp
+        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+          umin = 15.28_dp
+          umax = 20.29_dp
+        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+          umin = 15.93_dp
+          umax = 16.25_dp
+        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+          umin = 14.43_dp
+          umax = 14.59_dp
+        END IF
+        
+        DO ti = mesh%ti1, mesh%ti2
+          x = mesh%TriGC( ti,1)
+          y = mesh%TriGC( ti,2)
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
+        END DO
+        CALL sync
+        
+      END IF
+      
+      ! Initialise velocity fields with the approximation
+      IF     (C%choice_ice_dynamics == 'SIA/SSA') THEN
+        ice%u_base_SSA_b( mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
+        CALL sync
+      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+        ice%u_vav_b(      mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
+        CALL sync
+      END IF
+      
+      ! Clean up after yourself
+      CALL deallocate_shared( wu_ISMIP_HOM)
+      
+    END IF ! IF (is_ISMIP_HOM) THEN
     
   END SUBROUTINE initialise_velocity_solver
   SUBROUTINE remap_velocity_solver( mesh_old, mesh_new, map, ice)

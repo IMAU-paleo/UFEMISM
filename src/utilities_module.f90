@@ -29,6 +29,7 @@ MODULE utilities_module
                                              adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
                                              adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid, type_sparse_matrix_CSR
+  USE petsc_module,                    ONLY: solve_matrix_equation_CSR_PETSc
 
 CONTAINS
 
@@ -1913,11 +1914,8 @@ CONTAINS
       
     ELSEIF (choice_matrix_solver == 'PETSc') THEN
       ! Use the PETSc solver (much preferred, this is way faster and more stable!)
-      
-      IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: PETSc is not yet available in UFEMISM!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
-      !CALL solve_matrix_equation_CSR_PETSc( AA, b, x, PETSc_rtol, PETSc_abstol)
+      CALL solve_matrix_equation_CSR_PETSc( AA, b, x, PETSc_rtol, PETSc_abstol)
     
     ELSE
       IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: unknown choice_matrix_solver "', choice_matrix_solver, '"!'

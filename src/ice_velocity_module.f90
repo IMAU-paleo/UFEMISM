@@ -147,6 +147,7 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
+    REAL(dp)                                           :: t_start, tcomp_assembly, tcomp_solve, tcomp_tot, dt_assembly, dt_solve
     
   ! =========
   ! == Safety
@@ -174,6 +175,10 @@ CONTAINS
     
   ! == Safety - end
   ! ===============
+    
+    tcomp_assembly = 0._dp
+    tcomp_solve    = 0._dp
+    t_start = MPI_WTIME()
     
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -218,7 +223,9 @@ CONTAINS
       CALL sync
       
       ! Solve the linearised SSA
-      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
+      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b, dt_assembly, dt_solve)
+      tcomp_assembly = tcomp_assembly + dt_assembly
+      tcomp_solve    = tcomp_solve    + dt_solve
       
       ! Apply velocity limits (both overflow and underflow) for improved stability
       CALL apply_velocity_limits( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b)
@@ -228,7 +235,7 @@ CONTAINS
       
       ! Check if the viscosity iteration has converged
       CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_base_SSA_b, ice%v_base_SSA_b, resid_UV)
-      IF (par%master) WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']'
+      !IF (par%master) WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_base_SSA_b), ' - ', MAXVAL(ice%u_base_SSA_b), ']'
       
       IF (par%master .AND. C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') &
         WRITE(0,*) '    SSA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_base_SSA_b) / umax_analytical), ': resid_UV = ', resid_UV
@@ -244,6 +251,9 @@ CONTAINS
     
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
+    
+    tcomp_tot = MPI_WTIME() - t_start
+    !IF (par%master) WRITE(0,*) '     Solved the DIVA in ', tcomp_tot, ' s, of which ', tcomp_assembly, ' s was matrix assembly, and ', tcomp_solve, ' s was matrix solving'
     
   END SUBROUTINE solve_SSA
   SUBROUTINE solve_DIVA(  mesh, ice)
@@ -261,6 +271,7 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
+    REAL(dp)                                           :: t_start, tcomp_assembly, tcomp_solve, tcomp_tot, dt_assembly, dt_solve
     
   ! =========
   ! == Safety
@@ -285,6 +296,10 @@ CONTAINS
     
   ! == Safety - end
   ! ===============
+    
+    tcomp_assembly = 0._dp
+    tcomp_solve    = 0._dp
+    t_start = MPI_WTIME()
     
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -325,7 +340,9 @@ CONTAINS
       CALL sync
       
       ! Solve the linearised DIVA
-      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
+      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b, dt_assembly, dt_solve)
+      tcomp_assembly = tcomp_assembly + dt_assembly
+      tcomp_solve    = tcomp_solve    + dt_solve
       
       ! Apply velocity limits (both overflow and underflow) for improved stability
       CALL apply_velocity_limits( mesh, ice%u_vav_b, ice%v_vav_b)
@@ -335,7 +352,7 @@ CONTAINS
       
       ! Check if the viscosity iteration has converged
       CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_b, ice%v_vav_b, resid_UV)
-      IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_b), ' - ', MAXVAL(ice%u_vav_b), ']'
+      !IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_b), ' - ', MAXVAL(ice%u_vav_b), ']'
       
       IF (par%master .AND. C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') &
         WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_vav_b) / umax_analytical), ': resid_UV = ', resid_UV
@@ -354,6 +371,9 @@ CONTAINS
     
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
+    
+    tcomp_tot = MPI_WTIME() - t_start
+    !IF (par%master) WRITE(0,*) '     Solved the DIVA in ', tcomp_tot, ' s, of which ', tcomp_assembly, ' s was matrix assembly, and ', tcomp_solve, ' s was matrix solving'
     
   END SUBROUTINE solve_DIVA
   
@@ -984,7 +1004,7 @@ CONTAINS
   END SUBROUTINE calc_3D_horizontal_velocities_DIVA
   
   ! Routines for solving the "linearised" SSA/DIVA
-  SUBROUTINE solve_SSADIVA_linearised( mesh, ice, u_b, v_b)
+  SUBROUTINE solve_SSADIVA_linearised( mesh, ice, u_b, v_b, dt_assembly, dt_solve)
     ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
     ! constant rather than functions of velocity) on the b-grid.
     ! 
@@ -1018,15 +1038,15 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp),                            INTENT(OUT)   :: dt_assembly, dt_solve
 
     ! Local variables
-    INTEGER                                            :: tiuv1, tiuv2, tiuv, ti, tiu, tiv, edge_index, n, vi
+    INTEGER                                            :: ti, nu, nv
     REAL(dp), DIMENSION(:    ), POINTER                ::  N_b,  dN_dx_b,  dN_dy_b
     INTEGER                                            :: wN_b, wdN_dx_b, wdN_dy_b
     REAL(dp), DIMENSION(:    ), POINTER                ::  b_buv,  uv_buv
     INTEGER                                            :: wb_buv, wuv_buv
-    INTEGER                                            :: nrows, ncols, nnz_per_row_max, nnz_max
-    TYPE(type_sparse_matrix_CSR)                       :: A
+    REAL(dp)                                           :: t_start
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D(   mesh%nTri, N_b    , wN_b    )
@@ -1040,79 +1060,39 @@ CONTAINS
     CALL ddx_a_to_b_2D( mesh, ice%N_a, dN_dx_b)
     CALL ddy_a_to_b_2D( mesh, ice%N_a, dN_dy_b)
     
-  ! Construct the big matrix A
-  ! ==========================
+  ! Fill in the coefficients of the stiffness matrix
+  ! ================================================
     
-    ! Allocate shared memory for A
-    ncols           = 2*mesh%nTri    ! from
-    nrows           = 2*mesh%nTri    ! to
-    nnz_per_row_max = 20
+    t_start = MPI_WTIME()
     
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( A, nrows, ncols, nnz_max)
-    
-    ! Fill in matrix rows, right-hand side, and initial guess
-    CALL partition_list( 2*mesh%nTri, par%i, par%n, tiuv1, tiuv2)
-    DO tiuv = tiuv1, tiuv2
-    
-      ! Apply boundary conditions to all triangles that touch the domain boundary
-      IF (MOD( tiuv,2) == 1) THEN
-        ! u
-        ti = (tiuv+1) / 2
+    DO ti = mesh%ti1, mesh%ti2
+      
+      IF (mesh%Tri_edge_index( ti) == 0) THEN
+        ! Free triangle: fill in matrix row for the SSA/DIVA
+        IF (C%include_SSADIVA_crossterms) THEN
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
+        ELSE
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
+        END IF
       ELSE
-        ! v
-        ti = tiuv / 2
+        ! Border triangle: apply boundary conditions
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
       END IF
-      edge_index = 0
-      DO n = 1, 3
-        vi = mesh%Tri( ti,n)
-        IF (mesh%edge_index( vi) > 0) edge_index = MAX( edge_index, mesh%edge_index( vi))
-      END DO
       
-      ! Fill matrix coefficients
-      IF (MOD( tiuv,2) == 1) THEN
-        ! u
-      
-        IF (edge_index == 0) THEN
-          ! Free triangle: fill in matrix row for the SSA/DIVA
-          IF (C%include_SSADIVA_crossterms) THEN
-            CALL list_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, A, b_buv, uv_buv)
-          ELSE
-            CALL list_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, A, b_buv, uv_buv)
-          END IF
-        ELSE
-          ! Border triangle: apply boundary conditions
-          CALL list_DIVA_matrix_coefficients_eq_1_boundary( mesh, u_b, ti, edge_index, A, b_buv, uv_buv)
-        END IF
-        
-      ELSE ! IF (MOD( tiuv,2) == 1) THEN
-        ! v
-      
-        IF (edge_index == 0) THEN
-          ! Free triangle: fill in matrix row for the SSA/DIVA
-          IF (C%include_SSADIVA_crossterms) THEN
-            CALL list_DIVA_matrix_coefficients_eq_2_free( mesh, ice, v_b, ti, N_b, dN_dx_b, dN_dy_b, A, b_buv, uv_buv)
-          ELSE
-            CALL list_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, v_b, ti, N_b, A, b_buv, uv_buv)
-          END IF
-        ELSE
-          ! Border triangle: apply boundary conditions
-          CALL list_DIVA_matrix_coefficients_eq_2_boundary( mesh, v_b, ti, edge_index, A, b_buv, uv_buv)
-        END IF
-        
-      END IF ! IF (MOD( tiuv,2) == 1) THEN
-      
-    END DO ! DO tiuv = tiuv1, tiuv2
+    END DO
     CALL sync
     
-    ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( A, tiuv1, tiuv2)
-    CALL finalise_matrix_CSR_dist( A, tiuv1, tiuv2)
+    dt_assembly = MPI_WTIME() - t_start
     
   ! Solve the matrix equation
   ! =========================
     
-    CALL solve_matrix_equation_CSR( A, b_buv, uv_buv, &
+    t_start = MPI_WTIME()
+    
+    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
       C%DIVA_choice_matrix_solver, &
       C%DIVA_SOR_nit             , &
       C%DIVA_SOR_tol             , &
@@ -1120,22 +1100,23 @@ CONTAINS
       C%DIVA_PETSc_rtol          , &
       C%DIVA_PETSc_abstol)
     
+    dt_solve = MPI_WTIME() - t_start
+    
   ! Get solution back on the b-grid
   ! ================================
     
     DO ti = mesh%ti1, mesh%ti2
       
-      tiu = 2*ti - 1
-      tiv = 2*ti
+      nu = 2*ti - 1
+      nv = 2*ti
       
-      u_b( ti) = uv_buv( tiu)
-      v_b( ti) = uv_buv( tiv)
+      u_b( ti) = uv_buv( nu)
+      v_b( ti) = uv_buv( nv)
       
     END DO
     CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_matrix_CSR( A)
     CALL deallocate_shared( wN_b    )
     CALL deallocate_shared( wdN_dx_b)
     CALL deallocate_shared( wdN_dy_b)
@@ -1143,7 +1124,7 @@ CONTAINS
     CALL deallocate_shared( wuv_buv )
 
   END SUBROUTINE solve_SSADIVA_linearised
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free(      mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, A, b_buv, uv_buv)
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free(      mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
     !   4*N*d2u/dx2 + 4*dN/dx*du/dx + 2*N*d2v/dxdy + 2*dN/dx*dv/dy + N*d2u/dy2 + dN/dy*du/dy + N*d2v/dxdy + dN/dy*dv/dx - beta*u = -taud_x
@@ -1152,58 +1133,51 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
     INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv, k1, k2, k, tj, tju, tjv
+    INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
+    nu = ice%ti2n_u( ti)
     
-    k1 = mesh%M2_ddx_b_b%ptr( ti)
-    k2 = mesh%m2_ddx_b_b%ptr( ti+1) - 1
+    nnz = (ice%M_SSADIVA%ptr( nu+1) - ice%M_SSADIVA%ptr( nu)) / 2
     
-    DO k = k1, k2
+    DO kk = 1, nnz
       
-      tj  = mesh%M2_ddx_b_b%index( k)
-      tju = 2*tj - 1
-      tjv = 2*tj
+      ku = ice%M_SSADIVA%ptr(   nu) + 2*kk - 2
+      kv = ice%M_SSADIVA%ptr(   nu) + 2*kk - 1
+      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      
+      mu = ice%M_SSADIVA%index(   ku)
       
       ! u-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tju
-      A%val(   A%nnz) = 4._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
-                        4._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k) + &
-                        1._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
-                        1._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k)
+      ice%M_SSADIVA%val( ku) = 4._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
+                               4._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k) + &
+                               1._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
+                               1._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k)
       
-      IF (tju == tiu) THEN
-        A%val( A%nnz) = A%val( A%nnz) - ice%beta_eff_b( ti)
+      ! Sliding term on the diagonal
+      IF (mu == nu) THEN
+        ice%M_SSADIVA%val( ku) = ice%M_SSADIVA%val( ku) - ice%beta_eff_b( ti)
       END IF
       
       ! v-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tjv
-      A%val(   A%nnz) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
-                        2._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k) + &
-                        1._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k)
+      ice%M_SSADIVA%val( kv) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
+                               2._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k) + &
+                               1._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k)
       
     END DO
     
-    ! Finalise this matrix row
-    A%ptr( tiu+1 : A%m+1) = A%nnz+1
-    
     ! Right-hand side and initial guess
-    b_buv(  tiu) = -ice%taudx_b( ti)
-    uv_buv( tiu) = u_b( ti)
+    b_buv(  nu) = -ice%taudx_b( ti)
+    uv_buv( nu) = u_b( ti)
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free(      mesh, ice, v_b, ti, N_b, dN_dx_b, dN_dy_b, A, b_buv, uv_buv)
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free(      mesh, ice, v_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     !
     !   4*N*d2v/dy2 + 4*dN/dy*dv/dy + 2*N*d2u/dxdy + 2*dN/dy*du/dx + N*d2v/dx2 + dN/dx*dv/dx + N*d2u/dxdy + dN/dx*du/dy - beta*v = -taud_y
@@ -1216,54 +1190,47 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
     INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv, k1, k2, k, tj, tju, tjv
+    INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
+    nv = ice%ti2n_v( ti)
     
-    k1 = mesh%M2_ddx_b_b%ptr( ti)
-    k2 = mesh%m2_ddx_b_b%ptr( ti+1) - 1
+    nnz = (ice%M_SSADIVA%ptr( nv+1) - ice%M_SSADIVA%ptr( nv)) / 2
     
-    DO k = k1, k2
+    DO kk = 1, nnz
       
-      tj  = mesh%M2_ddx_b_b%index( k)
-      tju = 2*tj - 1
-      tjv = 2*tj
+      ku = ice%M_SSADIVA%ptr(   nv) + 2*kk - 2
+      kv = ice%M_SSADIVA%ptr(   nv) + 2*kk - 1
+      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      
+      mv = ice%M_SSADIVA%index(   kv)
       
       ! v-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tjv
-      A%val(   A%nnz) = 4._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
-                        4._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k) + &
-                        1._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
-                        1._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k)
+      ice%M_SSADIVA%val( kv) = 4._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
+                               4._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k) + &
+                               1._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
+                               1._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k)
       
-      IF (tjv == tiv) THEN
-        A%val( A%nnz) = A%val( A%nnz) - ice%beta_eff_b( ti)
+      ! Sliding term on the diagonal
+      IF (mv == nv) THEN
+        ice%M_SSADIVA%val( kv) = ice%M_SSADIVA%val( kv) - ice%beta_eff_b( ti)
       END IF
       
       ! u-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tju
-      A%val(   A%nnz) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
-                        2._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k) + &
-                        1._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k)
+      ice%M_SSADIVA%val( ku) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
+                               2._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k) + &
+                               1._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k)
       
     END DO
     
-    ! Finalise this matrix row
-    A%ptr( tiv+1 : A%m+1) = A%nnz+1
-    
     ! Right-hand side and initial guess
-    b_buv(  tiv) = -ice%taudy_b( ti)
-    uv_buv( tiv) = v_b( ti)
+    b_buv(  nv) = -ice%taudy_b( ti)
+    uv_buv( nv) = v_b( ti)
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, A, b_buv, uv_buv)
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     ! 
     ! 4*d2u/dx2 + d2u/dy2 + 3*d2v/dxdy - beta*u/N = -taud_x/N
@@ -1272,53 +1239,46 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
     INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv, k1, k2, k, tj, tju, tjv
+    INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
+    nu = ice%ti2n_u( ti)
     
-    k1 = mesh%M2_ddx_b_b%ptr( ti)
-    k2 = mesh%m2_ddx_b_b%ptr( ti+1) - 1
+    nnz = (ice%M_SSADIVA%ptr( nu+1) - ice%M_SSADIVA%ptr( nu)) / 2
     
-    DO k = k1, k2
+    DO kk = 1, nnz
       
-      tj  = mesh%M2_ddx_b_b%index( k)
-      tju = 2*tj - 1
-      tjv = 2*tj
+      ku = ice%M_SSADIVA%ptr(   nu) + 2*kk - 2
+      kv = ice%M_SSADIVA%ptr(   nu) + 2*kk - 1
+      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      
+      mu = ice%M_SSADIVA%index(   ku)
       
       ! u-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tju
-      A%val(   A%nnz) = 4._dp * mesh%M2_d2dx2_b_b%val( k) + mesh%M2_d2dy2_b_b%val( k)
+      ice%M_SSADIVA%val( ku) = 4._dp * mesh%M2_d2dx2_b_b%val( k) + mesh%M2_d2dy2_b_b%val( k)
       
-      IF (tju == tiu) THEN
-        A%val( A%nnz) = A%val( A%nnz) - (ice%beta_eff_b( ti) / N_b( ti))
+      ! Sliding term on the diagonal
+      IF (mu == nu) THEN
+        ice%M_SSADIVA%val( ku) = ice%M_SSADIVA%val( ku) - (ice%beta_eff_b( ti) / N_b( ti))
       END IF
       
       ! v-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tjv
-      A%val(   A%nnz) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
+      ice%M_SSADIVA%val( kv) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
       
     END DO
     
-    ! Finalise this matrix row
-    A%ptr( tiu+1 : A%m+1) = A%nnz+1
-    
     ! Right-hand side and initial guess
-    b_buv(  tiu) = -ice%taudx_b( ti) / N_b( ti)
-    uv_buv( tiu) = u_b( ti)
+    b_buv(  nu) = -ice%taudx_b( ti) / N_b( ti)
+    uv_buv( nu) = u_b( ti)
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_1_free_sans
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, v_b, ti, N_b, A, b_buv, uv_buv)
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_free_sans
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, v_b, ti, N_b, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
     ! 
     ! 4*d2v/dy2 + d2v/dx2 + 3*d2u/dxdy - beta*v/N = -taud_y/N
@@ -1327,72 +1287,64 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
     INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv, k1, k2, k, tj, tju, tjv
+    INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
+    nv = ice%ti2n_v( ti)
     
-    k1 = mesh%M2_ddx_b_b%ptr( ti)
-    k2 = mesh%m2_ddx_b_b%ptr( ti+1) - 1
+    nnz = (ice%M_SSADIVA%ptr( nv+1) - ice%M_SSADIVA%ptr( nv)) / 2
     
-    DO k = k1, k2
+    DO kk = 1, nnz
       
-      tj  = mesh%M2_ddx_b_b%index( k)
-      tju = 2*tj - 1
-      tjv = 2*tj
+      ku = ice%M_SSADIVA%ptr(   nv) + 2*kk - 2
+      kv = ice%M_SSADIVA%ptr(   nv) + 2*kk - 1
+      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      
+      mv = ice%M_SSADIVA%index(   kv)
       
       ! v-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tjv
-      A%val(   A%nnz) = 4._dp * mesh%M2_d2dy2_b_b%val( k) + mesh%M2_d2dx2_b_b%val( k)
+      ice%M_SSADIVA%val( kv) = 4._dp * mesh%M2_d2dy2_b_b%val( k) + mesh%M2_d2dx2_b_b%val( k)
       
-      IF (tjv == tiv) THEN
-        A%val( A%nnz) = A%val( A%nnz) - (ice%beta_eff_b( ti) / N_b( ti))
+      ! Sliding term on the diagonal
+      IF (mv == nv) THEN
+        ice%M_SSADIVA%val( kv) = ice%M_SSADIVA%val( kv) - (ice%beta_eff_b( ti) / N_b( ti))
       END IF
       
       ! u-part
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tju
-      A%val(   A%nnz) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
+      ice%M_SSADIVA%val( ku) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
       
     END DO
     
-    ! Finalise this matrix row
-    A%ptr( tiv+1 : A%m+1) = A%nnz+1
-    
     ! Right-hand side and initial guess
-    b_buv(  tiv) = -ice%taudy_b( ti) / N_b( ti)
-    uv_buv( tiv) = v_b( ti)
+    b_buv(  nv) = -ice%taudy_b( ti) / N_b( ti)
+    uv_buv( nv) = v_b( ti)
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_2_free_sans
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_1_boundary(  mesh, u_b, ti, edge_index, A, b_buv, uv_buv)
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_free_sans
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_boundary(  mesh, ice, u_b, ti, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
       
     IMPLICIT NONE
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti, edge_index
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv
+    INTEGER                                            :: edge_index
     CHARACTER(LEN=256)                                 :: BC
-    INTEGER                                            :: tj, tju, tjv, n, tti
+    INTEGER                                            :: nu, nnz, kk, ku, k, mu, n_neighbours
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
-   
+    edge_index = mesh%Tri_edge_index( ti)
+    
     ! Determine what kind of boundary conditions to apply 
     IF     (edge_index == 8 .OR. edge_index == 1 .OR. edge_index == 2) THEN
       ! North
@@ -1401,7 +1353,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_u_north == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_north "', TRIM(C%DIVA_boundary_BC_u_north), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_north "', TRIM(C%DIVA_boundary_BC_u_north), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 3) THEN
@@ -1411,7 +1363,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_u_east == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_east "', TRIM(C%DIVA_boundary_BC_u_east), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_east "', TRIM(C%DIVA_boundary_BC_u_east), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 4 .OR. edge_index == 5 .OR. edge_index == 6) THEN
@@ -1421,7 +1373,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_u_south == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_south "', TRIM(C%DIVA_boundary_BC_u_south), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_south "', TRIM(C%DIVA_boundary_BC_u_south), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 7) THEN
@@ -1431,90 +1383,96 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_u_west == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_west "', TRIM(C%DIVA_boundary_BC_u_west), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: unknown DIVA_boundary_BC_u_west "', TRIM(C%DIVA_boundary_BC_u_west), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSE
-      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid edge_index ', edge_index, ' at ti = ', ti
+      WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid edge_index ', edge_index, ' at ti = ', ti
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
     IF (BC == 'zero') THEN
       ! Let u = 0 at this domain boundary
-      
-      ! Matrix
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tiu
-      A%val(   A%nnz) = 1._dp
     
-      ! Finalise this matrix row
-      A%ptr( tiu+1 : A%m+1) = A%nnz+1
+      nu = ice%ti2n_u( ti)
+      
+      nnz = ice%M_SSADIVA%ptr( nu+1) - ice%M_SSADIVA%ptr( nu)
+      n_neighbours = nnz - 1
+      
+      DO kk = 1, nnz
+        
+        ku = ice%M_SSADIVA%ptr(         nu) + kk - 1
+        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        
+        mu = ice%M_SSADIVA%index( ku)
+        
+        IF (mu == nu) THEN
+          ! Diagonal: the triangle itself
+          ice%M_SSADIVA%val( ku) = 1._dp
+        ELSE
+          ! Off-diagonal: neighbours
+          ice%M_SSADIVA%val( ku) = 0._dp
+        END IF
+        
+      END DO
       
       ! Right-hand side and initial guess
-      b_buv(  tiu) = 0._dp
-      uv_buv( tiu) = 0._dp
+      b_buv(  nu) = 0._dp
+      uv_buv( nu) = u_b( ti)
       
     ELSEIF (BC == 'infinite') THEN
       ! Let du/dx = 0 at this domain boundary
-      
-      ! Matrix
-      
-      ! Find number of neighbouring triangles
-      n = 0
-      DO tti = 1, 3
-        tj = mesh%TriC( ti,tti)
-        IF (tj == 0) CYCLE
-        n = n+1
-      END DO
-      
-      ! The triangle itself
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tiu
-      A%val(   A%nnz) = -1._dp
-      
-      ! Neighbouring triangles
-      DO tti = 1, 3
-        tj = mesh%TriC( ti,tti)
-        IF (tj == 0) CYCLE
-        tju = 2*tj - 1
-        tjv = 2*tj
-        A%nnz =  A%nnz + 1
-        A%index( A%nnz) = tju
-        A%val(   A%nnz) = 1._dp / REAL( n,dp)
-      END DO
     
-      ! Finalise this matrix row
-      A%ptr( tiu+1 : A%m+1) = A%nnz+1
+      nu = ice%ti2n_u( ti)
+      
+      nnz = ice%M_SSADIVA%ptr( nu+1) - ice%M_SSADIVA%ptr( nu)
+      n_neighbours = nnz - 1
+      
+      DO kk = 1, nnz
+        
+        ku = ice%M_SSADIVA%ptr(         nu) + kk - 1
+        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        
+        mu = ice%M_SSADIVA%index( ku)
+        
+        IF (mu == nu) THEN
+          ! Diagonal: the triangle itself
+          ice%M_SSADIVA%val( ku) = REAL( n_neighbours,dp)
+        ELSE
+          ! Off-diagonal: neighbours
+          ice%M_SSADIVA%val( ku) = -1._dp
+        END IF
+        
+      END DO
       
       ! Right-hand side and initial guess
-      b_buv(  tiu) = 0._dp
-      uv_buv( tiu) = u_b( ti)
+      b_buv(  nu) = 0._dp
+      uv_buv( nu) = u_b( ti)
       
     ELSE
-      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid BC = "', BC, '"!'
+      WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_1_boundary - ERROR: invalid BC = "', BC, '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_1_boundary
-  SUBROUTINE list_DIVA_matrix_coefficients_eq_2_boundary(  mesh, v_b, ti, edge_index, A, b_buv, uv_buv)
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_1_boundary
+  SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_boundary(  mesh, ice, v_b, ti, b_buv, uv_buv)
     ! Find the matrix coefficients of equation n and add them to the lists
       
     IMPLICIT NONE
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti, edge_index
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: A
+    INTEGER,                             INTENT(IN)    :: ti
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
-    INTEGER                                            :: tiu, tiv
+    INTEGER                                            :: edge_index
     CHARACTER(LEN=256)                                 :: BC
-    INTEGER                                            :: tj, tju, tjv, n, tti
+    INTEGER                                            :: nv, nnz, kk, kv, k, mv, n_neighbours
     
-    tiu = 2*ti - 1
-    tiv = 2*ti
+    edge_index = mesh%Tri_edge_index( ti)
    
     ! Determine what kind of boundary conditions to apply 
     IF     (edge_index == 8 .OR. edge_index == 1 .OR. edge_index == 2) THEN
@@ -1524,7 +1482,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_v_north == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_north "', TRIM(C%DIVA_boundary_BC_v_north), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_north "', TRIM(C%DIVA_boundary_BC_v_north), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 3) THEN
@@ -1534,7 +1492,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_v_east == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_east "', TRIM(C%DIVA_boundary_BC_v_east), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_east "', TRIM(C%DIVA_boundary_BC_v_east), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 4 .OR. edge_index == 5 .OR. edge_index == 6) THEN
@@ -1544,7 +1502,7 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_v_south == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_south "', TRIM(C%DIVA_boundary_BC_v_south), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_south "', TRIM(C%DIVA_boundary_BC_v_south), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSEIF (edge_index == 7) THEN
@@ -1554,71 +1512,78 @@ CONTAINS
       ELSEIF (C%DIVA_boundary_BC_v_west == 'infinite') THEN
         BC = 'infinite'
       ELSE
-        WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_west "', TRIM(C%DIVA_boundary_BC_v_west), '"!'
+        WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: unknown DIVA_boundary_BC_v_west "', TRIM(C%DIVA_boundary_BC_v_west), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     ELSE
-      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid edge_index ', edge_index, ' at ti = ', ti
+      WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid edge_index ', edge_index, ' at ti = ', ti
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
     IF (BC == 'zero') THEN
-      ! Let u = 0 at this domain boundary
-      
-      ! Matrix
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tiv
-      A%val(   A%nnz) = 1._dp
+      ! Let v = 0 at this domain boundary
     
-      ! Finalise this matrix row
-      A%ptr( tiv+1 : A%m+1) = A%nnz+1
+      nv = ice%ti2n_v( ti)
+      
+      nnz = ice%M_SSADIVA%ptr( nv+1) - ice%M_SSADIVA%ptr( nv)
+      n_neighbours = nnz - 1
+      
+      DO kk = 1, nnz
+        
+        kv = ice%M_SSADIVA%ptr(         nv) + kk - 1
+        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        
+        mv = ice%M_SSADIVA%index( kv)
+        
+        IF (mv == nv) THEN
+          ! Diagonal: the triangle itself
+          ice%M_SSADIVA%val( kv) = 1._dp
+        ELSE
+          ! Off-diagonal: neighbours
+          ice%M_SSADIVA%val( kv) = 0._dp
+        END IF
+        
+      END DO
       
       ! Right-hand side and initial guess
-      b_buv(  tiv) = 0._dp
-      uv_buv( tiv) = 0._dp
+      b_buv(  nv) = 0._dp
+      uv_buv( nv) = v_b( ti)
       
     ELSEIF (BC == 'infinite') THEN
-      ! Let du/dx = 0 at this domain boundary
-      
-      ! Matrix
-      
-      ! Find number of neighbouring triangles
-      n = 0
-      DO tti = 1, 3
-        tj = mesh%TriC( ti,tti)
-        IF (tj == 0) CYCLE
-        n = n+1
-      END DO
-      
-      ! The triangle itself
-      A%nnz =  A%nnz + 1
-      A%index( A%nnz) = tiv
-      A%val(   A%nnz) = -1._dp
-      
-      ! Neighbouring triangles
-      DO tti = 1, 3
-        tj = mesh%TriC( ti,tti)
-        IF (tj == 0) CYCLE
-        tju = 2*tj - 1
-        tjv = 2*tj
-        A%nnz =  A%nnz + 1
-        A%index( A%nnz) = tjv
-        A%val(   A%nnz) = 1._dp / REAL( n,dp)
-      END DO
+      ! Let dv/dx = 0 at this domain boundary
     
-      ! Finalise this matrix row
-      A%ptr( tiv+1 : A%m+1) = A%nnz+1
+      nv = ice%ti2n_v( ti)
+      
+      nnz = ice%M_SSADIVA%ptr( nv+1) - ice%M_SSADIVA%ptr( nv)
+      n_neighbours = nnz - 1
+      
+      DO kk = 1, nnz
+        
+        kv = ice%M_SSADIVA%ptr(         nv) + kk - 1
+        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        
+        mv = ice%M_SSADIVA%index( kv)
+        
+        IF (mv == nv) THEN
+          ! Diagonal: the triangle itself
+          ice%M_SSADIVA%val( kv) = REAL( n_neighbours,dp)
+        ELSE
+          ! Off-diagonal: neighbours
+          ice%M_SSADIVA%val( kv) = -1._dp
+        END IF
+        
+      END DO
       
       ! Right-hand side and initial guess
-      b_buv(  tiv) = 0._dp
-      uv_buv( tiv) = v_b( ti)
+      b_buv(  nv) = 0._dp
+      uv_buv( nv) = v_b( ti)
       
     ELSE
-      WRITE(0,*) 'list_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid BC = "', BC, '"!'
+      WRITE(0,*) 'calc_DIVA_matrix_coefficients_eq_2_boundary - ERROR: invalid BC = "', BC, '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-  END SUBROUTINE list_DIVA_matrix_coefficients_eq_2_boundary
+  END SUBROUTINE calc_DIVA_matrix_coefficients_eq_2_boundary
     
   ! Some "administration" routines that help speed up and stabilise the SSA/DIVA solver
   SUBROUTINE apply_velocity_limits( mesh, u_b, v_b)
@@ -1945,6 +1910,7 @@ CONTAINS
   
   ! Initialise/remap data fields for the velocity solver(s)
   SUBROUTINE initialise_velocity_solver( mesh, ice)
+    ! Allocate and initialise data fields for the velocity solver
       
     IMPLICIT NONE
     
@@ -1976,16 +1942,16 @@ CONTAINS
         CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
       END IF
       
-      ! Useful data fields for solving the SSA/DIVA
+      ! Physical terms in the SSA/DIVA
       CALL allocate_shared_dp_1D(   mesh%nTri,              ice%taudx_b               , ice%wtaudx_b              )
       CALL allocate_shared_dp_1D(   mesh%nTri,              ice%taudy_b               , ice%wtaudy_b              )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%du_dx_a               , ice%wdu_dx_a              )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%du_dy_a               , ice%wdu_dy_a              )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dv_dx_a               , ice%wdv_dx_a              )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dv_dy_a               , ice%wdv_dy_a              )
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz,        ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz,        ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-      CALL allocate_shared_dp_2D(   mesh%nV  , C%nz,        ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+      CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%N_a                   , ice%wN_a                  )
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%beta_a                , ice%wbeta_a               )
@@ -1996,6 +1962,13 @@ CONTAINS
       CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%F2_a                  , ice%wF2_a                 )
       CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_prev_b              , ice%wu_prev_b             )
       CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_prev_b              , ice%wv_prev_b             )
+      
+      ! Some administrative stuff to make solving the SSA/DIVA more efficient
+      CALL allocate_shared_int_1D(  mesh%nTri,              ice%ti2n_u                , ice%wti2n_u               )
+      CALL allocate_shared_int_1D(  mesh%nTri,              ice%ti2n_v                , ice%wti2n_v               )
+      CALL allocate_shared_int_2D(2*mesh%nTri, 2          , ice%n2ti_uv               , ice%wn2ti_uv              )
+      CALL initialise_matrix_conversion_lists(  mesh, ice)
+      CALL initialise_SSADIVA_stiffness_matrix( mesh, ice)
       
     END IF
     
@@ -2151,7 +2124,246 @@ CONTAINS
     END IF ! IF (is_ISMIP_HOM) THEN
     
   END SUBROUTINE initialise_velocity_solver
-  SUBROUTINE remap_velocity_solver( mesh_old, mesh_new, map, ice)
+  SUBROUTINE initialise_matrix_conversion_lists( mesh, ice)
+    ! Initialise lists for converting triangle indices to stiffness matrix rows and vice versa
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: ti, nu, nv
+    
+    DO ti = mesh%ti1, mesh%ti2
+      
+      nu = 2*ti - 1
+      nv = 2*ti
+      
+      ice%ti2n_u( ti) = nu
+      ice%ti2n_v( ti) = nv
+      
+      ice%n2ti_uv( nu,:) = [ti,0 ]
+      ice%n2ti_uv( nv,:) = [0 ,ti]
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE initialise_matrix_conversion_lists
+  SUBROUTINE initialise_SSADIVA_stiffness_matrix( mesh, ice)
+    ! Initialise the non-zero structure template of the SSA/DIVA stiffness matrix
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
+    
+    ! Allocate shared memory for A
+    ncols           = 2*mesh%nTri    ! from
+    nrows           = 2*mesh%nTri    ! to
+    nnz_per_row_max = 20
+    
+    nnz_max = nrows * nnz_per_row_max
+    CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
+    
+    ! Fill in matrix rows, right-hand side, and initial guess
+    CALL partition_list( 2*mesh%nTri, par%i, par%n, n1, n2)
+    DO n = n1, n2
+      
+      ! Fill matrix coefficients
+      IF (ice%n2ti_uv( n,1) > 0) THEN
+        ! u
+        
+        ti = ice%n2ti_uv( n,1)
+      
+        IF (mesh%Tri_edge_index( ti) == 0) THEN
+          ! Free triangle: fill in matrix row for the SSA/DIVA
+    
+          k1 = mesh%M2_ddx_b_b%ptr( ti)
+          k2 = mesh%M2_ddx_b_b%ptr( ti+1) - 1
+          
+          DO k = k1, k2
+            
+            tj  = mesh%M2_ddx_b_b%index( k)
+            mu = ice%ti2n_u( tj)
+            mv = ice%ti2n_v( tj)
+            
+            ! u-part
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
+            
+            ! v-part
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            
+          END DO
+          
+        ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+          ! Border triangle: apply boundary conditions
+    
+          k1 = mesh%M_Neumann_BC_b_b%ptr( ti)
+          k2 = mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          
+          ! Matrix
+          DO k = mesh%M_Neumann_BC_b_b%ptr( ti), mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+            
+            tj  = mesh%M_Neumann_BC_b_b%index( k)
+            mu = ice%ti2n_u( tj)
+            mv = ice%ti2n_v( tj)
+            
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
+            
+          END DO
+          
+        END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        
+      ELSE ! IF (MOD( n,2) == 1) THEN
+        ! v
+        
+        ti = ice%n2ti_uv( n,2)
+      
+        IF (mesh%Tri_edge_index( ti) == 0) THEN
+          ! Free triangle: fill in matrix row for the SSA/DIVA
+    
+          k1 = mesh%M2_ddx_b_b%ptr( ti)
+          k2 = mesh%M2_ddx_b_b%ptr( ti+1) - 1
+          
+          DO k = k1, k2
+            
+            tj  = mesh%M2_ddx_b_b%index( k)
+            mu = ice%ti2n_u( tj)
+            mv = ice%ti2n_v( tj)
+            
+            ! u-part
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
+            
+            ! v-part
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            
+          END DO
+          
+        ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+          ! Border triangle: apply boundary conditions
+    
+          k1 = mesh%M_Neumann_BC_b_b%ptr( ti)
+          k2 = mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          
+          ! Matrix
+          DO k = mesh%M_Neumann_BC_b_b%ptr( ti), mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+            
+            tj  = mesh%M_Neumann_BC_b_b%index( k)
+            mu = ice%ti2n_u( tj)
+            mv = ice%ti2n_v( tj)
+            
+            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
+            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            
+          END DO
+          
+        END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        
+      END IF ! IF (MOD( n,2) == 1) THEN
+    
+      ! Finalise this matrix row
+      ice%M_SSADIVA%ptr( n+1 : 2*mesh%nTri+1) = ice%M_SSADIVA%nnz+1
+      
+    END DO ! DO n = n1, n2
+    CALL sync
+    
+    ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( ice%M_SSADIVA, n1, n2)
+    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, n1, n2)
+    
+  END SUBROUTINE initialise_SSADIVA_stiffness_matrix
+  SUBROUTINE remap_velocities( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    IF     (C%choice_ice_dynamics == 'SIA') THEN
+      CALL remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+      CALL remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      CALL remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+    ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+      CALL remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
+    ELSE
+      IF (par%master) WRITE(0,*) 'remap_velocities - ERROR: unknown choice_ice_dynamics "', TRIM(C%choice_ice_dynamics), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE remap_velocities
+  SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    REAL(dp)                                           :: dp_dummy
+    
+    ! To prevent compiler warnings
+    dp_dummy = mesh_old%V(   1,1)
+    dp_dummy = mesh_new%V(   1,1)
+    dp_dummy = map%trilin%w( 1,1)
+    dp_dummy = ice%Hi_a( 1)
+      
+    ! No need to remap anything, just reallocate
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    
+  END SUBROUTINE remap_velocities_SIA
+  SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
@@ -2165,97 +2377,315 @@ CONTAINS
     ! Local variables:
     REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
     INTEGER                                            :: wu_a, wv_a
+        
+  ! == Remap SSA velocities
+  ! =======================
     
-    IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
-      ! Data fields for the SIA
-      
-      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz       , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz       , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-      
-    END IF
-      
-    IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA' .OR. C%choice_ice_dynamics == 'DIVA') THEN
-      ! Data fields for the SSA / DIVA
-      
-      IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
-        ! Velocity fields containing the SSA solution on the b-grid
-        
-        ! Remap velocities so that the velocity solver doesn't have to start from scratch after a mesh update
-        
-        ! Allocate shared memory
-        CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
-        CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
-        
-        ! Map velocities to the a-grid
-        CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
-        CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
-        
-        ! Remap a-grid velocities
-        CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_1st_order')
-        CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_1st_order')
-        
-        ! Reallocate b-grid velocities
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-        CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
-        
-        ! Map remapped velocities to the b-grid
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
-        
-        ! Clean up after yourself
-        CALL deallocate_shared( wu_a)
-        CALL deallocate_shared( wv_a)
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
     
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-        ! Velocity fields containing the DIVA solution on the b-grid
-        
-        ! Remap velocities so that the velocity solver doesn't have to start from scratch after a mesh update
-        
-        ! Allocate shared memory
-        CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
-        CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
-        
-        ! Map velocities to the a-grid
-        CALL map_b_to_a_2D( mesh_old, ice%u_vav_b, u_a)
-        CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
-        
-        ! Remap a-grid velocities
-        CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_1st_order')
-        CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_1st_order')
-        
-        ! Map remapped velocities to the b-grid
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_b)
-        CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_b)
-        
-        ! Clean up after yourself
-        CALL deallocate_shared( wu_a)
-        CALL deallocate_shared( wv_a)
-        
-      END IF
-      
-      ! Useful data fields for solving the SSA/DIVA
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taudx_b               , ice%wtaudx_b              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taudy_b               , ice%wtaudy_b              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%du_dx_a               , ice%wdu_dx_a              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%du_dy_a               , ice%wdu_dy_a              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%dv_dx_a               , ice%wdv_dx_a              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%dv_dy_a               , ice%wdv_dy_a              )
-      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-      CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,        ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-      CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,        ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%N_a                   , ice%wN_a                  )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%beta_a                , ice%wbeta_a               )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%beta_eff_a            , ice%wbeta_eff_a           )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%beta_eff_b            , ice%wbeta_eff_b           )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%taubx_b               , ice%wtaubx_b              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%tauby_b               , ice%wtauby_b              )
-      CALL reallocate_shared_dp_1D(   mesh_new%nV  ,              ice%F2_a                  , ice%wF2_a                 )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%u_prev_b              , ice%wu_prev_b             )
-      CALL reallocate_shared_dp_1D(   mesh_new%nTri,              ice%v_prev_b              , ice%wv_prev_b             )
-      
-    END IF
+    ! Map velocities to the a-grid
+    CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
+    CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
     
-  END SUBROUTINE remap_velocity_solver
+    ! Remap a-grid velocities
+    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    
+    ! Reallocate b-grid velocities
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
+    
+    ! Map remapped velocities to the b-grid
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wu_a)
+    CALL deallocate_shared( wv_a)
+    
+  ! == Reallocate everything else
+  ! =============================
+  
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    
+   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    
+    ! Physical terms in the SSA/DIVA
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
+      
+    ! Some administrative stuff to make solving the SSA/DIVA more efficient
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
+    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
+    
+    CALL initialise_matrix_conversion_lists(  mesh_new, ice)
+    CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+    
+  END SUBROUTINE remap_velocities_SSA
+  SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
+    INTEGER                                            :: wu_a, wv_a
+        
+  ! == Remap SSA velocities
+  ! =======================
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+    
+    ! Map velocities to the a-grid
+    CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
+    CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
+    
+    ! Remap a-grid velocities
+    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    
+    ! Reallocate b-grid velocities
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
+    
+    ! Map remapped velocities to the b-grid
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wu_a)
+    CALL deallocate_shared( wv_a)
+    
+  ! == Reallocate everything else
+  ! =============================
+  
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    
+    ! Physical terms in the SSA/DIVA
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
+      
+    ! Some administrative stuff to make solving the SSA/DIVA more efficient
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
+    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
+    
+    CALL initialise_matrix_conversion_lists(  mesh_new, ice)
+    CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+    
+  END SUBROUTINE remap_velocities_SIASSA
+  SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
+    ! Remap or reallocate all the data fields
+
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
+    INTEGER                                            :: wu_a, wv_a
+        
+  ! == Remap SSA velocities
+  ! =======================
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+    
+    ! Map velocities to the a-grid
+    CALL map_b_to_a_2D( mesh_old, ice%u_vav_b, u_a)
+    CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
+    
+    ! Remap a-grid velocities
+    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    
+    ! Reallocate b-grid velocities
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_vav_b, ice%wu_vav_b)
+    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_vav_b, ice%wv_vav_b)
+    
+    ! Map remapped velocities to the b-grid
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_b)
+    CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_b)
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wu_a)
+    CALL deallocate_shared( wv_a)
+    
+  ! == Reallocate everything else
+  ! =============================
+  
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+        
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    
+   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    
+    ! Physical terms in the SSA/DIVA
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
+      
+    ! Some administrative stuff to make solving the SSA/DIVA more efficient
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
+    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
+    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
+    
+    CALL initialise_matrix_conversion_lists(  mesh_new, ice)
+    CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+    
+  END SUBROUTINE remap_velocities_DIVA
   
 END MODULE ice_velocity_module

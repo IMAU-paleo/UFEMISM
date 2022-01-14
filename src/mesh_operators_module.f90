@@ -1245,6 +1245,9 @@ MODULE mesh_operators_module
     ! Calculate 2nd-order accurate matrix operators on the b-grid
     CALL calc_matrix_operators_2nd_order_b_b( mesh)
     
+    ! Calculate matrix operator for applying Neumann boundary conditions on border triangles
+    CALL calc_matrix_operator_Neumann_BC_b_b( mesh)
+    
   END SUBROUTINE calc_matrix_operators_mesh
   
   SUBROUTINE calc_matrix_operators_a_a( mesh,        M_ddx, M_ddy)
@@ -2446,6 +2449,77 @@ MODULE mesh_operators_module
     DEALLOCATE( Nfyyc)
     
   END SUBROUTINE calc_matrix_operators_2nd_order_b_b
+  
+  SUBROUTINE calc_matrix_operator_Neumann_BC_b_b( mesh)
+    ! Calculate matrix operator for applying Neumann boundary conditions on border triangles
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    
+    ! Local variables:
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ti, n, tti, tj
+
+  ! Then fill in the stiffness matrix coefficients
+  ! ==============================================
+
+    ncols           = mesh%nTri    ! from
+    nrows           = mesh%nTri    ! to
+    nnz_per_row_max = 4
+
+    nnz_max = nrows * nnz_per_row_max
+    CALL allocate_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, nrows, ncols, nnz_max)
+    
+    DO ti = mesh%ti1, mesh%ti2
+      
+      IF (mesh%Tri_edge_index( ti) > 0) THEN
+        ! This triangle touchers the domain border; apply Neumann boundary conditions
+        
+        ! In this case, that means that the value of f on ti should be equal to the
+        ! mean value of f on the neighbours of ti.
+      
+        ! Find number of neighbouring triangles
+        n = 0
+        DO tti = 1, 3
+          tj = mesh%TriC( ti,tti)
+          IF (tj == 0) CYCLE
+          n = n+1
+        END DO
+        
+        ! The triangle itself
+        mesh%M_Neumann_BC_b_b%nnz =  mesh%M_Neumann_BC_b_b%nnz + 1
+        mesh%M_Neumann_BC_b_b%index( mesh%M_Neumann_BC_b_b%nnz) = ti
+        mesh%M_Neumann_BC_b_b%val(   mesh%M_Neumann_BC_b_b%nnz) = -1._dp
+        
+        ! Neighbouring triangles
+        DO tti = 1, 3
+          tj = mesh%TriC( ti,tti)
+          IF (tj == 0) CYCLE
+          mesh%M_Neumann_BC_b_b%nnz =  mesh%M_Neumann_BC_b_b%nnz + 1
+          mesh%M_Neumann_BC_b_b%index( mesh%M_Neumann_BC_b_b%nnz) = tj
+          mesh%M_Neumann_BC_b_b%val(   mesh%M_Neumann_BC_b_b%nnz) = 1._dp / REAL( n,dp)
+        END DO
+        
+      END IF ! IF (is_border_triangle) THEN
+    
+      ! Finalise this matrix row
+      mesh%M_Neumann_BC_b_b%ptr( ti+1 : mesh%M_Neumann_BC_b_b%m+1) = mesh%M_Neumann_BC_b_b%nnz+1
+    
+    END DO ! DO ti = mesh%ti1, mesh%ti2
+    CALL sync
+    
+    ! Combine results from the different processes
+    CALL sort_columns_in_CSR_dist( mesh%M_Neumann_BC_b_b, mesh%ti1, mesh%ti2)
+    CALL finalise_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, mesh%ti1, mesh%ti2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( mesh%M_Neumann_BC_b_b, 'mesh%M_Neumann_BC_b_b')
+    END IF
+    
+  END SUBROUTINE calc_matrix_operator_Neumann_BC_b_b
   
 ! == Routines for calculating neighbour functions for regular and staggered vertices
   SUBROUTINE calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)

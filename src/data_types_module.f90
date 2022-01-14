@@ -121,30 +121,36 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
     
-    ! Ice dynamics - physical terms in the SSA/DIVA (sans cross-terms)
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a
+    ! Ice dynamics - physical terms in the SSA/DIVA
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! Vertically averaged   xx strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a                     ! Vertically averaged   xy strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b                  ! 3-D                   xz strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b                  ! 3-D                   yz strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_a               ! 3-D                   effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_a              ! Vertically integrated effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a                      ! Sliding term beta (as in, [basal shear stress] = [beta] * [basal velocity])
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a                  ! Beta_eff, appearing in the DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! x-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b                     ! y-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F2, appearing in the DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: u_prev_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_prev_b
     INTEGER :: wtaudx_b, wtaudy_b
     INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, wdu_dz_3D_b, wdv_dz_3D_b, wvisc_eff_3D_a, wvisc_eff_int_a, wN_a
     INTEGER :: wbeta_a, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wF2_a
     INTEGER :: wu_prev_b, wv_prev_b
+    
+    ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
+    INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
+    INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
+    TYPE(type_sparse_matrix_CSR)            :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -343,12 +349,15 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
-    ! 2nd-order accurate matrix operators on the b-gri
+    ! 2nd-order accurate matrix operators on the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    
+    ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
+    TYPE(type_sparse_matrix_CSR)            :: M_Neumann_BC_b_b
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat

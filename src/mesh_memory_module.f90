@@ -449,6 +449,8 @@ CONTAINS
     CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b )
     CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b)
     CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b )
+    
+    CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_b)
  
    END SUBROUTINE deallocate_mesh_all
   

@@ -81,58 +81,64 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    ! Calculate the isotope content of annual mean precipitation
-    ! ==========================================================
     
-    IsoMax = -1E9_dp
-    IsoMin =  1E9_dp
     
-    DO vi = region%mesh%vi1, region%mesh%vi2
-      
-      Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
-      Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
-      Hs     = region%ice%Hs_a( vi)
-      Hs_ref = region%climate%PD_obs%Hs( vi)
-      
-      region%ice%IsoSurf( vi) = region%ice%IsoRef( vi)                 &
-                              + 0.35_dp              * (Ts - Ts_ref    &
-                              - C%constant_lapserate * (Hs - Hs_ref))  &
-                              - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-        
-      IF (region%ice%mask_ice_a( vi) == 1) THEN
-        IsoMax = MAX( IsoMax, region%ice%IsoSurf( vi))
-        IsoMin = MIN( IsoMin, region%ice%IsoSurf( vi))
-      END IF           
-
-    END DO
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
-
-    ! Calculate the mass gain/loss of d18O
-    DO vi = region%mesh%vi1, region%mesh%vi2
     
-      region%ice%MB_iso( vi) = 0._dp
+    ! DENK DROM
+    RETURN
     
-      IF ( region%SMB%SMB_year( vi) > 0._dp ) THEN
-        ! Surface accumulation has the isotope content of precipitation
-        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoSurf( vi) * region%mesh%A( vi)    ! (applied MB) mass gain, so d18O from precipitation
-      ELSE
-        ! Surface melt has the isotope content of the ice itself
-        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)    ! (applied MB) mass loss, so d18O from ice
-      END IF
-      
-      ! Both basal melt and basal freezing have the isotope content of the ice itself (the latter
-      ! is not really true, but it's the best we can do for now)
-      region%ice%MB_iso(   vi) = region%ice%MB_iso( vi) + region%BMB%BMB(      vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)
-      
-    END DO
-    CALL sync
-
-    ! Calculate the new d18O_ice from the ice fluxes and applied mass balance
-    ! =======================================================================
     
-    IF (par%master) WRITE(0,*) 'run_isotopes_model - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    
+    
+!    ! Calculate the isotope content of annual mean precipitation
+!    ! ==========================================================
+!    
+!    IsoMax = -1E9_dp
+!    IsoMin =  1E9_dp
+!    
+!    DO vi = region%mesh%vi1, region%mesh%vi2
+!      
+!      Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
+!      Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
+!      Hs     = region%ice%Hs_a( vi)
+!      Hs_ref = region%climate%PD_obs%Hs( vi)
+!      
+!      region%ice%IsoSurf( vi) = region%ice%IsoRef( vi)                 &
+!                              + 0.35_dp              * (Ts - Ts_ref    &
+!                              - C%constant_lapserate * (Hs - Hs_ref))  &
+!                              - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
+!        
+!      IF (region%ice%mask_ice_a( vi) == 1) THEN
+!        IsoMax = MAX( IsoMax, region%ice%IsoSurf( vi))
+!        IsoMin = MIN( IsoMin, region%ice%IsoSurf( vi))
+!      END IF           
+!
+!    END DO
+!    CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+!    CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+!
+!    ! Calculate the mass gain/loss of d18O
+!    DO vi = region%mesh%vi1, region%mesh%vi2
+!    
+!      region%ice%MB_iso( vi) = 0._dp
+!    
+!      IF ( region%SMB%SMB_year( vi) > 0._dp ) THEN
+!        ! Surface accumulation has the isotope content of precipitation
+!        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoSurf( vi) * region%mesh%A( vi)    ! (applied MB) mass gain, so d18O from precipitation
+!      ELSE
+!        ! Surface melt has the isotope content of the ice itself
+!        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)    ! (applied MB) mass loss, so d18O from ice
+!      END IF
+!      
+!      ! Both basal melt and basal freezing have the isotope content of the ice itself (the latter
+!      ! is not really true, but it's the best we can do for now)
+!      region%ice%MB_iso(   vi) = region%ice%MB_iso( vi) + region%BMB%BMB(      vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)
+!      
+!    END DO
+!    CALL sync
+!
+!    ! Calculate the new d18O_ice from the ice fluxes and applied mass balance
+!    ! =======================================================================
 
 !    DO vi = region%mesh%vi1, region%mesh%vi2
 !    
@@ -211,39 +217,49 @@ CONTAINS
     REAL(dp)                                           :: Hi_msle
     REAL(dp)                                           :: total_isotope_content
     REAL(dp)                                           :: total_ice_volume_msle
+    
+    
+    
+    
+    ! DENK DROM
+    RETURN
+    
+    
+    
+    
 
-    ! Calculate total isotope content
-    ! ===============================
-    
-    total_isotope_content = 0._dp
-    total_ice_volume_msle = 0._dp
-    
-    DO vi = mesh%vi1, mesh%vi2
-          
-      IF (Hi( vi) > 0._dp) THEN
-        Hi_msle = Hi( vi) * mesh%A( vi) * ice_density / (seawater_density * ocean_area)
-        total_isotope_content = total_isotope_content + Hi_msle * IsoIce( vi)
-        total_ice_volume_msle = total_ice_volume_msle + Hi_msle
-      END IF   
-
-    END DO
-    CALL sync
-    
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_isotope_content, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_ice_volume_msle, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    
-    ! Weighted average of isotope content with Hi
-    IF (par%master) THEN
-      IF (total_ice_volume_msle > 0._dp) THEN
-        mean_isotope_content  = total_isotope_content / total_ice_volume_msle
-      ELSE
-        mean_isotope_content  = 0._dp
-      END IF
-    END IF
-    CALL sync
-    
-    ! Contribution to benthic d18O
-    d18O_contribution = -1._dp * mean_isotope_content * total_ice_volume_msle / mean_ocean_depth
+!    ! Calculate total isotope content
+!    ! ===============================
+!    
+!    total_isotope_content = 0._dp
+!    total_ice_volume_msle = 0._dp
+!    
+!    DO vi = mesh%vi1, mesh%vi2
+!          
+!      IF (Hi( vi) > 0._dp) THEN
+!        Hi_msle = Hi( vi) * mesh%A( vi) * ice_density / (seawater_density * ocean_area)
+!        total_isotope_content = total_isotope_content + Hi_msle * IsoIce( vi)
+!        total_ice_volume_msle = total_ice_volume_msle + Hi_msle
+!      END IF   
+!
+!    END DO
+!    CALL sync
+!    
+!    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_isotope_content, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+!    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_ice_volume_msle, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+!    
+!    ! Weighted average of isotope content with Hi
+!    IF (par%master) THEN
+!      IF (total_ice_volume_msle > 0._dp) THEN
+!        mean_isotope_content  = total_isotope_content / total_ice_volume_msle
+!      ELSE
+!        mean_isotope_content  = 0._dp
+!      END IF
+!    END IF
+!    CALL sync
+!    
+!    ! Contribution to benthic d18O
+!    d18O_contribution = -1._dp * mean_isotope_content * total_ice_volume_msle / mean_ocean_depth
     
   END SUBROUTINE calculate_isotope_content
   
@@ -290,72 +306,82 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    IF (par%master) WRITE (0,*) '  Initialising isotopes model...'
     
-    ! Allocate memory
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoRef    , region%ice%wIsoRef    )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoSurf   , region%ice%wIsoSurf   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%MB_iso    , region%ice%wMB_iso    )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce    , region%ice%wIsoIce    )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
     
-    ! Calculate present-day isotope content of precipitation    
-    CALL calculate_reference_isotopes( region)
     
-    ! Initialise ice sheet isotope content with the isotope content of present-day annual mean precipitation,
-    ! so that we can calculate the total present-day isotope content of the ice-sheet
-    DO vi = region%mesh%vi1, region%mesh%vi2
+    ! DENK DROM
+    RETURN
     
-      IF (region%refgeo_PD%Hi( vi) > 0._dp) THEN
-      
-        Ts     = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
-        Ts_ref = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
-        Hs     = region%refgeo_PD%Hs( vi)
-        Hs_ref = region%climate%PD_obs%Hs( vi)
-        
-        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
-                               + 0.35_dp              * (Ts - Ts_ref    &
-                               - C%constant_lapserate * (Hs - Hs_ref))  &
-                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-        
-      ELSE
-        region%ice%IsoIce( vi) = 0._dp ! = No ice
-      END IF           
-
-    END DO
-    CALL sync
     
-    ! Calculate mean isotope content of the whole ice sheet at present-day
-    CALL calculate_isotope_content( region%mesh, region%refgeo_PD%Hi, region%ice%IsoIce, region%mean_isotope_content_PD, region%d18O_contribution_PD)
     
-    ! Initialise ice sheet isotope content with the isotope content of annual mean precipitation at the start of the simulation
-    ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)
-    DO vi = region%mesh%vi1, region%mesh%vi2
     
-      IF (region%ice%mask_ice_a( vi) == 1) THEN
-      
-        Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
-        Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
-        Hs     = region%ice%Hs_a( vi)
-        Hs_ref = region%climate%PD_obs%Hs( vi)
-        
-        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
-                               + 0.35_dp              * (Ts - Ts_ref    &
-                               - C%constant_lapserate * (Hs - Hs_ref))  &
-                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-        
-      ELSE
-        region%ice%IsoIce( vi) = 0._dp ! = No ice
-      END IF           
-
-    END DO
-    CALL sync
     
-    ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
-    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
-    
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+!    IF (par%master) WRITE (0,*) '  Initialising isotopes model...'
+!    
+!    ! Allocate memory
+!    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoRef    , region%ice%wIsoRef    )
+!    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoSurf   , region%ice%wIsoSurf   )
+!    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%MB_iso    , region%ice%wMB_iso    )
+!    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce    , region%ice%wIsoIce    )
+!    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
+!    
+!    ! Calculate present-day isotope content of precipitation    
+!    CALL calculate_reference_isotopes( region)
+!    
+!    ! Initialise ice sheet isotope content with the isotope content of present-day annual mean precipitation,
+!    ! so that we can calculate the total present-day isotope content of the ice-sheet
+!    DO vi = region%mesh%vi1, region%mesh%vi2
+!    
+!      IF (region%refgeo_PD%Hi( vi) > 0._dp) THEN
+!      
+!        Ts     = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
+!        Ts_ref = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
+!        Hs     = region%refgeo_PD%Hs( vi)
+!        Hs_ref = region%climate%PD_obs%Hs( vi)
+!        
+!        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
+!                               + 0.35_dp              * (Ts - Ts_ref    &
+!                               - C%constant_lapserate * (Hs - Hs_ref))  &
+!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
+!        
+!      ELSE
+!        region%ice%IsoIce( vi) = 0._dp ! = No ice
+!      END IF           
+!
+!    END DO
+!    CALL sync
+!    
+!    ! Calculate mean isotope content of the whole ice sheet at present-day
+!    CALL calculate_isotope_content( region%mesh, region%refgeo_PD%Hi, region%ice%IsoIce, region%mean_isotope_content_PD, region%d18O_contribution_PD)
+!    
+!    ! Initialise ice sheet isotope content with the isotope content of annual mean precipitation at the start of the simulation
+!    ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)
+!    DO vi = region%mesh%vi1, region%mesh%vi2
+!    
+!      IF (region%ice%mask_ice_a( vi) == 1) THEN
+!      
+!        Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
+!        Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
+!        Hs     = region%ice%Hs_a( vi)
+!        Hs_ref = region%climate%PD_obs%Hs( vi)
+!        
+!        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
+!                               + 0.35_dp              * (Ts - Ts_ref    &
+!                               - C%constant_lapserate * (Hs - Hs_ref))  &
+!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
+!        
+!      ELSE
+!        region%ice%IsoIce( vi) = 0._dp ! = No ice
+!      END IF           
+!
+!    END DO
+!    CALL sync
+!    
+!    ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
+!    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
+!    
+!    n2 = par%mem%n
+!    CALL write_to_memory_log( routine_name, n1, n2)
     
   END SUBROUTINE initialise_isotopes_model
   SUBROUTINE calculate_reference_isotopes( region)
@@ -389,12 +415,22 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    ! Calculate reference field of d18O of precipitation
-    ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
-    DO vi = region%mesh%vi1, region%mesh%vi2
-      region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
-    END DO
-    CALL sync
+    
+    
+    
+    ! DENK DROM
+    RETURN
+    
+    
+    
+    
+    
+!    ! Calculate reference field of d18O of precipitation
+!    ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
+!    DO vi = region%mesh%vi1, region%mesh%vi2
+!      region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
+!    END DO
+!    CALL sync
     
   END SUBROUTINE calculate_reference_isotopes
   SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, map, region)
@@ -426,15 +462,25 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    ! Reallocate memory
-    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
-    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
-    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
-    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
     
-    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
-    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
+    
+    
+    ! DENK DROM
+    RETURN
+    
+    
+    
+    
+    
+!    ! Reallocate memory
+!    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
+!    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
+!    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
+!    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
+!    
+!    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
+!    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
+!    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
     
   END SUBROUTINE remap_isotopes_model
 

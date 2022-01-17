@@ -259,25 +259,6 @@ MODULE mesh_help_functions_module
     CALL sync
     
   END SUBROUTINE calc_triangle_geometric_centres
-  SUBROUTINE calc_triangle_geometric_centres_ac( mesh)
-    ! Find the geometric centres of all the triangles of the "combined" AC-mesh
-    
-    IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
-    ! Local variables:
-    INTEGER                                       :: ati, ati1, ati2
-    
-    ! Partition triangle of over the processors
-    CALL partition_list( mesh%nTriAaAc, par%i, par%n, ati1, ati2)
-    
-    DO ati = ati1, ati2
-      CALL update_triangle_geometric_center_ac( mesh, ati)
-    END DO
-    CALL sync
-    
-  END SUBROUTINE calc_triangle_geometric_centres_ac
   
 ! == Finding the vertices of a vertex' Voronoi cell
   SUBROUTINE find_Voronoi_cell_vertices(        mesh, vi, Vor, nVor)
@@ -959,67 +940,6 @@ MODULE mesh_help_functions_module
     mesh%Tricc(ti,:) = cc
     
   END SUBROUTINE update_triangle_circumcenter
-  SUBROUTINE update_triangle_circumcenters_bb( mesh)
-    ! Calculate the circumcenters of all mesh bb-triangles
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
-    ! Local variables:
-    INTEGER                                       :: ati
-    
-    DO ati = mesh%ati1, mesh%ati2
-      CALL update_triangle_circumcenter_bb( mesh, ati)
-    END DO
-    CALL sync
-    
-  END SUBROUTINE update_triangle_circumcenters_bb
-  SUBROUTINE update_triangle_circumcenter_bb( mesh, ati)
-    ! Calculate the circumcenter of mesh bb-triangle ati
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER,                    INTENT(IN)        :: ati
-    
-    ! Local variables:
-    REAL(dp), DIMENSION(2)                        :: av1, av2, av3, cc
-    
-    av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
-    av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
-    av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:)     
-    CALL find_circumcenter( av1, av2, av3, cc)
-    
-    ! If find_circumcenter yields infinity, it's because p and q have the
-    ! same y-coordinate. Rearrange vertices in triangle matrix (maintaining
-    ! counter-clockwise orientation) and try again.
-    
-    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*10000._dp) THEN
-      mesh%TriAaAc( ati,:) = [mesh%TriAaAc( ati,2), mesh%TriAaAc( ati,3), mesh%TriAaAc( ati,1)]
-      av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
-      av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
-      av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
-      CALL find_circumcenter( av1, av2, av3, cc)
-    END IF
-    
-    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*100000._dp) THEN
-      mesh%TriAaAc( ati,:) = [mesh%TriAaAc( ati,2), mesh%TriAaAc( ati,3), mesh%TriAaAc( ati,1)]
-      av1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
-      av2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
-      av3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
-      CALL find_circumcenter( av1, av2, av3, cc)
-    END IF
-    
-    IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*100000._dp) THEN
-      WRITE(0,*) '  update_bb_triangle_circumcenter - ERROR: triangle  doesn''t yield a valid circumcenter!'
-    END IF
-    
-    mesh%TriccAaAc( ati,:) = cc
-    
-  END SUBROUTINE update_triangle_circumcenter_bb
   SUBROUTINE update_triangle_geometric_center( mesh, ti)
     ! Calculate the geometric centre of mesh triangle ti    
     
@@ -1039,25 +959,6 @@ MODULE mesh_help_functions_module
     mesh%TriGC( ti,:) = (v1 + v2 + v3) / 3._dp
     
   END SUBROUTINE update_triangle_geometric_center
-  SUBROUTINE update_triangle_geometric_center_ac( mesh, ati)
-    ! Calculate the geometric centre of "combined" AC-mesh triangle ati
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER,                    INTENT(IN)        :: ati
-    
-    ! Local variables:
-    REAL(dp), DIMENSION(2)                        :: v1, v2, v3
-    
-    v1 = mesh%VAaAc( mesh%TriAaAc( ati,1),:)
-    v2 = mesh%VAaAc( mesh%TriAaAc( ati,2),:)
-    v3 = mesh%VAaAc( mesh%TriAaAc( ati,3),:) 
-    
-    mesh%TriGCAaAc( ati,:) = (v1 + v2 + v3) / 3._dp
-    
-  END SUBROUTINE update_triangle_geometric_center_ac
   
 ! == Routines for merging meshes created by parallel processes
   SUBROUTINE merge_vertices( mesh, nVl, nVr, nTril, nTrir, T, nT, vil, vir, orientation)

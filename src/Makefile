@@ -1,9 +1,11 @@
-#    Makefile for compiling the UFEMISM model
+#    Makefile for compiling the IMAU_ICE model
 
 #    For "make" syntax search on "make tutorial", or see:
 #     http://www.gnu.org/software/make/manual/make.html
 
 include Makefile_include_local.txt
+#include Makefile_include_Gemini.txt
+#include Makefile_include_Cartesius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files
@@ -11,6 +13,9 @@ MOD_PATH = module-files
 
 # Pattern rules for creating object files from *.f90 (fortran 90) source files
 $(OBJ_PATH)/%.o : %.f90
+	$(F90) $(F90FLAGS) -c -o $@ $<
+	
+$(OBJ_PATH)/%.o : %.F90
 	$(F90) $(F90FLAGS) -c -o $@ $<
 
 # This rule is used to build an executable from the object files:
@@ -32,6 +37,7 @@ UFEMISM_program_objects = \
         data_types_netcdf_module.o \
         data_types_module.o \
         parallel_module.o \
+        petsc_module.o \
         parameters_module.o \
         utilities_module.o \
         mesh_memory_module.o \

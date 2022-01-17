@@ -107,7 +107,7 @@ CONTAINS
     CALL deallocate_shared( wdHi_dy_a)
     
   END SUBROUTINE calculate_zeta_derivatives
-  SUBROUTINE initialize_zeta_discretization
+  SUBROUTINE initialise_zeta_discretisation
     ! See table 3 and table 1.
     ! To be called in anice, not only usefull for uvw-mumps, but also for temperature
     ! Calculating the discretization coefficents for a Arakawa A-grid discretization    
@@ -167,6 +167,6 @@ CONTAINS
     p_zeta%b_t = -1._dp / C%dt_thermo                      ! See equations 14.38
     p_zeta%s_t =  1._dp / C%dt_thermo                      ! See equations 14.39
     
-  END SUBROUTINE initialize_zeta_discretization
+  END SUBROUTINE initialise_zeta_discretisation
 
 END MODULE zeta_module

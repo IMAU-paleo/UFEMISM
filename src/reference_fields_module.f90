@@ -175,6 +175,11 @@ CONTAINS
     CALL sync
     
     ! Fill in secondary grid parameters
+    CALL allocate_shared_dp_0D( refgeo%grid%dx,   refgeo%grid%wdx  )
+    CALL allocate_shared_dp_0D( refgeo%grid%xmin, refgeo%grid%wxmin)
+    CALL allocate_shared_dp_0D( refgeo%grid%xmax, refgeo%grid%wxmax)
+    CALL allocate_shared_dp_0D( refgeo%grid%ymin, refgeo%grid%wymin)
+    CALL allocate_shared_dp_0D( refgeo%grid%ymax, refgeo%grid%wymax)
     IF (par%master) THEN
       refgeo%grid%dx = refgeo%grid%x( 2) - refgeo%grid%x( 1)
       refgeo%grid%xmin = refgeo%grid%x( 1             )

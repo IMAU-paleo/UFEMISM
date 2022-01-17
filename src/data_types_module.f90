@@ -40,39 +40,41 @@ MODULE data_types_module
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_c
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_c
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
-    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_c, wv_3D_c, ww_3D_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_b
+    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a, ww_3D_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
-    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_c, wv_vav_c, wuabs_vav_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_b
+    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wuabs_vav_a, wuabs_vav_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
-    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_c, wv_surf_c, wuabs_surf_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_b
+    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, wuabs_surf_a, wuabs_surf_b
     
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_c
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_b
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
-    INTEGER :: wu_base_a, wv_base_a, wu_base_c, wv_base_c, wuabs_base_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
+    INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, wuabs_base_a, wuabs_base_b
     
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_c                  ! Separate fields for the SIA/SSA components, required for the old hybrid method
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_SSA_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_SSA_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_SSA_c
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_SSA_c
-    INTEGER :: wu_3D_SIA_c, wv_3D_SIA_c, wu_SSA_a, wv_SSA_a, wu_SSA_c, wv_SSA_c
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_SSA_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_SSA_b
+    INTEGER :: wu_3D_SIA_b, wv_3D_SIA_b, wu_base_SSA_b, wv_base_SSA_b
     
     ! Different masks
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a
@@ -86,9 +88,10 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_gl_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_cf_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_ac
+    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_b
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_ac
+    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
     
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
@@ -118,34 +121,36 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
     
-    ! Ice dynamics - physical terms in the SSA/DIVA (sans cross-terms)
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_bb
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_bb
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_bb
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_ac
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_ac
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: F1_3D_ac
-    INTEGER :: wHi_ac, wtaudx_ac, wtaudy_ac, wHi_bb,wdu_dx_bb, wdu_dy_bb, wdv_dx_bb, wdv_dy_bb, wdu_dz_3D_ac, wdv_dz_3D_ac
-    INTEGER :: wA_flow_3D_ac, wA_flow_3D_bb, wvisc_eff_3D_ac, wvisc_eff_3D_bb, wvisc_eff_int_ac, wvisc_eff_int_bb, wN_ac, wN_bb
-    INTEGER :: wbeta_ac, wbeta_eff_ac, wtaubx_ac, wtauby_ac, wF2_ac, wF1_3D_ac
+    ! Ice dynamics - physical terms in the SSA/DIVA
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! Vertically averaged   xx strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a                     ! Vertically averaged   xy strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b                  ! 3-D                   xz strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b                  ! 3-D                   yz strain rate
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_a               ! 3-D                   effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_a              ! Vertically integrated effective viscosity
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a                      ! Sliding term beta (as in, [basal shear stress] = [beta] * [basal velocity])
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a                  ! Beta_eff, appearing in the DIVA
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! x-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b                     ! y-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F2, appearing in the DIVA
+    REAL(dp), DIMENSION(:    ), POINTER     :: u_prev_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: v_prev_b
+    INTEGER :: wtaudx_b, wtaudy_b
+    INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, wdu_dz_3D_b, wdv_dz_3D_b, wvisc_eff_3D_a, wvisc_eff_int_a, wN_a
+    INTEGER :: wbeta_a, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wF2_a
+    INTEGER :: wu_prev_b, wv_prev_b
+    
+    ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
+    INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
+    INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
+    TYPE(type_sparse_matrix_CSR)            :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -314,19 +319,6 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: edge_index_Ac
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
     
-    ! Combined A+C mesh
-    INTEGER,                    POINTER     :: nVAaAc    
-    INTEGER,                    POINTER     :: nTriAaAc
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: VAaAc
-    INTEGER,  DIMENSION(:    ), POINTER     :: nCAaAc
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: CAaAc
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: TriAaAc
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: TriccAaAc
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: TriGCAaAc
-    INTEGER,  DIMENSION(:    ), POINTER     :: niTriAaAc
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: iTriAaAc
-    INTEGER :: wnVAaAc, wnTriAaAc, wVAaAc, wnCAaAc, wCAaAc, wTriAaAc, wTriccAaAc, wTriGCAaAc, wniTriAaAc, wiTriAaAc
-    
     ! Matrix operators: mapping
     TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
     TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
@@ -357,37 +349,15 @@ MODULE data_types_module
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
-    ! Matrix operators: second derivatives on a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_a_a                   ! Operation: d2/dx2  from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_a_a                  ! Operation: d2/dxdy from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_a_a                   ! Operation: d2/dy2  from the a-grid to the a-grid
+    ! 2nd-order accurate matrix operators on the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR)            :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
     
-    ! Matrix operators: move data between the a/c-grids and the combined ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_a_aca                  ! Operation: move    from the a-grid to the a-part of the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_aca_a                  ! Operation: move    from the a-part of the ac-grid to the a (vertex) grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_c_acc                  ! Operation: move    from the c-grid to the c-part of the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_acc_c                  ! Operation: move    from the c-part of the ac-grid to the c (edge) grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_ac_ac                   ! Operation: d/dx    from the ac-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_ac_ac                   ! Operation: d/dy    from the ac-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dx2_ac_ac                 ! Operation: d2/dx2  from the ac-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dxdy_ac_ac                ! Operation: d2/dxdy from the ac-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_d2dy2_ac_ac                 ! Operation: d2/dy2  from the ac-grid to the ac-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_map_ac_bb                   ! Operation: map     from the ac-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_ac_bb                   ! Operation: d/dx    from the ac-grid to the bb-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_ac_bb                   ! Operation: d/dy    from the ac-grid to the bb-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_map_bb_ac                   ! Operation: map     from the bb-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_bb_ac                   ! Operation: d/dx    from the bb-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_bb_ac                   ! Operation: d/dy    from the bb-grid to the ac-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: M_move_ac_acu                 ! Operation: move    from the ac-grid to the acu-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_ac_acv                 ! Operation: move    from the ac-grid to the acv-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_acu_ac                 ! Operation: move    from the acu-grid to the ac-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_move_acv_ac                 ! Operation: move    from the acv-grid to the ac-grid
-    
-    TYPE(type_sparse_matrix_CSR)            :: nz_template_acuv_acuv         ! Non-zero-structure template for matrix operations on the acuv-grid
+    ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
+    TYPE(type_sparse_matrix_CSR)            :: M_Neumann_BC_b_b
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
@@ -404,9 +374,6 @@ MODULE data_types_module
     INTEGER                                 :: vi1, vi2                      ! Vertices
     INTEGER                                 :: ti1, ti2                      ! Triangles
     INTEGER                                 :: ci1, ci2                      ! Edges
-    INTEGER                                 :: avi1, avi2                    ! Combined-mesh vertices
-    INTEGER                                 :: ati1, ati2                    ! Combined-mesh triangles
-    INTEGER                                 :: auvi1, auvi2                  ! Combined-mesh vector-field vertices
     
     ! Parallelisation - five-colouring
     INTEGER,  DIMENSION(:    ), POINTER     :: colour
@@ -463,19 +430,6 @@ MODULE data_types_module
     INTEGER :: wint_2D_c_01, wint_2D_c_02, wint_2D_c_03, wint_2D_c_04, wint_2D_c_05
     INTEGER :: wint_2D_c_06, wint_2D_c_07, wint_2D_c_08, wint_2D_c_09, wint_2D_c_10
     
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_01
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_02
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_03
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_04
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_05
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_06
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_07
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_08
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_09
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_ac_10
-    INTEGER :: wint_2D_ac_01, wint_2D_ac_02, wint_2D_ac_03, wint_2D_ac_04, wint_2D_ac_05
-    INTEGER :: wint_2D_ac_06, wint_2D_ac_07, wint_2D_ac_08, wint_2D_ac_09, wint_2D_ac_10
-    
     REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_01
     REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_02
     REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_03
@@ -514,19 +468,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_10
     INTEGER :: wdp_2D_c_01, wdp_2D_c_02, wdp_2D_c_03, wdp_2D_c_04, wdp_2D_c_05
     INTEGER :: wdp_2D_c_06, wdp_2D_c_07, wdp_2D_c_08, wdp_2D_c_09, wdp_2D_c_10
-    
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_01
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_02
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_03
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_04
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_05
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_06
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_07
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_08
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_09
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_ac_10
-    INTEGER :: wdp_2D_ac_01, wdp_2D_ac_02, wdp_2D_ac_03, wdp_2D_ac_04, wdp_2D_ac_05
-    INTEGER :: wdp_2D_ac_06, wdp_2D_ac_07, wdp_2D_ac_08, wdp_2D_ac_09, wdp_2D_ac_10
     
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_01
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_02

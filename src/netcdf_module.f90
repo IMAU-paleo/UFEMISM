@@ -373,26 +373,48 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'v_3D') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_3D_a, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_3D_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_b, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_3D_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_3D_b, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'w_3D') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%w_3D_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'u_vav') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_vav_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'v_vav') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_vav_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_vav_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_vav_b, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_vav_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_vav_b, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'uabs_vav') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_vav_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_vav_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_vav_b, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'u_surf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_surf_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'v_surf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_surf_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_surf_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_surf_b, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_surf_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_surf_b, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'uabs_surf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_surf_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_surf_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_surf_b, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'u_base') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_base_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'v_base') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_base_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'u_base_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_base_b, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'v_base_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_base_b, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'uabs_base') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'uabs_base_b') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_b, start=(/1, netcdf%ti /) ))
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -510,7 +532,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -542,8 +564,6 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_ai,           region%mesh%nVAaAc,      netcdf%id_dim_ai          ) ! Combined Aa/Ac vertex indices
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_tai,          region%mesh%nTriAaAc,    netcdf%id_dim_tai         ) ! Combined Aa/Ac triangle indices
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
@@ -555,8 +575,6 @@ CONTAINS
     three     = netcdf%id_dim_three
     four      = netcdf%id_dim_four
     vii       = netcdf%id_dim_vii_transect
-    ai        = netcdf%id_dim_ai
-    tai       = netcdf%id_dim_tai
     
     ! Define variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_V,                [vi,  two  ], netcdf%id_var_V,                long_name='Vertex coordinates', units='m')
@@ -572,8 +590,6 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAaAc,            [ai,  two  ], netcdf%id_var_VAaAc,            long_name='Aa/Ac vertex coordinates', units='m' )
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriAaAc,          [tai, three], netcdf%id_var_TriAaAc,          long_name='Aa/Ac vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_vi_transect,      [vii, two  ], netcdf%id_var_vi_transect,      long_name='Transect vertex pairs')
@@ -630,8 +646,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_VAc,             region%mesh%VAc           ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Aci,             region%mesh%Aci           ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_iAci,            region%mesh%iAci          ))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_VAaAc,           region%mesh%VAaAc         ))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_TriAaAc,         region%mesh%TriAaAc       ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_A,               region%mesh%A             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_vi_transect,     region%mesh%vi_transect   ))
@@ -659,7 +673,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -691,8 +705,6 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_ai,           region%mesh%nVAaAc,      netcdf%id_dim_ai          ) ! Combined Aa/Ac vertex indices
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_tai,          region%mesh%nTriAaAc,    netcdf%id_dim_tai         ) ! Combined Aa/Ac triangle indices
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
@@ -704,8 +716,6 @@ CONTAINS
     three     = netcdf%id_dim_three
     four      = netcdf%id_dim_four
     vii       = netcdf%id_dim_vii_transect
-    ai        = netcdf%id_dim_ai
-    tai       = netcdf%id_dim_tai
     
     ! Define variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_V,                [vi,  two  ], netcdf%id_var_V,                long_name='Vertex coordinates', units='m')
@@ -721,8 +731,6 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAaAc,            [ai,  two  ], netcdf%id_var_VAaAc,            long_name='Aa/Ac vertex coordinates', units='m' )
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriAaAc,          [tai, three], netcdf%id_var_TriAaAc,          long_name='Aa/Ac vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_vi_transect,      [vii, two  ], netcdf%id_var_vi_transect,      long_name='Transect vertex pairs')
@@ -817,8 +825,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_VAc,             region%mesh%VAc           ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Aci,             region%mesh%Aci           ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_iAci,            region%mesh%iAci          ))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_VAaAc,           region%mesh%VAaAc         ))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_TriAaAc,         region%mesh%TriAaAc       ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_A,               region%mesh%A             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_vi_transect,     region%mesh%vi_transect   ))
@@ -918,26 +924,48 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'u_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_3D') THEN
       CALL create_double_var( netcdf%ncid, 'v_3D',                     [vi, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_3D_b') THEN
+      CALL create_double_var( netcdf%ncid, 'u_3D_b',                   [ti, z, t], id_var, long_name='3D ice x-velocity (b-grid)', units='m/yr')
+    ELSEIF (field_name == 'v_3D_b') THEN
+      CALL create_double_var( netcdf%ncid, 'v_3D_b',                   [ti, z, t], id_var, long_name='3D ice y-velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'w_3D') THEN
       CALL create_double_var( netcdf%ncid, 'w_3D',                     [vi, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
     ELSEIF (field_name == 'u_vav') THEN
       CALL create_double_var( netcdf%ncid, 'u_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_vav') THEN
       CALL create_double_var( netcdf%ncid, 'v_vav',                    [vi,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_vav_b') THEN
+      CALL create_double_var( netcdf%ncid, 'u_vav_b',                  [ti,    t], id_var, long_name='Vertically averaged ice x-velocity (b-grid)', units='m/yr')
+    ELSEIF (field_name == 'v_vav_b') THEN
+      CALL create_double_var( netcdf%ncid, 'v_vav_b',                  [ti,    t], id_var, long_name='Vertically averaged ice y-velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'uabs_vav') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_vav',                 [vi,    t], id_var, long_name='Vertically averaged ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_vav_b') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_vav_b',               [ti,    t], id_var, long_name='Vertically averaged ice velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'u_surf') THEN
       CALL create_double_var( netcdf%ncid, 'u_surf',                   [vi,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_surf') THEN
       CALL create_double_var( netcdf%ncid, 'v_surf',                   [vi,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_surf_b') THEN
+      CALL create_double_var( netcdf%ncid, 'u_surf_b',                 [ti,    t], id_var, long_name='Surface ice x-velocity (b-grid)', units='m/yr')
+    ELSEIF (field_name == 'v_surf_b') THEN
+      CALL create_double_var( netcdf%ncid, 'v_surf_b',                 [ti,    t], id_var, long_name='Surface ice y-velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'uabs_surf') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_surf',                [vi,    t], id_var, long_name='Surface ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_surf_b') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_surf_b',              [ti,    t], id_var, long_name='Surface ice velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'u_base') THEN
       CALL create_double_var( netcdf%ncid, 'u_base',                   [vi,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_base') THEN
       CALL create_double_var( netcdf%ncid, 'v_base',                   [vi,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_base_b') THEN
+      CALL create_double_var( netcdf%ncid, 'u_base_b',                 [ti,    t], id_var, long_name='Basal ice x-velocity (b-grid)', units='m/yr')
+    ELSEIF (field_name == 'v_base_b') THEN
+      CALL create_double_var( netcdf%ncid, 'v_base_b',                 [ti,    t], id_var, long_name='Basal ice y-velocity (b-grid)', units='m/yr')
     ELSEIF (field_name == 'uabs_base') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [vi,    t], id_var, long_name='Basal ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_base_b') THEN
+      CALL create_double_var( netcdf%ncid, 'uabs_base_b',              [ti,    t], id_var, long_name='Basal ice velocity (b-grid)', units='m/yr')
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1231,26 +1259,48 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_3D_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'v_3D') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_3D_a, id_var, netcdf%ti, C%nZ)
+    ELSEIF (field_name == 'u_3D_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_3D_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'w_3D') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%w_3D_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'u_vav') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_vav_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'v_vav') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_vav_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'u_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_vav') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_vav_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'u_surf') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_surf_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'v_surf') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_surf_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'u_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_surf') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_surf_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'u_base') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_base_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'v_base') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%v_base_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'u_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_base') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_base_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'uabs_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1670,26 +1720,48 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'u_3D',                     [x, y, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_3D') THEN
       CALL create_double_var( netcdf%ncid, 'v_3D',                     [x, y, z, t], id_var, long_name='3D ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_3D_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_3D_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'w_3D') THEN
       CALL create_double_var( netcdf%ncid, 'w_3D',                     [x, y, z, t], id_var, long_name='3D ice z-velocity', units='m/yr')
     ELSEIF (field_name == 'u_vav') THEN
       CALL create_double_var( netcdf%ncid, 'u_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_vav') THEN
       CALL create_double_var( netcdf%ncid, 'v_vav',                    [x, y,    t], id_var, long_name='Vertically averaged ice x-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_vav') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_vav',                 [x, y,    t], id_var, long_name='Vertically averaged ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_vav_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'u_surf') THEN
       CALL create_double_var( netcdf%ncid, 'u_surf',                   [x, y,    t], id_var, long_name='Surface ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_surf') THEN
       CALL create_double_var( netcdf%ncid, 'v_surf',                   [x, y,    t], id_var, long_name='Surface ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_surf') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_surf',                [x, y,    t], id_var, long_name='Surface ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_surf_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'u_base') THEN
       CALL create_double_var( netcdf%ncid, 'u_base',                   [x, y,    t], id_var, long_name='Basal ice x-velocity', units='m/yr')
     ELSEIF (field_name == 'v_base') THEN
       CALL create_double_var( netcdf%ncid, 'v_base',                   [x, y,    t], id_var, long_name='Basal ice y-velocity', units='m/yr')
+    ELSEIF (field_name == 'u_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
+    ELSEIF (field_name == 'v_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
     ELSEIF (field_name == 'uabs_base') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [x, y,    t], id_var, long_name='Basal ice velocity', units='m/yr')
+    ELSEIF (field_name == 'uabs_base_b') THEN
+      ! Do nothing; b-grid variables are only written to the mesh-version of the file
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
@@ -1976,17 +2048,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_09, debug%int_2D_c_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_10, debug%int_2D_c_10, start = (/ 1 /) ))
     
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_01, debug%int_2D_ac_01, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_02, debug%int_2D_ac_02, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_03, debug%int_2D_ac_03, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_04, debug%int_2D_ac_04, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_05, debug%int_2D_ac_05, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_06, debug%int_2D_ac_06, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_07, debug%int_2D_ac_07, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_08, debug%int_2D_ac_08, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_09, debug%int_2D_ac_09, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_ac_10, debug%int_2D_ac_10, start = (/ 1 /) ))
-    
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_01, debug%dp_2D_a_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_02, debug%dp_2D_a_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_03, debug%dp_2D_a_03, start = (/ 1 /) ))
@@ -2019,17 +2080,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_08, debug%dp_2D_c_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_09, debug%dp_2D_c_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_10, debug%dp_2D_c_10, start = (/ 1 /) ))
-    
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_01, debug%dp_2D_ac_01, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_02, debug%dp_2D_ac_02, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_03, debug%dp_2D_ac_03, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_04, debug%dp_2D_ac_04, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_05, debug%dp_2D_ac_05, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_06, debug%dp_2D_ac_06, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_07, debug%dp_2D_ac_07, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_08, debug%dp_2D_ac_08, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_09, debug%dp_2D_ac_09, start = (/ 1 /) ))
-    CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_ac_10, debug%dp_2D_ac_10, start = (/ 1 /) ))
     
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_01, debug%dp_3D_a_01, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_02, debug%dp_3D_a_02, start = (/ 1, 1 /) ))
@@ -2072,7 +2122,7 @@ CONTAINS
     CHARACTER(LEN=20)                             :: short_filename
     INTEGER                                       :: n
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -2109,8 +2159,6 @@ CONTAINS
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_three,        3,                       debug_temp%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_four,         4,                       debug_temp%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_vii_transect, region%mesh%nV_transect, debug_temp%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_ai,           region%mesh%nVAaAc,      debug_temp%id_dim_ai          ) ! Combined Aa/Ac vertex indices
-    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_tai,          region%mesh%nTriAaAc,    debug_temp%id_dim_tai         ) ! Combined Aa/Ac triangle indices
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = debug_temp%id_dim_vi
@@ -2122,8 +2170,6 @@ CONTAINS
     three     = debug_temp%id_dim_three
     four      = debug_temp%id_dim_four
     vii       = debug_temp%id_dim_vii_transect
-    ai        = debug_temp%id_dim_ai
-    tai       = debug_temp%id_dim_tai
     
     ! Define variables
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_V,                [vi,  two  ], debug_temp%id_var_V,                long_name='Vertex coordinates', units='m')
@@ -2139,8 +2185,6 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAc,              [aci, two  ], debug_temp%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, four ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_iAci,             [vi,  ci   ], debug_temp%id_var_iAci,             long_name='Regular to staggered vertex indices')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAaAc,            [ai,  two  ], debug_temp%id_var_VAaAc,            long_name='Aa/Ac vertex coordinates', units='m' )
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_TriAaAc,          [tai, three], debug_temp%id_var_TriAaAc,          long_name='Aa/Ac vertex indices')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_A,                [vi        ], debug_temp%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_R,                [vi        ], debug_temp%id_var_R,                long_name='Vertex resolution', units='m')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_vi_transect,      [vii, two  ], debug_temp%id_var_vi_transect,      long_name='Transect vertex pairs')
@@ -2195,17 +2239,6 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_09, [aci], debug_temp%id_var_int_2D_c_09,  long_name='2D int c-grid (edge) variable 09')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_10, [aci], debug_temp%id_var_int_2D_c_10,  long_name='2D int c-grid (edge) variable 10')
     
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_01, [ai], debug_temp%id_var_int_2D_ac_01, long_name='2D int ac-grid (combi) variable 01')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_02, [ai], debug_temp%id_var_int_2D_ac_02, long_name='2D int ac-grid (combi) variable 02')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_03, [ai], debug_temp%id_var_int_2D_ac_03, long_name='2D int ac-grid (combi) variable 03')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_04, [ai], debug_temp%id_var_int_2D_ac_04, long_name='2D int ac-grid (combi) variable 04')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_05, [ai], debug_temp%id_var_int_2D_ac_05, long_name='2D int ac-grid (combi) variable 05')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_06, [ai], debug_temp%id_var_int_2D_ac_06, long_name='2D int ac-grid (combi) variable 06')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_07, [ai], debug_temp%id_var_int_2D_ac_07, long_name='2D int ac-grid (combi) variable 07')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_08, [ai], debug_temp%id_var_int_2D_ac_08, long_name='2D int ac-grid (combi) variable 08')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_09, [ai], debug_temp%id_var_int_2D_ac_09, long_name='2D int ac-grid (combi) variable 09')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_ac_10, [ai], debug_temp%id_var_int_2D_ac_10, long_name='2D int ac-grid (combi) variable 10')
-    
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_01,  [vi], debug_temp%id_var_dp_2D_a_01,  long_name='2D dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_02,  [vi], debug_temp%id_var_dp_2D_a_02,  long_name='2D dp a-grid (vertex) variable 02')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_03,  [vi], debug_temp%id_var_dp_2D_a_03,  long_name='2D dp a-grid (vertex) variable 03')
@@ -2238,17 +2271,6 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_08, [aci], debug_temp%id_var_dp_2D_c_08,  long_name='2D dp c-grid (edge) variable 08')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_09, [aci], debug_temp%id_var_dp_2D_c_09,  long_name='2D dp c-grid (edge) variable 09')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_10, [aci], debug_temp%id_var_dp_2D_c_10,  long_name='2D dp c-grid (edge) variable 10')
-    
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_01, [ai], debug_temp%id_var_dp_2D_ac_01, long_name='2D dp ac-grid (combi) variable 01')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_02, [ai], debug_temp%id_var_dp_2D_ac_02, long_name='2D dp ac-grid (combi) variable 02')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_03, [ai], debug_temp%id_var_dp_2D_ac_03, long_name='2D dp ac-grid (combi) variable 03')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_04, [ai], debug_temp%id_var_dp_2D_ac_04, long_name='2D dp ac-grid (combi) variable 04')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_05, [ai], debug_temp%id_var_dp_2D_ac_05, long_name='2D dp ac-grid (combi) variable 05')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_06, [ai], debug_temp%id_var_dp_2D_ac_06, long_name='2D dp ac-grid (combi) variable 06')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_07, [ai], debug_temp%id_var_dp_2D_ac_07, long_name='2D dp ac-grid (combi) variable 07')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_08, [ai], debug_temp%id_var_dp_2D_ac_08, long_name='2D dp ac-grid (combi) variable 08')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_09, [ai], debug_temp%id_var_dp_2D_ac_09, long_name='2D dp ac-grid (combi) variable 09')
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_ac_10, [ai], debug_temp%id_var_dp_2D_ac_10, long_name='2D dp ac-grid (combi) variable 10')
     
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_01,  [vi, zeta], debug_temp%id_var_dp_3D_a_01,  long_name='3D dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_02,  [vi, zeta], debug_temp%id_var_dp_3D_a_02,  long_name='3D dp a-grid (vertex) variable 02')
@@ -2289,8 +2311,6 @@ CONTAINS
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_VAc,             region%mesh%VAc           ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_Aci,             region%mesh%Aci           ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_iAci,            region%mesh%iAci          ))
-    CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_VAaAc,           region%mesh%VAaAc         ))
-    CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_TriAaAc,         region%mesh%TriAaAc       ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_A,               region%mesh%A             ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_vi_transect,     region%mesh%vi_transect   ))
@@ -2383,17 +2403,6 @@ CONTAINS
       NULLIFY( debug%int_2D_c_09)
       NULLIFY( debug%int_2D_c_10)
     
-      NULLIFY( debug%int_2D_ac_01)
-      NULLIFY( debug%int_2D_ac_02)
-      NULLIFY( debug%int_2D_ac_03)
-      NULLIFY( debug%int_2D_ac_04)
-      NULLIFY( debug%int_2D_ac_05)
-      NULLIFY( debug%int_2D_ac_06)
-      NULLIFY( debug%int_2D_ac_07)
-      NULLIFY( debug%int_2D_ac_08)
-      NULLIFY( debug%int_2D_ac_09)
-      NULLIFY( debug%int_2D_ac_10)
-    
       NULLIFY( debug%dp_2D_a_01)
       NULLIFY( debug%dp_2D_a_02)
       NULLIFY( debug%dp_2D_a_03)
@@ -2426,17 +2435,6 @@ CONTAINS
       NULLIFY( debug%dp_2D_c_08)
       NULLIFY( debug%dp_2D_c_09)
       NULLIFY( debug%dp_2D_c_10)
-    
-      NULLIFY( debug%dp_2D_ac_01)
-      NULLIFY( debug%dp_2D_ac_02)
-      NULLIFY( debug%dp_2D_ac_03)
-      NULLIFY( debug%dp_2D_ac_04)
-      NULLIFY( debug%dp_2D_ac_05)
-      NULLIFY( debug%dp_2D_ac_06)
-      NULLIFY( debug%dp_2D_ac_07)
-      NULLIFY( debug%dp_2D_ac_08)
-      NULLIFY( debug%dp_2D_ac_09)
-      NULLIFY( debug%dp_2D_ac_10)
     
       NULLIFY( debug%dp_3D_a_01)
       NULLIFY( debug%dp_3D_a_02)
@@ -2498,17 +2496,6 @@ CONTAINS
       debug%int_2D_c_09 => debug_NAM%int_2D_c_09
       debug%int_2D_c_10 => debug_NAM%int_2D_c_10
     
-      debug%int_2D_ac_01 => debug_NAM%int_2D_ac_01
-      debug%int_2D_ac_02 => debug_NAM%int_2D_ac_02
-      debug%int_2D_ac_03 => debug_NAM%int_2D_ac_03
-      debug%int_2D_ac_04 => debug_NAM%int_2D_ac_04
-      debug%int_2D_ac_05 => debug_NAM%int_2D_ac_05
-      debug%int_2D_ac_06 => debug_NAM%int_2D_ac_06
-      debug%int_2D_ac_07 => debug_NAM%int_2D_ac_07
-      debug%int_2D_ac_08 => debug_NAM%int_2D_ac_08
-      debug%int_2D_ac_09 => debug_NAM%int_2D_ac_09
-      debug%int_2D_ac_10 => debug_NAM%int_2D_ac_10
-    
       debug%dp_2D_a_01 => debug_NAM%dp_2D_a_01
       debug%dp_2D_a_02 => debug_NAM%dp_2D_a_02
       debug%dp_2D_a_03 => debug_NAM%dp_2D_a_03
@@ -2541,17 +2528,6 @@ CONTAINS
       debug%dp_2D_c_08 => debug_NAM%dp_2D_c_08
       debug%dp_2D_c_09 => debug_NAM%dp_2D_c_09
       debug%dp_2D_c_10 => debug_NAM%dp_2D_c_10
-    
-      debug%dp_2D_ac_01 => debug_NAM%dp_2D_ac_01
-      debug%dp_2D_ac_02 => debug_NAM%dp_2D_ac_02
-      debug%dp_2D_ac_03 => debug_NAM%dp_2D_ac_03
-      debug%dp_2D_ac_04 => debug_NAM%dp_2D_ac_04
-      debug%dp_2D_ac_05 => debug_NAM%dp_2D_ac_05
-      debug%dp_2D_ac_06 => debug_NAM%dp_2D_ac_06
-      debug%dp_2D_ac_07 => debug_NAM%dp_2D_ac_07
-      debug%dp_2D_ac_08 => debug_NAM%dp_2D_ac_08
-      debug%dp_2D_ac_09 => debug_NAM%dp_2D_ac_09
-      debug%dp_2D_ac_10 => debug_NAM%dp_2D_ac_10
     
       debug%dp_3D_a_01 => debug_NAM%dp_3D_a_01
       debug%dp_3D_a_02 => debug_NAM%dp_3D_a_02
@@ -2610,17 +2586,6 @@ CONTAINS
       debug%int_2D_c_09 => debug_EAS%int_2D_c_09
       debug%int_2D_c_10 => debug_EAS%int_2D_c_10
     
-      debug%int_2D_ac_01 => debug_EAS%int_2D_ac_01
-      debug%int_2D_ac_02 => debug_EAS%int_2D_ac_02
-      debug%int_2D_ac_03 => debug_EAS%int_2D_ac_03
-      debug%int_2D_ac_04 => debug_EAS%int_2D_ac_04
-      debug%int_2D_ac_05 => debug_EAS%int_2D_ac_05
-      debug%int_2D_ac_06 => debug_EAS%int_2D_ac_06
-      debug%int_2D_ac_07 => debug_EAS%int_2D_ac_07
-      debug%int_2D_ac_08 => debug_EAS%int_2D_ac_08
-      debug%int_2D_ac_09 => debug_EAS%int_2D_ac_09
-      debug%int_2D_ac_10 => debug_EAS%int_2D_ac_10
-    
       debug%dp_2D_a_01 => debug_EAS%dp_2D_a_01
       debug%dp_2D_a_02 => debug_EAS%dp_2D_a_02
       debug%dp_2D_a_03 => debug_EAS%dp_2D_a_03
@@ -2653,17 +2618,6 @@ CONTAINS
       debug%dp_2D_c_08 => debug_EAS%dp_2D_c_08
       debug%dp_2D_c_09 => debug_EAS%dp_2D_c_09
       debug%dp_2D_c_10 => debug_EAS%dp_2D_c_10
-    
-      debug%dp_2D_ac_01 => debug_EAS%dp_2D_ac_01
-      debug%dp_2D_ac_02 => debug_EAS%dp_2D_ac_02
-      debug%dp_2D_ac_03 => debug_EAS%dp_2D_ac_03
-      debug%dp_2D_ac_04 => debug_EAS%dp_2D_ac_04
-      debug%dp_2D_ac_05 => debug_EAS%dp_2D_ac_05
-      debug%dp_2D_ac_06 => debug_EAS%dp_2D_ac_06
-      debug%dp_2D_ac_07 => debug_EAS%dp_2D_ac_07
-      debug%dp_2D_ac_08 => debug_EAS%dp_2D_ac_08
-      debug%dp_2D_ac_09 => debug_EAS%dp_2D_ac_09
-      debug%dp_2D_ac_10 => debug_EAS%dp_2D_ac_10
     
       debug%dp_3D_a_01 => debug_EAS%dp_3D_a_01
       debug%dp_3D_a_02 => debug_EAS%dp_3D_a_02
@@ -2722,17 +2676,6 @@ CONTAINS
       debug%int_2D_c_09 => debug_GRL%int_2D_c_09
       debug%int_2D_c_10 => debug_GRL%int_2D_c_10
     
-      debug%int_2D_ac_01 => debug_GRL%int_2D_ac_01
-      debug%int_2D_ac_02 => debug_GRL%int_2D_ac_02
-      debug%int_2D_ac_03 => debug_GRL%int_2D_ac_03
-      debug%int_2D_ac_04 => debug_GRL%int_2D_ac_04
-      debug%int_2D_ac_05 => debug_GRL%int_2D_ac_05
-      debug%int_2D_ac_06 => debug_GRL%int_2D_ac_06
-      debug%int_2D_ac_07 => debug_GRL%int_2D_ac_07
-      debug%int_2D_ac_08 => debug_GRL%int_2D_ac_08
-      debug%int_2D_ac_09 => debug_GRL%int_2D_ac_09
-      debug%int_2D_ac_10 => debug_GRL%int_2D_ac_10
-    
       debug%dp_2D_a_01 => debug_GRL%dp_2D_a_01
       debug%dp_2D_a_02 => debug_GRL%dp_2D_a_02
       debug%dp_2D_a_03 => debug_GRL%dp_2D_a_03
@@ -2765,17 +2708,6 @@ CONTAINS
       debug%dp_2D_c_08 => debug_GRL%dp_2D_c_08
       debug%dp_2D_c_09 => debug_GRL%dp_2D_c_09
       debug%dp_2D_c_10 => debug_GRL%dp_2D_c_10
-    
-      debug%dp_2D_ac_01 => debug_GRL%dp_2D_ac_01
-      debug%dp_2D_ac_02 => debug_GRL%dp_2D_ac_02
-      debug%dp_2D_ac_03 => debug_GRL%dp_2D_ac_03
-      debug%dp_2D_ac_04 => debug_GRL%dp_2D_ac_04
-      debug%dp_2D_ac_05 => debug_GRL%dp_2D_ac_05
-      debug%dp_2D_ac_06 => debug_GRL%dp_2D_ac_06
-      debug%dp_2D_ac_07 => debug_GRL%dp_2D_ac_07
-      debug%dp_2D_ac_08 => debug_GRL%dp_2D_ac_08
-      debug%dp_2D_ac_09 => debug_GRL%dp_2D_ac_09
-      debug%dp_2D_ac_10 => debug_GRL%dp_2D_ac_10
     
       debug%dp_3D_a_01 => debug_GRL%dp_3D_a_01
       debug%dp_3D_a_02 => debug_GRL%dp_3D_a_02
@@ -2834,17 +2766,6 @@ CONTAINS
       debug%int_2D_c_09 => debug_ANT%int_2D_c_09
       debug%int_2D_c_10 => debug_ANT%int_2D_c_10
     
-      debug%int_2D_ac_01 => debug_ANT%int_2D_ac_01
-      debug%int_2D_ac_02 => debug_ANT%int_2D_ac_02
-      debug%int_2D_ac_03 => debug_ANT%int_2D_ac_03
-      debug%int_2D_ac_04 => debug_ANT%int_2D_ac_04
-      debug%int_2D_ac_05 => debug_ANT%int_2D_ac_05
-      debug%int_2D_ac_06 => debug_ANT%int_2D_ac_06
-      debug%int_2D_ac_07 => debug_ANT%int_2D_ac_07
-      debug%int_2D_ac_08 => debug_ANT%int_2D_ac_08
-      debug%int_2D_ac_09 => debug_ANT%int_2D_ac_09
-      debug%int_2D_ac_10 => debug_ANT%int_2D_ac_10
-    
       debug%dp_2D_a_01 => debug_ANT%dp_2D_a_01
       debug%dp_2D_a_02 => debug_ANT%dp_2D_a_02
       debug%dp_2D_a_03 => debug_ANT%dp_2D_a_03
@@ -2877,17 +2798,6 @@ CONTAINS
       debug%dp_2D_c_08 => debug_ANT%dp_2D_c_08
       debug%dp_2D_c_09 => debug_ANT%dp_2D_c_09
       debug%dp_2D_c_10 => debug_ANT%dp_2D_c_10
-    
-      debug%dp_2D_ac_01 => debug_ANT%dp_2D_ac_01
-      debug%dp_2D_ac_02 => debug_ANT%dp_2D_ac_02
-      debug%dp_2D_ac_03 => debug_ANT%dp_2D_ac_03
-      debug%dp_2D_ac_04 => debug_ANT%dp_2D_ac_04
-      debug%dp_2D_ac_05 => debug_ANT%dp_2D_ac_05
-      debug%dp_2D_ac_06 => debug_ANT%dp_2D_ac_06
-      debug%dp_2D_ac_07 => debug_ANT%dp_2D_ac_07
-      debug%dp_2D_ac_08 => debug_ANT%dp_2D_ac_08
-      debug%dp_2D_ac_09 => debug_ANT%dp_2D_ac_09
-      debug%dp_2D_ac_10 => debug_ANT%dp_2D_ac_10
     
       debug%dp_3D_a_01 => debug_ANT%dp_3D_a_01
       debug%dp_3D_a_02 => debug_ANT%dp_3D_a_02
@@ -2982,17 +2892,6 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_09, debug%wint_2D_c_09)
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_10, debug%wint_2D_c_10)
     
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_01, debug%wint_2D_ac_01)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_02, debug%wint_2D_ac_02)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_03, debug%wint_2D_ac_03)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_04, debug%wint_2D_ac_04)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_05, debug%wint_2D_ac_05)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_06, debug%wint_2D_ac_06)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_07, debug%wint_2D_ac_07)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_08, debug%wint_2D_ac_08)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_09, debug%wint_2D_ac_09)
-    CALL allocate_shared_int_1D( mesh%nVAaAc, debug%int_2D_ac_10, debug%wint_2D_ac_10)
-    
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_01, debug%wdp_2D_a_01)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_02, debug%wdp_2D_a_02)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_03, debug%wdp_2D_a_03)
@@ -3025,17 +2924,6 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_08, debug%wdp_2D_c_08)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_09, debug%wdp_2D_c_09)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_10, debug%wdp_2D_c_10)
-    
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_01, debug%wdp_2D_ac_01)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_02, debug%wdp_2D_ac_02)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_03, debug%wdp_2D_ac_03)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_04, debug%wdp_2D_ac_04)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_05, debug%wdp_2D_ac_05)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_06, debug%wdp_2D_ac_06)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_07, debug%wdp_2D_ac_07)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_08, debug%wdp_2D_ac_08)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_09, debug%wdp_2D_ac_09)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, debug%dp_2D_ac_10, debug%wdp_2D_ac_10)
     
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_01, debug%wdp_3D_a_01)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_02, debug%wdp_3D_a_02)
@@ -3123,17 +3011,6 @@ CONTAINS
     CALL deallocate_shared( debug%wint_2D_c_09)
     CALL deallocate_shared( debug%wint_2D_c_10)
     
-    CALL deallocate_shared( debug%wint_2D_ac_01)
-    CALL deallocate_shared( debug%wint_2D_ac_02)
-    CALL deallocate_shared( debug%wint_2D_ac_03)
-    CALL deallocate_shared( debug%wint_2D_ac_04)
-    CALL deallocate_shared( debug%wint_2D_ac_05)
-    CALL deallocate_shared( debug%wint_2D_ac_06)
-    CALL deallocate_shared( debug%wint_2D_ac_07)
-    CALL deallocate_shared( debug%wint_2D_ac_08)
-    CALL deallocate_shared( debug%wint_2D_ac_09)
-    CALL deallocate_shared( debug%wint_2D_ac_10)
-    
     CALL deallocate_shared( debug%wdp_2D_a_01)
     CALL deallocate_shared( debug%wdp_2D_a_02)
     CALL deallocate_shared( debug%wdp_2D_a_03)
@@ -3166,17 +3043,6 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_c_08)
     CALL deallocate_shared( debug%wdp_2D_c_09)
     CALL deallocate_shared( debug%wdp_2D_c_10)
-    
-    CALL deallocate_shared( debug%wdp_2D_ac_01)
-    CALL deallocate_shared( debug%wdp_2D_ac_02)
-    CALL deallocate_shared( debug%wdp_2D_ac_03)
-    CALL deallocate_shared( debug%wdp_2D_ac_04)
-    CALL deallocate_shared( debug%wdp_2D_ac_05)
-    CALL deallocate_shared( debug%wdp_2D_ac_06)
-    CALL deallocate_shared( debug%wdp_2D_ac_07)
-    CALL deallocate_shared( debug%wdp_2D_ac_08)
-    CALL deallocate_shared( debug%wdp_2D_ac_09)
-    CALL deallocate_shared( debug%wdp_2D_ac_10)
     
     CALL deallocate_shared( debug%wdp_3D_a_01)
     CALL deallocate_shared( debug%wdp_3D_a_02)

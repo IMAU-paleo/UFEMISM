@@ -385,24 +385,6 @@ CONTAINS
     NULLIFY( mesh%iAci)
     NULLIFY( mesh%edge_index_Ac)
     
-    CALL deallocate_shared( mesh%wnVAaAc)
-    CALL deallocate_shared( mesh%wnTriAaAc)
-    CALL deallocate_shared( mesh%wVAaAc)
-    CALL deallocate_shared( mesh%wnCAaAc)
-    CALL deallocate_shared( mesh%wCAaAc)
-    CALL deallocate_shared( mesh%wTriAaAc)
-    CALL deallocate_shared( mesh%wniTriAaAc)
-    CALL deallocate_shared( mesh%wiTriAaAc)
-    
-    NULLIFY( mesh%nVAaAc)
-    NULLIFY( mesh%nTriAaAc)
-    NULLIFY( mesh%VAaAc)
-    NULLIFY( mesh%nCAaAc)
-    NULLIFY( mesh%CAaAc)
-    NULLIFY( mesh%TriAaAc)
-    NULLIFY( mesh%niTriAaAc)
-    NULLIFY( mesh%iTriAaAc)
-    
     CALL deallocate_shared( mesh%wnPOI               )        
     CALL deallocate_shared( mesh%wPOI_coordinates    )
     CALL deallocate_shared( mesh%wPOI_XY_coordinates )
@@ -425,13 +407,13 @@ CONTAINS
     NULLIFY( mesh%vi_transect)
     NULLIFY( mesh%w_transect )
     
-    CALL deallocate_shared( mesh%wcolour   )
-    CALL deallocate_shared( mesh%wcolour_vi)
-    CALL deallocate_shared( mesh%wcolour_nV)
-    
-    NULLIFY( mesh%colour   )
-    NULLIFY( mesh%colour_vi)
-    NULLIFY( mesh%colour_nV)
+!    CALL deallocate_shared( mesh%wcolour   )
+!    CALL deallocate_shared( mesh%wcolour_vi)
+!    CALL deallocate_shared( mesh%wcolour_nV)
+!    
+!    NULLIFY( mesh%colour   )
+!    NULLIFY( mesh%colour_vi)
+!    NULLIFY( mesh%colour_nV)
     
     ! Matrix operators
     
@@ -462,35 +444,13 @@ CONTAINS
     CALL deallocate_matrix_CSR( mesh%M_ddy_c_b)
     CALL deallocate_matrix_CSR( mesh%M_ddy_c_c)
     
-    CALL deallocate_matrix_CSR( mesh%M_d2dx2_a_a)
-    CALL deallocate_matrix_CSR( mesh%M_d2dxdy_a_a)
-    CALL deallocate_matrix_CSR( mesh%M_d2dy2_a_a)
+    CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b   )
+    CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b   )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b)
+    CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b )
     
-    CALL deallocate_matrix_CSR( mesh%M_move_a_aca)
-    CALL deallocate_matrix_CSR( mesh%M_move_aca_a)
-    CALL deallocate_matrix_CSR( mesh%M_move_c_acc)
-    CALL deallocate_matrix_CSR( mesh%M_move_acc_c)
-    
-    CALL deallocate_matrix_CSR( mesh%M_ddx_ac_ac)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_ac_ac)
-    CALL deallocate_matrix_CSR( mesh%M_d2dx2_ac_ac)
-    CALL deallocate_matrix_CSR( mesh%M_d2dxdy_ac_ac)
-    CALL deallocate_matrix_CSR( mesh%M_d2dy2_ac_ac)
-    
-    CALL deallocate_matrix_CSR( mesh%M_map_ac_bb)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_ac_bb)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_ac_bb)
-    
-    CALL deallocate_matrix_CSR( mesh%M_map_bb_ac)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_bb_ac)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_bb_ac)
-    
-    CALL deallocate_matrix_CSR( mesh%M_move_ac_acu)
-    CALL deallocate_matrix_CSR( mesh%M_move_ac_acv)
-    CALL deallocate_matrix_CSR( mesh%M_move_acu_ac)
-    CALL deallocate_matrix_CSR( mesh%M_move_acv_ac)
-    
-    CALL deallocate_matrix_CSR( mesh%nz_template_acuv_acuv)
+    CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_b)
  
    END SUBROUTINE deallocate_mesh_all
   

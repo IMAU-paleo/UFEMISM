@@ -23,7 +23,6 @@ MODULE basal_conditions_and_sliding_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping
-  USE mesh_operators_module,           ONLY: map_a_to_ac_2D
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
 
   IMPLICIT NONE
@@ -193,6 +192,8 @@ CONTAINS
       
       IF     (C%choice_sliding_law == 'no_sliding') THEN
         ! No sliding; do nothing
+      ELSEIF (C%choice_sliding_law == 'idealised') THEN
+        ! Idealised sliding; do nothing
       ELSEIF (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
@@ -750,7 +751,7 @@ CONTAINS
 ! == Sliding laws
 ! ===============
 
-  SUBROUTINE calc_sliding_law( mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law( mesh, ice, u_a, v_a, beta_a)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
       
     IMPLICIT NONE
@@ -758,35 +759,35 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
       
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed (choice of beta is trivial)
-      beta_ac( mesh%avi1:mesh%avi2) = 0._dp
+      beta_a( mesh%vi1:mesh%vi2) = 0._dp
       CALL sync
     ELSEIF (C%choice_sliding_law == 'idealised') THEN
       ! Sliding laws for some idealised experiments
-      CALL calc_sliding_law_idealised(           mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_idealised(           mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
-      CALL calc_sliding_law_Weertman(            mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_Weertman(            mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
       ! Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb(             mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_Coulomb(             mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
-      CALL calc_sliding_law_Tsai2015(            mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_Tsai2015(            mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
-      CALL calc_sliding_law_Schoof2005(          mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_Schoof2005(          mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
-      CALL calc_sliding_law_ZoetIverson(         mesh, ice, u_ac, v_ac, beta_ac)
+      CALL calc_sliding_law_ZoetIverson(         mesh, ice, u_a, v_a, beta_a)
     ELSE
       IF (par%master) WRITE(0,*) 'calc_sliding_law - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -794,7 +795,7 @@ CONTAINS
     
   END SUBROUTINE calc_sliding_law
 
-  SUBROUTINE calc_sliding_law_Weertman( mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_Weertman( mesh, ice, u_a, v_a, beta_a)
     ! Weertman-type ("power law") sliding law
       
     IMPLICIT NONE
@@ -802,42 +803,31 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  beta_sq_aca
-    INTEGER                                            :: wbeta_sq_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
     
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, beta_sq_aca, wbeta_sq_aca)
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%beta_sq_a, beta_sq_aca)
-    
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
       ! Asay-Davis et al. (2016), Eq. 6
-      beta_ac( avi) = beta_sq_aca( avi) * uabs ** (1._dp / C%slid_Weertman_m - 1._dp)
+      beta_a( vi) = ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m - 1._dp)
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( wbeta_sq_aca)
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_Weertman')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Weertman')
     
   END SUBROUTINE calc_sliding_law_Weertman
-  SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_a, v_a, beta_a)
     ! Coulomb-type sliding law
       
     IMPLICIT NONE
@@ -845,47 +835,36 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: vi, avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  tauc_aca
-    INTEGER                                            :: wtauc_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, tauc_aca, wtauc_aca)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
       ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
     END DO
     CALL sync
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%tauc_a, tauc_aca)
       
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
-      beta_ac( avi) = tauc_aca( avi) / uabs
+      beta_a( vi) = ice%tauc_a( vi) / uabs
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( wtauc_aca)
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_Coulomb')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Coulomb')
     
   END SUBROUTINE calc_sliding_law_Coulomb
-  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ! Regularised Coulomb-type sliding law
       
     IMPLICIT NONE
@@ -893,51 +872,40 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: vi, avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  tauc_aca
-    INTEGER                                            :: wtauc_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, tauc_aca, wtauc_aca)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
       ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
     END DO
     CALL sync
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%tauc_a, tauc_aca)
       
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
-      beta_ac( avi) = tauc_aca( avi) * uabs ** (C%slid_Coulomb_reg_q_plastic - 1._dp) / (C%slid_Coulomb_reg_u_threshold ** C%slid_Coulomb_reg_q_plastic)
+      beta_a( vi) = ice%tauc_a( vi) * uabs ** (C%slid_Coulomb_reg_q_plastic - 1._dp) / (C%slid_Coulomb_reg_u_threshold ** C%slid_Coulomb_reg_q_plastic)
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( wtauc_aca)
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_Coulomb_regularised')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Coulomb_regularised')
     
   END SUBROUTINE calc_sliding_law_Coulomb_regularised
-  SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_a, v_a, beta_a)
     ! Modified power-law relation according to Tsai et al. (2015)
-    ! (implementation based on equations provided by Asay-Davis et al., 2016)
+    ! (implementation based on equations provided by Asay-Dvis et al., 2016)
     ! 
-    ! Asay-Davis et al.: Experimental design for three interrelated marine ice sheet and ocean model
+    ! Asay-Dvis et al.: Experimental design for three interrelated marine ice sheet and ocean model
     ! intercomparison projects: MISMIP v. 3 (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1),
     ! Geoscientific Model Development 9, 2471-2497, 2016
     ! 
@@ -949,105 +917,71 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  alpha_sq_aca,  beta_sq_aca,  Neff_aca
-    INTEGER                                            :: walpha_sq_aca, wbeta_sq_aca, wNeff_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
     
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, alpha_sq_aca, walpha_sq_aca)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, beta_sq_aca , wbeta_sq_aca )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, Neff_aca    , wNeff_aca    )
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%alpha_sq_a, alpha_sq_aca)
-    CALL map_a_to_ac_2D( mesh, ice%beta_sq_a , beta_sq_aca )
-    CALL map_a_to_ac_2D( mesh, ice%Neff_a    , Neff_aca    )
-    
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
-      ! Asay-Davis et al. (2016), Eq. 7
-      beta_ac( avi) = MIN( alpha_sq_aca( avi) * Neff_aca( avi), beta_sq_aca( avi) * uabs ** (1._dp / C%slid_Weertman_m)) * uabs**(-1._dp)
+      ! Asay-Dvis et al. (2016), Eq. 7
+      beta_a( vi) = MIN( ice%alpha_sq_a( vi) * ice%Neff_a( vi), ice%beta_sq_a( vi) * uabs ** (1._dp / C%slid_Weertman_m)) * uabs**(-1._dp)
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( walpha_sq_aca)
-    CALL deallocate_shared( wbeta_sq_aca )
-    CALL deallocate_shared( wNeff_aca    )
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_Tsai2015')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Tsai2015')
     
   END SUBROUTINE calc_sliding_law_Tsai2015
-  SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_a, v_a, beta_a)
     ! Modified power-law relation according to Tsai et al. (2015)
-    ! (implementation based on equations provided by Asay-Davis et al., 2016)
+    ! (implementation based on equations provided by Asay-Dvis et al., 2016)
     ! 
-    ! Asay-Davis et al.: Experimental design for three interrelated marine ice sheet and ocean model
+    ! Asay-Dvis et al.: Experimental design for three interrelated marine ice sheet and ocean model
     ! intercomparison projects: MISMIP v. 3 (MISMIP+), ISOMIP v. 2 (ISOMIP+) and MISOMIP v. 1 (MISOMIP1),
     ! Geoscientific Model Development 9, 2471-2497, 2016
     ! 
-    ! Schoof: The effect of cavitation on glacier sliding, P. Roy. Soc. A-Math. Phy., 461, 609–627, doi:10.1098/rspa.2004.1350, 2005
+    ! Schoof: The effect of cvitation on glacier sliding, P. Roy. Soc. A-Math. Phy., 461, 609–627, doi:10.1098/rspa.2004.1350, 2005
       
     IMPLICIT NONE
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  alpha_sq_aca,  beta_sq_aca,  Neff_aca
-    INTEGER                                            :: walpha_sq_aca, wbeta_sq_aca, wNeff_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
     
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, alpha_sq_aca, walpha_sq_aca)
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, beta_sq_aca , wbeta_sq_aca )
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, Neff_aca    , wNeff_aca    )
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%alpha_sq_a, alpha_sq_aca)
-    CALL map_a_to_ac_2D( mesh, ice%beta_sq_a , beta_sq_aca )
-    CALL map_a_to_ac_2D( mesh, ice%Neff_a    , Neff_aca    )
-    
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
-      ! Asay-Davis et al. (2016), Eq. 11
-      beta_ac( avi) = ((beta_sq_aca( avi) * uabs**(1._dp / C%slid_Weertman_m) * alpha_sq_aca( avi) * Neff_aca( avi)) / &
-        ((beta_sq_aca( avi)**C%slid_Weertman_m * uabs + (alpha_sq_aca( avi) * Neff_aca( avi))**C%slid_Weertman_m)**(1._dp / C%slid_Weertman_m))) * uabs**(-1._dp)
+      ! Asay-Dvis et al. (2016), Eq. 11
+      beta_a( vi) = ((ice%beta_sq_a( vi) * uabs**(1._dp / C%slid_Weertman_m) * ice%alpha_sq_a( vi) * ice%Neff_a( vi)) / &
+        ((ice%beta_sq_a( vi)**C%slid_Weertman_m * uabs + (ice%alpha_sq_a( vi) * ice%Neff_a( vi))**C%slid_Weertman_m)**(1._dp / C%slid_Weertman_m))) * uabs**(-1._dp)
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( walpha_sq_aca)
-    CALL deallocate_shared( wbeta_sq_aca )
-    CALL deallocate_shared( wNeff_aca    )
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_Schoof2005')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Schoof2005')
     
   END SUBROUTINE calc_sliding_law_Schoof2005
-  SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_a, v_a, beta_a)
     ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
       
     IMPLICIT NONE
@@ -1055,49 +989,38 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: vi, avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  tauc_aca
-    INTEGER                                            :: wtauc_aca
+    INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, tauc_aca, wtauc_aca)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
       ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
     END DO
     CALL sync
-    
-    ! Map bed roughness to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%tauc_a, tauc_aca)
       
     ! Calculate beta
-    DO avi = mesh%avi1, mesh%avi2
+    DO vi = mesh%vi1, mesh%vi2
     
       ! Include a normalisation term following Bueler & Brown (2009) to prevent divide-by-zero errors.
-      uabs = SQRT( C%slid_delta_v**2 + u_ac( avi)**2 + v_ac( avi)**2)
+      uabs = SQRT( C%slid_delta_v**2 + u_a( vi)**2 + v_a( vi)**2)
       
       ! Zoet & Iverson (2020), Eq. (3) (divided by u to give beta = tau_b / u)
-      beta_ac( avi) = tauc_aca( avi) * (uabs**(1._dp / C%slid_ZI_p - 1._dp)) * ((uabs + C%slid_ZI_ut)**(-1._dp / C%slid_ZI_p))
+      beta_a( vi) = ice%tauc_a( vi) * (uabs**(1._dp / C%slid_ZI_p - 1._dp)) * ((uabs + C%slid_ZI_ut)**(-1._dp / C%slid_ZI_p))
       
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( wtauc_aca)
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_ZoetIverson')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_ZoetIverson')
     
   END SUBROUTINE calc_sliding_law_ZoetIverson
   
-  SUBROUTINE calc_sliding_law_idealised(  mesh, ice, u_ac, v_ac, beta_ac)
+  SUBROUTINE calc_sliding_law_idealised(  mesh, ice, u_a, v_a, beta_a)
     ! Sliding laws for some idealised experiments
       
     IMPLICIT NONE
@@ -1105,26 +1028,26 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_ac
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
     REAL(dp) :: dummy_dp
     
     ! To prevent compiler warnings...
-    dummy_dp = u_ac( 1)
-    dummy_dp = v_ac( 1)
+    dummy_dp = u_a( 1)
+    dummy_dp = v_a( 1)
       
     IF     (C%choice_idealised_sliding_law == 'ISMIP_HOM_C') THEN
       ! ISMIP-HOM experiment C
       
-      CALL calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_ac)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
       
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_D') THEN
       ! ISMIP-HOM experiment D
       
-      CALL calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_ac)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
       
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_E') THEN
       ! ISMIP-HOM experiment E
@@ -1135,7 +1058,7 @@ CONTAINS
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_F') THEN
       ! ISMIP-HOM experiment F
       
-      CALL calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_ac)
+      CALL calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
       
     ELSE
       IF (par%master) WRITE(0,*) 'calc_sliding_law_idealised - ERROR: unknown choice_idealised_sliding_law "', TRIM(C%choice_idealised_sliding_law), '"!'
@@ -1143,7 +1066,7 @@ CONTAINS
     END IF
     
   END SUBROUTINE calc_sliding_law_idealised
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_ac)
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
     ! Sliding laws for some idealised experiments
     ! 
     ! ISMIP-HOM experiment C
@@ -1152,24 +1075,24 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
+    INTEGER                                            :: vi
     REAL(dp)                                           :: x,y
     
-    DO avi = mesh%avi1, mesh%avi2
-      x = mesh%VAaAc( avi,1)
-      y = mesh%VAaAc( avi,2)
-      beta_ac( avi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L) * SIN( 2._dp * pi * y / C%ISMIP_HOM_L)
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,1)
+      y = mesh%V( vi,2)
+      beta_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L) * SIN( 2._dp * pi * y / C%ISMIP_HOM_L)
     END DO
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_idealised_ISMIP_HOM_C')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_C')
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_ac)
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
     ! Sliding laws for some idealised experiments
     ! 
     ! ISMIP-HOM experiment D
@@ -1178,23 +1101,23 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
+    INTEGER                                            :: vi
     REAL(dp)                                           :: x
     
-    DO avi = mesh%avi1, mesh%avi2
-      x = mesh%VAaAc( avi,1)
-      beta_ac( avi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L)
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,1)
+      beta_a( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%ISMIP_HOM_L)
     END DO
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_idealised_ISMIP_HOM_D')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_D')
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D
-  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_ac)
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
     ! Sliding laws for some idealised experiments
     ! 
     ! ISMIP-HOM experiment F
@@ -1204,29 +1127,18 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_ac
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
-    INTEGER                                            :: avi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  A_flow_vav_aca
-    INTEGER                                            :: wA_flow_vav_aca
+    INTEGER                                            :: vi
     
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nVAaAc, A_flow_vav_aca, wA_flow_vav_aca)
-    
-    ! Map flow factor to the combi-mesh
-    CALL map_a_to_ac_2D( mesh, ice%A_flow_vav_a, A_flow_vav_aca)
-    
-    DO avi = mesh%avi1, mesh%avi2
-      beta_ac( avi) = (A_flow_vav_aca( avi) * 1000._dp)**(-1._dp)
+    DO vi = mesh%vi1, mesh%vi2
+      beta_a( vi) = (ice%A_flow_vav_a( vi) * 1000._dp)**(-1._dp)
     END DO
     CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_shared( wA_flow_vav_aca)
-    
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_ac, 'beta_ac', 'calc_sliding_law_idealised_ISMIP_HOM_F')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_F')
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F
   

@@ -29,6 +29,7 @@ MODULE utilities_module
                                              adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
                                              adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid, type_sparse_matrix_CSR
+  USE petsc_module,                    ONLY: solve_matrix_equation_CSR_PETSc
 
 CONTAINS
 
@@ -1913,11 +1914,8 @@ CONTAINS
       
     ELSEIF (choice_matrix_solver == 'PETSc') THEN
       ! Use the PETSc solver (much preferred, this is way faster and more stable!)
-      
-      IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: PETSc is not yet available in UFEMISM!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
-      !CALL solve_matrix_equation_CSR_PETSc( AA, b, x, PETSc_rtol, PETSc_abstol)
+      CALL solve_matrix_equation_CSR_PETSc( AA, b, x, PETSc_rtol, PETSc_abstol)
     
     ELSE
       IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: unknown choice_matrix_solver "', choice_matrix_solver, '"!'
@@ -1991,7 +1989,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. found_it) THEN
-        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element!'
+        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element in row ', i, '!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
     END DO
@@ -2016,7 +2014,7 @@ CONTAINS
         END DO
         
         res = (lhs - b( i)) / diagA( i)
-        res_max = MAX( res_max, res)
+        res_max = MAX( res_max, ABS(res))
         
         x( i) = x( i) - omega_dyn * res
         
@@ -2119,7 +2117,7 @@ CONTAINS
           END DO
           
           res = (lhs - b( i)) / diagA( i)
-          res_max = MAX( res_max, res)
+          res_max = MAX( res_max, ABS(res))
           
           x( i) = x( i) - omega_dyn * res
         
@@ -2621,6 +2619,47 @@ CONTAINS
     Ainv = Ainv / detA
     
   END SUBROUTINE calc_matrix_inverse_3_by_3
+  SUBROUTINE calc_matrix_inverse_general( A, Ainv)
+    ! Calculate the inverse Ainv of an n-by-n matrix A using LAPACK
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: A
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Ainv
+    
+    ! Local variables:
+    REAL(dp), DIMENSION( SIZE( A,1))                   :: work     ! work array for LAPACK
+    INTEGER,  DIMENSION( SIZE( A,1))                   :: ipiv     ! pivot indices
+    INTEGER                                            :: n,info
+
+    ! LAPACK subroutines:     
+    EXTERNAL DGETRF, DGETRI
+
+    n = size( A,1)
+    
+    ! Store A in Ainv to prevent it from being overwritten by LAPACK
+    Ainv = A
+    
+    ! DGETRF computes an LU factorization of a general M-by-N matrix A using partial pivoting with row interchanges.
+    CALL DGETRF( n, n, Ainv, n, ipiv, info)
+    
+    ! Safety
+    IF (info /= 0) THEN
+      WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! DGETRI computes the inverse of a matrix using the LU factorization computed by DGETRF.
+    CALL DGETRI( n, Ainv, n, ipiv, work, n, info)
+    
+    ! Safety
+    IF (info /= 0) THEN
+      WRITE(0,*) 'calc_matrix_inverse_general - DGETRI error: matrix inversion failed!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE calc_matrix_inverse_general
   
 ! == Debugging
   SUBROUTINE check_for_NaN_dp_1D(  d, d_name, routine_name)

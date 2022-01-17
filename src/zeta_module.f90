@@ -1,8 +1,24 @@
 MODULE zeta_module
 
-  USE configuration_module,        ONLY: dp, C
-  USE data_types_module,           ONLY: type_mesh, type_ice_model
-  USE parallel_module,             ONLY: par, sync, ierr, cerr
+  ! Import basic functionality
+  USE mpi
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  
+  ! Import specific functionality 
+  USE data_types_module,               ONLY: type_mesh, type_ice_model
+  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
   
   IMPLICIT NONE
   
@@ -30,59 +46,6 @@ MODULE zeta_module
   
 CONTAINS
 
-  FUNCTION vertical_average(f) RESULT(average_f)
-    ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
-    !  average_f = INTEGRAL_{zeta=0}^{zeta=1} (f(zeta))dzeta
-    ! So the the integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%NZ) = 1.
-    ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those 
-    ! layers k and k+1, which is immediately the weight factor for this contribution because de total layer distance 
-    ! is scaled to 1. The sum of all the weighted contribution gives the vertical average average_f of f.    
-    
-    IMPLICIT NONE
-
-    ! Input variable:
-    REAL(dp), DIMENSION(C%NZ), INTENT(IN) :: f
-
-    ! Result variable:
-    REAL(dp)                              :: average_f
-    
-    ! Local variable:
-    INTEGER                               :: k
-
-    ! See equation (11.14):
-    average_f = 0._dp
-    DO k = 1, C%NZ-1
-      average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-    END DO
-  END FUNCTION vertical_average
-  FUNCTION vertical_integrate(f) RESULT(int_f)
-    ! This subroutine calcualtes the integral int_f:
-    !  int_f(k) = INTEGRAL_bottom[C%zeta(k=C%NZ)=1]^zeta[C%zeta(k)] f(zeta) dzeta
-    ! In case the integrant f is positive (our cases) our result must be negative because we
-    ! integrate from C%zeta(k=C%NZ) = 1 opposite to the zeta-axis up to C%zeta(k). (Our dzeta's are
-    ! negative).
-    ! This subroutine returns the integral for each layer k from bottom to this layer, so
-    ! inf_f is an array with length C%NZ: int_f(k=1:C%NZ)
-    ! The value of the integrant f at some integration step k is the average of f(k+1) and f(k).
-    !  int_f(k) = int_f(k+1) + 0.5*(f(k+1) + f(k))*(-dzeta)
-    ! So for f > 0  int_f < 0.    
-    
-    IMPLICIT NONE
-
-    ! Input variable:
-    REAL(dp), DIMENSION(C%NZ), INTENT(IN) :: f
-
-    ! Output variable:
-    REAL(dp), DIMENSION(C%NZ)             :: int_f
-
-    ! Local variable:
-    INTEGER                               :: k
-
-    int_f(C%NZ) = 0._dp
-    DO k = C%NZ-1, 1, -1
-      int_f(k) = int_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-    END DO
-  END FUNCTION vertical_integrate  
   SUBROUTINE calculate_zeta_derivatives( mesh, ice)
     ! This subroutine calculates the global struct which contains the derivatives of 
     ! zeta, which are used in the transformation to the t,x,y,zeta coordinates. 
@@ -96,21 +59,55 @@ CONTAINS
 
     ! Local variables:
     INTEGER                                            :: vi, k
-    REAL(dp)                                           :: inverse_Hi                 ! Contains the inverse of Hi
+    REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dt_a,  dHs_dx_a,  dHs_dy_a,  dHi_dx_a,  dHi_dy_a
+    INTEGER                                            :: wdHs_dt_a, wdHs_dx_a, wdHs_dy_a, wdHi_dx_a, wdHi_dy_a
     
-    DO vi = mesh%v1, mesh%v2
-      inverse_Hi  = 1._dp / MAX(0.1_dp, ice%Hi(vi))
-      ice%dzeta_dz(vi)  = -inverse_Hi                                                      
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dt_a, wdHs_dt_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHi_dx_a, wdHi_dx_a)
+    CALL allocate_shared_dp_1D( mesh%nV, dHi_dy_a, wdHi_dy_a)
+    
+    ! Calculate dHs_dt
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%mask_land_a( vi) == 1) THEN
+        dHs_dt_a( vi) = ice%dHb_dt_a( vi) + ice%dHi_dt_a( vi)
+      ELSE
+        dHs_dt_a( vi) = (1._dp - ice_density / seawater_density) * ice%dHi_dt_a( vi)
+      END IF
+    END DO
+    CALL sync
+    
+    ! Calculate spatial derivatives of Hi and Hs
+    CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
+    CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
+    CALL ddx_a_to_a_2D( mesh, ice%Hi_a, dHi_dx_a)
+    CALL ddy_a_to_a_2D( mesh, ice%Hi_a, dHi_dy_a)
+    
+    ! Calculate derivatives of zeta
+    DO vi = mesh%vi1, mesh%vi2
+    
+      ice%dzeta_dz_a(vi) = -1._dp / ice%Hi_a( vi)   
+                                                         
       DO k = 1, C%NZ
-        ice%dzeta_dt(vi,k)  =  inverse_Hi * (ice%dHs_dt(vi)  - C%zeta(k) * ice%dHi_dt(vi))                                   
-        ice%dzeta_dx(vi,k)  =  inverse_Hi * (ice%dHs_dx(vi)  - C%zeta(k) * ice%dHi_dx(vi))                                   
-        ice%dzeta_dy(vi,k)  =  inverse_Hi * (ice%dHs_dy(vi)  - C%zeta(k) * ice%dHi_dy(vi))                                   
+        ice%dzeta_dt_a( vi,k)  =  (dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi)) / ice%Hi_a( vi)
+        ice%dzeta_dx_a( vi,k)  =  (dHs_dx_a( vi)  - C%zeta(k) *     dHi_dx_a( vi)) / ice%Hi_a( vi)
+        ice%dzeta_dy_a( vi,k)  =  (dHs_dy_a( vi)  - C%zeta(k) *     dHi_dy_a( vi)) / ice%Hi_a( vi)
       END DO
+      
     END DO ! DO vi = mesh%v1, mesh%v2
     CALL sync
     
+    ! Clean up after yourself
+    CALL deallocate_shared( wdHs_dt_a)
+    CALL deallocate_shared( wdHs_dx_a)
+    CALL deallocate_shared( wdHs_dy_a)
+    CALL deallocate_shared( wdHi_dx_a)
+    CALL deallocate_shared( wdHi_dy_a)
+    
   END SUBROUTINE calculate_zeta_derivatives
-  SUBROUTINE initialize_zeta_discretization
+  SUBROUTINE initialise_zeta_discretisation
     ! See table 3 and table 1.
     ! To be called in anice, not only usefull for uvw-mumps, but also for temperature
     ! Calculating the discretization coefficents for a Arakawa A-grid discretization    
@@ -170,6 +167,6 @@ CONTAINS
     p_zeta%b_t = -1._dp / C%dt_thermo                      ! See equations 14.38
     p_zeta%s_t =  1._dp / C%dt_thermo                      ! See equations 14.39
     
-  END SUBROUTINE initialize_zeta_discretization
+  END SUBROUTINE initialise_zeta_discretisation
 
 END MODULE zeta_module

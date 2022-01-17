@@ -1,19 +1,30 @@
 MODULE BMB_module
 
+  ! Contains all the routines for calculating the basal mass balance.
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           deallocate_shared
-  USE data_types_module,             ONLY: type_mesh, type_ice_model, type_subclimate_region, type_BMB_model, &
-                                           type_remapping
-  USE netcdf_module,                 ONLY: debug, write_to_debug_file
-  USE forcing_module,                ONLY: forcing
-  USE parameters_module,             ONLY: pi, T0, L_fusion, sec_per_year, seawater_density, ice_density
-  USE mesh_mapping_module,           ONLY: reallocate_field_dp
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_BMB_model, &
+                                             type_remapping
+  USE forcing_module,                  ONLY: forcing
 
   IMPLICIT NONE
     
@@ -58,8 +69,14 @@ CONTAINS
           C%choice_benchmark_experiment == 'Halfar' .OR. &
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        BMB%BMB( mesh%v1:mesh%v2) = 0._dp
+          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
         CALL sync
         RETURN
       ELSE
@@ -69,11 +86,11 @@ CONTAINS
     END IF ! IF (C%do_benchmark_experiment) THEN
       
     ! Initialise everything at zero
-    BMB%BMB(       mesh%v1:mesh%v2) = 0._dp
-    BMB%BMB_sheet( mesh%v1:mesh%v2) = 0._dp
-    BMB%BMB_shelf( mesh%v1:mesh%v2) = 0._dp
-    BMB%sub_angle( mesh%v1:mesh%v2) = 360._dp
-    BMB%dist_open( mesh%v1:mesh%v2) = 0._dp
+    BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
+    BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
+    BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+    BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
+    BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
     w_ins                             = 0._dp
     weight                            = 0._dp
     w_PD                              = 0._dp
@@ -86,7 +103,7 @@ CONTAINS
     BMB_deepocean                     = 0._dp
     
     ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
     END DO
     CALL sync
@@ -167,13 +184,13 @@ CONTAINS
     ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
     ! ====================================================================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
-      IF (ice%mask_shelf( vi) == 1) THEN
+      IF (ice%mask_shelf_a( vi) == 1) THEN
         ! Sub-shelf melt
 
         ! Freezing temperature at the bottom of the ice shelves, scaling with depth below water level
-        T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi( vi) * ice_density / seawater_density
+        T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
         ! Sub-shelf melt rate for non-exposed shelves (Martin, TC, 2011) - melt values, when T_ocean > T_freeze.
         BMB_shelf   = seawater_density * cp0 * sec_per_year * gamma_T * BMB%subshelf_melt_factor * &
@@ -183,9 +200,9 @@ CONTAINS
         BMB_shelf = 0._dp
       END IF
 
-      IF (ice%mask_shelf( vi) == 1 .OR. ice%mask_ocean( vi) == 1) THEN
+      IF (ice%mask_shelf_a( vi) == 1 .OR. ice%mask_ocean_a( vi) == 1) THEN
       
-        water_depth = ice%SL( vi) - ice%Hb( vi)
+        water_depth = ice%SL_a( vi) - ice%Hb_a( vi)
         w_deep = MAX(0._dp, MIN(1._dp, (water_depth - BMB%deep_ocean_threshold_depth) / 200._dp))
         w_expo = MAX(0._dp, MIN(1._dp, (BMB%sub_angle( vi) - 80._dp)/30._dp)) * EXP(-BMB%dist_open( vi) / 100000._dp)
         
@@ -199,7 +216,7 @@ CONTAINS
     CALL sync
     
     ! Add sheet and shelf melt together
-    BMB%BMB( mesh%v1:mesh%v2) = BMB%BMB_sheet( mesh%v1:mesh%v2) + BMB%BMB_shelf( mesh%v1:mesh%v2)
+    BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
     CALL sync
     
     n2 = par%mem%n
@@ -228,8 +245,8 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: dist_ocean_in_dir
 
     ! Only calculate the angle for shelf vertices
-    IF (.NOT. ice%mask_shelf( vi) == 1) THEN
-      IF (ice%mask_ocean( vi) == 1) THEN
+    IF (.NOT. ice%mask_shelf_a( vi) == 1) THEN
+      IF (ice%mask_ocean_a( vi) == 1) THEN
         sub_angle = 360._dp
         dist_open = 0._dp
         RETURN
@@ -310,10 +327,10 @@ CONTAINS
       distance_along_line = NORM2( mesh%V( vi_next,:) - mesh%V( vi,:) )
 
       ! Check if we've finished the trace
-      IF (ice%mask_land( vi_next) == 1) THEN
+      IF (ice%mask_land_a( vi_next) == 1) THEN
         sees_ocean = 0
         Finished = .TRUE.
-      ELSEIF (ice%mask_ocean( vi_next) == 1 .AND. ice%mask_shelf( vi_next) == 0) THEN
+      ELSEIF (ice%mask_ocean_a( vi_next) == 1 .AND. ice%mask_shelf_a( vi_next) == 0) THEN
         sees_ocean = 1
         dist_ocean = distance_along_line
         Finished = .TRUE.
@@ -445,11 +462,11 @@ CONTAINS
     int_dummy = map%trilin%vi( 1,1)
         
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
-    CALL reallocate_field_dp( mesh_new%nV, BMB%BMB,             BMB%wBMB            )
-    CALL reallocate_field_dp( mesh_new%nV, BMB%BMB_sheet,       BMB%wBMB_sheet      )
-    CALL reallocate_field_dp( mesh_new%nV, BMB%BMB_shelf,       BMB%wBMB_shelf      )
-    CALL reallocate_field_dp( mesh_new%nV, BMB%sub_angle,       BMB%wsub_angle      )
-    CALL reallocate_field_dp( mesh_new%nV, BMB%dist_open,       BMB%wdist_open      )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%BMB,              BMB%wBMB             )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%BMB_sheet,        BMB%wBMB_sheet       )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%BMB_shelf,        BMB%wBMB_shelf       )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%sub_angle,        BMB%wsub_angle       )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%dist_open,        BMB%wdist_open       )
     
   END SUBROUTINE remap_BMB_model
   

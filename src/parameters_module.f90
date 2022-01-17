@@ -18,7 +18,9 @@ MODULE parameters_module
   REAL(dp), PARAMETER :: mean_ocean_depth                 = 4000._dp                  ! average depth of the ocean (meters)
   REAL(dp), PARAMETER :: ice_density                      =  910.0_dp                 ! Ice density [kg m^-3]
   REAL(dp), PARAMETER :: seawater_density                 = 1028.0_dp                 ! Seawater density [kg m^-3]
-  REAL(dp), PARAMETER :: SMT                              = 271.15_dp     ! Seawater temperature [K]
+  REAL(dp), PARAMETER :: SMT                              = 271.15_dp                 ! Seawater temperature [K]
+  REAL(dp), PARAMETER :: R_gas                            = 8.314_dp                  ! Gas constant [J mol^-1 K^-1]
+  REAL(dp), PARAMETER :: cp_ocean                         = 3.974E3_dp                ! Specific heat capacity of ocean water [J kg^-1 K^-1] 
   
 CONTAINS
 

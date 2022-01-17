@@ -1,13 +1,30 @@
 MODULE mesh_Delaunay_module
+
   ! Routines used for updating a Delaunay triangulation by splitting a triangle, a line or a segment.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
-  USE data_types_module,             ONLY: type_mesh
-  USE mesh_help_functions_module,    ONLY: is_in_triangle, is_boundary_segment, find_circumcenter, find_containing_triangle, &
-                                           line_from_points, line_line_intersection, perpendicular_bisector_from_line, &
-                                           encroaches_upon, update_triangle_circumcenter
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh
+  USE mesh_help_functions_module,      ONLY: is_in_triangle, is_boundary_segment, find_circumcenter, find_containing_triangle, &
+                                             line_from_points, line_line_intersection, perpendicular_bisector_from_line, &
+                                             encroaches_upon, update_triangle_circumcenter
 
   IMPLICIT NONE
 

@@ -1,19 +1,31 @@
 MODULE SMB_module
 
+  ! All the routines for calculating the surface mass balance from the climate forcing
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           deallocate_shared
-  USE data_types_module,             ONLY: type_mesh, type_ice_model, type_subclimate_region, type_init_data_fields, type_SMB_model, &
-                                           type_remapping
-  USE netcdf_module,                 ONLY: debug, write_to_debug_file
-  USE forcing_module,                ONLY: forcing
-  USE parameters_module,             ONLY: pi, T0, L_fusion, sec_per_year
-  USE mesh_mapping_module,           ONLY: remap_field_dp, remap_field_dp_monthly, reallocate_field_dp, reallocate_field_dp_3D
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, &
+                                             type_SMB_model, type_remapping
+  USE forcing_module,                  ONLY: forcing
+  USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_monthly
 
   IMPLICIT NONE
   
@@ -63,23 +75,29 @@ CONTAINS
         CALL EISMINT_SMB( mesh, time, SMB)
         RETURN
         
-      ELSEIF (C%choice_benchmark_experiment == 'Halfar') THEN
-        SMB%SMB_year( mesh%v1:mesh%v2  ) = 0._dp
-        SMB%SMB(      mesh%v1:mesh%v2,:) = 0._dp
+      ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0._dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0._dp
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
-        DO vi = mesh%v1, mesh%v2
-          SMB%SMB_year( vi  ) = Bueler_solution_MB( C%halfar_solution_H0, C%halfar_solution_R0, C%bueler_solution_lambda, mesh%V(vi,1), mesh%V(vi,2), time)
+        DO vi = mesh%vi1, mesh%vi2
+          SMB%SMB_year( vi  ) = Bueler_solution_MB( mesh%V(vi,1), mesh%V(vi,2), time)
           SMB%SMB(      vi,:) = SMB%SMB_year( vi) / 12._dp
         END DO
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        SMB%SMB_year( mesh%v1:mesh%v2  ) = 0.3_dp
-        SMB%SMB(      mesh%v1:mesh%v2,:) = 0.3_dp / 12._dp
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0.3_dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0.3_dp / 12._dp
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'mesh_generation_test') THEN
         ! Similar to EISMINT
-        DO vi = mesh%v1, mesh%v2
+        DO vi = mesh%vi1, mesh%vi2
           R = NORM2(mesh%V(vi,:))
           IF (R < 250000._dp) THEN
             SMB%SMB_year( vi  ) = 0.3_dp
@@ -87,7 +105,7 @@ CONTAINS
             SMB%SMB_year( vi  ) = MAX(-2._dp, 0.3_dp - (R - 250000._dp) / 200000._dp)
           END IF
           SMB%SMB(      vi,:) = SMB%SMB_year( vi  ) / 12._dp
-        END DO ! DO vi = mesh%v1, mesh%v2
+        END DO ! DO vi = mesh%vi1, mesh%vi2
         CALL sync
         RETURN
       ELSE
@@ -99,12 +117,12 @@ CONTAINS
     ! Calculate SMB components with IMAU_ITM
     ! ======================================
     
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Background albedo
       SMB%AlbedoSurf( vi) = albedo_soil
-      IF ((ice%mask_ocean( vi) == 1 .AND. ice%mask_shelf( vi) == 0) .OR. mask_noice( vi) == 1) SMB%AlbedoSurf( vi) = albedo_water
-      IF (ice%mask_ice(    vi) == 1) SMB%AlbedoSurf( vi) = albedo_ice
+      IF ((ice%mask_ocean_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 0) .OR. mask_noice( vi) == 1) SMB%AlbedoSurf( vi) = albedo_water
+      IF (ice%mask_ice_a(    vi) == 1) SMB%AlbedoSurf( vi) = albedo_ice
     
       DO m = 1, 12  ! Month loop
         
@@ -113,7 +131,7 @@ CONTAINS
         
         SMB%Albedo( vi,m) = MIN(albedo_snow, MAX( SMB%AlbedoSurf( vi), albedo_snow - (albedo_snow - SMB%AlbedoSurf( vi))  * &
                              EXP(-15._dp * SMB%FirnDepth( vi,mprev)) - 0.015_dp * SMB%MeltPreviousYear( vi)))
-        IF ((ice%mask_ocean( vi) == 1 .AND. ice%mask_shelf( vi) == 0) .OR. mask_noice( vi) == 1) SMB%Albedo( vi,m) = albedo_water
+        IF ((ice%mask_ocean_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 0) .OR. mask_noice( vi) == 1) SMB%Albedo( vi,m) = albedo_water
                
         ! Determine ablation as function af surface temperature and albedo/insolation
         ! according to Bintanja et al. (2002) 
@@ -136,7 +154,7 @@ CONTAINS
         sup_imp_wat  = 0.012_dp * MAX(0._dp, T0 - climate%T2m( vi,m))
         liquid_water = SMB%Rainfall( vi,m) + SMB%Melt( vi,m)
         SMB%Refreezing( vi,m) = MIN( MIN( sup_imp_wat, liquid_water), climate%Precip( vi,m))
-        IF (ice%mask_ice( vi) == 0 .OR. mask_noice( vi) == 1) SMB%Refreezing( vi,m) = 0._dp
+        IF (ice%mask_ice_a( vi) == 0 .OR. mask_noice( vi) == 1) SMB%Refreezing( vi,m) = 0._dp
         
         ! Calculate runoff and total SMB
         SMB%Runoff( vi,m) = SMB%Melt(     vi,m) + SMB%Rainfall(   vi,m) - SMB%Refreezing( vi,m)
@@ -147,7 +165,7 @@ CONTAINS
         SMB%FirnDepth( vi,m) = MIN(10._dp, MAX(0._dp, SMB%FirnDepth( vi,mprev) + SMB%AddedFirn( vi,m) ))
         
         ! Firn cannot accumulate on water, silly!
-        IF (ice%mask_ocean( vi) == 1) SMB%FirnDepth( vi,m) = 0._dp
+        IF (ice%mask_ocean_a( vi) == 1) SMB%FirnDepth( vi,m) = 0._dp
     
       END DO ! DO m = 1, 12
       
@@ -229,7 +247,7 @@ CONTAINS
       END IF
     END IF
 
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       dist = NORM2( mesh%V( vi,:))
       SMB%SMB_year(vi) = MIN( M_max, S_b * (E - dist))
       SMB%SMB(vi,:) = SMB%SMB_year(vi) / 12._dp
@@ -237,15 +255,12 @@ CONTAINS
     CALL sync
           
   END SUBROUTINE EISMINT_SMB
-  FUNCTION Bueler_solution_MB( H0, R0, lambda, x, y, t) RESULT(M)
+  FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
     ! Describes an ice-sheet at time t (in years) conforming to the Bueler solution
     ! with dome thickness H0 and margin radius R0 at t0, with a surface mass balance
     ! determined by lambda.
     
     ! Input variables
-    REAL(dp), INTENT(IN) :: H0      ! Ice dome thickness at t=0 [m]
-    REAL(dp), INTENT(IN) :: R0      ! Ice margin radius  at t=0 [m]
-    REAL(dp), INTENT(IN) :: lambda  ! Mass balance parameter
     REAL(dp), INTENT(IN) :: x       ! x coordinate [m]
     REAL(dp), INTENT(IN) :: y       ! y coordinate [m]
     REAL(dp), INTENT(IN) :: t       ! Time from t0 [years]
@@ -255,6 +270,10 @@ CONTAINS
     
     ! Local variables
     REAL(dp) :: A_flow, rho, g, n, alpha, beta, Gamma, f1, f2, t0, tp, f3, f4, H
+    
+    REAL(dp), PARAMETER :: H0     = 3000._dp    ! Ice dome thickness at t=0 [m]
+    REAL(dp), PARAMETER :: R0     = 500000._dp  ! Ice margin radius  at t=0 [m]
+    REAL(dp), PARAMETER :: lambda = 5.0_dp      ! Mass balance parameter
   
     A_flow  = 1E-16_dp
     rho     = 910._dp
@@ -283,14 +302,14 @@ CONTAINS
   END FUNCTION Bueler_solution_MB
   
   ! Initialise the SMB model (allocating shared memory)
-  SUBROUTINE initialise_SMB_model( mesh, init, SMB, region_name)
+  SUBROUTINE initialise_SMB_model( mesh, ice, SMB, region_name)
     ! Allocate memory for the data fields of the SMB model.
     
     IMPLICIT NONE
     
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    TYPE(type_init_data_fields),         INTENT(IN)    :: init
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
@@ -352,16 +371,16 @@ CONTAINS
     CALL sync
     
     ! Initialise albedo to background albedo
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Background albedo
-      IF (init%Hb(vi) < 0._dp) THEN
-        SMB%AlbedoSurf(vi) = albedo_water
+      IF (ice%mask_ocean_a( vi) ==  1) THEN
+        SMB%AlbedoSurf( vi) = albedo_water
       ELSE
-        SMB%AlbedoSurf(vi) = albedo_soil
+        SMB%AlbedoSurf( vi) = albedo_soil
       END IF
       
-      IF (init%Hi(vi) > 0._dp) THEN
+      IF (ice%mask_ice_a( vi) == 1) THEN
         SMB%AlbedoSurf(vi) = albedo_snow
         SMB%FirnDepth(vi,:) = initial_snow_depth   
       END IF
@@ -369,35 +388,8 @@ CONTAINS
       SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
       SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
-    
-    ! If we're doing a restart, initialise with that
-    IF (C%is_restart) THEN
-    
-      SMB%FirnDepth(        mesh%v1:mesh%v2,:) = init%FirnDepth(        mesh%v1:mesh%v2,:)
-      SMB%MeltPreviousYear( mesh%v1:mesh%v2  ) = init%MeltPreviousYear( mesh%v1:mesh%v2  )
-      
-      DO vi = mesh%v1, mesh%v2
-        
-        ! Background albedo
-        IF (init%Hb(vi) < 0._dp) THEN
-          SMB%AlbedoSurf(vi) = albedo_water
-        ELSE
-          SMB%AlbedoSurf(vi) = albedo_soil
-        END IF
-        
-        IF (SMB%FirnDepth( vi,12) > 0._dp) THEN
-          SMB%AlbedoSurf(vi)  = albedo_snow
-        END IF
-        
-        SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
-        SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
-        
-      END DO
-      CALL sync
-      
-    END IF ! IF (C%is_restart) THEN
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)
@@ -417,27 +409,27 @@ CONTAINS
     
     int_dummy = mesh_old%nV
     int_dummy = map%trilin%vi( 1,1)
-        
-    ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Q_TOA,            SMB%wQ_TOA           , 12)
-    CALL reallocate_field_dp(    mesh_new%nV, SMB%AlbedoSurf,       SMB%wAlbedoSurf          )
-    !CALL reallocate_field_dp(    mesh_new%nV, SMB%MeltPreviousYear, SMB%wMeltPreviousYear    )
-    !CALL reallocate_field_dp_3D( mesh_new%nV, SMB%FirnDepth,        SMB%wFirnDepth       , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Rainfall,         SMB%wRainfall        , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Snowfall,         SMB%wSnowfall        , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%AddedFirn,        SMB%wAddedFirn       , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Melt,             SMB%wMelt            , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Refreezing,       SMB%wRefreezing      , 12)
-    CALL reallocate_field_dp(    mesh_new%nV, SMB%Refreezing_year,  SMB%wRefreezing_year     )
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Runoff,           SMB%wRunoff          , 12)
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%Albedo,           SMB%wAlbedo          , 12)
-    CALL reallocate_field_dp(    mesh_new%nV, SMB%Albedo_year,      SMB%wAlbedo_year         )
-    CALL reallocate_field_dp_3D( mesh_new%nV, SMB%SMB,              SMB%wSMB             , 12)
-    CALL reallocate_field_dp(    mesh_new%nV, SMB%SMB_year,         SMB%wSMB_year            )
     
     ! Firn depth and melt-during-previous-year must be remapped
     CALL remap_field_dp(         mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
     CALL remap_field_dp_monthly( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
+        
+    ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
+   !CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%MeltPreviousYear, SMB%wMeltPreviousYear)
+   !CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%FirnDepth,        SMB%wFirnDepth       )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Rainfall,         SMB%wRainfall        )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Snowfall,         SMB%wSnowfall        )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%AddedFirn,        SMB%wAddedFirn       )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Melt,             SMB%wMelt            )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Refreezing,       SMB%wRefreezing      )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%Refreezing_year,  SMB%wRefreezing_year )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Runoff,           SMB%wRunoff          )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Albedo,           SMB%wAlbedo          )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
+    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%SMB,              SMB%wSMB             )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%SMB_year,         SMB%wSMB_year        )
     
   END SUBROUTINE remap_SMB_model
 

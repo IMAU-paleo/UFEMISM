@@ -1,37 +1,46 @@
 MODULE mesh_creation_module
+
   ! Routines for creating the first mesh from a collection of forcing data on a Cartesian grid.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           allocate_shared_bool_1D, deallocate_shared, &
-                                           adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                           adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                           adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                           adapt_shared_bool_1D, &
-                                           allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                           allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                           allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                           allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                           allocate_shared_dist_bool_1D
-  USE data_types_module,             ONLY: type_model_region, type_mesh, type_init_data_fields
-  USE mesh_help_functions_module,    ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
-                                           determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
-                                           cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
-                                           min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
-                                           find_POI_xy_coordinates, find_Voronoi_cell_geometric_centres, partition_domain_regular, find_POI_vertices_and_weights, &
-                                           update_triangle_circumcenter, write_mesh_to_text_file, is_encroached_upon, is_boundary_segment, partition_list
-  USE mesh_memory_module,            ONLY: allocate_mesh_primary, allocate_submesh_primary, extend_mesh_primary, extend_submesh_primary, &
-                                           crop_mesh_primary, crop_submesh_primary, allocate_mesh_secondary, &
-                                           deallocate_submesh_primary, move_data_from_submesh_to_mesh, share_submesh_access
-  USE mesh_Delaunay_module,          ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
-  USE mesh_derivatives_module,       ONLY: get_neighbour_functions
-  USE mesh_ArakawaC_module,          ONLY: make_Ac_mesh
-  USE mesh_five_colour_module,       ONLY: calculate_five_colouring_AaAc
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE parallel_module,                 ONLY: allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                             allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
+                                             allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
+                                             allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
+                                             allocate_shared_dist_bool_1D
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_reference_geometry
+  USE mesh_help_functions_module,      ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
+                                             determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
+                                             cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
+                                             min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
+                                             find_POI_xy_coordinates, find_Voronoi_cell_geometric_centres, partition_domain_regular, find_POI_vertices_and_weights, &
+                                             update_triangle_circumcenter, write_mesh_to_text_file, is_encroached_upon, is_boundary_segment, &
+                                             calc_triangle_geometric_centres
+  USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_submesh_primary, extend_mesh_primary, extend_submesh_primary, &
+                                             crop_mesh_primary, crop_submesh_primary, allocate_mesh_secondary, &
+                                             deallocate_submesh_primary, move_data_from_submesh_to_mesh, share_submesh_access
+  USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
+  USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
+  USE mesh_five_colour_module,         ONLY: calculate_five_colouring
   
   IMPLICIT NONE
   
@@ -41,7 +50,7 @@ MODULE mesh_creation_module
   
   ! === Check whether or not a triangle meets all the fitness criteria.
   ! If you want to change the rules for mesh creation, this is where to do it.
-  SUBROUTINE is_good_triangle( mesh, ti, init, IsGood)
+  SUBROUTINE is_good_triangle( mesh, ti, refgeo_init, is_good)
     ! Check if triangle ti of the mesh is Good
     ! A triangle is not Good if:
     !   - its smallest internal angle is too small
@@ -53,9 +62,8 @@ MODULE mesh_creation_module
     ! Input variables
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     INTEGER,                    INTENT(IN)        :: ti
-    TYPE(type_init_data_fields),INTENT(IN)        :: init
-
-    LOGICAL,                    INTENT(OUT)       :: IsGood
+    TYPE(type_reference_geometry),INTENT(IN)      :: refgeo_init
+    LOGICAL,                    INTENT(OUT)       :: is_good
 
     INTEGER                                       :: vp,vq,vr
     REAL(dp), DIMENSION(2)                        :: p, q, r, POI
@@ -63,7 +71,6 @@ MODULE mesh_creation_module
     LOGICAL                                       :: isso
     REAL(dp)                                      :: dmax
     INTEGER                                       :: n
-    REAL(dp)                                      :: ap,aq,ar,alpha
     REAL(dp)                                      :: trisumel, mean_curvature, dz
     INTEGER                                       :: trinel
     REAL(dp), PARAMETER                           :: Hb_lo = 500._dp
@@ -73,10 +80,16 @@ MODULE mesh_creation_module
     REAL(dp)                                      :: mean_mask_dp
     LOGICAL                                       :: contains_ice, contains_nonice, contains_margin, contains_gl, contains_cf, contains_coast
 
-    IsGood = .TRUE.
+    is_good = .TRUE.
+    
+    ! First check if the basic triangle geometry meets Ruppert's criteria
+    ! ===================================================================
+    
+    CALL is_good_triangle_geo_only( mesh, ti, isso)
+    IF (.NOT. is_good) RETURN
 
-    ! Triangle geometry (the basis of the original version of Rupperts Algorithm)
-    ! ===========================================================================
+    ! Find length of longest triangle leg (for resolution checks)
+    ! ===========================================================
     
     vp = mesh%Tri(ti,1)
     vq = mesh%Tri(ti,2)
@@ -93,52 +106,12 @@ MODULE mesh_creation_module
 
     ! Longest leg
     dmax = MAXVAL([NORM2(pq), NORM2(qr), NORM2(rp)])
-
-    ! Internal angles
-    ap = ACOS(-(rp(1)*pq(1) + rp(2)*pq(2))/(NORM2(rp)*NORM2(pq)))
-    aq = ACOS(-(pq(1)*qr(1) + pq(2)*qr(2))/(NORM2(pq)*NORM2(qr)))
-    ar = ACOS(-(rp(1)*qr(1) + rp(2)*qr(2))/(NORM2(rp)*NORM2(qr)))
-
-    ! Smallest internal angle
-    alpha = MINVAL([ap, aq, ar])
-
-    IF (alpha < mesh%alpha_min) THEN
-      IsGood = .FALSE.
-      RETURN
-    END IF
-    
-    ! If its an edge triangle, check if the third vertex encroaches on the edge segment
-    IF (is_boundary_segment( mesh, vp, vq)) THEN
-      CALL is_encroached_upon( mesh, vp, vq, isso)
-      IF (isso) THEN
-        IsGood = .FALSE.
-        RETURN
-      END IF
-    ELSEIF (is_boundary_segment( mesh, vq, vr)) THEN
-      CALL is_encroached_upon( mesh, vq, vr, isso)
-      IF (isso) THEN
-        IsGood = .FALSE.
-        RETURN
-      END IF
-    ELSEIF (is_boundary_segment( mesh, vr, vp)) THEN
-      CALL is_encroached_upon( mesh, vr, vp, isso)
-      IF (isso) THEN
-        IsGood = .FALSE.
-        RETURN
-      END IF
-    END IF
-    
-    ! Forbid "wall to wall" triangles (i.e. triangles with vertices lying on opposite domain boundaries)
-    IF (is_walltowall( mesh, ti)) THEN
-      IsGood = .FALSE.
-      RETURN
-    END IF
     
     ! Coarsest allowed resolution
     ! ===========================
     
     IF (dmax > mesh%res_max * 1.5_dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
@@ -146,7 +119,7 @@ MODULE mesh_creation_module
     ! =========================
     
     IF (dmax < mesh%res_min * 1.5_dp * 1000._dp) THEN
-      IsGood = .TRUE.
+      is_good = .TRUE.
       RETURN
     END IF
     
@@ -156,7 +129,7 @@ MODULE mesh_creation_module
     DO n = 1, mesh%nPOI
       POI = mesh%POI_XY_coordinates(n,:)
       IF (is_in_triangle( p, q, r, POI) .AND. dmax > mesh%POI_resolutions(n) * 1.5_dp * 1000._dp) THEN
-        IsGood = .FALSE.
+        is_good = .FALSE.
         RETURN
       END IF
     END DO
@@ -171,55 +144,55 @@ MODULE mesh_creation_module
     contains_cf     = .FALSE.
     contains_coast  = .FALSE.
     
-    CALL min_cart_over_triangle_int( p, q, r, init%mask_ice_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, min_mask_int, trinel)
-    CALL max_cart_over_triangle_int( p, q, r, init%mask_ice_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, max_mask_int, trinel)    
+    CALL min_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, min_mask_int, trinel)
+    CALL max_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_ice    = .TRUE.
       IF (min_mask_int==0) contains_nonice = .TRUE.
     ELSE
-      CALL cart_bilinear_int( init%mask_ice_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+      CALL cart_bilinear_int( refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_ice    = .TRUE.
       IF (mean_mask_dp<0.9_dp) contains_nonice = .TRUE.
     END IF
     IF (contains_ice .AND. contains_nonice) contains_margin = .TRUE.
     
-    CALL max_cart_over_triangle_int(p,q,r, init%mask_gl_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, max_mask_int, trinel)    
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_gl = .TRUE.
     ELSE
-      CALL cart_bilinear_int( init%mask_gl_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+      CALL cart_bilinear_int( refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_gl = .TRUE.
     END IF
     
-    CALL max_cart_over_triangle_int(p,q,r, init%mask_cf_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, max_mask_int, trinel)    
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_cf, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_cf = .TRUE.
     ELSE
-      CALL cart_bilinear_int( init%mask_cf_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+      CALL cart_bilinear_int( refgeo_init%mask_cf, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_cf = .TRUE.
     END IF
     
-    CALL max_cart_over_triangle_int(p,q,r, init%mask_coast_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, max_mask_int, trinel)    
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_coast, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_coast = .TRUE.
     ELSE
-      CALL cart_bilinear_int( init%mask_coast_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
+      CALL cart_bilinear_int( refgeo_init%mask_coast, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_coast = .TRUE.
     END IF
 
     ! Second-order surface deviation (curvature times size)
     ! =====================================================
     
-    CALL sum_cart_over_triangle_dp(p,q,r, init%surface_curvature_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, trisumel, trinel)
+    CALL sum_cart_over_triangle_dp(p,q,r, refgeo_init%surf_curv, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, trisumel, trinel)
     IF (trinel>4) THEN
       mean_curvature = trisumel / trinel
     ELSE
-      CALL cart_bilinear_dp( init%surface_curvature_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, mean_curvature)
+      CALL cart_bilinear_dp( refgeo_init%surf_curv, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_curvature)
     END IF
     dz = 0.5_dp * mean_curvature * dmax**2
 
     IF (contains_ice .AND. dz > mesh%dz_max_ice) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
      RETURN
     END IF
 
@@ -228,34 +201,34 @@ MODULE mesh_creation_module
     
     ! Coastline
     IF (contains_coast .AND. dmax > mesh%res_max_coast * 2._dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
     ! Ice margin
     IF (contains_margin .AND. dmax > mesh%res_max_margin * 2._dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
     ! Grounding line
     IF (contains_gl .AND. dmax > mesh%res_max_gl * 2._dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
 
     ! Calving front
     IF (contains_cf .AND. dmax > mesh%res_max_cf * 2._dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
     ! Ice-free bed topography (higher res for mountains so inception is captured better)
     ! ==================================================================================
     
-    CALL max_cart_over_triangle_dp(p,q,r, init%Hb_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, Hb_max,trinel)
+    CALL max_cart_over_triangle_dp(p,q,r, refgeo_init%Hb_grid, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, Hb_max,trinel)
     IF (trinel==0) THEN
-      CALL cart_bilinear_dp( init%Hb_grid, init%grid%x, init%grid%y, init%grid%nx, init%grid%ny, (p+q+r)/3._dp, Hb_max)
+      CALL cart_bilinear_dp( refgeo_init%Hb_grid, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, Hb_max)
     END IF
     
     lr_lo = LOG( mesh%res_max)
@@ -265,12 +238,12 @@ MODULE mesh_creation_module
     r_crit = EXP( (w_Hb * lr_hi) + ((1._dp - w_Hb) * lr_lo))
     
     IF (contains_nonice .AND. dmax > r_crit * 2._dp * 1000._dp) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN      
     END IF
 
   END SUBROUTINE is_good_triangle
-  SUBROUTINE is_good_triangle_geo_only( mesh, ti, IsGood)
+  SUBROUTINE is_good_triangle_geo_only( mesh, ti, is_good)
     ! Check if triangle ti of the mesh is Good
     ! A triangle is not Good if:
     !   - its smallest internal angle is too small
@@ -282,7 +255,7 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     INTEGER,                    INTENT(IN)        :: ti
 
-    LOGICAL,                    INTENT(OUT)       :: IsGood
+    LOGICAL,                    INTENT(OUT)       :: is_good
 
     INTEGER                                       :: vp,vq,vr
     REAL(dp), DIMENSION(2)                        :: p,q,r
@@ -290,7 +263,7 @@ MODULE mesh_creation_module
     REAL(dp)                                      :: ap,aq,ar,alpha
     LOGICAL                                       :: isso
     
-    IsGood = .TRUE.
+    is_good = .TRUE.
 
     ! Triangle geometry (the basis of the original version of Rupperts Algorithm)
     ! ===========================================================================
@@ -317,7 +290,7 @@ MODULE mesh_creation_module
     alpha = MINVAL([ap, aq, ar])
 
     IF (alpha < mesh%alpha_min) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
@@ -325,33 +298,33 @@ MODULE mesh_creation_module
     IF (is_boundary_segment( mesh, vp, vq)) THEN
       CALL is_encroached_upon( mesh, vp, vq, isso)
       IF (isso) THEN
-        IsGood = .FALSE.
+        is_good = .FALSE.
         RETURN
       END IF
     ELSEIF (is_boundary_segment( mesh, vq, vr)) THEN
       CALL is_encroached_upon( mesh, vq, vr, isso)
       IF (isso) THEN
-        IsGood = .FALSE.
+        is_good = .FALSE.
         RETURN
       END IF
     ELSEIF (is_boundary_segment( mesh, vr, vp)) THEN
       CALL is_encroached_upon( mesh, vr, vp, isso)
       IF (isso) THEN
-        IsGood = .FALSE.
+        is_good = .FALSE.
         RETURN
       END IF
     END IF
     
     ! Forbid "wall to wall" triangles (i.e. triangles with vertices lying on opposite domain boundaries)
     IF (is_walltowall( mesh, ti)) THEN
-      IsGood = .FALSE.
+      is_good = .FALSE.
       RETURN
     END IF
     
   END SUBROUTINE is_good_triangle_geo_only
     
   ! == Mesh creation routines ==
-  SUBROUTINE create_mesh_from_cart_data(region)
+  SUBROUTINE create_mesh_from_cart_data( region)
     ! Create the first mesh, using the data from the initial file to force the resolution.
     
     IMPLICIT NONE
@@ -381,13 +354,13 @@ MODULE mesh_creation_module
         
     ! Determine the domain of this process' submesh.
     IF (orientation == 0) THEN
-      CALL partition_domain_regular( MINVAL(region%init%grid%x), MAXVAL(region%init%grid%x), par%i, par%n, xmin, xmax)
-      ymin = MINVAL(region%init%grid%y)
-      ymax = MAXVAL(region%init%grid%y)
+      CALL partition_domain_regular( MINVAL(region%refgeo_init%grid%x), MAXVAL(region%refgeo_init%grid%x), par%i, par%n, xmin, xmax)
+      ymin = MINVAL(region%refgeo_init%grid%y)
+      ymax = MAXVAL(region%refgeo_init%grid%y)
     ELSE
-      CALL partition_domain_regular( MINVAL(region%init%grid%y), MAXVAL(region%init%grid%y), par%i, par%n, ymin, ymax)
-      xmin = MINVAL(region%init%grid%x)
-      xmax = MAXVAL(region%init%grid%x)
+      CALL partition_domain_regular( MINVAL(region%refgeo_init%grid%y), MAXVAL(region%refgeo_init%grid%y), par%i, par%n, ymin, ymax)
+      xmin = MINVAL(region%refgeo_init%grid%x)
+      xmax = MAXVAL(region%refgeo_init%grid%x)
     END IF
     
     ! Allocate memory and initialise a dummy mesh
@@ -408,7 +381,13 @@ MODULE mesh_creation_module
               C%choice_benchmark_experiment == 'EISMINT_6' ) THEN
         submesh%res_max = MAX(C%res_min * 2._dp, 16._dp)
       ELSEIF (C%choice_benchmark_experiment == 'Bueler'.OR. &
-              C%choice_benchmark_experiment == 'Halfar') THEN
+              C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! No need for an exception here, as this one starts with a (small) ice sheet
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
               C%choice_benchmark_experiment == 'mesh_generation_test') THEN
@@ -440,7 +419,7 @@ MODULE mesh_creation_module
       IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
       
       ! Refine the process submesh
-      CALL refine_mesh( submesh, region%init)
+      CALL refine_mesh( submesh, region%refgeo_init)
       
       ! Align with neighbouring submeshes
       CALL align_all_submeshes( submesh, orientation)
@@ -485,14 +464,14 @@ MODULE mesh_creation_module
   END SUBROUTINE create_mesh_from_cart_data
   
   ! == Extended and basic Ruppert's algorithm
-  SUBROUTINE refine_mesh( mesh, init)
+  SUBROUTINE refine_mesh( mesh, refgeo_init)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
     
     IMPLICIT NONE
   
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    TYPE(type_init_data_fields),INTENT(IN)        :: init
+    TYPE(type_reference_geometry),INTENT(IN)      :: refgeo_init
     
     ! Local variables
     INTEGER                                       :: ti
@@ -526,7 +505,7 @@ MODULE mesh_creation_module
         ! Bad, refine it and add the affected triangles to the RefineStack.
       
         ti = mesh%RefStack( mesh%RefStackN)       
-        CALL is_good_triangle( mesh, ti, init, IsGood)
+        CALL is_good_triangle( mesh, ti, refgeo_init, IsGood)
               
         IF (IsGood) THEN
           ! Remove this triangle from the stack
@@ -1717,24 +1696,25 @@ MODULE mesh_creation_module
     ! ========================================
                 
     ! Determine vertex and triangle domains
-    CALL partition_list( mesh%nV,   par%i, par%n, mesh%v1, mesh%v2)
-    CALL partition_list( mesh%nTri, par%i, par%n, mesh%t1, mesh%t2)
+    CALL partition_list( mesh%nV,   par%i, par%n, mesh%vi1, mesh%vi2)
+    CALL partition_list( mesh%nTri, par%i, par%n, mesh%ti1, mesh%ti2)
     
     ! Calculate extra mesh data
     CALL allocate_mesh_secondary(             mesh)
+    CALL calc_triangle_geometric_centres(     mesh)
     CALL find_Voronoi_cell_areas(             mesh)
     CALL get_lat_lon_coordinates(             mesh)
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)
-    CALL get_neighbour_functions(             mesh)
+    CALL calc_matrix_operators_mesh(          mesh)
     CALL determine_mesh_resolution(           mesh)
     IF (par%master) CALL find_POI_xy_coordinates( mesh)
     CALL sync
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
     CALL create_transect(                     mesh)
-    CALL calculate_five_colouring_AaAc(       mesh)
+    CALL calculate_five_colouring(            mesh)
     
     CALL check_mesh( mesh)
     

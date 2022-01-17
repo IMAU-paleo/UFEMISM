@@ -31,25 +31,22 @@ PROGRAM UFEMISM_program
 
   USE mpi
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-  USE configuration_module,        ONLY: dp, C, create_output_dir, read_main_config_file, initialize_main_constants
+  USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
+  USE petsc_module,                ONLY: initialise_petsc, finalise_petsc
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
                                          initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
                                          calculate_modelled_d18O, initialise_inverse_routine_data, inverse_routine_global_temperature_offset, inverse_routine_CO2, &
                                          initialise_geothermal_heat_flux
   USE climate_module,              ONLY: initialise_climate_matrix
-  USE zeta_module,                 ONLY: initialize_zeta_discretization
+  USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
 
   IMPLICIT NONE
   
-  CHARACTER(LEN=256), PARAMETER          :: version_number = '1.1.1'
-  
-  INTEGER                                :: p, iargc
-  
-  CHARACTER(LEN=256)                     :: config_filename
+  CHARACTER(LEN=256), PARAMETER          :: version_number = '1.2'
   
   ! The four model regions
   TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
@@ -59,8 +56,7 @@ PROGRAM UFEMISM_program
   
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
-  REAL(dp)                               :: tstart, tstop, dt
-  INTEGER                                :: nr, ns, nm, nh, nd
+  REAL(dp)                               :: tstart, tstop
   
   ! ======================================================================================
   
@@ -73,53 +69,24 @@ PROGRAM UFEMISM_program
   IF (par%master) WRITE(0,*) '=================================================='
   IF (par%master) WRITE(0,*) ''
   
-  tstart = MPI_WTIME() 
+  tstart = MPI_WTIME()
+  
+  ! PETSc Initialisation
+  ! ====================
+  
+  ! Basically just a call to PetscInitialize
+  CALL initialise_petsc
     
-  ! Initial administration - output directory, config file
-  ! ======================================================
+  ! Set up the model configuration from the provided config file(s) and create an output directory
+  ! ==============================================================================================
   
-  ! Read the config file, collect all information into the "C" structure
-  ! Since the name of the config file is provided as an argument, which is only seen by
-  ! the Master process, it must be shared with the other processes using MPI_SEND
-  
-  IF (par%master) THEN
-    IF (iargc()==1) THEN
-      ! Get the name of the configuration file, open this file and read it:
-      CALL getarg(1, config_filename)
-    ELSEIF (iargc()==0) THEN
-      WRITE(UNIT=*, FMT='(/2A/)') ' ERROR: UFEMISM needs a config file to run!'
-      STOP
-    ELSE
-      WRITE(UNIT=*, FMT='(/2A/)') ' ERROR: UFEMISM only takes one argument to run: the name of the config file!'
-      STOP
-    END IF
-  END IF
-  CALL MPI_BCAST( config_filename, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
-  
-  ! Let each of the processors read the config file in turns so there's no access conflicts
-  DO p = 0, par%n-1
-    IF (p == par%i) THEN  
-      CALL read_main_config_file(config_filename)
-      CALL initialize_main_constants
-    END IF
-    CALL sync
-  END DO
-  
-  IF (C%do_benchmark_experiment) THEN
-    IF (par%master) WRITE(0,*) '    Running benchmark experiment "', TRIM(C%choice_benchmark_experiment), '"'
-    IF (par%master) WRITE(0,*) ''
-  END IF
+  CALL initialise_model_configuration( version_number)
     
-  ! Some administration that can only be done by the master process
-  IF (par%master) THEN
-    ! Create a new output directory
-    CALL create_output_dir
-    ! Copy the config file to the output directory
-    CALL system('cp ' // config_filename // ' ' // TRIM(C%output_dir))
-    ! Create a text file for global output data
-    CALL create_text_output_files    
-  END IF 
-  CALL MPI_BCAST( C%output_dir, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
+  ! ===== Initialise parameters for the vertical scaled coordinate transformation =====
+  ! (the same for all model regions, so stored in the "C" structure)
+  ! ===================================================================================
+  
+  CALL initialise_zeta_discretisation
   
   ! ===== Initialise forcing data =====
   ! ===================================
@@ -134,13 +101,7 @@ PROGRAM UFEMISM_program
   ! ===== Initialise the climate matrix =====
   ! =========================================
   
-  CALL initialise_climate_matrix(matrix) 
-      
-  ! ===== Initialise zeta transformation =====
-  ! ==========================================
-  ! Initialise parameters for the vertical scaled coordinate transformation
-  ! (the same for all ice-sheet models, so stored separately in the "p_zeta" structure)
-  CALL initialize_zeta_discretization 
+  CALL initialise_climate_matrix(matrix)  
 
   ! ===== Initialise the model regions ======
   ! =========================================
@@ -206,15 +167,15 @@ PROGRAM UFEMISM_program
     
     ! Update regional sea level (needs to be moved to separate subroutine at some point!)
     IF (C%choice_sealevel_model == 'fixed') THEN
-      IF (C%do_NAM) NAM%ice%SL( NAM%mesh%v1:NAM%mesh%v2) = C%fixed_sealevel
-      IF (C%do_EAS) EAS%ice%SL( EAS%mesh%v1:EAS%mesh%v2) = C%fixed_sealevel
-      IF (C%do_GRL) GRL%ice%SL( GRL%mesh%v1:GRL%mesh%v2) = C%fixed_sealevel
-      IF (C%do_ANT) ANT%ice%SL( ANT%mesh%v1:ANT%mesh%v2) = C%fixed_sealevel
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = C%fixed_sealevel
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = C%fixed_sealevel
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = C%fixed_sealevel
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = C%fixed_sealevel
     ELSEIF (C%choice_sealevel_model == 'eustatic') THEN
-      IF (C%do_NAM) NAM%ice%SL( NAM%mesh%v1:NAM%mesh%v2) = GMSL_glob
-      IF (C%do_EAS) EAS%ice%SL( EAS%mesh%v1:EAS%mesh%v2) = GMSL_glob
-      IF (C%do_GRL) GRL%ice%SL( GRL%mesh%v1:GRL%mesh%v2) = GMSL_glob
-      IF (C%do_ANT) ANT%ice%SL( ANT%mesh%v1:ANT%mesh%v2) = GMSL_glob
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = GMSL_glob
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = GMSL_glob
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = GMSL_glob
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
     ELSE
       IF (par%master) WRITE(0,*) '  ERROR: choice_sealevel_model "', TRIM(C%choice_sealevel_model), '" not implemented in IMAU_ICE_program!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -281,36 +242,17 @@ PROGRAM UFEMISM_program
       
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)
   
+! ====================================
+! ===== End of the big time loop =====
+! ==================================== 
   
   ! Write total elapsed time to screen
-  IF (par%master) THEN
-    tstop = MPI_WTIME()
-    
-    dt = tstop - tstart
-    
-    ns = CEILING(dt)
-    
-    nr = MOD(ns, 60*60*24)
-    nd = (ns - nr) / (60*60*24)
-    ns = ns - (nd*60*60*24)
-    
-    nr = MOD(ns, 60*60)
-    nh = (ns - nr) / (60*60)
-    ns = ns - (nh*60*60)
-    
-    nr = MOD(ns, 60)
-    nm = (ns - nr) / (60)
-    ns = ns - (nm*60)
-      
-    WRITE(0,*) ''
-    WRITE(0,*) '================================================================================'
-    WRITE(0,'(A,I2,A,I2,A,I2,A,I2,A)') ' ===== Simulation finished in ', nd, ' days, ', nh, ' hours, ', nm, ' minutes and ', ns, ' seconds! ====='
-    WRITE(0,*) '================================================================================'
-    WRITE(0,*) ''  
-    
-  END IF  
-    
-  ! Finalize all MPI processes
+  tstop = MPI_WTIME()
+  IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
+  CALL sync
+  
+  ! Finalise MPI and PETSc
+  CALL finalise_petsc
   CALL MPI_FINALIZE( ierr)
     
 END PROGRAM UFEMISM_program

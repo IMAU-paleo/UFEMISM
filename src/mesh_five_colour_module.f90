@@ -1,140 +1,159 @@
 MODULE mesh_five_colour_module
 
+  ! Routines for calculating a five-colouring of a mesh
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           allocate_shared_bool_1D, deallocate_shared
-  USE data_types_module,             ONLY: type_mesh
-  USE mesh_help_functions_module,    ONLY: partition_list
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh
 
   IMPLICIT NONE
   
-  CONTAINS
+CONTAINS
   
-  SUBROUTINE calculate_five_colouring_AaAc( mesh)
-    ! Calculate a five-colouring of the combined Aa-Ac mesh (to be used in parallelised SOR)
+  SUBROUTINE calculate_five_colouring( mesh)
+    ! Calculate a five-colouring of the b (triangle)-grid, to be used in parallelised SOR
+    ! 
     ! Based on Williams, M.H.: "A Linear Algorithm for Colouring
     ! Planar Graphs With Five Colours", The Computer Journal 28, 78-81, 1985.
     
     IMPLICIT NONE
   
-    ! Input variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    ! In/output variables
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
     
-    ! Local variables:
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: deg
-    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: L
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: Q4
-    INTEGER                                       :: Q4n
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: Q5
-    INTEGER                                       :: Q5n
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: LDP
-    LOGICAL,  DIMENSION(:    ), ALLOCATABLE       :: mark
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: S_vi
-    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: S_L
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: S_u
-    INTEGER                                       :: Sn
-    INTEGER                                       :: noofvert
+    ! DENK DROM
+    INTEGER :: int_dummy
+    int_dummy = mesh%nV
     
-    INTEGER                                       :: vi, ci
+!    ! Local variables:
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: deg
+!    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: L
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: Q4
+!    INTEGER                                       :: Q4n
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: Q5
+!    INTEGER                                       :: Q5n
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: LDP
+!    LOGICAL,  DIMENSION(:    ), ALLOCATABLE       :: mark
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: S_vi
+!    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: S_L
+!    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: S_u
+!    INTEGER                                       :: Sn
+!    INTEGER                                       :: noofvert
+!    
+!    INTEGER                                       :: vi,ti,ci
+!    
+!    ! Allocate shared memory
+!    CALL allocate_shared_int_1D( mesh%nTri, mesh%colour, mesh%wcolour)
+!    
+!    ! Not parallelised (but not needed, very fast)
+!    IF (.NOT.par%master) THEN
+!    
+!      ALLOCATE( deg(  1  ))
+!      ALLOCATE( L(    1,1))
+!      ALLOCATE( Q4(   1  ))
+!      ALLOCATE( Q5(   1  ))
+!      ALLOCATE( LDP(  1  ))
+!      ALLOCATE( mark( 1  ))
+!      ALLOCATE( S_vi( 1  ))
+!      ALLOCATE( S_L(  1,1))
+!      ALLOCATE( S_u(  1  ))
+!    
+!    ELSE
+!      
+!      ! Initialise
+!      ALLOCATE( deg(  mesh%nTri   ))
+!      ALLOCATE( L(    mesh%nTri, 3))
+!      ALLOCATE( Q4(   mesh%nTri   ))
+!      ALLOCATE( Q5(   mesh%nTri   ))
+!      ALLOCATE( LDP(  mesh%nTri   ))
+!      ALLOCATE( mark( mesh%nTri   ))
+!      ALLOCATE( S_vi( mesh%nTri   ))
+!      ALLOCATE( S_L(  mesh%nTri, 3))
+!      ALLOCATE( S_u(  mesh%nTri   ))
+!      
+!      deg      = mesh%nCAaAc
+!      L        = mesh%CAaAc
+!      Q4       = 0
+!      Q4n      = 0
+!      Q5       = 0
+!      Q5n      = 0
+!      LDP      = 0
+!      mark     = .FALSE.
+!      S_vi     = 0
+!      S_L      = 0
+!      S_u      = 0
+!      Sn       = 0
+!      noofvert = mesh%nVAaAc
+!      
+!      ! Initialise Q4,Q5
+!      DO vi = 1, mesh%nVAaAc
+!        IF     (deg( vi) <= 4) THEN
+!          CALL add_to_Q4( deg, LDP, Q4, Q4n, Q5, Q5n, vi)
+!        ELSEIF (deg( vi) == 5) THEN
+!          CALL add_to_Q5( deg, LDP, Q4, Q4n, Q5, Q5n, vi)
+!        END IF
+!      END DO
+!      
+!      ! Reduce the mesh
+!      CALL reduce( mesh, deg, L, LDP, mark, Q4, Q4n, Q5, Q5n, S_vi, S_L, S_u, Sn, noofvert)
+!      
+!      ! Colour the mesh
+!      CALL colour_mesh( mesh, Q4, S_vi, S_L, S_u, Sn, colour_ac)
+!      
+!      ! Check if the solution is valid
+!      CALL check_solution( mesh, colour_ac)
+!      
+!    END IF ! IF (par%master) THEN
+!    CALL sync
+!    
+!    ! Clean up after yourself
+!    DEALLOCATE( deg )
+!    DEALLOCATE( L   )
+!    DEALLOCATE( Q4  )
+!    DEALLOCATE( Q5  )
+!    DEALLOCATE( LDP )
+!    DEALLOCATE( mark)
+!    DEALLOCATE( S_vi)
+!    DEALLOCATE( S_L )
+!    DEALLOCATE( S_u )
+!    
+!    ! Create same-coloured parallelisation domains
+!    IF (par%master) THEN
+!      mesh%colour_vi = 0
+!      mesh%colour_nV = 0
+!      
+!      DO ti = 1, mesh%nTri
+!        ci = mesh%colour( ti)
+!        mesh%colour_nV( ci) = mesh%colour_nV( ci) + 1
+!        mesh%colour_vi( mesh%colour_nV( ci), ci) = ti
+!      END DO
+!      
+!    END IF ! IF (par%master) THEN
+!    CALL sync
+!    
+!    ! Assign processor domains to the five colours
+!    DO ci = 1, 5
+!      CALL partition_list( mesh%colour_nV( ci), par%i, par%n, mesh%colour_v1( ci), mesh%colour_v2( ci))
+!    END DO
     
-    ! Allocate shared memory
-    CALL allocate_shared_int_1D( mesh%nVAaAc,    mesh%colour,    mesh%wcolour   )
-    CALL allocate_shared_int_2D( mesh%nVAaAc, 5, mesh%colour_vi, mesh%wcolour_vi)
-    CALL allocate_shared_int_1D(              5, mesh%colour_nV, mesh%wcolour_nV)
-    
-    ! Not parallelised (but not needed, very fast)
-    IF (.NOT.par%master) THEN
-    
-      ALLOCATE( deg(  1  ))
-      ALLOCATE( L(    1,1))
-      ALLOCATE( Q4(   1  ))
-      ALLOCATE( Q5(   1  ))
-      ALLOCATE( LDP(  1  ))
-      ALLOCATE( mark( 1  ))
-      ALLOCATE( S_vi( 1  ))
-      ALLOCATE( S_L(  1,1))
-      ALLOCATE( S_u(  1  ))
-    
-    ELSE
-      
-      ! Initialise
-      ALLOCATE( deg(  mesh%nVAaAc             ))
-      ALLOCATE( L(    mesh%nVAaAc, mesh%nC_mem))
-      ALLOCATE( Q4(   mesh%nVAaAc             ))
-      ALLOCATE( Q5(   mesh%nVAaAc             ))
-      ALLOCATE( LDP(  mesh%nVAaAc             ))
-      ALLOCATE( mark( mesh%nVAaAc             ))
-      ALLOCATE( S_vi( mesh%nVAaAc             ))
-      ALLOCATE( S_L(  mesh%nVAaAc, mesh%nC_mem))
-      ALLOCATE( S_u(  mesh%nVAaAc             ))
-      
-      deg      = mesh%nCAaAc
-      L        = mesh%CAaAc
-      Q4       = 0
-      Q4n      = 0
-      Q5       = 0
-      Q5n      = 0
-      LDP      = 0
-      mark     = .FALSE.
-      S_vi     = 0
-      S_L      = 0
-      S_u      = 0
-      Sn       = 0
-      noofvert = mesh%nVAaAc
-      
-      ! Initialise Q4,Q5
-      DO vi = 1, mesh%nVAaAc
-        IF     (deg( vi) <= 4) THEN
-          CALL add_to_Q4( deg, LDP, Q4, Q4n, Q5, Q5n, vi)
-        ELSEIF (deg( vi) == 5) THEN
-          CALL add_to_Q5( deg, LDP, Q4, Q4n, Q5, Q5n, vi)
-        END IF
-      END DO
-      
-      ! Reduce the mesh
-      CALL reduce( mesh, deg, L, LDP, mark, Q4, Q4n, Q5, Q5n, S_vi, S_L, S_u, Sn, noofvert)
-      
-      ! Colour the mesh
-      CALL colour( mesh, Q4, S_vi, S_L, S_u, Sn)
-      
-      ! Check if the solution is valid
-      CALL check_solution( mesh)
-      
-      ! Create same-coloured parallelisation domains
-      mesh%colour_vi = 0
-      mesh%colour_nV = 0
-      
-      DO vi = 1, mesh%nVAaAc
-        ci = mesh%colour( vi)
-        mesh%colour_nV( ci) = mesh%colour_nV( ci) + 1
-        mesh%colour_vi( mesh%colour_nV( ci), ci) = vi
-      END DO
-      
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
-    ! Assign processor domains to the five colours
-    DO ci = 1, 5
-      CALL partition_list( mesh%colour_nV( ci), par%i, par%n, mesh%colour_v1( ci), mesh%colour_v2( ci))
-    END DO
-    
-    ! Clean up after yourself
-    DEALLOCATE( deg )
-    DEALLOCATE( L   )
-    DEALLOCATE( Q4  )
-    DEALLOCATE( Q5  )
-    DEALLOCATE( LDP )
-    DEALLOCATE( mark)
-    DEALLOCATE( S_vi)
-    DEALLOCATE( S_L )
-    DEALLOCATE( S_u )
-    
-  END SUBROUTINE calculate_five_colouring_AaAc
+  END SUBROUTINE calculate_five_colouring
   
   SUBROUTINE reduce( mesh, deg, L, LDP, mark, Q4, Q4n, Q5, Q5n, S_vi, S_L, S_u, Sn, noofvert)
     ! Iteratively reduce the mesh until 5 vertices remain
@@ -142,7 +161,7 @@ MODULE mesh_five_colour_module
     IMPLICIT NONE
   
     ! Input variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
     INTEGER,  DIMENSION(:    ), INTENT(INOUT)     :: deg
     INTEGER,  DIMENSION(:,:  ), INTENT(INOUT)     :: L
     INTEGER,  DIMENSION(:    ), INTENT(INOUT)     :: LDP
@@ -165,7 +184,7 @@ MODULE mesh_five_colour_module
     DO WHILE (noofvert > 5)
       
       it = it + 1
-      IF (it > mesh%nVAaAc*2) THEN
+      IF (it > mesh%nTri) THEN
         WRITE(0,*) '  ERROR - reduce got stuck!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
@@ -235,18 +254,19 @@ MODULE mesh_five_colour_module
     END DO ! while (noofvert > 5)
     
   END SUBROUTINE reduce
-  SUBROUTINE colour( mesh, Q4, S_vi, S_L, S_u, Sn)
+  SUBROUTINE colour_mesh( mesh, Q4, S_vi, S_L, S_u, Sn, colour_ac)
     ! Colour the mesh by reversing the reduction
     
     IMPLICIT NONE
   
     ! Input variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
     INTEGER,  DIMENSION(:    ), INTENT(IN)        :: Q4
     INTEGER,  DIMENSION(:    ), INTENT(IN)        :: S_vi
     INTEGER,  DIMENSION(:,:  ), INTENT(IN)        :: S_L
     INTEGER,  DIMENSION(:    ), INTENT(IN)        :: S_u
     INTEGER,                    INTENT(INOUT)     :: Sn
+    INTEGER,  DIMENSION(:    ), INTENT(INOUT)     :: colour_ac
     
     ! Local variables:
     INTEGER                                       :: vi, ui, col, ci, it
@@ -256,18 +276,18 @@ MODULE mesh_five_colour_module
     ALLOCATE( Lv( mesh%nC_mem))
     
     ! Colour vertices remaining in Q4
-    mesh%colour( Q4(1)) = 1
-    mesh%colour( Q4(2)) = 2
-    mesh%colour( Q4(3)) = 3
-    mesh%colour( Q4(4)) = 4
-    mesh%colour( Q4(5)) = 5
+    colour_ac( Q4(1)) = 1
+    colour_ac( Q4(2)) = 2
+    colour_ac( Q4(3)) = 3
+    colour_ac( Q4(4)) = 4
+    colour_ac( Q4(5)) = 5
     
     ! Colour vertices in stack
     it = 0
     DO WHILE (Sn > 0)
       
       it = it + 1
-      IF (it > mesh%nVAaAc*2) THEN
+      IF (it > mesh%nTri) THEN
         WRITE(0,*) '  ERROR - colour got stuck!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
@@ -279,7 +299,7 @@ MODULE mesh_five_colour_module
       IF (S_u( Sn) > 0) THEN
         ! Paint u and v with the same colour
         
-        mesh%colour( ui) = mesh%colour( vi)
+        colour_ac( ui) = colour_ac( vi)
         
       ELSE ! if (S_u( Sn) > 0)
         
@@ -288,7 +308,7 @@ MODULE mesh_five_colour_module
         DO ci = 1, mesh%nC_mem
           ui = Lv( ci)
           IF (ui == 0) EXIT
-          col = mesh%colour( ui)
+          col = colour_ac( ui)
           IF (col == 0) CYCLE
           L_colours( col) = 1
         END DO
@@ -300,7 +320,7 @@ MODULE mesh_five_colour_module
         ! Paint vi with unused colour
         DO ci = 1, 5
           IF (L_colours( ci) == 0) THEN
-            mesh%colour( vi) = ci
+            colour_ac( vi) = ci
             EXIT
           END IF
         END DO
@@ -313,7 +333,7 @@ MODULE mesh_five_colour_module
     
     DEALLOCATE( Lv)
     
-  END SUBROUTINE colour
+  END SUBROUTINE colour_mesh
   
   SUBROUTINE check_solution( mesh)
     ! Check if the solution is a valid five-colouring
@@ -324,16 +344,17 @@ MODULE mesh_five_colour_module
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     
     ! Local variables:
-    INTEGER                                       :: vi, ci, vj
+    INTEGER                                       :: ti, tti, tj
     
-    DO vi = 1, mesh%nVAaAc
-      IF (mesh%colour( vi) == 0) THEN
+    DO ti = 1, mesh%nTri
+      IF (mesh%colour( ti) == 0) THEN
         WRITE(0,*) '  ERROR - the resulting five-colouring is invalid!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
-      DO ci = 1, mesh%nCAaAc( vi)
-        vj = mesh%CAaAc( vi,ci)
-        IF (mesh%colour( vi) == mesh%colour(vj)) THEN
+      DO tti = 1, 3
+        tj = mesh%TriC( ti,tti)
+        IF (tj == 0) CYCLE
+        IF (mesh%colour( ti) == mesh%colour( tj)) THEN
           WRITE(0,*) '  ERROR - the resulting five-colouring is invalid!'
           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         END IF

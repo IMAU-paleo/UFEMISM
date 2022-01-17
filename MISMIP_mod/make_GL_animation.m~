@@ -1,0 +1,71 @@
+clc
+clear all
+close all
+
+addpath('/Users/berends/Documents/Models/UFEMISM/MATLAB');
+
+foldername = '../results_20220104_001';
+filename   = [foldername '/restart_ANT_00001.nc'];
+
+%% Create transect matrix
+mesh = read_mesh_from_file( filename);
+
+n = 1000;
+
+mesh.tol_dist   = 1e-5;
+mesh.TriMap     = zeros( mesh.nTri,1);
+mesh.TriStack1  = zeros( mesh.nTri,1);
+mesh.TriStack2  = zeros( mesh.nTri,1);
+mesh.TriStackN1 = 0;
+mesh.TriStackN2 = 0;
+
+xmin = mesh.xmin + (mesh.xmax - mesh.xmin) / 3;
+xmax = mesh.xmax - (mesh.xmax - mesh.xmin) / 3;
+xq = linspace( xmin, xmax, n)';
+yq = zeros(size(xq)) - 1/12 * (mesh.ymax - mesh.ymin);
+vq = [xq,yq];
+  
+T = construct_transect_matrix( mesh, vq);
+
+%% Set up plot
+wa = 500;
+ha = 400;
+
+margin_left   = 110;
+margin_right  = 25;
+margin_bottom = 80;
+margin_top    = 25;
+
+wf = margin_left + wa + margin_right;
+hf = margin_bottom + ha + margin_top;
+
+H.Fig = figure('position',[300,300,wf,hf],'color','w');
+H.Ax  = axes('parent',H.Fig,'units','pixels','position',[margin_left,margin_bottom,wa,ha],'fontsize',24,...
+  'xgrid','on','ygrid','on','xlim',[0,mesh.xmax]/1e3,'ylim',[-1000,4000]);
+xlabel('x (km)');
+ylabel('z (m)');
+
+H.bed      = line('parent',H.Ax,'xdata',[],'ydata',[],'linewidth',2,'color','k');
+H.ice_surf = line('parent',H.Ax,'xdata',[],'ydata',[],'linewidth',2,'color','k');
+H.ice_base = line('parent',H.Ax,'xdata',[],'ydata',[],'linewidth',2,'color','k');
+H.SL       = line('parent',H.Ax,'xdata',[mesh.xmin,mesh.xmax],'ydata',[0,0],'linewidth',1,'color','k','linestyle','--');
+
+time = ncread( filename,'time');
+for ti = 1: length(time)
+  
+  % Read data fields
+  Hi = ncread( filename,'Hi',[1,ti],[Inf,1]);
+  Hb = ncread( filename,'Hb',[1,ti],[Inf,1]);
+  Hs = ncread( filename,'Hs',[1,ti],[Inf,1]);
+  
+  % Create transect
+  Hi = T*Hi;
+  Hb = T*Hb;
+  Hs = T*Hs;
+  
+  ice_surf = Hs;
+  ice_surf( Hi==0) = NaN;
+  
+  ice_base = Hs - 
+  
+end

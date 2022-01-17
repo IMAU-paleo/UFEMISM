@@ -1,18 +1,35 @@
 MODULE mesh_update_module
+
   ! Routines for creating a new mesh based on forcing data on an old mesh.
 
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log
-  USE data_types_module,             ONLY: type_mesh, type_model_region, type_ice_model, type_PD_data_fields
-  USE mesh_help_functions_module,    ONLY: cart_bilinear_dp, max_cart_over_triangle_dp, mesh_bilinear_dp, is_in_triangle, check_mesh, &
-                                           partition_domain_regular, partition_domain_x_balanced, partition_domain_y_balanced, is_walltowall, &
-                                           new_triangle_contains_old_mask, write_mesh_to_text_file, is_boundary_segment, is_encroached_upon
-  USE mesh_memory_module,            ONLY: allocate_submesh_primary, extend_submesh_primary
-  USE mesh_Delaunay_module,          ONLY: split_triangle
-  USE mesh_derivatives_module,       ONLY: get_mesh_curvatures_vertex
-  USE mesh_creation_module,          ONLY: initialise_dummy_mesh, perturb_dummy_mesh, align_all_submeshes, refine_submesh_geo_only, debug_mesh_creation, &
-                                           merge_all_submeshes, create_final_mesh_from_merged_submesh, Lloyds_algorithm_single_iteration_submesh
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_ice_model, type_reference_geometry
+  USE mesh_help_functions_module,      ONLY: cart_bilinear_dp, max_cart_over_triangle_dp, mesh_bilinear_dp, is_in_triangle, check_mesh, &
+                                             partition_domain_regular, partition_domain_x_balanced, partition_domain_y_balanced, is_walltowall, &
+                                             new_triangle_contains_old_mask, write_mesh_to_text_file, is_boundary_segment, is_encroached_upon
+  USE mesh_memory_module,              ONLY: allocate_submesh_primary, extend_submesh_primary
+  USE mesh_Delaunay_module,            ONLY: split_triangle
+  USE mesh_creation_module,            ONLY: initialise_dummy_mesh, perturb_dummy_mesh, align_all_submeshes, refine_submesh_geo_only, debug_mesh_creation, &
+                                             merge_all_submeshes, create_final_mesh_from_merged_submesh, Lloyds_algorithm_single_iteration_submesh
+  USE mesh_operators_module,           ONLY: d2dx2_a_to_a_2D, d2dxdy_a_to_a_2D, d2dy2_a_to_a_2D
 
   IMPLICIT NONE
 
@@ -20,7 +37,7 @@ MODULE mesh_update_module
   
   ! === Check whether or not a triangle meets all the fitness criteria.
   ! If you want to change the rules for mesh creation, this is where to do it.
-  SUBROUTINE is_good_triangle( mesh_new, ti, mesh_old, ice, PD, IsGood)
+  SUBROUTINE is_good_triangle( mesh_new, ti, mesh_old, ice, refgeo_PD, IsGood)
     ! Check if triangle ti of the mesh is Bad (and should be refined by Ruppert's Algorithm)
     ! A triangle is Bad if:
     !   - its smallest internal angle is too small
@@ -32,7 +49,7 @@ MODULE mesh_update_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_new
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_old       ! The old mesh
     TYPE(type_ice_model),       INTENT(IN)        :: ice
-    TYPE(type_PD_data_fields),  INTENT(IN)        :: PD
+    TYPE(type_reference_geometry), INTENT(IN)     :: refgeo_PD
 
     INTEGER,                    INTENT(IN)        :: ti             ! The triangle we want to check
     LOGICAL,                    INTENT(OUT)       :: IsGood         ! The result
@@ -154,15 +171,15 @@ MODULE mesh_update_module
     ! ====================================
     
     vi = 1
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_ice,    vi, contains_ice   )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_land,   vi, contains_land  )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_ocean,  vi, contains_ocean )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_sheet,  vi, contains_sheet )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_shelf,  vi, contains_shelf )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_coast,  vi, contains_coast )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_margin, vi, contains_margin)
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_gl,     vi, contains_gl    )
-    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_cf,     vi, contains_cf    )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_ice_a,    vi, contains_ice   )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_land_a,   vi, contains_land  )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_ocean_a,  vi, contains_ocean )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_sheet_a,  vi, contains_sheet )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_shelf_a,  vi, contains_shelf )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_coast_a,  vi, contains_coast )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_margin_a, vi, contains_margin)
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_gl_a,     vi, contains_gl    )
+    CALL new_triangle_contains_old_mask( mesh_old, p, q, r, ice%mask_cf_a,     vi, contains_cf    )
         
     ! Special area resolution - ice margin, grounding line, calving front
     ! ===================================================================
@@ -194,25 +211,25 @@ MODULE mesh_update_module
     ! Second-order surface deviation (curvature times size)
     ! =====================================================
 
-    CALL mesh_bilinear_dp(mesh_old, ice%surf_curv, p, mesh_new%mesh_old_ti_in(vp), mean_mask_dp_p)
-    CALL mesh_bilinear_dp(mesh_old, ice%surf_curv, q, mesh_new%mesh_old_ti_in(vq), mean_mask_dp_q)
-    CALL mesh_bilinear_dp(mesh_old, ice%surf_curv, r, mesh_new%mesh_old_ti_in(vr), mean_mask_dp_r)
-    CALL mesh_bilinear_dp(mesh_old, ice%surf_curv, m, mesh_new%mesh_old_ti_in(vp), mean_mask_dp_m)
+    CALL mesh_bilinear_dp( mesh_old, ice%surf_curv, p, mesh_new%mesh_old_ti_in( vp), mean_mask_dp_p)
+    CALL mesh_bilinear_dp( mesh_old, ice%surf_curv, q, mesh_new%mesh_old_ti_in( vq), mean_mask_dp_q)
+    CALL mesh_bilinear_dp( mesh_old, ice%surf_curv, r, mesh_new%mesh_old_ti_in( vr), mean_mask_dp_r)
+    CALL mesh_bilinear_dp( mesh_old, ice%surf_curv, m, mesh_new%mesh_old_ti_in( vp), mean_mask_dp_m)
 
     max_curv = MAXVAL([mean_mask_dp_p, mean_mask_dp_q, mean_mask_dp_r, mean_mask_dp_m])
     dz = 0.5_dp * max_curv * dmax**2
 
     IF (contains_ice .AND. dz > mesh_new%dz_max_ice) THEN
       IsGood = .FALSE.
-     RETURN
+      RETURN
     END IF
     
     ! Ice-free bed topography (higher res for mountains so inception is captured better)
     ! ==================================================================================
     
-    CALL max_cart_over_triangle_dp( p, q, r, PD%Hb_grid, PD%grid%x, PD%grid%y, PD%grid%nx, PD%grid%ny, Hb_max, trinel)
+    CALL max_cart_over_triangle_dp( p, q, r, refgeo_PD%Hb_grid, refgeo_PD%grid%x, refgeo_PD%grid%y, refgeo_PD%grid%nx, refgeo_PD%grid%ny, Hb_max, trinel)
     IF (trinel==0) THEN
-      CALL cart_bilinear_dp( PD%Hb_grid, PD%grid%x, PD%grid%y, PD%grid%nx, PD%grid%ny, (p+q+r)/3._dp, Hb_max)
+      CALL cart_bilinear_dp( refgeo_PD%Hb_grid, refgeo_PD%grid%x, refgeo_PD%grid%y, refgeo_PD%grid%nx, refgeo_PD%grid%ny, (p+q+r)/3._dp, Hb_max)
     END IF
     
     lr_lo = LOG( mesh_new%res_max)
@@ -225,7 +242,6 @@ MODULE mesh_update_module
       IsGood = .FALSE.
       RETURN      
     END IF
-
 
   END SUBROUTINE is_good_triangle
   
@@ -243,7 +259,8 @@ MODULE mesh_update_module
     CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'create_new_mesh'
     INTEGER                                       :: n1, n2
     INTEGER                                       :: vi
-    REAL(dp)                                      :: d2dx2, d2dxdy, d2dy2
+    REAL(dp), DIMENSION(:    ), POINTER           ::  d2dx2,  d2dxdy,  d2dy2
+    INTEGER                                       :: wd2dx2, wd2dxdy, wd2dy2
     INTEGER                                       :: orientation, it
     TYPE(type_mesh)                               :: submesh
     REAL(dp)                                      :: xmin, xmax, ymin, ymax
@@ -266,10 +283,19 @@ MODULE mesh_update_module
     CALL widen_high_res_zones( region%ice, region%mesh, region%time)
     
     ! Calculate surface curvature
-    DO vi = region%mesh%v1, region%mesh%v2
-      CALL get_mesh_curvatures_vertex( region%mesh, region%ice%Hs, d2dx2, d2dxdy, d2dy2, vi)
-      region%ice%surf_curv(vi) = MAX(-1E-6, MIN(1E-6, SQRT(d2dx2**2 + d2dy2**2 + d2dxdy**2)))
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dx2,  wd2dx2)
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dxdy, wd2dxdy)
+    CALL allocate_shared_dp_1D( region%mesh%nV, d2dy2,  wd2dy2)
+    CALL d2dx2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dx2 )
+    CALL d2dxdy_a_to_a_2D( region%mesh, region%ice%Hs_a, d2dxdy)
+    CALL d2dy2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dy2 )
+    DO vi = region%mesh%vi1, region%mesh%vi2
+      region%ice%surf_curv( vi) = MAX(-1E-6, MIN(1E-6, SQRT(d2dx2( vi)**2 + d2dy2( vi)**2 + d2dxdy( vi)**2)))
     END DO
+    CALL sync
+    CALL deallocate_shared( wd2dx2)
+    CALL deallocate_shared( wd2dxdy)
+    CALL deallocate_shared( wd2dy2)
     
     ! Determine the domain of this process' submesh (based on distribution of vertices in
     ! the previous mesh, which works very well for workload balancing)
@@ -310,7 +336,7 @@ MODULE mesh_update_module
       IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
       
       ! Refine the process submesh
-      CALL refine_mesh( submesh, region%mesh, region%ice, region%PD) 
+      CALL refine_mesh( submesh, region%mesh, region%ice, region%refgeo_PD) 
       
       ! Align with neighbouring submeshes
       CALL align_all_submeshes( submesh, orientation)
@@ -379,59 +405,59 @@ MODULE mesh_update_module
   ! Ice margin
   ! ==========
     
-      mask_widened = ice%mask_margin
+      mask_widened = ice%mask_margin_a
       
       DO vi = 1, mesh%nV
-        IF (ice%mask_margin(vi)==1) THEN
-          DO ci = 1, mesh%nC(vi)
-            vc = mesh%C(vi,ci)
-            D = NORM2( mesh%V(vi,:) - mesh%V(vc,:))
+        IF (ice%mask_margin_a( vi)==1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            D = NORM2( mesh%V( vi,:) - mesh%V( vc,:))
             IF (D < C%res_max_margin * 1000._dp * widening_factor) THEN
-              mask_widened(vc) = 1
+              mask_widened( vc) = 1
             END IF
           END DO
         END IF
       END DO
       
-      ice%mask_margin = mask_widened
+      ice%mask_margin_a = mask_widened
     
   ! Grounding line
   ! ==============
     
-      mask_widened = ice%mask_gl
+      mask_widened = ice%mask_gl_a
       
       DO vi = 1, mesh%nV
-        IF (ice%mask_gl(vi)==1) THEN
-          DO ci = 1, mesh%nC(vi)
-            vc = mesh%C(vi,ci)
-            D = NORM2( mesh%V(vi,:) - mesh%V(vc,:))
+        IF (ice%mask_gl_a( vi)==1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            D = NORM2( mesh%V( vi,:) - mesh%V( vc,:))
             IF (D < C%res_max_gl * 1000._dp * widening_factor) THEN
-              mask_widened(vc) = 1
+              mask_widened( vc) = 1
             END IF
           END DO
         END IF
       END DO
       
-      ice%mask_gl = mask_widened
+      ice%mask_gl_a = mask_widened
     
   ! Calving front
   ! =============
     
-      mask_widened = ice%mask_cf
+      mask_widened = ice%mask_cf_a
       
       DO vi = 1, mesh%nV
-        IF (ice%mask_cf(vi)==1) THEN
-          DO ci = 1, mesh%nC(vi)
-            vc = mesh%C(vi,ci)
-            D = NORM2( mesh%V(vi,:) - mesh%V(vc,:))
+        IF (ice%mask_cf_a( vi)==1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            D = NORM2( mesh%V( vi,:) - mesh%V(vc,:))
             IF (D < C%res_max_cf * 1000._dp * widening_factor) THEN
-              mask_widened(vc) = 1
+              mask_widened( vc) = 1
             END IF
           END DO
         END IF
       END DO
       
-      ice%mask_cf = mask_widened
+      ice%mask_cf_a = mask_widened
       
     END IF ! IF (par%master) THEN
     CALL sync
@@ -439,7 +465,7 @@ MODULE mesh_update_module
   END SUBROUTINE widen_high_res_zones
   
   ! == Extended Ruppert's algorithm
-  SUBROUTINE refine_mesh( mesh, mesh_old, ice, PD)
+  SUBROUTINE refine_mesh( mesh, mesh_old, ice, refgeo_PD)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
     
     IMPLICIT NONE
@@ -448,7 +474,7 @@ MODULE mesh_update_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh_old
     TYPE(type_ice_model),       INTENT(IN)        :: ice
-    TYPE(type_PD_data_fields),  INTENT(IN)        :: PD
+    TYPE(type_reference_geometry), INTENT(IN)     :: refgeo_PD
     
     ! Local variables
     INTEGER                                       :: ti
@@ -484,7 +510,7 @@ MODULE mesh_update_module
         ! Bad, refine it and add the affected triangles to the RefineStack.
       
         ti = mesh%RefStack( mesh%RefStackN)
-        CALL is_good_triangle(mesh, ti, mesh_old, ice, PD, IsGood)
+        CALL is_good_triangle(mesh, ti, mesh_old, ice, refgeo_PD, IsGood)
               
         IF (IsGood) THEN
           ! Remove this triangle from the stack
@@ -574,17 +600,17 @@ MODULE mesh_update_module
     lugl     = 0._dp
     lucf     = 0._dp
     
-    DO ti = mesh%t1, mesh%t2
+    DO ti = mesh%ti1, mesh%ti2
      
       ! Triangle vertex indices
-      v1 = mesh%Tri(ti,1)
-      v2 = mesh%Tri(ti,2)
-      v3 = mesh%Tri(ti,3)
+      v1 = mesh%Tri( ti,1)
+      v2 = mesh%Tri( ti,2)
+      v3 = mesh%Tri( ti,3)
     
       ! Triangle vertex coordinates
-      p = mesh%V(v1,:)
-      q = mesh%V(v2,:)
-      r = mesh%V(v3,:)
+      p = mesh%V( v1,:)
+      q = mesh%V( v2,:)
+      r = mesh%V( v3,:)
 
       ! Triangle legs
       pq = p-q
@@ -594,7 +620,7 @@ MODULE mesh_update_module
       ! Longest triangle leg
       dmax = MAXVAL([SQRT(pq(1)**2+pq(2)**2), SQRT(qr(1)**2+qr(2)**2), SQRT(rp(1)**2+rp(2)**2)])
       
-      IF (ice%mask_coast(v1)==1 .OR. ice%mask_coast(v2)==1 .OR. ice%mask_coast(v3)==1) THEN
+      IF (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) THEN
         ncoast = ncoast + 1
         lcoast = lcoast + dmax
         IF (dmax > C%res_max_coast*2.0_dp*1000._dp*res_tol) THEN
@@ -603,7 +629,7 @@ MODULE mesh_update_module
         END IF
       END IF
       
-      IF (ice%mask_margin(v1)==1 .OR. ice%mask_margin(v2)==1 .OR. ice%mask_margin(v3)==1) THEN
+      IF (ice%mask_margin_a( v1)==1 .OR. ice%mask_margin_a( v2)==1 .OR. ice%mask_margin_a( v3)==1) THEN
         nmargin = nmargin + 1
         lmargin = lmargin + dmax
         IF (dmax > C%res_max_margin*2.0_dp*1000._dp*res_tol) THEN
@@ -611,7 +637,7 @@ MODULE mesh_update_module
           lumargin = lumargin + dmax
         END IF
       END IF
-      IF (ice%mask_gl(v1)==1 .OR. ice%mask_gl(v2)==1 .OR. ice%mask_gl(v3)==1) THEN
+      IF (ice%mask_gl_a( v1)==1 .OR. ice%mask_gl_a( v2)==1 .OR. ice%mask_gl_a( v3)==1) THEN
         ngl = ngl + 1
         lgl = lgl + dmax
         IF (dmax > C%res_max_gl*2.0_dp*1000._dp*res_tol) THEN
@@ -619,7 +645,7 @@ MODULE mesh_update_module
           lugl = lugl + dmax
         END IF
       END IF
-      IF (ice%mask_cf(v1)==1 .OR. ice%mask_cf(v2)==1 .OR. ice%mask_cf(v3)==1) THEN
+      IF (ice%mask_cf_a( v1)==1 .OR. ice%mask_cf_a( v2)==1 .OR. ice%mask_cf_a( v3)==1) THEN
         ncf = ncf + 1
         lcf = lcf + dmax
         IF (dmax > C%res_max_cf*2.0_dp*1000._dp*res_tol) THEN
@@ -673,7 +699,6 @@ MODULE mesh_update_module
       
     !IF (par%master) WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(meshfitness * 100._dp), ' %'
     
-        
   END SUBROUTINE determine_mesh_fitness
 
 END MODULE mesh_update_module

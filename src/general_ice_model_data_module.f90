@@ -1,94 +1,61 @@
 MODULE general_ice_model_data_module
 
+  ! Only "secondary geometry" right now: masks, surface elevation, TAF
+
+  ! Import basic functionality
   USE mpi
-  USE configuration_module,          ONLY: dp, C
-  USE parallel_module,               ONLY: par, sync, ierr, cerr, write_to_memory_log, &
-                                           allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                           allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                           allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                           allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                           deallocate_shared
-  USE data_types_module,             ONLY: type_mesh, type_ice_model
-  USE netcdf_module,                 ONLY: debug, write_to_debug_file
-  USE mesh_ArakawaC_module,          ONLY: map_Aa_to_Ac, map_Aa_to_Ac_3D, get_mesh_derivatives_Ac
-  USE mesh_derivatives_module,       ONLY: get_mesh_derivatives, get_mesh_curvatures
-  USE zeta_module,                   ONLY: vertical_average, vertical_integrate
-  USE parameters_module,             ONLY: seawater_density, ice_density 
+  USE configuration_module,            ONLY: dp, C
+  USE parameters_module
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                             deallocate_shared
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  
+  ! Import specific functionality
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model
+  USE utilities_module,                ONLY: is_floating, surface_elevation, thickness_above_floatation
+  USE mesh_help_functions_module,      ONLY: find_triangle_area
+  USE mesh_operators_module,           ONLY: map_a_to_b_2D
 
   IMPLICIT NONE
 
 CONTAINS
   
   ! Routines for calculating general ice model data - Hs, masks, ice physical properties
-  SUBROUTINE update_general_ice_model_data( mesh, ice, time)
+  SUBROUTINE update_general_ice_model_data( mesh, ice)
     
     IMPLICIT NONE
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp),                            INTENT(IN)    :: time
     
     ! Local variables
     CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'update_general_ice_model_data'
     INTEGER                                            :: n1, n2
-    INTEGER                                            :: vi, aci
+    INTEGER                                            :: vi
     
     n1 = par%mem%n
- 
-    ! Map basic ice data to Ac mesh
-    CALL map_Aa_to_Ac(    mesh, ice%Hi, ice%Hi_Ac)
-    CALL map_Aa_to_Ac(    mesh, ice%Hb, ice%Hb_Ac)
-    CALL map_Aa_to_Ac(    mesh, ice%SL, ice%SL_Ac)
-    CALL map_Aa_to_Ac_3D( mesh, ice%Ti, ice%Ti_Ac)
     
-    ! Hs
-    DO vi = mesh%v1, mesh%v2
-      ice%Hs(    vi ) = ice%Hi(    vi ) + MAX(ice%SL(    vi ) - ice_density / seawater_density * ice%Hi(    vi ), ice%Hb(    vi ))
+    ! Calculate surface elevation and thickness above floatation
+    DO vi = mesh%vi1, mesh%vi2
+      ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
     END DO
     CALL sync
-    DO aci = mesh%ac1, mesh%ac2
-      ice%Hs_Ac( aci) = ice%Hi_Ac( aci) + MAX(ice%SL_Ac( aci) - ice_density / seawater_density * ice%Hi_Ac( aci), ice%Hb_Ac( aci))
-    END DO
-    
-    ! dHs_dt
-    ice%dHs_dt( mesh%v1:mesh%v2) = ice%dHb_dt( mesh%v1:mesh%v2) + ice%dHi_dt( mesh%v1:mesh%v2)
     
     ! Determine masks
     CALL determine_masks( mesh, ice)
-    
-    ! Calculate surface slopes on Aa and Ac mesh
-    CALL get_mesh_derivatives(    mesh, ice%Hi, ice%dHi_dx,    ice%dHi_dy)
-    CALL get_mesh_derivatives(    mesh, ice%Hs, ice%dHs_dx,    ice%dHs_dy)
-    CALL get_mesh_derivatives_Ac( mesh, ice%Hi, ice%dHi_dx_Ac, ice%dHi_dy_Ac, ice%dHi_dp_Ac, ice%dHi_do_Ac)
-    CALL get_mesh_derivatives_Ac( mesh, ice%Hb, ice%dHb_dx_Ac, ice%dHb_dy_Ac, ice%dHb_dp_Ac, ice%dHb_do_Ac)
-    CALL get_mesh_derivatives_Ac( mesh, ice%Hs, ice%dHs_dx_Ac, ice%dHs_dy_Ac, ice%dHs_dp_Ac, ice%dHs_do_Ac)
-    CALL get_mesh_derivatives_Ac( mesh, ice%SL, ice%dSL_dx_Ac, ice%dSL_dy_Ac, ice%dSL_dp_Ac, ice%dSL_do_Ac)
-    
-    ! Use a different surface slope for shelves, to make sure the SSA gets the
-    ! correct slopes around the discontinuity that is the grounding line.
-    DO vi = mesh%v1, mesh%v2
-      IF (ice%mask_ocean( vi) == 0) THEN
-        ice%dHs_dx_shelf( vi) = ice%dHs_dx( vi)
-        ice%dHs_dy_shelf( vi) = ice%dHs_dy( vi)
-      ELSE
-        ice%dHs_dx_shelf( vi) = (1._dp - ice_density / seawater_density) * ice%dHi_dx( vi)
-        ice%dHs_dy_shelf( vi) = (1._dp - ice_density / seawater_density) * ice%dHi_dy( vi)
-      END IF
-    END DO
-    DO aci = mesh%ac1, mesh%ac2
-      IF (ice%mask_ocean_Ac( aci) == 0) THEN
-        ice%dHs_dx_shelf_Ac( aci) = ice%dHs_dx_Ac( aci)
-        ice%dHs_dy_shelf_Ac( aci) = ice%dHs_dy_Ac( aci)
-      ELSE
-        ice%dHs_dx_shelf_Ac( aci) = (1._dp - ice_density / seawater_density) * ice%dHi_dx_Ac( aci)
-        ice%dHs_dy_shelf_Ac( aci) = (1._dp - ice_density / seawater_density) * ice%dHi_dy_Ac( aci)
-      END IF
-    END DO
-    CALL sync
-        
-    ! Calculate physical properties on both Aa and Ac mesh
-    CALL ice_physical_properties( mesh, ice, time)
     
     n2 = par%mem%n
     !CALL write_to_memory_log( routine_name, n1, n2)
@@ -103,375 +70,586 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
     TYPE(type_ice_model),                INTENT(INOUT) :: ice 
   
-    INTEGER                                       :: vi, ci, vc, aci, vj
-
-    INTEGER, PARAMETER                            :: type_land           = 0
-    INTEGER, PARAMETER                            :: type_ocean          = 1
-    INTEGER, PARAMETER                            :: type_lake           = 2
-    INTEGER, PARAMETER                            :: type_sheet          = 3
-    INTEGER, PARAMETER                            :: type_shelf          = 4
-    INTEGER, PARAMETER                            :: type_coast          = 5
-    INTEGER, PARAMETER                            :: type_margin         = 6
-    INTEGER, PARAMETER                            :: type_groundingline  = 7
-    INTEGER, PARAMETER                            :: type_calvingfront   = 8
+    INTEGER                                       :: vi, ci, vc
     
     ! Start out with land everywhere, fill in the rest based on input.
-    ice%mask_land(      mesh%v1:mesh%v2  ) = 1
-    ice%mask_land_Ac(   mesh%ac1:mesh%ac2) = 1
-    ice%mask_ocean(     mesh%v1:mesh%v2  ) = 0
-    ice%mask_ocean_Ac(  mesh%ac1:mesh%ac2) = 0
-    ice%mask_lake(      mesh%v1:mesh%v2  ) = 0
-    ice%mask_lake_Ac(   mesh%ac1:mesh%ac2) = 0
-    ice%mask_ice(       mesh%v1:mesh%v2  ) = 0
-    ice%mask_ice_Ac(    mesh%ac1:mesh%ac2) = 0
-    ice%mask_sheet(     mesh%v1:mesh%v2  ) = 0
-    ice%mask_sheet_Ac(  mesh%ac1:mesh%ac2) = 0
-    ice%mask_shelf(     mesh%v1:mesh%v2  ) = 0
-    ice%mask_shelf_Ac(  mesh%ac1:mesh%ac2) = 0
-    ice%mask_coast(     mesh%v1:mesh%v2  ) = 0
-    ice%mask_coast_Ac(  mesh%ac1:mesh%ac2) = 0
-    ice%mask_margin(    mesh%v1:mesh%v2  ) = 0
-    ice%mask_margin_Ac( mesh%ac1:mesh%ac2) = 0
-    ice%mask_gl(        mesh%v1:mesh%v2  ) = 0
-    ice%mask_gl_Ac(     mesh%ac1:mesh%ac2) = 0
-    ice%mask_cf(        mesh%v1:mesh%v2  ) = 0
-    ice%mask_cf_Ac(     mesh%ac1:mesh%ac2) = 0
-    ice%mask(           mesh%v1:mesh%v2  ) = type_land
-    ice%mask_Ac(        mesh%ac1:mesh%ac2) = type_land
+    ice%mask_land_a(   mesh%vi1:mesh%vi2) = 1
+    ice%mask_ocean_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_lake_a(   mesh%vi1:mesh%vi2) = 0
+    ice%mask_ice_a(    mesh%vi1:mesh%vi2) = 0
+    ice%mask_sheet_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_shelf_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_coast_a(  mesh%vi1:mesh%vi2) = 0
+    ice%mask_margin_a( mesh%vi1:mesh%vi2) = 0
+    ice%mask_gl_a(     mesh%vi1:mesh%vi2) = 0
+    ice%mask_cf_a(     mesh%vi1:mesh%vi2) = 0
+    ice%mask_a(        mesh%vi1:mesh%vi2) = C%type_land
     CALL sync
   
-    ! First on the Aa mesh
-    ! ====================
-  
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Determine ocean (both open and shelf-covered)
-      IF (is_floating( ice%Hi( vi), ice%Hb( vi), ice%SL( vi))) THEN
-        ice%mask_ocean( vi) = 1
-        ice%mask_land(  vi) = 0
-        ice%mask(       vi) = type_ocean
+      IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
+        ice%mask_ocean_a( vi) = 1
+        ice%mask_land_a(  vi) = 0
+        ice%mask_a(       vi) = C%type_ocean
       END IF
     
       ! Determine ice
-      IF (ice%Hi( vi) > 0._dp) THEN
-        ice%mask_ice( vi)  = 1
+      IF (ice%Hi_a( vi) > 0._dp) THEN
+        ice%mask_ice_a( vi)  = 1
       END IF
       
       ! Determine sheet
-      IF (ice%mask_ice( vi) == 1 .AND. ice%mask_land( vi) == 1) THEN
-        ice%mask_sheet( vi) = 1
-        ice%mask(       vi) = type_sheet
+      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
+        ice%mask_sheet_a( vi) = 1
+        ice%mask_a(       vi) = C%type_sheet
       END IF
     
       ! Determine shelf
-      IF (ice%mask_ice( vi) == 1 .AND. ice%mask_ocean( vi) == 1) THEN
-        ice%mask_shelf( vi) = 1
-        ice%mask(       vi) = type_shelf
+      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ocean_a( vi) == 1) THEN
+        ice%mask_shelf_a( vi) = 1
+        ice%mask_a(       vi) = C%type_shelf
       END IF
       
-    END DO ! DO vi = mesh%v1, mesh%v2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
   
     ! Determine coast, grounding line and calving front
-    DO vi = mesh%v1, mesh%v2
+    DO vi = mesh%vi1, mesh%vi2
     
-      IF (ice%mask_land( vi) == 1) THEN  
+      IF (ice%mask_land_a( vi) == 1) THEN  
         ! Land bordering ocean equals coastline
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean( vc) == 1) THEN
-            ice%mask( vi) = type_coast
-            ice%mask_coast( vi) =  1
+          IF (ice%mask_ocean_a( vc) == 1) THEN
+            ice%mask_a( vi) = C%type_coast
+            ice%mask_coast_a( vi) =  1
           END IF
         END DO
       END IF
     
-      IF (ice%mask_ice( vi) == 1) THEN  
+      IF (ice%mask_ice_a( vi) == 1) THEN  
         ! Ice bordering non-ice equals margin
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice( vc) == 0) THEN
-            ice%mask( vi) = type_margin
-            ice%mask_margin( vi) =  1
+          IF (ice%mask_ice_a( vc) == 0) THEN
+            ice%mask_a( vi) = C%type_margin
+            ice%mask_margin_a( vi) =  1
           END IF
         END DO
       END IF
     
-      IF (ice%mask_sheet( vi) == 1) THEN  
+      IF (ice%mask_sheet_a( vi) == 1) THEN  
         ! Sheet bordering shelf equals groundingline
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_shelf( vc) == 1) THEN
-            ice%mask( vi) = type_groundingline
-            ice%mask_gl( vi) = 1
+          IF (ice%mask_shelf_a( vc) == 1) THEN
+            ice%mask_a( vi) = C%type_groundingline
+            ice%mask_gl_a( vi) = 1
           END IF
         END DO
       END IF
   
-      IF (ice%mask_ice( vi) == 1) THEN  
-        ! Ice (sheet or shelf) bordering ocean equals calvingfront
+      IF (ice%mask_ice_a( vi) == 1) THEN  
+        ! Ice (sheet or shelf) bordering open ocean equals calvingfront
         
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean( vc) == 1) THEN
-            ice%mask( vi) = type_calvingfront
-            ice%mask_cf( vi) = 1
+          IF (ice%mask_ocean_a( vc) == 1 .AND. ice%mask_ice_a( vc) == 0) THEN
+            ice%mask_a( vi) = C%type_calvingfront
+            ice%mask_cf_a( vi) = 1
           END IF
         END DO
         
       END IF
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-    
-    ! Then on the Ac mesh
-    ! ===================
-  
-    DO aci = mesh%ac1, mesh%ac2
-      
-      ! Determine ocean (both open and shelf-covered)
-      IF (is_floating( ice%Hi_Ac( aci), ice%Hb_Ac( aci), ice%SL_Ac( aci))) THEN
-        ice%mask_ocean_Ac( aci) = 1
-        ice%mask_land_Ac(  aci) = 0
-        ice%mask_Ac(       aci) = type_ocean
-      END IF
-    
-      ! Determine ice
-      IF (ice%Hi_Ac( aci) > 0._dp) THEN
-        ice%mask_ice_Ac(  aci) = 1
-      END IF
-      
-      ! Determine sheet
-      IF (ice%mask_ice_Ac( aci) == 1 .AND. ice%mask_land_Ac( aci) == 1) THEN
-        ice%mask_sheet_Ac( aci) = 1
-        ice%mask_Ac(       aci) = type_sheet
-      END IF
-    
-      ! Determine shelf
-      IF (ice%mask_ice_Ac( aci) == 1 .AND. ice%mask_ocean_Ac( aci) == 1) THEN
-        ice%mask_shelf_Ac( aci) = 1
-        ice%mask_Ac(       aci) = type_shelf
-      END IF
-      
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-  
-    ! Determine coast, margin, grounding line and calving front
-    DO aci = mesh%ac1, mesh%ac2
-    
-      vi = mesh%Aci( aci,1)
-      vj = mesh%Aci( aci,2)
-      
-      IF ((ice%mask_land( vi) == 1 .AND. ice%mask_ocean( vj) == 1) .OR. &
-          (ice%mask_land( vj) == 1 .AND. ice%mask_ocean( vi) == 1)) THEN
-        ! Land bordering ocean equals coast
-        ice%mask_Ac( aci) = type_coast
-        ice%mask_coast_Ac( aci) = 1
-      END IF
-      
-      IF ((ice%mask_ice( vi) == 1 .AND. ice%mask_ice( vj) == 0) .OR. &
-          (ice%mask_ice( vj) == 1 .AND. ice%mask_ice( vi) == 0)) THEN
-        ! Ice bordering non-ice equals margin
-        ice%mask_Ac( aci) = type_margin
-        ice%mask_margin_Ac( aci) = 1
-      END IF
-      
-      IF ((ice%mask_sheet( vi) == 1 .AND. ice%mask_shelf( vj) == 1) .OR. &
-          (ice%mask_sheet( vj) == 1 .AND. ice%mask_shelf( vi) == 1)) THEN
-        ! Sheet bordering shelf equals groundingline
-        ice%mask_Ac( aci) = type_groundingline
-        ice%mask_gl_Ac( aci) = 1
-      END IF
-      
-      IF ((ice%mask_ice( vi) == 1 .AND. ice%mask_shelf( vj) == 0 .AND. ice%mask_ocean( vj) == 1) .OR. &
-          (ice%mask_ice( vj) == 1 .AND. ice%mask_shelf( vi) == 0 .AND. ice%mask_ocean( vi) == 1)) THEN
-        ! Ice bordering open ocean equals calvingfront
-        ice%mask_Ac( aci) = type_calvingfront
-        ice%mask_cf_Ac( aci) = 1
-      END IF
-    END DO ! DO aci = mesh%ac1, mesh%ac2
+    END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
   
   END SUBROUTINE determine_masks
-  SUBROUTINE ice_physical_properties( mesh, ice, time)
-    ! Calculate the pressure melting point, flow parameter, specific heat and thermal conductivity of the ice.
-      
-    USE parameters_module, ONLY: T0, CC, SMT, sec_per_year
-      
+  
+! == Routines for calculating sub-grid grounded fractions
+  SUBROUTINE determine_grounded_fractions( mesh, ice)
+    ! Determine the grounded fractions of all grid cells
+    
     IMPLICIT NONE
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp),                            INTENT(IN)    :: time
-  
+    
+    CALL determine_grounded_fractions_a( mesh, ice)
+    CALL determine_grounded_fractions_b( mesh, ice)
+    
+  END SUBROUTINE determine_grounded_fractions
+  SUBROUTINE determine_grounded_fractions_a( mesh, ice)
+    ! Determine the grounded fractions of all grid cells on the a-grid
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
     ! Local variables:
-    INTEGER                                            :: vi, ci, k
-    REAL(dp)                                           :: Ti_mean     ! Mean ice temperature at the shelf [K]
-    REAL(dp), DIMENSION(C%nZ)                          :: prof
+    REAL(dp), DIMENSION(:    ), POINTER                ::  TAF_b
+    INTEGER                                            :: wTAF_b
+    INTEGER                                            :: vi, ci, vj, iti, iti2, ti1, ti2
+    REAL(dp)                                           :: TAF_max, TAF_min
+    REAL(dp), DIMENSION(2)                             :: va, ccb1, ccb2
+    REAL(dp)                                           :: TAFa, TAFb, TAFc, A_vor, A_tri_tot, A_tri_grnd, A_grnd
     
-    REAL(dp)                                           :: A_flow_MISMIP
-    
-    REAL(dp), PARAMETER                                :: A_low_temp  = 1.14E-05_dp   ! [Pa^-3 yr^-1] The constant a in the Arrhenius relationship
-    REAL(dp), PARAMETER                                :: A_high_temp = 5.47E+10_dp   ! [Pa^-3 yr^-1] The constant a in the Arrhenius relationship
-    REAL(dp), PARAMETER                                :: Q_low_temp  = 6.0E+04_dp    ! [J mol^-1] Activation energy for creep in the Arrhenius relationship
-    REAL(dp), PARAMETER                                :: Q_high_temp = 13.9E+04_dp   ! [J mol^-1] Activation energy for creep in the Arrhenius relationship
-    REAL(dp), PARAMETER                                :: R_gas       = 8.314_dp      ! Gas constant [J mol^-1 K^-1]
-    
-    ! If we're doing one of the EISMINT experiments, use fixed values
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test') THEN
-          
-        ice%A_flow(         mesh%v1:mesh%v2,   :) = 1.0E-16_dp
-        ice%A_flow_Ac(      mesh%ac1:mesh%ac2, :) = 1.0E-16_dp
-        ice%A_flow_mean(    mesh%v1:mesh%v2     ) = 1.0E-16_dp
-        ice%A_flow_mean_Ac( mesh%ac1:mesh%ac2   ) = 1.0E-16_dp
-        ice%Ki(             mesh%v1:mesh%v2,   :) = 2.1_dp * sec_per_year
-        ice%Cpi(            mesh%v1:mesh%v2,   :) = 2009._dp
-        
-        DO vi = mesh%v1, mesh%v2
-          DO k = 1, C%nZ
-            ice%Ti_pmp( vi,k) = T0 - (C%zeta(k) * ice%Hi( vi) * 8.7E-04_dp)
-          END DO
-        END DO    
-        CALL sync
-        
-        RETURN
-        
-      ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
+    ! Map thickness-above-floatation to the b-grid
+    CALL allocate_shared_dp_1D( mesh%nTri, TAF_b, wTAF_b)
+    CALL map_a_to_b_2D(  mesh, ice%TAF_a, TAF_b)
+  
+    DO vi = mesh%vi1, mesh%vi2
       
-        A_flow_MISMIP = 1.0E-16_dp
-        IF     (time < 25000._dp) THEN
-          A_flow_MISMIP = 1.0E-16_dp
-        ELSEIF (time < 50000._dp) THEN
-          A_flow_MISMIP = 1.0E-17_dp
-        ELSEIF (time < 75000._dp) THEN
-          A_flow_MISMIP = 1.0E-16_dp
-        END IF
+      ! Skip border vertices
+      IF (mesh%edge_index( vi) > 0) THEN
+        ice%f_grnd_a( vi) = 0._dp
+        CYCLE
+      END IF
+      
+      ! Determine maximum and minimum TAF of the local neighbourhood
+      TAF_max = -1E6_dp
+      TAF_min =  1E6_dp
+      
+      TAF_max = MAX( TAF_max, ice%TAF_a( vi))
+      TAF_min = MIN( TAF_min, ice%TAF_a( vi))
+      
+      DO ci = 1, mesh%nC( vi)
+        vj = mesh%C( vi,ci)
+        TAF_max = MAX( TAF_max, ice%TAF_a( vj))
+        TAF_min = MIN( TAF_min, ice%TAF_a( vj))
+      END DO
+      
+      ! If the entire local neighbourhood is grounded, the answer is trivial
+      IF (TAF_min >= 0._dp) THEN
+        ice%f_grnd_a( vi) = 1._dp
+        CYCLE
+      END IF
+      
+      ! If the entire local neighbourhood is floating, the answer is trivial
+      IF (TAF_max <= 0._dp) THEN
+        ice%f_grnd_a( vi) = 0._dp
+        CYCLE
+      END IF
+      
+      ! The local neighbourhood contains both grounded and floating vertices.
+      A_vor  = 0._dp
+      A_grnd = 0._dp
+      
+      va   = mesh%V( vi,:)
+      TAFa = ice%TAF_a( vi)
+      
+      DO iti = 1, mesh%niTri( vi)
         
-        ice%A_flow(         mesh%v1:mesh%v2,   :) = A_flow_MISMIP
-        ice%A_flow_Ac(      mesh%ac1:mesh%ac2, :) = A_flow_MISMIP
-        ice%A_flow_mean(    mesh%v1:mesh%v2     ) = A_flow_MISMIP
-        ice%A_flow_mean_Ac( mesh%ac1:mesh%ac2   ) = A_flow_MISMIP
-        CALL sync
+        iti2 = iti + 1
+        IF (iti == mesh%niTri( vi)) iti2 = 1
         
-        RETURN
+        ti1 = mesh%iTri( vi,iti )
+        ti2 = mesh%iTri( vi,iti2)
         
+        ccb1 = mesh%Tricc( ti1,:)
+        ccb2 = mesh%Tricc( ti2,:)
+        
+        TAFb = TAF_b( ti1)
+        TAFc = TAF_b( ti2)
+        
+        ! Determine total area of, and grounded area within, this subtriangle
+        CALL determine_grounded_area_triangle( va, ccb1, ccb2, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
+        
+        A_vor  = A_vor  + A_tri_tot
+        A_grnd = A_grnd + A_tri_grnd
+        
+      END DO ! DO iati = 1, mesh%niTriAaAc( avi)
+      
+      ! Calculate the grounded fraction of this Voronoi cell
+      ice%f_grnd_a( vi) = A_grnd / A_vor
+      
+    END DO
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wTAF_b)
+    
+  END SUBROUTINE determine_grounded_fractions_a
+  SUBROUTINE determine_grounded_fractions_b( mesh, ice)
+    ! Determine the grounded fractions of all grid cells on the b-grid
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    INTEGER                                            :: ti, via, vib, vic
+    REAL(dp)                                           :: TAF_max, TAF_min
+    REAL(dp), DIMENSION(2)                             :: va, vb, vc
+    REAL(dp)                                           :: TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd
+  
+    DO ti = mesh%ti1, mesh%ti2
+      
+      via = mesh%Tri( ti,1)
+      vib = mesh%Tri( ti,2)
+      vic = mesh%Tri( ti,3)
+      
+      ! Determine maximum and minimum TAF of the local neighbourhood
+      TAF_max = MAXVAL([ ice%TAF_a( via), ice%TAF_a( vib), ice%TAF_a( vic)])
+      TAF_min = MINVAL([ ice%TAF_a( via), ice%TAF_a( vib), ice%TAF_a( vic)])
+      
+      ! If the entire local neighbourhood is grounded, the answer is trivial
+      IF (TAF_min >= 0._dp) THEN
+        ice%f_grnd_b( ti) = 1._dp
+        CYCLE
+      END IF
+      
+      ! If the entire local neighbourhood is floating, the answer is trivial
+      IF (TAF_max <= 0._dp) THEN
+        ice%f_grnd_b( ti) = 0._dp
+        CYCLE
+      END IF
+      
+      ! The local neighbourhood contains both grounded and floating vertices.
+      
+      va   = mesh%V( via,:)
+      vb   = mesh%V( vib,:)
+      vc   = mesh%V( vic,:)
+        
+      TAFa = ice%TAF_a( via)
+      TAFb = ice%TAF_a( vib)
+      TAFc = ice%TAF_a( vic)
+        
+      ! Determine total area of, and grounded area within, this subtriangle
+      CALL determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
+      
+      ! Calculate the grounded fraction of this Voronoi cell
+      ice%f_grnd_b( ti) = A_tri_grnd / A_tri_tot
+      
+    END DO
+    CALL sync
+    
+  END SUBROUTINE determine_grounded_fractions_b
+  SUBROUTINE determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
+    ! Determine the grounded area of the triangle [va,vb,vc], where the thickness-above-floatation is given at all three corners
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_tri_tot, A_tri_grnd
+    
+    ! Local variables:
+    REAL(dp)                                           :: A_flt
+    
+    ! Determine total area of this subtriangle
+    CALL find_triangle_area( va, vb, vc, A_tri_tot)
+        
+    IF     (TAFa >= 0._dp .AND. TAFb >= 0._dp .AND. TAFc >= 0._dp) THEN
+      ! If all three corners are grounded, the answer is trivial
+      A_tri_grnd = A_tri_tot
+    ELSEIF (TAFa <= 0._dp .AND. TAFb <= 0._dp .AND. TAFc <= 0._dp) THEN
+      ! If all three corners are floating, the answer is trivial
+      A_tri_grnd = 0._dp
+    ELSE
+      ! At least one corner is grounded and at least one corner is floating
+      
+      IF     (TAFa >= 0._dp .AND. TAFb <= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! a is grounded, b and c are floating
+        CALL determine_grounded_area_triangle_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_tri_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb >= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! b is grounded, a and c are floating
+        CALL determine_grounded_area_triangle_1grnd_2flt( vb, vc, va, TAFb, TAFc, TAFa, A_tri_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb <= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! c is grounded, a and b are floating
+        CALL determine_grounded_area_triangle_1grnd_2flt( vc, va, vb, TAFc, TAFa, TAFb, A_tri_grnd)
+      ELSEIF (TAFa <= 0._dp .AND. TAFb >= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! a is floating, b and c are grounded
+        CALL determine_grounded_area_triangle_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_flt)
+        A_tri_grnd = A_tri_tot - A_flt
+      ELSEIF (TAFa >= 0._dp .AND. TAFb <= 0._dp .AND. TAFc >= 0._dp) THEN
+        ! b is floating, c and a are grounded
+        CALL determine_grounded_area_triangle_1flt_2grnd( vb, vc, va, TAFb, TAFc, TAFa, A_flt)
+        A_tri_grnd = A_tri_tot - A_flt
+      ELSEIF (TAFa >= 0._dp .AND. TAFb >= 0._dp .AND. TAFc <= 0._dp) THEN
+        ! c is floating, a and b are grounded
+        CALL determine_grounded_area_triangle_1flt_2grnd( vc, va, vb, TAFc, TAFa, TAFb, A_flt)
+        A_tri_grnd = A_tri_tot - A_flt
       ELSE
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in ice_physical_properties!'
+        A_tri_grnd = 0._dp
+        WRITE(0,*) 'determine_grounded_fraction_triangle - ERROR: TAF = [', TAFa, ',', TAFb, ',', TAFc, ']'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+      
+    END IF
+    
+  END SUBROUTINE determine_grounded_area_triangle
+  SUBROUTINE determine_grounded_area_triangle_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_tri_grnd)
+    ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is grounded
+    ! and b and c are floating
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_tri_grnd
+    
+    ! Local variables:
+    REAL(dp)                                           :: lambda_ab, lambda_ac
+    REAL(dp), DIMENSION(2)                             :: pab, pac
+    
+    lambda_ab = TAFa / (TAFa - TAFb)
+    pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
+    
+    lambda_ac = TAFa / (TAFa - TAFc)
+    pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
+    
+    CALL find_triangle_area( va, pab, pac, A_tri_grnd)
+    
+  END SUBROUTINE determine_grounded_area_triangle_1grnd_2flt
+  SUBROUTINE determine_grounded_area_triangle_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_tri_flt)
+    ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is floating
+    ! and b and c are grounded
+    
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
+    REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
+    REAL(dp),                            INTENT(OUT)   :: A_tri_flt
+    
+    ! Local variables:
+    REAL(dp)                                           :: lambda_ab, lambda_ac
+    REAL(dp), DIMENSION(2)                             :: pab, pac
+    
+    lambda_ab = TAFa / (TAFa - TAFb)
+    pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
+    
+    lambda_ac = TAFa / (TAFa - TAFc)
+    pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
+    
+    CALL find_triangle_area( va, pab, pac, A_tri_flt)
+    
+  END SUBROUTINE determine_grounded_area_triangle_1flt_2grnd
   
-    ! First on the Aa mesh
-    ! ====================
-    
-    ice%A_flow(         mesh%v1:mesh%v2,   :) = 0._dp
-    ice%A_flow_Ac(      mesh%ac1:mesh%ac2, :) = 0._dp
-    ice%A_flow_mean(    mesh%v1:mesh%v2     ) = 0._dp
-    ice%A_flow_mean_Ac( mesh%ac1:mesh%ac2   ) = 0._dp
-    ice%Ti_pmp(         mesh%v1:mesh%v2,   :) = 0._dp
-    ice%Cpi(            mesh%v1:mesh%v2,   :) = 0._dp
-    ice%Ki(             mesh%v1:mesh%v2,   :) = 0._dp
-    CALL sync
-    
-    DO vi = mesh%v1, mesh%v2
-      ! Calculate the pressure melting point temperature (= the maximum temperature) for each depth (see equation (11.2)):
-      ice%Ti_pmp( vi,:) = T0 - CC * ice%Hi( vi) * C%zeta
-      
-      DO k = 1, C%nZ 
-
-        ! Calculation of the flow parameter at the sheet and groundline as a function of the ice temperature 
-        ! the Arrhenius relationship (see equation (11.10), Huybrechts (4.6)):
-        IF (ice%Ti( vi,k) < 263.15_dp) THEN
-          ice%A_flow( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * ice%Ti( vi,k)))  
-        ELSE
-          ice%A_flow( vi,k) = A_high_temp * EXP(-Q_high_temp / (R_gas * ice%Ti( vi,k)))  
-        END IF
-           
-        ! Calculation of the parameterization of the specific heat capacity of ice, based on Pounder (1965):
-        ice%Cpi( vi,k) = 2115.3_dp + 7.79293_dp * (ice%Ti( vi,k) - T0)  ! See equation (11.9)
-           
-        ! Calculation of the parameterization of the thermal conductivity of ice, based on Ritz (1987):
-        ice%Ki( vi,k)  = 3.101E+08_dp * EXP(-0.0057_dp * ice%Ti( vi,k)) ! See equation (11.5), Huybrechts (4.40)
-      END DO 
-
-      IF (ice%mask_sheet( vi) == 1) THEN
-        ! Calculation of the vertical average flow parameter at the sheet and groundline
-        prof = ice%A_flow( vi,:)
-        ice%A_flow_mean( vi) = vertical_average(prof)
-      ELSE
-        ! Calculation of the flow parameter at the shelf as a function of the ice temperature 
-        ! the Arrhenius relationship (see equation (11.10), Huybrechts (4.6)):
-        Ti_mean = (ice%Ti( vi,1) + SMT) / 2._dp
-        IF (Ti_mean < 263.15_dp) THEN
-          ice%A_flow_mean( vi) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * Ti_mean))  
-        ELSE
-          ice%A_flow_mean( vi) = A_high_temp * EXP(-Q_high_temp / (R_gas * Ti_mean))  
-        END IF
-      END IF  
-      
-    END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
-  
-    ! Then on the Ac mesh
-    ! ===================
-    
-    DO ci = mesh%ac1, mesh%ac2
-      
-      DO k = 1, C%nZ 
-
-        ! Calculation of the flow parameter at the sheet and groundline as a function of the ice temperature 
-        ! the Arrhenius relationship (see equation (11.10), Huybrechts (4.6)):
-        IF (ice%Ti_Ac( ci,k) < 263.15_dp) THEN
-          ice%A_flow_Ac( ci,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * ice%Ti_Ac( ci,k)))  
-        ELSE
-          ice%A_flow_Ac( ci,k) = A_high_temp * EXP(-Q_high_temp / (R_gas * ice%Ti_Ac( ci,k)))  
-        END IF
-        
-      END DO 
-
-      IF (ice%mask_sheet_Ac( ci) == 1) THEN
-        ! Calculation of the vertical average flow parameter at the sheet and groundline
-        prof = ice%A_flow_Ac( ci,:)
-        ice%A_flow_mean_Ac( ci) = vertical_average(prof)
-      ELSE
-        ! Calculation of the flow parameter at the shelf as a function of the ice temperature 
-        ! the Arrhenius relationship (see equation (11.10), Huybrechts (4.6)):
-        Ti_mean = (ice%Ti_Ac( ci,1) + SMT) / 2._dp
-        IF (Ti_mean < 263.15_dp) THEN
-          ice%A_flow_mean_Ac( ci) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * Ti_mean))  
-        ELSE
-          ice%A_flow_mean_Ac( ci) = A_high_temp * EXP(-Q_high_temp / (R_gas * Ti_mean))  
-        END IF
-      END IF  
-      
-    END DO ! DO ci = mesh%ac1, mesh%ac2
-    CALL sync
-    
-  END SUBROUTINE ice_physical_properties
-  
-  FUNCTION is_floating( Hi, Hb, SL) RESULT( isso)
-    ! The flotation criterion
+! == The no-ice mask, to prevent ice growth in certain areas
+  SUBROUTINE initialise_mask_noice( region, mesh)
+    ! Mask a certain area where no ice is allowed to grow. This is used to "remove"
+    ! Greenland from NAM and EAS, and Ellesmere Island from GRL.
+    ! 
+    ! Also used to define calving fronts in certain idealised-geometry experiments
       
     IMPLICIT NONE
     
-    REAL(dp),                            INTENT(IN)    :: Hi, Hb, SL
-    LOGICAL                                            :: isso
+    ! In- and output variables
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
-    isso = .FALSE.
-    IF (Hi < (SL - Hb) * seawater_density/ice_density) isso = .TRUE.
+    ! Initialise
+    region%mask_noice( mesh%vi1:mesh%vi2) = 0
+    CALL sync
     
-  END FUNCTION is_floating
+    IF     (region%name == 'NAM') THEN
+      ! Define a no-ice mask for North America
+    
+      IF     (C%choice_mask_noice_NAM == 'none') THEN
+        ! No no-ice mask is defined for North America
+      ELSEIF (C%choice_mask_noice_NAM == 'NAM_remove_GRL') THEN
+        ! Prevent ice growth in the Greenlandic part of the North America domain
+        CALL initialise_mask_noice_NAM_remove_GRL( mesh, region%mask_noice)
+      ELSE
+        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_NAM "', TRIM(C%choice_mask_noice_NAM), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    ELSEIF (region%name == 'EAS') THEN
+      ! Define a no-ice mask for Eurasia
+    
+      IF     (C%choice_mask_noice_EAS == 'none') THEN
+        ! No no-ice mask is defined for Eurasia
+      ELSEIF (C%choice_mask_noice_EAS == 'EAS_remove_GRL') THEN
+        ! Prevent ice growth in the Greenlandic part of the Eurasia domain
+        CALL initialise_mask_noice_EAS_remove_GRL( mesh, region%mask_noice)
+      ELSE
+        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_EAS "', TRIM(C%choice_mask_noice_EAS), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    ELSEIF (region%name == 'GRL') THEN
+      ! Define a no-ice mask for Greenland
+    
+      IF     (C%choice_mask_noice_GRL == 'none') THEN
+        ! No no-ice mask is defined for Greenland
+      ELSEIF (C%choice_mask_noice_GRL == 'GRL_remove_Ellesmere') THEN
+        ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
+        CALL initialise_mask_noice_GRL_remove_Ellesmere( mesh, region%mask_noice)
+      ELSE
+        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_GRL "', TRIM(C%choice_mask_noice_GRL), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    ELSEIF (region%name == 'ANT') THEN
+      ! Define a no-ice mask for Antarctica, or for an idealised-geometry experiment
+    
+      IF     (C%choice_mask_noice_ANT == 'none') THEN
+        ! No no-ice mask is defined for Antarctica
+      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
+        ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised geometry
+        CALL initialise_mask_noice_MISMIP_mod( mesh, region%mask_noice)
+      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP+') THEN
+        ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
+        CALL initialise_mask_noice_MISMIPplus( mesh, region%mask_noice)
+      ELSE
+        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_ANT "', TRIM(C%choice_mask_noice_ANT), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    END IF
+  
+  END SUBROUTINE initialise_mask_noice
+  SUBROUTINE initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
+    ! Prevent ice growth in the Greenlandic part of the North America domain
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+  
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION(2)                             :: pa, pb
+    REAL(dp)                                           :: yl_ab
+      
+    pa = [ 490000._dp, 1530000._dp]
+    pb = [2030000._dp,  570000._dp]
+    
+    DO vi = mesh%vi1, mesh%vi2
+      yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      IF (mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) > pa(1) .AND. mesh%V( vi,2) > pb(2)) THEN
+        mask_noice( vi) = 1
+      ELSE
+        mask_noice( vi) = 0
+      END IF
+    END DO
+    CALL sync
+  
+  END SUBROUTINE initialise_mask_noice_NAM_remove_GRL
+  SUBROUTINE initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
+    ! Prevent ice growth in the Greenlandic part of the Eurasia domain
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+  
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
+    REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
+    
+    pa = [-2900000._dp, 1300000._dp]
+    pb = [-1895000._dp,  900000._dp]
+    pc = [ -835000._dp, 1135000._dp]
+    pd = [ -400000._dp, 1855000._dp]
+    
+    DO vi = mesh%vi1, mesh%vi2
+      yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      yl_bc = pb(2) + (mesh%V( vi,1) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
+      yl_cd = pc(2) + (mesh%V( vi,1) - pc(1))*(pd(2)-pc(2))/(pd(1)-pc(1))
+      IF ((mesh%V( vi,1) <  pa(1) .AND. mesh%V( vi,2) > pa(2)) .OR. &
+          (mesh%V( vi,1) >= pa(1) .AND. mesh%V( vi,1) < pb(1) .AND. mesh%V( vi,2) > yl_ab) .OR. &
+          (mesh%V( vi,1) >= pb(1) .AND. mesh%V( vi,1) < pc(1) .AND. mesh%V( vi,2) > yl_bc) .OR. &
+          (mesh%V( vi,1) >= pc(1) .AND. mesh%V( vi,1) < pd(1) .AND. mesh%V( vi,2) > yl_cd)) THEN
+        mask_noice( vi) = 1
+      ELSE
+        mask_noice( vi) = 0
+      END IF
+    END DO
+    CALL sync
+  
+  END SUBROUTINE initialise_mask_noice_EAS_remove_GRL
+  SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
+    ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+  
+    ! Local variables:
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION(2)                             :: pa, pb
+    REAL(dp)                                           :: yl_ab
+      
+    pa = [-750000._dp,  900000._dp]
+    pb = [-250000._dp, 1250000._dp]
+    
+    DO vi = mesh%vi1, mesh%vi2
+      yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      IF (mesh%V( vi,2) > pa(2) .AND. mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) < pb(1)) THEN
+        mask_noice( vi) = 1
+      ELSE
+        mask_noice( vi) = 0
+      END IF
+    END DO
+    CALL sync
+  
+  END SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere
+  SUBROUTINE initialise_mask_noice_MISMIP_mod( mesh, mask_noice)
+    ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised-geometry experiment
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+  
+    ! Local variables:
+    INTEGER                                            :: vi
+        
+    ! Create a nice circular ice shelf
+    DO vi = mesh%vi1, mesh%vi2
+      IF (SQRT(mesh%V( vi,1)**2 + mesh%V( vi,2)**2) > mesh%xmax * 0.95_dp) THEN
+        mask_noice( vi) = 1
+      ELSE
+        mask_noice( vi) = 0
+      END IF
+    END DO
+    CALL sync
+  
+  END SUBROUTINE initialise_mask_noice_MISMIP_mod
+  SUBROUTINE initialise_mask_noice_MISMIPplus( mesh, mask_noice)
+    ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+  
+    ! Local variables:
+    INTEGER                                            :: vi
+        
+    DO vi = mesh%vi1, mesh%vi2
+      ! NOTE: because UFEMISM wants to centre the domain at x=0, the front now lies at x = 240 km
+      IF (mesh%V( vi,1) > 240000._dp) THEN
+        mask_noice( vi) = 1
+      ELSE
+        mask_noice( vi) = 0
+      END IF
+    END DO
+    CALL sync
+  
+  END SUBROUTINE initialise_mask_noice_MISMIPplus
 
 END MODULE general_ice_model_data_module

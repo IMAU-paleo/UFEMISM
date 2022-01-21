@@ -23,15 +23,16 @@ MODULE ice_velocity_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality 
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR, type_remapping             
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping             
   USE mesh_mapping_module,             ONLY: remap_field_dp
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
                                              ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
                                              map_a_to_b_3D, map_b_to_c_3D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
-                                             vertical_integrate, allocate_matrix_CSR_dist, sort_columns_in_CSR_dist, &
-                                             finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
+                                             vertical_integrate
+  USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, finalise_matrix_CSR_dist, &
+                                             solve_matrix_equation_CSR, deallocate_matrix_CSR
   USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
   USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
@@ -2161,16 +2162,17 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER                                            :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
     
     ! Allocate shared memory for A
     ncols           = 2*mesh%nTri    ! from
     nrows           = 2*mesh%nTri    ! to
     nnz_per_row_max = 20
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max_proc)
     
     ! Fill in matrix rows, right-hand side, and initial guess
     CALL partition_list( 2*mesh%nTri, par%i, par%n, n1, n2)
@@ -2194,13 +2196,8 @@ CONTAINS
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
-            ! u-part
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
-            
-            ! v-part
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mu, 0._dp)
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mv, 0._dp)
             
           END DO
           
@@ -2217,8 +2214,7 @@ CONTAINS
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mu, 0._dp)
             
           END DO
           
@@ -2242,12 +2238,8 @@ CONTAINS
             mv = ice%ti2n_v( tj)
             
             ! u-part
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
-            
-            ! v-part
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mu, 0._dp)
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mv, 0._dp)
             
           END DO
           
@@ -2264,23 +2256,18 @@ CONTAINS
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
-            ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
-            ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
+            CALL add_entry_CSR_dist( ice%M_SSADIVA, n, mv, 0._dp)
             
           END DO
           
         END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
         
       END IF ! IF (MOD( n,2) == 1) THEN
-    
-      ! Finalise this matrix row
-      ice%M_SSADIVA%ptr( n+1 : 2*mesh%nTri+1) = ice%M_SSADIVA%nnz+1
       
     END DO ! DO n = n1, n2
     CALL sync
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( ice%M_SSADIVA, n1, n2)
     CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, n1, n2)
     
   END SUBROUTINE initialise_SSADIVA_stiffness_matrix

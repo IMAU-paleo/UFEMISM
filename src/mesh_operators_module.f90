@@ -25,15 +25,14 @@ MODULE mesh_operators_module
                                              adapt_shared_int_2D,    adapt_shared_dp_2D, &
                                              adapt_shared_int_3D,    adapt_shared_dp_3D, &
                                              adapt_shared_bool_1D
-  USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR
-  USE utilities_module,                ONLY: allocate_matrix_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
-                                             deallocate_matrix_CSR, multiply_matrix_matrix_CSR, multiply_matrix_vector_CSR, &
-                                             multiply_matrix_vector_2D_CSR, check_CSR, add_matrix_matrix_CSR, sort_columns_in_CSR_dist, &
-                                             calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general 
+  USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR_dp
+  USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general 
+  USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
+                                             multiply_matrix_vector_CSR, multiply_matrix_vector_2D_CSR, check_CSR, check_CSR_dist
 
   IMPLICIT NONE
   
-  LOGICAL, PARAMETER :: do_check_matrices = .FALSE.
+  LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
 
   CONTAINS
   
@@ -1258,13 +1257,13 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: vi, n, ci, vj, i, k
+    INTEGER                                            :: vi, n, ci, vj, i
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
@@ -1272,6 +1271,8 @@ MODULE mesh_operators_module
     ncols           = mesh%nV      ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem+1
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1279,11 +1280,8 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1308,34 +1306,23 @@ MODULE mesh_operators_module
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
+      CALL add_entry_CSR_dist( M_ddx, vi, vi, Nfxi)
+      CALL add_entry_CSR_dist( M_ddy, vi, vi, Nfyi)
       DO i = 1, n
-        k = k+1
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
       END DO
-      
-      k = k+1
-      M_ddx%index( k) = vi
-      M_ddy%index( k) = vi
-      M_ddx%val(   k) = Nfxi
-      M_ddy%val(   k) = Nfyi
-
-      ! Finish this row
-      M_ddx%ptr( vi+1 : nrows+1) = k+1
-      M_ddy%ptr( vi+1 : nrows+1) = k+1
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Number of non-zero elements
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_a', mesh%vi1, mesh%vi2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_a', mesh%vi1, mesh%vi2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     
@@ -1361,19 +1348,21 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: ti, n, vii, vi, i, k
+    INTEGER                                            :: ti, n, vii, vi, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
 
     ncols           = mesh%nV      ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 3
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1382,12 +1371,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO ti = mesh%ti1, mesh%ti2
       
@@ -1413,32 +1399,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, ti, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( ti+1 : nrows+1) = k+1
-      M_ddx%ptr( ti+1 : nrows+1) = k+1
-      M_ddy%ptr( ti+1 : nrows+1) = k+1
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_a_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_b', mesh%ti1, mesh%ti2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
@@ -1467,19 +1443,21 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: aci, n, acii, vi, i, k
+    INTEGER                                            :: aci, n, acii, vi, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
 
     ncols           = mesh%nV      ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 4
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1488,12 +1466,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO aci = mesh%ci1, mesh%ci2
       
@@ -1520,32 +1495,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, aci, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( aci+1 : nrows+1) = k+1
-      M_ddx%ptr( aci+1 : nrows+1) = k+1
-      M_ddy%ptr( aci+1 : nrows+1) = k+1
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_a_c', mesh%ci1, mesh%ci2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_c', mesh%ci1, mesh%ci2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_c', mesh%ci1, mesh%ci2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%ci1, mesh%ci2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
@@ -1574,19 +1539,21 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: vi, n, iti, ti, i, k
+    INTEGER                                            :: vi, n, iti, ti, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1595,12 +1562,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1626,32 +1590,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, vi, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( vi+1 : nrows+1) = k+1
-      M_ddx%ptr( vi+1 : nrows+1) = k+1
-      M_ddy%ptr( vi+1 : nrows+1) = k+1
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_b_a', mesh%vi1, mesh%vi2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_a', mesh%vi1, mesh%vi2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_a', mesh%vi1, mesh%vi2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%vi1, mesh%vi2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
@@ -1680,13 +1634,13 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: ti, n, tii, tj, i, k
+    INTEGER                                            :: ti, n, tii, tj, i
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
@@ -1694,6 +1648,8 @@ MODULE mesh_operators_module
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 4
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1702,10 +1658,8 @@ MODULE mesh_operators_module
     ALLOCATE( Nfyc( nnz_per_row_max))
 
     nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO ti = mesh%ti1, mesh%ti2
       
@@ -1731,34 +1685,23 @@ MODULE mesh_operators_module
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
+      CALL add_entry_CSR_dist( M_ddx, ti, ti, Nfxi)
+      CALL add_entry_CSR_dist( M_ddy, ti, ti, Nfyi)
       DO i = 1, n
-        k = k+1
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
       END DO
-      
-      k = k+1
-      M_ddx%index( k) = ti
-      M_ddy%index( k) = ti
-      M_ddx%val(   k) = Nfxi
-      M_ddy%val(   k) = Nfyi
-
-      ! Finish this row
-      M_ddx%ptr( ti+1 : nrows+1) = k+1
-      M_ddy%ptr( ti+1 : nrows+1) = k+1
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Number of non-zero elements
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_b', mesh%ti1, mesh%ti2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     
@@ -1784,13 +1727,13 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: aci, n, acii, vi, iti, ti, n_match, vii, aciii, i, k
+    INTEGER                                            :: aci, n, acii, vi, iti, ti, n_match, vii, aciii, i
     LOGICAL                                            :: is_listed
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
@@ -1798,6 +1741,8 @@ MODULE mesh_operators_module
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 6
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1806,15 +1751,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO aci = mesh%ci1, mesh%ci2
       
@@ -1867,32 +1806,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, aci, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( aci+1 : nrows+1) = k+1
-      M_ddx%ptr( aci+1 : nrows+1) = k+1
-      M_ddy%ptr( aci+1 : nrows+1) = k+1
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_b_c', mesh%ci1, mesh%ci2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_c', mesh%ci1, mesh%ci2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_c', mesh%ci1, mesh%ci2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%ci1, mesh%ci2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
@@ -1921,19 +1850,21 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: vi, n, ci, aci, i, k
+    INTEGER                                            :: vi, n, ci, aci, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
 
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1942,15 +1873,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1976,32 +1901,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, vi, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( vi+1 : nrows+1) = k+1
-      M_ddx%ptr( vi+1 : nrows+1) = k+1
-      M_ddy%ptr( vi+1 : nrows+1) = k+1
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_c_a', mesh%vi1, mesh%vi2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_a', mesh%vi1, mesh%vi2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_a', mesh%vi1, mesh%vi2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%vi1, mesh%vi2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
@@ -2030,19 +1945,21 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: ti, n, via, vib, vic, ci, vj, acab, acbc, acca, i, k
+    INTEGER                                            :: ti, n, via, vib, vic, ci, vj, acab, acbc, acca, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
 
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 3
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -2051,15 +1968,9 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
-    M_map%ptr = 1
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
+    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO ti = mesh%ti1, mesh%ti2
       
@@ -2125,32 +2036,22 @@ MODULE mesh_operators_module
       
       ! Fill into sparse matrices
       DO i = 1, n
-        k = k+1
-        M_map%index( k) = i_c(  i)
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_map%val(   k) = Nfc(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_map, ti, i_c( i), Nfc(  i))
+        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
       END DO
-
-      ! Finish this row
-      M_map%ptr( ti+1 : nrows+1) = k+1
-      M_ddx%ptr( ti+1 : nrows+1) = k+1
-      M_ddy%ptr( ti+1 : nrows+1) = k+1
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Number of non-zero elements
-    M_map%nnz = k
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_map, 'mesh%M_map_c_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_b', mesh%ti1, mesh%ti2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_map, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
@@ -2179,13 +2080,13 @@ MODULE mesh_operators_module
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR),        INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: aci, n, acii, vi, ci, vc, acj, i, k
+    INTEGER                                            :: aci, n, acii, vi, ci, vc, acj, i
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
@@ -2193,6 +2094,8 @@ MODULE mesh_operators_module
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 5
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -2200,13 +2103,8 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max)
-
-    k = 0
-    M_ddx%ptr = 1
-    M_ddy%ptr = 1
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
 
     DO aci = mesh%ci1, mesh%ci2
       
@@ -2238,34 +2136,23 @@ MODULE mesh_operators_module
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
+      CALL add_entry_CSR_dist( M_ddx, aci, aci, Nfxi)
+      CALL add_entry_CSR_dist( M_ddy, aci, aci, Nfyi)
       DO i = 1, n
-        k = k+1
-        M_ddx%index( k) = i_c(  i)
-        M_ddy%index( k) = i_c(  i)
-        M_ddx%val(   k) = Nfxc( i)
-        M_ddy%val(   k) = Nfyc( i)
+        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
+        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
       END DO
-      
-      k = k+1
-      M_ddx%index( k) = aci
-      M_ddy%index( k) = aci
-      M_ddx%val(   k) = Nfxi
-      M_ddy%val(   k) = Nfyi
-
-      ! Finish this row
-      M_ddx%ptr( aci+1 : nrows+1) = k+1
-      M_ddy%ptr( aci+1 : nrows+1) = k+1
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Number of non-zero elements
-    M_ddx%nnz = k
-    M_ddy%nnz = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_c', mesh%ci1, mesh%ci2)
+      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_c', mesh%ci1, mesh%ci2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL sort_columns_in_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
     CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
     
@@ -2294,10 +2181,10 @@ MODULE mesh_operators_module
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
-    INTEGER                                            :: ti, n, n1, n_cur, tj, tk, i, k, ii
+    INTEGER                                            :: ti, n, n1, n_cur, tj, tk, i, ii
     LOGICAL                                            :: is_listed
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi, Nfxxi, Nfxyi, Nfyyi
@@ -2306,6 +2193,8 @@ MODULE mesh_operators_module
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 10
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
     ALLOCATE( i_c(   nnz_per_row_max))
     ALLOCATE( x_c(   nnz_per_row_max))
@@ -2316,19 +2205,13 @@ MODULE mesh_operators_module
     ALLOCATE( Nfxyc( nnz_per_row_max))
     ALLOCATE( Nfyyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( mesh%M2_ddx_b_b   , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( mesh%M2_ddy_b_b   , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dx2_b_b , nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dxdy_b_b, nrows, ncols, nnz_max)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dy2_b_b , nrows, ncols, nnz_max)
-
-    k = 0
+    CALL allocate_matrix_CSR_dist( mesh%M2_ddx_b_b   , nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_ddy_b_b   , nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dx2_b_b , nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dxdy_b_b, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dy2_b_b , nrows, ncols, nnz_max_proc)
 
     DO ti = mesh%ti1, mesh%ti2
-      
-!      ! Not defined on the domain border
-!      IF (mesh%Tri_edge_index( ti) > 0) CYCLE
       
       ! Source points: 2-star neighbourhood of triangles
       n = 0
@@ -2374,55 +2257,32 @@ MODULE mesh_operators_module
       CALL calc_neighbour_functions_ls_reg_2nd_order( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxxi, Nfxyi, Nfyyi, Nfxc, Nfyc, Nfxxc, Nfxyc, Nfyyc)
       
       ! Fill into sparse matrices
+      CALL add_entry_CSR_dist( mesh%M2_ddx_b_b   , ti, ti, Nfxi )
+      CALL add_entry_CSR_dist( mesh%M2_ddy_b_b   , ti, ti, Nfyi )
+      CALL add_entry_CSR_dist( mesh%M2_d2dx2_b_b , ti, ti, Nfxxi)
+      CALL add_entry_CSR_dist( mesh%M2_d2dxdy_b_b, ti, ti, Nfxyi)
+      CALL add_entry_CSR_dist( mesh%M2_d2dy2_b_b , ti, ti, Nfyyi)
       DO i = 1, n
-        k = k+1
-        mesh%M2_ddx_b_b%index(    k) = i_c(   i)
-        mesh%M2_ddy_b_b%index(    k) = i_c(   i)
-        mesh%M2_d2dx2_b_b%index(  k) = i_c(   i)
-        mesh%M2_d2dxdy_b_b%index( k) = i_c(   i)
-        mesh%M2_d2dy2_b_b%index(  k) = i_c(   i)
-        mesh%M2_ddx_b_b%val(      k) = Nfxc(  i)
-        mesh%M2_ddy_b_b%val(      k) = Nfyc(  i)
-        mesh%M2_d2dx2_b_b%val(    k) = Nfxxc( i)
-        mesh%M2_d2dxdy_b_b%val(   k) = Nfxyc( i)
-        mesh%M2_d2dy2_b_b%val(    k) = Nfyyc( i)
+        CALL add_entry_CSR_dist( mesh%M2_ddx_b_b   , ti, i_c( i), Nfxc(  i))
+        CALL add_entry_CSR_dist( mesh%M2_ddy_b_b   , ti, i_c( i), Nfyc(  i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dx2_b_b , ti, i_c( i), Nfxxc( i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dxdy_b_b, ti, i_c( i), Nfxyc( i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dy2_b_b , ti, i_c( i), Nfyyc( i))
       END DO
-      
-      k = k+1
-      mesh%M2_ddx_b_b%index(    k) = ti
-      mesh%M2_ddy_b_b%index(    k) = ti
-      mesh%M2_d2dx2_b_b%index(  k) = ti
-      mesh%M2_d2dxdy_b_b%index( k) = ti
-      mesh%M2_d2dy2_b_b%index(  k) = ti
-      mesh%M2_ddx_b_b%val(      k) = Nfxi
-      mesh%M2_ddy_b_b%val(      k) = Nfyi
-      mesh%M2_d2dx2_b_b%val(    k) = Nfxxi
-      mesh%M2_d2dxdy_b_b%val(   k) = Nfxyi
-      mesh%M2_d2dy2_b_b%val(    k) = Nfyyi
-
-      ! Finish this row
-      mesh%M2_ddx_b_b%ptr(    ti+1 : nrows+1) = k+1
-      mesh%M2_ddy_b_b%ptr(    ti+1 : nrows+1) = k+1
-      mesh%M2_d2dx2_b_b%ptr(  ti+1 : nrows+1) = k+1
-      mesh%M2_d2dxdy_b_b%ptr( ti+1 : nrows+1) = k+1
-      mesh%M2_d2dy2_b_b%ptr(  ti+1 : nrows+1) = k+1
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Number of non-zero elements
-    mesh%M2_ddx_b_b%nnz    = k
-    mesh%M2_ddy_b_b%nnz    = k
-    mesh%M2_d2dx2_b_b%nnz  = k
-    mesh%M2_d2dxdy_b_b%nnz = k
-    mesh%M2_d2dy2_b_b%nnz  = k
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( mesh%M2_ddx_b_b   , 'mesh%M2_ddx_b_b'   , mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( mesh%M2_ddy_b_b   , 'mesh%M2_ddy_b_b'   , mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( mesh%M2_d2dx2_b_b , 'mesh%M2_d2dx2_b_b' , mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( mesh%M2_d2dxdy_b_b, 'mesh%M2_d2dxdy_b_b', mesh%ti1, mesh%ti2)
+      CALL check_CSR_dist( mesh%M2_d2dy2_b_b , 'mesh%M2_d2dy2_b_b' , mesh%ti1, mesh%ti2)
+    END IF
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( mesh%M2_ddx_b_b   , mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( mesh%M2_ddy_b_b   , mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( mesh%M2_d2dx2_b_b , mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( mesh%M2_d2dxdy_b_b, mesh%ti1, mesh%ti2)
-    CALL sort_columns_in_CSR_dist( mesh%M2_d2dy2_b_b , mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( mesh%M2_ddx_b_b   , mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( mesh%M2_ddy_b_b   , mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( mesh%M2_d2dx2_b_b , mesh%ti1, mesh%ti2)
@@ -2459,7 +2319,7 @@ MODULE mesh_operators_module
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
     INTEGER                                            :: ti, n, tti, tj
 
   ! Then fill in the stiffness matrix coefficients
@@ -2468,9 +2328,10 @@ MODULE mesh_operators_module
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 4
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, nrows, ncols, nnz_max)
+    CALL allocate_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, nrows, ncols, nnz_max_proc)
     
     DO ti = mesh%ti1, mesh%ti2
       
@@ -2489,29 +2350,26 @@ MODULE mesh_operators_module
         END DO
         
         ! The triangle itself
-        mesh%M_Neumann_BC_b_b%nnz =  mesh%M_Neumann_BC_b_b%nnz + 1
-        mesh%M_Neumann_BC_b_b%index( mesh%M_Neumann_BC_b_b%nnz) = ti
-        mesh%M_Neumann_BC_b_b%val(   mesh%M_Neumann_BC_b_b%nnz) = -1._dp
+        CALL add_entry_CSR_dist( mesh%M_Neumann_BC_b_b, ti, ti, -1._dp)
         
         ! Neighbouring triangles
         DO tti = 1, 3
           tj = mesh%TriC( ti,tti)
           IF (tj == 0) CYCLE
-          mesh%M_Neumann_BC_b_b%nnz =  mesh%M_Neumann_BC_b_b%nnz + 1
-          mesh%M_Neumann_BC_b_b%index( mesh%M_Neumann_BC_b_b%nnz) = tj
-          mesh%M_Neumann_BC_b_b%val(   mesh%M_Neumann_BC_b_b%nnz) = 1._dp / REAL( n,dp)
+          CALL add_entry_CSR_dist( mesh%M_Neumann_BC_b_b, ti, tj, 1._dp / REAL( n,dp))
         END DO
         
       END IF ! IF (is_border_triangle) THEN
     
-      ! Finalise this matrix row
-      mesh%M_Neumann_BC_b_b%ptr( ti+1 : mesh%M_Neumann_BC_b_b%m+1) = mesh%M_Neumann_BC_b_b%nnz+1
-    
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( mesh%M_Neumann_BC_b_b, 'mesh%M_Neumann_BC_b_b', mesh%ti1, mesh%ti2)
+    END IF
+    
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( mesh%M_Neumann_BC_b_b, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, mesh%ti1, mesh%ti2)
     
     ! Safety

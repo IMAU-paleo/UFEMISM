@@ -115,9 +115,9 @@ CONTAINS
       IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
     
       ! If required, update the mesh
-      IF (meshfitness < C%mesh_fitness_threshold) THEN
+    !  IF (meshfitness < C%mesh_fitness_threshold) THEN
     !  IF (.FALSE.) THEN
-    !  IF (.TRUE.) THEN 
+      IF (.TRUE.) THEN 
         region%t_last_mesh = region%time
         IF (par%master) t2 = MPI_WTIME()
         CALL run_model_update_mesh( region, matrix)

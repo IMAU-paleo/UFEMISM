@@ -13,7 +13,7 @@ MODULE petsc_module
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
                                              deallocate_shared
   USE configuration_module,            ONLY: dp, C
-  USE data_types_module,               ONLY: type_sparse_matrix_CSR
+  USE data_types_module,               ONLY: type_sparse_matrix_CSR_dp
   
   IMPLICIT NONE
 
@@ -26,7 +26,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: A_CSR
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: xx
     REAL(dp),                            INTENT(IN)    :: PETSc_rtol
@@ -100,7 +100,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: A_CSR
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
     TYPE(tMat),                          INTENT(INOUT) :: A

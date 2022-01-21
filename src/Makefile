@@ -40,6 +40,7 @@ UFEMISM_program_objects = \
         petsc_module.o \
         parameters_module.o \
         utilities_module.o \
+        sparse_matrix_module.o \
         mesh_memory_module.o \
         mesh_help_functions_module.o \
         mesh_Delaunay_module.o \

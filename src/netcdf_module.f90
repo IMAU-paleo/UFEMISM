@@ -24,7 +24,7 @@ MODULE netcdf_module
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
                                            type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
-                                           type_sparse_matrix_CSR
+                                           type_sparse_matrix_CSR_dp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
                                            nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
@@ -3625,7 +3625,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: AA
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
     ! Local variables:

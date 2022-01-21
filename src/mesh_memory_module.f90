@@ -38,7 +38,7 @@ MODULE mesh_memory_module
                                              share_memory_access_int_2D, share_memory_access_dp_2D, &
                                              share_memory_access_int_3D, share_memory_access_dp_3D
   USE data_types_module,               ONLY: type_mesh
-  USE utilities_module,                ONLY: deallocate_matrix_CSR
+  USE sparse_matrix_module,            ONLY: deallocate_matrix_CSR
 
   IMPLICIT NONE
 

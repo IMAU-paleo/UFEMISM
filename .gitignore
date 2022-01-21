@@ -7,3 +7,5 @@ UFEMISM_program
 
 # Ignore output files
 result*/
+ISMIP-HOM/*
+MISMIP_mod/*

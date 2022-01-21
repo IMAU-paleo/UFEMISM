@@ -23,7 +23,7 @@ MODULE tests_and_checks_module
   
   ! Import specific functionality
   USE mesh_operators_module
-  USE utilities_module
+  USE sparse_matrix_module
   USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
 
   IMPLICIT NONE
@@ -62,7 +62,6 @@ CONTAINS
   ! Solve the (modified) Laplace equation as the ultimate test
   ! ==========================================================
   
-    CALL solve_modified_Laplace_equation_a( mesh)
     CALL solve_modified_Laplace_equation_b( mesh)
     
     IF (par%master) WRITE(0,*) ''
@@ -81,11 +80,9 @@ CONTAINS
         
     IF (par%master) WRITE(0,*) '  Testing basic CSR matrix operations...'
     
-    CALL test_CSR_matrix_operations_add    
-    CALL test_CSR_matrix_operations_overwrite_rows
+    CALL test_CSR_matrix_operations_add
     CALL test_CSR_matrix_operations_multiply_vector
     CALL test_CSR_matrix_operations_multiply_matrix
-    CALL test_CSR_matrix_operations_multiply_matrix_rows_with_vector
     
   END SUBROUTINE test_CSR_matrix_operations
   
@@ -98,7 +95,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
+    TYPE(type_sparse_matrix_CSR_dp)                    :: AAA, BBB, CCC, CCC_ex
     LOGICAL                                            :: are_identical
     
     IF (par%master) WRITE(0,*) '   Testing matrix addition (C = A+B)...'
@@ -109,18 +106,18 @@ CONTAINS
     CALL allocate_matrix_CSR_shared( CCC_ex, 64, 3, 144)
     
     IF (par%master) THEN
-AAA%nnz = 96
-AAA%ptr   = [1,1,1,1,1,1,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,76,79,82,85,88,91,94,97]
-AAA%index = [1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
-AAA%val   = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-BBB%nnz = 96
-BBB%ptr   = [1,1,2,3,4,6,8,10,13,13,14,15,16,18,20,22,25,25,26,27,28,30,32,34,37,37,38,39,40,42,44,46,49,49,50,51,52,54,56,58,61,61,62,63,64,66,68,70,73,73,74,75,76,78,80,82,85,85,86,87,88,90,92,94,97]
-BBB%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3]
-BBB%val   = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
-CCC_ex%nnz = 144
-CCC_ex%ptr   = [1,1,2,3,4,6,8,10,13,14,15,17,19,21,23,26,29,30,32,33,35,37,40,42,45,46,48,50,51,54,56,58,61,63,65,67,70,72,75,78,81,83,85,88,90,93,95,98,101,103,106,108,110,113,116,118,121,124,127,130,133,136,139,142,145]
-CCC_ex%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,1,1,2,1,3,1,2,1,3,1,2,3,1,2,3,2,1,2,2,2,3,1,2,1,2,3,2,3,1,2,3,3,1,3,2,3,3,1,2,3,1,3,2,3,1,2,3,1,2,1,2,1,2,1,2,3,1,2,1,2,3,1,2,3,1,2,3,1,3,1,3,1,2,3,1,3,1,2,3,1,3,1,2,3,1,2,3,2,3,1,2,3,2,3,2,3,1,2,3,1,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
-CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,1,2,2,3,2,1,2,3,2,2,3,2,1,2,1,2,1,3,2,2,1,2,3,2,3,2,2,3,1,1,3,1,1,3,1,1,2,3,3,3,1,2,1,3,2,3,3,2,1,1,3,1,1,2,1,1,3,3,2,1,3,3,1,2,3,3,2,3,1,1,2,1,1,3,1,1,3,2,3,1,2,1,3,3,3,2,3,3,1,1,1,3,1,1,1,3,1,1,1,3,3,3,1,3,1,3,1,3,3,3,3,3]
+      AAA%nnz = 96
+      AAA%ptr   = [1,1,1,1,1,1,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,76,79,82,85,88,91,94,97]
+      AAA%index = [1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
+      AAA%val   = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+      BBB%nnz = 96
+      BBB%ptr   = [1,1,2,3,4,6,8,10,13,13,14,15,16,18,20,22,25,25,26,27,28,30,32,34,37,37,38,39,40,42,44,46,49,49,50,51,52,54,56,58,61,61,62,63,64,66,68,70,73,73,74,75,76,78,80,82,85,85,86,87,88,90,92,94,97]
+      BBB%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3]
+      BBB%val   = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
+      CCC_ex%nnz = 144
+      CCC_ex%ptr   = [1,1,2,3,4,6,8,10,13,14,15,17,19,21,23,26,29,30,32,33,35,37,40,42,45,46,48,50,51,54,56,58,61,63,65,67,70,72,75,78,81,83,85,88,90,93,95,98,101,103,106,108,110,113,116,118,121,124,127,130,133,136,139,142,145]
+      CCC_ex%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,1,1,2,1,3,1,2,1,3,1,2,3,1,2,3,2,1,2,2,2,3,1,2,1,2,3,2,3,1,2,3,3,1,3,2,3,3,1,2,3,1,3,2,3,1,2,3,1,2,1,2,1,2,1,2,3,1,2,1,2,3,1,2,3,1,2,3,1,3,1,3,1,2,3,1,3,1,2,3,1,3,1,2,3,1,2,3,2,3,1,2,3,2,3,2,3,1,2,3,1,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
+      CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,1,2,2,3,2,1,2,3,2,2,3,2,1,2,1,2,1,3,2,2,1,2,3,2,3,2,2,3,1,1,3,1,1,3,1,1,2,3,3,3,1,2,1,3,2,3,3,2,1,1,3,1,1,2,1,1,3,3,2,1,3,3,1,2,3,3,2,3,1,1,2,1,1,3,1,1,3,2,3,1,2,1,3,3,3,2,3,3,1,1,1,3,1,1,1,3,1,1,1,3,3,3,1,3,1,3,1,3,3,3,3,3]
     END IF
     CALL sync
     
@@ -146,82 +143,6 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     CALL deallocate_matrix_CSR( CCC_ex)
     
   END SUBROUTINE test_CSR_matrix_operations_add
-  SUBROUTINE test_CSR_matrix_operations_overwrite_rows
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB
-    
-    IF (par%master) WRITE(0,*) '   Testing matrix row overwriting (C = A (+O) B)...'
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    CALL allocate_matrix_CSR_shared( BBB, 4, 4, 8)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! B
-      BBB%nnz   = 4
-      BBB%ptr   = [1,3,3,5,5]
-      BBB%index = [1,3,2,4]
-      BBB%val   = [15,16,17,18]
-    END IF
-    CALL sync
-    
-    ! Perform multiplication
-    CALL overwrite_rows_CSR( AAA, BBB)
-    
-    ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (AAA%nnz == 9 .AND. &
-          AAA%ptr(    1) ==  1 .AND. &
-          AAA%ptr(    2) ==  3 .AND. &
-          AAA%ptr(    3) ==  5 .AND. &
-          AAA%ptr(    4) ==  7 .AND. &
-          AAA%ptr(    5) == 10 .AND. &
-          AAA%index(  1) == 1 .AND. &
-          AAA%index(  2) == 3 .AND. &
-          AAA%index(  3) == 1 .AND. &
-          AAA%index(  4) == 4 .AND. &
-          AAA%index(  5) == 2 .AND. &
-          AAA%index(  6) == 4 .AND. &
-          AAA%index(  7) == 1 .AND. &
-          AAA%index(  8) == 3 .AND. &
-          AAA%index(  9) == 4 .AND. &
-          AAA%val(    1) ==  15._dp .AND. &
-          AAA%val(    2) ==  16._dp .AND. &
-          AAA%val(    3) ==   3._dp .AND. &
-          AAA%val(    4) ==   4._dp .AND. &
-          AAA%val(    5) ==  17._dp .AND. &
-          AAA%val(    6) ==  18._dp .AND. &
-          AAA%val(    7) ==   6._dp .AND. &
-          AAA%val(    8) ==   7._dp .AND. &
-          AAA%val(    9) ==   8._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_overwrite_rows - ERROR: CSR matrix row overwriting gave wrong answer!'
-        WRITE(0,*) '  A%nnz   = ', AAA%nnz
-        WRITE(0,*) '  A%ptr   = ', AAA%ptr
-        WRITE(0,*) '  A%index = ', AAA%index
-        WRITE(0,*) '  A%val   = ', AAA%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_matrix_CSR( BBB)
-    
-  END SUBROUTINE test_CSR_matrix_operations_overwrite_rows
   SUBROUTINE test_CSR_matrix_operations_multiply_vector
     ! Testing some basic CSR-formatted matrix operations
     
@@ -231,7 +152,7 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     IMPLICIT NONE
     
     ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA
+    TYPE(type_sparse_matrix_CSR_dp)                    :: AAA
     REAL(dp), DIMENSION(:    ), POINTER                ::  x,  b
     INTEGER                                            :: wx, wb
     
@@ -284,7 +205,7 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
     IMPLICIT NONE
     
     ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
+    TYPE(type_sparse_matrix_CSR_dp)                    :: AAA, BBB, CCC, CCC_ex
     LOGICAL                                            :: are_identical
     
     IF (par%master) WRITE(0,*) '   Testing matrix-matrix multiplication (C = A*B)...'
@@ -306,10 +227,10 @@ CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,
       BBB%index = [1,3,3,4,2,3,2,4]
       BBB%val   = [9,10,11,12,13,14,15,16]
       ! C
-CCC_ex%nnz = 13
-CCC_ex%ptr   = [1,4,8,10,14]
-CCC_ex%index = [1,2,3,1,2,3,4,3,4,1,2,3,4]
-CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
+      CCC_ex%nnz = 13
+      CCC_ex%ptr   = [1,4,8,10,14]
+      CCC_ex%index = [1,2,3,1,2,3,4,3,4,1,2,3,4]
+      CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     END IF
     CALL sync
     
@@ -340,82 +261,6 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     CALL deallocate_matrix_CSR( CCC_ex)
     
   END SUBROUTINE test_CSR_matrix_operations_multiply_matrix
-  SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, CCC
-    REAL(dp), DIMENSION(:    ), POINTER                ::  BB
-    INTEGER                                            :: wBB
-    
-    IF (par%master) WRITE(0,*) '   Testing multiplication of matrix rows with vector elements (C = DIAG(B) * A)...'
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( 4, BB, wBB)
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! BB
-      BB = [1,2,3,4]
-    END IF
-    CALL sync
-    
-    ! Perform multiplication
-    CALL multiply_matrix_rows_with_vector( AAA, BB, CCC)
-    
-    ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (CCC%nnz == 8 .AND. &
-          CCC%ptr(    1) ==  1 .AND. &
-          CCC%ptr(    2) ==  3 .AND. &
-          CCC%ptr(    3) ==  5 .AND. &
-          CCC%ptr(    4) ==  6 .AND. &
-          CCC%ptr(    5) ==  9 .AND. &
-          CCC%index(  1) == 1 .AND. &
-          CCC%index(  2) == 3 .AND. &
-          CCC%index(  3) == 1 .AND. &
-          CCC%index(  4) == 4 .AND. &
-          CCC%index(  5) == 2 .AND. &
-          CCC%index(  6) == 1 .AND. &
-          CCC%index(  7) == 3 .AND. &
-          CCC%index(  8) == 4 .AND. &
-          CCC%val(    1) ==   1._dp .AND. &
-          CCC%val(    2) ==   2._dp .AND. &
-          CCC%val(    3) ==   6._dp .AND. &
-          CCC%val(    4) ==   8._dp .AND. &
-          CCC%val(    5) ==  15._dp .AND. &
-          CCC%val(    6) ==  24._dp .AND. &
-          CCC%val(    7) ==  28._dp .AND. &
-          CCC%val(    8) ==  32._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_multiply_matrix - ERROR: CSR matrix rows with vector elements multiplication gave wrong answer!'
-        WRITE(0,*) '  C%nnz   = ', CCC%nnz
-        WRITE(0,*) '  C%ptr   = ', CCC%ptr
-        WRITE(0,*) '  C%index = ', CCC%index
-        WRITE(0,*) '  C%val   = ', CCC%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_shared(     wBB)
-    CALL deallocate_matrix_CSR( CCC)
-    
-  END SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
   
 ! == Test all the matrix operators (mapping+gradients)
 
@@ -689,6 +534,7 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
 !      
 !    END IF
 !    CALL sync
+!    CALl MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
   ! Clean up after yourself
   ! =======================
@@ -1118,6 +964,7 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
 !      
 !    END IF
 !    CALL sync
+!    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
   ! Clean up after yourself
   ! =======================
@@ -1172,125 +1019,6 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
   END SUBROUTINE test_matrix_operators_test_function
   
 ! == Solve a (modified version of) the Laplace equation on the mesh
-  SUBROUTINE solve_modified_Laplace_equation_a( mesh)
-    ! Test the discretisation by solving (a modified version of) the Laplace equation:
-    !
-    ! d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
-    !
-    ! (Modified to include a spatially variable stiffness, making it much more similar to
-    ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    
-    ! Local variables:
-    INTEGER                                            :: vi, ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  f_a,  N_b,  b_a
-    INTEGER                                            :: wf_a, wN_b, wb_a
-    TYPE(type_sparse_matrix_CSR)                       :: M_a, BC_a, mNddx_b
-    REAL(dp)                                           :: x, y, xp, yp
-    REAL(dp), PARAMETER                                :: amp = 0._dp
-    INTEGER                                            :: nnz_BC
-        
-    IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation on the a-grid...'
-    
-  ! Solve the equation on the a-grid (vertex)
-  ! =========================================
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,   f_a, wf_a)
-    CALL allocate_shared_dp_1D( mesh%nV,   b_a, wb_a)
-    CALL allocate_shared_dp_1D( mesh%nTri, N_b, wN_b)
-    
-    ! Set up the spatially variable stiffness N on the b-grid (triangle)
-    DO ti = mesh%ti1, mesh%ti2
-      x = mesh%TriGC( ti,1)
-      y = mesh%TriGC( ti,2)
-      xp = (x - mesh%xmin) / (mesh%xmax - mesh%xmin)
-      yp = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-      N_b( ti) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
-    END DO
-    CALL sync
-    
-    ! Create the operator matrix M
-    CALL multiply_matrix_rows_with_vector( mesh%M_ddx_a_b, N_b, mNddx_b     )
-    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_b_a,      mNddx_b, M_a, nz_template = mesh%M_ddx_a_a)
-    
-    ! Create the boundary conditions matrix BC
-    
-    ! Find maximum number of non-zero entries
-    nnz_BC = 0
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mesh%edge_index( vi) > 0) THEN
-        nnz_BC = nnz_BC + 1 + mesh%nC( vi)
-      END IF
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_BC, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)   
-    
-    ! Allocate distributed shared memory
-    CALL allocate_matrix_CSR_dist( BC_a, mesh%nV, mesh%nV, nnz_BC)
-    
-    ! Fill in values
-    BC_a%nnz = 0
-    BC_a%ptr = 1
-    DO vi = mesh%vi1, mesh%vi2
-    
-      IF (mesh%edge_index( vi) == 0) THEN
-        ! Free vertex: no boundary conditions apply
-      
-      ELSEIF (mesh%edge_index( vi) == 6 .OR. mesh%edge_index( vi) == 7 .OR. mesh%edge_index( vi) == 8) THEN
-        ! West: bump
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        y = mesh%V( vi,2)
-        y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-        b_a( vi) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
-        
-      ELSE
-        ! Otherwise: zero
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        b_a( vi) = 0._dp
-        
-      END IF
-      
-      ! Finalise matrix row
-      BC_a%ptr( vi+1) = BC_a%nnz + 1
-      
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
-    
-    ! Finalise matrix
-    CALL finalise_matrix_CSR_dist( BC_a, mesh%vi1, mesh%vi2)
-    
-    ! Add boundary conditions to the operator matrix
-    CALL overwrite_rows_CSR( M_a, BC_a)
-    
-    ! Solve the equation
-    CALL solve_matrix_equation_CSR( M_a, b_a, f_a, C%DIVA_choice_matrix_solver, &
-      SOR_nit = 5000, SOR_tol = 0.0001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
-      
-    ! Write result to debug file
-    IF (par%master) THEN
-      debug%dp_2D_a_01 = f_a
-      CALL write_to_debug_file
-    END IF
-    CALL sync
-    
-  END SUBROUTINE solve_modified_Laplace_equation_a
   SUBROUTINE solve_modified_Laplace_equation_b( mesh)
     ! Test the discretisation by solving (a modified version of) the Laplace equation:
     !
@@ -1310,9 +1038,9 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     INTEGER                                            :: wN_a, wN_b, wdN_dx_b, wdN_dy_b
     REAL(dp), DIMENSION(:    ), POINTER                ::  x_b,  b_b
     INTEGER                                            :: wx_b, wb_b
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, n, edge_index
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc, n, edge_index
     INTEGER                                            :: k1, k2, k
-    TYPE(type_sparse_matrix_CSR)                       :: A_b
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_b
     REAL(dp)                                           :: x, y, xp, yp
     REAL(dp), PARAMETER                                :: amp = 7._dp
         
@@ -1346,8 +1074,9 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 10
     
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( A_b, nrows, ncols, nnz_max)
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL(nnz_max,dp) / REAL(par%n,dp))
+    CALL allocate_matrix_CSR_dist( A_b, nrows, ncols, nnz_max_proc)
     
     DO ti = mesh%ti1, mesh%ti2
       
@@ -1368,6 +1097,8 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
           A_b%nnz  = A_b%nnz+1
           A_b%index( A_b%nnz) = ti
           A_b%val(   A_b%nnz) = 1._dp
+          ! Extend memory if necessary
+          IF (A_b%nnz > A_b%nnz_max - 1000) CALL extend_matrix_CSR_dist( A_b, A_b%nnz_max + 1000)
         
           ! Right-hand side and initial guess
           y = mesh%V( vi,2)
@@ -1382,6 +1113,8 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
           A_b%nnz  = A_b%nnz+1
           A_b%index( A_b%nnz) = ti
           A_b%val(   A_b%nnz) = 1._dp
+          ! Extend memory if necessary
+          IF (A_b%nnz > A_b%nnz_max - 1000) CALL extend_matrix_CSR_dist( A_b, A_b%nnz_max + 1000)
         
           ! Right-hand side and initial guess
           b_b( ti) = 0._dp
@@ -1404,6 +1137,8 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
                                 dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k) + &
                                 N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
                                 dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k)
+          ! Extend memory if necessary
+          IF (A_b%nnz > A_b%nnz_max - 1000) CALL extend_matrix_CSR_dist( A_b, A_b%nnz_max + 1000)
           
         END DO
         
@@ -1420,13 +1155,13 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     CALL sync
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( A_b, mesh%ti1, mesh%ti2)
     CALL finalise_matrix_CSR_dist( A_b, mesh%ti1, mesh%ti2)
     
     ! Solve the equation
-    CALL solve_matrix_equation_CSR( A_b, b_b, x_b, C%DIVA_choice_matrix_solver, &
+    CALL solve_matrix_equation_CSR( A_b, b_b, x_b, &
+      choice_matrix_solver = C%DIVA_choice_matrix_solver, &
       SOR_nit = 5000, SOR_tol = 0.00001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
+      PETSc_rtol = 0.001_dp, PETSc_abstol = 0.001_dp)
       
     ! Write result to debug file
     IF (par%master) THEN

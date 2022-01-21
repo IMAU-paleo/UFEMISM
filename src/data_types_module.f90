@@ -12,8 +12,8 @@ MODULE data_types_module
 
   IMPLICIT NONE
   
-  TYPE type_sparse_matrix_CSR
-    ! Compressed Sparse Row (CSR) format matrix
+  TYPE type_sparse_matrix_CSR_dp
+    ! Compressed Sparse Row (CSR) format matrix, double precision
     
     INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
     INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
@@ -23,7 +23,27 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: val
     INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
     
-  END TYPE type_sparse_matrix_CSR
+  END TYPE type_sparse_matrix_CSR_dp
+  
+  TYPE type_sparse_matrix_CSR_int
+    ! Compressed Sparse Row (CSR) format matrix, integer
+    
+    INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
+    INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
+    INTEGER,                    POINTER     :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
+    INTEGER,  DIMENSION(:    ), POINTER     :: ptr
+    INTEGER,  DIMENSION(:    ), POINTER     :: index
+    INTEGER,  DIMENSION(:    ), POINTER     :: val
+    INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
+    
+    ! Process-local memory, used during matrix assembly
+    INTEGER                                 :: nnz_max_loc
+    INTEGER                                 :: nnz_loc
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: ptr_loc
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_loc
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: val_loc
+    
+  END TYPE type_sparse_matrix_CSR_int
   
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
@@ -150,7 +170,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
-    TYPE(type_sparse_matrix_CSR)            :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -320,44 +340,44 @@ MODULE data_types_module
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
     
     ! Matrix operators: mapping
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
    
     ! Matrix operators: d/dx
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
    
     ! Matrix operators: d/dy
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
     ! 2nd-order accurate matrix operators on the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
     
     ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
-    TYPE(type_sparse_matrix_CSR)            :: M_Neumann_BC_b_b
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_b
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat

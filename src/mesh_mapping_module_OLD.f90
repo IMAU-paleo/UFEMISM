@@ -860,10 +860,8 @@ MODULE mesh_mapping_module
     
     ! ================================================================================================================================
     
-    CALL write_mesh_to_text_file( mesh_src, 'mesh_src.txt')
-    CALL write_mesh_to_text_file( mesh_dst, 'mesh_dst.txt')
-    CALL sync
-    STOP
+    !CALL write_mesh_to_text_file( mesh_src, 'mesh_src.txt')
+    !CALL write_mesh_to_text_file( mesh_dst, 'mesh_dst.txt')
     
     A_min  = MIN( MINVAL( mesh_src%A), MINVAL( mesh_dst%A))
     A_max  = MAX( MAXVAL( mesh_src%A), MAXVAL( mesh_dst%A))

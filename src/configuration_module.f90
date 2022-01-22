@@ -219,24 +219,47 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
   CHARACTER(LEN=256)  :: filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
 
-  ! Input data file paths
-  ! =====================
-   
-  ! Insolation forcing (NetCDF) (Laskar et al., 2004)
-  CHARACTER(LEN=256)  :: filename_insolation_config                  = '/Datasets/Insolation_laskar/Insolation_Laskar_etal_2004.nc'
-  
+  ! Global forcing (insolation, CO2, d18O, geothermal heat flux)
+  ! ============================================================
+
+  ! Possible choice_forcing_method options:
+  ! 'none'                 : No global forcing used at all; climate or SMB are fully parameterised or directly prescribed
+  ! 'd18O_inverse_dT_glob' : Use the inverse routine with the specified d18O record to calculate a global temperature offset (e.g. de Boer et al., 2013)
+  ! 'CO2_direct'           : Use the specified CO2 record to force the climate matrix (e.g. Berends et al., 2018)
+  ! 'd18O_inverse_CO2'     : Use the inverse routine with the specified d18O record to calculate CO2 and then force the climate matrix (e.g. Berends et al., 2019)
+  CHARACTER(LEN=256)  :: choice_forcing_method_config                = 'CO2_direct'
+
+  ! Insolation forcing (NetCDF)
+  CHARACTER(LEN=256)  :: choice_insolation_forcing_config            = 'realistic'                      ! Choice of insolation forcing: "none", "static", "realistic"
+  REAL(dp)            :: static_insolation_time_config               = 0._dp                            ! Keep insolation values fixed to this time when choice_insolation_forcing = 'static'
+  CHARACTER(LEN=256)  :: filename_insolation_config                  = 'Datasets/Insolation/Laskar_etal_2004_insolation.nc'
+
+
   ! CO2 record (ASCII text file, so the number of rows needs to be specified)
   CHARACTER(LEN=256)  :: filename_CO2_record_config                  = 'Datasets/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
   INTEGER             :: CO2_record_length_config                    = 8001
-  
+
   ! d18O record (ASCII text file, so the number of rows needs to be specified)
   CHARACTER(LEN=256)  :: filename_d18O_record_config                 = 'Datasets/d18O/Ahn2017_d18O.dat'
   INTEGER             :: d18O_record_length_config                   = 2051
-  
+
   ! Geothermal heat flux
   CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   REAL(dp)            :: constant_geothermal_heat_flux_config        = 1.72E06_dp                       ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
   CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = '/Users/berends/Documents/Datasets/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
+
+  ! Parameters for calculating modelled benthic d18O
+  LOGICAL             :: do_calculate_benthic_d18O_config            = .TRUE.                          ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
+  REAL(dp)            :: dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
+  REAL(dp)            :: dT_deepwater_dT_surf_ratio_config           = 0.25_dp                          ! Ratio between global mean surface temperature change and deep-water temperature change
+  REAL(dp)            :: d18O_dT_deepwater_ratio_config              = -0.28_dp                         ! Ratio between deep-water temperature change and benthic d18O change
+
+  ! Parameters for the inverse routine
+  REAL(dp)            :: dT_glob_inverse_averaging_window_config     = 2000._dp                         ! Time window (in yr) over which global mean temperature anomaly is averaged before changing it with the inverse routine
+  REAL(dp)            :: inverse_d18O_to_dT_glob_scaling_config      = 20._dp                           ! Scaling factor between modelled d18O anomaly and prescribed temperature anomaly change (value from de Boer et al., 2013)
+  REAL(dp)            :: CO2_inverse_averaging_window_config         = 2000._dp                         ! Time window (in yr) over which CO2                             is averaged before changing it with the inverse routine
+  REAL(dp)            :: inverse_d18O_to_CO2_scaling_config          = 68._dp                           ! Scaling factor between modelled d18O anomaly and modelled CO2 change (value from Berends et al., 2019)
+  REAL(dp)            :: inverse_d18O_to_CO2_initial_CO2_config      = 280._dp                          ! CO2 value at the start of the simulation when using the inverse method to calculate CO2
 
   ! Ice dynamics - velocity
   ! =======================
@@ -390,26 +413,7 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_ICE5G_LGM_config                   = 'Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
   
   REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
-  
-  ! Forcing
-  ! =======
-  
-  ! The choice of forcing:
-  ! 'd18O_inverse_dT_glob' : Use the inverse routine with the specified d18O record to calculate a global temperature offset (e.g. de Boer et al., 2013)
-  ! 'CO2_direct'           : Use the specified CO2 record to force the climate matrix (e.g. Berends et al., 2018)
-  ! 'd18O_inverse_CO2'     : Use the inverse routine with the specified d18O record to calculate CO2 and then force the climate matrix (e.g. Berends et al., 2019)
-  CHARACTER(LEN=256)  :: choice_forcing_method_config                = 'CO2_direct'
-  
-  REAL(dp)            :: dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
-  REAL(dp)            :: dT_deepwater_dT_surf_ratio_config           = 0.25_dp                          ! Ratio between global mean surface temperature change and deep-water temperature change
-  REAL(dp)            :: d18O_dT_deepwater_ratio_config              = -0.28_dp                         ! Ratio between deep-water temperature change and benthic d18O change
-  
-  REAL(dp)            :: dT_glob_inverse_averaging_window_config     = 2000._dp                         ! Time window (in yr) over which global mean temperature anomaly is averaged before changing it with the inverse routine
-  REAL(dp)            :: inverse_d18O_to_dT_glob_scaling_config      = 20._dp                           ! Scaling factor between modelled d18O anomaly and prescribed temperature anomaly change (value from de Boer et al., 2013)
-  REAL(dp)            :: CO2_inverse_averaging_window_config         = 2000._dp                         ! Time window (in yr) over which CO2                             is averaged before changing it with the inverse routine
-  REAL(dp)            :: inverse_d18O_to_CO2_scaling_config          = 68._dp                           ! Scaling factor between modelled d18O anomaly and modelled CO2 change (value from Berends et al., 2019)
-  REAL(dp)            :: inverse_d18O_to_CO2_initial_CO2_config      = 280._dp                          ! CO2 value at the start of the simulation when using the inverse method to calculate CO2
-  
+
   ! SMB tuning
   ! ==========
   
@@ -732,20 +736,41 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_restart_GRL
     CHARACTER(LEN=256)                  :: filename_restart_ANT
 
-    ! Input data file paths
-    ! =====================
-    
+    ! Global forcing (insolation, CO2, d18O, geothermal heat flux)
+    ! ============================================================
+
+    CHARACTER(LEN=256)                  :: choice_forcing_method
+
+    ! Insolation forcing (NetCDF)
+    CHARACTER(LEN=256)                  :: choice_insolation_forcing
+    REAL(dp)                            :: static_insolation_time
     CHARACTER(LEN=256)                  :: filename_insolation
-    
+
+    ! CO2 record (ASCII text file, so the number of rows needs to be specified)
     CHARACTER(LEN=256)                  :: filename_CO2_record
     INTEGER                             :: CO2_record_length
+
+    ! d18O record (ASCII text file, so the number of rows needs to be specified)
     CHARACTER(LEN=256)                  :: filename_d18O_record
     INTEGER                             :: d18O_record_length
-    
+
     ! Geothermal heat flux
     CHARACTER(LEN=256)                  :: choice_geothermal_heat_flux
     REAL(dp)                            :: constant_geothermal_heat_flux
     CHARACTER(LEN=256)                  :: filename_geothermal_heat_flux
+
+    ! Parameters for calculating modelled benthic d18O
+    LOGICAL                             :: do_calculate_benthic_d18O
+    REAL(dp)                            :: dT_deepwater_averaging_window
+    REAL(dp)                            :: dT_deepwater_dT_surf_ratio
+    REAL(dp)                            :: d18O_dT_deepwater_ratio
+
+    ! Parameters for the inverse routine
+    REAL(dp)                            :: dT_glob_inverse_averaging_window
+    REAL(dp)                            :: inverse_d18O_to_dT_glob_scaling
+    REAL(dp)                            :: CO2_inverse_averaging_window
+    REAL(dp)                            :: inverse_d18O_to_CO2_scaling
+    REAL(dp)                            :: inverse_d18O_to_CO2_initial_CO2
 
     ! Ice dynamics - velocity
     ! =======================
@@ -882,42 +907,27 @@ MODULE configuration_module
     REAL(dp)                            :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
-    
+
     ! Climate matrix
     ! ==============
-    
+
     CHARACTER(LEN=256)                  :: filename_PD_obs_climate
     CHARACTER(LEN=256)                  :: choice_climate_matrix
     CHARACTER(LEN=256)                  :: filename_GCM_snapshot_PI
     CHARACTER(LEN=256)                  :: filename_GCM_snapshot_LGM
     CHARACTER(LEN=256)                  :: filename_ICE5G_PD
     CHARACTER(LEN=256)                  :: filename_ICE5G_LGM
-    
+
     CHARACTER(LEN=256)                  :: choice_ocean_temperature_model
     REAL(dp)                            :: ocean_temperature_PD
     REAL(dp)                            :: ocean_temperature_cold
     REAL(dp)                            :: ocean_temperature_warm
-    
+
     REAL(dp)                            :: constant_lapserate
-    
-    ! Forcing
-    ! =======
-    
-    CHARACTER(LEN=256)                  :: choice_forcing_method
-    
-    REAL(dp)                            :: dT_deepwater_averaging_window
-    REAL(dp)                            :: dT_deepwater_dT_surf_ratio
-    REAL(dp)                            :: d18O_dT_deepwater_ratio
-    
-    REAL(dp)                            :: dT_glob_inverse_averaging_window
-    REAL(dp)                            :: inverse_d18O_to_dT_glob_scaling
-    REAL(dp)                            :: CO2_inverse_averaging_window
-    REAL(dp)                            :: inverse_d18O_to_CO2_scaling
-    REAL(dp)                            :: inverse_d18O_to_CO2_initial_CO2
-    
+
     ! SMB melt tuning
     ! ===============
-    
+
     REAL(dp)                            :: C_abl_constant_NAM
     REAL(dp)                            :: C_abl_constant_EAS
     REAL(dp)                            :: C_abl_constant_GRL
@@ -1364,6 +1374,9 @@ CONTAINS
                      filename_restart_EAS_config,                     &
                      filename_restart_GRL_config,                     &
                      filename_restart_ANT_config,                     &
+                     choice_forcing_method_config,                    &
+                     choice_insolation_forcing_config,                &
+                     static_insolation_time_config,                   &
                      filename_insolation_config,                      &
                      filename_CO2_record_config,                      &
                      CO2_record_length_config,                        &
@@ -1372,6 +1385,15 @@ CONTAINS
                      choice_geothermal_heat_flux_config,              &
                      constant_geothermal_heat_flux_config,            &
                      filename_geothermal_heat_flux_config,            &
+                     do_calculate_benthic_d18O_config,                &
+                     dT_deepwater_averaging_window_config,            &
+                     dT_deepwater_dT_surf_ratio_config,               &
+                     d18O_dT_deepwater_ratio_config,                  &
+                     dT_glob_inverse_averaging_window_config,         &
+                     inverse_d18O_to_dT_glob_scaling_config,          &
+                     CO2_inverse_averaging_window_config,             &
+                     inverse_d18O_to_CO2_scaling_config,              &
+                     inverse_d18O_to_CO2_initial_CO2_config,          &
                      choice_ice_dynamics_config,                      &
                      n_flow_config,                                   &
                      m_enh_sheet_config,                              &
@@ -1508,15 +1530,6 @@ CONTAINS
                      ocean_temperature_cold_config,                   &
                      ocean_temperature_warm_config,                   &
                      constant_lapserate_config,                       &
-                     choice_forcing_method_config,                    &
-                     dT_deepwater_averaging_window_config,            &
-                     dT_deepwater_dT_surf_ratio_config,               &
-                     d18O_dT_deepwater_ratio_config,                  &
-                     dT_glob_inverse_averaging_window_config,         &
-                     inverse_d18O_to_dT_glob_scaling_config,          &
-                     CO2_inverse_averaging_window_config,             &
-                     inverse_d18O_to_CO2_scaling_config,              &
-                     inverse_d18O_to_CO2_initial_CO2_config,          &
                      C_abl_constant_NAM_config,                       &
                      C_abl_constant_EAS_config,                       &
                      C_abl_constant_GRL_config,                       &
@@ -1834,20 +1847,41 @@ CONTAINS
     C%filename_restart_GRL                     = filename_restart_GRL_config
     C%filename_restart_ANT                     = filename_restart_ANT_config
 
-    ! Input data file paths
-    ! =====================
-    
+    ! Global forcing (insolation, CO2, d18O, geothermal heat flux)
+    ! ============================================================
+
+    C%choice_forcing_method                    = choice_forcing_method_config
+
+    ! Insolation forcing (NetCDF)
+    C%choice_insolation_forcing                = choice_insolation_forcing_config
+    C%static_insolation_time                   = static_insolation_time_config
     C%filename_insolation                      = filename_insolation_config
-    
+
+    ! CO2 record (ASCII text file, so the number of rows needs to be specified)
     C%filename_CO2_record                      = filename_CO2_record_config
     C%CO2_record_length                        = CO2_record_length_config
+
+    ! d18O record (ASCII text file, so the number of rows needs to be specified)
     C%filename_d18O_record                     = filename_d18O_record_config
     C%d18O_record_length                       = d18O_record_length_config
-    
+
     ! Geothermal heat flux
     C%choice_geothermal_heat_flux              = choice_geothermal_heat_flux_config
     C%constant_geothermal_heat_flux            = constant_geothermal_heat_flux_config
     C%filename_geothermal_heat_flux            = filename_geothermal_heat_flux_config
+
+    ! Parameters for calculating modelled benthic d18O
+    C%do_calculate_benthic_d18O                = do_calculate_benthic_d18O_config
+    C%dT_deepwater_averaging_window            = dT_deepwater_averaging_window_config
+    C%dT_deepwater_dT_surf_ratio               = dT_deepwater_dT_surf_ratio_config
+    C%d18O_dT_deepwater_ratio                  = d18O_dT_deepwater_ratio_config
+
+    ! Parameters for the inverse routine
+    C%dT_glob_inverse_averaging_window         = dT_glob_inverse_averaging_window_config
+    C%inverse_d18O_to_dT_glob_scaling          = inverse_d18O_to_dT_glob_scaling_config
+    C%CO2_inverse_averaging_window             = CO2_inverse_averaging_window_config
+    C%inverse_d18O_to_CO2_scaling              = inverse_d18O_to_CO2_scaling_config
+    C%inverse_d18O_to_CO2_initial_CO2          = inverse_d18O_to_CO2_initial_CO2_config
 
     ! Ice dynamics - velocity
     ! =======================
@@ -1984,42 +2018,27 @@ CONTAINS
     C%ELRA_lithosphere_flex_rigidity           = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
-    
+
     ! Climate matrix
     ! ==============
-    
+
     C%filename_PD_obs_climate                  = filename_PD_obs_climate_config
     C%choice_climate_matrix                    = choice_climate_matrix_config
     C%filename_GCM_snapshot_PI                 = filename_GCM_snapshot_PI_config
     C%filename_GCM_snapshot_LGM                = filename_GCM_snapshot_LGM_config
     C%filename_ICE5G_PD                        = filename_ICE5G_PD_config
     C%filename_ICE5G_LGM                       = filename_ICE5G_LGM_config
-    
+
     C%choice_ocean_temperature_model           = choice_ocean_temperature_model_config
     C%ocean_temperature_PD                     = ocean_temperature_PD_config
     C%ocean_temperature_cold                   = ocean_temperature_cold_config
     C%ocean_temperature_warm                   = ocean_temperature_warm_config
-    
+
     C%constant_lapserate                       = constant_lapserate_config
-    
-    ! Forcing
-    ! =======
-    
-    C%choice_forcing_method                    = choice_forcing_method_config
-    
-    C%dT_deepwater_averaging_window            = dT_deepwater_averaging_window_config
-    C%dT_deepwater_dT_surf_ratio               = dT_deepwater_dT_surf_ratio_config
-    C%d18O_dT_deepwater_ratio                  = d18O_dT_deepwater_ratio_config
-    
-    C%dT_glob_inverse_averaging_window         = dT_glob_inverse_averaging_window_config
-    C%inverse_d18O_to_dT_glob_scaling          = inverse_d18O_to_dT_glob_scaling_config
-    C%CO2_inverse_averaging_window             = CO2_inverse_averaging_window_config
-    C%inverse_d18O_to_CO2_scaling              = inverse_d18O_to_CO2_scaling_config
-    C%inverse_d18O_to_CO2_initial_CO2          = inverse_d18O_to_CO2_initial_CO2_config
-    
+
     ! SMB melt tuning
     ! ===============
-    
+
     C%C_abl_constant_NAM                       = C_abl_constant_NAM_config
     C%C_abl_constant_EAS                       = C_abl_constant_EAS_config
     C%C_abl_constant_GRL                       = C_abl_constant_GRL_config
@@ -2036,10 +2055,10 @@ CONTAINS
     C%C_refr_EAS                               = C_refr_EAS_config
     C%C_refr_GRL                               = C_refr_GRL_config
     C%C_refr_ANT                               = C_refr_ANT_config
-    
+
     ! Sub-shelf melt parameterisation
     ! ===============================
-    
+
     C%T_ocean_mean_PD_NAM                      = T_ocean_mean_PD_NAM_config
     C%T_ocean_mean_PD_EAS                      = T_ocean_mean_PD_EAS_config
     C%T_ocean_mean_PD_GRL                      = T_ocean_mean_PD_GRL_config

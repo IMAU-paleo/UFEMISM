@@ -3,7 +3,7 @@
 #    For "make" syntax search on "make tutorial", or see:
 #     http://www.gnu.org/software/make/manual/make.html
 
-include Makefile_include_local.txt
+include Makefile_include_mac.txt
 #include Makefile_include_Gemini.txt
 #include Makefile_include_Cartesius.txt
 

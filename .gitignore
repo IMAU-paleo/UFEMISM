@@ -7,3 +7,10 @@ UFEMISM_program
 
 # Ignore output files
 result*/
+
+# Ignore local testing files
+/config-files/config_local*
+/src/Makefile_include_mac.txt
+
+# Ignore Mac files
+.DS_store

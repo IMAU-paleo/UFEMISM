@@ -23,8 +23,8 @@ MODULE ice_velocity_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality 
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping             
-  USE mesh_mapping_module,             ONLY: remap_field_dp
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
                                              ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
@@ -1773,62 +1773,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c, v_c
     
     ! Local variables:
-    INTEGER                                            :: aci, vi, vj, vl, vr, vti, ti, n1, n2, n3, til, tir
+    INTEGER                                            :: aci, til, tir
     
     DO aci = mesh%ci1, mesh%ci2
       
-      IF (mesh%edge_index_ac( aci) == 0) THEN
-        ! Free edge
-        
-        ! Find the two adjacent triangles
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
-        vr = mesh%Aci( aci,4)
-        
-        til = 0
-        tir = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) til = ti
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vr .AND. mesh%Tri( ti,n3) == vj) tir = ti
-          END DO
-        END DO
-        
-        u_c( aci) = (u_b( til) + u_b( tir)) / 2._dp
-        v_c( aci) = (v_b( til) + v_b( tir)) / 2._dp
-        
-      ELSE
-        ! Border edge
-        
-        ! Find the adjacent triangle
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
-        
-        til = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF ((mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) .OR. &
-                (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vl .AND. mesh%Tri( ti,n3) == vj)) THEN
-              til = ti
-            END IF
-          END DO
-        END DO
-        
+      til = mesh%Aci( aci,5)
+      tir = mesh%Aci( aci,6)
+      
+      IF     (til == 0) THEN
+        u_c( aci) = u_b( tir)
+        v_c( aci) = v_b( tir)
+      ELSEIF (tir == 0) THEN
         u_c( aci) = u_b( til)
         v_c( aci) = v_b( til)
-        
+      ELSE
+        u_c( aci) = 0.5_dp * (u_b( til) + u_b( tir))
+        v_c( aci) = 0.5_dp * (v_b( til) + v_b( tir))
       END IF
       
     END DO
@@ -1846,62 +1806,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_c, v_c
     
     ! Local variables:
-    INTEGER                                            :: aci, vi, vj, vl, vr, vti, ti, n1, n2, n3, til, tir
+    INTEGER                                            :: aci, til, tir
     
     DO aci = mesh%ci1, mesh%ci2
       
-      IF (mesh%edge_index_ac( aci) == 0) THEN
-        ! Free edge
-        
-        ! Find the two adjacent triangles
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
-        vr = mesh%Aci( aci,4)
-        
-        til = 0
-        tir = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) til = ti
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vr .AND. mesh%Tri( ti,n3) == vj) tir = ti
-          END DO
-        END DO
-        
-        u_c( aci,:) = (u_b( til,:) + u_b( tir,:)) / 2._dp
-        v_c( aci,:) = (v_b( til,:) + v_b( tir,:)) / 2._dp
-        
-      ELSE
-        ! Border edge
-        
-        ! Find the adjacent triangle
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
-        
-        til = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF ((mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) .OR. &
-                (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vl .AND. mesh%Tri( ti,n3) == vj)) THEN
-              til = ti
-            END IF
-          END DO
-        END DO
-        
+      til = mesh%Aci( aci,5)
+      tir = mesh%Aci( aci,6)
+      
+      IF     (til == 0) THEN
+        u_c( aci,:) = u_b( tir,:)
+        v_c( aci,:) = v_b( tir,:)
+      ELSEIF (tir == 0) THEN
         u_c( aci,:) = u_b( til,:)
         v_c( aci,:) = v_b( til,:)
-        
+      ELSE
+        u_c( aci,:) = 0.5_dp * (u_b( til,:) + u_b( tir,:))
+        v_c( aci,:) = 0.5_dp * (v_b( til,:) + v_b( tir,:))
       END IF
       
     END DO
@@ -2279,7 +2199,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     IF     (C%choice_ice_dynamics == 'SIA') THEN
@@ -2304,7 +2224,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2313,7 +2233,7 @@ CONTAINS
     ! To prevent compiler warnings
     dp_dummy = mesh_old%V(   1,1)
     dp_dummy = mesh_new%V(   1,1)
-    dp_dummy = map%trilin%w( 1,1)
+    dp_dummy = map%M_trilin%ptr( 1)
     dp_dummy = ice%Hi_a( 1)
       
     ! No need to remap anything, just reallocate
@@ -2358,7 +2278,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2377,8 +2297,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2466,7 +2386,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2485,8 +2405,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2574,7 +2494,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2593,8 +2513,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_vav_b, ice%wu_vav_b)

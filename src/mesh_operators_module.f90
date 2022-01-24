@@ -25,7 +25,7 @@ MODULE mesh_operators_module
                                              adapt_shared_int_2D,    adapt_shared_dp_2D, &
                                              adapt_shared_int_3D,    adapt_shared_dp_3D, &
                                              adapt_shared_bool_1D
-  USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR_dp
+  USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR_dp, type_grid
   USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general 
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
                                              multiply_matrix_vector_CSR, multiply_matrix_vector_2D_CSR, check_CSR, check_CSR_dist
@@ -34,7 +34,7 @@ MODULE mesh_operators_module
   
   LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
 
-  CONTAINS
+CONTAINS
   
 ! == Mapping
 
@@ -2378,6 +2378,102 @@ MODULE mesh_operators_module
     END IF
     
   END SUBROUTINE calc_matrix_operator_Neumann_BC_b_b
+  
+  SUBROUTINE calc_matrix_operators_grid( grid, M_ddx, M_ddy)
+    ! Calculate matrix operators for partial derivatives on a regular grid (needed for conservative remapping)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
+    
+    ! Local variables:
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: n1, n2, n, i, j, n_ip1, n_im1, n_jp1, n_jm1
+    REAL(dp)                                           :: v1, v2
+
+    ncols           = grid%n      ! from
+    nrows           = grid%n      ! to
+    nnz_per_row_max = 3
+    nnz_max         = nrows * nnz_per_row_max
+    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+
+    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
+    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
+    
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    
+    DO n = n1, n2
+      
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      
+      ! d/dx
+      IF     (i == 1) THEN
+        n_ip1 = grid%ij2n( i+1,j)
+        v1 = -1._dp / grid%dx
+        v2 =  1._dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddx, n, n    , v1)
+        CALL add_entry_CSR_dist( M_ddx, n, n_ip1, v2)
+      ELSEIF (i == grid%nx) THEN
+        n_im1 = grid%ij2n( i-1,j)
+        v1 =  1._dp / grid%dx
+        v2 = -1._dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddx, n, n    , v1)
+        CALL add_entry_CSR_dist( M_ddx, n, n_im1, v2)
+      ELSE
+        n_im1 = grid%ij2n( i-1,j)
+        n_ip1 = grid%ij2n( i+1,j)
+        v1 = -0.5_dp / grid%dx
+        v2 =  0.5_dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddx, n, n_im1, v1)
+        CALL add_entry_CSR_dist( M_ddx, n, n_ip1, v2)
+      END IF
+      j = grid%n2ij( n,2)
+      
+      ! d/dy
+      IF     (j == 1) THEN
+        n_jp1 = grid%ij2n( i,j+1)
+        v1 = -1._dp / grid%dx
+        v2 =  1._dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddy, n, n    , v1)
+        CALL add_entry_CSR_dist( M_ddy, n, n_jp1, v2)
+      ELSEIF (j == grid%ny) THEN
+        n_jm1 = grid%ij2n( i,j-1)
+        v1 =  1._dp / grid%dx
+        v2 = -1._dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddy, n, n    , v1)
+        CALL add_entry_CSR_dist( M_ddy, n, n_jm1, v2)
+      ELSE
+        n_jm1 = grid%ij2n( i,j-1)
+        n_jp1 = grid%ij2n( i,j+1)
+        v1 = -0.5_dp / grid%dx
+        v2 =  0.5_dp / grid%dx
+        CALL add_entry_CSR_dist( M_ddy, n, n_jm1, v1)
+        CALL add_entry_CSR_dist( M_ddy, n, n_jp1, v2)
+      END IF
+      
+    END DO ! DO n = n1, n2
+    CALL sync
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR_dist( M_ddx, 'M_grid_ddx', n1, n2)
+      CALL check_CSR_dist( M_ddy, 'M_grid_ddy', n1, n2)
+    END IF
+    
+    ! Combine results from the different processes
+    CALL finalise_matrix_CSR_dist( M_ddx, n1, n2)
+    CALL finalise_matrix_CSR_dist( M_ddy, n1, n2)
+    
+    ! Safety
+    IF (do_check_matrices) THEN
+      CALL check_CSR( M_ddx, 'M_grid_ddx')
+      CALL check_CSR( M_ddy, 'M_grid_ddy')
+    END IF
+    
+  END SUBROUTINE calc_matrix_operators_grid
   
 ! == Routines for calculating neighbour functions for regular and staggered vertices
   SUBROUTINE calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)

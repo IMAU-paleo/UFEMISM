@@ -26,7 +26,7 @@ MODULE climate_module
   USE netcdf_module,                   ONLY: inquire_PD_obs_data_file, read_PD_obs_data_file, inquire_GCM_snapshot, &
                                              read_GCM_snapshot, inquire_ICE5G_data, read_ICE5G_data
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_climate_model, type_reference_geometry, &
-                                             type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping, &
+                                             type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping_mesh_mesh, &
                                              type_ICE5G_timeframe, type_remapping_latlon2mesh, type_SMB_model
   USE mesh_mapping_module,             ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, map_latlon2mesh_3D, &
                                              deallocate_remapping_arrays_glob_mesh, smooth_Gaussian_2D
@@ -1713,7 +1713,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
@@ -1724,8 +1724,10 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: int_dummy
     
-    int_dummy = map%conservative%n_tot
+    ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
+    int_dummy = mesh_new%nV
+    int_dummy = map%M_trilin%ptr( 1)
 
     ! Reallocate memory for the different subclimates
     CALL reallocate_subclimate( mesh_new, climate%applied)

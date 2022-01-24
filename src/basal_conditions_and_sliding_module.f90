@@ -22,7 +22,7 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
 
   IMPLICIT NONE
@@ -1153,7 +1153,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Basal hydrology
@@ -1171,7 +1171,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -1180,7 +1180,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = map%M_trilin%ptr( 1)
     
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
@@ -1205,7 +1205,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -1214,7 +1214,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = map%M_trilin%ptr( 1)
     
     ! Allocate shared memory
     IF     (C%choice_sliding_law == 'no_sliding') THEN

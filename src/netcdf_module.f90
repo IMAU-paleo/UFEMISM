@@ -532,7 +532,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -562,7 +562,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ciplusone,    region%mesh%nC_mem+1,    netcdf%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_two,          2,                       netcdf%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -573,7 +573,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     
     ! Define variables
@@ -588,7 +588,7 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
@@ -673,7 +673,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -703,7 +703,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ciplusone,    region%mesh%nC_mem+1,    netcdf%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_two,          2,                       netcdf%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -714,7 +714,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     
     ! Define variables
@@ -729,7 +729,7 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
@@ -852,7 +852,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, t, z, m
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
@@ -862,7 +862,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     ai        = netcdf%id_dim_ai
     tai       = netcdf%id_dim_tai
@@ -2122,7 +2122,7 @@ CONTAINS
     CHARACTER(LEN=20)                             :: short_filename
     INTEGER                                       :: n
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -2157,7 +2157,7 @@ CONTAINS
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_ciplusone,    region%mesh%nC_mem+1,    debug_temp%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_two,          2,                       debug_temp%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_three,        3,                       debug_temp%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_four,         4,                       debug_temp%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_six,          6,                       debug_temp%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_vii_transect, region%mesh%nV_transect, debug_temp%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -2168,7 +2168,7 @@ CONTAINS
     ciplusone = debug_temp%id_dim_ciplusone
     two       = debug_temp%id_dim_two
     three     = debug_temp%id_dim_three
-    four      = debug_temp%id_dim_four
+    six       = debug_temp%id_dim_six
     vii       = debug_temp%id_dim_vii_transect
     
     ! Define variables
@@ -2183,7 +2183,7 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_TriC,             [ti,  three], debug_temp%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Tri_edge_index,   [ti        ], debug_temp%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAc,              [aci, two  ], debug_temp%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, four ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, six  ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_iAci,             [vi,  ci   ], debug_temp%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_A,                [vi        ], debug_temp%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_R,                [vi        ], debug_temp%id_var_R,                long_name='Vertex resolution', units='m')

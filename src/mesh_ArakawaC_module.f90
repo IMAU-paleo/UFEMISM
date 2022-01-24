@@ -36,7 +36,7 @@ MODULE mesh_ArakawaC_module
 
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
-    INTEGER                                       :: vi, ci, vj, cj, iti, ti, n1, n2, n3, vl, vr
+    INTEGER                                       :: vi, ci, vj, cj, iti, ti, n1, n2, n3, vil, vir, til, tir
     INTEGER,  DIMENSION(:,:), ALLOCATABLE         :: Aci_temp
     REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: VAc_temp
                 
@@ -48,9 +48,6 @@ MODULE mesh_ArakawaC_module
     ! Go through all vertex connections, determine the location of the Ac vertex (on the connection midpoint),
     ! the indices of the left and right Aa vertices, and the neighbour functions on the Ac vertex
     
-    vr = 0
-    vl = 0
-    
     IF (.NOT. par%master) THEN
     
       ! Allocate a little memory to prevent compiler warnings
@@ -61,7 +58,7 @@ MODULE mesh_ArakawaC_module
     
       ! Allocate temporary memory for VAc, Aci and neighbour functions
       ALLOCATE(VAc_temp( mesh%nTri * 3,2))
-      ALLOCATE(Aci_temp( mesh%nTri * 3,4))
+      ALLOCATE(Aci_temp( mesh%nTri * 3,6))
       
       mesh%nAc   = 0
       mesh%iAci  = 0
@@ -94,47 +91,59 @@ MODULE mesh_ArakawaC_module
           IF (.NOT. is_boundary_segment( mesh, vi, vj)) THEN
               
             ! Find indices of vl and vr
+            vil = 0
+            vir = 0
+            til = 0
+            tir = 0
             DO iti = 1, mesh%niTri( vi)
               ti = mesh%iTri( vi,iti)
               DO n1 = 1, 3
                 n2 = n1+1
-                IF (n2==4) n2=1
+                IF (n2 == 4) n2 = 1
                 n3 = n2+1
-                IF (n3==4) n3=1
+                IF (n3 == 4) n3 = 1
                 
-                IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj) THEN
-                  vl = mesh%Tri( ti,n3)
-                ELSE IF (mesh%Tri( ti,n1) == vj .AND. mesh%Tri( ti,n2) == vi) THEN
-                  vr = mesh%Tri( ti,n3)
+                IF     (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj) THEN
+                  til = ti
+                  vil = mesh%Tri( ti,n3)
+                ELSEIF (mesh%Tri( ti,n1) == vj .AND. mesh%Tri( ti,n2) == vi) THEN
+                  tir = ti
+                  vir = mesh%Tri( ti,n3)
                 END IF
               END DO
             END DO
-            
-            ! List relevant Aa vertex indices vor Ac vertex in reference array
-            Aci_temp( mesh%nAc,:) = [vi, vj, vl, vr]
             
           ELSE
             ! Surface slope on an edge segment Ac vertex equals that of the (single) triangle
               
             ! Find index of vl
+            vil = 0
+            vir = 0
+            til = 0
+            tir = 0
             DO iti = 1, mesh%niTri( vi)
               ti = mesh%iTri( vi,iti)
               DO n1 = 1, 3
                 n2 = n1+1
-                IF (n2==4) n2=1
+                IF (n2 == 4) n2 = 1
                 n3 = n2+1
-                IF (n3==4) n3=1
+                IF (n3 == 4) n3 = 1
                 
-                IF ((mesh%Tri( ti,n1)==vi .AND. mesh%Tri( ti,n2)==vj) .OR. (mesh%Tri( ti,n1)==vj .AND. mesh%Tri( ti,n2)==vi)) THEN
-                  vl = mesh%Tri( ti,n3)
+                IF     (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj) THEN
+                  til = ti
+                  vil = mesh%Tri( ti,n3)
+                ELSEIF (mesh%Tri( ti,n1) == vj .AND. mesh%Tri( ti,n2) == vi) THEN
+                  tir = ti
+                  vir = mesh%Tri( ti,n3)
                 END IF
+          
               END DO
-            END DO
-            
-            ! List relevant Aa vertex indices vor Ac vertex in reference array
-            Aci_temp( mesh%nAc,:) = [vi, vj, vl, 0]          
+            END DO         
           
           END IF
+
+          ! List relevant Aa vertex indices vor Ac vertex in reference array
+          Aci_temp( mesh%nAc,:) = [vi, vj, vil, vir, til, tir]
             
         END DO ! DO ci = 1, mesh%nC(vi)
       END DO ! DO vi = 1, mesh%nV
@@ -144,7 +153,7 @@ MODULE mesh_ArakawaC_module
     
     ! Allocate shared memory, move data there
     CALL allocate_shared_dp_2D(  mesh%nAc, 2, mesh%VAc, mesh%wVAc)
-    CALL allocate_shared_int_2D( mesh%nAc, 4, mesh%Aci, mesh%wAci)
+    CALL allocate_shared_int_2D( mesh%nAc, 6, mesh%Aci, mesh%wAci)
     
     IF (par%master) THEN
       mesh%VAc   = VAc_temp(   1:mesh%nAc,:)

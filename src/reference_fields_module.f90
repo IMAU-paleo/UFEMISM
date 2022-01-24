@@ -27,7 +27,7 @@ MODULE reference_fields_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_grid, type_reference_geometry, type_mesh
   USE netcdf_module,                   ONLY: inquire_reference_geometry_file, read_reference_geometry_file
-  USE mesh_mapping_module,             ONLY: create_remapping_arrays_mesh_grid, map_grid2mesh_2D, deallocate_remapping_arrays_mesh_grid
+  USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_grid, map_grid2mesh_2D, deallocate_remapping_operators_mesh_grid
   USE utilities_module,                ONLY: is_floating, surface_elevation, remove_Lake_Vostok
 
   IMPLICIT NONE
@@ -594,8 +594,9 @@ CONTAINS
     REAL(dp),                        INTENT(IN)        :: dx
     
     ! Local variables:
-    INTEGER                                            :: nsx, nsy, i, j
+    INTEGER                                            :: nsx, nsy, i, j, n
     REAL(dp)                                           :: xmin, xmax, ymin, ymax, xmid, ymid
+    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
     
     ! Assign dummy values to suppress compiler warnings
     xmin = 0._dp
@@ -608,13 +609,13 @@ CONTAINS
     nsy  = 0
     
     ! Allocate shared memory
-    CALL allocate_shared_int_0D( grid%nx,           grid%wnx          )
-    CALL allocate_shared_int_0D( grid%ny,           grid%wny          )
-    CALL allocate_shared_dp_0D(  grid%dx,           grid%wdx          )
-    CALL allocate_shared_dp_0D(  grid%xmin,         grid%wxmin        )
-    CALL allocate_shared_dp_0D(  grid%xmax,         grid%wxmax        )
-    CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
-    CALL allocate_shared_dp_0D(  grid%ymax,         grid%wymax        )
+    CALL allocate_shared_int_0D(                   grid%nx          , grid%wnx          )
+    CALL allocate_shared_int_0D(                   grid%ny          , grid%wny          )
+    CALL allocate_shared_dp_0D(                    grid%dx          , grid%wdx          )
+    CALL allocate_shared_dp_0D(                    grid%xmin        , grid%wxmin        )
+    CALL allocate_shared_dp_0D(                    grid%xmax        , grid%wxmax        )
+    CALL allocate_shared_dp_0D(                    grid%ymin        , grid%wymin        )
+    CALL allocate_shared_dp_0D(                    grid%ymax        , grid%wymax        )
     
     ! Let the Master do the work
     IF (par%master) THEN
@@ -682,6 +683,28 @@ CONTAINS
       grid%ymin = MINVAL(grid%y)
       grid%ymax = MAXVAL(grid%y)
     END IF ! IF (par%master) THEN
+    CALL sync
+      
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( grid%tol_dist, grid%wtol_dist)
+    IF (par%master) grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
+    
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D(                   grid%n           , grid%wn           )
+    IF (par%master) grid%n  = grid%nx * grid%ny
+    CALL sync
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n        , grid%wij2n        )
+    CALL allocate_shared_int_2D( grid%n , 2      , grid%n2ij        , grid%wn2ij        )
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, grid%nx
+      DO j = 1, grid%ny
+        n = n+1
+        grid%ij2n( i,j) = n
+        grid%n2ij( n,:) = [i,j]
+      END DO
+      END DO
+    END IF
     CALL sync
     
   END SUBROUTINE setup_idealised_geometry_grid
@@ -840,7 +863,7 @@ CONTAINS
     n1 = par%mem%n
     
     ! Calculate mapping arrays
-    CALL create_remapping_arrays_mesh_grid( mesh, refgeo%grid)
+    CALL calc_remapping_operators_mesh_grid( mesh, refgeo%grid)
     
     ! Allocate memory for reference data on the mesh
     CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hi, refgeo%wHi)
@@ -848,16 +871,16 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hs, refgeo%wHs)
     
     ! Map PD data to the mesh
-    CALL map_grid2mesh_2D( mesh, refgeo%grid, refgeo%Hi_grid, refgeo%Hi)
-    CALL map_grid2mesh_2D( mesh, refgeo%grid, refgeo%Hb_grid, refgeo%Hb)
+    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
+    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
     
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
     CALL sync
     
-    ! Deallocate remapping arrays
-    CALL deallocate_remapping_arrays_mesh_grid( refgeo%grid)
+    ! Clean upp after yourself
+    CALL deallocate_remapping_operators_mesh_grid( refgeo%grid)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)

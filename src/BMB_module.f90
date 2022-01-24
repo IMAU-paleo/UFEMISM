@@ -23,7 +23,7 @@ MODULE BMB_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_BMB_model, &
-                                             type_remapping
+                                             type_remapping_mesh_mesh
   USE forcing_module,                  ONLY: forcing
 
   IMPLICIT NONE
@@ -452,14 +452,16 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     
     ! Local variables:
     INTEGER                                            :: int_dummy
     
+    ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = mesh_new%nV
+    int_dummy = map%M_trilin%ptr( 1)
         
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
     CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%BMB,              BMB%wBMB             )

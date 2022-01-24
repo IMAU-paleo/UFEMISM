@@ -23,7 +23,7 @@ MODULE bedrock_ELRA_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, &
-                                             type_reference_geometry, type_remapping
+                                             type_reference_geometry, type_remapping_mesh_mesh
   USE mesh_mapping_module,             ONLY: map_mesh2grid_2D, map_grid2mesh_2D
   USE utilities_module,                ONLY: is_floating
 
@@ -175,7 +175,7 @@ CONTAINS
     CALL sync
     
     ! Map the deformation rate back to the model mesh
-    CALL map_grid2mesh_2D( mesh, grid, ice%dHb_dt_grid, ice%dHb_dt_a)
+    CALL map_grid2mesh_2D( grid, mesh, ice%dHb_dt_grid, ice%dHb_dt_a)
     
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
   
@@ -302,7 +302,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_grid),                     INTENT(IN)    :: grid
@@ -330,7 +330,7 @@ CONTAINS
     END IF ! IF (C%do_benchmark_experiment) THEN
     
     int_dummy = mesh_old%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = map%M_trilin%ptr( 1)
     
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_mesh,     ice%wsurface_load_mesh    )

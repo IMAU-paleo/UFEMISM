@@ -22,7 +22,7 @@ MODULE thermodynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_remapping
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_remapping_mesh_mesh
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
@@ -991,7 +991,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -1129,7 +1129,7 @@ CONTAINS
     CALL sync
     
     ! Remap the extrapolated temperature field
-    CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext, wTi_ext, 'cons_1st_order')
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext, wTi_ext, 'cons_2nd_order')
     
     ! Reallocate ice temperature field, copy remapped data only for ice-covered pixels
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz, ice%Ti_a, ice%wTi_a)

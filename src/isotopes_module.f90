@@ -22,8 +22,8 @@ MODULE isotopes_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping
-  USE mesh_mapping_module,             ONLY: remap_field_dp
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping_mesh_mesh
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
   IMPLICIT NONE
     
@@ -439,7 +439,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Not needed for benchmark experiments

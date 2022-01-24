@@ -517,139 +517,48 @@ MODULE data_types_module
     
   END TYPE type_debug_fields
   
-  TYPE type_remapping_trilin
-    ! Indices and weights for mapping data between two meshes, using trilinear interpolation
+  TYPE type_single_row_mapping_matrices
+    ! Results from integrating a single set of lines
     
-    INTEGER,  DIMENSION(:,:  ), POINTER :: vi   ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:,:  ), POINTER :: w    ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    
-    INTEGER :: wvi, ww
-    
-  END TYPE type_remapping_trilin
-  
-  TYPE type_remapping_nearest_neighbour
-    ! Indices and weights for mapping data between two meshes, using nearest-neighbour interpolation
-    
-    INTEGER,  DIMENSION(:    ), POINTER :: vi   ! Index of mesh_src vertex nearest to this mesh_dst vertex
-    
-    INTEGER :: wvi
-    
-  END TYPE type_remapping_nearest_neighbour
-  
-  TYPE type_remapping_conservative_intermediate_Ac_local
-    ! Intermediate data used in creating conservative remapping arrays
-    
-    INTEGER                                 :: n_tot
     INTEGER                                 :: n_max
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nS
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli1
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli2
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_left
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_right
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
-  
-  END TYPE type_remapping_conservative_intermediate_Ac_local
-  
-  TYPE type_remapping_conservative_intermediate_Ac_shared
-    ! Intermediate data used in creating conservative remapping arrays
+    INTEGER                                 :: n
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_left
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
     
-    INTEGER,                    POINTER :: n_tot
-    INTEGER,                    POINTER :: n_max
-    INTEGER,  DIMENSION(:    ), POINTER :: nS
-    INTEGER,  DIMENSION(:    ), POINTER :: sli1
-    INTEGER,  DIMENSION(:    ), POINTER :: sli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_left
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_right
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
-    INTEGER :: wn_tot, wn_max, wnS, wsli1, wsli2, wvi_opp_left, wvi_opp_right, wLI_xdy, wLI_mxydx, wLI_xydy
+  END TYPE type_single_row_mapping_matrices
   
-  END TYPE type_remapping_conservative_intermediate_Ac_shared
-  
-  TYPE type_remapping_conservative_intermediate_local
-    ! Intermediate data used in creating conservative remapping arrays
+  TYPE type_remapping_mesh_mesh
+    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
     
-    INTEGER                                 :: n_tot
-    INTEGER                                 :: n_max
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nV
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli1
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli2
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_trilin                     ! Remapping using trilinear interpolation
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_cons_1st_order             ! Remapping using first-order conservative remapping
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
   
-  END TYPE type_remapping_conservative_intermediate_local
-  
-  TYPE type_remapping_conservative_intermediate_shared
-    ! Intermediate data used in creating conservative remapping arrays
-    
-    INTEGER,                    POINTER :: n_tot
-    INTEGER,                    POINTER :: n_max
-    INTEGER,  DIMENSION(:    ), POINTER :: nV
-    INTEGER,  DIMENSION(:    ), POINTER :: vli1
-    INTEGER,  DIMENSION(:    ), POINTER :: vli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
-    INTEGER :: wn_tot, wn_max, wnV, wvli1, wvli2, wvi_opp, wLI_xdy, wLI_mxydx, wLI_xydy
-  
-  END TYPE type_remapping_conservative_intermediate_shared
-  
-  TYPE type_remapping_conservative
-    ! Indices and weights for mapping data between two meshes, using 1st or 2nd order conservative remapping
-    
-    INTEGER,                    POINTER :: n_tot ! Total number of entries in list
-    INTEGER,  DIMENSION(:    ), POINTER :: vli1  ! List index range per vertex
-    INTEGER,  DIMENSION(:    ), POINTER :: vli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi    ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w0    ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w1x   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w1y   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    INTEGER :: wn_tot, wvli1, wvli2, wvi, ww0, ww1x, ww1y
-    
-  END TYPE type_remapping_conservative
-  
-  TYPE type_remapping
-    ! Mapping index and weight arrays for remapping data between two meshes, for different remapping methods
-    
-    TYPE(type_remapping_trilin)                 :: trilin
-    TYPE(type_remapping_nearest_neighbour)      :: nearest_neighbour
-    TYPE(type_remapping_conservative)           :: conservative
-  
-  END TYPE type_remapping
-  
-  TYPE type_remapping_mesh2grid
-    ! Indices and weights for mapping data between the model mesh and a grid using pseudo-conservative remapping
-    
-    ! Indices and weights
-    INTEGER,                    POINTER :: n
-    INTEGER,  DIMENSION(:,:  ), POINTER :: ii
-    REAL(dp), DIMENSION(:    ), POINTER :: w_m2g
-    REAL(dp), DIMENSION(:    ), POINTER :: w_g2m
-    INTEGER :: wn, wii, ww_m2g, ww_g2m
-  
-  END TYPE type_remapping_mesh2grid
+  END TYPE type_remapping_mesh_mesh
   
   TYPE type_grid
     ! A regular square grid covering a model region
     
     ! Basic grid data
-    INTEGER,                    POINTER     :: nx, ny
+    INTEGER,                    POINTER     :: nx, ny, n
     REAL(dp),                   POINTER     :: dx
     REAL(dp), DIMENSION(:    ), POINTER     :: x, y
     REAL(dp),                   POINTER     :: xmin, xmax, ymin, ymax
-    INTEGER :: wnx, wny, wdx, wx, wy, wxmin, wxmax, wymin, wymax
+    INTEGER :: wnx, wny, wn, wdx, wx, wy, wxmin, wxmax, wymin, wymax
     
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
     
-    ! Mapping arrays between the grid and the model mesh (pseudo-conservative remapping)
-    TYPE(type_remapping_mesh2grid)          :: map
+    ! Sparse matrices representing the remapping operations between a mesh and a grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
+    REAL(dp),                   POINTER     :: tol_dist
+    INTEGER :: wtol_dist
+    
+    ! Conversion tables for grid-form vs. vector-form data
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
+    INTEGER :: wij2n, wn2ij
     
     ! Lat-lon coordinates
     REAL(dp), DIMENSION(:,:  ), POINTER     :: lat, lon
@@ -660,8 +569,8 @@ MODULE data_types_module
   TYPE type_remapping_latlon2mesh
     ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
     
-    INTEGER,  DIMENSION(:    ), POINTER :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER :: wlat1, wlat2, wlon1, wlon2
+    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
+    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
     INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
     
   END TYPE type_remapping_latlon2mesh

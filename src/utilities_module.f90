@@ -794,7 +794,7 @@ CONTAINS
     CALL deallocate_shared( wd_ext_smooth)
     
   END SUBROUTINE smooth_Gaussian_2D_grid
-  SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r, nz)
+  SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 3D data field d
      
     IMPLICIT NONE
@@ -803,7 +803,6 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:,:,:),          INTENT(INOUT) :: d
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in km
-    INTEGER,                             INTENT(IN)    :: nz
     
     ! Local variables:
     INTEGER                                            :: k
@@ -813,7 +812,7 @@ CONTAINS
     ! Allocate temporary shared memory for the extended and smoothed data fields
     CALL allocate_shared_dp_2D( grid%ny, grid%nx, d_2D, wd_2D)
     
-    DO k = 1, nz
+    DO k = 1, SIZE( d,2)
       d_2D( :,grid%i1:grid%i2) = d( k,:,grid%i1:grid%i2)
       CALL smooth_Gaussian_2D_grid( grid, d_2D, r)
       d( k,:,grid%i1:grid%i2) = d_2D( :,grid%i1:grid%i2)
@@ -909,7 +908,7 @@ CONTAINS
     CALL deallocate_shared( wd_ext_smooth)
     
   END SUBROUTINE smooth_Shepard_2D_grid
-  SUBROUTINE smooth_Shepard_3D_grid( grid, d, r, nz)
+  SUBROUTINE smooth_Shepard_3D_grid( grid, d, r)
     ! Apply a Shepard smoothing filter of with sigma = n*dx to the 3D data field d
      
     IMPLICIT NONE
@@ -918,7 +917,6 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:,:,:),          INTENT(INOUT) :: d
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in km
-    INTEGER,                             INTENT(IN)    :: nz
     
     ! Local variables:
     INTEGER                                            :: k
@@ -928,7 +926,7 @@ CONTAINS
     ! Allocate temporary shared memory for the extended and smoothed data fields
     CALL allocate_shared_dp_2D( grid%ny, grid%nx, d_2D, wd_2D)
     
-    DO k = 1, nz
+    DO k = 1, SIZE( d,2)
       d_2D( :,grid%i1:grid%i2) = d( k,:,grid%i1:grid%i2)
       CALL smooth_Shepard_2D_grid( grid, d_2D, r)
       d( k,:,grid%i1:grid%i2) = d_2D( :,grid%i1:grid%i2)

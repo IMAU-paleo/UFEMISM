@@ -529,7 +529,53 @@ MODULE mesh_help_functions_module
    CALL line_from_points(p, q, le, lf, lg)
    CALL line_line_intersection(la, lb, lc, le, lf, lg, ccc);
 
-  END SUBROUTINE crop_circumcenter 
+  END SUBROUTINE crop_circumcenter
+  SUBROUTINE find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
+    ! Return the endpoints of the shared Voronoi cell boundary represented by edge aci
+    
+    IMPLICIT NONE
+    
+    ! In/output variables
+    TYPE(type_mesh),          INTENT(IN)          :: mesh
+    INTEGER,                  INTENT(IN)          :: aci
+    REAL(dp), DIMENSION(2),   INTENT(OUT)         :: cc1, cc2
+    
+    ! Local variables
+    INTEGER                                       :: til,tir
+    
+    til = mesh%Aci( aci,5)
+    tir = mesh%Aci( aci,6)
+  
+    IF (mesh%edge_index_Ac( aci) > 0) THEN
+      ! Boundary segments have only one adjacent triangle
+      
+      IF (til > 0) THEN
+        cc1 = mesh%Tricc( til,:)
+      ELSE
+        cc1 = mesh%Tricc( tir,:)
+      END IF
+      IF     (mesh%edge_index_Ac( aci) == 1) THEN
+        ! North
+        cc2 = [cc1(1), mesh%ymax]
+      ELSEIF (mesh%edge_index_Ac( aci) == 3) THEN
+        ! East
+        cc2 = [mesh%xmax, cc1(2)]
+      ELSEIF (mesh%edge_index_Ac( aci) == 5) THEN
+        ! South
+        cc2 = [cc1(1), mesh%ymin]
+      ELSEIF (mesh%edge_index_Ac( aci) == 7) THEN
+        ! West
+        cc2 = [mesh%xmin, cc1(2)]
+      END IF
+      
+    ELSE ! IF (mesh%edge_index_Ac( aci) > 0) THEN
+      
+      cc1 = mesh%Tricc( til,:)
+      cc2 = mesh%Tricc( tir,:)
+      
+    END IF ! IF (mesh%edge_index_Ac( aci) > 0) THEN
+    
+  END SUBROUTINE find_shared_Voronoi_boundary
   
 ! == The oblique stereographic projection
   SUBROUTINE get_lat_lon_coordinates( mesh)
@@ -1830,8 +1876,9 @@ MODULE mesh_help_functions_module
     STOP
 
   END SUBROUTINE find_containing_vertex
-  FUNCTION   is_in_Voronoi_cell( mesh, p, vi) RESULT(isso)
-    ! Checks whether of not the point p lies in the Voronoi cell of vertex vi    
+  FUNCTION is_in_Voronoi_cell( mesh, p, vi) RESULT(isso)
+    ! If the point p lies closer to vertex vi than to any other vertex, then
+    ! by definition it lies inside the Voronoi cell of vertex vi. 
     
     IMPLICIT NONE
 
@@ -1842,30 +1889,20 @@ MODULE mesh_help_functions_module
     
     ! Local variables:
     LOGICAL                                       :: isso
-    INTEGER                                       :: nVor, n, nprev
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
-    REAL(dp), DIMENSION(2)                        :: ta, tb, tc
-
-    isso = .FALSE.
-
-    ALLOCATE(Vor(mesh%nC_mem+2,2))
-
-    CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
-
-    DO n = 1, nVor
-      nprev = n-1
-      IF (nprev==0) nprev = nVor
-
-      ta = Vor(n,:)
-      tb = Vor(nprev,:)
-      tc = mesh%V(vi,:)
-      IF (is_in_triangle(ta, tb, tc, p)) THEN
-        isso = .TRUE.
+    REAL(dp)                                      :: dist_vi
+    INTEGER                                       :: vvi, vj
+    
+    isso = .TRUE.
+    
+    dist_vi = NORM2( mesh%V( vi,:) - p)
+    
+    DO vvi = 1, mesh%nC( vi)
+      vj = mesh%C( vi,vvi)
+      IF (NORM2( mesh%V( vj,:) - p) < dist_vi) THEN
+        isso = .FALSE.
         RETURN
       END IF
     END DO
-
-    DEALLOCATE(Vor)
 
   END FUNCTION is_in_Voronoi_cell
   FUNCTION lies_on_line_segment( pa, pb, pc, tol_dist) RESULT(isso)

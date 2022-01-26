@@ -24,10 +24,13 @@ MODULE climate_module
   ! Import specific functionality
   USE utilities_module,                ONLY: error_function
   USE netcdf_module,                   ONLY: inquire_PD_obs_data_file, read_PD_obs_data_file, inquire_GCM_snapshot, &
-                                             read_GCM_snapshot, inquire_ICE5G_data, read_ICE5G_data
+                                             read_GCM_snapshot, inquire_ICE5G_data, read_ICE5G_data, &
+                                             inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file, &
+                                             inquire_GCM_global_climate_file, read_GCM_global_climate_file
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_climate_model, type_reference_geometry, &
                                              type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping, &
-                                             type_ICE5G_timeframe, type_remapping_latlon2mesh, type_SMB_model
+                                             type_ICE5G_timeframe, type_remapping_latlon2mesh, type_SMB_model, &
+                                             type_climate_matrix_global, type_climate_snapshot_global
   USE mesh_mapping_module,             ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, map_latlon2mesh_3D, &
                                              deallocate_remapping_arrays_glob_mesh, smooth_Gaussian_2D
   USE forcing_module,                  ONLY: forcing, map_insolation_to_mesh
@@ -36,6 +39,237 @@ MODULE climate_module
   IMPLICIT NONE
     
 CONTAINS
+
+! == The main routines that should be called from the main ice model/program
+! ==========================================================================
+
+  SUBROUTINE initialise_climate_model_global( climate_matrix)
+    ! Initialise the global climate model
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_climate_matrix_global),    INTENT(INOUT) :: climate_matrix
+
+    IF (par%master) WRITE(0,*) ''
+    IF (par%master) WRITE(0,*) ' Initialising global climate model "', TRIM(C%choice_climate_model), '"...'
+
+    IF     (C%choice_climate_model == 'none') THEN
+      ! Possibly a direct SMB is used? Otherwise no need to do anything.
+
+    !   IF     (C%choice_SMB_model == 'direct_global') THEN
+    !     ! Use a directly prescribed global SMB
+    !     CALL initialise_climate_model_direct_SMB_global( climate_matrix%SMB_direct)
+    !   ELSEIF (C%choice_SMB_model == 'direct_regional') THEN
+    !     ! Use a directly prescribed regional SMB, no need to initialise any global stuff
+    !   END IF
+
+      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: choice_climate_model "', TRIM(C%choice_climate_model), '" is still WIP. Sorry!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+    ELSEIF (C%choice_climate_model == 'idealised') THEN
+      ! No need to initialise any global climate stuff
+
+    ELSEIF (C%choice_climate_model == 'PD_obs') THEN
+      ! Keep the climate fixed to present-day observed conditions
+
+    !   CALL initialise_climate_model_global_PD_obs( climate_matrix)
+
+      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: choice_climate_model "', TRIM(C%choice_climate_model), '" is still WIP. Sorry!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+    ELSEIF (C%choice_climate_model == 'PD_dTglob') THEN
+      ! Use the present-day climate plus a global temperature offset (de Boer et al., 2013)
+
+    !   CALL initialise_climate_model_global_PD_obs( climate_matrix)
+
+      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: choice_climate_model "', TRIM(C%choice_climate_model), '" is still WIP. Sorry!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+    ELSEIF (C%choice_climate_model == 'matrix_warm_cold') THEN
+      ! Use the warm/cold climate matrix (Berends et al., 2018)
+
+      CALL initialise_climate_matrix_global( climate_matrix)
+
+    ELSEIF (C%choice_climate_model == 'direct_global') THEN
+      ! Use a directly prescribed global climate
+
+    !   CALL initialise_climate_model_direct_climate_global( climate_matrix%direct)
+
+      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: choice_climate_model "', TRIM(C%choice_climate_model), '" is still WIP. Sorry!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+    ELSEIF (C%choice_climate_model == 'direct_regional') THEN
+      ! No need to initialise any global climate stuff
+
+    ELSE
+      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: unknown choice_climate_model "', TRIM(C%choice_climate_model), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+  END SUBROUTINE initialise_climate_model_global
+
+! == Warm/cold climate matrix
+! ===========================
+
+  ! Climate matrix with PI + LGM snapshots, forced with CO2 (from record or from inverse routine) from Berends et al., 2018
+  ! Generalised for different timeframes, L.B. Stap (2021)
+
+  ! Initialising the climate matrix, containing all the global subclimates
+  ! (PD observations and GCM snapshots) on their own lat-lon grids
+  SUBROUTINE initialise_climate_matrix_global( climate_matrix_global)
+    ! Allocate shared memory for the global climate matrix
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_climate_matrix_global), INTENT(INOUT) :: climate_matrix_global
+
+    ! Initialise the present-day observed global climate (e.g. ERA-40)
+    CALL initialise_climate_PD_obs_global(   climate_matrix_global%PD_obs,   name = 'PD_obs')
+
+    ! Initialise the (GCM-modelled) global climate snapshots
+    CALL initialise_climate_snapshot_global( climate_matrix_global%GCM_PI,   name = 'GCM_PI',   nc_filename = C%filename_climate_snapshot_PI,   CO2 = 280._dp,                 orbit_time = 0._dp                   )
+    CALL initialise_climate_snapshot_global( climate_matrix_global%GCM_warm, name = 'GCM_warm', nc_filename = C%filename_climate_snapshot_warm, CO2 = C%matrix_high_CO2_level, orbit_time = C%matrix_warm_orbit_time)
+    CALL initialise_climate_snapshot_global( climate_matrix_global%GCM_cold, name = 'GCM_cold', nc_filename = C%filename_climate_snapshot_cold, CO2 = C%matrix_low_CO2_level,  orbit_time = C%matrix_cold_orbit_time)
+
+  END SUBROUTINE initialise_climate_matrix_global
+  SUBROUTINE initialise_climate_PD_obs_global( PD_obs, name)
+    ! Allocate shared memory for the global PD observed climate data fields (stored in the climate matrix),
+    ! read them from the specified NetCDF file (latter only done by master process).
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: PD_obs
+    CHARACTER(LEN=*),                   INTENT(IN)    :: name
+
+    PD_obs%name = name
+    PD_obs%netcdf%filename   = C%filename_PD_obs_climate
+
+    ! General forcing info (not relevant for PD_obs, but needed so that the same mapping routines as for GCM snapshots can be used)
+    CALL allocate_shared_dp_0D( PD_obs%CO2,        PD_obs%wCO2       )
+    CALL allocate_shared_dp_0D( PD_obs%orbit_time, PD_obs%worbit_time)
+    CALL allocate_shared_dp_0D( PD_obs%orbit_ecc,  PD_obs%worbit_ecc )
+    CALL allocate_shared_dp_0D( PD_obs%orbit_obl,  PD_obs%worbit_obl )
+    CALL allocate_shared_dp_0D( PD_obs%orbit_pre,  PD_obs%worbit_pre )
+
+    ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
+    CALL allocate_shared_int_0D( PD_obs%nlon, PD_obs%wnlon)
+    CALL allocate_shared_int_0D( PD_obs%nlat, PD_obs%wnlat)
+    IF (par%master) CALL inquire_PD_obs_global_climate_file( PD_obs)
+    CALL sync
+
+    ! Allocate memory
+    CALL allocate_shared_dp_1D( PD_obs%nlon,                  PD_obs%lon,         PD_obs%wlon        )
+    CALL allocate_shared_dp_1D(              PD_obs%nlat,     PD_obs%lat,         PD_obs%wlat        )
+    CALL allocate_shared_dp_2D( PD_obs%nlon, PD_obs%nlat,     PD_obs%Hs,          PD_obs%wHs         )
+    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%T2m,         PD_obs%wT2m        )
+    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Precip,      PD_obs%wPrecip     )
+    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_WE,     PD_obs%wWind_WE    )
+    CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_SN,     PD_obs%wWind_SN    )
+
+    ! Read data from the NetCDF file
+    IF (par%master) WRITE(0,*) '   Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
+    IF (par%master) CALL read_PD_obs_global_climate_file( PD_obs)
+    CALL sync
+
+    ! Determine process domains
+    CALL partition_list( PD_obs%nlon, par%i, par%n, PD_obs%i1, PD_obs%i2)
+
+  END SUBROUTINE initialise_climate_PD_obs_global
+  SUBROUTINE initialise_climate_snapshot_global( snapshot, name, nc_filename, CO2, orbit_time)
+    ! Allocate shared memory for the data fields of a GCM snapshot (stored in the climate matrix),
+    ! read them from the specified NetCDF file (latter only done by master process).
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: snapshot
+    CHARACTER(LEN=*),                   INTENT(IN)    :: name
+    CHARACTER(LEN=*),                   INTENT(IN)    :: nc_filename
+    REAL(dp),                           INTENT(IN)    :: CO2
+    REAL(dp),                           INTENT(IN)    :: orbit_time
+
+    ! Local variables:
+    INTEGER                                           :: i,j,m
+    REAL(dp), PARAMETER                               :: Precip_minval = 1E-5_dp
+
+    ! Metadata
+    snapshot%name            = name
+    snapshot%netcdf%filename = nc_filename
+
+    ! General forcing info
+    CALL allocate_shared_dp_0D( snapshot%CO2,        snapshot%wCO2       )
+    CALL allocate_shared_dp_0D( snapshot%orbit_time, snapshot%worbit_time)
+    CALL allocate_shared_dp_0D( snapshot%orbit_ecc,  snapshot%worbit_ecc )
+    CALL allocate_shared_dp_0D( snapshot%orbit_obl,  snapshot%worbit_obl )
+    CALL allocate_shared_dp_0D( snapshot%orbit_pre,  snapshot%worbit_pre )
+
+    snapshot%CO2        = CO2
+    snapshot%orbit_time = orbit_time
+
+    ! Inquire if all required variables are present in the NetCDF file, and read the grid size.
+    CALL allocate_shared_int_0D( snapshot%nlon, snapshot%wnlon)
+    CALL allocate_shared_int_0D( snapshot%nlat, snapshot%wnlat)
+    IF (par%master) CALL inquire_GCM_global_climate_file( snapshot)
+    CALL sync
+
+    ! Allocate memory
+    CALL allocate_shared_dp_1D( snapshot%nlon,                    snapshot%lon,     snapshot%wlon    )
+    CALL allocate_shared_dp_1D(                snapshot%nlat,     snapshot%lat,     snapshot%wlat    )
+    CALL allocate_shared_dp_2D( snapshot%nlon, snapshot%nlat,     snapshot%Hs,      snapshot%wHs     )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%T2m,     snapshot%wT2m    )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Precip,  snapshot%wPrecip )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_WE, snapshot%wWind_WE)
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_SN, snapshot%wWind_SN)
+
+    ! Read data from the NetCDF file
+    IF (par%master) WRITE(0,*) '   Reading GCM snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
+    IF (par%master) CALL read_GCM_global_climate_file( snapshot)
+    CALL sync
+
+    ! Determine process domains
+    CALL partition_list( snapshot%nlon, par%i, par%n, snapshot%i1, snapshot%i2)
+
+    ! Very rarely zero precipitation can occur in GCM snapshots, which gives problems with the matrix interpolation. Fix this.
+    DO i = snapshot%i1, snapshot%i2
+    DO j = 1, snapshot%nlat
+    DO m = 1, 12
+      snapshot%Precip( i,j,m) = MAX( Precip_minval, snapshot%Precip( i,j,m))
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Safety checks
+    DO i = snapshot%i1, snapshot%i2
+    DO j = 1, snapshot%nlat
+    DO m = 1, 12
+      IF (snapshot%T2m( i,j,m) < 150._dp) THEN
+        WRITE(0,*) ' WARNING - initialise_snapshot: excessively low temperatures (<150K) detected in snapshot ', snapshot%name, '!'
+      ELSEIF (snapshot%T2m( i,j,m) < 0._dp) THEN
+        WRITE(0,*) ' ERROR - initialise_snapshot: negative temperatures (<0K) detected in snapshot ', snapshot%name, '!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSEIF (snapshot%T2m( i,j,m) /= snapshot%T2m( i,j,m)) THEN
+        WRITE(0,*) ' ERROR - initialise_snapshot: NaN temperatures  detected in snapshot ', snapshot%name, '!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSEIF (snapshot%Precip( i,j,m) <= 0._dp) THEN
+        WRITE(0,*) ' ERROR - initialise_snapshot: zero/negative precipitation detected in snapshot ', snapshot%name, '!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSEIF (snapshot%Precip( i,j,m) /= snapshot%Precip( i,j,m)) THEN
+        WRITE(0,*) ' ERROR - initialise_snapshot: NaN precipitation  detected in snapshot ', snapshot%name, '!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+  END SUBROUTINE initialise_climate_snapshot_global
+
+!============================
+!============================
 
   ! Run the matrix climate model on a region mesh
   SUBROUTINE run_climate_model( mesh, ice, SMB, climate, time, region_name, grid_smooth)

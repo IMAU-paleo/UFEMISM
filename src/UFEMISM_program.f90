@@ -34,10 +34,10 @@ PROGRAM UFEMISM_program
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
   USE petsc_module,                ONLY: initialise_petsc, finalise_petsc
-  USE data_types_module,           ONLY: type_model_region, type_climate_matrix
+  USE data_types_module,           ONLY: type_model_region, type_climate_matrix, type_climate_matrix_global
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
-  USE climate_module,              ONLY: initialise_climate_matrix
+  USE climate_module,              ONLY: initialise_climate_matrix, initialise_climate_model_global
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
@@ -51,6 +51,7 @@ PROGRAM UFEMISM_program
 
   ! The global climate matrix
   TYPE(type_climate_matrix)              :: matrix
+  TYPE(type_climate_matrix_global)       :: climate_matrix_global
 
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
@@ -95,6 +96,8 @@ PROGRAM UFEMISM_program
   ! =========================================
 
   CALL initialise_climate_matrix(matrix)
+
+  CALL initialise_climate_model_global( climate_matrix_global)
 
   ! ===== Initialise the model regions ======
   ! =========================================
@@ -160,7 +163,7 @@ PROGRAM UFEMISM_program
     CALL reset_memory_use_tracker
 
     ! Update global insolation forcing, CO2, and d18O at the current model time
-    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, 'pre')
+    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'pre')
 
     ! Update regional sea level (needs to be moved to separate subroutine at some point!)
     IF (C%choice_sealevel_model == 'fixed') THEN
@@ -202,7 +205,7 @@ PROGRAM UFEMISM_program
 
     ! Calculate contributions to benthic d18O from the different ice sheets and,
     ! if applicable, call the inverse routine to update the climate forcing parameter
-    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, 'post')
+    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
 
     ! Write global data to output file
     CALL write_text_output( &

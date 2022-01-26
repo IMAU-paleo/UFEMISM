@@ -382,10 +382,26 @@ MODULE configuration_module
   REAL(dp)            :: uniform_ice_heat_capacity_config            = 2009._dp                         ! Uniform ice heat capacity (applied when choice_ice_heat_capacity_config = "uniform")
   CHARACTER(LEN=256)  :: choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   REAL(dp)            :: uniform_ice_thermal_conductivity_config     = 6.626958E7_dp                    ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
-  
+
+  !Climate
+  ! =======
+
+  CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+
+  ! GCM snapshots in the matrix_warm_cold option
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+
+  ! Orbit time and CO2 concentration of the warm and cold snapshots
+  REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
+  REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
+  REAL(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
+  REAL(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
+
   ! Sea level and GIA
   ! =================
-  
+
   LOGICAL             :: do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
   CHARACTER(LEN=256)  :: choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   REAL(dp)            :: fixed_sealevel_config                       = 0._dp
@@ -893,6 +909,22 @@ MODULE configuration_module
     REAL(dp)                            :: uniform_ice_heat_capacity
     CHARACTER(LEN=256)                  :: choice_ice_thermal_conductivity
     REAL(dp)                            :: uniform_ice_thermal_conductivity
+
+    ! Climate
+    ! =======
+
+    CHARACTER(LEN=256)                  :: choice_climate_model
+
+    ! GCM snapshots in the matrix_warm_cold option
+    CHARACTER(LEN=256)                  :: filename_climate_snapshot_PI
+    CHARACTER(LEN=256)                  :: filename_climate_snapshot_warm
+    CHARACTER(LEN=256)                  :: filename_climate_snapshot_cold
+
+    ! Orbit time and CO2 concentration of the warm and cold snapshots
+    REAL(dp)                            :: matrix_high_CO2_level
+    REAL(dp)                            :: matrix_low_CO2_level
+    REAL(dp)                            :: matrix_warm_orbit_time
+    REAL(dp)                            :: matrix_cold_orbit_time
   
     ! Sea level and GIA
     ! =================
@@ -1510,6 +1542,14 @@ CONTAINS
                      uniform_ice_heat_capacity_config,                &
                      choice_ice_thermal_conductivity_config,          &
                      uniform_ice_thermal_conductivity_config,         &
+                     choice_climate_model_config,                     &
+                     filename_climate_snapshot_PI_config,             &
+                     filename_climate_snapshot_warm_config,           &
+                     filename_climate_snapshot_cold_config,           &
+                     matrix_high_CO2_level_config,                    &
+                     matrix_low_CO2_level_config,                     &
+                     matrix_warm_orbit_time_config,                   &
+                     matrix_cold_orbit_time_config,                   &
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
@@ -2004,7 +2044,23 @@ CONTAINS
     C%uniform_ice_heat_capacity                = uniform_ice_heat_capacity_config
     C%choice_ice_thermal_conductivity          = choice_ice_thermal_conductivity_config
     C%uniform_ice_thermal_conductivity         = uniform_ice_thermal_conductivity_config
-  
+
+    ! Climate
+    ! =======
+
+    C%choice_climate_model                     = choice_climate_model_config
+
+    ! GCM snapshots in the matrix_warm_cold option
+    C%filename_climate_snapshot_PI             = filename_climate_snapshot_PI_config
+    C%filename_climate_snapshot_warm           = filename_climate_snapshot_warm_config
+    C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
+
+    ! Orbit time and CO2 concentration of the warm and cold snapshots
+    C%matrix_high_CO2_level                    = matrix_high_CO2_level_config
+    C%matrix_low_CO2_level                     = matrix_low_CO2_level_config
+    C%matrix_warm_orbit_time                   = matrix_warm_orbit_time_config
+    C%matrix_cold_orbit_time                   = matrix_cold_orbit_time_config
+
     ! Sea level and GIA
     ! =================
     

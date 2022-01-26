@@ -805,7 +805,86 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_ghf                   = 'hflux                '
 
   END TYPE type_netcdf_geothermal_heat_flux
-  
+
+  TYPE type_netcdf_direct_climate_forcing_global
+    ! For reading an input file containing climate data,
+    ! describing 2-m air temperature and precipitation, on a global lon/lat-grid.
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! ID's for variables:
+    ! ===================
+
+    ! Dimensions
+    INTEGER :: id_dim_time
+    INTEGER :: id_dim_month
+    INTEGER :: id_dim_lon
+    INTEGER :: id_dim_lat
+
+    CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_dim_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_dim_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_dim_lat                   = 'lat                  '
+
+    ! Variables
+    INTEGER :: id_var_time
+    INTEGER :: id_var_month
+    INTEGER :: id_var_lon
+    INTEGER :: id_var_lat
+
+    CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_var_month                 = 'month                '
+    CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
+
+    INTEGER :: id_var_T2m
+    INTEGER :: id_var_Precip
+
+    CHARACTER(LEN=256) :: name_var_T2m                   = 'T2m                  '
+    CHARACTER(LEN=256) :: name_var_Precip                = 'Precip               '
+
+  END TYPE type_netcdf_direct_climate_forcing_global
+
+  TYPE type_netcdf_direct_SMB_forcing_global
+    ! For reading an input file containing SMB, on a global lon/lat-grid.
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! ID's for variables:
+    ! ===================
+
+    ! Dimensions
+    INTEGER :: id_dim_time
+    INTEGER :: id_dim_lon
+    INTEGER :: id_dim_lat
+
+    CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_dim_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_dim_lat                   = 'lat                  '
+
+    ! Variables
+    INTEGER :: id_var_time
+    INTEGER :: id_var_lon
+    INTEGER :: id_var_lat
+
+    CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
+
+    INTEGER :: id_var_T2m_year
+    INTEGER :: id_var_SMB_year
+
+    CHARACTER(LEN=256) :: name_var_T2m_year              = 'T2m                  '
+    CHARACTER(LEN=256) :: name_var_SMB_year              = 'SMB                  '
+
+  END TYPE type_netcdf_direct_SMB_forcing_global
+
 CONTAINS
 
 END MODULE data_types_netcdf_module

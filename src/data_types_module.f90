@@ -8,7 +8,8 @@ MODULE data_types_module
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
-                                         type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux
+                                         type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux, &
+                                         type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global
 
   IMPLICIT NONE
   
@@ -1053,7 +1054,115 @@ MODULE data_types_module
     INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
     
   END TYPE type_memory_use_tracker
-  
+
+  !===============================
+
+  TYPE type_climate_snapshot_global
+    ! Global climate snapshot, either from present-day observations (e.g. ERA40) or from a GCM snapshot.
+
+    CHARACTER(LEN=256)                      :: name                          ! 'ERA40', 'HadCM3_PI', etc.
+
+    ! NetCDF file containing the data
+    TYPE(type_netcdf_climate_data)          :: netcdf
+
+    ! Grid
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon
+    INTEGER :: wnlat, wnlon, wlat, wlon
+
+    ! General forcing info (not relevant for PD observations)
+    REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
+    REAL(dp),                   POINTER     :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_obl
+    REAL(dp),                   POINTER     :: orbit_pre
+    INTEGER :: wCO2, worbit_time, worbit_ecc, worbit_obl, worbit_pre
+
+    ! Actual GCM data
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs                            ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T2m                           ! Monthly mean 2m air temperature (K)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Precip                        ! Monthly mean precipitation (m)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_WE                       ! Monthly mean west-east wind speed (m/s)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_SN                       ! Monthly mean south_north wind speed (m/s)
+    INTEGER :: wHs, wT2m, wPrecip, wWind_WE, wWind_SN
+
+    ! Paralelisation
+    INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
+
+  END TYPE type_climate_snapshot_global
+
+  TYPE type_direct_climate_forcing_global
+    ! Direct global climate forcing from a provided NetCDF file
+
+    ! NetCDF file containing the data
+    TYPE(type_netcdf_direct_climate_forcing_global) :: netcdf
+
+    ! Grid
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon
+    INTEGER :: wnlat, wnlon, wlat, wlon
+
+    ! Time dimension
+    INTEGER,                    POINTER     :: nyears
+    REAL(dp), DIMENSION(:    ), POINTER     :: time
+    REAL(dp),                   POINTER     :: t0, t1
+    INTEGER :: wnyears, wtime, wt0, wt1
+
+    ! Actual data (two timeframes enveloping the model time)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs0,      Hs1                 ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T2m0,     T2m1                ! Monthly mean 2m air temperature (K)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Precip0,  Precip1             ! Monthly mean precipitation (m)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_WE0, Wind_WE1            ! Monthly mean west-east wind speed (m/s)
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_SN0, Wind_SN1            ! Monthly mean south_north wind speed (m/s)
+    INTEGER :: wHs0, wT2m0, wPrecip0, wWind_WE0, wWind_SN0
+    INTEGER :: wHs1, wT2m1, wPrecip1, wWind_WE1, wWind_SN1
+
+  END TYPE type_direct_climate_forcing_global
+
+  TYPE type_direct_SMB_forcing_global
+    ! Direct global SMB forcing from a provided NetCDF file
+
+    ! NetCDF file containing the data
+    TYPE(type_netcdf_direct_SMB_forcing_global) :: netcdf
+
+    ! Grid
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon
+    INTEGER :: wnlat, wnlon, wlat, wlon
+
+    ! Time dimension
+    INTEGER,                    POINTER     :: nyears
+    REAL(dp), DIMENSION(:    ), POINTER     :: time
+    REAL(dp),                   POINTER     :: t0, t1
+    INTEGER :: wnyears, wtime, wt0, wt1
+
+    ! Actual data (two timeframes enveloping the model time)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T2m_year0, T2m_year1          ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: SMB_year0, SMB_year1          ! Yearly total SMB (m.i.e.)
+    INTEGER :: wT2m_year0, wT2m_year1, wSMB_year0, wSMB_year1
+
+  END TYPE type_direct_SMB_forcing_global
+
+  TYPE type_climate_matrix_global
+    ! The climate matrix data structure. Contains all the different global GCM snapshots.
+
+    ! The present-day observed climate (e.g. ERA40)
+    TYPE(type_climate_snapshot_global)      :: PD_obs
+
+    ! The GCM climate snapshots
+    TYPE(type_climate_snapshot_global)      :: GCM_PI
+    TYPE(type_climate_snapshot_global)      :: GCM_warm
+    TYPE(type_climate_snapshot_global)      :: GCM_cold
+
+    ! ! Direct climate forcing
+    TYPE(type_direct_climate_forcing_global) :: direct
+    TYPE(type_direct_SMB_forcing_global)     :: SMB_direct
+
+  END TYPE type_climate_matrix_global
+
 CONTAINS
 
 END MODULE data_types_module

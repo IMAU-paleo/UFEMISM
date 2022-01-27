@@ -30,7 +30,7 @@ MODULE reference_fields_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh
   USE netcdf_module,                   ONLY: inquire_reference_geometry_file, read_reference_geometry_file
-  USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_grid, map_grid2mesh_2D, deallocate_remapping_operators_mesh_grid
+  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, deallocate_remapping_operators_grid2mesh
   USE utilities_module,                ONLY: is_floating, surface_elevation, remove_Lake_Vostok
 
   IMPLICIT NONE
@@ -704,11 +704,19 @@ CONTAINS
     IF (par%master) THEN
       n = 0
       DO i = 1, grid%nx
-      DO j = 1, grid%ny
-        n = n+1
-        grid%ij2n( i,j) = n
-        grid%n2ij( n,:) = [i,j]
-      END DO
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, grid%ny
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = grid%ny, 1, -1
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
       END DO
     END IF
     CALL sync
@@ -867,7 +875,7 @@ CONTAINS
     TYPE(type_mesh),                INTENT(INOUT) :: mesh
     
     ! Calculate remapping operators for the initial geometry
-    CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_init%grid)
+    CALL calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
     
     ! Calculate remapping operators for the present-day geometry;
     ! check if the remapping operators from the initial geometry can be reused
@@ -881,13 +889,12 @@ CONTAINS
         region%refgeo_PD%grid%ny   == region%refgeo_init%grid%ny) THEN
       ! The square grid of the PD geometry is identical to that of the initial geometry; copy the remapping operators
       
-      CALL MatDuplicate( region%refgeo_init%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_PD%grid%M_map_mesh2grid, perr)
       CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_PD%grid%M_map_grid2mesh, perr)
       
     ELSE
       ! This square grid is different; calculate new remapping operators
       
-      CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_PD%grid)
+      CALL calc_remapping_operator_grid2mesh( region%refgeo_PD%grid, mesh)
       
     END IF
     
@@ -903,7 +910,6 @@ CONTAINS
             region%refgeo_GIAeq%grid%ny   == region%refgeo_init%grid%ny) THEN
       ! The square grid of the GIA equilibrium geometry is identical to that of the initial geometry; copy the remapping operators
       
-      CALL MatDuplicate( region%refgeo_init%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_mesh2grid, perr)
       CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
       
     ELSEIF (region%refgeo_GIAeq%grid%xmin == region%refgeo_PD%grid%xmin .AND. &
@@ -915,13 +921,12 @@ CONTAINS
             region%refgeo_GIAeq%grid%ny   == region%refgeo_PD%grid%ny) THEN
       ! The square grid of the GIA equilibrium geometry is identical to that of the initial geometry; copy the remapping operators
       
-      CALL MatDuplicate( region%refgeo_PD%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_mesh2grid, perr)
       CALL MatDuplicate( region%refgeo_PD%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
       
     ELSE
       ! This square grid is different; calculate new remapping operators
       
-      CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_GIAeq%grid)
+      CALL calc_remapping_operator_grid2mesh( region%refgeo_GIAeq%grid, mesh)
       
     END IF
     
@@ -931,10 +936,9 @@ CONTAINS
     CALL  map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
     
     ! Clean up after yourself
-    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_init%grid )
-    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_PD%grid   )
-    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_GIAeq%grid)
-    
+    CALL deallocate_remapping_operators_grid2mesh( region%refgeo_init%grid )
+    CALL deallocate_remapping_operators_grid2mesh( region%refgeo_PD%grid   )
+    CALL deallocate_remapping_operators_grid2mesh( region%refgeo_GIAeq%grid)
     
   END SUBROUTINE map_reference_geometries_to_mesh
   SUBROUTINE map_reference_geometry_to_mesh( mesh, refgeo)

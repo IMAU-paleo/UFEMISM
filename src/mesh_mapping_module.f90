@@ -549,143 +549,6 @@ CONTAINS
   END SUBROUTINE smooth_Gaussian_3D
   
 ! == Calculating the remapping matrices
-  SUBROUTINE calc_remapping_operators_mesh_grid( mesh, grid)
-    ! Calculate the remapping operators between the mesh and the square grid using 2nd-order conservative remapping
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
-    
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-    CALL calc_remapping_operator_grid2mesh( grid, mesh)
-    
-  END SUBROUTINE calc_remapping_operators_mesh_grid
-  SUBROUTINE calc_remapping_operator_mesh2grid( mesh, grid)
-    ! Calculate the remapping operators from the mesh to the square grid using 2nd-order conservative remapping
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(INOUT) :: grid
-    
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
-    LOGICAL                                            :: count_coincidences
-    INTEGER                                            :: nnz_per_row_max
-    TYPE(tMat)                                         :: B_xdy_b_g  , B_mxydx_b_g  , B_xydy_b_g
-    TYPE(tMat)                                         :: B_xdy_g_b  , B_mxydx_g_b  , B_xydy_g_b
-    TYPE(tMat)                                         :: B_xdy_b_g_T, B_mxydx_b_g_T, B_xydy_b_g_T
-    TYPE(tMat)                                         :: w0, w1x, w1y
-    INTEGER                                            :: istart, iend, n, k, ti
-    INTEGER                                            :: ncols
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
-    REAL(dp)                                           :: A_overlap_tot
-    TYPE(tMat)                                         :: M1, M2
-    
-    ! Estimate maximum number of non-zeros per row (i.e. maximum number of grid cells overlapping with a mesh triangle)
-    nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh%TriA) / (grid%dx**2)), &
-                                    CEILING( 2._dp * (grid%dx**2) / MAXVAL( mesh%TriA))) )
-    
-    ! Integrate around the triangles of the mesh through the grid cells of the grid
-    count_coincidences = .TRUE.
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - integrating triangles through grid...'
-    CALL integrate_triangles_through_grid( mesh, grid, B_xdy_b_g, B_mxydx_b_g, B_xydy_b_g, count_coincidences, nnz_per_row_max)
-    
-    ! Integrate around the grid cells of the grid through the triangles of the mesh
-    count_coincidences = .FALSE.
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - integrating grid through triangles...'
-    CALL integrate_grid_through_triangles( grid, mesh, B_xdy_g_b, B_mxydx_g_b, B_xydy_g_b, count_coincidences, nnz_per_row_max)
-    
-    ! Transpose line integral matrices
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - transposing line integral matrices...'
-    CALL MatCreateTranspose( B_xdy_b_g  , B_xdy_b_g_T  , perr)
-    CALL MatCreateTranspose( B_mxydx_b_g, B_mxydx_b_g_T, perr)
-    CALL MatCreateTranspose( B_xydy_b_g , B_xydy_b_g_T , perr)
-    
-    ! Combine line integrals around areas of overlap to get surface integrals over areas of overlap
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - combining line integrals around areas of overlap...'
-    CALL MatAXPY( B_xdy_g_b  , 1._dp, B_xdy_b_g_T  , UNKNOWN_NONZERO_PATTERN, perr)
-    CALL MatAXPY( B_mxydx_g_b, 1._dp, B_mxydx_b_g_T, UNKNOWN_NONZERO_PATTERN, perr)
-    CALL MatAXPY( B_xydy_g_b , 1._dp, B_xydy_b_g_T , UNKNOWN_NONZERO_PATTERN, perr)
-    
-    CALL MatDestroy( B_xdy_b_g_T  , perr)
-    CALL MatDestroy( B_mxydx_b_g_T, perr)
-    CALL MatDestroy( B_xydy_b_g_T , perr)
-    
-    ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping weights...'
-    CALL MatDuplicate( B_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
-    CALL MatDuplicate( B_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
-    CALL MatDuplicate( B_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
-    
-    ALLOCATE( cols(    nnz_per_row_max))
-    ALLOCATE( vals(    nnz_per_row_max))
-    ALLOCATE( w0_row(  nnz_per_row_max))
-    ALLOCATE( w1x_row( nnz_per_row_max))
-    ALLOCATE( w1y_row( nnz_per_row_max))
-    
-    CALL MatGetOwnershipRange( B_xdy_g_b  , istart, iend, perr)
-    
-    DO n = istart+1, iend ! +1 because PETSc indexes from 0
-      
-      ! w0
-      CALL MatGetRow( B_xdy_g_b, n-1, ncols, cols, vals, perr)
-      A_overlap_tot = SUM( vals( 1:ncols))
-      DO k = 1, ncols
-        w0_row( k) = vals( k) / A_overlap_tot
-        CALL MatSetValues( w0, 1, n-1, 1, cols( k), w0_row( k), INSERT_VALUES, perr)
-      END DO
-      CALL MatRestoreRow( B_xdy_g_b, n-1, ncols, cols, vals, perr)
-      
-      ! w1x
-      CALL MatGetRow( B_mxydx_g_b, n-1, ncols, cols, vals, perr)
-      DO k = 1, ncols
-        ti = cols( k)+1
-        w1x_row( k) = (vals( k) / A_overlap_tot) - (mesh%TriGC( ti,1) * w0_row( k))
-        CALL MatSetValues( w1x, 1, n-1, 1, cols( k), w1x_row( k), INSERT_VALUES, perr)
-      END DO
-      CALL MatRestoreRow( B_mxydx_g_b, n-1, ncols, cols, vals, perr)
-      
-      ! w1y
-      CALL MatGetRow( B_xydy_g_b, n-1, ncols, cols, vals, perr)
-      DO k = 1, ncols
-        ti = cols( k)+1
-        w1y_row( k) = (vals( k) / A_overlap_tot) - (mesh%TriGC( ti,2) * w0_row( k))
-        CALL MatSetValues( w1y, 1, n-1, 1, cols( k), w1y_row( k), INSERT_VALUES, perr)
-      END DO
-      CALL MatRestoreRow( B_xydy_g_b, n-1, ncols, cols, vals, perr)
-      
-    END DO
-    CALL sync
-    
-    CALL MatDestroy( B_xdy_g_b  , perr)
-    CALL MatDestroy( B_mxydx_g_b, perr)
-    CALL MatDestroy( B_xydy_g_b , perr)
-    
-    ! Calculate the remapping matrix
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - combining weights into remapping matrix...'
-    
-    CALL MatMatMult( w0 , mesh%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, grid%M_map_mesh2grid, perr)
-    CALL MatMatMult( w1x, mesh%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
-    CALL MatMatMult( w1y, mesh%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
-    
-    CALL MatDestroy( w0            , perr)
-    CALL MatDestroy( w1x           , perr)
-    CALL MatDestroy( w1y           , perr)
-    
-    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
-    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
-    
-    CALL MatDestroy( M1, perr)
-    CALL MatDestroy( M2, perr)
-    
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - done!'
-    
-  END SUBROUTINE calc_remapping_operator_mesh2grid
   SUBROUTINE calc_remapping_operator_grid2mesh( grid, mesh)
     ! Calculate the remapping operators from the square grid to the mesh using 2nd-order conservative remapping
     
@@ -698,54 +561,252 @@ CONTAINS
     ! Local variables
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
-    INTEGER                                            :: nnz_per_row_max
-    TYPE(tMat)                                         :: B_xdy_g_a  , B_mxydx_g_a  , B_xydy_g_a
-    TYPE(tMat)                                         :: B_xdy_a_g  , B_mxydx_a_g  , B_xydy_a_g
-    TYPE(tMat)                                         :: B_xdy_g_a_T, B_mxydx_g_a_T, B_xydy_g_a_T
+    INTEGER                                            :: nrows_A, ncols_A, nnz_per_row_max
+    TYPE(tMat)                                         :: A_xdy_a_g  , A_mxydx_a_g  , A_xydy_a_g
+    INTEGER                                            :: vi1, vi2, vi
+    INTEGER                                            :: nVor, vori1, vori2
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
+    REAL(dp), DIMENSION(2)                             :: p, q
+    INTEGER                                            :: k, n, i, j, kk, vj
+    REAL(dp)                                           :: xl, xu, yl, yu
+    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne
+    INTEGER                                            :: vi_hint
+    REAL(dp)                                           :: xmin, xmax, ymin, ymax
+    INTEGER                                            :: il, iu, jl, ju
+    TYPE(type_single_row_mapping_matrices)             :: single_row_Vor, single_row_grid
     TYPE(tMat)                                         :: w0, w1x, w1y
-    INTEGER                                            :: istart, iend, vi, k, n, i, j
     INTEGER                                            :: ncols
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: grid_M_ddx, grid_M_ddy
     TYPE(tMat)                                         :: M1, M2
+    REAL(dp)                                           :: tstart, tcomp
     
-    ! Estimate maximum number of non-zeros per row (i.e. maximum number of grid cells overlapping with a mesh triangle)
-    nnz_per_row_max = MAX( 32, MAX( CEILING( 10._dp * MAXVAL( mesh%A) / (grid%dx**2)), &
-                                    CEILING( 10._dp * (grid%dx**2) / MAXVAL( mesh%A))) )
+    tstart = MPI_WTIME()
     
-    ! Integrate around the grid cells of the grid through the triangles of the mesh
-    count_coincidences = .TRUE.
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - integrating grid through Voronoi cells...'
-    CALL integrate_grid_through_Voronoi_cells( grid, mesh, B_xdy_g_a, B_mxydx_g_a, B_xydy_g_a, count_coincidences, nnz_per_row_max)
+  ! == Use PETSc routines to initialise the three matrices
+  ! ======================================================
     
-    ! Integrate around the triangles of the mesh through the grid cells of the grid
-    count_coincidences = .FALSE.
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - integrating Voronoi cells through grid...'
-    CALL integrate_Voronoi_cells_through_grid( mesh, grid, B_xdy_a_g, B_mxydx_a_g, B_xydy_a_g, count_coincidences, nnz_per_row_max)
+    ! Matrix sise
+    nrows_A         = mesh%nV  ! to
+    ncols_A         = grid%n   ! from
+    nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh%A) / (grid%dx**2)), &
+                                    CEILING( 2._dp * (grid%dx**2) / MINVAL( mesh%A))) )
     
-    ! Transpose line integral matrices
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - transposing line integral matrices...'
-    CALL MatCreateTranspose( B_xdy_g_a  , B_xdy_g_a_T  , perr)
-    CALL MatCreateTranspose( B_mxydx_g_a, B_mxydx_g_a_T, perr)
-    CALL MatCreateTranspose( B_xydy_g_a , B_xydy_g_a_T , perr)
+    ! Initialise the matrix object
+    CALL MatCreate( PETSC_COMM_WORLD, A_xdy_a_g  , perr)
+    CALL MatCreate( PETSC_COMM_WORLD, A_mxydx_a_g, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, A_xydy_a_g , perr)
     
-    ! Combine line integrals around areas of overlap to get surface integrals over areas of overlap
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - combining line integrals around areas of overlap...'
-    CALL MatAXPY( B_xdy_a_g  , 1._dp, B_xdy_g_a_T  , UNKNOWN_NONZERO_PATTERN, perr)
-    CALL MatAXPY( B_mxydx_a_g, 1._dp, B_mxydx_g_a_T, UNKNOWN_NONZERO_PATTERN, perr)
-    CALL MatAXPY( B_xydy_a_g , 1._dp, B_xydy_g_a_T , UNKNOWN_NONZERO_PATTERN, perr)
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( A_xdy_a_g  , 'mpiaij', perr)
+    CALL MatSetType( A_mxydx_a_g, 'mpiaij', perr)
+    CALL MatSetType( A_xydy_a_g , 'mpiaij', perr)
     
-    CALL MatDestroy( B_xdy_g_a_T  , perr)
-    CALL MatDestroy( B_mxydx_g_a_T, perr)
-    CALL MatDestroy( B_xydy_g_a_T , perr)
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( A_xdy_a_g  , PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
+    CALL MatSetSizes( A_mxydx_a_g, PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
+    CALL MatSetSizes( A_xydy_a_g , PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
     
-    ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping weights...'
-    CALL MatDuplicate( B_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
-    CALL MatDuplicate( B_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
-    CALL MatDuplicate( B_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( A_xdy_a_g  , perr)
+    CALL MatSetFromOptions( A_mxydx_a_g, perr)
+    CALL MatSetFromOptions( A_xydy_a_g , perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( A_xdy_a_g  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( A_mxydx_a_g, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( A_xydy_a_g , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( A_xdy_a_g, vi1, vi2, perr)
+    
+    ! Allocate memory for single row results
+    single_row_Vor%n_max = nnz_per_row_max
+    single_row_Vor%n     = 0
+    ALLOCATE( single_row_Vor%index_left( single_row_Vor%n_max))
+    ALLOCATE( single_row_Vor%LI_xdy(     single_row_Vor%n_max))
+    ALLOCATE( single_row_Vor%LI_mxydx(   single_row_Vor%n_max))
+    ALLOCATE( single_row_Vor%LI_xydy(    single_row_Vor%n_max))
+    
+    single_row_grid%n_max = nnz_per_row_max
+    single_row_grid%n     = 0
+    ALLOCATE( single_row_grid%index_left( single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_xdy(     single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_mxydx(   single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_xydy(    single_row_grid%n_max))
+    
+    ALLOCATE( Vor( mesh%nC_mem+2,2))
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating all the line integrals...'
+    
+    ! Calculate line integrals around all Voronoi cells
+    DO vi = vi1+1, vi2
+      
+      IF (mesh%A( vi) < 4._dp * grid%dx**2) THEN
+        ! This Voronoi cell is small enough to warrant a proper line integral
+    
+        ! Clean up single row results
+        single_row_Vor%n          = 0
+        single_row_Vor%index_left = 0
+        single_row_Vor%LI_xdy     = 0._dp
+        single_row_Vor%LI_mxydx   = 0._dp
+        single_row_Vor%LI_xydy    = 0._dp
+      
+        ! Integrate around the complete Voronoi cell boundary
+        CALL find_Voronoi_cell_vertices( mesh, vi, Vor, nVor)
+        IF (mesh%edge_index( vi) > 0) THEN
+          Vor( nVor+1,:) = Vor( 1,:)
+          nVor = nVor + 1
+        END IF
+        DO vori1 = 1, nVor-1
+          vori2 = vori1 + 1
+          IF (vori2 > nVor) vori2 = 1
+          p = Vor( vori1,:)
+          q = Vor( vori2,:)
+          count_coincidences = .TRUE.
+          CALL trace_line_grid( grid, p, q, single_row_Vor, count_coincidences)
+        END DO
+      
+        ! Next integrate around the grid cells overlapping with this triangle
+        DO k = 1, single_row_Vor%n
+    
+          ! Clean up single row results
+          single_row_grid%n          = 0
+          single_row_grid%index_left = 0
+          single_row_grid%LI_xdy     = 0._dp
+          single_row_grid%LI_mxydx   = 0._dp
+          single_row_grid%LI_xydy    = 0._dp
+          
+          ! The grid cell
+          n  = single_row_Vor%index_left( k)
+          i  = grid%n2ij( n,1)
+          j  = grid%n2ij( n,2)
+          
+          xl = grid%x( i) - grid%dx / 2._dp
+          xu = grid%x( i) + grid%dx / 2._dp
+          yl = grid%y( j) - grid%dx / 2._dp
+          yu = grid%y( j) + grid%dx / 2._dp
+          
+          sw = [xl,yl]
+          nw = [xl,yu]
+          se = [xu,yl]
+          ne = [xu,yu]
+          
+          ! Integrate around the grid cell
+          vi_hint = vi
+          count_coincidences = .FALSE.
+          CALL trace_line_Vor( mesh, sw, se, single_row_grid, count_coincidences, vi_hint)
+          CALL trace_line_Vor( mesh, se, ne, single_row_grid, count_coincidences, vi_hint)
+          CALL trace_line_Vor( mesh, ne, nw, single_row_grid, count_coincidences, vi_hint)
+          CALL trace_line_Vor( mesh, nw, sw, single_row_grid, count_coincidences, vi_hint)
+          
+          ! Add contribution for this particular triangle
+          DO kk = 1, single_row_grid%n
+            vj = single_row_grid%index_left( kk)
+            IF (vj == vi) THEN
+              ! Add contribution to this triangle
+              single_row_Vor%LI_xdy(   k) = single_row_Vor%LI_xdy(   k) + single_row_grid%LI_xdy(   kk)
+              single_row_Vor%LI_mxydx( k) = single_row_Vor%LI_mxydx( k) + single_row_grid%LI_mxydx( kk)
+              single_row_Vor%LI_xydy(  k) = single_row_Vor%LI_xydy(  k) + single_row_grid%LI_xydy(  kk)
+              EXIT
+            END IF
+          END DO ! DO kk = 1, single_row_grid%n
+        
+          ! Add entries to the big matrices
+          CALL MatSetValues( A_xdy_a_g  , 1, vi-1, 1, n-1, single_row_Vor%LI_xdy(   k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_mxydx_a_g, 1, vi-1, 1, n-1, single_row_Vor%LI_mxydx( k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_xydy_a_g , 1, vi-1, 1, n-1, single_row_Vor%LI_xydy(  k), INSERT_VALUES, perr)
+          
+        END DO ! DO k = 1, single_row_Vor%n
+        
+      ELSE ! IF (mesh%A( vi) < 4._dp * grid%dx**2) THEN
+        ! This Voronoi cell is big enough that we can just average over the grid cells it contains
+    
+        ! Clean up single row results
+        single_row_Vor%n = 0
+        
+        ! Find the square of grid cells enveloping this Voronoi cell
+        CALL find_Voronoi_cell_vertices( mesh, vi, Vor, nVor)
+        
+        xmin = MINVAL( Vor( 1:nVor,1))
+        xmax = MAXVAL( Vor( 1:nVor,1))
+        ymin = MINVAL( Vor( 1:nVor,2))
+        ymax = MAXVAL( Vor( 1:nVor,2))
+        
+        il = 1 + FLOOR( (xmin - grid%xmin + grid%dx / 2._dp) / grid%dx)
+        iu = 1 + FLOOR( (xmax - grid%xmin + grid%dx / 2._dp) / grid%dx)
+        jl = 1 + FLOOR( (ymin - grid%ymin + grid%dx / 2._dp) / grid%dx)
+        ju = 1 + FLOOR( (ymax - grid%ymin + grid%dx / 2._dp) / grid%dx)
+        
+        ! Check which of the grid cells in this square lie inside the triangle
+        DO i = il, iu
+        DO j = jl, ju
+          
+          n = grid%ij2n( i,j)
+          p = [grid%x( i), grid%y( j)]
+          
+          IF (is_in_Voronoi_cell( mesh, p, vi)) THEN
+            ! This grid cell lies inside the triangle; add it to the single row
+            single_row_Vor%n = single_row_Vor%n + 1
+            single_row_Vor%index_left( single_row_Vor%n) = n
+            single_row_Vor%LI_xdy(     single_row_Vor%n) = grid%dx**2
+            single_row_Vor%LI_mxydx(   single_row_Vor%n) = grid%x( i) * grid%dx**2
+            single_row_Vor%LI_xydy(    single_row_Vor%n) = grid%y( j) * grid%dx**2
+          END IF
+          
+        END DO
+        END DO
+        
+        ! Add entries to the big matrices
+        DO k = 1, single_row_Vor%n
+          n = single_row_Vor%index_left( k)
+          CALL MatSetValues( A_xdy_a_g  , 1, vi-1, 1, n-1, single_row_Vor%LI_xdy(   k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_mxydx_a_g, 1, vi-1, 1, n-1, single_row_Vor%LI_mxydx( k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_xydy_a_g , 1, vi-1, 1, n-1, single_row_Vor%LI_xydy(  k), INSERT_VALUES, perr)
+        END DO
+        
+      END IF ! IF (mesh%A( vi) < 4._dp * grid%dx**2) THEN
+      
+    END DO
+    CALL sync
+    
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL MatAssemblyBegin( A_xdy_a_g  , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( A_mxydx_a_g, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( A_xydy_a_g , MAT_FINAL_ASSEMBLY, perr)
+    
+    CALL MatAssemblyEnd(   A_xdy_a_g  , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   A_mxydx_a_g, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   A_xydy_a_g , MAT_FINAL_ASSEMBLY, perr)
+    
+    ! Clean up after yourself
+    DEALLOCATE( single_row_Vor%index_left )
+    DEALLOCATE( single_row_Vor%LI_xdy     )
+    DEALLOCATE( single_row_Vor%LI_mxydx   )
+    DEALLOCATE( single_row_Vor%LI_xydy    )
+    
+    DEALLOCATE( single_row_grid%index_left )
+    DEALLOCATE( single_row_grid%LI_xdy     )
+    DEALLOCATE( single_row_grid%LI_mxydx   )
+    DEALLOCATE( single_row_grid%LI_xydy    )
+    
+    DEALLOCATE( Vor)
+    
+  ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
+  ! ==============================================================
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating w0, w1x, w1y...'
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping weights...'
+    CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
+    CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
+    CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
     
     ALLOCATE( cols(    nnz_per_row_max))
     ALLOCATE( vals(    nnz_per_row_max))
@@ -753,21 +814,19 @@ CONTAINS
     ALLOCATE( w1x_row( nnz_per_row_max))
     ALLOCATE( w1y_row( nnz_per_row_max))
     
-    CALL MatGetOwnershipRange( B_xdy_a_g  , istart, iend, perr)
-    
-    DO vi = istart+1, iend ! +1 because PETSc indexes from 0
+    DO vi = vi1+1, vi2 ! +1 because PETSc indexes from 0
       
       ! w0
-      CALL MatGetRow( B_xdy_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatGetRow( A_xdy_a_g, vi-1, ncols, cols, vals, perr)
       A_overlap_tot = SUM( vals( 1:ncols))
       DO k = 1, ncols
         w0_row( k) = vals( k) / A_overlap_tot
         CALL MatSetValues( w0, 1, vi-1, 1, cols( k), w0_row( k), INSERT_VALUES, perr)
       END DO
-      CALL MatRestoreRow( B_xdy_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatRestoreRow( A_xdy_a_g, vi-1, ncols, cols, vals, perr)
       
       ! w1x
-      CALL MatGetRow( B_mxydx_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatGetRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
       DO k = 1, ncols
         n = cols( k)+1
         i = grid%n2ij( n,1)
@@ -775,10 +834,10 @@ CONTAINS
         w1x_row( k) = (vals( k) / A_overlap_tot) - (grid%x( i) * w0_row( k))
         CALL MatSetValues( w1x, 1, vi-1, 1, cols( k), w1x_row( k), INSERT_VALUES, perr)
       END DO
-      CALL MatRestoreRow( B_mxydx_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatRestoreRow( A_mxydx_a_g, vi-1, ncols, cols, vals, perr)
       
       ! w1y
-      CALL MatGetRow( B_xydy_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatGetRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
       DO k = 1, ncols
         n = cols( k)+1
         i = grid%n2ij( n,1)
@@ -786,10 +845,14 @@ CONTAINS
         w1y_row( k) = (vals( k) / A_overlap_tot) - (grid%y( j) * w0_row( k))
         CALL MatSetValues( w1y, 1, vi-1, 1, cols( k), w1y_row( k), INSERT_VALUES, perr)
       END DO
-      CALL MatRestoreRow( B_xydy_a_g, vi-1, ncols, cols, vals, perr)
+      CALL MatRestoreRow( A_xydy_a_g, vi-1, ncols, cols, vals, perr)
       
     END DO
     CALL sync
+    
+    CALL MatDestroy( A_xdy_a_g  , perr)
+    CALL MatDestroy( A_mxydx_a_g, perr)
+    CALL MatDestroy( A_xydy_a_g , perr)
     
     ! Assemble matrix and vectors, using the 2-step process:
     !   MatAssemblyBegin(), MatAssemblyEnd()
@@ -804,24 +867,22 @@ CONTAINS
     CALL MatAssemblyEnd(   w1x, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   w1y, MAT_FINAL_ASSEMBLY, perr)
     
-    CALL MatDestroy( B_xdy_a_g  , perr)
-    CALL MatDestroy( B_mxydx_a_g, perr)
-    CALL MatDestroy( B_xydy_a_g , perr)
-    
     ! Calculate the remapping matrix
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - combining weights into remapping matrix...'
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - combining weights into remapping matrix...'
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping matrix...'
     
     CALL calc_matrix_operators_grid( grid, grid_M_ddx, grid_M_ddy)
     
     CALL MatDuplicate( w0, MAT_COPY_VALUES, grid%M_map_grid2mesh, perr)
-    CALL MatMatMult( w1x, grid_M_ddx, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)
+    CALL MatMatMult( w1x, grid_M_ddx, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
     CALL MatMatMult( w1y, grid_M_ddy, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
     
+    CALL MatDestroy( grid_M_ddx    , perr)
+    CALL MatDestroy( grid_M_ddy    , perr)
     CALL MatDestroy( w0            , perr)
     CALL MatDestroy( w1x           , perr)
     CALL MatDestroy( w1y           , perr)
-    CALL MatDestroy( grid_M_ddx    , perr)
-    CALL MatDestroy( grid_M_ddy    , perr)
     
     CALL MatAXPY( grid%M_map_grid2mesh, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
     CALL MatAXPY( grid%M_map_grid2mesh, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
@@ -829,9 +890,384 @@ CONTAINS
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
     
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - done!'
+    tcomp = MPI_WTIME() - tstart
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - done in ', tcomp, ' s!'
     
   END SUBROUTINE calc_remapping_operator_grid2mesh
+  SUBROUTINE calc_remapping_operator_mesh2grid( mesh, grid)
+    ! Calculate the remapping operators from the mesh to the square grid using 2nd-order conservative remapping
+    
+    IMPLICIT NONE
+        
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_grid),                     INTENT(INOUT) :: grid
+    
+    ! Local variables
+    TYPE(PetscErrorCode)                               :: perr
+    LOGICAL                                            :: count_coincidences
+    INTEGER,  DIMENSION(:,:  ), POINTER                ::  overlaps_with_small_triangle,  containing_triangle
+    INTEGER                                            :: woverlaps_with_small_triangle, wcontaining_triangle
+    INTEGER                                            :: ti
+    INTEGER                                            :: via, vib, vic
+    REAL(dp), DIMENSION(2)                             :: pa, pb, pc
+    REAL(dp)                                           :: xmin, xmax, ymin, ymax
+    INTEGER                                            :: il, iu, jl, ju
+    INTEGER                                            :: i, j
+    INTEGER                                            :: ncols_A, nrows_A, nnz_per_row_max
+    TYPE(tMat)                                         :: A_xdy_g_b, A_mxydx_g_b, A_xydy_g_b
+    TYPE(type_single_row_mapping_matrices)             :: single_row_grid, single_row_Tri
+    INTEGER                                            :: n1, n2, n, ti_hint
+    REAL(dp), DIMENSION(2)                             :: p
+    REAL(dp)                                           :: xl, xu, yl, yu
+    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne
+    INTEGER                                            :: k, kk, nn
+    REAL(dp)                                           :: LI_xdy, LI_mxydx, LI_xydy
+    TYPE(tMat)                                         :: w0, w1x, w1y
+    INTEGER                                            :: ncols
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
+    REAL(dp)                                           :: A_overlap_tot
+    TYPE(tMat)                                         :: M1, M2
+    REAL(dp)                                           :: tstart, tcomp
+    
+    tstart = MPI_WTIME()
+    
+  ! == Find all grid cells that overlap with small triangles
+  ! ========================================================
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - finding all grid cells overlapping with small/big triangles...'
+    
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, overlaps_with_small_triangle, woverlaps_with_small_triangle)
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, containing_triangle         , wcontaining_triangle         )
+    
+    DO ti = mesh%ti1, mesh%ti2
+        
+      ! The three vertices spanning this triangle
+      via = mesh%Tri( ti,1)
+      vib = mesh%Tri( ti,2)
+      vic = mesh%Tri( ti,3)
+      
+      pa  = mesh%V( via,:)
+      pb  = mesh%V( vib,:)
+      pc  = mesh%V( vic,:)
+      
+      ! The square enveloping this triangle
+      xmin = MIN( MIN( pa(1), pb(1)), pc(1))
+      xmax = MAX( MAX( pa(1), pb(1)), pc(1))
+      ymin = MIN( MIN( pa(2), pb(2)), pc(2))
+      ymax = MAX( MAX( pa(2), pb(2)), pc(2))
+      
+      ! The square of grid cells enveloping this triangle
+      il = 1 + FLOOR( (xmin - grid%xmin + grid%dx / 2._dp) / grid%dx)
+      iu = 1 + FLOOR( (xmax - grid%xmin + grid%dx / 2._dp) / grid%dx)
+      jl = 1 + FLOOR( (ymin - grid%ymin + grid%dx / 2._dp) / grid%dx)
+      ju = 1 + FLOOR( (ymax - grid%ymin + grid%dx / 2._dp) / grid%dx)
+      
+      il = MAX( 1      , il - 1)
+      iu = MIN( grid%nx, iu + 1)
+      jl = MAX( 1      , jl - 1)
+      ju = MIN( grid%ny, ju + 1)
+      
+      IF (mesh%TriA( ti) < 4._dp * grid%dx**2) THEN
+        ! This triangle is small; mark all grid cells it overlaps with
+        
+        ! Mark all these grid cells
+        DO i = il, iu
+        DO j = jl, ju
+          overlaps_with_small_triangle( i,j) = 1
+        END DO
+        END DO
+        
+      ELSE
+        ! This triangle is large; mark all grid cells it contains
+        
+        ! Mark all these grid cells
+        DO i = il, iu
+        DO j = jl, ju
+          p = [grid%x( i), grid%y( j)]
+          IF (is_in_triangle( pa, pb, pc, p)) THEN
+            containing_triangle( i,j) = ti
+          END IF
+        END DO
+        END DO
+        
+      END IF ! IF (mesh%TriA( ti) < 4._dp * grid%dx**2) THEN
+      
+    END DO
+    CALL sync
+    
+  ! == Integrate around all grid cells that overlap with small triangles
+  ! ====================================================================
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating all line integrals...'
+    
+    ! Use PETSc routines to initialise the three matrices
+    
+    ! Matrix sise
+    nrows_A         = grid%n     ! to
+    ncols_A         = mesh%nTri  ! from
+    nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh%TriA) / (grid%dx**2)), &
+                                    CEILING( 2._dp * (grid%dx**2) / MINVAL( mesh%TriA))) )
+    
+    ! Initialise the matrix object
+    CALL MatCreate( PETSC_COMM_WORLD, A_xdy_g_b  , perr)
+    CALL MatCreate( PETSC_COMM_WORLD, A_mxydx_g_b, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, A_xydy_g_b , perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( A_xdy_g_b  , 'mpiaij', perr)
+    CALL MatSetType( A_mxydx_g_b, 'mpiaij', perr)
+    CALL MatSetType( A_xydy_g_b , 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( A_xdy_g_b  , PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
+    CALL MatSetSizes( A_mxydx_g_b, PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
+    CALL MatSetSizes( A_xydy_g_b , PETSC_DECIDE, PETSC_DECIDE, nrows_A, ncols_A, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( A_xdy_g_b  , perr)
+    CALL MatSetFromOptions( A_mxydx_g_b, perr)
+    CALL MatSetFromOptions( A_xydy_g_b , perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( A_xdy_g_b  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( A_mxydx_g_b, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( A_xydy_g_b , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( A_xdy_g_b, n1, n2, perr)
+    
+    ! Allocate memory for single row results
+    single_row_grid%n_max = nnz_per_row_max
+    single_row_grid%n     = 0
+    ALLOCATE( single_row_grid%index_left( single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_xdy(     single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_mxydx(   single_row_grid%n_max))
+    ALLOCATE( single_row_grid%LI_xydy(    single_row_grid%n_max))
+    
+    single_row_Tri%n_max = nnz_per_row_max
+    single_row_Tri%n     = 0
+    ALLOCATE( single_row_Tri%index_left( single_row_Tri%n_max))
+    ALLOCATE( single_row_Tri%LI_xdy(     single_row_Tri%n_max))
+    ALLOCATE( single_row_Tri%LI_mxydx(   single_row_Tri%n_max))
+    ALLOCATE( single_row_Tri%LI_xydy(    single_row_Tri%n_max))
+    
+    ti_hint = 1
+    
+    DO n = n1+1, n2
+      
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      p = [grid%x( i), grid%y( j)]
+      
+      IF (overlaps_with_small_triangle( i,j) == 1) THEN
+        ! This grid cell overlaps with a small triangle; integrate around it, and around
+        ! all triangles overlapping with it
+        
+        ! The four sides of the grid cell
+        xl = grid%x( i) - grid%dx / 2._dp
+        xu = grid%x( i) + grid%dx / 2._dp
+        yl = grid%y( j) - grid%dx / 2._dp
+        yu = grid%y( j) + grid%dx / 2._dp
+        
+        sw = [xl, yl]
+        nw = [xl, yu]
+        se = [xu, yl]
+        ne = [xu, yu]
+        
+        ! Clear the single row results
+        single_row_grid%n          = 0
+        single_row_grid%index_left = 0
+        single_row_grid%LI_xdy     = 0._dp
+        single_row_grid%LI_mxydx   = 0._dp
+        single_row_grid%LI_xydy    = 0._dp
+        
+        ! Integrate over all four sides
+        count_coincidences = .TRUE.
+        CALL trace_line_tri( mesh, sw, se, single_row_grid, count_coincidences, ti_hint)
+        CALL trace_line_tri( mesh, se, ne, single_row_grid, count_coincidences, ti_hint)
+        CALL trace_line_tri( mesh, ne, nw, single_row_grid, count_coincidences, ti_hint)
+        CALL trace_line_tri( mesh, nw, sw, single_row_grid, count_coincidences, ti_hint)
+        
+        ! Next, integrate around all the triangles overlapping with this grid cell
+        DO k = 1, single_row_grid%n
+          
+          ti = single_row_grid%index_left( k)
+          
+          ! The three vertices spanning this triangle
+          via = mesh%Tri( ti,1)
+          vib = mesh%Tri( ti,2)
+          vic = mesh%Tri( ti,3)
+          
+          pa  = mesh%V( via,:)
+          pb  = mesh%V( vib,:)
+          pc  = mesh%V( vic,:)
+          
+          ! Clear the single row results
+          single_row_Tri%n = 0
+          single_row_Tri%index_left = 0
+          single_row_Tri%LI_xdy     = 0._dp
+          single_row_Tri%LI_mxydx   = 0._dp
+          single_row_Tri%LI_xydy    = 0._dp
+          
+          ! Integrate over all three triangle sides
+          count_coincidences = .FALSE.
+          CALL trace_line_grid( grid, pa, pb, single_row_Tri, count_coincidences)
+          CALL trace_line_grid( grid, pb, pc, single_row_Tri, count_coincidences)
+          CALL trace_line_grid( grid, pc, pa, single_row_Tri, count_coincidences)
+          
+          ! Add contribution for this particular grid cell
+          DO kk = 1, single_row_Tri%n
+            nn = single_row_Tri%index_left( kk)
+            IF (nn == n) THEN
+              ! Add contribution to this triangle
+              single_row_grid%LI_xdy(   k) = single_row_grid%LI_xdy(   k) + single_row_Tri%LI_xdy(   kk)
+              single_row_grid%LI_mxydx( k) = single_row_grid%LI_mxydx( k) + single_row_Tri%LI_mxydx( kk)
+              single_row_grid%LI_xydy(  k) = single_row_grid%LI_xydy(  k) + single_row_Tri%LI_xydy(  kk)
+              EXIT
+            END IF
+          END DO ! DO kk = 1, single_row_grid%n
+        
+          ! Add entries to the big matrices
+          CALL MatSetValues( A_xdy_g_b  , 1, n-1, 1, ti-1, single_row_grid%LI_xdy(   k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_mxydx_g_b, 1, n-1, 1, ti-1, single_row_grid%LI_mxydx( k), INSERT_VALUES, perr)
+          CALL MatSetValues( A_xydy_g_b , 1, n-1, 1, ti-1, single_row_grid%LI_xydy(  k), INSERT_VALUES, perr)
+          
+        END DO ! DO k = 1, single_row_grid%n
+        
+      ELSE ! IF (overlaps_with_small_triangle( i,j) == 1) THEN
+        ! This grid cell does not overlap with a small triangle; use only the
+        ! contribution from the nearest triangle
+        
+        ti_hint = containing_triangle( i,j)
+        
+        LI_xdy   = grid%dx**2
+        LI_mxydx = grid%dx**2 * grid%x( i)
+        LI_xydy  = grid%dx**2 * grid%y( j)
+        
+        CALL MatSetValues( A_xdy_g_b  , 1, n-1, 1, ti_hint-1, LI_xdy  , INSERT_VALUES, perr)
+        CALL MatSetValues( A_mxydx_g_b, 1, n-1, 1, ti_hint-1, LI_mxydx, INSERT_VALUES, perr)
+        CALL MatSetValues( A_xydy_g_b , 1, n-1, 1, ti_hint-1, LI_xydy , INSERT_VALUES, perr)
+        
+      END IF ! IF (overlaps_with_small_triangle( i,j) == 1) THEN
+      
+    END DO ! DO n = n1+1, n2
+    CALL sync
+    
+    CALL deallocate_shared( woverlaps_with_small_triangle)
+    CALL deallocate_shared( wcontaining_triangle         )
+    
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL MatAssemblyBegin( A_xdy_g_b  , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( A_mxydx_g_b, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( A_xydy_g_b , MAT_FINAL_ASSEMBLY, perr)
+    
+    CALL MatAssemblyEnd(   A_xdy_g_b  , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   A_mxydx_g_b, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   A_xydy_g_b , MAT_FINAL_ASSEMBLY, perr)
+    
+    ! Clean up after yourself
+    DEALLOCATE( single_row_grid%index_left )
+    DEALLOCATE( single_row_grid%LI_xdy     )
+    DEALLOCATE( single_row_grid%LI_mxydx   )
+    DEALLOCATE( single_row_grid%LI_xydy    )
+    
+    DEALLOCATE( single_row_Tri%index_left )
+    DEALLOCATE( single_row_Tri%LI_xdy     )
+    DEALLOCATE( single_row_Tri%LI_mxydx   )
+    DEALLOCATE( single_row_Tri%LI_xydy    )
+    
+  ! Calculate w0, w1x, w1y for the mesh-to-grid remapping operator
+  ! ==============================================================
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating w0, w1x, w1y...'
+  
+    CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
+    CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
+    CALL MatDuplicate( A_xdy_g_b, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
+    
+    ALLOCATE( cols(    nnz_per_row_max))
+    ALLOCATE( vals(    nnz_per_row_max))
+    ALLOCATE( w0_row(  nnz_per_row_max))
+    ALLOCATE( w1x_row( nnz_per_row_max))
+    ALLOCATE( w1y_row( nnz_per_row_max))
+    
+    DO n = n1+1, n2 ! +1 because PETSc indexes from 0
+      
+      ! w0
+      CALL MatGetRow( A_xdy_g_b, n-1, ncols, cols, vals, perr)
+      A_overlap_tot = SUM( vals( 1:ncols))
+      DO k = 1, ncols
+        w0_row( k) = vals( k) / A_overlap_tot
+        CALL MatSetValues( w0, 1, n-1, 1, cols( k), w0_row( k), INSERT_VALUES, perr)
+      END DO
+      CALL MatRestoreRow( A_xdy_g_b, n-1, ncols, cols, vals, perr)
+      
+      ! w1x
+      CALL MatGetRow( A_mxydx_g_b, n-1, ncols, cols, vals, perr)
+      DO k = 1, ncols
+        ti = cols( k)+1
+        w1x_row( k) = (vals( k) / A_overlap_tot) - (mesh%TriGC( ti,1) * w0_row( k))
+        CALL MatSetValues( w1x, 1, n-1, 1, cols( k), w1x_row( k), INSERT_VALUES, perr)
+      END DO
+      CALL MatRestoreRow( A_mxydx_g_b, n-1, ncols, cols, vals, perr)
+      
+      ! w1y
+      CALL MatGetRow( A_xydy_g_b, n-1, ncols, cols, vals, perr)
+      DO k = 1, ncols
+        ti = cols( k)+1
+        w1y_row( k) = (vals( k) / A_overlap_tot) - (mesh%TriGC( ti,2) * w0_row( k))
+        CALL MatSetValues( w1y, 1, n-1, 1, cols( k), w1y_row( k), INSERT_VALUES, perr)
+      END DO
+      CALL MatRestoreRow( A_xydy_g_b, n-1, ncols, cols, vals, perr)
+      
+    END DO
+    CALL sync
+    
+    CALL MatDestroy( A_xdy_g_b  , perr)
+    CALL MatDestroy( A_mxydx_g_b, perr)
+    CALL MatDestroy( A_xydy_g_b , perr)
+    
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL MatAssemblyBegin( w0 , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( w1x, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( w1y, MAT_FINAL_ASSEMBLY, perr)
+    
+    CALL MatAssemblyEnd(   w0 , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   w1x, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   w1y, MAT_FINAL_ASSEMBLY, perr)
+    
+    ! Calculate the remapping matrix
+  
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping matrix...'
+    
+    CALL MatMatMult( w0,  mesh%M_map_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, grid%M_map_mesh2grid, perr)
+    CALL MatMatMult( w1x, mesh%M_ddx_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
+    CALL MatMatMult( w1y, mesh%M_ddy_a_b, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
+    
+    CALL MatDestroy( w0            , perr)
+    CALL MatDestroy( w1x           , perr)
+    CALL MatDestroy( w1y           , perr)
+    
+    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M1, DIFFERENT_NONZERO_PATTERN, perr)
+    CALL MatAXPY( grid%M_map_mesh2grid, 1._dp, M2, DIFFERENT_NONZERO_PATTERN, perr)
+    
+    CALL MatDestroy( M1, perr)
+    CALL MatDestroy( M2, perr)
+    
+    tcomp = MPI_WTIME() - tstart
+    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - done in ', tcomp, ' s!'
+    
+  END SUBROUTINE calc_remapping_operator_mesh2grid
   SUBROUTINE calc_remapping_operators_mesh_mesh( mesh_src, mesh_dst, map)
     ! Calculate all the remapping operators between two meshes
     
@@ -1127,519 +1563,7 @@ CONTAINS
     
   END SUBROUTINE calc_remapping_operators_mesh_mesh_conservative
   
-  ! Integrate around triangles/Voronoi cells/grid cells through triangles/Voronoi cells/grid cells
-  SUBROUTINE integrate_triangles_through_grid(          mesh    , grid    , B_xdy_b_g, B_mxydx_b_g, B_xydy_b_g, count_coincidences, nnz_per_row_max)
-    ! Integrate around the triangles of the mesh through the grid cells of the grid
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(tMat),                          INTENT(INOUT) :: B_xdy_b_g
-    TYPE(tMat),                          INTENT(INOUT) :: B_mxydx_b_g
-    TYPE(tMat),                          INTENT(INOUT) :: B_xydy_b_g
-    LOGICAL,                             INTENT(IN)    :: count_coincidences
-    INTEGER,                             INTENT(IN)    :: nnz_per_row_max
-    
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
-    INTEGER                                            :: nrows, ncols, istart, iend
-    TYPE(type_single_row_mapping_matrices)             :: single_row
-    INTEGER                                            :: via, vib, vic, ti, ii
-    REAL(dp), DIMENSION(2)                             :: p, q
-    
-  ! == Use PETSc routines to initialise the three matrices
-  ! ======================================================
-    
-    ! Matrix sise
-    nrows           = mesh%nTri
-    ncols           = grid%n
-    
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, B_xdy_b_g  , perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_mxydx_b_g, perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_xydy_b_g , perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( B_xdy_b_g  , 'mpiaij', perr)
-    CALL MatSetType( B_mxydx_b_g, 'mpiaij', perr)
-    CALL MatSetType( B_xydy_b_g , 'mpiaij', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( B_xdy_b_g  , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_mxydx_b_g, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_xydy_b_g , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( B_xdy_b_g  , perr)
-    CALL MatSetFromOptions( B_mxydx_b_g, perr)
-    CALL MatSetFromOptions( B_xydy_b_g , perr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( B_xdy_b_g  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_mxydx_b_g, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_xydy_b_g , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( B_xdy_b_g  , istart, iend, perr)
-    
-    ! Initialise results from integrating a single triangle through the Voronoi cells
-    single_row%n_max = 100
-    single_row%n     = 0
-    ALLOCATE( single_row%index_left( single_row%n_max))
-    ALLOCATE( single_row%LI_xdy(     single_row%n_max))
-    ALLOCATE( single_row%LI_mxydx(   single_row%n_max))
-    ALLOCATE( single_row%LI_xydy(    single_row%n_max))
-    
-  ! == Trace all the line segments to fill the matrices
-  ! ===================================================
-    
-    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
-      
-      !WRITE(0,*) '  Process ', par%i, ' - integrating mesh triangle ', ti, '/', mesh%nTri, ' sides through the grid...'
-    
-      ! Clean up single row results
-      single_row%n            = 0
-      single_row%index_left   = 0
-      single_row%LI_xdy       = 0
-      single_row%LI_mxydx     = 0
-      single_row%LI_xydy      = 0
-    
-      ! The three vertices spanning this triangle
-      via = mesh%Tri( ti,1)
-      vib = mesh%Tri( ti,2)
-      vic = mesh%Tri( ti,3)
-    
-      ! Integrate over the three triangle sides
-      p = mesh%V( via,:)
-      q = mesh%V( vib,:)
-      CALL trace_line_grid( grid, p, q, single_row, count_coincidences)
-    
-      p = mesh%V( vib,:)
-      q = mesh%V( vic,:)
-      CALL trace_line_grid( grid, p, q, single_row, count_coincidences)
-    
-      p = mesh%V( vic,:)
-      q = mesh%V( via,:)
-      CALL trace_line_grid( grid, p, q, single_row, count_coincidences)
-    
-      ! Add the results for this triangle to the sparse matrix
-      DO ii = 1, single_row%n
-        CALL MatSetValues( B_xdy_b_g  , 1, ti-1, 1, single_row%index_left( ii)-1, single_row%LI_xdy(   ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_mxydx_b_g, 1, ti-1, 1, single_row%index_left( ii)-1, single_row%LI_mxydx( ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_xydy_b_g , 1, ti-1, 1, single_row%index_left( ii)-1, single_row%LI_xydy(  ii), INSERT_VALUES, perr)
-      END DO
-    
-    END DO ! DO ti = istart, iend
-    CALL sync
-    
-    ! Assemble matrix and vectors, using the 2-step process:
-    !   MatAssemblyBegin(), MatAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-    
-    CALL MatAssemblyBegin( B_xdy_b_g  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_mxydx_b_g, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_xydy_b_g , MAT_FINAL_ASSEMBLY, perr)
-    
-    CALL MatAssemblyEnd(   B_xdy_b_g  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_mxydx_b_g, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_xydy_b_g , MAT_FINAL_ASSEMBLY, perr)
-    
-    ! Clean up after yourself
-    DEALLOCATE( single_row%index_left )
-    DEALLOCATE( single_row%LI_xdy     )
-    DEALLOCATE( single_row%LI_mxydx   )
-    DEALLOCATE( single_row%LI_xydy    )
-    
-  END SUBROUTINE integrate_triangles_through_grid
-  SUBROUTINE integrate_grid_through_triangles(          grid    , mesh    , B_xdy_g_b, B_mxydx_g_b, B_xydy_g_b, count_coincidences, nnz_per_row_max)
-    ! Integrate around the grid cells of the grid through the triangles of the mesh
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(tMat),                          INTENT(INOUT) :: B_xdy_g_b
-    TYPE(tMat),                          INTENT(INOUT) :: B_mxydx_g_b
-    TYPE(tMat),                          INTENT(INOUT) :: B_xydy_g_b
-    LOGICAL,                             INTENT(IN)    :: count_coincidences
-    INTEGER,                             INTENT(IN)    :: nnz_per_row_max
-    
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
-    INTEGER                                            :: nrows, ncols, istart, iend
-    TYPE(type_single_row_mapping_matrices)             :: single_row
-    INTEGER                                            :: n, i, j, ti_hint, ii
-    REAL(dp)                                           :: xl, xu, yl, yu
-    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne
-    
-  ! == Use PETSc routine to initialise the three matrices
-  ! =====================================================
-    
-    ! Matrix sie
-    nrows           = grid%n
-    ncols           = mesh%nTri
-    
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, B_xdy_g_b  , perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_mxydx_g_b, perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_xydy_g_b , perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( B_xdy_g_b  , 'mpiaij', perr)
-    CALL MatSetType( B_mxydx_g_b, 'mpiaij', perr)
-    CALL MatSetType( B_xydy_g_b , 'mpiaij', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( B_xdy_g_b  , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_mxydx_g_b, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_xydy_g_b , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( B_xdy_g_b  , perr)
-    CALL MatSetFromOptions( B_mxydx_g_b, perr)
-    CALL MatSetFromOptions( B_xydy_g_b , perr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( B_xdy_g_b  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_mxydx_g_b, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_xydy_g_b , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( B_xdy_g_b  , istart, iend, perr)
-    
-    ! Initialise results from integrating a single triangle through the Voronoi cells
-    single_row%n_max = 100
-    single_row%n     = 0
-    ALLOCATE( single_row%index_left( single_row%n_max))
-    ALLOCATE( single_row%LI_xdy(     single_row%n_max))
-    ALLOCATE( single_row%LI_mxydx(   single_row%n_max))
-    ALLOCATE( single_row%LI_xydy(    single_row%n_max))
-    
-  ! == Trace all the line segments to fill the matrices
-  ! ===================================================
-    
-    ti_hint = 1
-    
-    DO n = istart+1, iend ! +1 because PETSc indexes from 0
-    
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      
-      !WRITE(0,*) '  Process ', par%i, ' - integrating grid cell ', n, '/', grid%n, ' sides through the mesh triangles...'
-    
-      ! Clean up single row results
-      single_row%n            = 0
-      single_row%index_left   = 0
-      single_row%LI_xdy       = 0
-      single_row%LI_mxydx     = 0
-      single_row%LI_xydy      = 0
-    
-      ! Integrate over the four borders of the grid cell
-      
-      xl = grid%x( i) - grid%dx / 2._dp
-      xu = grid%x( i) + grid%dx / 2._dp
-      yl = grid%y( j) - grid%dx / 2._dp
-      yu = grid%y( j) + grid%dx / 2._dp
-      
-      sw = [xl,yl]
-      nw = [xl,yu]
-      se = [xu,yl]
-      ne = [xu,yu]
-      
-      CALL trace_line_tri( mesh, sw, se, single_row, count_coincidences, ti_hint)
-      CALL trace_line_tri( mesh, se, ne, single_row, count_coincidences, ti_hint)
-      CALL trace_line_tri( mesh, ne, nw, single_row, count_coincidences, ti_hint)
-      CALL trace_line_tri( mesh, nw, sw, single_row, count_coincidences, ti_hint)
-    
-      ! Add the results for this triangle to the sparse matrix
-      DO ii = 1, single_row%n
-        CALL MatSetValues( B_xdy_g_b  , 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_xdy(   ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_mxydx_g_b, 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_mxydx( ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_xydy_g_b , 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_xydy(  ii), INSERT_VALUES, perr)
-      END DO
-    
-    END DO ! DO n = n1, n2
-    CALL sync
-    
-    ! Assemble matrix and vectors, using the 2-step process:
-    !   MatAssemblyBegin(), MatAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-    
-    CALL MatAssemblyBegin( B_xdy_g_b  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_mxydx_g_b, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_xydy_g_b , MAT_FINAL_ASSEMBLY, perr)
-    
-    CALL MatAssemblyEnd(   B_xdy_g_b  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_mxydx_g_b, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_xydy_g_b , MAT_FINAL_ASSEMBLY, perr)
-    
-    ! Clean up after yourself
-    DEALLOCATE( single_row%index_left )
-    DEALLOCATE( single_row%LI_xdy     )
-    DEALLOCATE( single_row%LI_mxydx   )
-    DEALLOCATE( single_row%LI_xydy    )
-    
-  END SUBROUTINE integrate_grid_through_triangles
-  SUBROUTINE integrate_Voronoi_cells_through_grid(      mesh    , grid    , B_xdy_a_g, B_mxydx_a_g, B_xydy_a_g, count_coincidences, nnz_per_row_max)
-    ! Integrate around the Voronoi cells of the mesh through the grid cells of the grid
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(tMat),                          INTENT(INOUT) :: B_xdy_a_g
-    TYPE(tMat),                          INTENT(INOUT) :: B_mxydx_a_g
-    TYPE(tMat),                          INTENT(INOUT) :: B_xydy_a_g
-    LOGICAL,                             INTENT(IN)    :: count_coincidences
-    INTEGER,                             INTENT(IN)    :: nnz_per_row_max
-    
-    ! Local variables
-    INTEGER                                            :: nrows, ncols, istart, iend
-    TYPE(type_single_row_mapping_matrices)             :: single_row
-    INTEGER                                            :: vi, nVor, vori1, vori2, ii
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
-    REAL(dp), DIMENSION(2)                             :: p, q
-    
-  ! == Use PETSc routine to initialise the three matrices
-  ! =====================================================
-    
-    ! Initialise sparse matrices
-    nrows        = mesh%nV
-    ncols        = grid%n
-    
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, B_xdy_a_g  , perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_mxydx_a_g, perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_xydy_a_g , perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( B_xdy_a_g  , 'mpiaij', perr)
-    CALL MatSetType( B_mxydx_a_g, 'mpiaij', perr)
-    CALL MatSetType( B_xydy_a_g , 'mpiaij', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( B_xdy_a_g  , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_mxydx_a_g, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_xydy_a_g , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( B_xdy_a_g  , perr)
-    CALL MatSetFromOptions( B_mxydx_a_g, perr)
-    CALL MatSetFromOptions( B_xydy_a_g , perr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( B_xdy_a_g  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_mxydx_a_g, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_xydy_a_g , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( B_xdy_a_g  , istart, iend, perr)
-    
-    ! Initialise results from integrating a single triangle through the Voronoi cells
-    single_row%n_max = 100
-    single_row%n     = 0
-    ALLOCATE( single_row%index_left( single_row%n_max))
-    ALLOCATE( single_row%LI_xdy(     single_row%n_max))
-    ALLOCATE( single_row%LI_mxydx(   single_row%n_max))
-    ALLOCATE( single_row%LI_xydy(    single_row%n_max))
-    
-  ! == Trace all the line segments to fill the matrices
-  ! ===================================================
-    
-    ALLOCATE( Vor( mesh%nC_mem+2,2))
-    
-    DO vi = istart+1, iend ! +1 because PETSc indexes from 0
-      
-      !WRITE(0,*) '  Process ', par%i, ' - integrating mesh vertex ', vi, '/', mesh%nV, ' sides through the grid...'
-    
-      ! Clean up single row results
-      single_row%n            = 0
-      single_row%index_left   = 0
-      single_row%LI_xdy       = 0
-      single_row%LI_mxydx     = 0
-      single_row%LI_xydy      = 0
-      
-      ! Integrate over the complete Voronoi cell boundary
-      CALL find_Voronoi_cell_vertices( mesh, vi, Vor, nVor)
-      IF (mesh%edge_index( vi) > 0) THEN
-        Vor( nVor+1,:) = Vor( 1,:)
-        nVor = nVor + 1
-      END IF
-      DO vori1 = 1, nVor-1
-        vori2 = vori1 + 1
-        IF (vori2 > nVor) vori2 = 1
-        p = Vor( vori1,:)
-        q = Vor( vori2,:)
-        CALL trace_line_grid( grid, p, q, single_row, count_coincidences)
-      END DO
-      
-      ! Add the results for this triangle to the sparse matrix
-      DO ii = 1, single_row%n
-        CALL MatSetValues( B_xdy_a_g  , 1, vi-1, 1, single_row%index_left( ii)-1, single_row%LI_xdy(   ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_mxydx_a_g, 1, vi-1, 1, single_row%index_left( ii)-1, single_row%LI_mxydx( ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_xydy_a_g , 1, vi-1, 1, single_row%index_left( ii)-1, single_row%LI_xydy(  ii), INSERT_VALUES, perr)
-      END DO
-    
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
-    
-    ! Assemble matrix and vectors, using the 2-step process:
-    !   MatAssemblyBegin(), MatAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-    
-    CALL MatAssemblyBegin( B_xdy_a_g  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_mxydx_a_g, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_xydy_a_g , MAT_FINAL_ASSEMBLY, perr)
-    
-    CALL MatAssemblyEnd(   B_xdy_a_g  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_mxydx_a_g, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_xydy_a_g , MAT_FINAL_ASSEMBLY, perr)
-    
-    ! Clean up after yourself
-    DEALLOCATE( Vor)
-    DEALLOCATE( single_row%index_left )
-    DEALLOCATE( single_row%LI_xdy     )
-    DEALLOCATE( single_row%LI_mxydx   )
-    DEALLOCATE( single_row%LI_xydy    )
-    
-  END SUBROUTINE integrate_Voronoi_cells_through_grid
-  SUBROUTINE integrate_grid_through_Voronoi_cells(      grid    , mesh    , B_xdy_g_a, B_mxydx_g_a, B_xydy_g_a, count_coincidences, nnz_per_row_max)
-    ! Integrate around the grid cells of the grid through the Voronoi cells of the mesh
-    
-    IMPLICIT NONE
-        
-    ! In/output variables
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
-    TYPE(tMat),                          INTENT(INOUT) :: B_xdy_g_a
-    TYPE(tMat),                          INTENT(INOUT) :: B_mxydx_g_a
-    TYPE(tMat),                          INTENT(INOUT) :: B_xydy_g_a
-    LOGICAL,                             INTENT(IN)    :: count_coincidences
-    INTEGER,                             INTENT(IN)    :: nnz_per_row_max
-    
-    ! Local variables
-    INTEGER                                            :: nrows, ncols, istart, iend
-    TYPE(type_single_row_mapping_matrices)             :: single_row
-    INTEGER                                            :: n, i, j, vi_hint, ii
-    REAL(dp)                                           :: xl, xu, yl, yu
-    REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne
-    
-  ! == Use PETSc routine to initialise the three matrices
-  ! =====================================================
-    
-    ! Initialise sparse matrices
-    nrows        = grid%n
-    ncols        = mesh%nV
-    
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, B_xdy_g_a  , perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_mxydx_g_a, perr)
-    CALL MatCreate( PETSC_COMM_WORLD, B_xydy_g_a , perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( B_xdy_g_a  , 'mpiaij', perr)
-    CALL MatSetType( B_mxydx_g_a, 'mpiaij', perr)
-    CALL MatSetType( B_xydy_g_a , 'mpiaij', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( B_xdy_g_a  , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_mxydx_g_a, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    CALL MatSetSizes( B_xydy_g_a , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( B_xdy_g_a  , perr)
-    CALL MatSetFromOptions( B_mxydx_g_a, perr)
-    CALL MatSetFromOptions( B_xydy_g_a , perr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( B_xdy_g_a  , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_mxydx_g_a, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( B_xydy_g_a , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( B_xdy_g_a  , istart, iend, perr)
-    
-    ! Initialise results from integrating a single triangle through the Voronoi cells
-    single_row%n_max = 100
-    single_row%n     = 0
-    ALLOCATE( single_row%index_left( single_row%n_max))
-    ALLOCATE( single_row%LI_xdy(     single_row%n_max))
-    ALLOCATE( single_row%LI_mxydx(   single_row%n_max))
-    ALLOCATE( single_row%LI_xydy(    single_row%n_max))
-    
-  ! == Trace all the line segments to fill the matrices
-  ! ===================================================
-    
-    vi_hint = 1
-    
-    DO n = istart+1, iend ! +1 because PETSc indexes from 0
-    
-      i = grid%n2ij( n,1)
-      j = grid%n2ij( n,2)
-      
-      !WRITE(0,*) '  Process ', par%i, ' - integrating grid cell ', n, '/', grid%n, ' sides through the mesh Voronoi cells...'
-    
-      ! Clean up single row results
-      single_row%n            = 0
-      single_row%index_left   = 0
-      single_row%LI_xdy       = 0
-      single_row%LI_mxydx     = 0
-      single_row%LI_xydy      = 0
-    
-      ! Integrate over the four borders of the grid cell
-      
-      xl = grid%x( i) - grid%dx / 2._dp
-      xu = grid%x( i) + grid%dx / 2._dp
-      yl = grid%y( j) - grid%dx / 2._dp
-      yu = grid%y( j) + grid%dx / 2._dp
-      
-      sw = [xl,yl]
-      nw = [xl,yu]
-      se = [xu,yl]
-      ne = [xu,yu]
-      
-      CALL trace_line_Vor( mesh, sw, se, single_row, count_coincidences, vi_hint)
-      CALL trace_line_Vor( mesh, se, ne, single_row, count_coincidences, vi_hint)
-      CALL trace_line_Vor( mesh, ne, nw, single_row, count_coincidences, vi_hint)
-      CALL trace_line_Vor( mesh, nw, sw, single_row, count_coincidences, vi_hint)
-    
-      ! Add the results for this triangle to the sparse matrix
-      DO ii = 1, single_row%n
-        CALL MatSetValues( B_xdy_g_a  , 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_xdy(   ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_mxydx_g_a, 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_mxydx( ii), INSERT_VALUES, perr)
-        CALL MatSetValues( B_xydy_g_a , 1, n-1, 1, single_row%index_left( ii)-1, single_row%LI_xydy(  ii), INSERT_VALUES, perr)
-      END DO
-    
-    END DO ! DO n = n1, n2
-    CALL sync
-    
-    ! Assemble matrix and vectors, using the 2-step process:
-    !   MatAssemblyBegin(), MatAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-    
-    CALL MatAssemblyBegin( B_xdy_g_a  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_mxydx_g_a, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyBegin( B_xydy_g_a , MAT_FINAL_ASSEMBLY, perr)
-    
-    CALL MatAssemblyEnd(   B_xdy_g_a  , MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_mxydx_g_a, MAT_FINAL_ASSEMBLY, perr)
-    CALL MatAssemblyEnd(   B_xydy_g_a , MAT_FINAL_ASSEMBLY, perr)
-    
-    ! Clean up after yourself
-    DEALLOCATE( single_row%index_left )
-    DEALLOCATE( single_row%LI_xdy     )
-    DEALLOCATE( single_row%LI_mxydx   )
-    DEALLOCATE( single_row%LI_xydy    )
-    
-  END SUBROUTINE integrate_grid_through_Voronoi_cells
+  ! Integrate around triangles/Voronoi cells through triangles/Voronoi cells
   SUBROUTINE integrate_triangles_through_Voronoi_cells( mesh_tri, mesh_Vor, B_xdy_b_a, B_mxydx_b_a, B_xydy_b_a, count_coincidences, nnz_per_row_max)
     ! Integrate around the triangles of mesh_tri through the Voronoi cells of mesh_Vor
     
@@ -5905,7 +5829,7 @@ CONTAINS
   END SUBROUTINE crop_line_to_domain
   
 ! == Clean up after yourself
-  SUBROUTINE deallocate_remapping_operators_mesh_grid( grid)
+  SUBROUTINE deallocate_remapping_operators_mesh2grid( grid)
     ! Deallocate the remapping operators between the mesh and the square grid
     
     IMPLICIT NONE
@@ -5917,9 +5841,22 @@ CONTAINS
     TYPE(PetscErrorCode)                               :: perr
     
     CALL MatDestroy( grid%M_map_mesh2grid, perr)
+    
+  END SUBROUTINE deallocate_remapping_operators_mesh2grid
+  SUBROUTINE deallocate_remapping_operators_grid2mesh( grid)
+    ! Deallocate the remapping operators between the mesh and the square grid
+    
+    IMPLICIT NONE
+        
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(INOUT) :: grid
+    
+    ! Local variables
+    TYPE(PetscErrorCode)                               :: perr
+    
     CALL MatDestroy( grid%M_map_grid2mesh, perr)
     
-  END SUBROUTINE deallocate_remapping_operators_mesh_grid
+  END SUBROUTINE deallocate_remapping_operators_grid2mesh
   SUBROUTINE deallocate_remapping_operators_mesh_mesh( map)
     ! Deallocate the remapping operators between two meshes
     

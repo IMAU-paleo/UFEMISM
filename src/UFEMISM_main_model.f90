@@ -30,10 +30,11 @@ MODULE UFEMISM_main_model
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
   USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                             calc_remapping_operators_mesh_grid, deallocate_remapping_operators_mesh_grid
+                                             calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                             calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
-                                             associate_debug_fields, reallocate_debug_fields, create_debug_file
+                                             associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
   USE restart_module,                  ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data, initialise_mask_noice
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
@@ -236,12 +237,21 @@ CONTAINS
     CALL create_new_mesh( region)
     
     ! Update the mapping operators between the new mesh and the fixed square grids
-    CALL deallocate_remapping_operators_mesh_grid(            region%grid_output)
-    CALL calc_remapping_operators_mesh_grid( region%mesh_new, region%grid_output)
-    CALL deallocate_remapping_operators_mesh_grid(            region%grid_GIA   )
-    CALL calc_remapping_operators_mesh_grid( region%mesh_new, region%grid_GIA   )
-    CALL deallocate_remapping_operators_mesh_grid(            region%grid_smooth)
-    CALL calc_remapping_operators_mesh_grid( region%mesh_new, region%grid_smooth)
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_output)
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_GIA   )
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_smooth)
+    
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_output)
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_GIA   )
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_smooth)
+    
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
+    
+    CALL calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
+    CALL calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
+    CALL calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
     
     ! Calculate the mapping arrays
     CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
@@ -682,11 +692,19 @@ CONTAINS
     IF (par%master) THEN
       n = 0
       DO i = 1, grid%nx
-      DO j = 1, grid%ny
-        n = n+1
-        grid%ij2n( i,j) = n
-        grid%n2ij( n,:) = [i,j]
-      END DO
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, grid%ny
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = grid%ny, 1, -1
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
       END DO
     END IF
     CALL sync
@@ -707,7 +725,8 @@ CONTAINS
     CALL sync
     
     ! Calculate mapping arrays between the mesh and the grid
-    CALL calc_remapping_operators_mesh_grid( region%mesh, grid)
+    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
+    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)

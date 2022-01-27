@@ -47,7 +47,6 @@ UFEMISM_program_objects = \
         mesh_operators_module.o \
         mesh_ArakawaC_module.o \
         mesh_mapping_module.o \
-        mesh_five_colour_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
         zeta_module.o \

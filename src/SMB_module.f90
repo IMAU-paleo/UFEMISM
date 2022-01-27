@@ -3,9 +3,11 @@ MODULE SMB_module
   ! All the routines for calculating the surface mass balance from the climate forcing
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -410,7 +412,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%M_trilin%ptr( 1)
+    int_dummy = int_dummy
     
     ! Firn depth and melt-during-previous-year must be remapped
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')

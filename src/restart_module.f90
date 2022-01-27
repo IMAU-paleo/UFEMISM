@@ -4,9 +4,11 @@ MODULE restart_module
   ! and read ice model data.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -34,7 +36,6 @@ MODULE restart_module
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
-  USE mesh_five_colour_module,         ONLY: calculate_five_colouring
   
   IMPLICIT NONE
 

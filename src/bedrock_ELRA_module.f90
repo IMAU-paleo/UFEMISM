@@ -3,9 +3,11 @@ MODULE bedrock_ELRA_module
   ! Contains all the routines of the ELRA bedrock model.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -330,7 +332,7 @@ CONTAINS
     END IF ! IF (C%do_benchmark_experiment) THEN
     
     int_dummy = mesh_old%nV
-    int_dummy = map%M_trilin%ptr( 1)
+    int_dummy = map%int_dummy
     
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_mesh,     ice%wsurface_load_mesh    )

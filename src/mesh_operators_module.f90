@@ -3,9 +3,12 @@ MODULE mesh_operators_module
   ! Routines for calculating and applying mapping and gradient operators on the mesh.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
+  USE petscksp
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -25,14 +28,11 @@ MODULE mesh_operators_module
                                              adapt_shared_int_2D,    adapt_shared_dp_2D, &
                                              adapt_shared_int_3D,    adapt_shared_dp_3D, &
                                              adapt_shared_bool_1D
-  USE data_types_module,               ONLY: type_mesh, type_sparse_matrix_CSR_dp, type_grid
+  USE data_types_module,               ONLY: type_mesh, type_grid
   USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general 
-  USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, extend_matrix_CSR_dist, finalise_matrix_CSR_dist, &
-                                             multiply_matrix_vector_CSR, multiply_matrix_vector_2D_CSR, check_CSR, check_CSR_dist
+  USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_petsc2CSR
 
   IMPLICIT NONE
-  
-  LOGICAL, PARAMETER :: do_check_matrices = .TRUE.
 
 CONTAINS
   
@@ -56,7 +56,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_a_b, d_a, d_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_a_b, d_a, d_b)
     
   END SUBROUTINE map_a_to_b_2D
   SUBROUTINE map_a_to_c_2D( mesh, d_a, d_c)
@@ -76,7 +76,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_a_c, d_a, d_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_a_c, d_a, d_c)
     
   END SUBROUTINE map_a_to_c_2D
   SUBROUTINE map_b_to_a_2D( mesh, d_b, d_a)
@@ -96,7 +96,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_b_a, d_b, d_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_a, d_b, d_a)
     
   END SUBROUTINE map_b_to_a_2D
   SUBROUTINE map_b_to_c_2D( mesh, d_b, d_c)
@@ -116,7 +116,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_b_c, d_b, d_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_c, d_b, d_c)
     
   END SUBROUTINE map_b_to_c_2D
   SUBROUTINE map_c_to_a_2D( mesh, d_c, d_a)
@@ -136,7 +136,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_c_a, d_c, d_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_c_a, d_c, d_a)
     
   END SUBROUTINE map_c_to_a_2D
   SUBROUTINE map_c_to_b_2D( mesh, d_c, d_b)
@@ -156,7 +156,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_map_c_b, d_c, d_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_c_b, d_c, d_b)
     
   END SUBROUTINE map_c_to_b_2D
   
@@ -178,7 +178,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_a_b, d_a, d_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_a_b, d_a, d_b)
     
   END SUBROUTINE map_a_to_b_3D
   SUBROUTINE map_a_to_c_3D( mesh, d_a, d_c)
@@ -198,7 +198,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_a_c, d_a, d_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_a_c, d_a, d_c)
     
   END SUBROUTINE map_a_to_c_3D
   SUBROUTINE map_b_to_a_3D( mesh, d_b, d_a)
@@ -218,7 +218,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_b_a, d_b, d_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_b_a, d_b, d_a)
     
   END SUBROUTINE map_b_to_a_3D
   SUBROUTINE map_b_to_c_3D( mesh, d_b, d_c)
@@ -238,7 +238,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_b_c, d_b, d_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_b_c, d_b, d_c)
     
   END SUBROUTINE map_b_to_c_3D
   SUBROUTINE map_c_to_a_3D( mesh, d_c, d_a)
@@ -258,7 +258,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_c_a, d_c, d_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_c_a, d_c, d_a)
     
   END SUBROUTINE map_c_to_a_3D
   SUBROUTINE map_c_to_b_3D( mesh, d_c, d_b)
@@ -278,7 +278,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_map_c_b, d_c, d_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_c_b, d_c, d_b)
     
   END SUBROUTINE map_c_to_b_3D
   
@@ -302,7 +302,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_a_a, d_a, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_a, d_a, ddx_a)
     
   END SUBROUTINE ddx_a_to_a_2D
   SUBROUTINE ddx_a_to_b_2D( mesh, d_a, ddx_b)
@@ -322,7 +322,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
     
   END SUBROUTINE ddx_a_to_b_2D
   SUBROUTINE ddx_a_to_c_2D( mesh, d_a, ddx_c)
@@ -342,7 +342,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_a_c, d_a, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_c, d_a, ddx_c)
     
   END SUBROUTINE ddx_a_to_c_2D
   SUBROUTINE ddx_b_to_a_2D( mesh, d_b, ddx_a)
@@ -362,7 +362,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_b_a, d_b, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_a, d_b, ddx_a)
     
   END SUBROUTINE ddx_b_to_a_2D
   SUBROUTINE ddx_b_to_b_2D( mesh, d_b, ddx_b)
@@ -382,7 +382,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_b_b, d_b, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_b, d_b, ddx_b)
     
   END SUBROUTINE ddx_b_to_b_2D
   SUBROUTINE ddx_b_to_c_2D( mesh, d_b, ddx_c)
@@ -402,7 +402,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_b_c, d_b, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_c, d_b, ddx_c)
     
   END SUBROUTINE ddx_b_to_c_2D
   SUBROUTINE ddx_c_to_a_2D( mesh, d_c, ddx_a)
@@ -422,7 +422,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_c_a, d_c, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_a, d_c, ddx_a)
     
   END SUBROUTINE ddx_c_to_a_2D
   SUBROUTINE ddx_c_to_b_2D( mesh, d_c, ddx_b)
@@ -442,7 +442,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_c_b, d_c, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_b, d_c, ddx_b)
     
   END SUBROUTINE ddx_c_to_b_2D
   SUBROUTINE ddx_c_to_c_2D( mesh, d_c, ddx_c)
@@ -462,7 +462,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_c_c, d_c, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_c, d_c, ddx_c)
     
   END SUBROUTINE ddx_c_to_c_2D
 
@@ -484,7 +484,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_a_a, d_a, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_a, d_a, ddx_a)
     
   END SUBROUTINE ddx_a_to_a_3D
   SUBROUTINE ddx_a_to_b_3D( mesh, d_a, ddx_b)
@@ -504,7 +504,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_b, d_a, ddx_b)
     
   END SUBROUTINE ddx_a_to_b_3D
   SUBROUTINE ddx_a_to_c_3D( mesh, d_a, ddx_c)
@@ -524,7 +524,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_a_c, d_a, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_c, d_a, ddx_c)
     
   END SUBROUTINE ddx_a_to_c_3D
   SUBROUTINE ddx_b_to_a_3D( mesh, d_b, ddx_a)
@@ -544,7 +544,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_b_a, d_b, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_a, d_b, ddx_a)
     
   END SUBROUTINE ddx_b_to_a_3D
   SUBROUTINE ddx_b_to_b_3D( mesh, d_b, ddx_b)
@@ -564,7 +564,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_b_b, d_b, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_b, d_b, ddx_b)
     
   END SUBROUTINE ddx_b_to_b_3D
   SUBROUTINE ddx_b_to_c_3D( mesh, d_b, ddx_c)
@@ -584,7 +584,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_b_c, d_b, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_c, d_b, ddx_c)
     
   END SUBROUTINE ddx_b_to_c_3D
   SUBROUTINE ddx_c_to_a_3D( mesh, d_c, ddx_a)
@@ -604,7 +604,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_c_a, d_c, ddx_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_a, d_c, ddx_a)
     
   END SUBROUTINE ddx_c_to_a_3D
   SUBROUTINE ddx_c_to_b_3D( mesh, d_c, ddx_b)
@@ -624,7 +624,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_c_b, d_c, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_b, d_c, ddx_b)
     
   END SUBROUTINE ddx_c_to_b_3D
   SUBROUTINE ddx_c_to_c_3D( mesh, d_c, ddx_c)
@@ -644,7 +644,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_c_c, d_c, ddx_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_c, d_c, ddx_c)
     
   END SUBROUTINE ddx_c_to_c_3D
   
@@ -668,7 +668,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_a_a, d_a, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_a, d_a, ddy_a)
     
   END SUBROUTINE ddy_a_to_a_2D
   SUBROUTINE ddy_a_to_b_2D( mesh, d_a, ddy_b)
@@ -688,7 +688,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_a_b, d_a, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_b, d_a, ddy_b)
     
   END SUBROUTINE ddy_a_to_b_2D
   SUBROUTINE ddy_a_to_c_2D( mesh, d_a, ddy_c)
@@ -708,7 +708,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_a_c, d_a, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_c, d_a, ddy_c)
     
   END SUBROUTINE ddy_a_to_c_2D
   SUBROUTINE ddy_b_to_a_2D( mesh, d_b, ddy_a)
@@ -728,7 +728,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_b_a, d_b, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, d_b, ddy_a)
     
   END SUBROUTINE ddy_b_to_a_2D
   SUBROUTINE ddy_b_to_b_2D( mesh, d_b, ddy_b)
@@ -748,7 +748,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_b_b, d_b, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_b, d_b, ddy_b)
     
   END SUBROUTINE ddy_b_to_b_2D
   SUBROUTINE ddy_b_to_c_2D( mesh, d_b, ddy_c)
@@ -768,7 +768,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_b_c, d_b, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_c, d_b, ddy_c)
     
   END SUBROUTINE ddy_b_to_c_2D
   SUBROUTINE ddy_c_to_a_2D( mesh, d_c, ddy_a)
@@ -788,7 +788,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_c_a, d_c, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_a, d_c, ddy_a)
     
   END SUBROUTINE ddy_c_to_a_2D
   SUBROUTINE ddy_c_to_b_2D( mesh, d_c, ddy_b)
@@ -808,7 +808,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_c_b, d_c, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_b, d_c, ddy_b)
     
   END SUBROUTINE ddy_c_to_b_2D
   SUBROUTINE ddy_c_to_c_2D( mesh, d_c, ddy_c)
@@ -828,7 +828,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_c_c, d_c, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_c, d_c, ddy_c)
     
   END SUBROUTINE ddy_c_to_c_2D
 
@@ -850,7 +850,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_a_a, d_a, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_a, d_a, ddy_a)
     
   END SUBROUTINE ddy_a_to_a_3D
   SUBROUTINE ddy_a_to_b_3D( mesh, d_a, ddy_b)
@@ -870,7 +870,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_a_b, d_a, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_b, d_a, ddy_b)
     
   END SUBROUTINE ddy_a_to_b_3D
   SUBROUTINE ddy_a_to_c_3D( mesh, d_a, ddy_c)
@@ -890,7 +890,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_a_c, d_a, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_c, d_a, ddy_c)
     
   END SUBROUTINE ddy_a_to_c_3D
   SUBROUTINE ddy_b_to_a_3D( mesh, d_b, ddy_a)
@@ -910,7 +910,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_b_a, d_b, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_a, d_b, ddy_a)
     
   END SUBROUTINE ddy_b_to_a_3D
   SUBROUTINE ddy_b_to_b_3D( mesh, d_b, ddy_b)
@@ -930,7 +930,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_b_b, d_b, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_b, d_b, ddy_b)
     
   END SUBROUTINE ddy_b_to_b_3D
   SUBROUTINE ddy_b_to_c_3D( mesh, d_b, ddy_c)
@@ -950,7 +950,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_b_c, d_b, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_c, d_b, ddy_c)
     
   END SUBROUTINE ddy_b_to_c_3D
   SUBROUTINE ddy_c_to_a_3D( mesh, d_c, ddy_a)
@@ -970,7 +970,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_c_a, d_c, ddy_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_a, d_c, ddy_a)
     
   END SUBROUTINE ddy_c_to_a_3D
   SUBROUTINE ddy_c_to_b_3D( mesh, d_c, ddy_b)
@@ -990,7 +990,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_c_b, d_c, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_b, d_c, ddy_b)
     
   END SUBROUTINE ddy_c_to_b_3D
   SUBROUTINE ddy_c_to_c_3D( mesh, d_c, ddy_c)
@@ -1010,7 +1010,7 @@ CONTAINS
     END IF
     
     ! Perform the operation as a matrix multiplication
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_c_c, d_c, ddy_c)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_c, d_c, ddy_c)
     
   END SUBROUTINE ddy_c_to_c_3D
   
@@ -1040,10 +1040,10 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri, ddx_b, wddx_b)
     
     ! ddx_b = M_ddx_a_b * d_a
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
     
     ! d2dx2_a = M_ddx_b_a * ddx_b
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_b_a, ddx_b, d2dx2_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_a, ddx_b, d2dx2_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
@@ -1073,10 +1073,10 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri, ddx_b, wddx_b)
     
     ! ddx_b = M_ddx_a_b * d_a
-    CALL multiply_matrix_vector_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
     
     ! d2dxdy_a = M_ddy_b_a * ddx_b
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_b_a, ddx_b, d2dxdy_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, ddx_b, d2dxdy_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
@@ -1106,10 +1106,10 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri, ddy_b, wddy_b)
     
     ! ddy_b = M_ddy_a_b * d_a
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_a_b, d_a, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_b, d_a, ddy_b)
     
     ! d2dy2_a = M_ddy_b_a * ddy_b
-    CALL multiply_matrix_vector_CSR( mesh%M_ddy_b_a, ddy_b, d2dy2_a)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, ddy_b, d2dy2_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddy_b)
@@ -1140,10 +1140,10 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nTri, SIZE( d_a,2), ddx_b, wddx_b)
     
     ! ddx_b = M_ddx_a_b * d_a
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_b, d_a, ddx_b)
     
     ! d2dx2_a = M_ddx_b_a * ddx_b
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_b_a, ddx_b, d2dx2_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_a, ddx_b, d2dx2_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
@@ -1173,10 +1173,10 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nTri, SIZE( d_a,2), ddx_b, wddx_b)
     
     ! ddx_b = M_ddx_a_b * d_a
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddx_a_b, d_a, ddx_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_b, d_a, ddx_b)
     
     ! d2dxdy_a = M_ddy_b_a * ddx_b
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_b_a, ddx_b, d2dxdy_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_a, ddx_b, d2dxdy_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
@@ -1206,15 +1206,44 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nTri, SIZE( d_a,2), ddy_b, wddy_b)
     
     ! ddy_b = M_ddy_a_b * d_a
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_a_b, d_a, ddy_b)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_b, d_a, ddy_b)
     
     ! d2dy2_a = M_ddy_b_a * ddy_b
-    CALL multiply_matrix_vector_2D_CSR( mesh%M_ddy_b_a, ddy_b, d2dy2_a)
+    CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_a, ddy_b, d2dy2_a)
     
     ! Clean up after yourself
     CALL deallocate_shared( wddy_b)
     
   END SUBROUTINE d2dy2_a_to_a_3D
+  
+! ==  Combined buv-grid
+  SUBROUTINE map_b_to_buv_2D( mesh, d_b, d_buv)
+    ! Map a data field defined on the b-grid (triangles) to the vector b-grid
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_buv
+    
+    ! Local variables:
+    INTEGER                                            :: ti, tiu, tiv
+    
+    ! Safety
+    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_buv,1) /= 2*mesh%nTri) THEN
+      IF (par%master) WRITE(0,*) 'map_b_to_buv_2D - ERROR: data fields are the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    DO ti = mesh%ti1, mesh%ti2
+      tiu = 2*ti - 1
+      tiv = 2*ti
+      d_buv( tiu:tiv) = d_b( ti)
+    END DO
+    CALL sync
+    
+  END SUBROUTINE map_b_to_buv_2D
   
 ! == Calculate the matrix operators for mapping and gradients
 
@@ -1242,10 +1271,23 @@ CONTAINS
     CALL calc_matrix_operators_c_c( mesh,                  mesh%M_ddx_c_c,  mesh%M_ddy_c_c)
     
     ! Calculate 2nd-order accurate matrix operators on the b-grid
-    CALL calc_matrix_operators_2nd_order_b_b( mesh)
+    CALL calc_matrix_operators_2nd_order_b_b( mesh, &
+      mesh%M2_ddx_b_b, &
+      mesh%M2_ddy_b_b, &
+      mesh%M2_d2dx2_b_b, &
+      mesh%M2_d2dxdy_b_b, &
+      mesh%M2_d2dy2_b_b)
     
     ! Calculate matrix operator for applying Neumann boundary conditions on border triangles
-    CALL calc_matrix_operator_Neumann_BC_b_b( mesh)
+    CALL calc_matrix_operator_Neumann_BC_b( mesh)
+    
+    ! Set up the matrix operators in CSR-format (since I can't get the velocity solver working yet using only PETSc functionality)
+    CALL mat_petsc2CSR( mesh%M2_ddx_b_b    , mesh%M2_ddx_b_b_CSR    )
+    CALL mat_petsc2CSR( mesh%M2_ddy_b_b    , mesh%M2_ddy_b_b_CSR    )
+    CALL mat_petsc2CSR( mesh%M2_d2dx2_b_b  , mesh%M2_d2dx2_b_b_CSR  )
+    CALL mat_petsc2CSR( mesh%M2_d2dxdy_b_b , mesh%M2_d2dxdy_b_b_CSR )
+    CALL mat_petsc2CSR( mesh%M2_d2dy2_b_b  , mesh%M2_d2dy2_b_b_CSR  )
+    CALL mat_petsc2CSR( mesh%M_Neumann_BC_b, mesh%M_Neumann_BC_b_CSR)
     
   END SUBROUTINE calc_matrix_operators_mesh
   
@@ -1257,33 +1299,53 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: vi, n, ci, vj, i
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
-
+    
+    ! Matrix size
     ncols           = mesh%nV      ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem+1
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
+    
+    ! Shape functions for a single node
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
     ALLOCATE( y_c(  nnz_per_row_max))
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the neighbouring vertices
       n = 0
@@ -1306,31 +1368,26 @@ CONTAINS
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
-      CALL add_entry_CSR_dist( M_ddx, vi, vi, Nfxi)
-      CALL add_entry_CSR_dist( M_ddy, vi, vi, Nfyi)
+      CALL MatSetValues( M_ddx, 1, vi-1, 1, vi-1, Nfxi, INSERT_VALUES, perr)
+      CALL MatSetValues( M_ddy, 1, vi-1, 1, vi-1, Nfyi, INSERT_VALUES, perr)
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_ddx, 1, vi-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, vi-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_a', mesh%vi1, mesh%vi2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_a', mesh%vi1, mesh%vi2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_a')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_a')
-    END IF
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1348,10 +1405,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, vii, vi, i
@@ -1361,9 +1418,36 @@ CONTAINS
     ncols           = mesh%nV      ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 3
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
     
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
+    
+    ! Shape functions for a single node
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
     ALLOCATE( y_c(  nnz_per_row_max))
@@ -1371,11 +1455,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the neighbouring vertices
       n = 0
@@ -1399,32 +1479,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, ti, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, ti-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, ti-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, ti-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_a_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_b', mesh%ti1, mesh%ti2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_a_b')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_b')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_b')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1443,10 +1517,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: aci, n, acii, vi, i
@@ -1456,8 +1530,34 @@ CONTAINS
     ncols           = mesh%nV      ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 4
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1466,11 +1566,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO aci = mesh%ci1, mesh%ci2
+    DO aci = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the three/four regular vertices surrounding the staggered vertex
       n = 0
@@ -1495,32 +1591,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, aci, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, aci-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, aci-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, aci-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_a_c', mesh%ci1, mesh%ci2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_a_c', mesh%ci1, mesh%ci2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_a_c', mesh%ci1, mesh%ci2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_a_c')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_a_c')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_a_c')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1539,10 +1629,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: vi, n, iti, ti, i
@@ -1552,8 +1642,34 @@ CONTAINS
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1562,11 +1678,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the geometric centres of the triangles surrounding the regular vertex
       n = 0
@@ -1590,32 +1702,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, vi, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, vi-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, vi-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, vi-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_b_a', mesh%vi1, mesh%vi2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_a', mesh%vi1, mesh%vi2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_a', mesh%vi1, mesh%vi2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_b_a')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_a')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_a')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1634,10 +1740,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, tii, tj, i
@@ -1648,8 +1754,29 @@ CONTAINS
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 4
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1657,11 +1784,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the up to three adjacent triangles's geometric centres
       n = 0
@@ -1685,31 +1808,26 @@ CONTAINS
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
-      CALL add_entry_CSR_dist( M_ddx, ti, ti, Nfxi)
-      CALL add_entry_CSR_dist( M_ddy, ti, ti, Nfyi)
+      CALL MatSetValues( M_ddx, 1, ti-1, 1, ti-1, Nfxi, INSERT_VALUES, perr)
+      CALL MatSetValues( M_ddy, 1, ti-1, 1, ti-1, Nfyi, INSERT_VALUES, perr)
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_ddx, 1, ti-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, ti-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_b', mesh%ti1, mesh%ti2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_b')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_b')
-    END IF
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1727,10 +1845,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: aci, n, acii, vi, iti, ti, n_match, vii, aciii, i
@@ -1741,8 +1859,34 @@ CONTAINS
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 6
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1751,11 +1895,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO aci = mesh%ci1, mesh%ci2
+    DO aci = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the two triangles adjacent to the edge, and the (up to) four other triangles adjoining them
       n = 0
@@ -1806,32 +1946,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, aci, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, aci-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, aci-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, aci-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_b_c', mesh%ci1, mesh%ci2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_b_c', mesh%ci1, mesh%ci2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_b_c', mesh%ci1, mesh%ci2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%ci1, mesh%ci2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_b_c')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_b_c')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_b_c')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1850,10 +1984,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: vi, n, ci, aci, i
@@ -1863,8 +1997,34 @@ CONTAINS
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nV      ! to
     nnz_per_row_max = mesh%nC_mem
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1873,11 +2033,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the staggered vertices surrounding the regular vertex
       n = 0
@@ -1901,32 +2057,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, vi, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, vi, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, vi, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, vi-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, vi-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, vi-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_c_a', mesh%vi1, mesh%vi2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_a', mesh%vi1, mesh%vi2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_a', mesh%vi1, mesh%vi2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%vi1, mesh%vi2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_c_a')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_a')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_a')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -1945,10 +2095,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_map, M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, via, vib, vic, ci, vj, acab, acbc, acca, i
@@ -1958,8 +2108,34 @@ CONTAINS
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 3
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_map, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_map, 'mpiaij', perr)
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_map, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_map, perr)
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_map, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -1968,11 +2144,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_map, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: the three staggered vertices on the triangle
       n = 0
@@ -2036,32 +2208,26 @@ CONTAINS
       
       ! Fill into sparse matrices
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_map, ti, i_c( i), Nfc(  i))
-        CALL add_entry_CSR_dist( M_ddx, ti, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, ti, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_map, 1, ti-1, 1, i_c( i)-1, Nfc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, ti-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, ti-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_map, 'mesh%M_map_c_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_b', mesh%ti1, mesh%ti2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_map, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ti1, mesh%ti2)
+    CALL MatAssemblyBegin( M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_map, 'mesh%M_map_c_b')
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_b')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_b')
-    END IF
+    CALL MatAssemblyEnd(   M_map, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -2080,10 +2246,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: aci, n, acii, vi, ci, vc, acj, i
@@ -2094,8 +2260,29 @@ CONTAINS
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nAc     ! to
     nnz_per_row_max = 5
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(  nnz_per_row_max))
     ALLOCATE( x_c(  nnz_per_row_max))
@@ -2103,10 +2290,7 @@ CONTAINS
     ALLOCATE( Nfxc( nnz_per_row_max))
     ALLOCATE( Nfyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
-
-    DO aci = mesh%ci1, mesh%ci2
+    DO aci = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: all the staggered vertices lying on the edges of the
       ! two triangles adjoining the staggered vertex
@@ -2136,31 +2320,26 @@ CONTAINS
       CALL calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
       
       ! Fill into sparse matrices
-      CALL add_entry_CSR_dist( M_ddx, aci, aci, Nfxi)
-      CALL add_entry_CSR_dist( M_ddy, aci, aci, Nfyi)
+      CALL MatSetValues( M_ddx, 1, aci-1, 1, aci-1, Nfxi, INSERT_VALUES, perr)
+      CALL MatSetValues( M_ddy, 1, aci-1, 1, aci-1, Nfyi, INSERT_VALUES, perr)
       DO i = 1, n
-        CALL add_entry_CSR_dist( M_ddx, aci, i_c( i), Nfxc( i))
-        CALL add_entry_CSR_dist( M_ddy, aci, i_c( i), Nfyc( i))
+        CALL MatSetValues( M_ddx, 1, aci-1, 1, i_c( i)-1, Nfxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, aci-1, 1, i_c( i)-1, Nfyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_ddx, 'mesh%M_ddx_c_c', mesh%ci1, mesh%ci2)
-      CALL check_CSR_dist( M_ddy, 'mesh%M_ddy_c_c', mesh%ci1, mesh%ci2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_ddx, mesh%ci1, mesh%ci2)
-    CALL finalise_matrix_CSR_dist( M_ddy, mesh%ci1, mesh%ci2)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_ddx, 'mesh%M_ddx_c_c')
-      CALL check_CSR( M_ddy, 'mesh%M_ddy_c_c')
-    END IF
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
     ! Clean up after yourself
     DEALLOCATE( i_c )
@@ -2171,17 +2350,18 @@ CONTAINS
     
   END SUBROUTINE calc_matrix_operators_c_c
   
-  SUBROUTINE calc_matrix_operators_2nd_order_b_b( mesh)
+  SUBROUTINE calc_matrix_operators_2nd_order_b_b( mesh, M_ddx, M_ddy, M_d2dx2, M_d2dxdy, M_d2dy2)
     ! Calculate the matrix operators representing the d/dx, d/dy, d2/dx2,
     ! d2/dxdy, and d2/dy2 operations from the b (triangle) to the b (triangle) grid
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy, M_d2dx2, M_d2dxdy, M_d2dy2
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, n1, n_cur, tj, tk, i, ii
@@ -2193,8 +2373,44 @@ CONTAINS
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 10
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
+    
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx   , perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy   , perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_d2dx2 , perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_d2dxdy, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_d2dy2 , perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_ddx   , 'mpiaij', perr)
+    CALL MatSetType( M_ddy   , 'mpiaij', perr)
+    CALL MatSetType( M_d2dx2 , 'mpiaij', perr)
+    CALL MatSetType( M_d2dxdy, 'mpiaij', perr)
+    CALL MatSetType( M_d2dy2 , 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_ddx   , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy   , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_d2dx2 , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_d2dxdy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_d2dy2 , PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_ddx   , perr)
+    CALL MatSetFromOptions( M_ddy   , perr)
+    CALL MatSetFromOptions( M_d2dx2 , perr)
+    CALL MatSetFromOptions( M_d2dxdy, perr)
+    CALL MatSetFromOptions( M_d2dy2 , perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_ddx   , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy   , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_d2dx2 , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_d2dxdy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_d2dy2 , nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
     
     ALLOCATE( i_c(   nnz_per_row_max))
     ALLOCATE( x_c(   nnz_per_row_max))
@@ -2205,13 +2421,7 @@ CONTAINS
     ALLOCATE( Nfxyc( nnz_per_row_max))
     ALLOCATE( Nfyyc( nnz_per_row_max))
 
-    CALL allocate_matrix_CSR_dist( mesh%M2_ddx_b_b   , nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( mesh%M2_ddy_b_b   , nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dx2_b_b , nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dxdy_b_b, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( mesh%M2_d2dy2_b_b , nrows, ncols, nnz_max_proc)
-
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
       
       ! Source points: 2-star neighbourhood of triangles
       n = 0
@@ -2257,46 +2467,39 @@ CONTAINS
       CALL calc_neighbour_functions_ls_reg_2nd_order( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxxi, Nfxyi, Nfyyi, Nfxc, Nfyc, Nfxxc, Nfxyc, Nfyyc)
       
       ! Fill into sparse matrices
-      CALL add_entry_CSR_dist( mesh%M2_ddx_b_b   , ti, ti, Nfxi )
-      CALL add_entry_CSR_dist( mesh%M2_ddy_b_b   , ti, ti, Nfyi )
-      CALL add_entry_CSR_dist( mesh%M2_d2dx2_b_b , ti, ti, Nfxxi)
-      CALL add_entry_CSR_dist( mesh%M2_d2dxdy_b_b, ti, ti, Nfxyi)
-      CALL add_entry_CSR_dist( mesh%M2_d2dy2_b_b , ti, ti, Nfyyi)
+      CALL MatSetValues( M_ddx   , 1, ti-1, 1, ti-1, Nfxi , INSERT_VALUES, perr)
+      CALL MatSetValues( M_ddy   , 1, ti-1, 1, ti-1, Nfyi , INSERT_VALUES, perr)
+      CALL MatSetValues( M_d2dx2 , 1, ti-1, 1, ti-1, Nfxxi, INSERT_VALUES, perr)
+      CALL MatSetValues( M_d2dxdy, 1, ti-1, 1, ti-1, Nfxyi, INSERT_VALUES, perr)
+      CALL MatSetValues( M_d2dy2 , 1, ti-1, 1, ti-1, Nfyyi, INSERT_VALUES, perr)
       DO i = 1, n
-        CALL add_entry_CSR_dist( mesh%M2_ddx_b_b   , ti, i_c( i), Nfxc(  i))
-        CALL add_entry_CSR_dist( mesh%M2_ddy_b_b   , ti, i_c( i), Nfyc(  i))
-        CALL add_entry_CSR_dist( mesh%M2_d2dx2_b_b , ti, i_c( i), Nfxxc( i))
-        CALL add_entry_CSR_dist( mesh%M2_d2dxdy_b_b, ti, i_c( i), Nfxyc( i))
-        CALL add_entry_CSR_dist( mesh%M2_d2dy2_b_b , ti, i_c( i), Nfyyc( i))
+        CALL MatSetValues( M_ddx   , 1, ti-1, 1, i_c( i)-1, Nfxc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy   , 1, ti-1, 1, i_c( i)-1, Nfyc(  i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_d2dx2 , 1, ti-1, 1, i_c( i)-1, Nfxxc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_d2dxdy, 1, ti-1, 1, i_c( i)-1, Nfxyc( i), INSERT_VALUES, perr)
+        CALL MatSetValues( M_d2dy2 , 1, ti-1, 1, i_c( i)-1, Nfyyc( i), INSERT_VALUES, perr)
       END DO
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( mesh%M2_ddx_b_b   , 'mesh%M2_ddx_b_b'   , mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( mesh%M2_ddy_b_b   , 'mesh%M2_ddy_b_b'   , mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( mesh%M2_d2dx2_b_b , 'mesh%M2_d2dx2_b_b' , mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( mesh%M2_d2dxdy_b_b, 'mesh%M2_d2dxdy_b_b', mesh%ti1, mesh%ti2)
-      CALL check_CSR_dist( mesh%M2_d2dy2_b_b , 'mesh%M2_d2dy2_b_b' , mesh%ti1, mesh%ti2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( mesh%M2_ddx_b_b   , mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( mesh%M2_ddy_b_b   , mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( mesh%M2_d2dx2_b_b , mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( mesh%M2_d2dxdy_b_b, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( mesh%M2_d2dy2_b_b , mesh%ti1, mesh%ti2)
+    CALL MatAssemblyBegin( M_ddx   , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy   , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_d2dx2 , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_d2dxdy, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_d2dy2 , MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( mesh%M2_ddx_b_b   , 'mesh%M2_ddx_b_b'   )
-      CALL check_CSR( mesh%M2_ddy_b_b   , 'mesh%M2_ddy_b_b'   )
-      CALL check_CSR( mesh%M2_d2dx2_b_b , 'mesh%M2_d2dx2_b_b' )
-      CALL check_CSR( mesh%M2_d2dxdy_b_b, 'mesh%M2_d2dxdy_b_b')
-      CALL check_CSR( mesh%M2_d2dy2_b_b , 'mesh%M2_d2dy2_b_b' )
-    END IF
+    CALL MatAssemblyEnd(   M_ddx   , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy   , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_d2dx2 , MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_d2dxdy, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_d2dy2 , MAT_FINAL_ASSEMBLY, perr)
+    CALL sync
     
     ! Clean up after yourself
     DEALLOCATE( i_c  )
@@ -2309,31 +2512,41 @@ CONTAINS
     DEALLOCATE( Nfyyc)
     
   END SUBROUTINE calc_matrix_operators_2nd_order_b_b
-  
-  SUBROUTINE calc_matrix_operator_Neumann_BC_b_b( mesh)
+  SUBROUTINE calc_matrix_operator_Neumann_BC_b( mesh)
     ! Calculate matrix operator for applying Neumann boundary conditions on border triangles
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: ti, n, tti, tj
-
-  ! Then fill in the stiffness matrix coefficients
-  ! ==============================================
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
     nnz_per_row_max = 4
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
-
-    CALL allocate_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, nrows, ncols, nnz_max_proc)
     
-    DO ti = mesh%ti1, mesh%ti2
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, mesh%M_Neumann_BC_b, perr)
+    
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( mesh%M_Neumann_BC_b, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( mesh%M_Neumann_BC_b, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( mesh%M_Neumann_BC_b, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( mesh%M_Neumann_BC_b, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( mesh%M_Neumann_BC_b, istart, iend, perr)
+    
+    DO ti = istart+1, iend ! +1 because PETSc indexes from 0
       
       IF (mesh%Tri_edge_index( ti) > 0) THEN
         ! This triangle touchers the domain border; apply Neumann boundary conditions
@@ -2350,13 +2563,13 @@ CONTAINS
         END DO
         
         ! The triangle itself
-        CALL add_entry_CSR_dist( mesh%M_Neumann_BC_b_b, ti, ti, -1._dp)
+        CALL MatSetValues( mesh%M_Neumann_BC_b, 1, ti-1, 1, ti-1, -1._dp, INSERT_VALUES, perr)
         
         ! Neighbouring triangles
         DO tti = 1, 3
           tj = mesh%TriC( ti,tti)
           IF (tj == 0) CYCLE
-          CALL add_entry_CSR_dist( mesh%M_Neumann_BC_b_b, ti, tj, 1._dp / REAL( n,dp))
+          CALL MatSetValues( mesh%M_Neumann_BC_b, 1, ti-1, 1, tj-1, 1._dp / REAL( n,dp), INSERT_VALUES, perr)
         END DO
         
       END IF ! IF (is_border_triangle) THEN
@@ -2364,20 +2577,15 @@ CONTAINS
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( mesh%M_Neumann_BC_b_b, 'mesh%M_Neumann_BC_b_b', mesh%ti1, mesh%ti2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( mesh%M_Neumann_BC_b_b, mesh%ti1, mesh%ti2)
+    CALL MatAssemblyBegin( mesh%M_Neumann_BC_b, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   mesh%M_Neumann_BC_b, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( mesh%M_Neumann_BC_b_b, 'mesh%M_Neumann_BC_b_b')
-    END IF
-    
-  END SUBROUTINE calc_matrix_operator_Neumann_BC_b_b
+  END SUBROUTINE calc_matrix_operator_Neumann_BC_b
   
   SUBROUTINE calc_matrix_operators_grid( grid, M_ddx, M_ddy)
     ! Calculate matrix operators for partial derivatives on a regular grid (needed for conservative remapping)
@@ -2386,25 +2594,41 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: M_ddx, M_ddy
+    TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, nnz_max_proc
-    INTEGER                                            :: n1, n2, n, i, j, n_ip1, n_im1, n_jp1, n_jm1
+    INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
+    INTEGER                                            :: n, i, j, n_ip1, n_im1, n_jp1, n_jm1
     REAL(dp)                                           :: v1, v2
 
     ncols           = grid%n      ! from
     nrows           = grid%n      ! to
-    nnz_per_row_max = 3
-    nnz_max         = nrows * nnz_per_row_max
-    nnz_max_proc    = CEILING( REAL( nnz_max,dp) / REAL( par%n,dp))
-
-    CALL allocate_matrix_CSR_dist( M_ddx, nrows, ncols, nnz_max_proc)
-    CALL allocate_matrix_CSR_dist( M_ddy, nrows, ncols, nnz_max_proc)
+    nnz_per_row_max = 2
     
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+    ! Initialise the matrix objects
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddx, perr)
+    CALL MatCreate( PETSC_COMM_WORLD, M_ddy, perr)
     
-    DO n = n1, n2
+    ! Set the matrix type to parallel (MPI) Aij
+    CALL MatSetType( M_ddx, 'mpiaij', perr)
+    CALL MatSetType( M_ddy, 'mpiaij', perr)
+    
+    ! Set the size, let PETSc automatically determine parallelisation domains
+    CALL MatSetSizes( M_ddx, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    CALL MatSetSizes( M_ddy, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
+    
+    ! Not entirely sure what this one does, but apparently it's really important
+    CALL MatSetFromOptions( M_ddx, perr)
+    CALL MatSetFromOptions( M_ddy, perr)
+    
+    ! Tell PETSc how much memory needs to be allocated
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)
+    
+    DO n = istart+1, iend ! +1 because PETSc indexes from 0
       
       i = grid%n2ij( n,1)
       j = grid%n2ij( n,2)
@@ -2414,64 +2638,58 @@ CONTAINS
         n_ip1 = grid%ij2n( i+1,j)
         v1 = -1._dp / grid%dx
         v2 =  1._dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddx, n, n    , v1)
-        CALL add_entry_CSR_dist( M_ddx, n, n_ip1, v2)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n_ip1-1, v2, INSERT_VALUES, perr)
       ELSEIF (i == grid%nx) THEN
         n_im1 = grid%ij2n( i-1,j)
         v1 =  1._dp / grid%dx
         v2 = -1._dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddx, n, n    , v1)
-        CALL add_entry_CSR_dist( M_ddx, n, n_im1, v2)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n_im1-1, v2, INSERT_VALUES, perr)
       ELSE
         n_im1 = grid%ij2n( i-1,j)
         n_ip1 = grid%ij2n( i+1,j)
         v1 = -0.5_dp / grid%dx
         v2 =  0.5_dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddx, n, n_im1, v1)
-        CALL add_entry_CSR_dist( M_ddx, n, n_ip1, v2)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n_im1-1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n-1, 1, n_ip1-1, v2, INSERT_VALUES, perr)
       END IF
-      j = grid%n2ij( n,2)
       
       ! d/dy
       IF     (j == 1) THEN
         n_jp1 = grid%ij2n( i,j+1)
         v1 = -1._dp / grid%dx
         v2 =  1._dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddy, n, n    , v1)
-        CALL add_entry_CSR_dist( M_ddy, n, n_jp1, v2)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jp1-1, v2, INSERT_VALUES, perr)
       ELSEIF (j == grid%ny) THEN
         n_jm1 = grid%ij2n( i,j-1)
         v1 =  1._dp / grid%dx
         v2 = -1._dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddy, n, n    , v1)
-        CALL add_entry_CSR_dist( M_ddy, n, n_jm1, v2)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jm1-1, v2, INSERT_VALUES, perr)
       ELSE
         n_jm1 = grid%ij2n( i,j-1)
         n_jp1 = grid%ij2n( i,j+1)
         v1 = -0.5_dp / grid%dx
         v2 =  0.5_dp / grid%dx
-        CALL add_entry_CSR_dist( M_ddy, n, n_jm1, v1)
-        CALL add_entry_CSR_dist( M_ddy, n, n_jp1, v2)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jm1-1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jp1-1, v2, INSERT_VALUES, perr)
       END IF
       
     END DO ! DO n = n1, n2
     CALL sync
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR_dist( M_ddx, 'M_grid_ddx', n1, n2)
-      CALL check_CSR_dist( M_ddy, 'M_grid_ddy', n1, n2)
-    END IF
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
     
-    ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( M_ddx, n1, n2)
-    CALL finalise_matrix_CSR_dist( M_ddy, n1, n2)
+    CALL MatAssemblyBegin( M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyBegin( M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
-    ! Safety
-    IF (do_check_matrices) THEN
-      CALL check_CSR( M_ddx, 'M_grid_ddx')
-      CALL check_CSR( M_ddy, 'M_grid_ddy')
-    END IF
+    CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
     
   END SUBROUTINE calc_matrix_operators_grid
   

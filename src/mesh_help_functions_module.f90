@@ -3,9 +3,11 @@ MODULE mesh_help_functions_module
   ! General help functions used in mesh creation and updating.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -456,6 +458,24 @@ MODULE mesh_help_functions_module
       ! This corner vertex has more than one triangle, can be handled by Edge version  
           
       CALL find_Voronoi_cell_vertices_edge(mesh, vi, Vor, nVor)
+      
+      IF     (mesh%edge_index( vi) == 2) THEN
+        ! Northeast corner
+        nVor = nVor + 1
+        Vor( nVor,:) = [mesh%xmax, mesh%ymax]
+      ELSEIF (mesh%edge_index( vi) == 4) THEN
+        ! Southeast corner
+        nVor = nVor + 1
+        Vor( nVor,:) = [mesh%xmax, mesh%ymin]
+      ELSEIF (mesh%edge_index( vi) == 6) THEN
+        ! Southwest corner
+        nVor = nVor + 1
+        Vor( nVor,:) = [mesh%xmin, mesh%ymin]
+      ELSEIF (mesh%edge_index( vi) == 8) THEN
+        ! Northwest corner
+        nVor = nVor + 1
+        Vor( nVor,:) = [mesh%xmin, mesh%ymax]
+      END IF
       
     ELSE
       ! This corner vertex has only a single triangle, best handled manually

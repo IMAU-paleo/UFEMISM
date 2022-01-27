@@ -2,9 +2,11 @@ MODULE mesh_memory_module
   ! Routines for allocating, deallocating, extending and cropping the memory for the mesh data.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -288,24 +290,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wres_max_coast)
     CALL deallocate_shared( mesh%wres_min)
     CALL deallocate_shared( mesh%wresolution_min)
-    CALL deallocate_shared( mesh%wresolution_max) 
-    
-    NULLIFY( mesh%lambda_M)
-    NULLIFY( mesh%phi_M)
-    NULLIFY( mesh%alpha_stereo)
-    NULLIFY( mesh%xmin)
-    NULLIFY( mesh%xmax)
-    NULLIFY( mesh%ymin)
-    NULLIFY( mesh%ymax)
-    NULLIFY( mesh%nC_mem)
-    NULLIFY( mesh%nV_mem)
-    NULLIFY( mesh%nTri_mem)
-    NULLIFY( mesh%nV)
-    NULLIFY( mesh%nTri)
-    NULLIFY( mesh%alpha_min)
-    NULLIFY( mesh%dz_max_ice)
-    NULLIFY( mesh%resolution_min)
-    NULLIFY( mesh%resolution_max)
+    CALL deallocate_shared( mesh%wresolution_max)
     
     CALL deallocate_shared( mesh%wV)
     CALL deallocate_shared( mesh%wA)
@@ -319,18 +304,6 @@ CONTAINS
     CALL deallocate_shared( mesh%wedge_index)
     CALL deallocate_shared( mesh%wmesh_old_ti_in)
     
-    NULLIFY( mesh%V)
-    NULLIFY( mesh%A)
-    NULLIFY( mesh%VorGC)
-    NULLIFY( mesh%R)
-    NULLIFY( mesh%nC)
-    NULLIFY( mesh%C)
-    NULLIFY( mesh%Cw)
-    NULLIFY( mesh%niTri)
-    NULLIFY( mesh%iTri)
-    NULLIFY( mesh%edge_index)
-    NULLIFY( mesh%mesh_old_ti_in)
-    
     CALL deallocate_shared( mesh%wTri)
     CALL deallocate_shared( mesh%wTricc)
     CALL deallocate_shared( mesh%wTriGC)
@@ -338,20 +311,9 @@ CONTAINS
     CALL deallocate_shared( mesh%wTri_edge_index)
     CALL deallocate_shared( mesh%wTriA)
     
-    NULLIFY( mesh%Tri)
-    NULLIFY( mesh%Tricc)
-    NULLIFY( mesh%TriGC)
-    NULLIFY( mesh%TriC)
-    NULLIFY( mesh%Tri_edge_index)
-    NULLIFY( mesh%TriA)
-    
     CALL deallocate_shared( mesh%wTriflip)
     CALL deallocate_shared( mesh%wRefMap)
     CALL deallocate_shared( mesh%wRefStack)
-    
-    NULLIFY( mesh%Triflip)
-    NULLIFY( mesh%RefMap)
-    NULLIFY( mesh%RefStack)
     
     CALL deallocate_shared( mesh%wVMap)
     CALL deallocate_shared( mesh%wVStack1)
@@ -360,30 +322,14 @@ CONTAINS
     CALL deallocate_shared( mesh%wTriStack1)
     CALL deallocate_shared( mesh%wTriStack2)
     
-    NULLIFY( mesh%VMap)
-    NULLIFY( mesh%VStack1)
-    NULLIFY( mesh%VStack2)
-    NULLIFY( mesh%TriMap)
-    NULLIFY( mesh%TriStack1)
-    NULLIFY( mesh%TriStack2)
-    
     CALL deallocate_shared( mesh%wlat)
     CALL deallocate_shared( mesh%wlon)
-    
-    NULLIFY( mesh%lat)
-    NULLIFY( mesh%lon)
     
     CALL deallocate_shared( mesh%wnAc)
     CALL deallocate_shared( mesh%wVAc)
     CALL deallocate_shared( mesh%wAci)
     CALL deallocate_shared( mesh%wiAci)
     CALL deallocate_shared( mesh%wedge_index_Ac)
-    
-    NULLIFY( mesh%nAc)
-    NULLIFY( mesh%VAc)
-    NULLIFY( mesh%Aci)
-    NULLIFY( mesh%iAci)
-    NULLIFY( mesh%edge_index_Ac)
     
     CALL deallocate_shared( mesh%wnPOI               )        
     CALL deallocate_shared( mesh%wPOI_coordinates    )
@@ -392,65 +338,53 @@ CONTAINS
     CALL deallocate_shared( mesh%wPOI_vi             )
     CALL deallocate_shared( mesh%wPOI_w              )
     
-    NULLIFY( mesh%nPOI)
-    NULLIFY( mesh%POI_coordinates)
-    NULLIFY( mesh%POI_XY_coordinates)
-    NULLIFY( mesh%POI_resolutions)
-    NULLIFY( mesh%POI_vi)
-    NULLIFY( mesh%POI_w)
-    
     CALL deallocate_shared( mesh%wnV_transect)
     CALL deallocate_shared( mesh%wvi_transect)
     CALL deallocate_shared( mesh%ww_transect )
     
-    NULLIFY( mesh%nV_transect)
-    NULLIFY( mesh%vi_transect)
-    NULLIFY( mesh%w_transect )
-    
-!    CALL deallocate_shared( mesh%wcolour   )
-!    CALL deallocate_shared( mesh%wcolour_vi)
-!    CALL deallocate_shared( mesh%wcolour_nV)
-!    
-!    NULLIFY( mesh%colour   )
-!    NULLIFY( mesh%colour_vi)
-!    NULLIFY( mesh%colour_nV)
-    
     ! Matrix operators
+    CALL MatDestroy( mesh%M_map_a_b             , perr)
+    CALL MatDestroy( mesh%M_map_a_c             , perr)
+    CALL MatDestroy( mesh%M_map_b_a             , perr)
+    CALL MatDestroy( mesh%M_map_b_c             , perr)
+    CALL MatDestroy( mesh%M_map_c_a             , perr)
+    CALL MatDestroy( mesh%M_map_c_b             , perr)
     
-    CALL deallocate_matrix_CSR( mesh%M_map_a_b)
-    CALL deallocate_matrix_CSR( mesh%M_map_a_c)
-    CALL deallocate_matrix_CSR( mesh%M_map_b_a)
-    CALL deallocate_matrix_CSR( mesh%M_map_b_c)
-    CALL deallocate_matrix_CSR( mesh%M_map_c_a)
-    CALL deallocate_matrix_CSR( mesh%M_map_c_b)
+    CALL MatDestroy( mesh%M_ddx_a_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_a_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_a_c             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_b_c             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_a             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_b             , perr)
+    CALL MatDestroy( mesh%M_ddx_c_c             , perr)
     
-    CALL deallocate_matrix_CSR( mesh%M_ddx_a_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_a_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_a_c)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_b_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_b_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_b_c)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_c_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_c_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddx_c_c)
+    CALL MatDestroy( mesh%M_ddy_a_a             , perr)
+    CALL MatDestroy( mesh%M_ddy_a_b             , perr)
+    CALL MatDestroy( mesh%M_ddy_a_c             , perr)
+    CALL MatDestroy( mesh%M_ddy_b_a             , perr)
+    CALL MatDestroy( mesh%M_ddy_b_b             , perr)
+    CALL MatDestroy( mesh%M_ddy_b_c             , perr)
+    CALL MatDestroy( mesh%M_ddy_c_a             , perr)
+    CALL MatDestroy( mesh%M_ddy_c_b             , perr)
+    CALL MatDestroy( mesh%M_ddy_c_c             , perr)
     
-    CALL deallocate_matrix_CSR( mesh%M_ddy_a_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_a_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_a_c)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_b_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_b_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_b_c)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_c_a)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_c_b)
-    CALL deallocate_matrix_CSR( mesh%M_ddy_c_c)
+    CALL MatDestroy( mesh%M2_ddx_b_b            , perr)
+    CALL MatDestroy( mesh%M2_ddy_b_b            , perr)
+    CALL MatDestroy( mesh%M2_d2dx2_b_b          , perr)
+    CALL MatDestroy( mesh%M2_d2dxdy_b_b         , perr)
+    CALL MatDestroy( mesh%M2_d2dy2_b_b          , perr)
     
-    CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b   )
-    CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b   )
-    CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b )
-    CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b)
-    CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b )
+    CALL MatDestroy( mesh%M_Neumann_BC_b        , perr)
     
-    CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_b)
+    CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b_CSR    )
+    CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b_CSR    )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b_CSR  )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b_CSR )
+    CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b_CSR  )
+    
+    CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_CSR)
  
    END SUBROUTINE deallocate_mesh_all
   

@@ -3,9 +3,11 @@ MODULE utilities_module
   ! Some generally useful tools
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -28,8 +30,7 @@ MODULE utilities_module
                                              adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
                                              adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
                                              adapt_shared_dist_bool_1D
-  USE data_types_module,               ONLY: type_mesh, type_grid, type_sparse_matrix_CSR_dp
-  USE petsc_module,                    ONLY: solve_matrix_equation_CSR_PETSc
+  USE data_types_module,               ONLY: type_mesh, type_grid
 
 CONTAINS
 

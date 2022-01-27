@@ -3,9 +3,11 @@ MODULE climate_module
   ! Contains all the routines for calculating the climate forcing.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -1727,7 +1729,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%M_trilin%ptr( 1)
+    int_dummy = map%int_dummy
 
     ! Reallocate memory for the different subclimates
     CALL reallocate_subclimate( mesh_new, climate%applied)

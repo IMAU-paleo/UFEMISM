@@ -3,9 +3,11 @@ MODULE UFEMISM_main_model
   ! The main regional ice-sheet model
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -23,7 +25,7 @@ MODULE UFEMISM_main_model
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping_mesh_mesh
-  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometry_to_mesh
+  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
@@ -241,8 +243,6 @@ CONTAINS
     CALL deallocate_remapping_operators_mesh_grid(            region%grid_smooth)
     CALL calc_remapping_operators_mesh_grid( region%mesh_new, region%grid_smooth)
     
-    IF (par%master) WRITE(0,*) '  Mapping model data to the new mesh...'
-    
     ! Calculate the mapping arrays
     CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
     
@@ -254,17 +254,13 @@ CONTAINS
     CALL deallocate_shared(  region%refgeo_init%wHi )
     CALL deallocate_shared(  region%refgeo_init%wHb )
     CALL deallocate_shared(  region%refgeo_init%wHs )
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_init )
-    
     CALL deallocate_shared(  region%refgeo_PD%wHi   )
     CALL deallocate_shared(  region%refgeo_PD%wHb   )
     CALL deallocate_shared(  region%refgeo_PD%wHs   )
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_PD   )
-    
     CALL deallocate_shared(  region%refgeo_GIAeq%wHi)
     CALL deallocate_shared(  region%refgeo_GIAeq%wHb)
     CALL deallocate_shared(  region%refgeo_GIAeq%wHs)
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_GIAeq)
+    CALL map_reference_geometries_to_mesh( region, region%mesh_new)
     
     ! Remap all the submodels
     CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
@@ -365,9 +361,7 @@ CONTAINS
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
     
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_init )
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_PD   )
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_GIAeq)
+    CALL map_reference_geometries_to_mesh( region, region%mesh)
     
     ! The different square grids
     ! ==========================

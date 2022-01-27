@@ -6,9 +6,12 @@ MODULE reference_fields_module
   ! - refgeo_GIA_eq: GIA equilibrium, used for the GIA model
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
+  USE petscksp
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -25,7 +28,7 @@ MODULE reference_fields_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_grid, type_reference_geometry, type_mesh
+  USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh
   USE netcdf_module,                   ONLY: inquire_reference_geometry_file, read_reference_geometry_file
   USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_grid, map_grid2mesh_2D, deallocate_remapping_operators_mesh_grid
   USE utilities_module,                ONLY: is_floating, surface_elevation, remove_Lake_Vostok
@@ -477,6 +480,9 @@ CONTAINS
     INTEGER                                       :: i,j
     REAL(dp)                                      :: x,Hs,Hb
     INTEGER                                       :: ios,slides
+    
+    ! To prevent compiler warnings from unused variables
+    i = grid%nx
       
     ! Read data from external file
     IF (par%master) THEN
@@ -846,8 +852,93 @@ CONTAINS
   END SUBROUTINE calc_reference_geometry_secondary_data
 
   ! Map init and PD references data from their supplied grids to the model mesh
+  SUBROUTINE map_reference_geometries_to_mesh( region, mesh)
+    ! Map the initial, present-day, and GIAeq reference geometries from their original
+    ! square grids to the model mesh.
+    !
+    ! Since calculating remapping operators can take some time, and since the three
+    ! square grids are often identical, some time can be saved by calculating the
+    ! operators only once.
+    
+    IMPLICIT NONE
+  
+    ! Input and output variables
+    TYPE(type_model_region),        INTENT(INOUT) :: region
+    TYPE(type_mesh),                INTENT(INOUT) :: mesh
+    
+    ! Calculate remapping operators for the initial geometry
+    CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_init%grid)
+    
+    ! Calculate remapping operators for the present-day geometry;
+    ! check if the remapping operators from the initial geometry can be reused
+    
+    IF (region%refgeo_PD%grid%xmin == region%refgeo_init%grid%xmin .AND. &
+        region%refgeo_PD%grid%xmax == region%refgeo_init%grid%xmax .AND. &
+        region%refgeo_PD%grid%ymin == region%refgeo_init%grid%ymin .AND. &
+        region%refgeo_PD%grid%ymax == region%refgeo_init%grid%ymax .AND. &
+        region%refgeo_PD%grid%dx   == region%refgeo_init%grid%dx   .AND. &
+        region%refgeo_PD%grid%nx   == region%refgeo_init%grid%nx   .AND. &
+        region%refgeo_PD%grid%ny   == region%refgeo_init%grid%ny) THEN
+      ! The square grid of the PD geometry is identical to that of the initial geometry; copy the remapping operators
+      
+      CALL MatDuplicate( region%refgeo_init%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_PD%grid%M_map_mesh2grid, perr)
+      CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_PD%grid%M_map_grid2mesh, perr)
+      
+    ELSE
+      ! This square grid is different; calculate new remapping operators
+      
+      CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_PD%grid)
+      
+    END IF
+    
+    ! Calculate remapping operators for the GIA equilibrium geometry;
+    ! check if the remapping operators from the initial or PD geometry can be reused
+    
+    IF     (region%refgeo_GIAeq%grid%xmin == region%refgeo_init%grid%xmin .AND. &
+            region%refgeo_GIAeq%grid%xmax == region%refgeo_init%grid%xmax .AND. &
+            region%refgeo_GIAeq%grid%ymin == region%refgeo_init%grid%ymin .AND. &
+            region%refgeo_GIAeq%grid%ymax == region%refgeo_init%grid%ymax .AND. &
+            region%refgeo_GIAeq%grid%dx   == region%refgeo_init%grid%dx   .AND. &
+            region%refgeo_GIAeq%grid%nx   == region%refgeo_init%grid%nx   .AND. &
+            region%refgeo_GIAeq%grid%ny   == region%refgeo_init%grid%ny) THEN
+      ! The square grid of the GIA equilibrium geometry is identical to that of the initial geometry; copy the remapping operators
+      
+      CALL MatDuplicate( region%refgeo_init%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_mesh2grid, perr)
+      CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
+      
+    ELSEIF (region%refgeo_GIAeq%grid%xmin == region%refgeo_PD%grid%xmin .AND. &
+            region%refgeo_GIAeq%grid%xmax == region%refgeo_PD%grid%xmax .AND. &
+            region%refgeo_GIAeq%grid%ymin == region%refgeo_PD%grid%ymin .AND. &
+            region%refgeo_GIAeq%grid%ymax == region%refgeo_PD%grid%ymax .AND. &
+            region%refgeo_GIAeq%grid%dx   == region%refgeo_PD%grid%dx   .AND. &
+            region%refgeo_GIAeq%grid%nx   == region%refgeo_PD%grid%nx   .AND. &
+            region%refgeo_GIAeq%grid%ny   == region%refgeo_PD%grid%ny) THEN
+      ! The square grid of the GIA equilibrium geometry is identical to that of the initial geometry; copy the remapping operators
+      
+      CALL MatDuplicate( region%refgeo_PD%grid%M_map_mesh2grid, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_mesh2grid, perr)
+      CALL MatDuplicate( region%refgeo_PD%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
+      
+    ELSE
+      ! This square grid is different; calculate new remapping operators
+      
+      CALL calc_remapping_operators_mesh_grid( mesh, region%refgeo_GIAeq%grid)
+      
+    END IF
+    
+    ! Map the data from the grids to the mesh
+    CALL  map_reference_geometry_to_mesh( mesh, region%refgeo_init )
+    CALL  map_reference_geometry_to_mesh( mesh, region%refgeo_PD   )
+    CALL  map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
+    
+    ! Clean up after yourself
+    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_init%grid )
+    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_PD%grid   )
+    CALL deallocate_remapping_operators_mesh_grid( region%refgeo_GIAeq%grid)
+    
+    
+  END SUBROUTINE map_reference_geometries_to_mesh
   SUBROUTINE map_reference_geometry_to_mesh( mesh, refgeo)
-    ! Calculate the mapping arrays, map data to the mesh. Allocate and deallocate memory for the mapping arrays within this subroutine.
+    ! Map data for a single reference geometry from its original square grid to the model mesh.
     
     IMPLICIT NONE
   
@@ -856,14 +947,7 @@ CONTAINS
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
     ! Local variables
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'map_PD_data_to_mesh'
-    INTEGER                                       :: n1, n2
     INTEGER                                       :: vi
-    
-    n1 = par%mem%n
-    
-    ! Calculate mapping arrays
-    CALL calc_remapping_operators_mesh_grid( mesh, refgeo%grid)
     
     ! Allocate memory for reference data on the mesh
     CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hi, refgeo%wHi)
@@ -878,12 +962,6 @@ CONTAINS
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
     CALL sync
-    
-    ! Clean upp after yourself
-    CALL deallocate_remapping_operators_mesh_grid( refgeo%grid)
-    
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
   
   END SUBROUTINE map_reference_geometry_to_mesh
 

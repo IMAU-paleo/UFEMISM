@@ -3,8 +3,10 @@ MODULE data_types_module
   ! all subroutines can use all types without interdependency conflicts, and also to make the 
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
-
+  
+#include <petsc/finclude/petscksp.h>
   USE mpi
+  USE petscksp
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
@@ -13,7 +15,7 @@ MODULE data_types_module
   IMPLICIT NONE
   
   TYPE type_sparse_matrix_CSR_dp
-    ! Compressed Sparse Row (CSR) format matrix, double precision
+    ! Compressed Sparse Row (CSR) format matrix
     
     INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
     INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
@@ -24,26 +26,6 @@ MODULE data_types_module
     INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
     
   END TYPE type_sparse_matrix_CSR_dp
-  
-  TYPE type_sparse_matrix_CSR_int
-    ! Compressed Sparse Row (CSR) format matrix, integer
-    
-    INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
-    INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
-    INTEGER,                    POINTER     :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
-    INTEGER,  DIMENSION(:    ), POINTER     :: ptr
-    INTEGER,  DIMENSION(:    ), POINTER     :: index
-    INTEGER,  DIMENSION(:    ), POINTER     :: val
-    INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
-    
-    ! Process-local memory, used during matrix assembly
-    INTEGER                                 :: nnz_max_loc
-    INTEGER                                 :: nnz_loc
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: ptr_loc
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_loc
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: val_loc
-    
-  END TYPE type_sparse_matrix_CSR_int
   
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
@@ -169,8 +151,8 @@ MODULE data_types_module
     ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -340,44 +322,51 @@ MODULE data_types_module
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
     
     ! Matrix operators: mapping
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
+    TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
+    TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
+    TYPE(tMat)                              :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
+    TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
+    TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
+    TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
    
     ! Matrix operators: d/dx
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
    
     ! Matrix operators: d/dy
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
     ! 2nd-order accurate matrix operators on the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
     
     ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_b
+    TYPE(tMat)                              :: M_Neumann_BC_b
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
@@ -394,13 +383,6 @@ MODULE data_types_module
     INTEGER                                 :: vi1, vi2                      ! Vertices
     INTEGER                                 :: ti1, ti2                      ! Triangles
     INTEGER                                 :: ci1, ci2                      ! Edges
-    
-    ! Parallelisation - five-colouring
-    INTEGER,  DIMENSION(:    ), POINTER     :: colour
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: colour_vi
-    INTEGER,  DIMENSION(:    ), POINTER     :: colour_nV
-    INTEGER                                 :: wcolour, wcolour_vi, wcolour_nV
-    INTEGER,  DIMENSION(5)                  :: colour_v1, colour_v2
 
   END TYPE type_mesh
   
@@ -530,10 +512,11 @@ MODULE data_types_module
   TYPE type_remapping_mesh_mesh
     ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
     
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_trilin                     ! Remapping using trilinear interpolation
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_cons_1st_order             ! Remapping using first-order conservative remapping
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
+    INTEGER                                 :: int_dummy
+    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
+    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
+    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
+    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
   
   END TYPE type_remapping_mesh_mesh
   
@@ -551,8 +534,8 @@ MODULE data_types_module
     INTEGER                                 :: i1, i2, j1, j2
     
     ! Sparse matrices representing the remapping operations between a mesh and a grid
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
-    TYPE(type_sparse_matrix_CSR_dp)         :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
+    TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
+    TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
     REAL(dp),                   POINTER     :: tol_dist
     INTEGER :: wtol_dist
     

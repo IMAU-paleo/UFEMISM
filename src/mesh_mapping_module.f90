@@ -1178,6 +1178,8 @@ CONTAINS
     ALLOCATE( w1x_row( nnz_per_row_max))
     ALLOCATE( w1y_row( nnz_per_row_max))
     
+    CALL MatGetOwnershipRange( A_xdy_g_b, n1, n2, perr)
+    
     DO n = n1+1, n2 ! +1 because PETSc indexes from 0
       
       ! w0

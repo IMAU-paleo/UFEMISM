@@ -1052,7 +1052,7 @@ CONTAINS
   
   END SUBROUTINE deallocate_matrix_CSR
   
-  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n, nnz_max_loc)
+  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n, nnz_max_proc)
     ! Allocate shared memory for a CSR-format sparse m-by-n matrix A
     ! 
     ! NOTE: uses local allocatable memory, so that the processes can create their own
@@ -1062,7 +1062,7 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
-    INTEGER,                             INTENT(IN)    :: m, n, nnz_max_loc
+    INTEGER,                             INTENT(IN)    :: m, n, nnz_max_proc
     
     ! Matrix dimensions should be the same everywhere, so use the shared version for that.
     CALL allocate_shared_int_0D( AA%m, AA%wm)
@@ -1078,7 +1078,7 @@ CONTAINS
     ALLOCATE( AA%nnz_max)
     ALLOCATE( AA%nnz    )
     
-    AA%nnz_max = nnz_max_loc
+    AA%nnz_max = nnz_max_proc
     AA%nnz     = 0
     
     ALLOCATE( AA%ptr(   AA%m+1    ))

@@ -268,6 +268,13 @@ CONTAINS
   END SUBROUTINE mat_petsc2CSR
   SUBROUTINE mat_CSR2petsc( A_CSR, A)
     ! Convert a CSR-format matrix in regular Fortran arrays to a PETSC parallel matrix
+    !
+    ! NOTE: the PETSc documentation seems to advise against using the MatCreateMPIAIJWithArrays
+    !       routine used here. However, for the advised way of using MatSetValues with preallocation
+    !       I've not been able to find a way that is fast enough to be useful without having to
+    !       preallocate -WAY- too much memory. Especially for the remapping matrices, which
+    !       can have hundreds or even thousands of non-zero elements per row, this can make the
+    !       model run hella slow, whereas the current solution seems to work perfectly. So there you go.
       
     IMPLICIT NONE
     
@@ -276,55 +283,58 @@ CONTAINS
     TYPE(tMat),                          INTENT(OUT)   :: A
     
     ! Local variables:
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max
-    INTEGER                                            :: i1, i2, i, nnz_row
-    INTEGER                                            :: k1, k2, k, j
-    REAL(dp)                                           :: v
-
-    nrows = A_CSR%m
-    ncols = A_CSR%n
+    INTEGER                                            :: i1, i2, nrows_proc, nrows_scan, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: ptr_proc, index_proc
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_proc
     
-    ! Determine maximum number of non-zeros per row
-    nnz_per_row_max = 0
-    CALL partition_list( A_CSR%m, par%i, par%n, i1, i2)
+    ! Determine process domains
+    ! NOTE: slightly different from how it's done in partition_list, this is needed
+    !       because otherwise PETSc will occasionally throw errors because the 
+    !       process domains are different from what it expects.
+    nrows_proc = PETSC_DECIDE
+    CALL PetscSplitOwnership( PETSC_COMM_WORLD, nrows_proc, A_CSR%m, perr)
+    CALL MPI_Scan( nrows_proc, nrows_scan, 1, MPI_INTEGER, MPI_SUM, PETSC_COMM_WORLD, ierr)
+    i1 = nrows_scan + 1 - nrows_proc
+    i2 = i1 + nrows_proc - 1
+    
+    ! Determine number of non-zeros for this process
+    nnz_proc = 0
     DO i = i1, i2
-      nnz_row = A_CSR%ptr( i+1) - A_CSR%ptr( i)
-      nnz_per_row_max = MAX( nnz_per_row_max, nnz_row)
-    END DO
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_per_row_max, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
-    
-    ! Initialise the matrix objects
-    CALL MatCreate( PETSC_COMM_WORLD, A, perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( A, 'mpiaij', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( A, PETSC_DECIDE, PETSC_DECIDE, nrows, ncols, perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( A, perr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( A, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( A, i1, i2, perr)
-    
-    ! Fill in the coefficients
-    DO i = i1+1, i2
-      
       k1 = A_CSR%ptr( i)
       k2 = A_CSR%ptr( i+1) - 1
+      nnz_row = k2 + 1 - k1
+      nnz_proc = nnz_proc + nnz_row
+    END DO
+    CALL sync
+    
+    ! Allocate memory for local CSR-submatrix
+    ALLOCATE( ptr_proc(   0:nrows_proc    ))
+    ALLOCATE( index_proc( 0:nnz_proc   - 1))
+    ALLOCATE( val_proc(   0:nnz_proc   - 1))
+    
+    ! Copy matrix data
+    DO i = i1, i2
+    
+      ! ptr
+      ii = i - i1
+      ptr_proc( ii) = A_CSR%ptr( i) - A_CSR%ptr( i1)
       
+      ! index and val
+      k1 = A_CSR%ptr( i)
+      k2 = A_CSR%ptr( i+1) - 1
       DO k = k1, k2
-        j = A_CSR%index( k)
-        v = A_CSR%val(   k)
-        CALL MatSetValues( A, 1, i-1, 1, j-1, v, INSERT_VALUES, perr)
+        kk = k - A_CSR%ptr( i1)
+        index_proc( kk) = A_CSR%index( k) - 1
+        val_proc(   kk) = A_CSR%val(   k)
       END DO
       
     END DO
+    ! Last row
+    ptr_proc( nrows_proc) = A_CSR%ptr( i2+1) - A_CSR%ptr( i1)
     CALL sync
+    
+    ! Create PETSc matrix
+    CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, PETSC_DECIDE, PETSC_DETERMINE, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)
     
     ! Assemble matrix and vectors, using the 2-step process:
     !   MatAssemblyBegin(), MatAssemblyEnd()
@@ -333,6 +343,11 @@ CONTAINS
     
     CALL MatAssemblyBegin( A, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   A, MAT_FINAL_ASSEMBLY, perr)
+    
+    ! Clean up after yourself
+    DEALLOCATE( ptr_proc  )
+    DEALLOCATE( index_proc)
+    DEALLOCATE( val_proc  )
     
   END SUBROUTINE mat_CSR2petsc
   

@@ -24,10 +24,12 @@ MODULE tests_and_checks_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
+  USE data_types_module
   USE mesh_operators_module
   USE petsc_module
   USE petscksp
-  USE netcdf_module,                   ONLY: write_PETSc_matrix_to_NetCDF
+  USE sparse_matrix_module
+  USE netcdf_module
 
   IMPLICIT NONE
 
@@ -46,6 +48,8 @@ CONTAINS
     IF (par%master) WRITE(0,*) '=== Testing all the matrix operators ==='
     IF (par%master) WRITE(0,*) '========================================'
     IF (par%master) WRITE(0,*) ''
+    
+    CALL test_petsc_to_csr
     
   ! Test all the matrix operators
   ! =============================
@@ -69,6 +73,56 @@ CONTAINS
     IF (par%master) WRITE(0,*) ''
     
   END SUBROUTINE run_all_matrix_tests
+  
+! == Test petsc-to-CSR conversion
+  
+  SUBROUTINE test_petsc_to_csr
+    ! Test petsc-to-CSR conversion
+      
+    IMPLICIT NONE
+    
+    ! Local variables
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+    TYPE(tMat)                                         :: A
+    INTEGER                                            :: nrows, ncols, nnz
+    REAL(dp), DIMENSION(:    ), POINTER                ::  xx,  yy
+    INTEGER                                            :: wxx, wyy
+    
+    ! Set up CSR matrix
+    nrows = 5
+    ncols = 5
+    nnz   = 10
+    
+    CALL allocate_matrix_CSR_shared( A_CSR, nrows, ncols, nnz)
+    
+    IF (par%master) THEN
+      A_CSR%nnz   = 10
+      A_CSR%ptr   = [1,3,5,7,10,11]
+      A_CSR%index = [1,3,2,4,1,5,1,2,4,5]
+      A_CSR%val   = [1._dp,2._dp,3._dp,4._dp,5._dp,6._dp,7._dp,8._dp,9._dp,10._dp]
+    END IF
+    CALL sync
+    
+    ! Convert to PETSc format
+    CALL mat_CSR2petsc( A_CSR, A)
+    
+    ! Text multiplication
+    CALL allocate_shared_dp_1D( 5, xx, wxx)
+    CALL allocate_shared_dp_1D( 5, yy, wyy)
+    IF (par%master) THEN
+      xx = [1._dp, 2._dp, 3._dp, 4._dp, 5._dp]
+    END IF
+    CALL sync
+    
+    CALL multiply_PETSc_matrix_with_vector_1D( A, xx, yy)
+    
+    ! Check the result
+    IF (yy(1) /= 7._dp .OR. yy(2) /= 22._dp .OR. yy(3) /= 35._dp .OR. yy(4) /= 59._dp .OR. yy(5) /= 50._dp) THEN
+      WRITE(0,*) 'test_petsc_to_csr - ERROR: did not find the correct answer!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  END SUBROUTINE test_petsc_to_csr
   
 ! == Test all the matrix operators (mapping+gradients)
 

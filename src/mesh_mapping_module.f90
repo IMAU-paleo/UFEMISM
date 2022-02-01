@@ -32,7 +32,7 @@ MODULE mesh_mapping_module
   USE utilities_module,                ONLY: line_integral_xdy, line_integral_mxydx, line_integral_xydy, smooth_Gaussian_2D_grid, &
                                              smooth_Gaussian_3D_grid
   USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_CSR2petsc
-  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid
+  USE mesh_operators_module,           ONLY: calc_matrix_operators_grid, apply_Neumann_BC_direct_2D, apply_Neumann_BC_direct_3D
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, add_entry_CSR_dist, finalise_matrix_CSR_dist, deallocate_matrix_CSR
 
   IMPLICIT NONE
@@ -79,6 +79,9 @@ CONTAINS
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
     
+    ! Fix border elements because the remapping often is inaccurate there
+    CALL apply_Neumann_BC_direct_2D( mesh, d_mesh)
+    
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)
     
@@ -121,6 +124,9 @@ CONTAINS
     
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
+    
+    ! Fix border elements because the remapping often is inaccurate there
+    CALL apply_Neumann_BC_direct_3D( mesh, d_mesh)
     
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)

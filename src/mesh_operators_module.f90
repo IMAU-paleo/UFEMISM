@@ -2913,30 +2913,56 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_a
     
     ! Local variables:
-    INTEGER                                            :: vi, ci, vc, n
+    INTEGER                                            :: vi, vvi, vj
+    REAL(dp)                                           :: sumd, sumw
     
+    ! First the borders - average over adjacent non-boundary vertices
     DO vi = mesh%vi1, mesh%vi2
-      IF (mesh%edge_index( vi) == 0) CYCLE
+    
+      IF (mesh%edge_index( vi) == 0 .OR. &
+          mesh%edge_index( vi) == 2 .OR. &
+          mesh%edge_index( vi) == 4 .OR. &
+          mesh%edge_index( vi) == 6 .OR. &
+          mesh%edge_index( vi) == 8) CYCLE
       
-      d_a( vi) = 0._dp
-      n        = 0
-      DO ci = 1, mesh%nC( vi)
-        vc = mesh%C( vi,ci)
-        IF (mesh%edge_index( vc) == 0) CYCLE
-        d_a( vi) = d_a( vi) + d_a( vc)
-        n = n + 1
+      sumd = 0._dp
+      sumw = 0._dp
+      
+      DO vvi = 1, mesh%nC( vi)
+        vj = mesh%C( vi,vvi)
+        IF (mesh%edge_index( vj) > 0) CYCLE
+        sumd = sumd + d_a( vj)
+        sumw = sumw + 1._dp
       END DO
       
-      IF (n > 0) THEN
-        d_a( vi) = d_a( vi) / REAL(n,dp)
+      IF (sumw > 0._dp) THEN
+        d_a( vi) = sumd / sumw
       ELSE
-        DO ci = 1, mesh%nC( vi)
-          vc = mesh%C( vi,ci)
-          d_a( vi) = d_a( vi) + d_a( vc) / mesh%nC( vi)
-        END DO
+        ! This border vertex has no non-border neighbours, which shouldn't be possible!
+        WRITE(0,*) 'apply_Neumann_BC_direct_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
+    CALL sync
+    
+    ! Then the corners - average over all adjacent vertices
+    IF (par%master) THEN
+      DO vi = 1, 4
+        
+        sumd = 0._dp
+        sumw = 0._dp
+        
+        DO vvi = 1, mesh%nC( vi)
+          vj = mesh%C( vi,vvi)
+          sumd = sumd + d_a( vj)
+          sumw = sumw + 1._dp
+        END DO
+        
+        d_a( vi) = sumd / sumw
+        
+      END DO ! DO vi = mesh%vi1, mesh%vi2
+    END IF ! IF (par%master) THEN
     CALL sync
     
   END SUBROUTINE apply_Neumann_BC_direct_2D
@@ -2950,31 +2976,62 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_a
     
     ! Local variables:
-    INTEGER                                            :: vi, ci, vc, n
+    INTEGER                                            :: vi, vvi, vj
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: sumd
+    REAL(dp)                                           :: sumw
     
+    ALLOCATE( sumd( SIZE( d_a,2)))
+    
+    ! First the borders - average over adjacent non-boundary vertices
     DO vi = mesh%vi1, mesh%vi2
-      IF (mesh%edge_index( vi) == 0) CYCLE
+    
+      IF (mesh%edge_index( vi) == 0 .OR. &
+          mesh%edge_index( vi) == 2 .OR. &
+          mesh%edge_index( vi) == 4 .OR. &
+          mesh%edge_index( vi) == 6 .OR. &
+          mesh%edge_index( vi) == 8) CYCLE
       
-      d_a( vi,:) = 0._dp
-      n        = 0
-      DO ci = 1, mesh%nC( vi)
-        vc = mesh%C( vi,ci)
-        IF (mesh%edge_index( vc) == 0) CYCLE
-        d_a( vi,:) = d_a( vi,:) + d_a( vc,:)
-        n = n + 1
+      sumd = 0._dp
+      sumw = 0._dp
+      
+      DO vvi = 1, mesh%nC( vi)
+        vj = mesh%C( vi,vvi)
+        IF (mesh%edge_index( vj) > 0) CYCLE
+        sumd = sumd + d_a( vj,:)
+        sumw = sumw + 1._dp
       END DO
       
-      IF (n > 0) THEN
-        d_a( vi,:) = d_a( vi,:) / REAL(n,dp)
+      IF (sumw > 0._dp) THEN
+        d_a( vi,:) = sumd / sumw
       ELSE
-        DO ci = 1, mesh%nC( vi)
-          vc = mesh%C( vi,ci)
-          d_a( vi,:) = d_a( vi,:) + d_a( vc,:) / mesh%nC( vi)
-        END DO
+        ! This border vertex has no non-border neighbours, which shouldn't be possible!
+        WRITE(0,*) 'apply_Neumann_BC_direct_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
+    
+    ! Then the corners - average over all adjacent vertices
+    IF (par%master) THEN
+      DO vi = 1, 4
+        
+        sumd = 0._dp
+        sumw = 0._dp
+        
+        DO vvi = 1, mesh%nC( vi)
+          vj = mesh%C( vi,vvi)
+          sumd = sumd + d_a( vj,:)
+          sumw = sumw + 1._dp
+        END DO
+        
+        d_a( vi,:) = sumd / sumw
+        
+      END DO ! DO vi = mesh%vi1, mesh%vi2
+    END IF ! IF (par%master) THEN
+    CALL sync
+    
+    DEALLOCATE( sumd)
     
   END SUBROUTINE apply_Neumann_BC_direct_3D
 

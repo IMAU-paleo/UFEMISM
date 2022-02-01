@@ -189,6 +189,9 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! If no sliding is included, no need to do anything
+    IF (C%choice_sliding_law == 'no_sliding') RETURN
+    
     IF (C%choice_basal_roughness == 'uniform') THEN
       ! Apply a uniform bed roughness
       

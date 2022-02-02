@@ -189,17 +189,14 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
-    ! If no sliding is included, no need to do anything
-    IF (C%choice_sliding_law == 'no_sliding') RETURN
+    ! In case of no sliding or "idealised" sliding (e.g. ISMIP-HOM experiments), no bed roughness is required
+    IF (C%choice_sliding_law == 'no_sliding' .OR. &
+        C%choice_sliding_law == 'idealised') RETURN
     
     IF (C%choice_basal_roughness == 'uniform') THEN
       ! Apply a uniform bed roughness
       
-      IF     (C%choice_sliding_law == 'no_sliding') THEN
-        ! No sliding; do nothing
-      ELSEIF (C%choice_sliding_law == 'idealised') THEN
-        ! Idealised sliding; do nothing
-      ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      IF     (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN

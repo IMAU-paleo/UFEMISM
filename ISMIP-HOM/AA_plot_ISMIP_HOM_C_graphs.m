@@ -38,12 +38,12 @@ model_types = {...
 models = dir(foldername);
 models = models(3:end);
 
-% experiments.a160 = [];
-% experiments.a080 = [];
-% experiments.a040 = [];
-% experiments.a020 = [];
-% experiments.a010 = [];
-% experiments.a005 = [];
+% experiments.c160 = [];
+% experiments.c080 = [];
+% experiments.c040 = [];
+% experiments.c020 = [];
+% experiments.c010 = [];
+% experiments.c005 = [];
 % 
 % for mi = 1: length(models)
 %   
@@ -79,7 +79,7 @@ models = models(3:end);
 %           v_vec = zeros(n,1);
 %           w_vec = zeros(n,1);
 %           for i = 1:n
-%             temp2 = textscan(temp{i},'%f %f %f %f %f %f %f %f');
+%             temp2 = textscan(temp{i},'%f %f %f %f %f %f %f %f %f %f');
 %             x_vec(i) = temp2{1};
 %             y_vec(i) = temp2{2};
 %             u_vec(i) = temp2{3};
@@ -108,122 +108,107 @@ models = models(3:end);
 %   
 % end
 % 
-% save('ISMIP_HOM_A_ensemble.mat','experiments')
-load('ISMIP_HOM_A_ensemble.mat')
+% save('ISMIP_HOM_C_ensemble.mat','experiments')
+load('ISMIP_HOM_C_ensemble.mat')
 
 %% Read my own results
-results.a160.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a080.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a040.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a020.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a010.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a005.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
+results.c160.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L160';
+results.c080.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L080';
+results.c040.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L040';
+results.c020.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L020';
+results.c010.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L010';
+results.c005.UFEMISM_DIVA.foldername        = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_L005';
 
-results.a160.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a080.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a040.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a020.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a010.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a005.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
+results.c160.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L160';
+results.c080.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L080';
+results.c040.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L040';
+results.c020.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L020';
+results.c010.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L010';
+results.c005.UFEMISM_DIVA_sans.foldername   = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_DIVA_sans_L005';
 
-results.a160.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a080.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a040.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a020.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a010.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a005.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
+results.c160.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L160';
+results.c080.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L080';
+results.c040.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L040';
+results.c020.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L020';
+results.c010.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L010';
+results.c005.UFEMISM_hybrid.foldername      = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_L005';
 
-results.a160.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a080.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a040.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a020.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a010.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
-results.a005.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/results_20220201_001';
+results.c160.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L160';
+results.c080.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L080';
+results.c040.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L040';
+results.c020.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L020';
+results.c010.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L010';
+results.c005.UFEMISM_hybrid_sans.foldername = '/Users/berends/Documents/Models/UFEMISM/ISMIP-HOM/ISMIP_HOM_C_hybrid_sans_L005';
 
 flds = fields(experiments);
 A = [];
+xt = [];
 for xi = 1:length(flds)
   ex = flds{xi};
   
   %% DIVA
-  filename = [results.(ex).UFEMISM_DIVA.foldername '/help_fields_ANT_00001.nc'];
+  filename = [results.(ex).UFEMISM_DIVA.foldername '/help_fields_grid_ANT.nc'];
   
   time = ncread(filename,'time');
   ti = length(time);
   
-  mesh = read_mesh_from_file( filename);
-  u    = ncread(filename,'u_3D',[1,1,ti],[Inf,1,1]);
+  x  = ncread( filename,'x');
+  y  = ncread( filename,'y');
+  yt = -1 * range(y) * 1/12;
+  j = find(abs(y-yt)==min(abs(y-yt)));
+  u = ncread( filename,'u_3D',[1,j,1,ti],[Inf,1,1,1]);
   
-  % Get velocity transect
-  xt  = linspace( mesh.xmin, mesh.xmax, 1000);
-  yt  = zeros( size( xt)) + (mesh.ymax - mesh.ymin) * 1/12;
-  if (size(A,1)~=length(xt) || size(A,2)~=mesh.nV)
-  A   = calc_transect_matrix( mesh, xt, yt);
-  end
+  results.(ex).UFEMISM_DIVA.x = x;
+  results.(ex).UFEMISM_DIVA.u = u;
   
-  results.(ex).UFEMISM_DIVA.x = A * mesh.V( :,1);
-  results.(ex).UFEMISM_DIVA.u = A * u;
-  
-  %% DIVA_sans
-  filename = [results.(ex).UFEMISM_DIVA_sans.foldername '/help_fields_ANT_00001.nc'];
+  %% DIVA
+  filename = [results.(ex).UFEMISM_DIVA_sans.foldername '/help_fields_grid_ANT.nc'];
   
   time = ncread(filename,'time');
   ti = length(time);
   
-  mesh = read_mesh_from_file( filename);
-  u    = ncread(filename,'u_3D',[1,1,ti],[Inf,1,1]);
+  x  = ncread( filename,'x');
+  y  = ncread( filename,'y');
+  yt = -1 * range(y) * 1/12;
+  j = find(abs(y-yt)==min(abs(y-yt)));
+  u = ncread( filename,'u_3D',[1,j,1,ti],[Inf,1,1,1]);
   
-  % Get velocity transect
-  xt  = linspace( mesh.xmin, mesh.xmax, 1000);
-  yt  = zeros( size( xt)) + (mesh.ymax - mesh.ymin) * 1/12;
-  if (size(A,1)~=length(xt) || size(A,2)~=mesh.nV)
-  A   = calc_transect_matrix( mesh, xt, yt);
-  end
-  
-  experiments.(ex).UFEMISM_DIVA_sans.x = A * mesh.V( :,1);
-  experiments.(ex).UFEMISM_DIVA_sans.u = A * u;
+  results.(ex).UFEMISM_DIVA_sans.x = x;
+  results.(ex).UFEMISM_DIVA_sans.u = u;
   
   %% hybrid
-  filename = [experiments.(ex).UFEMISM_hybrid.foldername '/help_fields_ANT_00001.nc'];
+  filename = [results.(ex).UFEMISM_hybrid.foldername '/help_fields_grid_ANT.nc'];
   
   time = ncread(filename,'time');
   ti = length(time);
   
-  mesh = read_mesh_from_file( filename);
-  u    = ncread(filename,'u_3D',[1,1,ti],[Inf,1,1]);
+  x  = ncread( filename,'x');
+  y  = ncread( filename,'y');
+  yt = -1 * range(y) * 1/12;
+  j = find(abs(y-yt)==min(abs(y-yt)));
+  u = ncread( filename,'u_3D',[1,j,1,ti],[Inf,1,1,1]);
   
-  % Get velocity transect
-  xt  = linspace( mesh.xmin, mesh.xmax, 1000);
-  yt  = zeros( size( xt)) + (mesh.ymax - mesh.ymin) * 1/12;
-  if (size(A,1)~=length(xt) || size(A,2)~=mesh.nV)
-  A   = calc_transect_matrix( mesh, xt, yt);
-  end
+  results.(ex).UFEMISM_hybrid.x = x;
+  results.(ex).UFEMISM_hybrid.u = u;
   
-  experiments.(ex).UFEMISM_hybrid.x = A * mesh.V( :,1);
-  experiments.(ex).UFEMISM_hybrid.u = A * u;
-  
-  %% hybrid_sans
-  filename = [experiments.(ex).UFEMISM_hybrid_sans.foldername '/help_fields_ANT_00001.nc'];
+  %% hybrid
+  filename = [results.(ex).UFEMISM_hybrid_sans.foldername '/help_fields_grid_ANT.nc'];
   
   time = ncread(filename,'time');
   ti = length(time);
   
-  mesh = read_mesh_from_file( filename);
-  u    = ncread(filename,'u_3D',[1,1,ti],[Inf,1,1]);
+  x  = ncread( filename,'x');
+  y  = ncread( filename,'y');
+  yt = -1 * range(y) * 1/12;
+  j = find(abs(y-yt)==min(abs(y-yt)));
+  u = ncread( filename,'u_3D',[1,j,1,ti],[Inf,1,1,1]);
   
-  % Get velocity transect
-  xt  = linspace( mesh.xmin, mesh.xmax, 1000);
-  yt  = zeros( size( xt)) + (mesh.ymax - mesh.ymin) * 1/12;
-  if (size(A,1)~=length(xt) || size(A,2)~=mesh.nV)
-  A   = calc_transect_matrix( mesh, xt, yt);
-  end
-  
-  experiments.(ex).UFEMISM_hybrid_sans.x = A * mesh.V( :,1);
-  experiments.(ex).UFEMISM_hybrid_sans.u = A * u;
+  results.(ex).UFEMISM_hybrid_sans.x = x;
+  results.(ex).UFEMISM_hybrid_sans.u = u;
   
 end
 
-%% Plot results
+%% Set up GUI
 wa = 400;
 ha = 300;
 margin_leftleft = 50;
@@ -267,39 +252,42 @@ xlabel(H.Ax(4),'x / L')
 xlabel(H.Ax(5),'x / L')
 xlabel(H.Ax(6),'x / L')
 
-set(H.Ax(1),'ylim',[0,125]);
-set(H.Ax(2),'ylim',[0,100]);
-set(H.Ax(3),'ylim',[0,80]);
-set(H.Ax(4),'ylim',[0,60]);
-set(H.Ax(5),'ylim',[0,40]);
-set(H.Ax(6),'ylim',[0,30]);
+set(H.Ax(1),'ylim',[0,170]);
+set(H.Ax(2),'ylim',[0,80]);
+set(H.Ax(3),'ylim',[0,40]);
+set(H.Ax(4),'ylim',[0,20]);
+set(H.Ax(5),'ylim',[0,20]);
+set(H.Ax(6),'ylim',[0,20]);
 
 % Legend
-c_IMAU = [1.0,0.2,0.2];
+c_with = [1.0,0.2,0.2];
+c_sans = [1.0,0.7,0.4];
 c_FS   = [0.2,0.5,1.0];
 c_HO   = [0.1,0.7,0.3];
-line(H.Ax(1),'xdata',[],'ydata',[],'color',c_IMAU,'linewidth',3,'linestyle','--');
-line(H.Ax(1),'xdata',[],'ydata',[],'color',c_IMAU,'linewidth',3,'linestyle','-');
+line(H.Ax(1),'xdata',[],'ydata',[],'color',c_with,'linewidth',3,'linestyle','-');   % DIVA
+line(H.Ax(1),'xdata',[],'ydata',[],'color',c_with,'linewidth',3,'linestyle','--');  % Hybrid
+line(H.Ax(1),'xdata',[],'ydata',[],'color',c_sans,'linewidth',3,'linestyle','-');   % DIVA sans
+line(H.Ax(1),'xdata',[],'ydata',[],'color',c_sans,'linewidth',3,'linestyle','--');  % Hybrid sans
 patch(H.Ax(1),'vertices',[],'faces',[],'facecolor',c_FS,'edgecolor','none','facealpha',0.7)
 patch(H.Ax(1),'vertices',[],'faces',[],'facecolor',c_HO,'edgecolor','none','facealpha',0.7)
 line(H.Ax(1),'xdata',[],'ydata',[],'color',c_FS,'linewidth',3);
 line(H.Ax(1),'xdata',[],'ydata',[],'color',c_HO,'linewidth',3);
 
-% Results
+%% Plot ISMIP-HOM ensemble
 for a = 1:6
   
   if a == 1
-    ex = 'a160';
+    ex = 'c160';
   elseif a == 2
-    ex = 'a080';
+    ex = 'c080';
   elseif a == 3
-    ex = 'a040';
+    ex = 'c040';
   elseif a == 4
-    ex = 'a020';
+    ex = 'c020';
   elseif a == 5
-    ex = 'a010';
+    ex = 'c010';
   elseif a == 6
-    ex = 'a005';
+    ex = 'c005';
   end
   
   x_FS = linspace(0,1,200)';
@@ -398,4 +386,50 @@ for a = 1:6
   
 end
 
-legend(H.Ax(1),'SIA/SSA','DIVA','Full-Stokes','Higher-Order','FS mean','HO mean','location','northwest')
+%% Plot UFEMISM results
+flds = fields(experiments);
+for xi = 1:length(flds)
+  ex = flds{xi};
+  
+  % DIVA
+  x = results.(ex).UFEMISM_DIVA.x;
+  x = ((x - min(x)) / range(x)) * 3 - 1;
+  u = results.(ex).UFEMISM_DIVA.u;
+  u(x<0) = [];
+  x(x<0) = [];
+  u(x>1) = [];
+  x(x>1) = [];
+  line('parent',H.Ax(xi),'xdata',x,'ydata',u,'linewidth',3,'color',c_with,'linestyle','-');
+  
+  % DIVA sans
+  x = results.(ex).UFEMISM_DIVA_sans.x;
+  x = ((x - min(x)) / range(x)) * 3 - 1;
+  u = results.(ex).UFEMISM_DIVA_sans.u;
+  u(x<0) = [];
+  x(x<0) = [];
+  u(x>1) = [];
+  x(x>1) = [];
+  line('parent',H.Ax(xi),'xdata',x,'ydata',u,'linewidth',3,'color',c_sans,'linestyle','-');
+  
+  % hybrid
+  x = results.(ex).UFEMISM_hybrid.x;
+  x = ((x - min(x)) / range(x)) * 3 - 1;
+  u = results.(ex).UFEMISM_hybrid.u;
+  u(x<0) = [];
+  x(x<0) = [];
+  u(x>1) = [];
+  x(x>1) = [];
+  line('parent',H.Ax(xi),'xdata',x,'ydata',u,'linewidth',3,'color',c_with,'linestyle','--');
+  
+  % hybrid sans
+  x = results.(ex).UFEMISM_hybrid_sans.x;
+  x = ((x - min(x)) / range(x)) * 3 - 1;
+  u = results.(ex).UFEMISM_hybrid_sans.u;
+  u(x<0) = [];
+  x(x<0) = [];
+  u(x>1) = [];
+  x(x>1) = [];
+  line('parent',H.Ax(xi),'xdata',x,'ydata',u,'linewidth',3,'color',c_sans,'linestyle','--');
+end
+
+legend(H.Ax(1),'DIVA','hybrid','DIVA sans','hybrid sans','Full-Stokes','Higher-Order','FS mean','HO mean','location','northwest')

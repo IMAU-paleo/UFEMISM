@@ -8,10 +8,7 @@ foldernames = {...
   'MISMIP_mod_DIVA_sans_32km',...
   'MISMIP_mod_DIVA_sans_20km',...
   'MISMIP_mod_DIVA_sans_16km',...
-  'MISMIP_mod_DIVA_sans_10km',...
-  'MISMIP_mod_DIVA_sans_8km',...
-  'MISMIP_mod_DIVA_sans_5km',...
-  'MISMIP_mod_DIVA_sans_4km'};
+  'MISMIP_mod_DIVA_sans_10km'};
 
 %% Read model output
 
@@ -104,8 +101,8 @@ end
 xlabel(H.Ax1,'Time (kyr)')
 ylabel(H.Ax1,'x_{GL} (km)')
 
-legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km',...
-  'location','northwest')
+% legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km','location','northwest')
+legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','location','northwest')
 
 %% Hysteresis
 
@@ -128,7 +125,7 @@ for fi = 1: length(foldernames)
   
 end
 
-resolutions = [64,40,32,20,16,10,8,5,4];
+resolutions = [64,40,32,20,16,10];%,8,5,4];
 
 line('parent',H.Ax2,'xdata',[],'ydata',[],'color','b','linewidth',2)
 
@@ -140,4 +137,4 @@ p = polyfit( log(resolutions), log(dxGL), 1);
 dxGL_fit = exp(polyval(p,log([2,128])));
 line('parent',H.Ax2,'xdata',[2,128],'ydata',dxGL_fit,'color','b','linestyle','-','linewidth',2)
 
-legend(['O( R^{' num2str(round(p(1)*100)/100) '})'])
+legend(['O( R^{' num2str(round(p(1)*100)/100) '})'],'location','northwest')

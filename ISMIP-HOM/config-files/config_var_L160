@@ -18,7 +18,7 @@
   dx_refgeo_init_idealised_config             = 2000.0                           ! Resolution of square grid used for idealised initial geometry
   dx_refgeo_PD_idealised_config               = 2000.0                           ! Resolution of square grid used for idealised present-day geometry
   dx_refgeo_GIAeq_idealised_config            = 2000.0                           ! Resolution of square grid used for idealised GIA equilibrium geometry
-  DIVA_PETSc_rtol_config                      = 0.001                            ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-  DIVA_PETSc_abstol_config                    = 0.01                             ! DIVA PETSc solver - stop criterion, absolute difference
+  DIVA_PETSc_rtol_config                      = 0.0001                            ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+  DIVA_PETSc_abstol_config                    = 0.001                             ! DIVA PETSc solver - stop criterion, absolute difference
 
 /

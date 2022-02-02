@@ -8,64 +8,61 @@ foldernames = {...
   'MISMIP_mod_hybrid_sans_32km',...
   'MISMIP_mod_hybrid_sans_20km',...
   'MISMIP_mod_hybrid_sans_16km',...
-  'MISMIP_mod_hybrid_sans_10km',...
-  'MISMIP_mod_hybrid_sans_8km',...
-  'MISMIP_mod_hybrid_sans_5km',...
-  'MISMIP_mod_hybrid_sans_4km'};
+  'MISMIP_mod_hybrid_sans_10km'};
 
 %% Read model output
 
-for fi = 1: length( foldernames)
-  
-  foldername = foldernames{ fi};
-  
-  timeframes = get_UFEMISM_filelist( foldername, 'ANT');
-  ntf = length( timeframes);
-  
-  results( fi).time   = zeros( ntf,1);
-  results( fi).xGL_av = zeros( ntf,1);
-
-  filename_prev = '';
-  
-  for tfi = 1: ntf
-  
-    % Get info for this timeframe
-    time                 = timeframes( tfi).time;
-    ti                   = timeframes( tfi).ti;
-    filename_restart     = timeframes( tfi).filename_restart;
-    filename_help_fields = timeframes( tfi).filename_help_fields;
-
-    % If necessary, read the new mesh
-    if ~strcmpi( filename_prev, filename_restart)
-      filename_prev = filename_restart;
-      mesh = read_mesh_from_file( filename_restart);
-    end
-
-    % Read data fields for this timeframe
-    Hi = ncread( filename_restart,'Hi',[1,ti],[Inf,1]);
-    Hb = ncread( filename_restart,'Hb',[1,ti],[Inf,1]);
-    SL = ncread( filename_restart,'SL',[1,ti],[Inf,1]);
-    
-    % Calculate thickness above flotation
-    ice_density      = 910;
-    seawater_density = 1028;
-    TAF = Hi - max(0, (SL - Hb) * (seawater_density / ice_density));
-    
-    % Calculate GL as TAF=0 contour
-    C_GL = mesh_contour( mesh,TAF,0);
-    
-    % Calculate average GL position
-    xGL = sqrt( C_GL(:,1).^2 + C_GL(:,2).^2);
-    xGL_av = mean( xGL);
-    
-    % Save in results struct
-    results( fi).time(   tfi) = time;
-    results( fi).xGL_av( tfi) = xGL_av;
-    
-  end
-end
-
-save('tempdata_hybrid_sans.mat','results');
+% for fi = 1: length( foldernames)
+%   
+%   foldername = foldernames{ fi};
+%   
+%   timeframes = get_UFEMISM_filelist( foldername, 'ANT');
+%   ntf = length( timeframes);
+%   
+%   results( fi).time   = zeros( ntf,1);
+%   results( fi).xGL_av = zeros( ntf,1);
+% 
+%   filename_prev = '';
+%   
+%   for tfi = 1: ntf
+%   
+%     % Get info for this timeframe
+%     time                 = timeframes( tfi).time;
+%     ti                   = timeframes( tfi).ti;
+%     filename_restart     = timeframes( tfi).filename_restart;
+%     filename_help_fields = timeframes( tfi).filename_help_fields;
+% 
+%     % If necessary, read the new mesh
+%     if ~strcmpi( filename_prev, filename_restart)
+%       filename_prev = filename_restart;
+%       mesh = read_mesh_from_file( filename_restart);
+%     end
+% 
+%     % Read data fields for this timeframe
+%     Hi = ncread( filename_restart,'Hi',[1,ti],[Inf,1]);
+%     Hb = ncread( filename_restart,'Hb',[1,ti],[Inf,1]);
+%     SL = ncread( filename_restart,'SL',[1,ti],[Inf,1]);
+%     
+%     % Calculate thickness above flotation
+%     ice_density      = 910;
+%     seawater_density = 1028;
+%     TAF = Hi - max(0, (SL - Hb) * (seawater_density / ice_density));
+%     
+%     % Calculate GL as TAF=0 contour
+%     C_GL = mesh_contour( mesh,TAF,0);
+%     
+%     % Calculate average GL position
+%     xGL = sqrt( C_GL(:,1).^2 + C_GL(:,2).^2);
+%     xGL_av = mean( xGL);
+%     
+%     % Save in results struct
+%     results( fi).time(   tfi) = time;
+%     results( fi).xGL_av( tfi) = xGL_av;
+%     
+%   end
+% end
+% 
+% save('tempdata_hybrid_sans.mat','results');
 load('tempdata_hybrid_sans.mat');
 
 %% Plot results
@@ -104,8 +101,8 @@ end
 xlabel(H.Ax1,'Time (kyr)')
 ylabel(H.Ax1,'x_{GL} (km)')
 
-legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km',...
-  'location','northwest')
+% legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km','location','northwest')
+legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','location','northwest')
 
 %% Hysteresis
 
@@ -128,7 +125,7 @@ for fi = 1: length(foldernames)
   
 end
 
-resolutions = [64,40,32,20,16,10,8,5,4];
+resolutions = [64,40,32,20,16,10];%,8,5,4];
 
 line('parent',H.Ax2,'xdata',[],'ydata',[],'color','b','linewidth',2)
 
@@ -140,4 +137,4 @@ p = polyfit( log(resolutions), log(dxGL), 1);
 dxGL_fit = exp(polyval(p,log([2,128])));
 line('parent',H.Ax2,'xdata',[2,128],'ydata',dxGL_fit,'color','b','linestyle','-','linewidth',2)
 
-legend(['O( R^{' num2str(round(p(1)*100)/100) '})'])
+legend(['O( R^{' num2str(round(p(1)*100)/100) '})'],'location','northwest')

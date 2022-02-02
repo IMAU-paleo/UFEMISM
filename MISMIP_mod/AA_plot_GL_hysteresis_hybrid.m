@@ -101,8 +101,8 @@ end
 xlabel(H.Ax1,'Time (kyr)')
 ylabel(H.Ax1,'x_{GL} (km)')
 
-legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km',...
-  'location','northwest')
+% legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','8 km','5 km','4 km','location','northwest')
+legend(H.Ax1,'64 km','40 km','32 km','20 km','16 km','10 km','location','northwest')
 
 %% Hysteresis
 
@@ -137,4 +137,4 @@ p = polyfit( log(resolutions), log(dxGL), 1);
 dxGL_fit = exp(polyval(p,log([2,128])));
 line('parent',H.Ax2,'xdata',[2,128],'ydata',dxGL_fit,'color','b','linestyle','-','linewidth',2)
 
-legend(['O( R^{' num2str(round(p(1)*100)/100) '})'])
+legend(['O( R^{' num2str(round(p(1)*100)/100) '})'],'location','northwest')

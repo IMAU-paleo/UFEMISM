@@ -2903,7 +2903,7 @@ CONTAINS
   END SUBROUTINE calc_neighbour_functions_ls_reg_2nd_order
   
 ! == Directly apply a Neumann boundary condition to a data field
-  SUBROUTINE apply_Neumann_BC_direct_2D( mesh, d_a)
+  SUBROUTINE apply_Neumann_BC_direct_a_2D( mesh, d_a)
     ! Directly apply a Neumann boundary condition to a data field
       
     IMPLICIT NONE
@@ -2915,6 +2915,12 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: vi, vvi, vj
     REAL(dp)                                           :: sumd, sumw
+    
+    ! Safety
+    IF (SIZE( d_a,1) /= mesh%nV) THEN
+      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: data field is of the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
     
     ! First the borders - average over adjacent non-boundary vertices
     DO vi = mesh%vi1, mesh%vi2
@@ -2939,7 +2945,7 @@ CONTAINS
         d_a( vi) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
+        WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
       
@@ -2965,8 +2971,8 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
-  END SUBROUTINE apply_Neumann_BC_direct_2D
-  SUBROUTINE apply_Neumann_BC_direct_3D( mesh, d_a)
+  END SUBROUTINE apply_Neumann_BC_direct_a_2D
+  SUBROUTINE apply_Neumann_BC_direct_a_3D( mesh, d_a)
     ! Directly apply a Neumann boundary condition to a data field
       
     IMPLICIT NONE
@@ -2979,6 +2985,12 @@ CONTAINS
     INTEGER                                            :: vi, vvi, vj
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: sumd
     REAL(dp)                                           :: sumw
+    
+    ! Safety
+    IF (SIZE( d_a,1) /= mesh%nV) THEN
+      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: data field is of the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
     
     ALLOCATE( sumd( SIZE( d_a,2)))
     
@@ -3005,7 +3017,7 @@ CONTAINS
         d_a( vi,:) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
+        WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
       
@@ -3033,6 +3045,103 @@ CONTAINS
     
     DEALLOCATE( sumd)
     
-  END SUBROUTINE apply_Neumann_BC_direct_3D
+  END SUBROUTINE apply_Neumann_BC_direct_a_3D
+  SUBROUTINE apply_Neumann_BC_direct_b_2D( mesh, d_b)
+    ! Directly apply a Neumann boundary condition to a data field
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_b
+    
+    ! Local variables:
+    INTEGER                                            :: ti, tti, tj
+    REAL(dp)                                           :: sumd, sumw
+    
+    ! Safety
+    IF (SIZE( d_b,1) /= mesh%nTri) THEN
+      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: data field is of the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    DO ti = mesh%ti1, mesh%ti2
+    
+      IF (mesh%Tri_edge_index( ti) == 0) CYCLE
+      
+      sumd = 0._dp
+      sumw = 0._dp
+      
+      DO tti = 1, 3
+        tj = mesh%TriC( ti,tti)
+        IF (tj == 0) CYCLE
+        IF (mesh%Tri_edge_index( tj) > 0) CYCLE
+        sumd = sumd + d_b( tj)
+        sumw = sumw + 1._dp
+      END DO
+      
+      IF (sumw > 0._dp) THEN
+        d_b( ti) = sumd / sumw
+      ELSE
+        ! This border triangle has no non-border neighbours, which shouldn't be possible!
+        WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    END DO ! DO ti = mesh%ti1, mesh%ti2
+    CALL sync
+    
+  END SUBROUTINE apply_Neumann_BC_direct_b_2D
+  SUBROUTINE apply_Neumann_BC_direct_b_3D( mesh, d_b)
+    ! Directly apply a Neumann boundary condition to a data field
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_b
+    
+    ! Local variables:
+    INTEGER                                            :: ti, tti, tj
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: sumd
+    REAL(dp)                                           :: sumw
+    
+    ! Safety
+    IF (SIZE( d_b,1) /= mesh%nTri) THEN
+      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: data field is of the wrong size!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ALLOCATE( sumd( SIZE( d_b,2)))
+    
+    DO ti = mesh%ti1, mesh%ti2
+    
+      IF (mesh%Tri_edge_index( ti) == 0) CYCLE
+      
+      sumd = 0._dp
+      sumw = 0._dp
+      
+      DO tti = 1, 3
+        tj = mesh%TriC( ti,tti)
+        IF (tj == 0) CYCLE
+        IF (mesh%Tri_edge_index( tj) > 0) CYCLE
+        sumd = sumd + d_b( tj,:)
+        sumw = sumw + 1._dp
+      END DO
+      
+      IF (sumw > 0._dp) THEN
+        d_b( ti,:) = sumd / sumw
+      ELSE
+        ! This border triangle has no non-border neighbours, which shouldn't be possible!
+        WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+      
+    END DO ! DO ti = mesh%ti1, mesh%ti2
+    CALL sync
+    
+    DEALLOCATE( sumd)
+    
+  END SUBROUTINE apply_Neumann_BC_direct_b_3D
 
 END MODULE mesh_operators_module

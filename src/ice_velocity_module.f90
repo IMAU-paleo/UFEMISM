@@ -28,7 +28,7 @@ MODULE ice_velocity_module
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
                                              ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
-                                             map_a_to_b_3D, map_b_to_c_3D, apply_Neumann_BC_direct_2D
+                                             map_a_to_b_3D, map_b_to_c_3D, apply_Neumann_BC_direct_a_2D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
                                              vertical_integrate
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
@@ -352,7 +352,7 @@ CONTAINS
       
       ! Check if the viscosity iteration has converged
       CALL calc_visc_iter_UV_resid( mesh, ice%u_prev_b, ice%v_prev_b, ice%u_vav_b, ice%v_vav_b, resid_UV)
-      IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_b), ' - ', MAXVAL(ice%u_vav_b), ']'
+      !IF (par%master) WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': resid_UV = ', resid_UV, ', u = [', MINVAL(ice%u_vav_b), ' - ', MAXVAL(ice%u_vav_b), ']'
       
       IF (par%master .AND. C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') &
         WRITE(0,*) '   DIVA - viscosity iteration ', viscosity_iteration_i, ': err = ', ABS(1._dp - MAXVAL(ice%u_vav_b) / umax_analytical), ': resid_UV = ', resid_UV
@@ -751,7 +751,7 @@ CONTAINS
     CALL deallocate_shared( wdv_dz_3D_a)
     
     ! Apply Neumann boundary conditions to correct inaccurate solutions at the domain border
-    CALL apply_Neumann_BC_direct_2D( mesh, ice%N_a)
+    CALL apply_Neumann_BC_direct_a_2D( mesh, ice%N_a)
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' , 'calc_effective_viscosity')
@@ -1118,6 +1118,28 @@ CONTAINS
       
     END DO
     CALL sync
+      
+      
+      
+      ! DENK DROM
+      IF (par%master) THEN
+        debug%dp_2D_b_01 = ice%taudx_b
+        debug%dp_2D_b_02 = ice%taudy_b
+        debug%dp_2D_a_01 = ice%N_a
+        debug%dp_2D_b_03 = N_b
+        debug%dp_2D_b_04 = dN_dx_b
+        debug%dp_2D_b_05 = dN_dy_b
+        debug%dp_2D_a_02 = ice%beta_a
+        debug%dp_2D_a_03 = ice%beta_eff_a
+        debug%dp_2D_b_06 = ice%beta_eff_b
+        debug%dp_2D_b_07 = u_b
+        debug%dp_2D_b_08 = v_b
+        CALL write_to_debug_file
+      END IF
+      CALL sync
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      
+      
     
     ! Clean up after yourself
     CALL deallocate_shared( wN_b    )

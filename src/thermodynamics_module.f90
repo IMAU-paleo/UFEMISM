@@ -27,7 +27,7 @@ MODULE thermodynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_remapping_mesh_mesh
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
-  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
+  USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_a_to_b_3D, ddy_a_to_b_3D
   USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex      
   USE mesh_mapping_module,             ONLY: remap_field_dp_3D
@@ -309,7 +309,7 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
         
-    CALL apply_Neumann_BC_direct_3D( mesh, Ti_new)
+    CALL apply_Neumann_BC_direct_a_3D( mesh, Ti_new)
     
     ! Cope with instability
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_unstable, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)    

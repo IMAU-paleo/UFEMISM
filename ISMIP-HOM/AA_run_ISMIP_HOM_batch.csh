@@ -117,4 +117,12 @@ rm -rf results_202*
 #mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_D_hybrid_sans    ISMIP-HOM/config-files/config_var_L010
 #mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_D_hybrid_sans    ISMIP-HOM/config-files/config_var_L005
 
-mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_0_DIVA
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_0_DIVA
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_0_DIVA_sans
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_0_hybrid
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_0_hybrid_sans
+#
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_1_DIVA
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_1_DIVA_sans
+#mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_1_hybrid
+mpiexec -n 2 UFEMISM_program   ISMIP-HOM/config-files/config_template_ISMIP_HOM_F_1_hybrid_sans

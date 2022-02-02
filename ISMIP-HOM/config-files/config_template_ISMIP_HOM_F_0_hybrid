@@ -42,7 +42,7 @@
   ! =======================================================================
   
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'ISMIP-HOM/ISMIP_HOM_F_0_DIVA'     ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'ISMIP-HOM/ISMIP_HOM_F_0_hybrid'     ! If not, create a directory with this name instead (stops the program if this directory already exists)
   fixed_output_dir_suffix_config              = ''                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
   do_write_regional_scalar_output_config      = .TRUE.
   do_write_global_scalar_output_config        = .TRUE.
@@ -125,7 +125,7 @@
   ! Ice dynamics - velocity
   ! =======================
   
-  choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+  choice_ice_dynamics_config                  = 'SIA/SSA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
   n_flow_config                               = 1.0                              ! Exponent in Glen's flow law
   m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
   m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice

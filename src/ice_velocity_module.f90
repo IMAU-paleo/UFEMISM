@@ -1118,28 +1118,6 @@ CONTAINS
       
     END DO
     CALL sync
-      
-      
-      
-      ! DENK DROM
-      IF (par%master) THEN
-        debug%dp_2D_b_01 = ice%taudx_b
-        debug%dp_2D_b_02 = ice%taudy_b
-        debug%dp_2D_a_01 = ice%N_a
-        debug%dp_2D_b_03 = N_b
-        debug%dp_2D_b_04 = dN_dx_b
-        debug%dp_2D_b_05 = dN_dy_b
-        debug%dp_2D_a_02 = ice%beta_a
-        debug%dp_2D_a_03 = ice%beta_eff_a
-        debug%dp_2D_b_06 = ice%beta_eff_b
-        debug%dp_2D_b_07 = u_b
-        debug%dp_2D_b_08 = v_b
-        CALL write_to_debug_file
-      END IF
-      CALL sync
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      
-      
     
     ! Clean up after yourself
     CALL deallocate_shared( wN_b    )

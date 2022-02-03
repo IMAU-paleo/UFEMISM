@@ -376,6 +376,7 @@ CONTAINS
     ! The different square grids
     ! ==========================
     
+    IF (par%master) WRITE(0,*) '  Initialising square grids for output, GIA, and data smoothing...'
     CALL initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
@@ -383,6 +384,7 @@ CONTAINS
     ! ===== Initialise dummy fields for debugging
     ! ===========================================
     
+    IF (par%master) WRITE(0,*) '  Initialising debug fields...'
     CALL initialise_debug_fields( region)
        
     ! ===== Output files =====

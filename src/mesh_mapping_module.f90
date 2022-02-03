@@ -798,7 +798,6 @@ CONTAINS
   
     !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating w0, w1x, w1y...'
   
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - calculating remapping weights...'
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w0 , perr)
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1x, perr)
     CALL MatDuplicate( A_xdy_a_g, MAT_SHARE_NONZERO_PATTERN, w1y, perr)
@@ -866,7 +865,6 @@ CONTAINS
     CALL MatAssemblyEnd(   w1y, MAT_FINAL_ASSEMBLY, perr)
     
     ! Calculate the remapping matrix
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - combining weights into remapping matrix...'
   
     !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping matrix...'
     
@@ -918,7 +916,7 @@ CONTAINS
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc
     REAL(dp)                                           :: xmin, xmax, ymin, ymax
     INTEGER                                            :: il, iu, jl, ju
-    INTEGER                                            :: i, j
+    INTEGER                                            :: i, j, ii, jj
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_xdy_g_b_CSR, A_mxydx_g_b_CSR, A_xydy_g_b_CSR
     TYPE(tMat)                                         :: A_xdy_g_b    , A_mxydx_g_b    , A_xydy_g_b
@@ -1000,6 +998,49 @@ CONTAINS
         
       END IF ! IF (mesh%TriA( ti) < 4._dp * grid%dx**2) THEN
       
+    END DO
+    CALL sync
+    
+    ! Treat grid cells that possibly were not yet marked before
+    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+    
+      IF (containing_triangle( i,j) == 0 .AND. overlaps_with_small_triangle( i,j) == 0) THEN
+        ! This grid cell does not overlap with a small triangle, but was not yet marked
+        ! as being contained inside a large one; find the large triangle containing it.
+        
+        ! For efficiency, find the nearest grid cell that does list which large
+        ! triangle contains it; use that as a hint for the triangle search
+        n = 0
+        ti_hint = 0
+        DO WHILE (ti_hint == 0)
+          n = n+1
+          ! Safety
+          IF (n > MAX( grid%nx, grid%ny)) EXIT
+          il = MAX( 1      , i-n)
+          iu = MIN( grid%nx, i+n)
+          jl = MAX( 1      , j-n)
+          ju = MIN( grid%ny, j+n)
+          DO ii = il, iu
+          DO jj = jl, ju
+            IF (containing_triangle( ii,jj) > 0) THEN
+              ti_hint = containing_triangle( ii,jj)
+              EXIT
+            END IF
+          END DO
+          IF (ti_hint > 0) EXIT
+          END DO
+        END DO
+        IF (ti_hint == 0) ti_hint = 1
+        
+        ! Find the triangle containing this grid cell
+        p = [MAX( mesh%xmin, MIN( mesh%xmax, grid%x( i) )), MAX( mesh%ymin, MIN( mesh%ymax, grid%y( j) ))]
+        CALL find_containing_triangle( mesh, p, ti_hint)
+        containing_triangle( i,j) = ti_hint
+        
+      END IF
+      
+    END DO
     END DO
     CALL sync
     

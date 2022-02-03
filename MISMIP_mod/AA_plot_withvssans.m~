@@ -96,19 +96,17 @@ line(H.Ax1,'xdata',[],'ydata',[],'color',c_sans,'linewidth',3,'linestyle','-'); 
 line(H.Ax1,'xdata',[],'ydata',[],'color',c_sans,'linewidth',3,'linestyle','--');  % Hybrid sans
 
 % Plot results
-line('parent',H.Ax1,'xdata',results.DIVA.time       /1e3,'ydata',results.DIVA.xGL_av        / 1e3,'linewidth',3,'color',c_with,'linestyle','-'); 
-line('parent',H.Ax1,'xdata',results.hybrid.time     /1e3,'ydata',results.hybrid.xGL_av      / 1e3,'linewidth',3,'color',c_with,'linestyle','--'); 
-line('parent',H.Ax1,'xdata',results.DIVA_sans.time  /1e3,'ydata',results.DIVA_sans.xGL_av   / 1e3,'linewidth',3,'color',c_sans,'linestyle','-');
-line('parent',H.Ax1,'xdata',results.hybrid_sans.time/1e3,'ydata',results.hybrid_sans.xGL_av / 1e3,'linewidth',3,'color',c_sans,'linestyle','--');
+line('parent',H.Ax1,'xdata',results.time/1e3,'ydata',results( 1).xGL_av / 1e3,'linewidth',3,'color',c_with,'linestyle','-');  % DIVA
+line('parent',H.Ax1,'xdata',results( 2).time/1e3,'ydata',results( 2).xGL_av / 1e3,'linewidth',3,'color',c_with,'linestyle','--'); % Hybrid
+line('parent',H.Ax1,'xdata',results( 3).time/1e3,'ydata',results( 3).xGL_av / 1e3,'linewidth',3,'color',c_sans,'linestyle','-');  % DIVA sans
+line('parent',H.Ax1,'xdata',results( 4).time/1e3,'ydata',results( 4).xGL_av / 1e3,'linewidth',3,'color',c_sans,'linestyle','--'); % Hybrid sans
 
 legend(H.Ax1,'DIVA','hybrid','DIVA sans','hybrid sans','location','northwest')
 
 %% Read sea-level change
-icedyns = {'DIVA','hybrid','DIVA_sans','hybrid_sans'};
-
-for idi = 1: length( icedyns)
+for fi = 1: length( foldernames)
   
-  foldername = results.(icedyns{idi}).foldername;
+  foldername = foldernames{ fi};
   filename = [foldername '/aa_general_output.txt'];
   
   fid = fopen( filename,'r');
@@ -123,9 +121,9 @@ for idi = 1: length( icedyns)
     dSLdt( ti) = (SL( ti+1) - SL( ti-1)) / (time( ti+1) / time( ti-1));
   end
   
-  results.(icedyns{idi}).SL.time  = time;
-  results.(icedyns{idi}).SL.SL    = SL;
-  results.(icedyns{idi}).SL.dSLdt = dSLdt;
+  results( fi).SL.time  = time;
+  results( fi).SL.SL    = SL;
+  results( fi).SL.dSLdt = dSLdt;
   
 end
 
@@ -139,7 +137,7 @@ xlabel(H.Ax2,'Time (kyr)')
 ylabel(H.Ax2,'Sea level rate (mm/yr)')
 
 % Plot results
-line('parent',H.Ax2,'xdata',results.DIVA.SL.time       /1e3,'ydata',results.DIVA.SL.dSLdt        * 1e3,'linewidth',3,'color',c_with,'linestyle','-'); 
-line('parent',H.Ax2,'xdata',results.hybrid.SL.time     /1e3,'ydata',results.hybrid.SL.dSLdt      * 1e3,'linewidth',3,'color',c_with,'linestyle','--'); 
-line('parent',H.Ax2,'xdata',results.DIVA_sans.SL.time  /1e3,'ydata',results.DIVA_sans.SL.dSLdt   * 1e3,'linewidth',3,'color',c_sans,'linestyle','-');
-line('parent',H.Ax2,'xdata',results.hybrid_sans.SL.time/1e3,'ydata',results.hybrid_sans.SL.dSLdt * 1e3,'linewidth',3,'color',c_sans,'linestyle','--');
+line('parent',H.Ax2,'xdata',results( 1).SL.time/1e3,'ydata',results( 1).SL.dSLdt * 1e3,'linewidth',3,'color',c_with,'linestyle','-');  % DIVA
+line('parent',H.Ax2,'xdata',results( 2).SL.time/1e3,'ydata',results( 2).SL.dSLdt * 1e3,'linewidth',3,'color',c_with,'linestyle','--'); % Hybrid
+line('parent',H.Ax2,'xdata',results( 3).SL.time/1e3,'ydata',results( 3).SL.dSLdt * 1e3,'linewidth',3,'color',c_sans,'linestyle','-');  % DIVA sans
+line('parent',H.Ax2,'xdata',results( 4).SL.time/1e3,'ydata',results( 4).SL.dSLdt * 1e3,'linewidth',3,'color',c_sans,'linestyle','--'); % Hybrid sans

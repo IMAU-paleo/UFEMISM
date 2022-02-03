@@ -150,6 +150,7 @@ CONTAINS
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     
     ! Local variables:
+    INTEGER                                       :: i,j,n
     
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
@@ -189,6 +190,32 @@ CONTAINS
       refgeo%grid%xmax = refgeo%grid%x( refgeo%grid%nx)
       refgeo%grid%ymin = refgeo%grid%y( 1             )
       refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
+    END IF
+    CALL sync
+    
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D(                   refgeo%grid%n           , refgeo%grid%wn           )
+    IF (par%master) refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
+    CALL sync
+    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n        , refgeo%grid%wij2n        )
+    CALL allocate_shared_int_2D( refgeo%grid%n , 2      , refgeo%grid%n2ij        , refgeo%grid%wn2ij        )
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, refgeo%grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, refgeo%grid%ny
+            n = n+1
+            refgeo%grid%ij2n( i,j) = n
+            refgeo%grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = refgeo%grid%ny, 1, -1
+            n = n+1
+            refgeo%grid%ij2n( i,j) = n
+            refgeo%grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
     END IF
     CALL sync
     
@@ -1259,6 +1286,8 @@ CONTAINS
     ! Initial ice-sheet geometry
     ! ==========================
     
+    IF (par%master) WRITE(0,*) '  Mapping initial reference geometry to the mesh...'
+    
     did_remap_init = .FALSE.
     
     IF     (choice_refgeo_init == 'idealised') THEN
@@ -1280,6 +1309,8 @@ CONTAINS
     
     ! Present-day ice-sheet geometry
     ! ==============================
+    
+    IF (par%master) WRITE(0,*) '  Mapping present-day reference geometry to the mesh...'
     
     did_remap_PD = .FALSE.
     
@@ -1320,6 +1351,8 @@ CONTAINS
     
     ! GIA equilibrium ice-sheet geometry
     ! ==================================
+    
+    IF (par%master) WRITE(0,*) '  Mapping GIA equilibrium reference geometry to the mesh...'
     
     did_remap_GIAeq = .FALSE.
     

@@ -108,7 +108,7 @@ MODULE configuration_module
   ! Mesh generation parameters
   ! ==========================
   
-  INTEGER             :: nconmax_config                              = 16                               ! Maximum number of vertex connections
+  INTEGER             :: nconmax_config                              = 32                               ! Maximum number of vertex connections
   REAL(dp)            :: alpha_min_config                            = 0.55_dp                          ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   REAL(dp)            :: dz_max_ice_config                           = 20000._dp                        ! Maximum allowed 2nd order surface deviation over ice 
   REAL(dp)            :: res_max_config                              = 800._dp                          ! Maximum allowed resolution                            [km]
@@ -254,7 +254,7 @@ MODULE configuration_module
   ! Some parameters for numerically solving the SSA/DIVA
   REAL(dp)            :: DIVA_visc_it_norm_dUV_tol_config            = 1E-2_dp                          ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
   INTEGER             :: DIVA_visc_it_nit_config                     = 50                               ! Maximum number of effective viscosity iterations
-  REAL(dp)            :: DIVA_visc_it_relax_config                   = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
+  REAL(dp)            :: DIVA_visc_it_relax_config                   = 0.2_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
   REAL(dp)            :: DIVA_beta_max_config                        = 1E20_dp                          ! beta values     are limited to this value
   REAL(dp)            :: DIVA_vel_max_config                         = 5000._dp                         ! DIVA velocities are limited to this value
   CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_west_config              = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain boundary in the DIVA

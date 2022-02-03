@@ -728,10 +728,10 @@ CONTAINS
         ymin = MINVAL( Vor( 1:nVor,2))
         ymax = MAXVAL( Vor( 1:nVor,2))
         
-        il = 1 + FLOOR( (xmin - grid%xmin + grid%dx / 2._dp) / grid%dx)
-        iu = 1 + FLOOR( (xmax - grid%xmin + grid%dx / 2._dp) / grid%dx)
-        jl = 1 + FLOOR( (ymin - grid%ymin + grid%dx / 2._dp) / grid%dx)
-        ju = 1 + FLOOR( (ymax - grid%ymin + grid%dx / 2._dp) / grid%dx)
+        il = MAX( 1, MIN( grid%nx, 1 + FLOOR( (xmin - grid%xmin + grid%dx / 2._dp) / grid%dx) ))
+        iu = MAX( 1, MIN( grid%nx, 1 + FLOOR( (xmax - grid%xmin + grid%dx / 2._dp) / grid%dx) ))
+        jl = MAX( 1, MIN( grid%ny, 1 + FLOOR( (ymin - grid%ymin + grid%dx / 2._dp) / grid%dx) ))
+        ju = MAX( 1, MIN( grid%ny, 1 + FLOOR( (ymax - grid%ymin + grid%dx / 2._dp) / grid%dx) ))
         
         ! Check which of the grid cells in this square lie inside the triangle
         DO i = il, iu

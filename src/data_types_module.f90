@@ -3,8 +3,10 @@ MODULE data_types_module
   ! all subroutines can use all types without interdependency conflicts, and also to make the 
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
-
+  
+#include <petsc/finclude/petscksp.h>
   USE mpi
+  USE petscksp
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
@@ -12,7 +14,7 @@ MODULE data_types_module
 
   IMPLICIT NONE
   
-  TYPE type_sparse_matrix_CSR
+  TYPE type_sparse_matrix_CSR_dp
     ! Compressed Sparse Row (CSR) format matrix
     
     INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
@@ -23,7 +25,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: val
     INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
     
-  END TYPE type_sparse_matrix_CSR
+  END TYPE type_sparse_matrix_CSR_dp
   
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
@@ -149,8 +151,8 @@ MODULE data_types_module
     ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
-    TYPE(type_sparse_matrix_CSR)            :: M_SSADIVA                   ! SSA/DIVA stiffness matrix
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
@@ -320,44 +322,51 @@ MODULE data_types_module
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
     
     ! Matrix operators: mapping
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
+    TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
+    TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
+    TYPE(tMat)                              :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
+    TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
+    TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
+    TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
    
     ! Matrix operators: d/dx
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
    
     ! Matrix operators: d/dy
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
-    TYPE(type_sparse_matrix_CSR)            :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
     
     ! 2nd-order accurate matrix operators on the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
-    TYPE(type_sparse_matrix_CSR)            :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
     
     ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
-    TYPE(type_sparse_matrix_CSR)            :: M_Neumann_BC_b_b
+    TYPE(tMat)                              :: M_Neumann_BC_b
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
     
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
@@ -374,13 +383,6 @@ MODULE data_types_module
     INTEGER                                 :: vi1, vi2                      ! Vertices
     INTEGER                                 :: ti1, ti2                      ! Triangles
     INTEGER                                 :: ci1, ci2                      ! Edges
-    
-    ! Parallelisation - five-colouring
-    INTEGER,  DIMENSION(:    ), POINTER     :: colour
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: colour_vi
-    INTEGER,  DIMENSION(:    ), POINTER     :: colour_nV
-    INTEGER                                 :: wcolour, wcolour_vi, wcolour_nV
-    INTEGER,  DIMENSION(5)                  :: colour_v1, colour_v2
 
   END TYPE type_mesh
   
@@ -497,139 +499,49 @@ MODULE data_types_module
     
   END TYPE type_debug_fields
   
-  TYPE type_remapping_trilin
-    ! Indices and weights for mapping data between two meshes, using trilinear interpolation
+  TYPE type_single_row_mapping_matrices
+    ! Results from integrating a single set of lines
     
-    INTEGER,  DIMENSION(:,:  ), POINTER :: vi   ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:,:  ), POINTER :: w    ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    
-    INTEGER :: wvi, ww
-    
-  END TYPE type_remapping_trilin
-  
-  TYPE type_remapping_nearest_neighbour
-    ! Indices and weights for mapping data between two meshes, using nearest-neighbour interpolation
-    
-    INTEGER,  DIMENSION(:    ), POINTER :: vi   ! Index of mesh_src vertex nearest to this mesh_dst vertex
-    
-    INTEGER :: wvi
-    
-  END TYPE type_remapping_nearest_neighbour
-  
-  TYPE type_remapping_conservative_intermediate_Ac_local
-    ! Intermediate data used in creating conservative remapping arrays
-    
-    INTEGER                                 :: n_tot
     INTEGER                                 :: n_max
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nS
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli1
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: sli2
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_left
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp_right
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
-  
-  END TYPE type_remapping_conservative_intermediate_Ac_local
-  
-  TYPE type_remapping_conservative_intermediate_Ac_shared
-    ! Intermediate data used in creating conservative remapping arrays
+    INTEGER                                 :: n
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_left
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
     
-    INTEGER,                    POINTER :: n_tot
-    INTEGER,                    POINTER :: n_max
-    INTEGER,  DIMENSION(:    ), POINTER :: nS
-    INTEGER,  DIMENSION(:    ), POINTER :: sli1
-    INTEGER,  DIMENSION(:    ), POINTER :: sli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_left
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp_right
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
-    INTEGER :: wn_tot, wn_max, wnS, wsli1, wsli2, wvi_opp_left, wvi_opp_right, wLI_xdy, wLI_mxydx, wLI_xydy
+  END TYPE type_single_row_mapping_matrices
   
-  END TYPE type_remapping_conservative_intermediate_Ac_shared
-  
-  TYPE type_remapping_conservative_intermediate_local
-    ! Intermediate data used in creating conservative remapping arrays
+  TYPE type_remapping_mesh_mesh
+    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
     
-    INTEGER                                 :: n_tot
-    INTEGER                                 :: n_max
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nV
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli1
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vli2
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: vi_opp
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xydy
+    INTEGER                                 :: int_dummy
+    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
+    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
+    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
+    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
   
-  END TYPE type_remapping_conservative_intermediate_local
-  
-  TYPE type_remapping_conservative_intermediate_shared
-    ! Intermediate data used in creating conservative remapping arrays
-    
-    INTEGER,                    POINTER :: n_tot
-    INTEGER,                    POINTER :: n_max
-    INTEGER,  DIMENSION(:    ), POINTER :: nV
-    INTEGER,  DIMENSION(:    ), POINTER :: vli1
-    INTEGER,  DIMENSION(:    ), POINTER :: vli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi_opp
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xdy
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_mxydx
-    REAL(dp), DIMENSION(:    ), POINTER :: LI_xydy
-    INTEGER :: wn_tot, wn_max, wnV, wvli1, wvli2, wvi_opp, wLI_xdy, wLI_mxydx, wLI_xydy
-  
-  END TYPE type_remapping_conservative_intermediate_shared
-  
-  TYPE type_remapping_conservative
-    ! Indices and weights for mapping data between two meshes, using 1st or 2nd order conservative remapping
-    
-    INTEGER,                    POINTER :: n_tot ! Total number of entries in list
-    INTEGER,  DIMENSION(:    ), POINTER :: vli1  ! List index range per vertex
-    INTEGER,  DIMENSION(:    ), POINTER :: vli2
-    INTEGER,  DIMENSION(:    ), POINTER :: vi    ! Indices of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w0    ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w1x   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    REAL(dp), DIMENSION(:    ), POINTER :: w1y   ! Weights of vertices from mesh_src contributing to this mesh_dst vertex
-    INTEGER :: wn_tot, wvli1, wvli2, wvi, ww0, ww1x, ww1y
-    
-  END TYPE type_remapping_conservative
-  
-  TYPE type_remapping
-    ! Mapping index and weight arrays for remapping data between two meshes, for different remapping methods
-    
-    TYPE(type_remapping_trilin)                 :: trilin
-    TYPE(type_remapping_nearest_neighbour)      :: nearest_neighbour
-    TYPE(type_remapping_conservative)           :: conservative
-  
-  END TYPE type_remapping
-  
-  TYPE type_remapping_mesh2grid
-    ! Indices and weights for mapping data between the model mesh and a grid using pseudo-conservative remapping
-    
-    ! Indices and weights
-    INTEGER,                    POINTER :: n
-    INTEGER,  DIMENSION(:,:  ), POINTER :: ii
-    REAL(dp), DIMENSION(:    ), POINTER :: w_m2g
-    REAL(dp), DIMENSION(:    ), POINTER :: w_g2m
-    INTEGER :: wn, wii, ww_m2g, ww_g2m
-  
-  END TYPE type_remapping_mesh2grid
+  END TYPE type_remapping_mesh_mesh
   
   TYPE type_grid
     ! A regular square grid covering a model region
     
     ! Basic grid data
-    INTEGER,                    POINTER     :: nx, ny
+    INTEGER,                    POINTER     :: nx, ny, n
     REAL(dp),                   POINTER     :: dx
     REAL(dp), DIMENSION(:    ), POINTER     :: x, y
     REAL(dp),                   POINTER     :: xmin, xmax, ymin, ymax
-    INTEGER :: wnx, wny, wdx, wx, wy, wxmin, wxmax, wymin, wymax
+    INTEGER :: wnx, wny, wn, wdx, wx, wy, wxmin, wxmax, wymin, wymax
     
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
     
-    ! Mapping arrays between the grid and the model mesh (pseudo-conservative remapping)
-    TYPE(type_remapping_mesh2grid)          :: map
+    ! Sparse matrices representing the remapping operations between a mesh and a grid
+    TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
+    TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
+    REAL(dp),                   POINTER     :: tol_dist
+    INTEGER :: wtol_dist
+    
+    ! Conversion tables for grid-form vs. vector-form data
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
+    INTEGER :: wij2n, wn2ij
     
     ! Lat-lon coordinates
     REAL(dp), DIMENSION(:,:  ), POINTER     :: lat, lon
@@ -640,8 +552,8 @@ MODULE data_types_module
   TYPE type_remapping_latlon2mesh
     ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
     
-    INTEGER,  DIMENSION(:    ), POINTER :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER :: wlat1, wlat2, wlon1, wlon2
+    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
+    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
     INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
     
   END TYPE type_remapping_latlon2mesh

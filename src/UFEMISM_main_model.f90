@@ -3,9 +3,11 @@ MODULE UFEMISM_main_model
   ! The main regional ice-sheet model
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -22,16 +24,17 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping
-  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometry_to_mesh
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping_mesh_mesh
+  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
-  USE mesh_mapping_module,             ONLY: create_remapping_arrays, deallocate_remapping_arrays, &
-                                             create_remapping_arrays_mesh_grid, deallocate_remapping_arrays_mesh_grid
+  USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+                                             calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                             calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
-                                             associate_debug_fields, reallocate_debug_fields, create_debug_file
+                                             associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
   USE restart_module,                  ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data, initialise_mask_noice
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
@@ -228,23 +231,30 @@ CONTAINS
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     
     ! Local variables
-    TYPE(type_remapping)                               :: map
+    TYPE(type_remapping_mesh_mesh)                     :: map
     
     ! Create a new mesh
     CALL create_new_mesh( region)
     
-    IF (par%master) WRITE(0,*) '  Mapping model data to the new mesh...'
+    ! Update the mapping operators between the new mesh and the fixed square grids
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_output)
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_GIA   )
+    CALL deallocate_remapping_operators_mesh2grid(            region%grid_smooth)
+    
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_output)
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_GIA   )
+    CALL deallocate_remapping_operators_grid2mesh(            region%grid_smooth)
+    
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
+    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
+    
+    CALL calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
+    CALL calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
+    CALL calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
     
     ! Calculate the mapping arrays
-    CALL create_remapping_arrays( region%mesh, region%mesh_new, map)
-    
-    ! Update the square grid mapping arrays (needed for remapping/reinitialising the climate model)
-    CALL deallocate_remapping_arrays_mesh_grid(              region%grid_output)
-    CALL deallocate_remapping_arrays_mesh_grid(              region%grid_GIA   )
-    CALL deallocate_remapping_arrays_mesh_grid(              region%grid_smooth)
-    CALL create_remapping_arrays_mesh_grid( region%mesh_new, region%grid_GIA   )
-    CALL create_remapping_arrays_mesh_grid( region%mesh_new, region%grid_output)
-    CALL create_remapping_arrays_mesh_grid( region%mesh_new, region%grid_smooth)
+    CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
     
     ! Recalculate the "no ice" mask (also needed for the climate model)
     CALL reallocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
@@ -254,17 +264,13 @@ CONTAINS
     CALL deallocate_shared(  region%refgeo_init%wHi )
     CALL deallocate_shared(  region%refgeo_init%wHb )
     CALL deallocate_shared(  region%refgeo_init%wHs )
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_init )
-    
     CALL deallocate_shared(  region%refgeo_PD%wHi   )
     CALL deallocate_shared(  region%refgeo_PD%wHb   )
     CALL deallocate_shared(  region%refgeo_PD%wHs   )
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_PD   )
-    
     CALL deallocate_shared(  region%refgeo_GIAeq%wHi)
     CALL deallocate_shared(  region%refgeo_GIAeq%wHb)
     CALL deallocate_shared(  region%refgeo_GIAeq%wHs)
-    CALL map_reference_geometry_to_mesh( region%mesh_new, region%refgeo_GIAeq)
+    CALL map_reference_geometries_to_mesh( region, region%mesh_new)
     
     ! Remap all the submodels
     CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
@@ -275,7 +281,7 @@ CONTAINS
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
             
     ! Deallocate shared memory for the mapping arrays
-    CALL deallocate_remapping_arrays( map)
+    CALL deallocate_remapping_operators_mesh_mesh( map)
     
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
     CALL deallocate_mesh_all( region%mesh)
@@ -365,13 +371,12 @@ CONTAINS
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
     
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_init )
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_PD   )
-    CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_GIAeq)
+    CALL map_reference_geometries_to_mesh( region, region%mesh)
     
     ! The different square grids
     ! ==========================
     
+    IF (par%master) WRITE(0,*) '  Initialising square grids for output, GIA, and data smoothing...'
     CALL initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
@@ -379,6 +384,7 @@ CONTAINS
     ! ===== Initialise dummy fields for debugging
     ! ===========================================
     
+    IF (par%master) WRITE(0,*) '  Initialising debug fields...'
     CALL initialise_debug_fields( region)
        
     ! ===== Output files =====
@@ -620,20 +626,21 @@ CONTAINS
     CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model_square_grid'
     INTEGER                                       :: n1, n2
     REAL(dp)                                      :: xmid, ymid
-    INTEGER                                       :: nsx, nsy, i, j
+    INTEGER                                       :: nsx, nsy, i, j, n
+    REAL(dp), PARAMETER                           :: tol = 1E-9_dp
     
     n1 = par%mem%n
     
     nsx = 0
     nsy = 0
     
-    CALL allocate_shared_int_0D( grid%nx,   grid%wnx  )    
-    CALL allocate_shared_int_0D( grid%ny,   grid%wny  )
-    CALL allocate_shared_dp_0D(  grid%dx,   grid%wdx  )
-    CALL allocate_shared_dp_0D(  grid%xmin, grid%wxmin)
-    CALL allocate_shared_dp_0D(  grid%xmax, grid%wxmax)
-    CALL allocate_shared_dp_0D(  grid%ymin, grid%wymin)
-    CALL allocate_shared_dp_0D(  grid%ymax, grid%wymax)
+    CALL allocate_shared_int_0D(                   grid%nx          , grid%wnx          )
+    CALL allocate_shared_int_0D(                   grid%ny          , grid%wny          )
+    CALL allocate_shared_dp_0D(                    grid%dx          , grid%wdx          )
+    CALL allocate_shared_dp_0D(                    grid%xmin        , grid%wxmin        )
+    CALL allocate_shared_dp_0D(                    grid%xmax        , grid%wxmax        )
+    CALL allocate_shared_dp_0D(                    grid%ymin        , grid%wymin        )
+    CALL allocate_shared_dp_0D(                    grid%ymax        , grid%wymax        )
     
     IF (par%master) THEN
     
@@ -672,6 +679,37 @@ CONTAINS
     
     END IF ! IF (par%master) THEN
     CALL sync
+      
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( grid%tol_dist, grid%wtol_dist)
+    IF (par%master) grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
+    CALL sync
+    
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D(                   grid%n           , grid%wn           )
+    IF (par%master) grid%n  = grid%nx * grid%ny
+    CALL sync
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n        , grid%wij2n        )
+    CALL allocate_shared_int_2D( grid%n , 2      , grid%n2ij        , grid%wn2ij        )
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, grid%ny
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = grid%ny, 1, -1
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
+    END IF
+    CALL sync
     
     ! Assign range to each processor
     CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
@@ -689,7 +727,8 @@ CONTAINS
     CALL sync
     
     ! Calculate mapping arrays between the mesh and the grid
-    CALL create_remapping_arrays_mesh_grid( region%mesh, grid)
+    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
+    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
     
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)

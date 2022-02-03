@@ -5,7 +5,7 @@ MODULE parallel_module
   USE mpi
   USE configuration_module,        ONLY: C, dp
   USE data_types_module,           ONLY: type_memory_use_tracker
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER, C_LOC
+  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   
   IMPLICIT NONE
   
@@ -205,7 +205,7 @@ CONTAINS
     
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
-    TYPE(C_PTR)                                        :: baseptr    
+    TYPE(C_PTR)                                        :: baseptr
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object

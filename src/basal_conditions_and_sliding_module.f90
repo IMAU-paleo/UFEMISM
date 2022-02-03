@@ -3,9 +3,11 @@ MODULE basal_conditions_and_sliding_module
   ! Contains all the routines for calculating the basal conditions underneath the ice.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -22,7 +24,7 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
 
   IMPLICIT NONE
@@ -187,14 +189,14 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! In case of no sliding or "idealised" sliding (e.g. ISMIP-HOM experiments), no bed roughness is required
+    IF (C%choice_sliding_law == 'no_sliding' .OR. &
+        C%choice_sliding_law == 'idealised') RETURN
+    
     IF (C%choice_basal_roughness == 'uniform') THEN
       ! Apply a uniform bed roughness
       
-      IF     (C%choice_sliding_law == 'no_sliding') THEN
-        ! No sliding; do nothing
-      ELSEIF (C%choice_sliding_law == 'idealised') THEN
-        ! Idealised sliding; do nothing
-      ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      IF     (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
@@ -1153,7 +1155,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Basal hydrology
@@ -1171,7 +1173,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -1180,7 +1182,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = map%int_dummy
     
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
@@ -1205,7 +1207,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -1214,7 +1216,7 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = map%int_dummy
     
     ! Allocate shared memory
     IF     (C%choice_sliding_law == 'no_sliding') THEN

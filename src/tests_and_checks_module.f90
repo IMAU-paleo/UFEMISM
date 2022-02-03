@@ -3,9 +3,11 @@ MODULE tests_and_checks_module
   ! A bunch of tests and checks of the CSR matrix operators
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -22,9 +24,12 @@ MODULE tests_and_checks_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
+  USE data_types_module
   USE mesh_operators_module
-  USE utilities_module
-  USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
+  USE petsc_module
+  USE petscksp
+  USE sparse_matrix_module
+  USE netcdf_module
 
   IMPLICIT NONE
 
@@ -44,10 +49,7 @@ CONTAINS
     IF (par%master) WRITE(0,*) '========================================'
     IF (par%master) WRITE(0,*) ''
     
-  ! Test basic CSR matrix operations
-  ! ================================
-    
-    CALL test_CSR_matrix_operations
+    CALL test_petsc_to_csr
     
   ! Test all the matrix operators
   ! =============================
@@ -62,7 +64,6 @@ CONTAINS
   ! Solve the (modified) Laplace equation as the ultimate test
   ! ==========================================================
   
-    CALL solve_modified_Laplace_equation_a( mesh)
     CALL solve_modified_Laplace_equation_b( mesh)
     
     IF (par%master) WRITE(0,*) ''
@@ -73,349 +74,55 @@ CONTAINS
     
   END SUBROUTINE run_all_matrix_tests
   
-! == Test basic CSR matrix operations
-  SUBROUTINE test_CSR_matrix_operations
-    ! Testing some basic CSR-formatted matrix operations
-    
-    IMPLICIT NONE
-        
-    IF (par%master) WRITE(0,*) '  Testing basic CSR matrix operations...'
-    
-    CALL test_CSR_matrix_operations_add    
-    CALL test_CSR_matrix_operations_overwrite_rows
-    CALL test_CSR_matrix_operations_multiply_vector
-    CALL test_CSR_matrix_operations_multiply_matrix
-    CALL test_CSR_matrix_operations_multiply_matrix_rows_with_vector
-    
-  END SUBROUTINE test_CSR_matrix_operations
+! == Test petsc-to-CSR conversion
   
-  SUBROUTINE test_CSR_matrix_operations_add
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
+  SUBROUTINE test_petsc_to_csr
+    ! Test petsc-to-CSR conversion
+      
     IMPLICIT NONE
     
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
-    LOGICAL                                            :: are_identical
+    ! Local variables
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+    TYPE(tMat)                                         :: A
+    INTEGER                                            :: nrows, ncols, nnz
+    REAL(dp), DIMENSION(:    ), POINTER                ::  xx,  yy
+    INTEGER                                            :: wxx, wyy
     
-    IF (par%master) WRITE(0,*) '   Testing matrix addition (C = A+B)...'
+    ! Set up CSR matrix
+    nrows = 5
+    ncols = 5
+    nnz   = 10
     
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA   , 64, 3, 96)
-    CALL allocate_matrix_CSR_shared( BBB   , 64, 3, 96)
-    CALL allocate_matrix_CSR_shared( CCC_ex, 64, 3, 144)
+    CALL allocate_matrix_CSR_shared( A_CSR, nrows, ncols, nnz)
     
     IF (par%master) THEN
-AAA%nnz = 96
-AAA%ptr   = [1,1,1,1,1,1,1,1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,76,79,82,85,88,91,94,97]
-AAA%index = [1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
-AAA%val   = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-BBB%nnz = 96
-BBB%ptr   = [1,1,2,3,4,6,8,10,13,13,14,15,16,18,20,22,25,25,26,27,28,30,32,34,37,37,38,39,40,42,44,46,49,49,50,51,52,54,56,58,61,61,62,63,64,66,68,70,73,73,74,75,76,78,80,82,85,85,86,87,88,90,92,94,97]
-BBB%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3,1,2,3,1,2,1,3,2,3,1,2,3]
-BBB%val   = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
-CCC_ex%nnz = 144
-CCC_ex%ptr   = [1,1,2,3,4,6,8,10,13,14,15,17,19,21,23,26,29,30,32,33,35,37,40,42,45,46,48,50,51,54,56,58,61,63,65,67,70,72,75,78,81,83,85,88,90,93,95,98,101,103,106,108,110,113,116,118,121,124,127,130,133,136,139,142,145]
-CCC_ex%index = [1,2,3,1,2,1,3,2,3,1,2,3,1,1,1,2,1,3,1,2,1,3,1,2,3,1,2,3,2,1,2,2,2,3,1,2,1,2,3,2,3,1,2,3,3,1,3,2,3,3,1,2,3,1,3,2,3,1,2,3,1,2,1,2,1,2,1,2,3,1,2,1,2,3,1,2,3,1,2,3,1,3,1,3,1,2,3,1,3,1,2,3,1,3,1,2,3,1,2,3,2,3,1,2,3,2,3,2,3,1,2,3,1,2,3,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3]
-CCC_ex%val   = [2,2,2,2,2,2,2,2,2,2,2,2,1,3,1,2,1,2,3,2,3,2,1,2,2,3,2,2,1,2,1,3,1,2,2,3,2,1,2,3,2,2,3,2,1,2,1,2,1,3,2,2,1,2,3,2,3,2,2,3,1,1,3,1,1,3,1,1,2,3,3,3,1,2,1,3,2,3,3,2,1,1,3,1,1,2,1,1,3,3,2,1,3,3,1,2,3,3,2,3,1,1,2,1,1,3,1,1,3,2,3,1,2,1,3,3,3,2,3,3,1,1,1,3,1,1,1,3,1,1,1,3,3,3,1,3,1,3,1,3,3,3,3,3]
+      A_CSR%nnz   = 10
+      A_CSR%ptr   = [1,3,5,7,10,11]
+      A_CSR%index = [1,3,2,4,1,5,1,2,4,5]
+      A_CSR%val   = [1._dp,2._dp,3._dp,4._dp,5._dp,6._dp,7._dp,8._dp,9._dp,10._dp]
     END IF
     CALL sync
     
-    ! Perform multiplication
-    CALL add_matrix_matrix_CSR( AAA, BBB, CCC)
+    ! Convert to PETSc format
+    CALL mat_CSR2petsc( A_CSR, A)
     
-    ! Check if operation gave the correct result
-    CALL are_identical_matrices_CSR( CCC, CCC_ex, are_identical)
-    IF (par%master .AND. (.NOT. are_identical)) THEN
-      WRITE(0,*) 'test_CSR_matrix_operations_add - ERROR: CSR matrix addition gave wrong answer!'
-      WRITE(0,*) '  C%nnz   = ', CCC%nnz
-      WRITE(0,*) '  C%ptr   = ', CCC%ptr
-      WRITE(0,*) '  C%index = ', CCC%index
-      WRITE(0,*) '  C%val   = ', CCC%val
+    ! Text multiplication
+    CALL allocate_shared_dp_1D( 5, xx, wxx)
+    CALL allocate_shared_dp_1D( 5, yy, wyy)
+    IF (par%master) THEN
+      xx = [1._dp, 2._dp, 3._dp, 4._dp, 5._dp]
+    END IF
+    CALL sync
+    
+    CALL multiply_PETSc_matrix_with_vector_1D( A, xx, yy)
+    
+    ! Check the result
+    IF (yy(1) /= 7._dp .OR. yy(2) /= 22._dp .OR. yy(3) /= 35._dp .OR. yy(4) /= 59._dp .OR. yy(5) /= 50._dp) THEN
+      WRITE(0,*) 'test_petsc_to_csr - ERROR: did not find the correct answer!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
-    CALL sync
     
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_matrix_CSR( BBB)
-    CALL deallocate_matrix_CSR( CCC)
-    CALL deallocate_matrix_CSR( CCC_ex)
-    
-  END SUBROUTINE test_CSR_matrix_operations_add
-  SUBROUTINE test_CSR_matrix_operations_overwrite_rows
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB
-    
-    IF (par%master) WRITE(0,*) '   Testing matrix row overwriting (C = A (+O) B)...'
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    CALL allocate_matrix_CSR_shared( BBB, 4, 4, 8)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! B
-      BBB%nnz   = 4
-      BBB%ptr   = [1,3,3,5,5]
-      BBB%index = [1,3,2,4]
-      BBB%val   = [15,16,17,18]
-    END IF
-    CALL sync
-    
-    ! Perform multiplication
-    CALL overwrite_rows_CSR( AAA, BBB)
-    
-    ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (AAA%nnz == 9 .AND. &
-          AAA%ptr(    1) ==  1 .AND. &
-          AAA%ptr(    2) ==  3 .AND. &
-          AAA%ptr(    3) ==  5 .AND. &
-          AAA%ptr(    4) ==  7 .AND. &
-          AAA%ptr(    5) == 10 .AND. &
-          AAA%index(  1) == 1 .AND. &
-          AAA%index(  2) == 3 .AND. &
-          AAA%index(  3) == 1 .AND. &
-          AAA%index(  4) == 4 .AND. &
-          AAA%index(  5) == 2 .AND. &
-          AAA%index(  6) == 4 .AND. &
-          AAA%index(  7) == 1 .AND. &
-          AAA%index(  8) == 3 .AND. &
-          AAA%index(  9) == 4 .AND. &
-          AAA%val(    1) ==  15._dp .AND. &
-          AAA%val(    2) ==  16._dp .AND. &
-          AAA%val(    3) ==   3._dp .AND. &
-          AAA%val(    4) ==   4._dp .AND. &
-          AAA%val(    5) ==  17._dp .AND. &
-          AAA%val(    6) ==  18._dp .AND. &
-          AAA%val(    7) ==   6._dp .AND. &
-          AAA%val(    8) ==   7._dp .AND. &
-          AAA%val(    9) ==   8._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_overwrite_rows - ERROR: CSR matrix row overwriting gave wrong answer!'
-        WRITE(0,*) '  A%nnz   = ', AAA%nnz
-        WRITE(0,*) '  A%ptr   = ', AAA%ptr
-        WRITE(0,*) '  A%index = ', AAA%index
-        WRITE(0,*) '  A%val   = ', AAA%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_matrix_CSR( BBB)
-    
-  END SUBROUTINE test_CSR_matrix_operations_overwrite_rows
-  SUBROUTINE test_CSR_matrix_operations_multiply_vector
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA
-    REAL(dp), DIMENSION(:    ), POINTER                ::  x,  b
-    INTEGER                                            :: wx, wb
-    
-    IF (par%master) WRITE(0,*) '   Testing matrix-vector multiplication (b = A*x)...'
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( 4, x, wx)
-    CALL allocate_shared_dp_1D( 4, b, wb)
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! x
-      x = [1,2,3,4]
-    END IF
-    CALL sync
-    
-    ! Perform multiplication
-    CALL multiply_matrix_vector_CSR( AAA, x, b)
-    
-    ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (b( 1) == 7._dp .AND. b( 2) == 19._dp .AND. b( 3) == 10._dp .AND. b( 4) == 59._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_multiply_vector - ERROR: CSR matrix-vector multiplication gave wrong answer!'
-        WRITE(0,*) '  b = ', b
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_shared( wx)
-    CALL deallocate_shared( wb)
-    
-  END SUBROUTINE test_CSR_matrix_operations_multiply_vector
-  SUBROUTINE test_CSR_matrix_operations_multiply_matrix
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, BBB, CCC, CCC_ex
-    LOGICAL                                            :: are_identical
-    
-    IF (par%master) WRITE(0,*) '   Testing matrix-matrix multiplication (C = A*B)...'
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA   , 4, 4, 8 )
-    CALL allocate_matrix_CSR_shared( BBB   , 4, 4, 8 )
-    CALL allocate_matrix_CSR_shared( CCC_ex, 4, 4, 13)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! B
-      BBB%nnz   = 8
-      BBB%ptr   = [1,3,5,7,9]
-      BBB%index = [1,3,3,4,2,3,2,4]
-      BBB%val   = [9,10,11,12,13,14,15,16]
-      ! C
-CCC_ex%nnz = 13
-CCC_ex%ptr   = [1,4,8,10,14]
-CCC_ex%index = [1,2,3,1,2,3,4,3,4,1,2,3,4]
-CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
-    END IF
-    CALL sync
-    
-    CALL write_CSR_matrix_to_NetCDF( AAA, 'A.nc')
-    CALL write_CSR_matrix_to_NetCDF( BBB, 'B.nc')
-    CALL write_CSR_matrix_to_NetCDF( CCC_ex, 'C_ex.nc')
-    
-    ! Perform multiplication
-    CALL multiply_matrix_matrix_CSR( AAA, BBB, CCC)
-    CALL write_CSR_matrix_to_NetCDF( CCC, 'C.nc')
-    
-    ! Check if operation gave the correct result
-    CALL are_identical_matrices_CSR( CCC, CCC_ex, are_identical)
-    IF (par%master .AND. (.NOT. are_identical)) THEN
-      WRITE(0,*) 'test_CSR_matrix_operations_add - ERROR: CSR matrix addition gave wrong answer!'
-      WRITE(0,*) '  C%nnz   = ', CCC%nnz
-      WRITE(0,*) '  C%ptr   = ', CCC%ptr
-      WRITE(0,*) '  C%index = ', CCC%index
-      WRITE(0,*) '  C%val   = ', CCC%val
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_matrix_CSR( BBB)
-    CALL deallocate_matrix_CSR( CCC)
-    CALL deallocate_matrix_CSR( CCC_ex)
-    
-  END SUBROUTINE test_CSR_matrix_operations_multiply_matrix
-  SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
-    ! Testing some basic CSR-formatted matrix operations
-    
-    USE mesh_operators_module
-    USE utilities_module
-    
-    IMPLICIT NONE
-    
-    ! Local variables:
-    TYPE(type_sparse_matrix_CSR)                       :: AAA, CCC
-    REAL(dp), DIMENSION(:    ), POINTER                ::  BB
-    INTEGER                                            :: wBB
-    
-    IF (par%master) WRITE(0,*) '   Testing multiplication of matrix rows with vector elements (C = DIAG(B) * A)...'
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( 4, BB, wBB)
-    
-    ! Define some simple matrices
-    CALL allocate_matrix_CSR_shared( AAA, 4, 4, 8)
-    
-    IF (par%master) THEN
-      ! A
-      AAA%nnz   = 8
-      AAA%ptr   = [1,3,5,6,9]
-      AAA%index = [1,3,1,4,2,1,3,4]
-      AAA%val   = [1,2,3,4,5,6,7,8]
-      ! BB
-      BB = [1,2,3,4]
-    END IF
-    CALL sync
-    
-    ! Perform multiplication
-    CALL multiply_matrix_rows_with_vector( AAA, BB, CCC)
-    
-    ! Check if operation gave the correct result
-    IF (par%master) THEN
-      IF (CCC%nnz == 8 .AND. &
-          CCC%ptr(    1) ==  1 .AND. &
-          CCC%ptr(    2) ==  3 .AND. &
-          CCC%ptr(    3) ==  5 .AND. &
-          CCC%ptr(    4) ==  6 .AND. &
-          CCC%ptr(    5) ==  9 .AND. &
-          CCC%index(  1) == 1 .AND. &
-          CCC%index(  2) == 3 .AND. &
-          CCC%index(  3) == 1 .AND. &
-          CCC%index(  4) == 4 .AND. &
-          CCC%index(  5) == 2 .AND. &
-          CCC%index(  6) == 1 .AND. &
-          CCC%index(  7) == 3 .AND. &
-          CCC%index(  8) == 4 .AND. &
-          CCC%val(    1) ==   1._dp .AND. &
-          CCC%val(    2) ==   2._dp .AND. &
-          CCC%val(    3) ==   6._dp .AND. &
-          CCC%val(    4) ==   8._dp .AND. &
-          CCC%val(    5) ==  15._dp .AND. &
-          CCC%val(    6) ==  24._dp .AND. &
-          CCC%val(    7) ==  28._dp .AND. &
-          CCC%val(    8) ==  32._dp) THEN
-      ELSE
-        WRITE(0,*) 'test_CSR_matrix_operations_multiply_matrix - ERROR: CSR matrix rows with vector elements multiplication gave wrong answer!'
-        WRITE(0,*) '  C%nnz   = ', CCC%nnz
-        WRITE(0,*) '  C%ptr   = ', CCC%ptr
-        WRITE(0,*) '  C%index = ', CCC%index
-        WRITE(0,*) '  C%val   = ', CCC%val
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF
-    CALL sync
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( AAA)
-    CALL deallocate_shared(     wBB)
-    CALL deallocate_matrix_CSR( CCC)
-    
-  END SUBROUTINE test_CSR_matrix_operations_multiply_matrix_rows_with_vector
+  END SUBROUTINE test_petsc_to_csr
   
 ! == Test all the matrix operators (mapping+gradients)
 
@@ -646,6 +353,7 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     CALL d2dx2_a_to_a_2D(  mesh, d_a_ex, d2dx2_a_to_a )
     CALL d2dxdy_a_to_a_2D( mesh, d_a_ex, d2dxdy_a_to_a)
     CALL d2dy2_a_to_a_2D(  mesh, d_a_ex, d2dy2_a_to_a )
+    CALL sync
     
   ! Write results to debug file
   ! ===========================
@@ -684,6 +392,11 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
 !      debug%dp_2D_c_07 = ddy_a_to_c
 !      debug%dp_2D_c_08 = ddy_b_to_c
 !      debug%dp_2D_c_09 = ddy_c_to_c
+!      
+!      !! 2nd-order
+!      !debug%dp_2D_a_01 = d2dx2_a_to_a
+!      !debug%dp_2D_a_02 = d2dxdy_a_to_a
+!      !debug%dp_2D_a_03 = d2dy2_a_to_a
 !      
 !      CALL write_to_debug_file
 !      
@@ -771,9 +484,9 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     ! ddy_c_to_b_3D
     ! ddy_c_to_c_3D
     ! 
-    ! d3Dx2_a_to_a_3D
-    ! d3Dxdy_a_to_a_3D
-    ! d3Dy2_a_to_a_3D
+    ! d2dx2_a_to_a_3D
+    ! d2dxdy_a_to_a_3D
+    ! d2dy2_a_to_a_3D
       
     IMPLICIT NONE
     
@@ -1089,11 +802,11 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
   ! Calculate discretised approximations
   ! ====================================
     
-    CALL multiply_matrix_vector_CSR( mesh%M2_ddx_b_b   , d_b_ex, ddx_b   )
-    CALL multiply_matrix_vector_CSR( mesh%M2_ddy_b_b   , d_b_ex, ddy_b   )
-    CALL multiply_matrix_vector_CSR( mesh%M2_d2dx2_b_b , d_b_ex, d2dx2_b )
-    CALL multiply_matrix_vector_CSR( mesh%M2_d2dxdy_b_b, d_b_ex, d2dxdy_b)
-    CALL multiply_matrix_vector_CSR( mesh%M2_d2dy2_b_b , d_b_ex, d2dy2_b )
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M2_ddx_b_b   , d_b_ex, ddx_b   )
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M2_ddy_b_b   , d_b_ex, ddy_b   )
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M2_d2dx2_b_b , d_b_ex, d2dx2_b )
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M2_d2dxdy_b_b, d_b_ex, d2dxdy_b)
+    CALL multiply_PETSc_matrix_with_vector_1D( mesh%M2_d2dy2_b_b , d_b_ex, d2dy2_b )
     
   ! Write results to debug file
   ! ===========================
@@ -1118,6 +831,7 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
 !      
 !    END IF
 !    CALL sync
+!    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     
   ! Clean up after yourself
   ! =======================
@@ -1172,132 +886,17 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
   END SUBROUTINE test_matrix_operators_test_function
   
 ! == Solve a (modified version of) the Laplace equation on the mesh
-  SUBROUTINE solve_modified_Laplace_equation_a( mesh)
-    ! Test the discretisation by solving (a modified version of) the Laplace equation:
-    !
-    ! d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
-    !
-    ! (Modified to include a spatially variable stiffness, making it much more similar to
-    ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
-      
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    
-    ! Local variables:
-    INTEGER                                            :: vi, ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  f_a,  N_b,  b_a
-    INTEGER                                            :: wf_a, wN_b, wb_a
-    TYPE(type_sparse_matrix_CSR)                       :: M_a, BC_a, mNddx_b
-    REAL(dp)                                           :: x, y, xp, yp
-    REAL(dp), PARAMETER                                :: amp = 0._dp
-    INTEGER                                            :: nnz_BC
-        
-    IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation on the a-grid...'
-    
-  ! Solve the equation on the a-grid (vertex)
-  ! =========================================
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,   f_a, wf_a)
-    CALL allocate_shared_dp_1D( mesh%nV,   b_a, wb_a)
-    CALL allocate_shared_dp_1D( mesh%nTri, N_b, wN_b)
-    
-    ! Set up the spatially variable stiffness N on the b-grid (triangle)
-    DO ti = mesh%ti1, mesh%ti2
-      x = mesh%TriGC( ti,1)
-      y = mesh%TriGC( ti,2)
-      xp = (x - mesh%xmin) / (mesh%xmax - mesh%xmin)
-      yp = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-      N_b( ti) = 1._dp + EXP(amp * SIN( 2._dp * pi * xp) * SIN(2._dp * pi * yp))
-    END DO
-    CALL sync
-    
-    ! Create the operator matrix M
-    CALL multiply_matrix_rows_with_vector( mesh%M_ddx_a_b, N_b, mNddx_b     )
-    CALL multiply_matrix_matrix_CSR(       mesh%M_ddx_b_a,      mNddx_b, M_a, nz_template = mesh%M_ddx_a_a)
-    
-    ! Create the boundary conditions matrix BC
-    
-    ! Find maximum number of non-zero entries
-    nnz_BC = 0
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mesh%edge_index( vi) > 0) THEN
-        nnz_BC = nnz_BC + 1 + mesh%nC( vi)
-      END IF
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_BC, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)   
-    
-    ! Allocate distributed shared memory
-    CALL allocate_matrix_CSR_dist( BC_a, mesh%nV, mesh%nV, nnz_BC)
-    
-    ! Fill in values
-    BC_a%nnz = 0
-    BC_a%ptr = 1
-    DO vi = mesh%vi1, mesh%vi2
-    
-      IF (mesh%edge_index( vi) == 0) THEN
-        ! Free vertex: no boundary conditions apply
-      
-      ELSEIF (mesh%edge_index( vi) == 6 .OR. mesh%edge_index( vi) == 7 .OR. mesh%edge_index( vi) == 8) THEN
-        ! West: bump
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        y = mesh%V( vi,2)
-        y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-        b_a( vi) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
-        
-      ELSE
-        ! Otherwise: zero
-        
-        ! Matrix
-        BC_a%nnz  = BC_a%nnz+1
-        BC_a%index( BC_a%nnz) = vi
-        BC_a%val(   BC_a%nnz) = 1._dp
-        
-        ! Right-hand side vector
-        b_a( vi) = 0._dp
-        
-      END IF
-      
-      ! Finalise matrix row
-      BC_a%ptr( vi+1) = BC_a%nnz + 1
-      
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
-    
-    ! Finalise matrix
-    CALL finalise_matrix_CSR_dist( BC_a, mesh%vi1, mesh%vi2)
-    
-    ! Add boundary conditions to the operator matrix
-    CALL overwrite_rows_CSR( M_a, BC_a)
-    
-    ! Solve the equation
-    CALL solve_matrix_equation_CSR( M_a, b_a, f_a, C%DIVA_choice_matrix_solver, &
-      SOR_nit = 5000, SOR_tol = 0.0001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
-      
-    ! Write result to debug file
-    IF (par%master) THEN
-      debug%dp_2D_a_01 = f_a
-      CALL write_to_debug_file
-    END IF
-    CALL sync
-    
-  END SUBROUTINE solve_modified_Laplace_equation_a
   SUBROUTINE solve_modified_Laplace_equation_b( mesh)
     ! Test the discretisation by solving (a modified version of) the Laplace equation:
     !
-    ! d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
+    !   d/dx ( N * df/dx) + d/dx ( N * df/dy) = 0
     !
     ! (Modified to include a spatially variable stiffness, making it much more similar to
     ! the SSA/DIVA, and necessitating the use of a staggered grid/mesh to solve it)
+    ! 
+    ! Using the product rule, this expression can be expanded to read:
+    ! 
+    !   N * d2f/dx2 + dN/dx * df/dx + N * d2f/dy2 + dN/dy * df/dy = 0
       
     IMPLICIT NONE
     
@@ -1306,15 +905,20 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     
     ! Local variables:
     INTEGER                                            :: vi, ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  N_a,  N_b,  dN_dx_b,  dN_dy_b
-    INTEGER                                            :: wN_a, wN_b, wdN_dx_b, wdN_dy_b
-    REAL(dp), DIMENSION(:    ), POINTER                ::  x_b,  b_b
-    INTEGER                                            :: wx_b, wb_b
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max, n, edge_index
-    INTEGER                                            :: k1, k2, k
-    TYPE(type_sparse_matrix_CSR)                       :: A_b
     REAL(dp)                                           :: x, y, xp, yp
     REAL(dp), PARAMETER                                :: amp = 7._dp
+    REAL(dp), DIMENSION(:    ), POINTER                ::  N_a,  N_b,  dN_dx_b,  dN_dy_b
+    INTEGER                                            :: wN_a, wN_b, wdN_dx_b, wdN_dy_b
+    TYPE(tVec)                                         :: vN_b, vdN_dx_b, vdN_dy_b
+    REAL(dp), DIMENSION(:    ), POINTER                ::  x_b,  b_b
+    INTEGER                                            :: wx_b, wb_b
+    TYPE(tMat)                                         :: M1, M2, M3, M4
+    TYPE(tMat)                                         :: A_b
+    INTEGER                                            :: nTri_BC
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            ::  Tri_BC_loc
+    INTEGER,  DIMENSION(:    ), POINTER                ::  Tri_BC
+    INTEGER                                            :: wTri_BC
+    REAL(dp)                                           :: rtol, abstol
         
     IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation on the b-grid...'
     
@@ -1341,92 +945,110 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     CALL ddx_a_to_b_2D( mesh, N_a, dN_dx_b)
     CALL ddy_a_to_b_2D( mesh, N_a, dN_dy_b)
     
-    ! Set up the matrix A
-    ncols           = mesh%nTri    ! from
-    nrows           = mesh%nTri    ! to
-    nnz_per_row_max = 10
+    ! Convert them to PETSc vectors
+    CALL vec_double2petsc( N_b    , vN_b    )
+    CALL vec_double2petsc( dN_dx_b, vdN_dx_b)
+    CALL vec_double2petsc( dN_dy_b, vdN_dy_b)
     
-    nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( A_b, nrows, ncols, nnz_max)
+  ! Create the stiffness matrix A
+  ! =============================
     
+    ! Initialise with known non-zero structure
+    CALL MatDuplicate( mesh%M2_ddx_b_b, MAT_SHARE_NONZERO_PATTERN, A_b, perr)
+    
+    ! Add the different terms
+    
+    ! M1 = N * d2/dx2
+    CALL MatDuplicate( mesh%M2_d2dx2_b_b, MAT_COPY_VALUES, M1, perr)
+    CALL MatDiagonalScale( M1, vN_b    , PETSC_NULL_VEC, perr)
+    
+    ! M2 = N * d2/dy2
+    CALL MatDuplicate( mesh%M2_d2dy2_b_b, MAT_COPY_VALUES, M2, perr)
+    CALL MatDiagonalScale( M2, vN_b    , PETSC_NULL_VEC, perr)
+    
+    ! M3 = dN/dx * d/dx
+    CALL MatDuplicate( mesh%M2_ddx_b_b  , MAT_COPY_VALUES, M3, perr)
+    CALL MatDiagonalScale( M3, vdN_dx_b, PETSC_NULL_VEC, perr)
+    
+    ! M4 = dN/dy * d/dy
+    CALL MatDuplicate( mesh%M2_ddy_b_b  , MAT_COPY_VALUES, M4, perr)
+    CALL MatDiagonalScale( M4, vdN_dy_b, PETSC_NULL_VEC, perr)
+    
+    ! Add them to A
+    CALL MatAXPY( A_b, 1._dp, M1, SAME_NONZERO_PATTERN, perr)
+    CALL MatAXPY( A_b, 1._dp, M2, SAME_NONZERO_PATTERN, perr)
+    CALL MatAXPY( A_b, 1._dp, M3, SAME_NONZERO_PATTERN, perr)
+    CALL MatAXPY( A_b, 1._dp, M4, SAME_NONZERO_PATTERN, perr)
+    
+  ! Add boundary conditions
+  ! =======================
+    
+    ! List all triangles where boundary conditions should be applied
+    ALLOCATE( Tri_BC_loc( mesh%nTri))
+    IF (par%master) THEN
+      nTri_BC = 0
+      DO ti = 1, mesh%nTri
+        IF (mesh%Tri_edge_index( ti) > 0) THEN
+          nTri_BC = nTri_BC + 1
+          Tri_BC_loc( nTri_BC) = ti
+        END IF
+      END DO
+    END IF
+    CALL MPI_BCAST( nTri_BC, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    CALL allocate_shared_int_1D( nTri_BC, Tri_BC, wTri_BC)
+    IF (par%master) THEN
+      Tri_BC = Tri_BC_loc( 1:nTri_BC)
+    END IF
+    DEALLOCATE( Tri_BC_loc)
+    CALL sync
+    
+    ! For those triangles, set matrix row to zeros and diagonal element to one
+    IF (par%master) Tri_BC = Tri_BC - 1 ! Because PETSc indexes from 0...
+    CALL sync
+    CALL MatZeroRows( A_b, nTri_BC, Tri_BC, 1._dp, PETSC_NULL_VEC, PETSC_NULL_VEC, perr)
+    CALL deallocate_shared( wTri_BC)
+    
+    ! Fill in right-hand side and initial guess
     DO ti = mesh%ti1, mesh%ti2
       
-      ! If this triangle touches the domain border, apply boundary conditions
-      edge_index = 0
-      DO n = 1, 3
-        vi = mesh%Tri( ti,n)
-        IF (mesh%edge_index( vi) > 0) edge_index = MAX( edge_index, mesh%edge_index( vi))
-      END DO
-      
-      IF (edge_index > 0) THEN
-        ! This triangle touches the domain border; apply boundary conditions
+      IF (mesh%Tri_edge_index( ti) == 0) THEN
+        ! Free triangle
         
-        IF (edge_index == 6 .OR. edge_index == 7 .OR. edge_index == 8) THEN
-          ! Western border: bump
-        
-          ! Matrix
-          A_b%nnz  = A_b%nnz+1
-          A_b%index( A_b%nnz) = ti
-          A_b%val(   A_b%nnz) = 1._dp
-        
-          ! Right-hand side and initial guess
-          y = mesh%V( vi,2)
-          y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
-          b_b( ti) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
-          x_b( ti) = b_b( ti)
-        
-        ELSE
-          ! Other borders: zero
-        
-          ! Matrix
-          A_b%nnz  = A_b%nnz+1
-          A_b%index( A_b%nnz) = ti
-          A_b%val(   A_b%nnz) = 1._dp
-        
-          ! Right-hand side and initial guess
-          b_b( ti) = 0._dp
-          x_b( ti) = 0._dp
-          
-        END IF
-        
-      ELSE ! IF (edge_index > 0) THEN
-        ! This is a free triangle; fill in matrix coefficients
-        
-        ! Matrix
-        k1 = mesh%M2_ddx_b_b%ptr( ti)
-        k2 = mesh%M2_ddx_b_b%ptr( ti+1) - 1
-        
-        DO k = k1, k2
-        
-          A_b%nnz  = A_b%nnz+1
-          A_b%index( A_b%nnz) = mesh%M2_d2dx2_b_b%index( k)
-          A_b%val(   A_b%nnz) = N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
-                                dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k) + &
-                                N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
-                                dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k)
-          
-        END DO
-        
-        ! Right-hand side and initial guess
         b_b( ti) = 0._dp
         x_b( ti) = 0._dp
         
-      END IF ! IF (edge_index > 0) THEN
-      
-      ! Finalise matrix row
-      A_b%ptr( ti+1: A_b%m+1) = A_b%nnz+1
+      ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        ! Border triangle
+        
+        IF (mesh%Tri_edge_index( ti) == 6 .OR. mesh%Tri_edge_index( ti) == 7 .OR. mesh%Tri_edge_index( ti) == 8) THEN
+          ! Western border: bump
+          y = mesh%TriGC( ti,2)
+          y = (y - mesh%ymin) / (mesh%ymax - mesh%ymin)
+          b_b( ti) = 0.5_dp * (1._dp - COS( 2._dp * pi * y))
+          x_b( ti) = b_b( ti)
+        ELSE
+          ! Other borders: zero
+          b_b( ti) = 0._dp
+          x_b( ti) = 0._dp
+        END IF
+        
+      END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
       
     END DO
     CALL sync
     
-    ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( A_b, mesh%ti1, mesh%ti2)
-    CALL finalise_matrix_CSR_dist( A_b, mesh%ti1, mesh%ti2)
+    ! Assemble matrix and vectors, using the 2-step process:
+    !   MatAssemblyBegin(), MatAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL MatAssemblyBegin( A_b, MAT_FINAL_ASSEMBLY, perr)
+    CALL MatAssemblyEnd(   A_b, MAT_FINAL_ASSEMBLY, perr)
     
     ! Solve the equation
-    CALL solve_matrix_equation_CSR( A_b, b_b, x_b, C%DIVA_choice_matrix_solver, &
-      SOR_nit = 5000, SOR_tol = 0.00001_dp, SOR_omega = 1.3_dp, &
-      PETSc_rtol = C%DIVA_PETSc_rtol, PETSc_abstol = C%DIVA_PETSc_abstol)
+    rtol   = 0.001_dp
+    abstol = 0.001_dp
+    CALL solve_matrix_equation_PETSc( A_b, b_b, x_b, rtol, abstol)
       
     ! Write result to debug file
     IF (par%master) THEN
@@ -1436,7 +1058,10 @@ CCC_ex%val   = [9,26,38,27,60,30,64,55,60,54,211,158,128]
     CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_matrix_CSR( A_b)
+    CALL VecDestroy( vN_b    , perr)
+    CALL VecDestroy( vdN_dx_b, perr)
+    CALL VecDestroy( vdN_dy_b, perr)
+    CALL MatDestroy( A_b     , perr)
     CALL deallocate_shared( wN_a)
     CALL deallocate_shared( wN_b)
     CALL deallocate_shared( wdN_dx_b)

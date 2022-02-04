@@ -4014,5 +4014,91 @@ CONTAINS
     CALL close_netcdf_file(clim%netcdf%ncid)
 
   END SUBROUTINE read_GCM_global_climate_file
-    
+
+  ! Insolation solution (e.g. Laskar 2004)
+  SUBROUTINE inquire_insolation_file( forcing)
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    INTEGER                                :: int_dummy
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+  END SUBROUTINE inquire_insolation_file
+  SUBROUTINE read_insolation_file_timeframes( forcing, ti0, ti1)
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    INTEGER                                       :: mi, li
+    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
+
+    IF (.NOT. par%master) RETURN
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
+    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
+
+    ! Read data
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+    ! Store the data in the shared memory structure
+    DO mi = 1, 12
+    DO li = 1, forcing%ins_nlat
+      forcing%ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
+      forcing%ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
+    END DO
+    END DO
+
+    ! Clean up temporary memory
+    DEALLOCATE(Q_temp0)
+    DEALLOCATE(Q_temp1)
+
+  END SUBROUTINE read_insolation_file_timeframes
+  SUBROUTINE read_insolation_file_time_lat( forcing)
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+  END SUBROUTINE read_insolation_file_time_lat
+
 END MODULE netcdf_module

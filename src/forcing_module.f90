@@ -26,6 +26,7 @@ MODULE forcing_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_forcing_data, type_mesh, type_model_region
   USE netcdf_module,                   ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
+                                             inquire_insolation_file, read_insolation_file_time_lat, read_insolation_file_timeframes, &
                                              read_insolation_data_file, inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
 
   IMPLICIT NONE
@@ -1074,68 +1075,52 @@ CONTAINS
 
     IMPLICIT NONE
 
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_insolation_data!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      ! No insolation included, likely because we're running an idealised-geometry experiment
+    ELSEIF (C%choice_insolation_forcing == 'static' .OR. &
+            C%choice_insolation_forcing == 'realistic') THEN
+      ! Initialise insolation
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Initialising insolation data from ', TRIM(C%filename_insolation), '...'
+      IF (par%master) WRITE(0,*) ''
+      IF (par%master) WRITE(0,*) ' Initialising insolation data from ', TRIM(C%filename_insolation), '...'
 
-    ! The times at which we have insolation fields from Laskar, between which we'll interpolate
-    ! to find the insolation at model time (ins_t0 < model_time < ins_t1)
+      ! The times at which we have insolation fields from Laskar, between which we'll interpolate
+      ! to find the insolation at model time (ins_t0 < model_time < ins_t1)
 
-    CALL allocate_shared_dp_0D( forcing%ins_t0, forcing%wins_t0)
-    CALL allocate_shared_dp_0D( forcing%ins_t1, forcing%wins_t1)
+      CALL allocate_shared_dp_0D( forcing%ins_t0, forcing%wins_t0)
+      CALL allocate_shared_dp_0D( forcing%ins_t1, forcing%wins_t1)
 
-    IF (par%master) THEN
-      forcing%ins_t0 = C%start_time_of_run
-      forcing%ins_t1 = C%end_time_of_run
-    END IF ! IF (par%master) THEN
-    CALL sync
+      IF (par%master) THEN
+        ! Give impossible values to timeframes, so that the first call to get_insolation_at_time
+        ! is guaranteed to first read two new timeframes from the NetCDF file
+        forcing%ins_t0 = C%start_time_of_run - 100._dp
+        forcing%ins_t1 = C%start_time_of_run - 90._dp
+      END IF ! IF (par%master) THEN
+      CALL sync
 
-    ! Inquire into the insolation forcing netcdf file
-    CALL allocate_shared_int_0D( forcing%ins_nyears, forcing%wins_nyears)
-    CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
+      ! Inquire into the insolation forcing netcdf file
+      CALL allocate_shared_int_0D( forcing%ins_nyears, forcing%wins_nyears)
+      CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
 
-    forcing%netcdf_ins%filename = C%filename_insolation
+      forcing%netcdf_ins%filename = C%filename_insolation
 
-    IF (par%master) CALL inquire_insolation_data_file( forcing)
-    CALL sync
+      IF (par%master) CALL inquire_insolation_file( forcing)
+      CALL sync
 
-    ! Insolation
-    CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
-    CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,     forcing%wins_lat    )
-    CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0,  forcing%wins_Q_TOA0 )
-    CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
+      ! Insolation
+      CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
+      CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,     forcing%wins_lat    )
+      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0,  forcing%wins_Q_TOA0 )
+      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
 
-    ! Read time and latitude data
-    IF (par%master) CALL read_insolation_data_file_time_lat( forcing)
-    CALL sync
+      ! Read time and latitude data
+      IF (par%master) CALL read_insolation_file_time_lat( forcing)
+      CALL sync
 
-    ! Read insolation data
-    CALL update_insolation_data( C%start_time_of_run)
+    ELSE
+      IF (par%master) WRITE(0,*) 'update_insolation_data - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
 
   END SUBROUTINE initialise_insolation_data
 

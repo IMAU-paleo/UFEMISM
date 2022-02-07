@@ -383,7 +383,7 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   REAL(dp)            :: uniform_ice_thermal_conductivity_config     = 6.626958E7_dp                    ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
 
-  !Climate
+  ! Climate
   ! =======
 
   CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
@@ -398,6 +398,34 @@ MODULE configuration_module
   REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
   REAL(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
   REAL(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
+
+  ! Whether or not to apply a bias correction to the GCM snapshots
+  LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
+  LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+
+  ! Surface mass balance
+  ! ====================
+
+  CHARACTER(LEN=256)  :: choice_SMB_model_config                     = 'IMAU-ITM'                       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
+  CHARACTER(LEN=256)  :: choice_idealised_SMB_config                 = 'EISMINT1_A'
+  REAL(dp)            :: SMB_uniform_config                          = 0._dp                            ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
+
+  REAL(dp)            :: SMB_IMAUITM_C_abl_constant_NAM_config       = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
+  REAL(dp)            :: SMB_IMAUITM_C_abl_constant_EAS_config       = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
+  REAL(dp)            :: SMB_IMAUITM_C_abl_constant_GRL_config       = -49._dp                          !            they used to in ANICE.)
+  REAL(dp)            :: SMB_IMAUITM_C_abl_constant_ANT_config       = -49._dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_NAM_config             = 10._dp                           ! 10._dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_EAS_config             = 10._dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_GRL_config             = 10._dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_ANT_config             = 10._dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227_dp                        ! 0.513_dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Q_EAS_config              = 0.0227_dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0227_dp
+  REAL(dp)            :: SMB_IMAUITM_C_abl_Q_ANT_config              = 0.0227_dp
+  REAL(dp)            :: SMB_IMAUITM_C_refr_NAM_config               = 0.051_dp                         ! 0.012_dp
+  REAL(dp)            :: SMB_IMAUITM_C_refr_EAS_config               = 0.051_dp
+  REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
+  REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp
 
   ! Sea level and GIA
   ! =================
@@ -925,10 +953,38 @@ MODULE configuration_module
     REAL(dp)                            :: matrix_low_CO2_level
     REAL(dp)                            :: matrix_warm_orbit_time
     REAL(dp)                            :: matrix_cold_orbit_time
-  
+
+    ! Whether or not to apply a bias correction to the GCM snapshots
+    LOGICAL                             :: climate_matrix_biascorrect_warm
+    LOGICAL                             :: climate_matrix_biascorrect_cold
+
+    ! Surface mass balance
+    ! ====================
+
+    CHARACTER(LEN=256)                  :: choice_SMB_model
+    CHARACTER(LEN=256)                  :: choice_idealised_SMB
+    REAL(dp)                            :: SMB_uniform
+
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_NAM
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_EAS
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_GRL
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_ANT
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Ts_NAM
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Ts_EAS
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Ts_GRL
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Ts_ANT
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Q_NAM
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Q_EAS
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Q_GRL
+    REAL(dp)                            :: SMB_IMAUITM_C_abl_Q_ANT
+    REAL(dp)                            :: SMB_IMAUITM_C_refr_NAM
+    REAL(dp)                            :: SMB_IMAUITM_C_refr_EAS
+    REAL(dp)                            :: SMB_IMAUITM_C_refr_GRL
+    REAL(dp)                            :: SMB_IMAUITM_C_refr_ANT
+
     ! Sea level and GIA
     ! =================
-    
+
     LOGICAL                             :: do_ocean_floodfill
     CHARACTER(LEN=256)                  :: choice_sealevel_model
     REAL(dp)                            :: fixed_sealevel
@@ -1550,6 +1606,27 @@ CONTAINS
                      matrix_low_CO2_level_config,                     &
                      matrix_warm_orbit_time_config,                   &
                      matrix_cold_orbit_time_config,                   &
+                     climate_matrix_biascorrect_warm_config,          &
+                     climate_matrix_biascorrect_cold_config,          &
+                     choice_SMB_model_config,                         &
+                     choice_idealised_SMB_config,                     &
+                     SMB_uniform_config,                              &
+                     SMB_IMAUITM_C_abl_constant_NAM_config,           &
+                     SMB_IMAUITM_C_abl_constant_EAS_config,           &
+                     SMB_IMAUITM_C_abl_constant_GRL_config,           &
+                     SMB_IMAUITM_C_abl_constant_ANT_config,           &
+                     SMB_IMAUITM_C_abl_Ts_NAM_config,                 &
+                     SMB_IMAUITM_C_abl_Ts_EAS_config,                 &
+                     SMB_IMAUITM_C_abl_Ts_GRL_config,                 &
+                     SMB_IMAUITM_C_abl_Ts_ANT_config,                 &
+                     SMB_IMAUITM_C_abl_Q_NAM_config,                  &
+                     SMB_IMAUITM_C_abl_Q_EAS_config,                  &
+                     SMB_IMAUITM_C_abl_Q_GRL_config,                  &
+                     SMB_IMAUITM_C_abl_Q_ANT_config,                  &
+                     SMB_IMAUITM_C_refr_NAM_config,                   &
+                     SMB_IMAUITM_C_refr_EAS_config,                   &
+                     SMB_IMAUITM_C_refr_GRL_config,                   &
+                     SMB_IMAUITM_C_refr_ANT_config,                   &
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
@@ -2060,6 +2137,35 @@ CONTAINS
     C%matrix_low_CO2_level                     = matrix_low_CO2_level_config
     C%matrix_warm_orbit_time                   = matrix_warm_orbit_time_config
     C%matrix_cold_orbit_time                   = matrix_cold_orbit_time_config
+
+    ! Whether or not to apply a bias correction to the GCM snapshots
+    C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
+    C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
+
+    ! Surface mass balance
+    ! ====================
+
+    C%choice_SMB_model                         = choice_SMB_model_config
+    C%choice_idealised_SMB                     = choice_idealised_SMB_config
+    C%SMB_uniform                              = SMB_uniform_config
+
+    ! Tuning parameters for the IMAU-ITM SMB model
+    C%SMB_IMAUITM_C_abl_constant_NAM           = SMB_IMAUITM_C_abl_constant_NAM_config
+    C%SMB_IMAUITM_C_abl_constant_EAS           = SMB_IMAUITM_C_abl_constant_EAS_config
+    C%SMB_IMAUITM_C_abl_constant_GRL           = SMB_IMAUITM_C_abl_constant_GRL_config
+    C%SMB_IMAUITM_C_abl_constant_ANT           = SMB_IMAUITM_C_abl_constant_ANT_config
+    C%SMB_IMAUITM_C_abl_Ts_NAM                 = SMB_IMAUITM_C_abl_Ts_NAM_config
+    C%SMB_IMAUITM_C_abl_Ts_EAS                 = SMB_IMAUITM_C_abl_Ts_EAS_config
+    C%SMB_IMAUITM_C_abl_Ts_GRL                 = SMB_IMAUITM_C_abl_Ts_GRL_config
+    C%SMB_IMAUITM_C_abl_Ts_ANT                 = SMB_IMAUITM_C_abl_Ts_ANT_config
+    C%SMB_IMAUITM_C_abl_Q_NAM                  = SMB_IMAUITM_C_abl_Q_NAM_config
+    C%SMB_IMAUITM_C_abl_Q_EAS                  = SMB_IMAUITM_C_abl_Q_EAS_config
+    C%SMB_IMAUITM_C_abl_Q_GRL                  = SMB_IMAUITM_C_abl_Q_GRL_config
+    C%SMB_IMAUITM_C_abl_Q_ANT                  = SMB_IMAUITM_C_abl_Q_ANT_config
+    C%SMB_IMAUITM_C_refr_NAM                   = SMB_IMAUITM_C_refr_NAM_config
+    C%SMB_IMAUITM_C_refr_EAS                   = SMB_IMAUITM_C_refr_EAS_config
+    C%SMB_IMAUITM_C_refr_GRL                   = SMB_IMAUITM_C_refr_GRL_config
+    C%SMB_IMAUITM_C_refr_ANT                   = SMB_IMAUITM_C_refr_ANT_config
 
     ! Sea level and GIA
     ! =================

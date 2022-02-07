@@ -22,7 +22,8 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping, &
+                                             type_climate_matrix_global
   USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometry_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
@@ -36,7 +37,8 @@ MODULE UFEMISM_main_model
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data, initialise_mask_noice
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
   USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
-  USE climate_module,                  ONLY: initialise_climate_model,  remap_climate_model,  run_climate_model, map_subclimate_to_mesh
+  USE climate_module,                  ONLY: initialise_climate_model,  remap_climate_model,  run_climate_model, map_subclimate_to_mesh, &
+                                             initialise_climate_model_regional
   USE SMB_module,                      ONLY: initialise_SMB_model,      remap_SMB_model,      run_SMB_model
   USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
   USE isotopes_module,                 ONLY: initialise_isotopes_model, remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
@@ -314,24 +316,25 @@ CONTAINS
   
   ! Initialise the entire model region - read initial and PD data, create the mesh,
   ! initialise the ice dynamics, climate and SMB sub models
-  SUBROUTINE initialise_model( region, name, matrix)
-  
-    IMPLICIT NONE  
-    
+  SUBROUTINE initialise_model( region, name, matrix, climate_matrix_global)
+
+    IMPLICIT NONE
+
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: region
-    CHARACTER(LEN=3),           INTENT(IN)        :: name
-    TYPE(type_climate_matrix),  INTENT(IN)        :: matrix
-    
+    TYPE(type_model_region),          INTENT(INOUT)     :: region
+    CHARACTER(LEN=3),                 INTENT(IN)        :: name
+    TYPE(type_climate_matrix),        INTENT(IN)        :: matrix
+    TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
+
     ! Local variables
     CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model'
     INTEGER                                       :: n1, n2
-    
+
     n1 = par%mem%n
-              
+
     ! Basic initialisation
     ! ====================
-    
+
     ! Region name
     region%name      = name    
     IF (region%name == 'NAM') THEN
@@ -343,68 +346,70 @@ CONTAINS
     ELSE IF (region%name == 'ANT') THEN
       region%long_name = 'Antarctica'
     END IF
-    
+
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) ' Initialising model region ', region%name, ' (', TRIM(region%long_name), ')...'
-    
+
     ! ===== Allocate memory for timers and scalars =====
     ! ==================================================
-    
+
     CALL allocate_region_timers_and_scalars( region)
-    
+
     ! ===== PD and init reference data fields =====
     ! =============================================
-    
+
     CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
-    
+
     ! ===== The mesh =====
     ! ====================
-    
+
     CALL create_mesh_from_cart_data( region)
-    
+
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
-    
+
     CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_init )
     CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_PD   )
     CALL map_reference_geometry_to_mesh( region%mesh, region%refgeo_GIAeq)
-    
+
     ! The different square grids
     ! ==========================
-    
+
     CALL initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
-    
+
     ! ===== Initialise dummy fields for debugging
     ! ===========================================
-    
+
     CALL initialise_debug_fields( region)
-       
+
     ! ===== Output files =====
     ! =======================
-  
+
     CALL create_output_files(    region)
     CALL associate_debug_fields( region)
     region%output_file_exists = .TRUE.
     CALL sync
-    
+
     ! ===== The "no ice" mask
     ! =======================
 
     CALL allocate_shared_int_1D( region%mesh%nV, region%mask_noice, region%wmask_noice)
     CALL initialise_mask_noice( region, region%mesh)
-  
+
     ! ===== The ice dynamics model
     ! ============================
-    
+
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
-        
+
     ! ===== The climate model =====
-    ! =============================    
-    
-    CALL initialise_climate_model( region%climate, matrix, region%mesh, region%refgeo_PD, region%name, region%mask_noice, region%grid_smooth)
-    
+    ! =============================
+
+    ! CALL initialise_climate_model( region%climate, matrix, region%mesh, region%refgeo_PD, region%name, region%mask_noice, region%grid_smooth)
+
+    CALL initialise_climate_model_regional( region, climate_matrix_global)
+
     ! ===== The SMB model =====
     ! =========================    
     

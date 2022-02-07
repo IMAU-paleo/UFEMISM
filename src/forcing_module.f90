@@ -1070,6 +1070,135 @@ CONTAINS
     CALL sync
 
   END SUBROUTINE map_insolation_to_mesh
+  !====================================================
+  !====================================================
+  SUBROUTINE get_insolation_at_time( mesh, time, Q_TOA)
+    ! Get monthly insolation at time t on the regional grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Q_TOA
+
+    ! Local variables:
+    REAL(dp)                                           :: time_applied
+    INTEGER                                            :: vi, m, ilat_l, ilat_u
+    REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Q_TOA_int
+    INTEGER                                            :: wQ_TOA_int
+
+    time_applied = 0._dp
+
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time - ERROR: choice_insolation_forcing = "none"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_insolation_forcing == 'static') THEN
+      time_applied = C%static_insolation_time
+    ELSEIF (C%choice_insolation_forcing == 'realistic') THEN
+      time_applied = time
+    ELSE
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Check if the requested time is enveloped by the two timeframes;
+    ! if not, read the two relevant timeframes from the NetCDF file
+    IF (time_applied < forcing%ins_t0 .OR. time_applied > forcing%ins_t1) THEN
+      CALL update_insolation_timeframes_from_file( time_applied)
+    END IF
+
+    ! Allocate shared memory for timeframe-interpolated lat-month-only insolation
+    CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, Q_TOA_int, wQ_TOA_int)
+
+    ! Calculate timeframe interpolation weights
+    wt0 = (forcing%ins_t1 - time_applied) / (forcing%ins_t1 - forcing%ins_t0)
+    wt1 = 1._dp - wt0
+
+    ! Interpolate the two timeframes
+    IF (par%master) THEN
+      Q_TOA_int = wt0 * forcing%ins_Q_TOA0 + wt1 * forcing%ins_Q_TOA1
+    END IF
+    CALL sync
+
+    ! Map the timeframe-interpolated lat-month-only insolation to the model mesh
+    DO vi = mesh%vi1, mesh%vi2
+
+      ilat_l = FLOOR(mesh%lat( vi) + 91)
+      ilat_u = ilat_l + 1
+
+      wlat_l = forcing%ins_lat(ilat_u) - mesh%lat( vi)
+      wlat_u = 1._dp - wlat_l
+
+      DO m = 1, 12
+        Q_TOA( vi, m) = wlat_l * Q_TOA_int( ilat_l,m) + wlat_u * Q_TOA_int( ilat_u,m)
+      END DO
+
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wQ_TOA_int)
+
+  END SUBROUTINE get_insolation_at_time
+  SUBROUTINE update_insolation_timeframes_from_file( time)
+    ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
+    ! coupling timestep to save on memory usage. Only done by master.
+
+    ! NOTE: assumes time in forcing file is in kyr
+
+    IMPLICIT NONE
+
+    REAL(dp),                            INTENT(IN)    :: time
+
+    ! Local variables
+    INTEGER                                            :: ti0, ti1
+
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: choice_insolation_forcing = "none"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_insolation_forcing == 'static' .OR. &
+            C%choice_insolation_forcing == 'realistic') THEN
+      ! Update insolation
+
+      ! Check if data for model time is available
+      IF (time < forcing%ins_time(1)) THEN
+        WRITE(0,*) '  update_insolation_timeframes_from_file - ERROR: insolation data only available between ', MINVAL(forcing%ins_time), ' y and ', MAXVAL(forcing%ins_time), ' y'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      ! Find time indices to be read
+      IF (par%master) THEN
+        IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
+          ti1 = 1
+          DO WHILE (forcing%ins_time(ti1) < time)
+            ti1 = ti1 + 1
+          END DO
+          ti0 = ti1 - 1
+
+          forcing%ins_t0 = forcing%ins_time(ti0)
+          forcing%ins_t1 = forcing%ins_time(ti1)
+        ELSE
+          IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+          ti0 = forcing%ins_nyears
+          ti1 = forcing%ins_nyears
+
+          forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
+          forcing%ins_t1 = forcing%ins_time(ti1)
+        END IF
+      END IF ! IF (par%master) THEN
+
+      ! Read new insolation fields from the NetCDF file
+      IF (par%master) CALL read_insolation_file_timeframes( forcing, ti0, ti1)
+      CALL sync
+
+    ELSE
+      IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+  END SUBROUTINE update_insolation_timeframes_from_file
   SUBROUTINE initialise_insolation_data
     ! Allocate shared memory for the forcing data fields
 

@@ -95,17 +95,17 @@ PROGRAM UFEMISM_program
   ! ===== Initialise the climate matrix =====
   ! =========================================
 
-  CALL initialise_climate_matrix(matrix)
+  ! CALL initialise_climate_matrix(matrix)
 
   CALL initialise_climate_model_global( climate_matrix_global)
 
   ! ===== Initialise the model regions ======
   ! =========================================
 
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', matrix)
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', matrix)
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', matrix)
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', matrix)
+  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', matrix, climate_matrix_global)
+  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', matrix, climate_matrix_global)
+  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', matrix, climate_matrix_global)
+  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', matrix, climate_matrix_global)
 
   ! ===== Initial contributions ======
   ! ==================================

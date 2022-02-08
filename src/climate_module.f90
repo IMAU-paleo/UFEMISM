@@ -3,9 +3,11 @@ MODULE climate_module
   ! Contains all the routines for calculating the climate forcing.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -28,7 +30,7 @@ MODULE climate_module
                                              inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file, &
                                              inquire_GCM_global_climate_file, read_GCM_global_climate_file
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_climate_model, type_reference_geometry, &
-                                             type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping, &
+                                             type_climate_matrix, type_subclimate_global, type_subclimate_region, type_remapping_mesh_mesh, &
                                              type_ICE5G_timeframe, type_remapping_latlon2mesh, type_SMB_model, &
                                              type_climate_matrix_global, type_climate_snapshot_global, &
                                              type_climate_matrix_regional, type_climate_snapshot_regional, &
@@ -2603,7 +2605,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
@@ -2614,8 +2616,10 @@ CONTAINS
     ! Local variables:
     INTEGER                                            :: int_dummy
     
-    int_dummy = map%conservative%n_tot
+    ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
+    int_dummy = mesh_new%nV
+    int_dummy = map%int_dummy
 
     ! Reallocate memory for the different subclimates
     CALL reallocate_subclimate( mesh_new, climate%applied)

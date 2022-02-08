@@ -3,9 +3,11 @@ MODULE netcdf_module
   ! Contains all the subroutines for reading, creating, and writing to NetCDF files.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -24,13 +26,16 @@ MODULE netcdf_module
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
                                            type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
-                                           type_sparse_matrix_CSR, type_climate_snapshot_global
+                                           type_climate_snapshot_global, type_sparse_matrix_CSR_dp
+  USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
                                            nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
                                            nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
-  USE mesh_mapping_module,           ONLY: map_mesh2grid_2D, map_mesh2grid_3D, map_mesh2grid_2D_min
+  USE mesh_mapping_module,           ONLY: map_mesh2grid_2D, map_mesh2grid_3D
   USE mesh_operators_module,         ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE petsc_module,                  ONLY: mat_petsc2CSR
+  USE sparse_matrix_module,          ONLY: deallocate_matrix_CSR
   
   IMPLICIT NONE
   
@@ -532,7 +537,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -562,7 +567,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ciplusone,    region%mesh%nC_mem+1,    netcdf%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_two,          2,                       netcdf%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -573,7 +578,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     
     ! Define variables
@@ -588,7 +593,7 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
@@ -673,7 +678,7 @@ CONTAINS
 
     ! Local variables:
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -703,7 +708,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ciplusone,    region%mesh%nC_mem+1,    netcdf%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_two,          2,                       netcdf%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_four,         4,                       netcdf%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -714,7 +719,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     
     ! Define variables
@@ -729,7 +734,7 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, four ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
@@ -852,7 +857,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, ai, tai, t, z, m
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
@@ -862,7 +867,7 @@ CONTAINS
     ciplusone = netcdf%id_dim_ciplusone
     two       = netcdf%id_dim_two
     three     = netcdf%id_dim_three
-    four      = netcdf%id_dim_four
+    six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
     ai        = netcdf%id_dim_ai
     tai       = netcdf%id_dim_tai
@@ -1226,7 +1231,7 @@ CONTAINS
     
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D_min( netcdf%ncid, region%mesh, region%grid_output, region%mesh%R, id_var, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%mesh%R, id_var, netcdf%ti)
       
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
@@ -1393,31 +1398,21 @@ CONTAINS
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
-      ! NOTE: masks commented out; mapping masks between grids is meaningless
+
       
     ! Masks
+    ! NOTE: not included, as mapping masks between grids is meaningless
     ELSEIF (field_name == 'mask') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_land') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_land, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_ocean') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_ocean, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_lake') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_lake, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_ice') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_ice, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_sheet') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_sheet, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_shelf') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_shelf, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_coast') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_coast, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_margin') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_margin, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_gl') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_gl, id_var, netcdf%ti)
     ELSEIF (field_name == 'mask_cf') THEN
-!      CALL map_and_write_to_grid_netcdf_int_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%mask_cf, id_var, netcdf%ti)
       
 !    ! Basal conditions
 !    ELSEIF (field_name == 'phi_fric') THEN
@@ -1872,41 +1867,6 @@ CONTAINS
   END SUBROUTINE create_help_field_grid
   
   ! Map a model data field from the model mesh to the output grid, and write it to a NetCDF file.
-  SUBROUTINE map_and_write_to_grid_netcdf_int_2D( ncid, mesh, grid, d_mesh, id_var, ti)
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    INTEGER,                    INTENT(IN)        :: ncid
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    TYPE(type_grid),            INTENT(IN)        :: grid
-    INTEGER,  DIMENSION(:    ), INTENT(IN)        :: d_mesh
-    INTEGER,                    INTENT(IN)        :: id_var
-    INTEGER,                    INTENT(IN)        :: ti
-    
-    ! Local variables:
-    REAL(dp), DIMENSION(:    ), POINTER           :: d_mesh_dp
-    REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
-    INTEGER                                       :: wd_mesh_dp, wd_grid
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,          d_mesh_dp, wd_mesh_dp)
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid,    wd_grid   )
-    
-    ! Convert from integer to real
-    d_mesh_dp( mesh%vi1:mesh%vi2) = REAL( d_mesh( mesh%vi1:mesh%vi2), dp)
-    
-    ! Map data from the model mesh to the square grid
-    CALL map_mesh2grid_2D( mesh, grid, d_mesh_dp, d_grid)
-    
-    ! Write grid data to NetCDF
-    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
-    
-    ! Deallocate shared memory
-    CALL deallocate_shared( wd_mesh_dp)
-    CALL deallocate_shared( wd_grid)
-    
-  END SUBROUTINE map_and_write_to_grid_netcdf_int_2D
   SUBROUTINE map_and_write_to_grid_netcdf_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti)
    
     IMPLICIT NONE
@@ -1936,35 +1896,6 @@ CONTAINS
     CALL deallocate_shared( wd_grid)
     
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D
-  SUBROUTINE map_and_write_to_grid_netcdf_dp_2D_min(  ncid, mesh, grid, d_mesh, id_var, ti)
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    INTEGER,                    INTENT(IN)        :: ncid
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    TYPE(type_grid),            INTENT(IN)        :: grid
-    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
-    INTEGER,                    INTENT(IN)        :: id_var
-    INTEGER,                    INTENT(IN)        :: ti
-    
-    ! Local variables:
-    REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
-    INTEGER                                       :: wd_grid
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
-    
-    ! Map data from the model mesh to the square grid
-    CALL map_mesh2grid_2D_min( mesh, grid, d_mesh, d_grid)
-    
-    ! Write grid data to NetCDF
-    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
-    
-    ! Deallocate shared memory
-    CALL deallocate_shared( wd_grid)
-    
-  END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D_min
   SUBROUTINE map_and_write_to_grid_netcdf_dp_3D(  ncid, mesh, grid, d_mesh, id_var, ti, nz)
    
     IMPLICIT NONE
@@ -2122,7 +2053,7 @@ CONTAINS
     CHARACTER(LEN=20)                             :: short_filename
     INTEGER                                       :: n
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, four, vii, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, zeta, month
     
     IF (.NOT. par%master) RETURN
     
@@ -2157,7 +2088,7 @@ CONTAINS
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_ciplusone,    region%mesh%nC_mem+1,    debug_temp%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_two,          2,                       debug_temp%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_three,        3,                       debug_temp%id_dim_three       ) ! 3 (each triangle has three vertices)
-    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_four,         4,                       debug_temp%id_dim_four        ) ! 4 (each staggered vertex has three "neighbouring" regular vertices)
+    CALL create_dim( debug_temp%ncid, debug_temp%name_dim_six,          6,                       debug_temp%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_vii_transect, region%mesh%nV_transect, debug_temp%id_dim_vii_transect) ! Number of vertex pairs in the transect
     
     ! Placeholders for the dimension ID's, for shorter code
@@ -2168,7 +2099,7 @@ CONTAINS
     ciplusone = debug_temp%id_dim_ciplusone
     two       = debug_temp%id_dim_two
     three     = debug_temp%id_dim_three
-    four      = debug_temp%id_dim_four
+    six       = debug_temp%id_dim_six
     vii       = debug_temp%id_dim_vii_transect
     
     ! Define variables
@@ -2183,7 +2114,7 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_TriC,             [ti,  three], debug_temp%id_var_TriC,             long_name='Triangle neighbours')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Tri_edge_index,   [ti        ], debug_temp%id_var_Tri_edge_index,   long_name='Triangle edge index') 
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAc,              [aci, two  ], debug_temp%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, four ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, six  ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_iAci,             [vi,  ci   ], debug_temp%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_A,                [vi        ], debug_temp%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_R,                [vi        ], debug_temp%id_var_R,                long_name='Vertex resolution', units='m')
@@ -3618,62 +3549,88 @@ CONTAINS
 
   END SUBROUTINE read_geothermal_heat_flux_file
   
-  ! Write a CSR matrix to a NetCDF file
-  SUBROUTINE write_CSR_matrix_to_NetCDF( AA, filename)
-    ! Write a CSR matrix to a NetCDF file
+  ! Write a sparse matrix to a NetCDF file
+  SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
+    ! Write a PETSc matrix to a NetCDF file
       
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: AA
+    TYPE(tMat),                          INTENT(IN)    :: A
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
     ! Local variables:
-    LOGICAL                                       :: file_exists
-    INTEGER                                       :: ncid
-    INTEGER                                       :: m, mp1, n, nnz, ptr, index, val
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
     
-    IF (.NOT. par%master) RETURN
+    ! Get matrix in CSR format using native Fortran arrays
+    CALL mat_petsc2CSR( A, A_CSR)
+    
+    ! Write the CSR matrix to a file
+    CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
+    
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR( A_CSR)
+    
+  END SUBROUTINE write_PETSc_matrix_to_NetCDF
+  SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
+    ! Write a CSR matrix to a NetCDF file
 
-    ! Safety
-    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
-    IF (file_exists) THEN
-      WRITE(0,*) 'write_CSR_matrix_to_NetCDF - ERROR: file "', TRIM(filename), '" already exists!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
+    IMPLICIT NONE
     
-    WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
-    ! Create netCDF file
-    CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
-        
-    ! Define dimensions:
-    CALL create_dim( ncid, 'm',      AA%m  , m  )
-    CALL create_dim( ncid, 'mplus1', AA%m+1, mp1)
-    CALL create_dim( ncid, 'n',      AA%n  , n  )
-    CALL create_dim( ncid, 'nnz',    AA%nnz, nnz)
+    ! Local variables:
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
+    INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
     
-    ! Define variables:
-    ! The order of the CALL statements for the different variables determines their
-    ! order of appearence in the netcdf file.
-    
-    CALL create_int_var(    ncid, 'ptr',   [mp1], ptr  , long_name = 'ptr'  )
-    CALL create_int_var(    ncid, 'index', [nnz], index, long_name = 'index')
-    CALL create_double_var( ncid, 'val',   [nnz], val  , long_name = 'val'  )
-       
-    ! Leave definition mode
-    CALL handle_error( nf90_enddef( ncid))    
-    
-    ! Write data
-    CALL handle_error( nf90_put_var( ncid, ptr  , AA%ptr  ))
-    CALL handle_error( nf90_put_var( ncid, index, AA%index))
-    CALL handle_error( nf90_put_var( ncid, val  , AA%val  ))
-        
-    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-    CALL handle_error(nf90_sync( ncid))
-    
-    ! Close the file
-    CALL close_netcdf_file(ncid)
+    IF (par%master) THEN
+
+      ! Safety
+      INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        WRITE(0,*) 'write_PETSc_matrix_to_NetCDF - ERROR: file "', TRIM(filename), '" already exists!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
+
+      ! Create netCDF file
+      CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
+
+      ! Define dimensions:
+      CALL create_dim( ncid, 'm',      A_CSR%m  , id_dim_m  )
+      CALL create_dim( ncid, 'mplus1', A_CSR%m+1, id_dim_mp1)
+      CALL create_dim( ncid, 'n',      A_CSR%n  , id_dim_n  )
+      CALL create_dim( ncid, 'nnz',    A_CSR%nnz, id_dim_nnz)
+
+      ! Define variables:
+      ! The order of the CALL statements for the different variables determines their
+      ! order of appearence in the netcdf file.
+
+      CALL create_int_var(    ncid, 'ptr',   [id_dim_mp1], id_var_ptr  , long_name = 'ptr'  )
+      CALL create_int_var(    ncid, 'index', [id_dim_nnz], id_var_index, long_name = 'index')
+      CALL create_double_var( ncid, 'val',   [id_dim_nnz], id_var_val  , long_name = 'val'  )
+
+      ! Leave definition mode
+      CALL handle_error( nf90_enddef( ncid))
+
+      ! Write data
+      CALL handle_error( nf90_put_var( ncid, id_var_ptr  , A_CSR%ptr  ))
+      CALL handle_error( nf90_put_var( ncid, id_var_index, A_CSR%index))
+      CALL handle_error( nf90_put_var( ncid, id_var_val  , A_CSR%val  ))
+
+      ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+      CALL handle_error(nf90_sync( ncid))
+
+      ! Close the file
+      CALL close_netcdf_file( ncid)
+
+    END IF ! IF (par%master) THEN
+    CALL sync
     
   END SUBROUTINE write_CSR_matrix_to_NetCDF
 

@@ -23,15 +23,15 @@ MODULE ice_velocity_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality 
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR, type_remapping             
-  USE mesh_mapping_module,             ONLY: remap_field_dp
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, type_remapping_mesh_mesh             
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
                                              ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D, &
-                                             map_a_to_b_3D, map_b_to_c_3D
+                                             map_a_to_b_3D, map_b_to_c_3D, apply_Neumann_BC_direct_a_2D
   USE utilities_module,                ONLY: vertical_integration_from_bottom_to_zeta, vertical_average, &
-                                             vertical_integrate, allocate_matrix_CSR_dist, sort_columns_in_CSR_dist, &
-                                             finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
+                                             vertical_integrate
+  USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
   USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
   USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
@@ -750,6 +750,9 @@ CONTAINS
     CALL deallocate_shared( wdu_dz_3D_a)
     CALL deallocate_shared( wdv_dz_3D_a)
     
+    ! Apply Neumann boundary conditions to correct inaccurate solutions at the domain border
+    CALL apply_Neumann_BC_direct_a_2D( mesh, ice%N_a)
+    
     ! Safety
     CALL check_for_NaN_dp_2D( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' , 'calc_effective_viscosity')
     CALL check_for_NaN_dp_1D( ice%visc_eff_int_a, 'ice%visc_eff_int_a', 'calc_effective_viscosity')
@@ -1150,15 +1153,15 @@ CONTAINS
       
       ku = ice%M_SSADIVA%ptr(   nu) + 2*kk - 2
       kv = ice%M_SSADIVA%ptr(   nu) + 2*kk - 1
-      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      k  = mesh%M2_ddx_b_b_CSR%ptr( ti) +   kk - 1
       
       mu = ice%M_SSADIVA%index(   ku)
       
       ! u-part
-      ice%M_SSADIVA%val( ku) = 4._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
-                               4._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k) + &
-                               1._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
-                               1._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k)
+      ice%M_SSADIVA%val( ku) = 4._dp * N_b(     ti) * mesh%M2_d2dx2_b_b_CSR%val( k) + &
+                               4._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b_CSR%val(   k) + &
+                               1._dp * N_b(     ti) * mesh%M2_d2dy2_b_b_CSR%val( k) + &
+                               1._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b_CSR%val(   k)
       
       ! Sliding term on the diagonal
       IF (mu == nu) THEN
@@ -1166,9 +1169,9 @@ CONTAINS
       END IF
       
       ! v-part
-      ice%M_SSADIVA%val( kv) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
-                               2._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k) + &
-                               1._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k)
+      ice%M_SSADIVA%val( kv) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b_CSR%val( k) + &
+                               2._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b_CSR%val(    k) + &
+                               1._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b_CSR%val(    k)
       
     END DO
     
@@ -1203,15 +1206,15 @@ CONTAINS
       
       ku = ice%M_SSADIVA%ptr(   nv) + 2*kk - 2
       kv = ice%M_SSADIVA%ptr(   nv) + 2*kk - 1
-      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      k  = mesh%M2_ddx_b_b_CSR%ptr( ti) +   kk - 1
       
       mv = ice%M_SSADIVA%index(   kv)
       
       ! v-part
-      ice%M_SSADIVA%val( kv) = 4._dp * N_b(     ti) * mesh%M2_d2dy2_b_b%val( k) + &
-                               4._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b%val(   k) + &
-                               1._dp * N_b(     ti) * mesh%M2_d2dx2_b_b%val( k) + &
-                               1._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b%val(   k)
+      ice%M_SSADIVA%val( kv) = 4._dp * N_b(     ti) * mesh%M2_d2dy2_b_b_CSR%val( k) + &
+                               4._dp * dN_dy_b( ti) * mesh%M2_ddy_b_b_CSR%val(   k) + &
+                               1._dp * N_b(     ti) * mesh%M2_d2dx2_b_b_CSR%val( k) + &
+                               1._dp * dN_dx_b( ti) * mesh%M2_ddx_b_b_CSR%val(   k)
       
       ! Sliding term on the diagonal
       IF (mv == nv) THEN
@@ -1219,9 +1222,9 @@ CONTAINS
       END IF
       
       ! u-part
-      ice%M_SSADIVA%val( ku) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b%val( k) + &
-                               2._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b%val(    k) + &
-                               1._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b%val(    k)
+      ice%M_SSADIVA%val( ku) = 3._dp * N_b(     ti) * mesh%M2_d2dxdy_b_b_CSR%val( k) + &
+                               2._dp * dN_dy_b( ti) * mesh%M2_ddx_b_b_CSR%val(    k) + &
+                               1._dp * dN_dx_b( ti) * mesh%M2_ddy_b_b_CSR%val(    k)
       
     END DO
     
@@ -1256,12 +1259,12 @@ CONTAINS
       
       ku = ice%M_SSADIVA%ptr(   nu) + 2*kk - 2
       kv = ice%M_SSADIVA%ptr(   nu) + 2*kk - 1
-      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      k  = mesh%M2_ddx_b_b_CSR%ptr( ti) +   kk - 1
       
       mu = ice%M_SSADIVA%index(   ku)
       
       ! u-part
-      ice%M_SSADIVA%val( ku) = 4._dp * mesh%M2_d2dx2_b_b%val( k) + mesh%M2_d2dy2_b_b%val( k)
+      ice%M_SSADIVA%val( ku) = 4._dp * mesh%M2_d2dx2_b_b_CSR%val( k) + mesh%M2_d2dy2_b_b_CSR%val( k)
       
       ! Sliding term on the diagonal
       IF (mu == nu) THEN
@@ -1269,7 +1272,7 @@ CONTAINS
       END IF
       
       ! v-part
-      ice%M_SSADIVA%val( kv) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
+      ice%M_SSADIVA%val( kv) = 3._dp * mesh%M2_d2dxdy_b_b_CSR%val( k)
       
     END DO
     
@@ -1304,12 +1307,12 @@ CONTAINS
       
       ku = ice%M_SSADIVA%ptr(   nv) + 2*kk - 2
       kv = ice%M_SSADIVA%ptr(   nv) + 2*kk - 1
-      k  = mesh%M2_ddx_b_b%ptr( ti) +   kk - 1
+      k  = mesh%M2_ddx_b_b_CSR%ptr( ti) +   kk - 1
       
       mv = ice%M_SSADIVA%index(   kv)
       
       ! v-part
-      ice%M_SSADIVA%val( kv) = 4._dp * mesh%M2_d2dy2_b_b%val( k) + mesh%M2_d2dx2_b_b%val( k)
+      ice%M_SSADIVA%val( kv) = 4._dp * mesh%M2_d2dy2_b_b_CSR%val( k) + mesh%M2_d2dx2_b_b_CSR%val( k)
       
       ! Sliding term on the diagonal
       IF (mv == nv) THEN
@@ -1317,7 +1320,7 @@ CONTAINS
       END IF
       
       ! u-part
-      ice%M_SSADIVA%val( ku) = 3._dp * mesh%M2_d2dxdy_b_b%val( k)
+      ice%M_SSADIVA%val( ku) = 3._dp * mesh%M2_d2dxdy_b_b_CSR%val( k)
       
     END DO
     
@@ -1402,7 +1405,7 @@ CONTAINS
       DO kk = 1, nnz
         
         ku = ice%M_SSADIVA%ptr(         nu) + kk - 1
-        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        k  = mesh%M_Neumann_BC_b_CSR%ptr( ti) + kk - 1
         
         mu = ice%M_SSADIVA%index( ku)
         
@@ -1431,7 +1434,7 @@ CONTAINS
       DO kk = 1, nnz
         
         ku = ice%M_SSADIVA%ptr(         nu) + kk - 1
-        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        k  = mesh%M_Neumann_BC_b_CSR%ptr( ti) + kk - 1
         
         mu = ice%M_SSADIVA%index( ku)
         
@@ -1531,7 +1534,7 @@ CONTAINS
       DO kk = 1, nnz
         
         kv = ice%M_SSADIVA%ptr(         nv) + kk - 1
-        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        k  = mesh%M_Neumann_BC_b_CSR%ptr( ti) + kk - 1
         
         mv = ice%M_SSADIVA%index( kv)
         
@@ -1560,7 +1563,7 @@ CONTAINS
       DO kk = 1, nnz
         
         kv = ice%M_SSADIVA%ptr(         nv) + kk - 1
-        k  = mesh%M_Neumann_BC_b_b%ptr( ti) + kk - 1
+        k  = mesh%M_Neumann_BC_b_CSR%ptr( ti) + kk - 1
         
         mv = ice%M_SSADIVA%index( kv)
         
@@ -1772,7 +1775,7 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c, v_c
     
     ! Local variables:
-    INTEGER                                            :: aci, vi, vj, vl, vr, vti, ti, n1, n2, n3, til, tir
+    INTEGER                                            :: aci, til, tir
     
     DO aci = mesh%ci1, mesh%ci2
       
@@ -1780,24 +1783,8 @@ CONTAINS
         ! Free edge
         
         ! Find the two adjacent triangles
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
-        vr = mesh%Aci( aci,4)
-        
-        til = 0
-        tir = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) til = ti
-            IF (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vr .AND. mesh%Tri( ti,n3) == vj) tir = ti
-          END DO
-        END DO
+        til = mesh%Aci( aci,5)
+        tir = mesh%Aci( aci,6)
         
         u_c( aci) = (u_b( til) + u_b( tir)) / 2._dp
         v_c( aci) = (v_b( til) + v_b( tir)) / 2._dp
@@ -1805,28 +1792,17 @@ CONTAINS
       ELSE
         ! Border edge
         
-        ! Find the adjacent triangle
-        vi = mesh%Aci( aci,1)
-        vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
+        ! Find the two adjacent triangles
+        til = mesh%Aci( aci,5)
+        tir = mesh%Aci( aci,6)
         
-        til = 0
-        DO vti = 1, mesh%niTri( vi)
-          ti = mesh%iTri( vi,vti)
-          DO n1 = 1, 3
-            n2 = n1 + 1
-            IF (n2 == 4) n2 = 1
-            n3 = n2 + 1
-            IF (n3 == 4) n3 = 1
-            IF ((mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vj .AND. mesh%Tri( ti,n3) == vl) .OR. &
-                (mesh%Tri( ti,n1) == vi .AND. mesh%Tri( ti,n2) == vl .AND. mesh%Tri( ti,n3) == vj)) THEN
-              til = ti
-            END IF
-          END DO
-        END DO
-        
-        u_c( aci) = u_b( til)
-        v_c( aci) = v_b( til)
+        IF (tir == 0) THEN
+          u_c( aci) = u_b( til)
+          v_c( aci) = v_b( til)
+        ELSE
+          u_c( aci) = u_b( tir)
+          v_c( aci) = v_b( tir)
+        END IF
         
       END IF
       
@@ -2185,12 +2161,12 @@ CONTAINS
         IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Free triangle: fill in matrix row for the SSA/DIVA
     
-          k1 = mesh%M2_ddx_b_b%ptr( ti)
-          k2 = mesh%M2_ddx_b_b%ptr( ti+1) - 1
+          k1 = mesh%M2_ddx_b_b_CSR%ptr( ti)
+          k2 = mesh%M2_ddx_b_b_CSR%ptr( ti+1) - 1
           
           DO k = k1, k2
             
-            tj  = mesh%M2_ddx_b_b%index( k)
+            tj  = mesh%M2_ddx_b_b_CSR%index( k)
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
@@ -2207,13 +2183,13 @@ CONTAINS
         ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Border triangle: apply boundary conditions
     
-          k1 = mesh%M_Neumann_BC_b_b%ptr( ti)
-          k2 = mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          k1 = mesh%M_Neumann_BC_b_CSR%ptr( ti)
+          k2 = mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
           
           ! Matrix
-          DO k = mesh%M_Neumann_BC_b_b%ptr( ti), mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
-            tj  = mesh%M_Neumann_BC_b_b%index( k)
+            tj  = mesh%M_Neumann_BC_b_CSR%index( k)
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
@@ -2232,12 +2208,12 @@ CONTAINS
         IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Free triangle: fill in matrix row for the SSA/DIVA
     
-          k1 = mesh%M2_ddx_b_b%ptr( ti)
-          k2 = mesh%M2_ddx_b_b%ptr( ti+1) - 1
+          k1 = mesh%M2_ddx_b_b_CSR%ptr( ti)
+          k2 = mesh%M2_ddx_b_b_CSR%ptr( ti+1) - 1
           
           DO k = k1, k2
             
-            tj  = mesh%M2_ddx_b_b%index( k)
+            tj  = mesh%M2_ddx_b_b_CSR%index( k)
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
@@ -2254,13 +2230,13 @@ CONTAINS
         ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Border triangle: apply boundary conditions
     
-          k1 = mesh%M_Neumann_BC_b_b%ptr( ti)
-          k2 = mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          k1 = mesh%M_Neumann_BC_b_CSR%ptr( ti)
+          k2 = mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
           
           ! Matrix
-          DO k = mesh%M_Neumann_BC_b_b%ptr( ti), mesh%M_Neumann_BC_b_b%ptr( ti+1) - 1
+          DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
-            tj  = mesh%M_Neumann_BC_b_b%index( k)
+            tj  = mesh%M_Neumann_BC_b_CSR%index( k)
             mu = ice%ti2n_u( tj)
             mv = ice%ti2n_v( tj)
             
@@ -2280,7 +2256,6 @@ CONTAINS
     CALL sync
     
     ! Combine results from the different processes
-    CALL sort_columns_in_CSR_dist( ice%M_SSADIVA, n1, n2)
     CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, n1, n2)
     
   END SUBROUTINE initialise_SSADIVA_stiffness_matrix
@@ -2292,7 +2267,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     IF     (C%choice_ice_dynamics == 'SIA') THEN
@@ -2317,7 +2292,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2326,7 +2301,7 @@ CONTAINS
     ! To prevent compiler warnings
     dp_dummy = mesh_old%V(   1,1)
     dp_dummy = mesh_new%V(   1,1)
-    dp_dummy = map%trilin%w( 1,1)
+    dp_dummy = map%int_dummy
     dp_dummy = ice%Hi_a( 1)
       
     ! No need to remap anything, just reallocate
@@ -2371,7 +2346,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2390,8 +2365,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2479,7 +2454,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2498,8 +2473,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2587,7 +2562,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
@@ -2606,8 +2581,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_vav_b, ice%wu_vav_b)

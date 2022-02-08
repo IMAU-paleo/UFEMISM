@@ -5,9 +5,11 @@ MODULE forcing_module
   ! can be accessed from all four ice-sheet models and the coupling routine).
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &

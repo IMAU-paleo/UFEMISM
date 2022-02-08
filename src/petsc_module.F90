@@ -1,9 +1,10 @@
 MODULE petsc_module
 
   ! Contains routines that use the PETSc matrix solvers
+  !
+  ! Convention: xx = Fortran, x = PETSc
   
 #include <petsc/finclude/petscksp.h>
-
   USE mpi
   USE petscksp
   USE parallel_module,                 ONLY: par, sync, cerr, ierr, partition_list, &
@@ -13,186 +14,327 @@ MODULE petsc_module
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
                                              deallocate_shared
   USE configuration_module,            ONLY: dp, C
-  USE data_types_module,               ONLY: type_sparse_matrix_CSR
+  USE data_types_module,               ONLY: type_sparse_matrix_CSR_dp
   
   IMPLICIT NONE
+  
+  INTEGER :: perr    ! Error flag for PETSc routines
 
 CONTAINS
   
 ! == Solve a square CSR matrix equation with PETSc
-  SUBROUTINE solve_matrix_equation_CSR_PETSc( A_CSR, bb, xx, PETSc_rtol, PETSc_abstol)
+  SUBROUTINE solve_matrix_equation_CSR_PETSc( A_CSR, bb, xx, rtol, abstol)
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: xx
+    REAL(dp),                            INTENT(IN)    :: rtol, abstol
+    
+    ! Local variables
+    TYPE(tMat)                                         :: A
+    
+    ! Convert matrix to PETSc format
+    CALL mat_CSR2petsc( A_CSR, A)
+    
+    ! Solve the PETSC matrix equation
+    CALL solve_matrix_equation_PETSc( A, bb, xx, rtol, abstol)
+    
+    ! Clean up after yourself
+    CALL MatDestroy( A, perr)
+    
+  END SUBROUTINE solve_matrix_equation_CSR_PETSc
+  SUBROUTINE solve_matrix_equation_PETSc( A, bb, xx, rtol, abstol)
     ! Solve the matrix equation using a Krylov solver from PETSc
       
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: A_CSR
+    TYPE(tMat),                          INTENT(IN)    :: A
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: xx
-    REAL(dp),                            INTENT(IN)    :: PETSc_rtol
-    REAL(dp),                            INTENT(IN)    :: PETSc_abstol
+    REAL(dp),                            INTENT(IN)    :: rtol, abstol
     
     ! Local variables:
-    TYPE(PetscErrorCode)                               :: perr
-    TYPE(PetscInt)                                     :: its
-    TYPE(tMat)                                         :: A
+    INTEGER                                            :: m, n
     TYPE(tVec)                                         :: b
     TYPE(tVec)                                         :: x
     TYPE(tKSP)                                         :: KSP_solver
-    TYPE(PetscReal)                                    :: rtol, abstol
+    INTEGER                                            :: its
     
-    ! Convert the CSR matrix from the native UFEMISM storage structure to a PETSc matrix
-    CALL convert_CSR_to_petsc( A_CSR, bb, xx, A, b, x)
+    ! Safety
+    CALL MatGetSize( A, m, n, perr)
+    IF (m /= n .OR. m /= SIZE( xx,1) .OR. m /= SIZE( bb,1)) THEN
+      IF (par%master) WRITE(0,*) 'solve_matrix_equation_PETSc - ERROR: matrix and vector sizes dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+  ! == Set up right-hand side and solution vectors as PETSc data structures
+  ! =======================================================================
+    
+    CALL vec_double2petsc( xx, x)
+    CALL vec_double2petsc( bb, b)
+    
+  ! Set up the solver
+  ! =================
     
     ! Set up the KSP solver
     CALL KSPcreate( PETSC_COMM_WORLD, KSP_solver, perr)
-    CALL handle_error( 'KSPcreate', perr)
   
     ! Set operators. Here the matrix that defines the linear system
     ! also serves as the preconditioning matrix.
     CALL KSPSetOperators( KSP_solver, A, A, perr)
-    CALL handle_error( 'KSPSetOperators', perr)
 
     ! Iterative solver tolerances
-    rtol   = PETSc_rtol     ! The relative convergence tolerance; relative decrease in the (possibly preconditioned) residual norm
-    abstol = PETSc_abstol   ! The absolute convergence tolerance; absolute size of the (possibly preconditioned) residual norm 
     CALL KSPSetTolerances( KSP_solver, rtol, abstol, PETSC_DEFAULT_REAL, PETSC_DEFAULT_INTEGER, perr)
-    CALL handle_error( 'KSPSetTolerances', perr)
     
     ! Set runtime options, e.g.,
     !     -ksp_type <type> -pc_type <type> -ksp_monitor -ksp_rtol <rtol>
     ! These options will override those specified above as long as
     ! KSPSetFromOptions() is called _after_ any other customization routines.
     CALL KSPSetFromOptions( KSP_solver, perr)
-    CALL handle_error( 'KSPSetFromOptions', perr)
+    
+  ! == Solve Ax=b
+  ! =============
     
     ! Solve the linear system
     CALL KSPSolve( KSP_solver, b, x, perr)
-    CALL handle_error( 'KSPSolve', perr)
   
     ! Find out how many iterations it took
     CALL KSPGetIterationNumber( KSP_solver, its, perr)
-    CALL handle_error( 'KSPGetIterationNumber', perr)
     !IF (par%master) WRITE(0,*) '   PETSc solved Ax=b in ', its, ' iterations'
     
     ! Get the solution back to the native UFEMISM storage structure
-    CALL convert_petsc_solution_to_double( x, xx)
+    CALL vec_petsc2double( x, xx)
     
     ! Clean up after yourself
     CALL KSPDestroy( KSP_solver, perr)
-    CALL handle_error( 'KSPDestroy', perr)
     CALL VecDestroy( x, perr)
-    CALL handle_error( 'VecDestroy', perr)
     CALL VecDestroy( b, perr)
-    CALL handle_error( 'VecDestroy', perr)
-    CALL MatDestroy( A, perr)
-    CALL handle_error( 'MatDestroy', perr)
     
-  END SUBROUTINE solve_matrix_equation_CSR_PETSc
+  END SUBROUTINE solve_matrix_equation_PETSc
   
-! == Convert native UFEMISM CSR matrix to PETSc matrix
-  SUBROUTINE convert_CSR_to_petsc( A_CSR, bb, xx, A, b, x)
-    ! Convert a native UFEMISM Compressed Sparse Row (CSR) type matrix
-    ! to a PETSc matrix.
-    !
-    ! Mostly copied from: https://petsc.org/release/documentation/manual/getting_started/#parallel-programming
+! == Conversion between 1-D Fortran double-precision arrays and PETSc parallel vectors
+  SUBROUTINE vec_double2petsc( xx, x)
+    ! Convert a regular 1-D Fortran double-precision array to a PETSc parallel vector
       
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR),        INTENT(IN)    :: A_CSR
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: bb
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
-    TYPE(tMat),                          INTENT(INOUT) :: A
-    TYPE(tVec),                          INTENT(INOUT) :: b
     TYPE(tVec),                          INTENT(INOUT) :: x
     
     ! Local variables:
-    TYPE(PetscErrorCode)                               :: perr
-    INTEGER                                            :: k,i,j,i1,i2,nnz_row,nnz_per_row_max,istart,iend
-    TYPE(PetscReal)                                    :: v
-    
-  ! == Matrix A ==
-  ! ==============
-    
-    ! Initialise the matrix object
-    CALL MatCreate( PETSC_COMM_WORLD, A, perr)
-    CALL handle_error( 'MatCreate', perr)
-    
-    ! Set the matrix type to parallel (MPI) Aij
-    CALL MatSetType( A, 'mpiaij', perr)
-    CALL handle_error( 'MatSetType', perr)
-    
-    ! Set the size, let PETSc automatically determine parallelisation domains
-    CALL MatSetSizes( A, PETSC_DECIDE, PETSC_DECIDE, A_CSR%m, A_CSR%n, perr)
-    CALL handle_error( 'MatSetSizes', perr)
-    
-    ! Not entirely sure what this one does, but apparently it's really important
-    CALL MatSetFromOptions( A, perr)
-    CALL handle_error( 'MatSetFromOptions', perr)
-    
-    ! Determine maximum number of non-zeros per row
-    nnz_per_row_max = 0
-    CALL partition_list( A_CSR%m, par%i, par%n, i1, i2)
-    DO i = i1, i2
-      nnz_row = A_CSR%ptr( i+1) - A_CSR%ptr( i)
-      nnz_per_row_max = MAX( nnz_per_row_max, nnz_row)
-    END DO
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nnz_per_row_max, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
-    
-    ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( A, nnz_per_row_max+1, PETSC_NULL_INTEGER, nnz_per_row_max+1, PETSC_NULL_INTEGER, perr)
-    CALL handle_error( 'MatMPIAIJSetPreallocation', perr)
+    TYPE(PetscInt)                                     :: istart,iend,i
+
+    ! Create parallel vector
+    CALL VecCreate( PETSC_COMM_WORLD, x, perr)
+    CALL VecSetSizes( x, PETSC_DECIDE, SIZE( xx,1), perr)
+    CALL VecSetFromOptions( x, perr)
     
     ! Get parallelisation domains ("ownership ranges")
-    CALL MatGetOwnershipRange( A, istart, iend, perr)
-    CALL handle_error( 'MatGetOwnershipRange', perr)
-    
-    ! Fill in matrix values
-    DO i = istart+1,iend ! +1 because PETSc indexes from 0
-      DO k = A_CSR%ptr( i), A_CSR%ptr( i+1)-1
-      
-        j = A_CSR%index( k)
-        v = A_CSR%val(   k)
-        
-        CALL MatSetValues( A, 1, i-1, 1, j-1, v, INSERT_VALUES, perr)
-        CALL handle_error( 'MatSetValues', perr)
-        
-      END DO
-    END DO
-    CALL sync
-    
-  ! == Vectors b,x ==
-  ! =================
-
-    ! Create parallel vectors.
-    CALL VecCreate( PETSC_COMM_WORLD, x, perr)
-    CALL handle_error( 'VecCreate', perr)
-    CALL VecSetSizes( x, PETSC_DECIDE, A_CSR%n, perr)
-    CALL handle_error( 'VecSetSizes', perr)
-    CALL VecSetFromOptions( x, perr)
-    CALL handle_error( 'VecSetFromOptions', perr)
-    
-    CALL VecCreate( PETSC_COMM_WORLD, b, perr)
-    CALL handle_error( 'VecCreate', perr)
-    CALL VecSetSizes( b, PETSC_DECIDE, A_CSR%m, perr)
-    CALL handle_error( 'VecSetSizes', perr)
-    CALL VecSetFromOptions( b, perr)
-    CALL handle_error( 'VecSetFromOptions', perr)
+    CALL VecGetOwnershipRange( x, istart, iend, perr)
     
     ! Fill in vector values
     DO i = istart+1,iend ! +1 because PETSc indexes from 0
-    
-      v = bb( i)
-      CALL VecSetValues( b, 1, i-1, v, INSERT_VALUES, perr)
-      CALL handle_error( 'VecSetValues', perr)
-      
-      v = xx( i)
-      CALL VecSetValues( x, 1, i-1, v, INSERT_VALUES, perr)
-      CALL handle_error( 'VecSetValues', perr)
-      
+      CALL VecSetValues( x, 1, i-1, xx( i), INSERT_VALUES, perr)
     END DO
     CALL sync
+    
+    ! Assemble vectors, using the 2-step process:
+    !   VecAssemblyBegin(), VecAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL VecAssemblyBegin( x, perr)
+    CALL VecAssemblyEnd(   x, perr)
+    
+  END SUBROUTINE vec_double2petsc
+  SUBROUTINE vec_petsc2double( x, xx)
+    ! Convert a PETSc parallel vector to a regular 1-D Fortran double-precision array
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(tVec),                          INTENT(IN)    :: x
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: xx
+    
+    ! Local variables:
+    TYPE(PetscInt)                                     :: istart,iend,i,n
+    TYPE(PetscInt),    DIMENSION(1)                    :: ix
+    TYPE(PetscScalar), DIMENSION(1)                    :: v
+    
+    ! Safety
+    CALL VecGetSize( x, n, perr)
+    IF (n /= SIZE( xx,1)) THEN
+      WRITE(0,*) 'vec_petsc2double - ERROR: Fortran and PETSc vector sizes dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL VecGetOwnershipRange( x, istart, iend, perr)
+    
+    ! Get values
+    DO i = istart+1,iend
+      ix(1) = i-1
+      CALL VecGetValues( x, 1, ix, v, perr)
+      xx( i) = v(1)
+    END DO
+    CALL sync
+    
+  END SUBROUTINE vec_petsc2double
+  SUBROUTINE mat_petsc2CSR( A, A_CSR)
+    ! Convert a PETSC parallel matrix to a CSR-format matrix in regular Fortran arrays
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(tMat),                          INTENT(IN)    :: A
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(OUT)   :: A_CSR
+    
+    ! Local variables:
+    INTEGER                                            :: m, n, istart, iend, i
+    INTEGER                                            :: ncols, nnz
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals
+    INTEGER,  DIMENSION(:    ), POINTER                ::  nnz_rows
+    INTEGER                                            :: wnnz_rows
+    INTEGER                                            :: k1, k2
+    
+    ! First get the number of rows and columns
+    CALL MatGetSize( A, m, n, perr)
+    
+    ! Find number of non-zeros per row
+    CALL allocate_shared_int_1D( m, nnz_rows, wnnz_rows)
+    
+    CALL MatGetOwnershipRange( A, istart, iend, perr)
+    
+    ALLOCATE( cols( n))
+    ALLOCATE( vals( n))
+    
+    DO i = istart+1, iend ! +1 because PETSc indexes from 0
+      CALL MatGetRow( A, i-1, ncols, cols, vals, perr)
+      nnz_rows( i) = ncols
+      CALL MatRestoreRow( A, i-1, ncols, cols, vals, perr)
+    END DO
+    CALL sync
+    
+    ! Find the number of non-zeros
+    nnz = SUM( nnz_rows)
+    
+    ! Allocate memory for the CSR matrix
+    CALL allocate_shared_int_0D( A_CSR%m      , A_CSR%wm      )
+    CALL allocate_shared_int_0D( A_CSR%n      , A_CSR%wn      )
+    CALL allocate_shared_int_0D( A_CSR%nnz_max, A_CSR%wnnz_max)
+    CALL allocate_shared_int_0D( A_CSR%nnz    , A_CSR%wnnz    )
+    
+    IF (par%master) THEN
+      A_CSR%m       = m
+      A_CSR%n       = n
+      A_CSR%nnz_max = nnz
+      A_CSR%nnz     = nnz
+    END IF
+    CALL sync
+    
+    CALL allocate_shared_int_1D( A_CSR%m+1, A_CSR%ptr  , A_CSR%wptr  )
+    CALL allocate_shared_int_1D( A_CSR%nnz, A_CSR%index, A_CSR%windex)
+    CALL allocate_shared_dp_1D(  A_CSR%nnz, A_CSR%val  , A_CSR%wval  )
+    
+    ! Fill in the ptr array
+    IF (par%master) THEN
+      A_CSR%ptr( 1) = 1
+      DO i = 2, m+1
+        A_CSR%ptr( i) = A_CSR%ptr( i-1) + nnz_rows( i-1)
+      END DO
+    END IF
+    CALL sync
+    
+    ! Copy data from the PETSc matrix to the CSR arrays
+    DO i = istart+1, iend ! +1 because PETSc indexes from 0
+      k1 = A_CSR%ptr( i)
+      k2 = A_CSR%ptr( i+1) - 1
+      CALL MatGetRow( A, i-1, ncols, cols, vals, perr)
+      A_CSR%index( k1:k2) = cols( 1:ncols)+1
+      A_CSR%val(   k1:k2) = vals( 1:ncols)
+      CALL MatRestoreRow( A, i-1, ncols, cols, vals, perr)
+    END DO
+    CALL sync
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wnnz_rows)
+    
+  END SUBROUTINE mat_petsc2CSR
+  SUBROUTINE mat_CSR2petsc( A_CSR, A)
+    ! Convert a CSR-format matrix in regular Fortran arrays to a PETSC parallel matrix
+    !
+    ! NOTE: the PETSc documentation seems to advise against using the MatCreateMPIAIJWithArrays
+    !       routine used here. However, for the advised way of using MatSetValues with preallocation
+    !       I've not been able to find a way that is fast enough to be useful without having to
+    !       preallocate -WAY- too much memory. Especially for the remapping matrices, which
+    !       can have hundreds or even thousands of non-zero elements per row, this can make the
+    !       model run hella slow, whereas the current solution seems to work perfectly. So there you go.
+      
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
+    TYPE(tMat),                          INTENT(OUT)   :: A
+    
+    ! Local variables:
+    INTEGER                                            :: i1, i2, nrows_proc, nrows_scan, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: ptr_proc, index_proc
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_proc
+    
+    ! Determine process domains
+    ! NOTE: slightly different from how it's done in partition_list, this is needed
+    !       because otherwise PETSc will occasionally throw errors because the 
+    !       process domains are different from what it expects.
+    nrows_proc = PETSC_DECIDE
+    CALL PetscSplitOwnership( PETSC_COMM_WORLD, nrows_proc, A_CSR%m, perr)
+    CALL MPI_Scan( nrows_proc, nrows_scan, 1, MPI_INTEGER, MPI_SUM, PETSC_COMM_WORLD, ierr)
+    i1 = nrows_scan + 1 - nrows_proc
+    i2 = i1 + nrows_proc - 1
+    
+    ! Determine number of non-zeros for this process
+    nnz_proc = 0
+    DO i = i1, i2
+      k1 = A_CSR%ptr( i)
+      k2 = A_CSR%ptr( i+1) - 1
+      nnz_row = k2 + 1 - k1
+      nnz_proc = nnz_proc + nnz_row
+    END DO
+    CALL sync
+    
+    ! Allocate memory for local CSR-submatrix
+    ALLOCATE( ptr_proc(   0:nrows_proc    ))
+    ALLOCATE( index_proc( 0:nnz_proc   - 1))
+    ALLOCATE( val_proc(   0:nnz_proc   - 1))
+    
+    ! Copy matrix data
+    DO i = i1, i2
+    
+      ! ptr
+      ii = i - i1
+      ptr_proc( ii) = A_CSR%ptr( i) - A_CSR%ptr( i1)
+      
+      ! index and val
+      k1 = A_CSR%ptr( i)
+      k2 = A_CSR%ptr( i+1) - 1
+      DO k = k1, k2
+        kk = k - A_CSR%ptr( i1)
+        index_proc( kk) = A_CSR%index( k) - 1
+        val_proc(   kk) = A_CSR%val(   k)
+      END DO
+      
+    END DO
+    ! Last row
+    ptr_proc( nrows_proc) = A_CSR%ptr( i2+1) - A_CSR%ptr( i1)
+    CALL sync
+    
+    ! Create PETSc matrix
+    CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, PETSC_DECIDE, PETSC_DETERMINE, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)
     
     ! Assemble matrix and vectors, using the 2-step process:
     !   MatAssemblyBegin(), MatAssemblyEnd()
@@ -200,77 +342,111 @@ CONTAINS
     ! by placing code between these two statements.
     
     CALL MatAssemblyBegin( A, MAT_FINAL_ASSEMBLY, perr)
-    CALL handle_error( 'MatAssemblyBegin', perr)
-    CALL VecAssemblyBegin( b, perr)
-    CALL handle_error( 'VecAssemblyBegin', perr)
-    CALL VecAssemblyBegin( x, perr)
-    CALL handle_error( 'VecAssemblyBegin', perr)
-    
     CALL MatAssemblyEnd(   A, MAT_FINAL_ASSEMBLY, perr)
-    CALL handle_error( 'MatAssemblyEnd', perr)
-    CALL VecAssemblyEnd(   b, perr)
-    CALL handle_error( 'VecAssemblyEnd', perr)
-    CALL VecAssemblyEnd(   x, perr)
-    CALL handle_error( 'VecAssemblyEnd', perr)
     
-  END SUBROUTINE convert_CSR_to_petsc
-  SUBROUTINE convert_petsc_solution_to_double( x, xx)
+    ! Clean up after yourself
+    DEALLOCATE( ptr_proc  )
+    DEALLOCATE( index_proc)
+    DEALLOCATE( val_proc  )
+    
+  END SUBROUTINE mat_CSR2petsc
+  
+! == Matrix-vector multiplication
+  SUBROUTINE multiply_PETSc_matrix_with_vector_1D( A, xx, yy)
+    ! Multiply a PETSc matrix with a FORTRAN vector: y = A*x
       
     IMPLICIT NONE
     
     ! In- and output variables:
-    TYPE(tVec),                          INTENT(IN)    :: x
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: xx
+    TYPE(tMat),                          INTENT(IN)    :: A
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: yy
+    
+    ! Local variables:
+    TYPE(PetscInt)                                     :: m, n
+    TYPE(tVec)                                         :: x, y
+    
+    ! Safety
+    CALL MatGetSize( A, m, n, perr)
+    IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1)) THEN
+      IF (par%master) WRITE(0,*) 'multiply_PETSc_matrix_with_vector_1D - ERROR: matrix and vector sizes dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Convert Fortran array xx to PETSc vector x
+    CALL vec_double2petsc( xx, x)
+    
+    ! Set up PETSc vector y for the answer
+    CALL VecCreate( PETSC_COMM_WORLD, y, perr)
+    CALL VecSetSizes( y, PETSC_DECIDE, m, perr)
+    CALL VecSetFromOptions( y, perr)
+    
+    ! Compute the matrix-vector product
+    CALL MatMult( A, x, y, perr)
+    
+    ! Convert PETSc vector y to Fortran array yy
+    CALL vec_petsc2double( y, yy)
+    
+    ! Clean up after yourself
+    CALL VecDestroy( x, perr)
+    CALL VecDestroy( y, perr)
+    
+  END SUBROUTINE multiply_PETSc_matrix_with_vector_1D
+  SUBROUTINE multiply_PETSc_matrix_with_vector_2D( A, xx, yy)
+    ! Multiply a PETSc matrix with a FORTRAN vector: y = A*x
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(tMat),                          INTENT(IN)    :: A
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: xx
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: yy
     
     ! Local variables:
     TYPE(PetscErrorCode)                               :: perr
-    TYPE(PetscInt)                                     :: istart,iend,i
-    TYPE(PetscInt),    DIMENSION(1)                    :: ix
-    TYPE(PetscScalar), DIMENSION(1)                    :: v
+    INTEGER                                            :: m, n, i1, i2, j1, j2, k
+    REAL(dp), DIMENSION(:    ), POINTER                ::  xx_1D,  yy_1D
+    INTEGER                                            :: wxx_1D, wyy_1D
     
-    ! Get parallelisation domains ("ownership ranges")
-    CALL VecGetOwnershipRange( x, istart, iend, perr)
-    CALL handle_error( 'VecGetOwnershipRange', perr)
+    ! Safety
+    CALL MatGetSize( A, m, n, perr)
     
-    ! Get values
-    DO i = istart+1,iend
-      ix(1) = i-1
-      CALL VecGetValues( x, 1, ix, v, perr)
-      CALL handle_error( 'VecGetValues', perr)
-      xx( i) = v(1)
+    IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1) .OR. SIZE( xx,2) /= SIZE( yy,2)) THEN
+      IF (par%master) WRITE(0,*) 'multiply_PETSc_matrix_with_vector_2D - ERROR: vector sizes dont match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( n, xx_1D, wxx_1D)
+    CALL allocate_shared_dp_1D( m, yy_1D, wyy_1D)
+    
+    CALL partition_list( n, par%i, par%n, i1, i2)
+    CALL partition_list( m, par%i, par%n, j1, j2)
+    
+    ! Compute each column separately
+    DO k = 1, SIZE( xx,2)
+      
+      ! Copy this column of x
+      xx_1D( i1:i2) = xx( i1:i2,k)
+      CALL sync
+      
+      ! Compute the matrix-vector product
+      CALL multiply_PETSc_matrix_with_vector_1D( A, xx_1D, yy_1D)
+      
+      ! Copy the result back
+      yy( j1:j2,k) = yy_1D( j1:j2)
+      CALL sync
+      
     END DO
-    CALL sync
     
-  END SUBROUTINE convert_petsc_solution_to_double
-  
-! == General PETSc initialisation and finalisation
-  SUBROUTINE initialise_petsc
-    ! Initialise PETSc
-
-    IMPLICIT NONE
-  
-    TYPE(PetscErrorCode)                               :: perr
+    ! Clean up after yourself
+    CALL deallocate_shared( wxx_1D)
+    CALL deallocate_shared( wyy_1D)
     
-    ! Initialise PETSc MPI stuff
-    CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
-    CALL handle_error( 'PetscInitialize', perr)
-    
-  END SUBROUTINE initialise_petsc
-  SUBROUTINE finalise_petsc
-    ! Finalise PETSc
-
-    IMPLICIT NONE
-  
-    TYPE(PetscErrorCode)                               :: perr
-    
-    ! Finalise PETSc MPI stuff
-    CALL PetscFinalize( perr)
-    CALL handle_error( 'PetscFinalize', perr)
-    
-  END SUBROUTINE finalise_petsc
+  END SUBROUTINE multiply_PETSc_matrix_with_vector_2D
   
 ! == Error handler
-  SUBROUTINE handle_error( routine_name, perr)
+  SUBROUTINE PETSc_handle_error( routine_name, perr)
     
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: routine_Name
@@ -281,6 +457,6 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-  END SUBROUTINE handle_error
+  END SUBROUTINE PETSc_handle_error
 
 END MODULE petsc_module

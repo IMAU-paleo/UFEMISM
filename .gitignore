@@ -14,3 +14,7 @@ result*/
 
 # Ignore Mac files
 .DS_store
+
+# Ignore benchmark files
+MISMIP_mod/MISMIP_mod*
+ISMIP-HOM/ISMIP_HOM_*

@@ -29,7 +29,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_ciplusone
     INTEGER :: id_dim_two
     INTEGER :: id_dim_three
-    INTEGER :: id_dim_four
+    INTEGER :: id_dim_six
     INTEGER :: id_dim_vii_transect
   
     CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
@@ -39,7 +39,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_ciplusone             = 'ciplusone            '
     CHARACTER(LEN=256) :: name_dim_two                   = 'two                  '
     CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
-    CHARACTER(LEN=256) :: name_dim_four                  = 'four                 '
+    CHARACTER(LEN=256) :: name_dim_six                   = 'six                  '
     CHARACTER(LEN=256) :: name_dim_vii_transect          = 'vii                  '
     CHARACTER(LEN=256) :: name_dim_ai                    = 'ai                   '
     CHARACTER(LEN=256) :: name_dim_tai                   = 'tai                  '
@@ -165,7 +165,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_ciplusone
     INTEGER :: id_dim_two
     INTEGER :: id_dim_three
-    INTEGER :: id_dim_four
+    INTEGER :: id_dim_six
     INTEGER :: id_dim_vii_transect
   
     CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
@@ -175,7 +175,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_ciplusone             = 'ciplusone            '
     CHARACTER(LEN=256) :: name_dim_two                   = 'two                  '
     CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
-    CHARACTER(LEN=256) :: name_dim_four                  = 'four                 '
+    CHARACTER(LEN=256) :: name_dim_six                   = 'six                  '
     CHARACTER(LEN=256) :: name_dim_vii_transect          = 'vii                  '
     CHARACTER(LEN=256) :: name_dim_ai                    = 'ai                   '
     CHARACTER(LEN=256) :: name_dim_tai                   = 'tai                  '
@@ -331,7 +331,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_ciplusone
     INTEGER :: id_dim_two
     INTEGER :: id_dim_three
-    INTEGER :: id_dim_four
+    INTEGER :: id_dim_six
     INTEGER :: id_dim_vii_transect
   
     CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
@@ -341,7 +341,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_dim_ciplusone             = 'ciplusone            '
     CHARACTER(LEN=256) :: name_dim_two                   = 'two                  '
     CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
-    CHARACTER(LEN=256) :: name_dim_four                  = 'four                 '
+    CHARACTER(LEN=256) :: name_dim_six                   = 'six                  '
     CHARACTER(LEN=256) :: name_dim_vii_transect          = 'vii                  '
     CHARACTER(LEN=256) :: name_dim_ai                    = 'ai                   '
     CHARACTER(LEN=256) :: name_dim_tai                   = 'tai                  '

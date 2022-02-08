@@ -3,9 +3,11 @@ MODULE isotopes_module
   ! Contains all the routines for calculating the isotope content of the ice sheet.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -22,8 +24,8 @@ MODULE isotopes_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping
-  USE mesh_mapping_module,             ONLY: remap_field_dp
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping_mesh_mesh
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
   IMPLICIT NONE
     
@@ -439,7 +441,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Not needed for benchmark experiments

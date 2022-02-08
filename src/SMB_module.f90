@@ -3,9 +3,11 @@ MODULE SMB_module
   ! All the routines for calculating the surface mass balance from the climate forcing
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -23,11 +25,11 @@ MODULE SMB_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, &
-                                             type_SMB_model, type_remapping, &
+                                             type_SMB_model, type_remapping_mesh_mesh, &
                                              type_climate_matrix_regional, &
                                              type_climate_snapshot_regional, type_direct_SMB_forcing_regional
   USE forcing_module,                  ONLY: forcing
-  USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_monthly
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
 
   IMPLICIT NONE
   
@@ -403,18 +405,20 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     
     ! Local variables:
     INTEGER                                            :: int_dummy
     
+    ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
-    int_dummy = map%trilin%vi( 1,1)
+    int_dummy = mesh_new%nV
+    int_dummy = int_dummy
     
     ! Firn depth and melt-during-previous-year must be remapped
-    CALL remap_field_dp(         mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
-    CALL remap_field_dp_monthly( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
         
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )

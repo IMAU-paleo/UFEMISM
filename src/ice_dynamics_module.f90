@@ -6,9 +6,11 @@ MODULE ice_dynamics_module
   !       routines for integrating the ice thickness equation have been moved to the ice_thickness_module.
 
   ! Import basic functionality
+#include <petsc/finclude/petscksp.h>
   USE mpi
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
+  USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -26,9 +28,9 @@ MODULE ice_dynamics_module
   
   ! Import specific functionality                     
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
-                                             type_remapping
+                                             type_remapping_mesh_mesh
   USE utilities_module,                ONLY: vertical_average, surface_elevation                 
-  USE mesh_mapping_module,             ONLY: remap_field_dp, remap_field_dp_3D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
   USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
@@ -844,7 +846,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping),                INTENT(IN)    :: map
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     REAL(dp),                            INTENT(IN)    :: time
@@ -853,10 +855,10 @@ CONTAINS
     INTEGER                                            :: vi
         
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
-    CALL remap_field_dp(    mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_1st_order')
-    CALL remap_field_dp(    mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_1st_order')
-    CALL remap_field_dp(    mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_1st_order')
-   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_1st_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_2nd_order')
+   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_2nd_order')
     
     ! Remove very thin ice resulting from remapping errors
     DO vi = mesh_new%vi1, mesh_new%vi2
@@ -870,7 +872,7 @@ CONTAINS
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
     
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp(         mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
     CALL reallocate_shared_dp_1D(    mesh_new%nV,  ice%Hb_a,                   ice%wHb_a                     )
     ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
     

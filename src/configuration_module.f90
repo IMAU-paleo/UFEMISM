@@ -108,7 +108,7 @@ MODULE configuration_module
   ! Mesh generation parameters
   ! ==========================
   
-  INTEGER             :: nconmax_config                              = 16                               ! Maximum number of vertex connections
+  INTEGER             :: nconmax_config                              = 32                               ! Maximum number of vertex connections
   REAL(dp)            :: alpha_min_config                            = 0.55_dp                          ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   REAL(dp)            :: dz_max_ice_config                           = 20000._dp                        ! Maximum allowed 2nd order surface deviation over ice 
   REAL(dp)            :: res_max_config                              = 800._dp                          ! Maximum allowed resolution                            [km]
@@ -277,7 +277,7 @@ MODULE configuration_module
   ! Some parameters for numerically solving the SSA/DIVA
   REAL(dp)            :: DIVA_visc_it_norm_dUV_tol_config            = 1E-2_dp                          ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
   INTEGER             :: DIVA_visc_it_nit_config                     = 50                               ! Maximum number of effective viscosity iterations
-  REAL(dp)            :: DIVA_visc_it_relax_config                   = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
+  REAL(dp)            :: DIVA_visc_it_relax_config                   = 0.2_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
   REAL(dp)            :: DIVA_beta_max_config                        = 1E20_dp                          ! beta values     are limited to this value
   REAL(dp)            :: DIVA_vel_max_config                         = 5000._dp                         ! DIVA velocities are limited to this value
   CHARACTER(LEN=256)  :: DIVA_boundary_BC_u_west_config              = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain boundary in the DIVA
@@ -540,28 +540,28 @@ MODULE configuration_module
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
   
-  CHARACTER(LEN=256)  :: help_field_01_config                        = 'lat'
-  CHARACTER(LEN=256)  :: help_field_02_config                        = 'lon'
-  CHARACTER(LEN=256)  :: help_field_03_config                        = 'resolution'
-  CHARACTER(LEN=256)  :: help_field_04_config                        = 'u_surf'
-  CHARACTER(LEN=256)  :: help_field_05_config                        = 'v_surf'
-  CHARACTER(LEN=256)  :: help_field_06_config                        = 'u_base'
-  CHARACTER(LEN=256)  :: help_field_07_config                        = 'u_base'
-  CHARACTER(LEN=256)  :: help_field_08_config                        = 'u_vav'
-  CHARACTER(LEN=256)  :: help_field_09_config                        = 'u_vav'
-  CHARACTER(LEN=256)  :: help_field_10_config                        = 'u_3D'
-  CHARACTER(LEN=256)  :: help_field_11_config                        = 'u_3D'
-  CHARACTER(LEN=256)  :: help_field_12_config                        = 'w_3D'
-  CHARACTER(LEN=256)  :: help_field_13_config                        = 'mask'
-  CHARACTER(LEN=256)  :: help_field_14_config                        = 'T2m_year'
-  CHARACTER(LEN=256)  :: help_field_15_config                        = 'Precip_year'
-  CHARACTER(LEN=256)  :: help_field_16_config                        = 'Albedo_year'
-  CHARACTER(LEN=256)  :: help_field_17_config                        = 'SMB_year'
-  CHARACTER(LEN=256)  :: help_field_18_config                        = 'BMB'
-  CHARACTER(LEN=256)  :: help_field_19_config                        = 'T2m'
-  CHARACTER(LEN=256)  :: help_field_20_config                        = 'Precip'
-  CHARACTER(LEN=256)  :: help_field_21_config                        = 'Albedo'
-  CHARACTER(LEN=256)  :: help_field_22_config                        = 'SMB'
+  CHARACTER(LEN=256)  :: help_field_01_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_02_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_03_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_04_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_05_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_06_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_07_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_08_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_09_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_10_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_11_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_12_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_13_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_14_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_15_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_16_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_17_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_18_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_19_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_20_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_21_config                        = 'none'
+  CHARACTER(LEN=256)  :: help_field_22_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_23_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_24_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_25_config                        = 'none'

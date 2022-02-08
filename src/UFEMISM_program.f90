@@ -29,11 +29,13 @@ PROGRAM UFEMISM_program
 !   of the ice-sheet model components, rather than the mesh itself, this is done in the
 !   "remap_COMPONENT" routines contained in the different model component modules.
 
+#include <petsc/finclude/petscksp.h>
   USE mpi
+  USE petscksp
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
+  USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
-  USE petsc_module,                ONLY: initialise_petsc, finalise_petsc
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix, type_climate_matrix_global
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
@@ -59,8 +61,9 @@ PROGRAM UFEMISM_program
 
   ! ======================================================================================
 
-  ! Initialise the MPI parallelisation
+  ! Initialise MPI and PETSc
   CALL initialise_parallelisation
+  CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
 
   IF (par%master) WRITE(0,*) ''
   IF (par%master) WRITE(0,*) '=================================================='
@@ -69,12 +72,6 @@ PROGRAM UFEMISM_program
   IF (par%master) WRITE(0,*) ''
 
   tstart = MPI_WTIME()
-
-  ! PETSc Initialisation
-  ! ====================
-
-  ! Basically just a call to PetscInitialize
-  CALL initialise_petsc
 
   ! Set up the model configuration from the provided config file(s) and create an output directory
   ! ==============================================================================================
@@ -227,20 +224,20 @@ PROGRAM UFEMISM_program
       forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
       forcing%dT_glob,                   &  ! global mean surface temperature anomaly
       forcing%dT_deepwater               )  ! deep-water temperature anomaly
-      
+
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)
-  
+
 ! ====================================
 ! ===== End of the big time loop =====
-! ==================================== 
-  
+! ====================================
+
   ! Write total elapsed time to screen
   tstop = MPI_WTIME()
   IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
   CALL sync
-  
+
   ! Finalise MPI and PETSc
-  CALL finalise_petsc
+  CALL PetscFinalize( perr)
   CALL MPI_FINALIZE( ierr)
-    
+
 END PROGRAM UFEMISM_program

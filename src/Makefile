@@ -40,13 +40,13 @@ UFEMISM_program_objects = \
         petsc_module.o \
         parameters_module.o \
         utilities_module.o \
+        sparse_matrix_module.o \
         mesh_memory_module.o \
         mesh_help_functions_module.o \
         mesh_Delaunay_module.o \
         mesh_operators_module.o \
         mesh_ArakawaC_module.o \
         mesh_mapping_module.o \
-        mesh_five_colour_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
         zeta_module.o \

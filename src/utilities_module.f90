@@ -1589,4 +1589,204 @@ CONTAINS
     
   END SUBROUTINE check_for_NaN_int_3D
 
+  ! == Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+  SUBROUTINE transpose_dp_2D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,nx,ny,i1,i2
+    REAL(dp), DIMENSION(:,:  ), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_2D( nx, ny, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+      d_temp( i,j) = d( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_dp_2D( ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+      d( j,i) = d_temp( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_dp_2D
+  SUBROUTINE transpose_dp_3D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
+    REAL(dp), DIMENSION(:,:,:), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    nz = SIZE( d,3)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_3D( nx, ny, nz, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d_temp( i,j,k) = d( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_dp_3D( nz, ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d( k,j,i) = d_temp( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_dp_3D
+  SUBROUTINE transpose_int_2D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,nx,ny,i1,i2
+    INTEGER,  DIMENSION(:,:  ), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_int_2D( nx, ny, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+      d_temp( i,j) = d( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_int_2D( ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+      d( j,i) = d_temp( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_int_2D
+  SUBROUTINE transpose_int_3D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:,:), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
+    INTEGER,  DIMENSION(:,:,:), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    nz = SIZE( d,3)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_int_3D( nx, ny, nz, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d_temp( i,j,k) = d( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_int_3D( nz, ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d( k,j,i) = d_temp( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_int_3D
+
 END MODULE utilities_module

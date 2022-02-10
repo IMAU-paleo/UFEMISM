@@ -1221,6 +1221,43 @@ MODULE data_types_module
 
   END TYPE type_model_region
 
+  TYPE type_restart_data
+    ! Restart data and NetCDF file
+
+    ! NetCDF file
+    TYPE(type_netcdf_restart)               :: netcdf
+
+    ! Grid
+    TYPE(type_grid)                         :: grid       ! Needed for the mapping from grid to mesh
+    INTEGER,                    POINTER     :: nz, nt
+    REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
+    INTEGER :: wnz, wnt, wzeta, wtime
+
+    ! Data
+
+    ! Ice dynamics
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: Ti
+    INTEGER :: wHi, wHb, wHs, wTi
+
+    ! GIA
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: SL
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb
+    INTEGER :: wSL, wdHb
+
+    ! SMB
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: FirnDepth
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: MeltPreviousYear
+    INTEGER :: wFirnDepth, wMeltPreviousYear
+
+    ! Isotopes
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce
+    INTEGER :: wIsoIce
+
+  END TYPE type_restart_data
+
 CONTAINS
 
 END MODULE data_types_module

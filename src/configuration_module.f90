@@ -410,6 +410,12 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_idealised_SMB_config                 = 'EISMINT1_A'
   REAL(dp)            :: SMB_uniform_config                          = 0._dp                            ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
 
+  ! Tuning parameters for the IMAU-ITM SMB model
+  CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_NAM_config     = 'uniform'                        ! How to initialise the firn layer in the IMAU-ITM SMB model: "uniform", "restart"
+  CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_EAS_config     = 'uniform'
+  CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_GRL_config     = 'uniform'
+  CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
+  REAL(dp)            :: SMB_IMAUITM_initial_firn_thickness_config   = 1._dp                            ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
   REAL(dp)            :: SMB_IMAUITM_C_abl_constant_NAM_config       = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
   REAL(dp)            :: SMB_IMAUITM_C_abl_constant_EAS_config       = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
   REAL(dp)            :: SMB_IMAUITM_C_abl_constant_GRL_config       = -49._dp                          !            they used to in ANICE.)
@@ -965,6 +971,12 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_idealised_SMB
     REAL(dp)                            :: SMB_uniform
 
+    ! Tuning parameters for the IMAU-ITM SMB model
+    CHARACTER(LEN=256)                  :: SMB_IMAUITM_choice_init_firn_NAM
+    CHARACTER(LEN=256)                  :: SMB_IMAUITM_choice_init_firn_EAS
+    CHARACTER(LEN=256)                  :: SMB_IMAUITM_choice_init_firn_GRL
+    CHARACTER(LEN=256)                  :: SMB_IMAUITM_choice_init_firn_ANT
+    REAL(dp)                            :: SMB_IMAUITM_initial_firn_thickness
     REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_NAM
     REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_EAS
     REAL(dp)                            :: SMB_IMAUITM_C_abl_constant_GRL
@@ -1611,6 +1623,11 @@ CONTAINS
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
+                     SMB_IMAUITM_choice_init_firn_NAM_config,         &
+                     SMB_IMAUITM_choice_init_firn_EAS_config,         &
+                     SMB_IMAUITM_choice_init_firn_GRL_config,         &
+                     SMB_IMAUITM_choice_init_firn_ANT_config,         &
+                     SMB_IMAUITM_initial_firn_thickness_config,       &
                      SMB_IMAUITM_C_abl_constant_NAM_config,           &
                      SMB_IMAUITM_C_abl_constant_EAS_config,           &
                      SMB_IMAUITM_C_abl_constant_GRL_config,           &
@@ -2150,6 +2167,11 @@ CONTAINS
     C%SMB_uniform                              = SMB_uniform_config
 
     ! Tuning parameters for the IMAU-ITM SMB model
+    C%SMB_IMAUITM_choice_init_firn_NAM         = SMB_IMAUITM_choice_init_firn_NAM_config
+    C%SMB_IMAUITM_choice_init_firn_EAS         = SMB_IMAUITM_choice_init_firn_EAS_config
+    C%SMB_IMAUITM_choice_init_firn_GRL         = SMB_IMAUITM_choice_init_firn_GRL_config
+    C%SMB_IMAUITM_choice_init_firn_ANT         = SMB_IMAUITM_choice_init_firn_ANT_config
+    C%SMB_IMAUITM_initial_firn_thickness       = SMB_IMAUITM_initial_firn_thickness_config
     C%SMB_IMAUITM_C_abl_constant_NAM           = SMB_IMAUITM_C_abl_constant_NAM_config
     C%SMB_IMAUITM_C_abl_constant_EAS           = SMB_IMAUITM_C_abl_constant_EAS_config
     C%SMB_IMAUITM_C_abl_constant_GRL           = SMB_IMAUITM_C_abl_constant_GRL_config

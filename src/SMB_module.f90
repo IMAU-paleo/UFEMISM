@@ -20,16 +20,21 @@ MODULE SMB_module
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                             transpose_dp_2D, transpose_dp_3D
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_restart_file_SMB, &
+                                             read_restart_file_SMB
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, &
                                              type_SMB_model, type_remapping_mesh_mesh, &
                                              type_climate_matrix_regional, &
-                                             type_climate_snapshot_regional, type_direct_SMB_forcing_regional
+                                             type_climate_snapshot_regional, type_direct_SMB_forcing_regional, &
+                                             type_restart_data
   USE forcing_module,                  ONLY: forcing
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, &
+                                             calc_remapping_operator_grid2mesh, map_grid2mesh_2D, map_grid2mesh_3D, &
+                                             deallocate_remapping_operators_grid2mesh
 
   IMPLICIT NONE
   
@@ -312,7 +317,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
@@ -324,77 +329,28 @@ CONTAINS
     
     n1 = par%mem%n
     
-    IF (par%master) WRITE (0,*) '  Initialising SMB model...'
-    
-    ! Allocate memory
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%MeltPreviousYear, SMB%wMeltPreviousYear)
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%FirnDepth,        SMB%wFirnDepth       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Rainfall,         SMB%wRainfall        )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Snowfall,         SMB%wSnowfall        )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%AddedFirn,        SMB%wAddedFirn       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Melt,             SMB%wMelt            )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Refreezing,       SMB%wRefreezing      )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Refreezing_year,  SMB%wRefreezing_year )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Runoff,           SMB%wRunoff          )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Albedo,           SMB%wAlbedo          )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%SMB,              SMB%wSMB             )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%SMB_year,         SMB%wSMB_year        )
-    
-    ! Tuning parameters
-    CALL allocate_shared_dp_0D( SMB%C_abl_constant, SMB%wC_abl_constant)
-    CALL allocate_shared_dp_0D( SMB%C_abl_Ts,       SMB%wC_abl_Ts      )
-    CALL allocate_shared_dp_0D( SMB%C_abl_Q,        SMB%wC_abl_Q       )
-    CALL allocate_shared_dp_0D( SMB%C_refr,         SMB%wC_refr        )
-    
-    IF (par%master) THEN
-      IF     (region_name == 'NAM') THEN
-        SMB%C_abl_constant = C%C_abl_constant_NAM
-        SMB%C_abl_Ts       = C%C_abl_Ts_NAM
-        SMB%C_abl_Q        = C%C_abl_Q_NAM
-        SMB%C_refr         = C%C_refr_NAM
-      ELSEIF (region_name == 'EAS') THEN
-        SMB%C_abl_constant = C%C_abl_constant_EAS
-        SMB%C_abl_Ts       = C%C_abl_Ts_EAS
-        SMB%C_abl_Q        = C%C_abl_Q_EAS
-        SMB%C_refr         = C%C_refr_EAS
-      ELSEIF (region_name == 'GRL') THEN
-        SMB%C_abl_constant = C%C_abl_constant_GRL
-        SMB%C_abl_Ts       = C%C_abl_Ts_GRL
-        SMB%C_abl_Q        = C%C_abl_Q_GRL
-        SMB%C_refr         = C%C_refr_GRL
-      ELSEIF (region_name == 'ANT') THEN
-        SMB%C_abl_constant = C%C_abl_constant_ANT
-        SMB%C_abl_Ts       = C%C_abl_Ts_ANT
-        SMB%C_abl_Q        = C%C_abl_Q_ANT
-        SMB%C_refr         = C%C_refr_ANT
-      END IF
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
-    ! Initialise albedo to background albedo
-    DO vi = mesh%vi1, mesh%vi2
-      
-      ! Background albedo
-      IF (ice%mask_ocean_a( vi) ==  1) THEN
-        SMB%AlbedoSurf( vi) = albedo_water
-      ELSE
-        SMB%AlbedoSurf( vi) = albedo_soil
-      END IF
-      
-      IF (ice%mask_ice_a( vi) == 1) THEN
-        SMB%AlbedoSurf(vi) = albedo_snow
-        SMB%FirnDepth(vi,:) = initial_snow_depth   
-      END IF
-      
-      SMB%Albedo(      vi,:) = SMB%AlbedoSurf(vi)
-      SMB%Albedo_year( vi  ) = SMB%AlbedoSurf(vi)
-      
-    END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
-    
+    IF (par%master) WRITE (0,*) '  Initialising regional SMB model "', TRIM(C%choice_SMB_model), '"...'
+
+    ! Allocate shared memory
+    IF     (C%choice_SMB_model == 'uniform' .OR. &
+            C%choice_SMB_model == 'idealised' .OR. &
+            C%choice_SMB_model == 'direct_global' .OR. &
+            C%choice_SMB_model == 'direct_regional') THEN
+      ! Only need yearly total SMB in these cases
+
+      CALL allocate_shared_dp_1D( mesh%nV, SMB%SMB_year, SMB%wSMB_year)
+
+    ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
+            C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
+      ! Allocate memory and initialise some fields for the IMAU-ITM SMB model
+
+      CALL initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name)
+
+    ELSE
+      IF (par%master) WRITE(0,*) 'initialise_SMB_model - ERROR: unknown choice_SMB_model "', TRIM(C%choice_SMB_model), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
     n2 = par%mem%n
     CALL write_to_memory_log( routine_name, n1, n2)
   
@@ -851,6 +807,257 @@ CONTAINS
     CALL check_for_NaN_dp_1D( SMB%Albedo_year     , 'SMB%Albedo_year'     , 'run_IMAUITM_wrongrefreezing')
 
   END SUBROUTINE run_SMB_model_IMAUITM_wrongrefreezing
+  SUBROUTINE initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name)
+    ! Allocate memory for the data fields of the SMB model.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+
+    ! Local variables
+    INTEGER                                            :: vi
+    CHARACTER(LEN=256)                                 :: SMB_IMAUITM_choice_init_firn
+
+    IF (par%master) WRITE (0,*) '  Initialising the IMAU-ITM SMB model...'
+
+    ! Data fields
+    CALL allocate_shared_dp_1D( mesh%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
+    CALL allocate_shared_dp_1D( mesh%nV,     SMB%MeltPreviousYear, SMB%wMeltPreviousYear)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%FirnDepth,        SMB%wFirnDepth       )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Rainfall,         SMB%wRainfall        )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Snowfall,         SMB%wSnowfall        )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%AddedFirn,        SMB%wAddedFirn       )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Melt,             SMB%wMelt            )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Refreezing,       SMB%wRefreezing      )
+    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Refreezing_year,  SMB%wRefreezing_year )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Runoff,           SMB%wRunoff          )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Albedo,           SMB%wAlbedo          )
+    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%SMB,              SMB%wSMB             )
+    CALL allocate_shared_dp_1D( mesh%nV,     SMB%SMB_year,         SMB%wSMB_year        )
+
+    ! Tuning parameters
+    CALL allocate_shared_dp_0D( SMB%C_abl_constant, SMB%wC_abl_constant)
+    CALL allocate_shared_dp_0D( SMB%C_abl_Ts,       SMB%wC_abl_Ts      )
+    CALL allocate_shared_dp_0D( SMB%C_abl_Q,        SMB%wC_abl_Q       )
+    CALL allocate_shared_dp_0D( SMB%C_refr,         SMB%wC_refr        )
+
+    IF (par%master) THEN
+      IF     (region_name == 'NAM') THEN
+        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_NAM
+        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_NAM
+        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_NAM
+        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_NAM
+      ELSEIF (region_name == 'EAS') THEN
+        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_EAS
+        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_EAS
+        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_EAS
+        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_EAS
+      ELSEIF (region_name == 'GRL') THEN
+        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_GRL
+        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_GRL
+        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_GRL
+        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_GRL
+      ELSEIF (region_name == 'ANT') THEN
+        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_ANT
+        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_ANT
+        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_ANT
+        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_ANT
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Initialisation choice
+    IF     (region_name == 'NAM') THEN
+      SMB_IMAUITM_choice_init_firn = C%SMB_IMAUITM_choice_init_firn_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      SMB_IMAUITM_choice_init_firn = C%SMB_IMAUITM_choice_init_firn_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      SMB_IMAUITM_choice_init_firn = C%SMB_IMAUITM_choice_init_firn_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      SMB_IMAUITM_choice_init_firn = C%SMB_IMAUITM_choice_init_firn_ANT
+    END IF
+
+    ! Initialise the firn layer
+    IF     (SMB_IMAUITM_choice_init_firn == 'uniform') THEN
+      ! Initialise with a uniform firn layer over the ice sheet
+
+      DO vi = mesh%vi1, mesh%vi2
+        IF (ice%Hi_a( vi) > 0._dp) THEN
+          SMB%FirnDepth(        vi,:) = C%SMB_IMAUITM_initial_firn_thickness
+          SMB%MeltPreviousYear( vi  ) = 0._dp
+        ELSE
+          SMB%FirnDepth(        vi,:) = 0._dp
+          SMB%MeltPreviousYear( vi  ) = 0._dp
+        END IF
+      END DO
+      CALL sync
+
+    ELSEIF (SMB_IMAUITM_choice_init_firn == 'restart') THEN
+      ! Initialise with the firn layer of a previous run
+
+      CALL initialise_IMAU_ITM_firn_restart( mesh, SMB, region_name)
+
+    ELSE
+      IF (par%master) WRITE(0,*) 'initialise_SMB_model_IMAU_ITM - ERROR: unknown SMB_IMAUITM_choice_init_firn "', TRIM(SMB_IMAUITM_choice_init_firn), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Initialise albedo
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Background albedo
+      IF (ice%Hb_a( vi) < 0._dp) THEN
+        SMB%AlbedoSurf( vi) = albedo_water
+      ELSE
+        SMB%AlbedoSurf( vi) = albedo_soil
+      END IF
+      IF (ice%Hi_a( vi) > 0._dp) THEN
+        SMB%AlbedoSurf(  vi) = albedo_snow
+      END IF
+
+      SMB%Albedo( vi,:) = SMB%AlbedoSurf( vi)
+
+    END DO
+    CALL sync
+
+  END SUBROUTINE initialise_SMB_model_IMAU_ITM
+  SUBROUTINE initialise_IMAU_ITM_firn_restart( mesh, SMB, region_name)
+    ! If this is a restarted run, read the firn depth and meltpreviousyear data from the restart file
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),      INTENT(INOUT) :: mesh
+    TYPE(type_SMB_model), INTENT(INOUT) :: SMB
+    CHARACTER(LEN=3),     INTENT(IN)    :: region_name
+
+    ! Local variables
+    INTEGER                             :: i,j,n
+    CHARACTER(LEN=256)                  :: filename_restart
+    REAL(dp)                            :: time_to_restart_from
+    TYPE(type_restart_data)             :: restart
+
+    ! Assume that SMB and geometry are read from the same restart file
+    IF     (region_name == 'NAM') THEN
+      filename_restart     = C%filename_refgeo_init_NAM
+      time_to_restart_from = C%time_to_restart_from_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      filename_restart     = C%filename_refgeo_init_EAS
+      time_to_restart_from = C%time_to_restart_from_EAS
+    ELSEIF (region_name == 'GR:') THEN
+      filename_restart     = C%filename_refgeo_init_GRL
+      time_to_restart_from = C%time_to_restart_from_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      filename_restart     = C%filename_refgeo_init_ANT
+      time_to_restart_from = C%time_to_restart_from_ANT
+    END IF
+
+    ! Inquire if all the required fields are present in the specified NetCDF file,
+    ! and determine the dimensions of the memory to be allocated.
+    CALL allocate_shared_int_0D( restart%grid%nx, restart%grid%wnx)
+    CALL allocate_shared_int_0D( restart%grid%ny, restart%grid%wny)
+    CALL allocate_shared_int_0D( restart%nt,      restart%wnt)
+    IF (par%master) THEN
+      restart%netcdf%filename = filename_restart
+      CALL inquire_restart_file_SMB( restart)
+    END IF
+    CALL sync
+
+    ! Assign range to each processor
+    CALL partition_list( restart%grid%nx, par%i, par%n, restart%grid%i1, restart%grid%i2)
+    CALL partition_list( restart%grid%ny, par%i, par%n, restart%grid%j1, restart%grid%j2)
+
+    ! Allocate memory for raw data
+    CALL allocate_shared_dp_1D( restart%grid%nx, restart%grid%x,    restart%grid%wx)
+    CALL allocate_shared_dp_1D( restart%grid%ny, restart%grid%y,    restart%grid%wy)
+    CALL allocate_shared_dp_1D( restart%nt,      restart%time,      restart%wtime  )
+
+    CALL allocate_shared_dp_3D( restart%grid%nx, restart%grid%ny, 12, restart%FirnDepth,        restart%wFirnDepth       )
+    CALL allocate_shared_dp_2D( restart%grid%nx, restart%grid%ny,     restart%MeltPreviousYear, restart%wMeltPreviousYear)
+
+    ! Read data from input file
+    IF (par%master) CALL read_restart_file_SMB( restart, time_to_restart_from)
+    CALL sync
+
+    ! Safety
+    ! CALL check_for_NaN_dp_3D( restart%FirnDepth,        'restart%FirnDepth',        'initialise_IMAU_ITM_firn_restart')
+    ! CALL check_for_NaN_dp_2D( restart%MeltPreviousYear, 'restart%MeltPreviousYear', 'initialise_IMAU_ITM_firn_restart')
+
+    ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+    ! CALL transpose_dp_3D( restart%FirnDepth,        restart%wFirnDepth       )
+    ! CALL transpose_dp_2D( restart%MeltPreviousYear, restart%wMeltPreviousYear)
+
+    ! Fill in secondary grid parameters
+    CALL allocate_shared_dp_0D( restart%grid%dx,   restart%grid%wdx  )
+    CALL allocate_shared_dp_0D( restart%grid%xmin, restart%grid%wxmin)
+    CALL allocate_shared_dp_0D( restart%grid%xmax, restart%grid%wxmax)
+    CALL allocate_shared_dp_0D( restart%grid%ymin, restart%grid%wymin)
+    CALL allocate_shared_dp_0D( restart%grid%ymax, restart%grid%wymax)
+    IF (par%master) THEN
+      restart%grid%dx   = restart%grid%x( 2) - restart%grid%x( 1)
+      restart%grid%xmin = restart%grid%x( 1)
+      restart%grid%xmax = restart%grid%x( restart%grid%nx)
+      restart%grid%ymin = restart%grid%y( 1)
+      restart%grid%ymax = restart%grid%y( restart%grid%ny)
+    END IF
+    CALL sync
+
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D( restart%grid%n, restart%grid%wn)
+    IF (par%master) restart%grid%n  = restart%grid%nx * restart%grid%ny
+    CALL sync
+    CALL allocate_shared_int_2D( restart%grid%nx, restart%grid%ny, restart%grid%ij2n, restart%grid%wij2n)
+    CALL allocate_shared_int_2D( restart%grid%n , 2              , restart%grid%n2ij, restart%grid%wn2ij)
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, restart%grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, restart%grid%ny
+            n = n+1
+            restart%grid%ij2n( i,j) = n
+            restart%grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = restart%grid%ny, 1, -1
+            n = n+1
+            restart%grid%ij2n( i,j) = n
+            restart%grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
+    END IF
+    CALL sync
+
+    ! Map (transposed) raw data to the model mesh
+    CALL calc_remapping_operator_grid2mesh( restart%grid, mesh)
+    CALL map_grid2mesh_3D(restart%grid, mesh, restart%FirnDepth,        SMB%FirnDepth)
+    CALL map_grid2mesh_2D(restart%grid, mesh, restart%MeltPreviousYear, SMB%MeltPreviousYear)
+    CALL deallocate_remapping_operators_grid2mesh( restart%grid)
+
+    ! Deallocate raw data
+    CALL deallocate_shared( restart%grid%wnx         )
+    CALL deallocate_shared( restart%grid%wny         )
+    CALL deallocate_shared( restart%grid%wx          )
+    CALL deallocate_shared( restart%grid%wy          )
+    CALL deallocate_shared( restart%grid%wdx         )
+    CALL deallocate_shared( restart%grid%wxmin       )
+    CALL deallocate_shared( restart%grid%wxmax       )
+    CALL deallocate_shared( restart%grid%wymin       )
+    CALL deallocate_shared( restart%grid%wymax       )
+    CALL deallocate_shared( restart%grid%wn          )
+    CALL deallocate_shared( restart%grid%wij2n       )
+    CALL deallocate_shared( restart%grid%wn2ij       )
+    CALL deallocate_shared( restart%wnt              )
+    CALL deallocate_shared( restart%wtime            )
+    CALL deallocate_shared( restart%wFirnDepth       )
+    CALL deallocate_shared( restart%wMeltPreviousYear)
+
+  END SUBROUTINE initialise_IMAU_ITM_firn_restart
 
   ! == Directly prescribed global/regional SMB
   ! ==========================================

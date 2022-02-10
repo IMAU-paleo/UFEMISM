@@ -418,16 +418,16 @@ CONTAINS
 
     CALL initialise_climate_model_regional( region, climate_matrix_global)
 
-    IF (par%master) stop 'All good til here! (initialise_model)'
-
     ! ===== The SMB model =====
-    ! =========================    
-    
+    ! =========================
+
     CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
-    
+
     ! ===== The BMB model =====
-    ! =========================    
-    
+    ! =========================
+
+    stop 'All good until here (initialise_model).'
+
     CALL initialise_BMB_model( region%mesh, region%BMB, region%name) 
     
     ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation

@@ -19,13 +19,10 @@ MODULE UFEMISM_main_model
                                              reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix, type_remapping_mesh_mesh, &
-                                             type_climate_matrix_global
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix_global, type_remapping_mesh_mesh
   USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
@@ -36,12 +33,10 @@ MODULE UFEMISM_main_model
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
                                              associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
-  USE restart_module,                  ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
-  USE general_ice_model_data_module,   ONLY: update_general_ice_model_data, initialise_mask_noice
+  USE general_ice_model_data_module,   ONLY: initialise_mask_noice
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
   USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
-  USE climate_module,                  ONLY: initialise_climate_model,  remap_climate_model,  run_climate_model, map_subclimate_to_mesh, &
-                                             initialise_climate_model_regional
+  USE climate_module,                  ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
   USE SMB_module,                      ONLY: initialise_SMB_model,      remap_SMB_model,      run_SMB_model
   USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
   USE isotopes_module,                 ONLY: initialise_isotopes_model, remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
@@ -52,20 +47,20 @@ MODULE UFEMISM_main_model
 
 CONTAINS
 
-  SUBROUTINE run_model( region, matrix, t_end)
+  SUBROUTINE run_model( region, climate_matrix_global, t_end)
     ! Run the model until t_end (usually a 100 years further)
   
     IMPLICIT NONE  
     
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: region
-    TYPE(type_climate_matrix),  INTENT(IN)        :: matrix
-    REAL(dp),                   INTENT(IN)        :: t_end
+    TYPE(type_model_region),           INTENT(INOUT)     :: region
+    TYPE(type_climate_matrix_global),  INTENT(INOUT)     :: climate_matrix_global
+    REAL(dp),                          INTENT(IN)        :: t_end
     
     ! Local variables
-    INTEGER                                       :: it
-    REAL(dp)                                      :: meshfitness
-    REAL(dp)                                      :: t1, t2
+    INTEGER                                              :: it
+    REAL(dp)                                             :: meshfitness
+    REAL(dp)                                             :: t1, t2
     
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), & 
@@ -125,7 +120,7 @@ CONTAINS
     !  IF (.TRUE.) THEN 
         region%t_last_mesh = region%time
         IF (par%master) t2 = MPI_WTIME()
-        CALL run_model_update_mesh( region, matrix)
+        CALL run_model_update_mesh( region, climate_matrix_global)
         IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
       
@@ -146,17 +141,17 @@ CONTAINS
             
       ! Run the climate model
       IF (region%do_climate) THEN
-        CALL run_climate_model( region%mesh, region%ice, region%SMB, region%climate, region%time, region%name, region%grid_smooth)
+        CALL run_climate_model( region, climate_matrix_global, region%time)
       END IF     
     
       ! Run the SMB model
       IF (region%do_SMB) THEN
-        CALL run_SMB_model( region%mesh, region%ice, region%climate%applied, region%time, region%SMB, region%mask_noice)
+        CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
       END IF
     
       ! Run the BMB model
       IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%climate%applied, region%BMB, region%name)
+        CALL run_BMB_model( region%mesh, region%ice, region%climate_matrix%applied, region%BMB, region%name)
       END IF
       
       t2 = MPI_WTIME()
@@ -166,7 +161,7 @@ CONTAINS
     ! ==============
     
       t1 = MPI_WTIME()
-      CALL run_thermo_model( region%mesh, region%ice, region%climate%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_thermo = region%tcomp_thermo + t2 - t1
       
@@ -221,7 +216,7 @@ CONTAINS
   END SUBROUTINE run_model
   
   ! Update the mesh and everything else that needs it
-  SUBROUTINE run_model_update_mesh( region, matrix)
+  SUBROUTINE run_model_update_mesh( region, climate_matrix_global)
     ! Perform a mesh update: create a new mesh based on the current modelled ice-sheet
     ! geometry, map all the model data from the old to the new mesh. Deallocate the
     ! old mesh, update the output files and the square grid maps.
@@ -230,7 +225,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
+    TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
     
     ! Local variables
     TYPE(type_remapping_mesh_mesh)                     :: map
@@ -277,7 +272,7 @@ CONTAINS
     ! Remap all the submodels
     CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
     CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
-    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate, matrix, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name)
+    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
@@ -322,14 +317,13 @@ CONTAINS
   
   ! Initialise the entire model region - read initial and PD data, create the mesh,
   ! initialise the ice dynamics, climate and SMB sub models
-  SUBROUTINE initialise_model( region, name, matrix, climate_matrix_global)
+  SUBROUTINE initialise_model( region, name, climate_matrix_global)
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),          INTENT(INOUT)     :: region
     CHARACTER(LEN=3),                 INTENT(IN)        :: name
-    TYPE(type_climate_matrix),        INTENT(IN)        :: matrix
     TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
 
     ! Local variables
@@ -414,9 +408,9 @@ CONTAINS
     ! ===== The climate model =====
     ! =============================
 
-    ! CALL initialise_climate_model( region%climate, matrix, region%mesh, region%refgeo_PD, region%name, region%mask_noice, region%grid_smooth)
-
     CALL initialise_climate_model_regional( region, climate_matrix_global)
+
+    stop 'All good until here (initialise_model).'
 
     ! ===== The SMB model =====
     ! =========================
@@ -426,16 +420,14 @@ CONTAINS
     ! ===== The BMB model =====
     ! =========================
 
-    stop 'All good until here (initialise_model).'
-
     CALL initialise_BMB_model( region%mesh, region%BMB, region%name) 
     
     ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
-    CALL run_climate_model( region%mesh, region%ice, region%SMB, region%climate, C%start_time_of_run, region%name, region%grid_smooth)
-    CALL run_SMB_model(     region%mesh, region%ice, region%climate%applied, C%start_time_of_run, region%SMB, region%mask_noice)
+    CALL run_climate_model( region, climate_matrix_global, region%time)
+    CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
     
     ! Initialise the ice temperature profile
-    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate%applied, region%SMB, region%name)
+    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%name)
     
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)

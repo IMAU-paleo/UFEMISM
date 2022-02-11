@@ -36,10 +36,10 @@ PROGRAM UFEMISM_program
   USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
-  USE data_types_module,           ONLY: type_model_region, type_climate_matrix, type_climate_matrix_global
+  USE data_types_module,           ONLY: type_model_region, type_climate_matrix_global
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
-  USE climate_module,              ONLY: initialise_climate_matrix, initialise_climate_model_global
+  USE climate_module,              ONLY: initialise_climate_model_global
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
@@ -52,7 +52,6 @@ PROGRAM UFEMISM_program
   TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
 
   ! The global climate matrix
-  TYPE(type_climate_matrix)              :: matrix
   TYPE(type_climate_matrix_global)       :: climate_matrix_global
 
   REAL(dp)                               :: t_coupling, t_end_models
@@ -92,17 +91,15 @@ PROGRAM UFEMISM_program
   ! ===== Initialise the climate matrix =====
   ! =========================================
 
-  ! CALL initialise_climate_matrix(matrix)
-
   CALL initialise_climate_model_global( climate_matrix_global)
 
   ! ===== Initialise the model regions ======
   ! =========================================
 
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', matrix, climate_matrix_global)
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', matrix, climate_matrix_global)
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', matrix, climate_matrix_global)
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', matrix, climate_matrix_global)
+  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', climate_matrix_global)
+  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', climate_matrix_global)
+  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', climate_matrix_global)
+  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', climate_matrix_global)
 
   ! ===== Initial contributions ======
   ! ==================================
@@ -181,10 +178,10 @@ PROGRAM UFEMISM_program
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
 
-    IF (C%do_NAM) CALL run_model( NAM, matrix, t_end_models)
-    IF (C%do_EAS) CALL run_model( EAS, matrix, t_end_models)
-    IF (C%do_GRL) CALL run_model( GRL, matrix, t_end_models)
-    IF (C%do_ANT) CALL run_model( ANT, matrix, t_end_models)
+    IF (C%do_NAM) CALL run_model( NAM, climate_matrix_global, t_end_models)
+    IF (C%do_EAS) CALL run_model( EAS, climate_matrix_global, t_end_models)
+    IF (C%do_GRL) CALL run_model( GRL, climate_matrix_global, t_end_models)
+    IF (C%do_ANT) CALL run_model( ANT, climate_matrix_global, t_end_models)
 
     ! Advance coupling time
     t_coupling = t_end_models

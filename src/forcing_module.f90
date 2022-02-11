@@ -52,10 +52,11 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
     CHARACTER(LEN=*),                    INTENT(IN)    :: switch
 
-    ! Insolation
-    IF (switch == 'pre') THEN
-      CALL update_insolation_data( time)
-    END IF
+    ! ! Insolation
+    ! IF (switch == 'pre') THEN
+    !   CALL update_insolation_data( time)
+    ! END IF
+    ! Not needed anymore, as this is now managed per region by get_insolation_at_time
 
     ! Climate forcing stuff: CO2, d18O, inverse routine data
     IF     (C%choice_forcing_method == 'none') THEN
@@ -372,10 +373,10 @@ CONTAINS
 
     DO vi = region%mesh%vi1, region%mesh%vi2
       dT_lapse_mod = region%ice%Hs_a(              vi) * C%constant_lapserate
-      dT_lapse_PD  = region%climate%PD_obs%Hs_ref( vi) * C%constant_lapserate
+      dT_lapse_PD  = region%climate_matrix%PD_obs%Hs( vi) * C%constant_lapserate
       DO m = 1, 12
-        T_pot_mod = region%climate%applied%T2m( vi,m) - dT_lapse_mod
-        T_pot_PD  = region%climate%PD_obs%T2m(  vi,m) - dT_lapse_PD
+        T_pot_mod = region%climate_matrix%applied%T2m( vi,m) - dT_lapse_mod
+        T_pot_PD  = region%climate_matrix%PD_obs%T2m(  vi,m) - dT_lapse_PD
         dT = dT + (T_pot_mod - T_pot_PD) * region%mesh%A( vi) / (12._dp * A_reg)
       END DO
     END DO
@@ -934,146 +935,15 @@ CONTAINS
 
   END SUBROUTINE initialise_d18O_record
 
-  ! == Insolation
-  SUBROUTINE update_insolation_data( t_coupling)
-    ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
-    ! coupling timestep to save on memory usage. Only done by master.
 
-    ! NOTE: assumes time in forcing file is in kyr
 
-    IMPLICIT NONE
 
-    ! In/output variables:
-    REAL(dp),                            INTENT(IN)    :: t_coupling
-
-    ! Local variables:
-    INTEGER                                       :: ti0, ti1
-
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in inverse_routine_global_temperature_offset!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Updating insolation data...'
-
-    ! Initialise at zero
-    IF (par%master) THEN
-      forcing%ins_Q_TOA0 = 0._dp
-      forcing%ins_Q_TOA1 = 0._dp
-    END IF
-
-    ! Check if data for model time is available
-    IF (t_coupling < forcing%ins_time(1)) THEN
-      WRITE(0,*) '  update_insolation_data - ERROR: insolation data only available between ', MINVAL(forcing%ins_time), ' y and ', MAXVAL(forcing%ins_time), ' y'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-    ! Find time indices to be read
-    IF (par%master) THEN
-      IF (t_coupling <= forcing%ins_time( forcing%ins_nyears)) THEN
-        ti1 = 1
-        DO WHILE (forcing%ins_time(ti1) < t_coupling)
-          ti1 = ti1 + 1
-        END DO
-        ti0 = ti1 - 1
-
-        forcing%ins_t0 = forcing%ins_time(ti0)
-        forcing%ins_t1 = forcing%ins_time(ti1)
-      ELSE
-        IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
-        ti0 = forcing%ins_nyears
-        ti1 = forcing%ins_nyears
-
-        forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
-        forcing%ins_t1 = forcing%ins_time(ti1)
-      END IF
-    END IF ! IF (par%master) THEN
-
-    ! Read new insolation fields from the NetCDF file
-    IF (par%master) CALL read_insolation_data_file( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
-    CALL sync
-
-  END SUBROUTINE update_insolation_data
-  SUBROUTINE map_insolation_to_mesh( mesh, ins_t0, ins_t1, Q_TOA0, Q_TOA1, time, Q_TOA, Q_TOA_jun_65N, Q_TOA_jan_80S)
-    ! Interpolate two insolation timeframes to the desired time, and then map it to the model mesh.
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp),                            INTENT(IN)    :: ins_t0, ins_t1
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Q_TOA0, Q_TOA1
-    REAL(dp),                            INTENT(IN)    :: time
-    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Q_TOA
-    REAL(dp),                            INTENT(OUT)   :: Q_TOA_jun_65N, Q_TOA_jan_80S
-
-    ! Local variables:
-    INTEGER                                            :: vi,m,ilat_l,ilat_u
-    REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
-
-    ! Calculate time interpolation weights
-    wt0 = (ins_t1 - time) / (ins_t1 - ins_t0)
-    wt1 = 1._dp - wt0
-
-    ! Interpolate on the grid
-    DO vi = mesh%vi1, mesh%vi2
-
-      ilat_l = FLOOR(mesh%lat( vi) + 91)
-      ilat_u = ilat_l + 1
-
-      wlat_l = forcing%ins_lat(ilat_u) - mesh%lat( vi)
-      wlat_u = 1._dp - wlat_l
-
-      DO m = 1, 12
-        Q_TOA( vi,m) = (wt0 * wlat_l * Q_TOA0( ilat_l,m)) + &
-                       (wt0 * wlat_u * Q_TOA0( ilat_u,m)) + &
-                       (wt1 * wlat_l * Q_TOA1( ilat_l,m)) + &
-                       (wt1 * wlat_u * Q_TOA1( ilat_u,m))
-      END DO
-
-    END DO
-    CALL sync
-
-    ! Find summer values at 65 N and 80 S
-    IF (par%master) THEN
-      ilat_l = 1
-      DO WHILE (forcing%ins_lat( ilat_l) < 65._dp)
-        ilat_l = ilat_l + 1
-      END DO
-      ilat_u = 1
-      DO WHILE (forcing%ins_lat( ilat_u) < -80._dp)
-        ilat_u = ilat_u + 1
-      END DO
-      Q_TOA_jun_65N = wt0 * Q_TOA0( ilat_l,6) + wt1 * Q_TOA1( ilat_l,6)
-      Q_TOA_jan_80S = wt0 * Q_TOA0( ilat_u,1) + wt1 * Q_TOA1( ilat_u,1)
-    END IF ! IF (par%master) THEN
-    CALL sync
-
-  END SUBROUTINE map_insolation_to_mesh
   !====================================================
   !====================================================
+
+
+
+
   SUBROUTINE get_insolation_at_time( mesh, time, Q_TOA)
     ! Get monthly insolation at time t on the regional grid
 
@@ -1249,7 +1119,7 @@ CONTAINS
       CALL sync
 
     ELSE
-      IF (par%master) WRITE(0,*) 'update_insolation_data - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      IF (par%master) WRITE(0,*) 'initialise_insolation_data - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 

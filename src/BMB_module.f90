@@ -24,7 +24,7 @@ MODULE BMB_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_BMB_model, &
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_climate_snapshot_regional, type_BMB_model, &
                                              type_remapping_mesh_mesh
   USE forcing_module,                  ONLY: forcing
 
@@ -39,190 +39,193 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_subclimate_region),        INTENT(INOUT) :: climate
-    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_mesh),                      INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                 INTENT(IN)    :: ice
+    TYPE(type_climate_snapshot_regional), INTENT(INOUT) :: climate
+    TYPE(type_BMB_model),                 INTENT(INOUT) :: BMB
+    CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
     
     ! Local variables
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_BMB_model'
-    INTEGER                                            :: n1, n2
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
-    REAL(dp)                                           :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
-    REAL(dp)                                           :: BMB_deepocean                         ! Sub-shelf melt rate for deep-ocean areas   [m/year]
-    REAL(dp)                                           :: w_ins, w_PD, w_warm, w_cold, w_deep, w_expo, weight
-    REAL(dp)                                           :: T_freeze                              ! Freezing temperature at the base of the shelf (Celcius)
-    REAL(dp)                                           :: water_depth
-    REAL(dp), PARAMETER                                :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1) 
-    REAL(dp), PARAMETER                                :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
+    CHARACTER(LEN=64), PARAMETER                        :: routine_name = 'run_BMB_model'
+    INTEGER                                             :: n1, n2
+    INTEGER                                             :: vi
+    REAL(dp)                                            :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
+    REAL(dp)                                            :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
+    REAL(dp)                                            :: BMB_deepocean                         ! Sub-shelf melt rate for deep-ocean areas   [m/year]
+    REAL(dp)                                            :: w_ins, w_PD, w_warm, w_cold, w_deep, w_expo, weight
+    REAL(dp)                                            :: T_freeze                              ! Freezing temperature at the base of the shelf (Celcius)
+    REAL(dp)                                            :: water_depth
+    REAL(dp), PARAMETER                                 :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1)
+    REAL(dp), PARAMETER                                 :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
     
-    n1 = par%mem%n
+    ! n1 = par%mem%n
     
-    ! Exceptions for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
-        CALL sync
-        RETURN
-      ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    ! ! Exceptions for benchmark experiments
+    ! IF (C%do_benchmark_experiment) THEN
+    !   IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
+    !       C%choice_benchmark_experiment == 'Halfar' .OR. &
+    !       C%choice_benchmark_experiment == 'Bueler' .OR. &
+    !       C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
+    !       C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+    !     BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
+    !     CALL sync
+    !     RETURN
+    !   ELSE
+    !     IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_BMB_model!'
+    !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !   END IF
+    ! END IF ! IF (C%do_benchmark_experiment) THEN
       
-    ! Initialise everything at zero
-    BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
-    BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
-    BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
-    BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
-    BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
-    w_ins                             = 0._dp
-    weight                            = 0._dp
-    w_PD                              = 0._dp
-    w_warm                            = 0._dp
-    w_cold                            = 0._dp
-    w_deep                            = 0._dp
-    w_expo                            = 0._dp
-    BMB_shelf                         = 0._dp
-    BMB_shelf_exposed                 = 0._dp
-    BMB_deepocean                     = 0._dp
+    ! ! Initialise everything at zero
+    ! BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
+    ! BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
+    ! BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+    ! BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
+    ! BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
+    ! w_ins                             = 0._dp
+    ! weight                            = 0._dp
+    ! w_PD                              = 0._dp
+    ! w_warm                            = 0._dp
+    ! w_cold                            = 0._dp
+    ! w_deep                            = 0._dp
+    ! w_expo                            = 0._dp
+    ! BMB_shelf                         = 0._dp
+    ! BMB_shelf_exposed                 = 0._dp
+    ! BMB_deepocean                     = 0._dp
     
-    ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
-    DO vi = mesh%vi1, mesh%vi2
-      CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
-    END DO
-    CALL sync
+    ! ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
+    ! DO vi = mesh%vi1, mesh%vi2
+    !   CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
+    ! END DO
+    ! CALL sync
     
-    ! Find the weight from insolation
-    IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'GRL') THEN
-      w_ins = MAX(0._dp, (climate%Q_TOA_jun_65N - 462.29_dp) / 40._dp)
-    ELSEIF (region_name == 'ANT') THEN
-      w_ins = MAX(0._dp, (climate%Q_TOA_jan_80S - 532.19_dp) / 40._dp)
-    END IF
+    ! ! Find the weight from insolation
+    ! IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'GRL') THEN
+    !   w_ins = MAX(0._dp, (climate%Q_TOA_jun_65N - 462.29_dp) / 40._dp)
+    ! ELSEIF (region_name == 'ANT') THEN
+    !   w_ins = MAX(0._dp, (climate%Q_TOA_jan_80S - 532.19_dp) / 40._dp)
+    ! END IF
     
-    ! Determine mean ocean temperature and basal melt rates for deep ocean and exposed shelves
-    ! ========================================================================================
+    ! ! Determine mean ocean temperature and basal melt rates for deep ocean and exposed shelves
+    ! ! ========================================================================================
     
-    IF (C%choice_ocean_temperature_model == 'fixed') THEN
-      ! Use present-day values
+    ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    !   ! Use present-day values
       
-      climate%T_ocean_mean = BMB%T_ocean_mean_PD
-      BMB_deepocean        = BMB%BMB_deepocean_PD
-      BMB_shelf_exposed    = BMB%BMB_shelf_exposed_PD
+    !   climate%T_ocean_mean = BMB%T_ocean_mean_PD
+    !   BMB_deepocean        = BMB%BMB_deepocean_PD
+    !   BMB_shelf_exposed    = BMB%BMB_shelf_exposed_PD
       
-    ELSEIF (C%choice_ocean_temperature_model == 'scaled') THEN
-      ! Scale between config values of mean ocean temperature and basal melt rates for PD, cold, and warm climates.
+    ! ELSEIF (C%choice_ocean_temperature_model == 'scaled') THEN
+    !   ! Scale between config values of mean ocean temperature and basal melt rates for PD, cold, and warm climates.
     
-      ! Determine weight for scaling between different ocean temperatures
-      IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !   ! Determine weight for scaling between different ocean temperatures
+    !   IF (C%choice_forcing_method == 'CO2_direct') THEN
       
-        ! Use the prescribed CO2 record as a glacial index
-        IF (forcing%CO2_obs > 280._dp) THEN
-          ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
-          weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_obs) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
-        ELSE
-          ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
-          weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_obs) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
-        END IF
+    !     ! Use the prescribed CO2 record as a glacial index
+    !     IF (forcing%CO2_obs > 280._dp) THEN
+    !       ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
+    !       weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_obs) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
+    !     ELSE
+    !       ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
+    !       weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_obs) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
+    !     END IF
         
-      ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
+    !   ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       
-        ! Use modelled CO2 as a glacial index
-        IF (forcing%CO2_obs > 280._dp) THEN
-          ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
-          weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_mod) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
-        ELSE
-          ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
-          weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_mod) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
-        END IF
+    !     ! Use modelled CO2 as a glacial index
+    !     IF (forcing%CO2_obs > 280._dp) THEN
+    !       ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
+    !       weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_mod) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
+    !     ELSE
+    !       ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
+    !       weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_mod) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
+    !     END IF
         
-      ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
+    !   ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       
-        ! Use modelled global mean annual temperature change as a glacial index
-        weight = MAX(0._dp, MIN(2._dp, 1._dp + forcing%dT_glob/12._dp + w_ins))
+    !     ! Use modelled global mean annual temperature change as a glacial index
+    !     weight = MAX(0._dp, MIN(2._dp, 1._dp + forcing%dT_glob/12._dp + w_ins))
         
-      ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
-        WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !   ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !     WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model!'
+    !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !   END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
       
-      IF (weight < 1._dp) THEN
-        w_PD   = weight
-        w_cold = 1._dp - w_PD
-        w_warm = 0._dp
-      ELSE
-        w_PD   = 2._dp - weight
-        w_warm = 1._dp - w_PD
-        w_cold = 0._dp
-      END IF
+    !   IF (weight < 1._dp) THEN
+    !     w_PD   = weight
+    !     w_cold = 1._dp - w_PD
+    !     w_warm = 0._dp
+    !   ELSE
+    !     w_PD   = 2._dp - weight
+    !     w_warm = 1._dp - w_PD
+    !     w_cold = 0._dp
+    !   END IF
       
-      climate%T_ocean_mean = w_PD * BMB%T_ocean_mean_PD      + w_warm * BMB%T_ocean_mean_warm      + w_cold * BMB%T_ocean_mean_cold
-      BMB_deepocean        = w_PD * BMB%BMB_deepocean_PD     + w_warm * BMB%BMB_deepocean_warm     + w_cold * BMB%BMB_deepocean_cold
-      BMB_shelf_exposed    = w_PD * BMB%BMB_shelf_exposed_PD + w_warm * BMB%BMB_shelf_exposed_warm + w_cold * BMB%BMB_shelf_exposed_cold
+    !   climate%T_ocean_mean = w_PD * BMB%T_ocean_mean_PD      + w_warm * BMB%T_ocean_mean_warm      + w_cold * BMB%T_ocean_mean_cold
+    !   BMB_deepocean        = w_PD * BMB%BMB_deepocean_PD     + w_warm * BMB%BMB_deepocean_warm     + w_cold * BMB%BMB_deepocean_cold
+    !   BMB_shelf_exposed    = w_PD * BMB%BMB_shelf_exposed_PD + w_warm * BMB%BMB_shelf_exposed_warm + w_cold * BMB%BMB_shelf_exposed_cold
       
-    ELSE ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
-      WRITE(0,*) '  ERROR: choice_ocean_temperature_model "', TRIM(C%choice_ocean_temperature_model), '" not implemented in run_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    ! ELSE ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    !   WRITE(0,*) '  ERROR: choice_ocean_temperature_model "', TRIM(C%choice_ocean_temperature_model), '" not implemented in run_BMB_model!'
+    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! END IF ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
     
-    ! Use the (interpolated, spatially uniform) ocean temperature and the subtended angle + distance-to-open-ocean
-    ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
-    ! ====================================================================================
+    ! ! Use the (interpolated, spatially uniform) ocean temperature and the subtended angle + distance-to-open-ocean
+    ! ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
+    ! ! ====================================================================================
     
-    DO vi = mesh%vi1, mesh%vi2
+    ! DO vi = mesh%vi1, mesh%vi2
     
-      IF (ice%mask_shelf_a( vi) == 1) THEN
-        ! Sub-shelf melt
+    !   IF (ice%mask_shelf_a( vi) == 1) THEN
+    !     ! Sub-shelf melt
 
-        ! Freezing temperature at the bottom of the ice shelves, scaling with depth below water level
-        T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+    !     ! Freezing temperature at the bottom of the ice shelves, scaling with depth below water level
+    !     T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-        ! Sub-shelf melt rate for non-exposed shelves (Martin, TC, 2011) - melt values, when T_ocean > T_freeze.
-        BMB_shelf   = seawater_density * cp0 * sec_per_year * gamma_T * BMB%subshelf_melt_factor * &
-                   (climate%T_ocean_mean - T_freeze) / (L_fusion * ice_density)
+    !     ! Sub-shelf melt rate for non-exposed shelves (Martin, TC, 2011) - melt values, when T_ocean > T_freeze.
+    !     BMB_shelf   = seawater_density * cp0 * sec_per_year * gamma_T * BMB%subshelf_melt_factor * &
+    !                (climate%T_ocean_mean - T_freeze) / (L_fusion * ice_density)
 
-      ELSE
-        BMB_shelf = 0._dp
-      END IF
+    !   ELSE
+    !     BMB_shelf = 0._dp
+    !   END IF
 
-      IF (ice%mask_shelf_a( vi) == 1 .OR. ice%mask_ocean_a( vi) == 1) THEN
+    !   IF (ice%mask_shelf_a( vi) == 1 .OR. ice%mask_ocean_a( vi) == 1) THEN
       
-        water_depth = ice%SL_a( vi) - ice%Hb_a( vi)
-        w_deep = MAX(0._dp, MIN(1._dp, (water_depth - BMB%deep_ocean_threshold_depth) / 200._dp))
-        w_expo = MAX(0._dp, MIN(1._dp, (BMB%sub_angle( vi) - 80._dp)/30._dp)) * EXP(-BMB%dist_open( vi) / 100000._dp)
+    !     water_depth = ice%SL_a( vi) - ice%Hb_a( vi)
+    !     w_deep = MAX(0._dp, MIN(1._dp, (water_depth - BMB%deep_ocean_threshold_depth) / 200._dp))
+    !     w_expo = MAX(0._dp, MIN(1._dp, (BMB%sub_angle( vi) - 80._dp)/30._dp)) * EXP(-BMB%dist_open( vi) / 100000._dp)
         
-        BMB%BMB_shelf( vi) = (w_deep * BMB_deepocean) + (1._dp - w_deep) * (w_expo * BMB_shelf_exposed + (1._dp - w_expo) * BMB_shelf)
+    !     BMB%BMB_shelf( vi) = (w_deep * BMB_deepocean) + (1._dp - w_deep) * (w_expo * BMB_shelf_exposed + (1._dp - w_expo) * BMB_shelf)
         
-      ELSE  
-        BMB%BMB_shelf( vi) = 0._dp
-      END IF
+    !   ELSE
+    !     BMB%BMB_shelf( vi) = 0._dp
+    !   END IF
 
-    END DO
-    CALL sync
+    ! END DO
+    ! CALL sync
     
-    ! Add sheet and shelf melt together
-    BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
-    CALL sync
+    ! ! Add sheet and shelf melt together
+    ! BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
+    ! CALL sync
     
-    n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
+    ! n2 = par%mem%n
+    ! !CALL write_to_memory_log( routine_name, n1, n2)
+
+    IF (par%master) WRITE(0,*) 'This subroutine (run_BMB_model) is empty. Feel free to fill it before running the model :)'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
           
   END SUBROUTINE run_BMB_model
   

@@ -25,7 +25,7 @@ MODULE netcdf_module
   ! Import specific functionality
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
-                                           type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, &
+                                           type_debug_fields, &
                                            type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
                                            type_restart_data
   USE petscksp
@@ -424,21 +424,21 @@ CONTAINS
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate%applied%T2m, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%T2m, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'T2m_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate%applied%T2m,2)/12._dp, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%T2m,2)/12._dp, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Precip') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate%applied%Precip, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Precip, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate%applied%Precip,2)/12._dp, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2)/12._dp, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_WE') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate%applied%Wind_WE, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_WE, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_WE_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate%applied%Wind_WE,2)/12._dp, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Wind_WE,2)/12._dp, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_SN') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate%applied%Wind_SN, start=(/1, 1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_SN, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_SN_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate%applied%Wind_SN,2)/12._dp, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Wind_SN,2)/12._dp, start=(/1, netcdf%ti /) ))
       
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
@@ -1310,31 +1310,31 @@ CONTAINS
       
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%T2m, id_var, netcdf%ti, 12)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%T2m, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'T2m_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%T2m( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Precip') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Precip, id_var, netcdf%ti, 12)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%Precip, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Precip_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate%applied%Precip( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Precip( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_WE') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_WE, id_var, netcdf%ti, 12)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%Wind_WE, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_WE_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate%applied%Wind_WE( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Wind_WE( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_SN') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate%applied%Wind_SN, id_var, netcdf%ti, 12)
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%Wind_SN, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Wind_SN_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate%applied%Wind_SN( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Wind_SN( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
@@ -3249,178 +3249,7 @@ CONTAINS
     CALL close_netcdf_file( refgeo%netcdf%ncid)
     
   END SUBROUTINE read_reference_geometry_file
-  
-  ! Present-day observed global climate (e.g. ERA-40)
-  SUBROUTINE inquire_PD_obs_data_file( PD_obs) 
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_subclimate_global), INTENT(INOUT) :: PD_obs
- 
-    ! Local variables:
-    INTEGER                               :: int_dummy
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file(PD_obs%netcdf%filename, PD_obs%netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( PD_obs%netcdf%ncid, PD_obs%netcdf%name_dim_lat,     PD_obs%grid%nlat,  PD_obs%netcdf%id_dim_lat)
-    CALL inquire_dim( PD_obs%netcdf%ncid, PD_obs%netcdf%name_dim_lon,     PD_obs%grid%nlon,  PD_obs%netcdf%id_dim_lon)
-    CALL inquire_dim( PD_obs%netcdf%ncid, PD_obs%netcdf%name_dim_month,   int_dummy,         PD_obs%netcdf%id_dim_month)
 
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_lat,      (/ PD_obs%netcdf%id_dim_lat                                                       /),  PD_obs%netcdf%id_var_lat)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_lon,      (/ PD_obs%netcdf%id_dim_lon                                                       /),  PD_obs%netcdf%id_var_lon)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_T2m,      (/ PD_obs%netcdf%id_dim_lon, PD_obs%netcdf%id_dim_lat, PD_obs%netcdf%id_dim_month /),  PD_obs%netcdf%id_var_T2m)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_Precip,   (/ PD_obs%netcdf%id_dim_lon, PD_obs%netcdf%id_dim_lat, PD_obs%netcdf%id_dim_month /),  PD_obs%netcdf%id_var_Precip)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_Hs,       (/ PD_obs%netcdf%id_dim_lon, PD_obs%netcdf%id_dim_lat                             /),  PD_obs%netcdf%id_var_Hs)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_Wind_WE,  (/ PD_obs%netcdf%id_dim_lon, PD_obs%netcdf%id_dim_lat, PD_obs%netcdf%id_dim_month /),  PD_obs%netcdf%id_var_Wind_WE)
-    CALL inquire_double_var( PD_obs%netcdf%ncid, PD_obs%netcdf%name_var_Wind_SN,  (/ PD_obs%netcdf%id_dim_lon, PD_obs%netcdf%id_dim_lat, PD_obs%netcdf%id_dim_month /),  PD_obs%netcdf%id_var_Wind_SN)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(PD_obs%netcdf%ncid)
-    
-  END SUBROUTINE inquire_PD_obs_data_file
-  SUBROUTINE read_PD_obs_data_file(    PD_obs)
-    ! Read the PD_obs0 netcdf file
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_subclimate_global), INTENT(INOUT) :: PD_obs
-    
-    ! Open the netcdf file
-    CALL open_netcdf_file(PD_obs%netcdf%filename, PD_obs%netcdf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_lon,     PD_obs%grid%lon, start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_lat,     PD_obs%grid%lat, start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_T2m,     PD_obs%T2m,      start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_Precip,  PD_obs%Precip,   start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_Hs,      PD_obs%Hs_ref,   start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_Wind_WE, PD_obs%Wind_WE,  start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( PD_obs%netcdf%ncid, PD_obs%netcdf%id_var_Wind_SN, PD_obs%Wind_SN,  start = (/ 1, 1, 1 /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(PD_obs%netcdf%ncid)
-    
-  END SUBROUTINE read_PD_obs_data_file
-  
-  ! GCM global climate (climate matrix snapshots)
-  SUBROUTINE inquire_GCM_snapshot( snapshot) 
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_subclimate_global), INTENT(INOUT) :: snapshot
- 
-    ! Local variables:
-    INTEGER                               :: int_dummy
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file( snapshot%netcdf%filename, snapshot%netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( snapshot%netcdf%ncid, snapshot%netcdf%name_dim_lat,     snapshot%grid%nlat,  snapshot%netcdf%id_dim_lat)
-    CALL inquire_dim( snapshot%netcdf%ncid, snapshot%netcdf%name_dim_lon,     snapshot%grid%nlon,  snapshot%netcdf%id_dim_lon)
-    CALL inquire_dim( snapshot%netcdf%ncid, snapshot%netcdf%name_dim_month,   int_dummy,           snapshot%netcdf%id_dim_month)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_lat,      (/ snapshot%netcdf%id_dim_lat                                                           /),  snapshot%netcdf%id_var_lat)
-    CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_lon,      (/ snapshot%netcdf%id_dim_lon                                                           /),  snapshot%netcdf%id_var_lon)
-    !CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_Hi,       (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat                               /),  snapshot%netcdf%id_var_Hi)
-    CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_Hs,       (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat                               /),  snapshot%netcdf%id_var_Hs)
-    CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_T2m,      (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat, snapshot%netcdf%id_dim_month /),  snapshot%netcdf%id_var_T2m)
-    CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_Precip,   (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat, snapshot%netcdf%id_dim_month /),  snapshot%netcdf%id_var_Precip)
-    !CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_Wind_WE,  (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat, snapshot%netcdf%id_dim_month /),  snapshot%netcdf%id_var_Wind_WE)
-    !CALL inquire_double_var( snapshot%netcdf%ncid, snapshot%netcdf%name_var_Wind_SN,  (/ snapshot%netcdf%id_dim_lon, snapshot%netcdf%id_dim_lat, snapshot%netcdf%id_dim_month /),  snapshot%netcdf%id_var_Wind_SN)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(snapshot%netcdf%ncid)
-    
-  END SUBROUTINE inquire_GCM_snapshot
-  SUBROUTINE read_GCM_snapshot(    snapshot)
-    ! Read the PD_obs0 netcdf file
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_subclimate_global), INTENT(INOUT) :: snapshot
-    
-    ! Open the netcdf file
-    CALL open_netcdf_file(snapshot%netcdf%filename, snapshot%netcdf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_lon,     snapshot%grid%lon, start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_lat,     snapshot%grid%lat, start = (/ 1       /) ))
-   !CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_Hi,      snapshot%Hi,       start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_Hs,      snapshot%Hs_ref,   start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_T2m,     snapshot%T2m,      start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_Precip,  snapshot%Precip,   start = (/ 1, 1, 1 /) ))
-   !CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_Wind_WE, snapshot%Wind_WE,  start = (/ 1, 1, 1 /) ))
-   !CALL handle_error(nf90_get_var( snapshot%netcdf%ncid, snapshot%netcdf%id_var_Wind_SN, snapshot%Wind_SN,  start = (/ 1, 1, 1 /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(snapshot%netcdf%ncid)
-    
-  END SUBROUTINE read_GCM_snapshot
-  
-  ! ICE5G ice geometry (needed for GCM snapshots)
-  SUBROUTINE inquire_ICE5G_data( ICE5G)
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_ICE5G_timeframe), INTENT(INOUT) :: ICE5G
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file( ICE5G%netcdf%filename, ICE5G%netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( ICE5G%netcdf%ncid, ICE5G%netcdf%name_dim_lat, ICE5G%grid%nlat, ICE5G%netcdf%id_dim_lat)
-    CALL inquire_dim( ICE5G%netcdf%ncid, ICE5G%netcdf%name_dim_lon, ICE5G%grid%nlon, ICE5G%netcdf%id_dim_lon)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_single_var( ICE5G%netcdf%ncid, ICE5G%netcdf%name_var_lat,      (/ ICE5G%netcdf%id_dim_lat                         /),  ICE5G%netcdf%id_var_lat     )
-    CALL inquire_single_var( ICE5G%netcdf%ncid, ICE5G%netcdf%name_var_lon,      (/ ICE5G%netcdf%id_dim_lon                         /),  ICE5G%netcdf%id_var_lon     )
-    CALL inquire_single_var( ICE5G%netcdf%ncid, ICE5G%netcdf%name_var_Hi,       (/ ICE5G%netcdf%id_dim_lon, ICE5G%netcdf%id_dim_lat/),  ICE5G%netcdf%id_var_Hi      )
-    CALL inquire_single_var( ICE5G%netcdf%ncid, ICE5G%netcdf%name_var_Hb,       (/ ICE5G%netcdf%id_dim_lon, ICE5G%netcdf%id_dim_lat/),  ICE5G%netcdf%id_var_Hb      )
-    CALL inquire_single_var( ICE5G%netcdf%ncid, ICE5G%netcdf%name_var_mask_ice, (/ ICE5G%netcdf%id_dim_lon, ICE5G%netcdf%id_dim_lat/),  ICE5G%netcdf%id_var_mask_ice)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(ICE5G%netcdf%ncid)
-    
-  END SUBROUTINE inquire_ICE5G_data
-  SUBROUTINE read_ICE5G_data(    ICE5G)
-    ! Read the PD_obs0 netcdf file
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_ICE5G_timeframe), INTENT(INOUT) :: ICE5G
-    
-    ! Open the netcdf file
-    CALL open_netcdf_file( ICE5G%netcdf%filename, ICE5G%netcdf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( ICE5G%netcdf%ncid, ICE5G%netcdf%id_var_lon,      ICE5G%grid%lon, start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( ICE5G%netcdf%ncid, ICE5G%netcdf%id_var_lat,      ICE5G%grid%lat, start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( ICE5G%netcdf%ncid, ICE5G%netcdf%id_var_Hi,       ICE5G%Hi,       start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( ICE5G%netcdf%ncid, ICE5G%netcdf%id_var_Hb,       ICE5G%Hb,       start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( ICE5G%netcdf%ncid, ICE5G%netcdf%id_var_mask_ice, ICE5G%mask_ice, start = (/ 1, 1 /) ))
-    
-    ! For some reason, "orog" in ICE5G is Hb+Hi (so like Hs without any oceans)
-    ICE5G%Hb = ICE5G%Hb - ICE5G%Hi
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(ICE5G%netcdf%ncid)
-    
-  END SUBROUTINE read_ICE5G_data
-  
   ! Insolation solution (e.g. Laskar 2004)
   SUBROUTINE inquire_insolation_data_file( forcing)
     IMPLICIT NONE
@@ -3849,7 +3678,12 @@ CONTAINS
     
   END SUBROUTINE handle_error
 
+
+
   !==========================
+  !==========================
+
+
 
   ! Present-day observed global climate (e.g. ERA-40)
   SUBROUTINE inquire_PD_obs_global_climate_file( clim)

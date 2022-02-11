@@ -24,7 +24,7 @@ MODULE thermodynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_subclimate_region, type_SMB_model, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_climate_snapshot_regional, type_SMB_model, type_remapping_mesh_mesh
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
@@ -46,7 +46,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-    TYPE(type_subclimate_region),         INTENT(IN)    :: climate
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     REAL(dp),                             INTENT(IN)    :: time
     LOGICAL,                              INTENT(IN)    :: do_solve_heat_equation
@@ -150,10 +150,10 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_subclimate_region),        INTENT(IN)    :: climate
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
+    TYPE(type_mesh),                      INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                 INTENT(INOUT) :: ice
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
 
     ! Local variables:
     INTEGER                                            :: vi, k
@@ -456,11 +456,11 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_subclimate_region),        INTENT(IN)    :: climate
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Ti
-    INTEGER,                             INTENT(IN)    :: vi
+    TYPE(type_ice_model),                 INTENT(IN)    :: ice
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
+    REAL(dp), DIMENSION(:,:  ),           INTENT(INOUT) :: Ti
+    INTEGER,                              INTENT(IN)    :: vi
 
     ! Local variables:
     INTEGER                                            :: k
@@ -799,7 +799,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-    TYPE(type_subclimate_region),         INTENT(IN)    :: climate
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
     
@@ -859,7 +859,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-    TYPE(type_subclimate_region),         INTENT(IN)    :: climate
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     
     ! Local variables
     INTEGER                                             :: vi
@@ -889,7 +889,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-    TYPE(type_subclimate_region),         INTENT(IN)    :: climate
+    TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     
     ! Local variables

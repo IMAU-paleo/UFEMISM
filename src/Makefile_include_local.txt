@@ -1,17 +1,21 @@
 # Compiler names:
-  F90 = mpifort 
+  F90 = mpifort
 
 # Setting the path for the netcdf libraries:  
-  MYLIB     = /usr/local/lib
-  MYINC     = /usr/local/include
-  PETSC_DIR = /usr/local/Cellar/petsc/3.15.1/
+  NCLIB     = $(shell nf-config --flibs)
+  NCINC     = $(shell nf-config --fflags)
+  PETSC_DIR = ${HOME}/projects/petsc
+  PETSC_ARCH= arch-linux-c-debug
 
 # Compiler flags:
-  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none
-  COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries -fimplicit-none
-  COMPILER_FLAGS_NETCDF   = -I $(MYINC)
+  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
+                            -Werror=implicit-interface -fimplicit-none
+  COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries
 
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} ${COMPILER_FLAGS_NETCDF}
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
+                            ${NCINC} -I${PETSC_DIR}/include \
+                            -I${PETSC_DIR}/${PETSC_ARCH}/include
 
 # Linking flags of libaries:
-  LDFLAGS                 = -L/usr/local/lib -lnetcdf -lnetcdff -framework Accelerate -L${PETSC_DIR}/lib -lpetsc
+  LDFLAGS                 = -L/usr/local/lib ${NCLIB} \
+                            ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so -llapack

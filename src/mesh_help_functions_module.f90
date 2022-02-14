@@ -28,6 +28,20 @@ MODULE mesh_help_functions_module
 
   IMPLICIT NONE
 
+  ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
+  ! LAPACK source)
+  !  *
+  !  *  -- LAPACK routine (version 3.1) --
+  !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
+  !  *     November 2006
+  interface 
+    SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+      INTEGER            INFO, LDA, LDB, N, NRHS
+      INTEGER            IPIV( * )
+      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+    END SUBROUTINE
+  end interface
+
   CONTAINS
     
 ! == Calculating some extra mesh data: Voronoi cell areas, connection widths,
@@ -1983,9 +1997,6 @@ MODULE mesh_help_functions_module
     INTEGER,  DIMENSION(2)                        :: IPIV
     INTEGER                                       :: info
 
-    ! External subroutines:      
-    EXTERNAL DGESV ! Lapack routine that solves matrix equation Ax=b for x (in double precision)
-    
     ! If pq and rs are colinear, define them as not intersecting
     IF ( ABS( cross2( [q(1)-p(1), q(2)-p(2)], [s(1)-r(1), s(2)-r(2)] )) < tol_dist) THEN
       llis = [0._dp, 0._dp]

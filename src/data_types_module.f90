@@ -5,6 +5,7 @@ MODULE data_types_module
   ! If only Types could be collapsed in BBEdit...
   
 #include <petsc/finclude/petscksp.h>
+  USE petscksp
   USE mpi
   USE petscksp
   USE configuration_module,        ONLY: dp, C

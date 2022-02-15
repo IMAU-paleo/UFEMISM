@@ -32,6 +32,30 @@ MODULE utilities_module
                                              adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid
 
+  implicit none
+  ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
+  ! LAPACK source)
+  !  *
+  !  *  -- LAPACK routine (version 3.1) --
+  !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
+  !  *     November 2006
+  interface 
+    SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
+      INTEGER            INFO, LDA, M, N
+      INTEGER            IPIV( * )
+      DOUBLE PRECISION   A( LDA, * )
+    END SUBROUTINE
+    SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
+      INTEGER            INFO, LDA, LWORK, N
+      INTEGER            IPIV( * )
+      DOUBLE PRECISION   A( LDA, * ), WORK( * )
+    END SUBROUTINE
+    SUBROUTINE dgtsv( N, NRHS, DL, D, DU, B, LDB, INFO )
+      INTEGER            INFO, LDB, N, NRHS
+      DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * )
+    END SUBROUTINE
+  end interface
+
 CONTAINS
 
 ! == Some operations on the scaled vertical coordinate
@@ -1066,9 +1090,6 @@ CONTAINS
     REAL(dp), DIMENSION(SIZE(diag))               :: diag_copy
     REAL(dp), DIMENSION(SIZE(udiag))              :: udiag_copy, ldiag_copy
 
-    ! External subroutines:      
-    EXTERNAL DGTSV ! Lapack routine that solves tridiagonal systems (in double precision).
-
     ! The LAPACK solver will overwrite the rhs with the solution x. Therefore we 
     ! first copy the rhs in the solution vector x:
     x = rhs
@@ -1186,9 +1207,6 @@ CONTAINS
     REAL(dp), DIMENSION( SIZE( A,1))                   :: work     ! work array for LAPACK
     INTEGER,  DIMENSION( SIZE( A,1))                   :: ipiv     ! pivot indices
     INTEGER                                            :: n,info
-
-    ! LAPACK subroutines:     
-    EXTERNAL DGETRF, DGETRI
 
     n = size( A,1)
     

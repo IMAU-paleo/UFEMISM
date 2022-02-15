@@ -18,4 +18,5 @@
 
 # Linking flags of libaries:
   LDFLAGS                 = -L/usr/local/lib ${NCLIB} \
+                            -Wl,-rpath=${PETSC_DIR}/${PETSC_ARCH}/lib \
                             ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so -llapack

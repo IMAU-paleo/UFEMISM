@@ -1,6 +1,0 @@
-&CONFIG
-  
-  fixed_output_dir_suffix_config              = '_10km'                          ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
-  res_max_gl_config                           = 10                               !                                 grounding line        [km]
-  
-/

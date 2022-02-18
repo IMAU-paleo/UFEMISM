@@ -1,8 +1,0 @@
-clc
-clear all
-close all
-
-filename = '../results_20220201_001/debug_ANT.nc';
-
-PlotMeshData( read_mesh_from_file( filename), ncread(filename,'dp_2D_a_01'), 'none'); title('Hi a');
-PlotMeshData( read_mesh_from_file( filename), ncread(filename,'dp_2D_a_01'), 'none'); title('Hi a');

@@ -21,3 +21,12 @@ Setup on Snellius
 ```
 
 point to `Makefile_include_snellius.txt` in the Makefile
+
+Profiling on Snellius
+---------------------
+
+```bash
+  module load VTune/2021.6.0
+  source ${EBROOTVTUNE}/setvars.sh
+  vtune -collect hotspots -r vtune_output ./UFEMISM_program config_test
+```

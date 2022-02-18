@@ -1,0 +1,19 @@
+# Compiler:
+  F90 = mpifort 
+
+# Path to NetCDF:
+  NETCDF_DIR = /opt/homebrew/Cellar/netcdf/4.8.1
+# Path to PETSc:
+  PETSC_DIR = /opt/homebrew/Cellar/petsc/3.16.2
+# PAth to LAPACK:
+  LAPACK_DIR = /opt/homebrew/Cellar/lapack/3.10.0
+
+# Compiler flags:
+  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -ffree-line-length-none -cpp
+  COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries -fimplicit-none
+
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
+                            -I$(NETCDF_DIR)/include -I$(PETSC_DIR)/include -I$(LAPACK_DIR)/include
+
+# Linking flags of libaries:
+  LDFLAGS                 = -L${NETCDF_DIR}/lib -lnetcdf -lnetcdff -L${PETSC_DIR}/lib -lpetsc -L${LAPACK_DIR}/lib -llapack

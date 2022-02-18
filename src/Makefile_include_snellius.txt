@@ -7,13 +7,13 @@
 
 # Compiler flags:
   COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
-                            -Werror=implicit-interface -fimplicit-none
-  COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries
+                            -Werror=implicit-interface -fimplicit-none -g
+  COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace
 
   F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
-                            ${NCINC} -I${PETSC_DIR}/include \
+			    ${NCINC} -I${PETSC_DIR}/include
 
 # Linking flags of libaries:
-  LDFLAGS                 = -L/usr/local/lib ${NCLIB} \
-                            ${PETSC_DIR}/lib/libpetsc.so \
-                            -lopenblas
+  LDFLAGS                 = -g ${NCLIB} \
+                            -lpetsc \
+                            -lmkl_rt

@@ -17,7 +17,7 @@ Example for bash:
 
 ```bash
   # 1. Copy compilation and run files from templates/ to UFEMISM/
-  cp templates/compile_clean.sh .
+  cp templates/compile_all.sh .
   cp templates/run_UFEMISM.sh .
 
   # 2. Modify src/Makefile_include_local.txt to your local settings and
@@ -26,7 +26,7 @@ Example for bash:
   # 3. Modify src/Makefile so it points to Makefile_include_local.txt
 
   # 4. Compile the model
-  ./compile_clean.sh
+  ./compile_all.sh
 
   # 5. Run a test simulation
   ./run_UFEMISM.sh

@@ -71,7 +71,7 @@ CONTAINS
       filename_refgeo_PD    = C%filename_refgeo_PD_EAS
       filename_refgeo_GIAeq = C%filename_refgeo_GIAeq_EAS
       time_to_restart_from  = C%time_to_restart_from_EAS
-    ELSEIF (region_name == 'GR:') THEN
+    ELSEIF (region_name == 'GRL') THEN
       choice_refgeo_init    = C%choice_refgeo_init_GRL
       choice_refgeo_PD      = C%choice_refgeo_PD_GRL
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_GRL
@@ -1273,7 +1273,7 @@ CONTAINS
       choice_refgeo_init    = C%choice_refgeo_init_EAS
       choice_refgeo_PD      = C%choice_refgeo_PD_EAS
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_EAS
-    ELSEIF (region%name == 'GR:') THEN
+    ELSEIF (region%name == 'GRL') THEN
       choice_refgeo_init    = C%choice_refgeo_init_GRL
       choice_refgeo_PD      = C%choice_refgeo_PD_GRL
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_GRL

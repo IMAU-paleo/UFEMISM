@@ -1,8 +1,9 @@
 #!/bin/bash
 #Set job requirements
-#SBATCH --time=5:00
+#SBATCH --time=05:00
 #SBATCH --partition=thin
 #SBATCH --nodes=1
+#SBATCH --mem=50G
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=1
 

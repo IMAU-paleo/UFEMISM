@@ -2,8 +2,8 @@
 
   ! Time steps and range
   ! ====================
-  
-  start_time_of_run_config                    = -1.0                             ! Start time (in years) of the simulations
+
+  start_time_of_run_config                    = -1000.0                          ! Start time (in years) of the simulations
   end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
@@ -12,16 +12,16 @@
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
   dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
-  dt_output_config                            = 50.0                             ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
   dt_mesh_min_config                          = 50.0                             ! Minimum amount of time (in years) between mesh updates
   dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
 
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .FALSE.                          ! North America
-  do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .FALSE.                          ! Greenland
+  do_NAM_config                               = .TRUE.                           ! North America
+  do_EAS_config                               = .TRUE.                           ! Eurasia
+  do_GRL_config                               = .TRUE.                           ! Greenland
   do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Benchmark experiments
@@ -41,8 +41,8 @@
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
 
-  create_procedural_output_dir_config         = .TRUE.                           ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'name_of_run'                    ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+  fixed_output_dir_config                     = 'results_test'                   ! If not, create a directory with this name instead (stops the program if this directory already exists)
   fixed_output_dir_suffix_config              = ''                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
   do_write_regional_scalar_output_config      = .TRUE.
   do_write_global_scalar_output_config        = .TRUE.
@@ -50,7 +50,7 @@
   ! Debugging
   ! =========
 
-  do_write_debug_data_config                  = .FALSE.                           ! Whether or not the debug NetCDF file should be created and written to
+  do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
   do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
   do_write_memory_tracker_config              = .FALSE.                          ! Whether or not the memory use tracker should be used
 
@@ -80,10 +80,10 @@
   ! Mesh generation parameters
   ! ==========================
 
-  nconmax_config                              = 32                               ! Maximum number of vertex connections
+  nconmax_config                              = 16                               ! Maximum number of vertex connections
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
-  res_max_config                              = 800.0                            ! Maximum allowed resolution                            [km]
+  res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
   res_max_margin_config                       = 40.0                             ! Maximum allowed resolution over land-based ice margin [km]
   res_max_gl_config                           = 40.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 40.0                             !                                 calving front         [km]
@@ -430,19 +430,19 @@
 
   help_field_01_config                        = 'lat'
   help_field_02_config                        = 'lon'
-  help_field_03_config                        = 'Hi'
-  help_field_04_config                        = 'Hs'
-  help_field_05_config                        = 'Hb'
-  help_field_06_config                        = 'none'
-  help_field_07_config                        = 'none'
-  help_field_08_config                        = 'none'
-  help_field_09_config                        = 'none'
-  help_field_10_config                        = 'none'
-  help_field_11_config                        = 'none'
-  help_field_12_config                        = 'none'
-  help_field_13_config                        = 'none'
-  help_field_14_config                        = 'none'
-  help_field_15_config                        = 'none'
+  help_field_03_config                        = 'resolution'
+  help_field_04_config                        = 'Hi'
+  help_field_05_config                        = 'Hs'
+  help_field_06_config                        = 'Hb'
+  help_field_07_config                        = 'T2m_year'
+  help_field_08_config                        = 'Precip_year'
+  help_field_09_config                        = 'SMB_year'
+  help_field_10_config                        = 'BMB'
+  help_field_11_config                        = 'Snowfall_year'
+  help_field_12_config                        = 'Rainfall_year'
+  help_field_13_config                        = 'Refreezing_year'
+  help_field_14_config                        = 'Runoff_year'
+  help_field_15_config                        = 'Albedo_year'
   help_field_16_config                        = 'none'
   help_field_17_config                        = 'none'
   help_field_18_config                        = 'none'

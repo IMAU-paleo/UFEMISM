@@ -749,8 +749,8 @@ CONTAINS
     CALL allocate_shared_dp_2D( grid%nx + 2*n, grid%ny + 2*n, d_ext_smooth, wd_ext_smooth)
 
     ! Copy data to the extended array and fill in the margins
-    DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
       d_ext( i+n,j+n) = d( i,j)
     END DO
     END DO
@@ -775,8 +775,8 @@ CONTAINS
     d_ext_smooth( grid%i1+n:grid%i2+n,:) = 0._dp
     CALL sync
 
-    DO i = grid%i1, grid%i2
     DO j = 1,       grid%ny
+    DO i = grid%i1, grid%i2
       DO ii = -n, n
         d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n+ii,j+n) * f(ii)
       END DO
@@ -806,8 +806,8 @@ CONTAINS
     CALL sync
 
     ! Copy data back
-    DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
       d( i,j) = d_ext_smooth( i+n, j+n)
     END DO
     END DO
@@ -1126,6 +1126,8 @@ CONTAINS
     
     ! Safety
     IF (ABS( detA) < TINY( detA)) THEN
+      !PRINT *, A(1,1), A(1,2)
+      !PRINT *, A(2,1), A(2,2)
       WRITE(0,*) 'calc_matrix_inverse_2_by_2 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1167,6 +1169,9 @@ CONTAINS
     
     ! Safety
     IF (ABS( detA) < TINY( detA)) THEN
+      ! PRINT *, A(1,1), A(1,2), A(1,3)
+      ! PRINT *, A(2,1), A(2,2), A(2,3)
+      ! PRINT *, A(3,1), A(3,2), A(3,3)
       WRITE(0,*) 'calc_matrix_inverse_3_by_3 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1218,6 +1223,13 @@ CONTAINS
     
     ! Safety
     IF (info /= 0) THEN
+      ! IF (n == 5) THEN
+        ! PRINT *, A(1,1), A(1,2), A(1,3), A(1,4), A(1,5)
+        ! PRINT *, A(2,1), A(2,2), A(2,3), A(2,4), A(2,5)
+        ! PRINT *, A(3,1), A(3,2), A(3,3), A(3,4), A(3,5)
+        ! PRINT *, A(4,1), A(4,2), A(4,3), A(4,4), A(4,5)
+        ! PRINT *, A(5,1), A(5,2), A(5,3), A(5,4), A(5,5)
+      ! END IF
       WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF

@@ -11,7 +11,7 @@
   COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace
 
   F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
-			    ${NCINC} -I${PETSC_DIR}/include
+                            ${NCINC} -I${PETSC_DIR}/include
 
 # Linking flags of libaries:
   LDFLAGS                 = -g ${NCLIB} \

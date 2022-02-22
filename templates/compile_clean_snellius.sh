@@ -1,4 +1,4 @@
-#! /bin/sh -f
+#!/bin/sh
 
 # Load necessary modules
 module load 2021

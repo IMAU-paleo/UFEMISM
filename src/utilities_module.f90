@@ -720,22 +720,22 @@ CONTAINS
 ! == Smoothing operations
   SUBROUTINE smooth_Gaussian_2D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 2D data field d
-     
+
     IMPLICIT NONE
-      
+
     ! In/output variables:
     TYPE(type_grid),                     INTENT(IN)    :: grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in m
-    
+
     ! Local variables:
     INTEGER                                            :: i,j,ii,jj,n
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_ext,  d_ext_smooth
     INTEGER                                            :: wd_ext, wd_ext_smooth
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: f
-    
+
     n = CEILING( r / grid%dx) * 3  ! Number of cells to extend the data by (3 standard deviations is enough to capture the tails of the normal distribution)
-    
+
     ! Fill in the smoothing filters
     ALLOCATE( f( -n:n))
     f = 0._dp
@@ -743,81 +743,81 @@ CONTAINS
       f(i) = EXP( -0.5_dp * (REAL(i,dp) * grid%dx/r)**2)
     END DO
     f = f / SUM(f)
-    
+
     ! Allocate temporary shared memory for the extended and smoothed data fields
-    CALL allocate_shared_dp_2D( grid%ny + 2*n, grid%nx + 2*n, d_ext,        wd_ext       )
-    CALL allocate_shared_dp_2D( grid%ny + 2*n, grid%nx + 2*n, d_ext_smooth, wd_ext_smooth)
-    
+    CALL allocate_shared_dp_2D( grid%nx + 2*n, grid%ny + 2*n, d_ext,        wd_ext       )
+    CALL allocate_shared_dp_2D( grid%nx + 2*n, grid%ny + 2*n, d_ext_smooth, wd_ext_smooth)
+
     ! Copy data to the extended array and fill in the margins
-    DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      d_ext( j+n,i+n) = d( j,i)
+    DO i = grid%i1, grid%i2
+      d_ext( i+n,j+n) = d( i,j)
     END DO
     END DO
     IF (par%master) THEN
       ! West
-      d_ext( n+1:n+grid%ny, 1            ) = d( :      ,1      )
+      d_ext( n+1:n+grid%nx, 1            ) = d( :      ,1      )
       ! East
-      d_ext( n+1:n+grid%ny, grid%nx+2*n  ) = d( :      ,grid%nx)
+      d_ext( n+1:n+grid%nx, grid%ny+2*n  ) = d( :      ,grid%ny)
       ! South
-      d_ext( 1            , n+1:n+grid%nx) = d( 1      ,:      )
+      d_ext( 1            , n+1:n+grid%ny) = d( 1      ,:      )
       ! North
-      d_ext( grid%ny+2*n  , n+1:n+grid%nx) = d( grid%ny,:      )
+      d_ext( grid%nx+2*n  , n+1:n+grid%ny) = d( grid%nx,:      )
       ! Corners
       d_ext( 1:n,                     1:n                    ) = d( 1      ,1      )
-      d_ext( 1:n,                     grid%nx+n+1:grid%nx+2*n) = d( 1      ,grid%nx)
-      d_ext( grid%ny+n+1:grid%ny+2*n, 1:n                    ) = d( grid%ny,1      )
-      d_ext( grid%ny+n+1:grid%ny+2*n, grid%nx+n+1:grid%nx+2*n) = d( grid%ny,grid%nx)
+      d_ext( 1:n,                     grid%ny+n+1:grid%ny+2*n) = d( 1      ,grid%ny)
+      d_ext( grid%nx+n+1:grid%nx+2*n, 1:n                    ) = d( grid%nx,1      )
+      d_ext( grid%nx+n+1:grid%nx+2*n, grid%ny+n+1:grid%ny+2*n) = d( grid%nx,grid%ny)
     END IF
     CALL sync
-    
+
     ! Convolute extended data with the smoothing filter
-    d_ext_smooth( :,grid%i1+n:grid%i2+n) = 0._dp
+    d_ext_smooth( grid%i1+n:grid%i2+n,:) = 0._dp
     CALL sync
-    
-    DO i = grid%i1, grid%i2
+
     DO j = 1,       grid%ny
-      DO jj = -n, n
-        d_ext_smooth( j+n,i+n) = d_ext_smooth( j+n,i+n) + d_ext( j+n+jj,i+n) * f(jj)
+    DO i = grid%i1, grid%i2
+      DO ii = -n, n
+        d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n+ii,j+n) * f(ii)
       END DO
     END DO
     END DO
     CALL sync
-    
-    d_ext( :,grid%i1+n:grid%i2+n) = d_ext_smooth( :,grid%i1+n:grid%i2+n)
+
+    d_ext( grid%i1+n:grid%i2+n,:) = d_ext_smooth( grid%i1+n:grid%i2+n,:)
     CALL sync
-    
+
     DO j = grid%j1, grid%j2
-      d_ext( j,           1:          n) = d( j,1      )
-      d_ext( j, grid%nx+n+1:grid%nx+2*n) = d( j,grid%nx)
+      d_ext(           1:          n,j) = d( 1      ,j)
+      d_ext( grid%nx+n+1:grid%nx+2*n,j) = d( grid%nx,j)
     END DO
     CALL sync
-    
-    d_ext_smooth( :,grid%i1+n:grid%i2+n) = 0._dp
+
+    d_ext_smooth( grid%i1+n:grid%i2+n,:) = 0._dp
     CALL sync
-    
+
     DO j = grid%j1, grid%j2
     DO i = 1,       grid%nx
-      DO ii = -n, n
-        d_ext_smooth( j+n,i+n) = d_ext_smooth( j+n,i+n) + d_ext( j+n,i+n+ii) * f(ii)
+      DO jj = -n, n
+        d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n,j+n+jj) * f(jj)
       END DO
     END DO
     END DO
     CALL sync
-    
+
     ! Copy data back
-    DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      d( j,i) = d_ext_smooth( j+n, i+n)
+    DO i = grid%i1, grid%i2
+      d( i,j) = d_ext_smooth( i+n, j+n)
     END DO
     END DO
     CALL sync
-    
+
     ! Clean up after yourself
     DEALLOCATE( f)
     CALL deallocate_shared( wd_ext)
     CALL deallocate_shared( wd_ext_smooth)
-    
+
   END SUBROUTINE smooth_Gaussian_2D_grid
   SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 3D data field d
@@ -835,12 +835,12 @@ CONTAINS
     INTEGER                                            :: wd_2D
     
     ! Allocate temporary shared memory for the extended and smoothed data fields
-    CALL allocate_shared_dp_2D( grid%ny, grid%nx, d_2D, wd_2D)
+    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_2D, wd_2D)
     
-    DO k = 1, SIZE( d,2)
-      d_2D( :,grid%i1:grid%i2) = d( k,:,grid%i1:grid%i2)
+    DO k = 1, SIZE( d,3)
+      d_2D( grid%i1:grid%i2,:) = d( grid%i1:grid%i2,:,k)
       CALL smooth_Gaussian_2D_grid( grid, d_2D, r)
-      d( k,:,grid%i1:grid%i2) = d_2D( :,grid%i1:grid%i2)
+      d( grid%i1:grid%i2,:,k) = d_2D( grid%i1:grid%i2,:)
     END DO
     
     ! Clean up after yourself
@@ -1126,6 +1126,8 @@ CONTAINS
     
     ! Safety
     IF (ABS( detA) < TINY( detA)) THEN
+      !PRINT *, A(1,1), A(1,2)
+      !PRINT *, A(2,1), A(2,2)
       WRITE(0,*) 'calc_matrix_inverse_2_by_2 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1167,6 +1169,9 @@ CONTAINS
     
     ! Safety
     IF (ABS( detA) < TINY( detA)) THEN
+      ! PRINT *, A(1,1), A(1,2), A(1,3)
+      ! PRINT *, A(2,1), A(2,2), A(2,3)
+      ! PRINT *, A(3,1), A(3,2), A(3,3)
       WRITE(0,*) 'calc_matrix_inverse_3_by_3 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1218,6 +1223,13 @@ CONTAINS
     
     ! Safety
     IF (info /= 0) THEN
+      ! IF (n == 5) THEN
+        ! PRINT *, A(1,1), A(1,2), A(1,3), A(1,4), A(1,5)
+        ! PRINT *, A(2,1), A(2,2), A(2,3), A(2,4), A(2,5)
+        ! PRINT *, A(3,1), A(3,2), A(3,3), A(3,4), A(3,5)
+        ! PRINT *, A(4,1), A(4,2), A(4,3), A(4,4), A(4,5)
+        ! PRINT *, A(5,1), A(5,2), A(5,3), A(5,4), A(5,5)
+      ! END IF
       WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF

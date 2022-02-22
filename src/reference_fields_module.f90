@@ -71,7 +71,7 @@ CONTAINS
       filename_refgeo_PD    = C%filename_refgeo_PD_EAS
       filename_refgeo_GIAeq = C%filename_refgeo_GIAeq_EAS
       time_to_restart_from  = C%time_to_restart_from_EAS
-    ELSEIF (region_name == 'GR:') THEN
+    ELSEIF (region_name == 'GRL') THEN
       choice_refgeo_init    = C%choice_refgeo_init_GRL
       choice_refgeo_PD      = C%choice_refgeo_PD_GRL
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_GRL
@@ -151,7 +151,8 @@ CONTAINS
     
     ! Local variables:
     INTEGER                                       :: i,j,n
-    
+    REAL(dp), PARAMETER                           :: tol = 1E-9_dp
+
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
     CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
@@ -161,23 +162,23 @@ CONTAINS
       CALL inquire_reference_geometry_file( refgeo)
     END IF
     CALL sync
-    
+
     ! Assign range to each processor
     CALL partition_list( refgeo%grid%nx, par%i, par%n, refgeo%grid%i1, refgeo%grid%i2)
     CALL partition_list( refgeo%grid%ny, par%i, par%n, refgeo%grid%j1, refgeo%grid%j2)
-    
+
     ! Allocate memory for raw data
     CALL allocate_shared_dp_1D( refgeo%grid%nx,                 refgeo%grid%x,  refgeo%grid%wx )
     CALL allocate_shared_dp_1D(                 refgeo%grid%ny, refgeo%grid%y,  refgeo%grid%wy )
-    
+
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hi_grid, refgeo%wHi_grid)
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hb_grid, refgeo%wHb_grid)
     CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hs_grid, refgeo%wHs_grid)
-  
+
     ! Read data from input file
     IF (par%master) CALL read_reference_geometry_file( refgeo)
     CALL sync
-    
+
     ! Fill in secondary grid parameters
     CALL allocate_shared_dp_0D( refgeo%grid%dx,   refgeo%grid%wdx  )
     CALL allocate_shared_dp_0D( refgeo%grid%xmin, refgeo%grid%wxmin)
@@ -192,6 +193,10 @@ CONTAINS
       refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
     END IF
     CALL sync
+
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( refgeo%grid%tol_dist, refgeo%grid%wtol_dist)
+    IF (par%master) refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
     
     ! Set up grid-to-vector translation tables
     CALL allocate_shared_int_0D(                   refgeo%grid%n           , refgeo%grid%wn           )
@@ -1273,7 +1278,7 @@ CONTAINS
       choice_refgeo_init    = C%choice_refgeo_init_EAS
       choice_refgeo_PD      = C%choice_refgeo_PD_EAS
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_EAS
-    ELSEIF (region%name == 'GR:') THEN
+    ELSEIF (region%name == 'GRL') THEN
       choice_refgeo_init    = C%choice_refgeo_init_GRL
       choice_refgeo_PD      = C%choice_refgeo_PD_GRL
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_GRL

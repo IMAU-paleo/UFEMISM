@@ -1,0 +1,23 @@
+clc
+clear all
+close all
+
+foldername = '../results_20220127_001';
+mesh = ReadMeshFromFile( [foldername '/debug_ANT.nc']);
+
+A = read_CSR_from_NetCDF( [foldername '/A_xdy_b_g.nc']);
+
+nx = sqrt( size(A,2));
+ny = nx;
+
+d_b = zeros( mesh.nTri,1);
+for ti = 1: mesh.nTri
+  V = (mesh.V( mesh.Tri( ti,1),:) + mesh.V( mesh.Tri( ti,2),:) + mesh.V( mesh.Tri( ti,3),:)) / 3;
+  x = V(1);
+  y = V(2);
+  
+  xp = 2 * pi * (x - mesh.xmin) / (xmax - xmin);
+  yp = 2 * pi * (y - ymin) / (ymax - ymin);
+
+  d_b( ti) =  sin( xp) * sin( yp);
+end

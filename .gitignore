@@ -1,20 +1,24 @@
 # Ignore the main executable
 UFEMISM_program
 
+# Ignore scripts in main folder
+/*.sh
+/*.csh
+
 # Ignore the module and object files
 *.mod
 *.o
 
+# Ignore input data folder
+/data
+
 # Ignore output files
 result*/
+/benchmarks/MISMIP_mod/MISMIP_mod*
+/benchmarks/ISMIP-HOM/ISMIP_HOM_*
 
-# Ignore local testing files
-/config-files/config_local*
-/src/Makefile_include_mac.txt
+# Ignore MacOS files
+.DS_Store
 
-# Ignore Mac files
-.DS_store
-
-# Ignore benchmark files
-MISMIP_mod/MISMIP_mod*
-ISMIP-HOM/ISMIP_HOM_*
+# Ignore SLURM output on Snellius
+slurm-*.out

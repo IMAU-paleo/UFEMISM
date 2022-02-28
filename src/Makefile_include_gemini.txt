@@ -1,0 +1,20 @@
+# Compiler:
+  F90 = mpifort 
+
+# Path to NetCDF:
+  NETCDF_DIR = /usr
+# Path to PETSc:
+  PETSC_DIR = /usr/local/petsc/3.16.3
+# PAth to LAPACK:
+  LAPACK_DIR = /usr
+
+# Compiler flags:
+  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
+                            -fimplicit-none
+  COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace
+
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
+                            -I$(NETCDF_DIR)/include -I$(PETSC_DIR)/include
+
+# Linking flags of libaries:
+  LDFLAGS                 = -L${NETCDF_DIR}/lib -lnetcdf -lnetcdff -L${PETSC_DIR}/lib -lpetsc -L${LAPACK_DIR}/lib -llapack -lpthread

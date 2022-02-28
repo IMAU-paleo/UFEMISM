@@ -410,12 +410,12 @@ CONTAINS
 
     CALL initialise_climate_model_regional( region, climate_matrix_global)
 
-    stop 'All good until here (initialise_model).'
-
     ! ===== The SMB model =====
     ! =========================
 
     CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
+
+    stop 'All good until here (initialise_model).'
 
     ! ===== The BMB model =====
     ! =========================

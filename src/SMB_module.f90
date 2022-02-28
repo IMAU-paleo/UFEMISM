@@ -118,7 +118,6 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_SMB_model'
     INTEGER                                            :: n1, n2
-    INTEGER                                            :: vi
 
     n1 = par%mem%n
 
@@ -679,6 +678,10 @@ CONTAINS
     REAL(dp)                            :: time_to_restart_from
     TYPE(type_restart_data)             :: restart
 
+    ! WIP wall
+    IF (par%master) WRITE(0,*) 'This subroutine (initialise_IMAU_ITM_firn_restart) needs testing. Feel free to do it before running the model :)'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
     ! Assume that SMB and geometry are read from the same restart file
     IF     (region_name == 'NAM') THEN
       filename_restart     = C%filename_refgeo_init_NAM
@@ -686,7 +689,7 @@ CONTAINS
     ELSEIF (region_name == 'EAS') THEN
       filename_restart     = C%filename_refgeo_init_EAS
       time_to_restart_from = C%time_to_restart_from_EAS
-    ELSEIF (region_name == 'GR:') THEN
+    ELSEIF (region_name == 'GRL') THEN
       filename_restart     = C%filename_refgeo_init_GRL
       time_to_restart_from = C%time_to_restart_from_GRL
     ELSEIF (region_name == 'ANT') THEN

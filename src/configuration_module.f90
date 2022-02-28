@@ -176,10 +176,10 @@ MODULE configuration_module
   REAL(dp)            :: time_to_restart_from_ANT_config             = 0._dp
   CHARACTER(LEN=256)  :: choice_refgeo_init_idealised_config         = 'flatearth'                      ! Choice of idealised initial geometry; see "generate_idealised_geometry" in reference_fields_module for options
   REAL(dp)            :: dx_refgeo_init_idealised_config             = 5000._dp                         ! Resolution of square grid used for idealised initial geometry
-  CHARACTER(LEN=256)  :: filename_refgeo_init_NAM_config             = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_init_EAS_config             = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_init_GRL_config             = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_init_ANT_config             = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_NAM_config             = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_EAS_config             = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_GRL_config             = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_init_ANT_config             = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
   
   ! Present-day geometry
   CHARACTER(LEN=256)  :: choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
@@ -188,10 +188,10 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   CHARACTER(LEN=256)  :: choice_refgeo_PD_idealised_config           = 'flatearth'                      ! Choice of idealised present-day geometry; see "generate_idealised_geometry" in reference_fields_module for options
   REAL(dp)            :: dx_refgeo_PD_idealised_config               = 5000._dp                         ! Resolution of square grid used for idealised present-day geometry
-  CHARACTER(LEN=256)  :: filename_refgeo_PD_NAM_config               = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_PD_EAS_config               = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_PD_GRL_config               = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_PD_ANT_config               = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_NAM_config               = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_EAS_config               = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_GRL_config               = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_PD_ANT_config               = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
   
   ! GIA equilibrium geometry
   CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_NAM_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for North America; can be "idealised", "realistic", or "restart"
@@ -200,10 +200,10 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_idealised_config        = 'flatearth'                      ! Choice of idealised GIA equilibrium geometry; see "generate_idealised_geometry" in reference_fields_module for options
   REAL(dp)            :: dx_refgeo_GIAeq_idealised_config            = 5000._dp                         ! Resolution of square grid used for idealised GIA equilibrium geometry
-  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_NAM_config            = '/Users/berends/Documents/Datasets/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_EAS_config            = '/Users/berends/Documents/Datasets/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_GRL_config            = '/Users/berends/Documents/Datasets/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
-  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = '/Users/berends/Documents/Datasets/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_NAM_config            = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
   
@@ -232,21 +232,21 @@ MODULE configuration_module
   ! Insolation forcing (NetCDF)
   CHARACTER(LEN=256)  :: choice_insolation_forcing_config            = 'realistic'                      ! Choice of insolation forcing: "none", "static", "realistic"
   REAL(dp)            :: static_insolation_time_config               = 0._dp                            ! Keep insolation values fixed to this time when choice_insolation_forcing = 'static'
-  CHARACTER(LEN=256)  :: filename_insolation_config                  = 'Datasets/Insolation/Laskar_etal_2004_insolation.nc'
+  CHARACTER(LEN=256)  :: filename_insolation_config                  = 'data/Insolation/Laskar_etal_2004_insolation.nc'
 
 
   ! CO2 record (ASCII text file, so the number of rows needs to be specified)
-  CHARACTER(LEN=256)  :: filename_CO2_record_config                  = 'Datasets/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
+  CHARACTER(LEN=256)  :: filename_CO2_record_config                  = 'data/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
   INTEGER             :: CO2_record_length_config                    = 8001
 
   ! d18O record (ASCII text file, so the number of rows needs to be specified)
-  CHARACTER(LEN=256)  :: filename_d18O_record_config                 = 'Datasets/d18O/Ahn2017_d18O.dat'
+  CHARACTER(LEN=256)  :: filename_d18O_record_config                 = 'data/d18O/Ahn2017_d18O.dat'
   INTEGER             :: d18O_record_length_config                   = 2051
 
   ! Geothermal heat flux
   CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   REAL(dp)            :: constant_geothermal_heat_flux_config        = 1.72E06_dp                       ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
-  CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = '/Users/berends/Documents/Datasets/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
+  CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
   ! Parameters for calculating modelled benthic d18O
   LOGICAL             :: do_calculate_benthic_d18O_config            = .TRUE.                          ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
@@ -389,9 +389,9 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
   ! GCM snapshots in the matrix_warm_cold option
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
 
   ! Orbit time and CO2 concentration of the warm and cold snapshots
   REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
@@ -451,16 +451,16 @@ MODULE configuration_module
   ! ==============
   
   ! Present-day observed climate (ERA40) (NetCDF)
-  CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'Datasets/ERA40/ERA40_climate_global.nc'
+  CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
   
   ! GCM snapshots
   CHARACTER(LEN=256)  :: choice_climate_matrix_config                = 'PI_LGM'                         ! 'PI_LGM' uses 2 snapshots
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_PI_config             = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_LGM_config            = 'Datasets/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+  CHARACTER(LEN=256)  :: filename_GCM_snapshot_PI_config             = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+  CHARACTER(LEN=256)  :: filename_GCM_snapshot_LGM_config            = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
   
   ! Ice5G ice-sheet geometry
-  CHARACTER(LEN=256)  :: filename_ICE5G_PD_config                    = 'Datasets/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  CHARACTER(LEN=256)  :: filename_ICE5G_LGM_config                   = 'Datasets/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
+  CHARACTER(LEN=256)  :: filename_ICE5G_PD_config                    = 'data/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
+  CHARACTER(LEN=256)  :: filename_ICE5G_LGM_config                   = 'data/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
   
   REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 

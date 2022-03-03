@@ -403,6 +403,34 @@ MODULE configuration_module
   LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
   LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
+  ! Ocean
+  ! =====
+
+  CHARACTER(LEN=256)  :: choice_ocean_model_config                   = 'matrix_warm_cold'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+
+  ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
+  CHARACTER(LEN=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
+  CHARACTER(LEN=256)  :: name_ocean_temperature_config               = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+  CHARACTER(LEN=256)  :: name_ocean_salinity_config                  = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+
+  ! GCM snapshots in the matrix_warm_cold option
+  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
+  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_warm_config     = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
+  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_cold_config     = 'data/COSMOS_ocean_examples/COSMOS_LGM_oceanTS_prep.nc'
+
+  ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+  CHARACTER(LEN=256)  :: choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
+  REAL(dp)            :: ocean_vertical_grid_max_depth_config        = 1500._dp                         ! Maximum depth           to be used for ocean data
+  REAL(dp)            :: ocean_regular_grid_dz_config                = 150._dp                          ! Vertical grid spacing   to be used for ocean data when choice_ocean_vertical_grid_config = 'regular'
+  CHARACTER(LEN=256)  :: ocean_extrap_dir_config                     = 'data/extrapolated_ocean_files'  ! Directory where extrapolated ocean files are stored
+  REAL(dp)            :: ocean_extrap_res_config                     = 5000._dp                         ! High resolution at which the ocean data extrapolation should be performed
+  REAL(dp)            :: ocean_extrap_Gauss_sigma_config             = 8000._dp                         ! 1-sigma of the Gaussian smoothing operation used to extrapolate the ocean data
+  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_NAM_config  = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'                     ! Path to a NetCDF file containing
+  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_EAS_config  = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'                          ! (present-day) geometry at high
+  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'      ! resolution, used for ocean
+  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
+  REAL(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
+
   ! Surface mass balance
   ! ====================
 
@@ -432,6 +460,18 @@ MODULE configuration_module
   REAL(dp)            :: SMB_IMAUITM_C_refr_EAS_config               = 0.051_dp
   REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
   REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp
+
+  ! Basal mass balance
+  ! ==================
+
+  CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
+  CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
+  CHARACTER(LEN=256)  :: choice_basin_scheme_GRL_config              = 'none'
+  CHARACTER(LEN=256)  :: choice_basin_scheme_ANT_config              = 'none'
+  CHARACTER(LEN=256)  :: filename_basins_NAM_config                  = ''                               ! Path to a text file containing polygons of drainage basins
+  CHARACTER(LEN=256)  :: filename_basins_EAS_config                  = ''
+  CHARACTER(LEN=256)  :: filename_basins_GRL_config                  = ''
+  CHARACTER(LEN=256)  :: filename_basins_ANT_config                  = ''
 
   ! Sea level and GIA
   ! =================
@@ -964,6 +1004,36 @@ MODULE configuration_module
     LOGICAL                             :: climate_matrix_biascorrect_warm
     LOGICAL                             :: climate_matrix_biascorrect_cold
 
+    ! Ocean
+    ! =====
+
+    CHARACTER(LEN=256)                  :: choice_ocean_model
+
+    ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
+    CHARACTER(LEN=256)                  :: filename_PD_obs_ocean
+    CHARACTER(LEN=256)                  :: name_ocean_temperature
+    CHARACTER(LEN=256)                  :: name_ocean_salinity
+
+    ! GCM snapshots in the matrix_warm_cold option
+    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_PI
+    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_warm
+    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_cold
+
+    ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+    CHARACTER(LEN=256)                  :: choice_ocean_vertical_grid
+    REAL(dp)                            :: ocean_vertical_grid_max_depth
+    REAL(dp)                            :: ocean_regular_grid_dz
+    INTEGER                             :: nz_ocean ! NOTE: nz_ocean and z_ocean cannot be set through the config file, but are filled in by the "initialise_ocean_vertical_grid" in the ocean_module!
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: z_ocean
+    CHARACTER(LEN=256)                  :: ocean_extrap_dir
+    REAL(dp)                            :: ocean_extrap_res
+    REAL(dp)                            :: ocean_extrap_Gauss_sigma
+    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_NAM
+    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_EAS
+    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_GRL
+    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_ANT
+    REAL(dp)                            :: ocean_w_tot_hist_averaging_window
+
     ! Surface mass balance
     ! ====================
 
@@ -993,6 +1063,18 @@ MODULE configuration_module
     REAL(dp)                            :: SMB_IMAUITM_C_refr_EAS
     REAL(dp)                            :: SMB_IMAUITM_C_refr_GRL
     REAL(dp)                            :: SMB_IMAUITM_C_refr_ANT
+
+    ! Basal mass balance - sub-shelf melt
+    ! ===================================
+
+    CHARACTER(LEN=256)                  :: choice_basin_scheme_NAM
+    CHARACTER(LEN=256)                  :: choice_basin_scheme_EAS
+    CHARACTER(LEN=256)                  :: choice_basin_scheme_GRL
+    CHARACTER(LEN=256)                  :: choice_basin_scheme_ANT
+    CHARACTER(LEN=256)                  :: filename_basins_NAM
+    CHARACTER(LEN=256)                  :: filename_basins_EAS
+    CHARACTER(LEN=256)                  :: filename_basins_GRL
+    CHARACTER(LEN=256)                  :: filename_basins_ANT
 
     ! Sea level and GIA
     ! =================
@@ -1620,6 +1702,24 @@ CONTAINS
                      matrix_cold_orbit_time_config,                   &
                      climate_matrix_biascorrect_warm_config,          &
                      climate_matrix_biascorrect_cold_config,          &
+                     choice_ocean_model_config,                       &
+                     filename_PD_obs_ocean_config,                    &
+                     name_ocean_temperature_config,                   &
+                     name_ocean_salinity_config,                      &
+                     filename_GCM_ocean_snapshot_PI_config,           &
+                     filename_GCM_ocean_snapshot_warm_config,         &
+                     filename_GCM_ocean_snapshot_cold_config,         &
+                     choice_ocean_vertical_grid_config,               &
+                     ocean_vertical_grid_max_depth_config,            &
+                     ocean_regular_grid_dz_config,                    &
+                     ocean_extrap_dir_config,                         &
+                     ocean_extrap_res_config,                         &
+                     ocean_extrap_Gauss_sigma_config,                 &
+                     ocean_extrap_hires_geo_filename_NAM_config,      &
+                     ocean_extrap_hires_geo_filename_EAS_config,      &
+                     ocean_extrap_hires_geo_filename_GRL_config,      &
+                     ocean_extrap_hires_geo_filename_ANT_config,      &
+                     ocean_w_tot_hist_averaging_window_config,        &
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
@@ -1644,6 +1744,14 @@ CONTAINS
                      SMB_IMAUITM_C_refr_EAS_config,                   &
                      SMB_IMAUITM_C_refr_GRL_config,                   &
                      SMB_IMAUITM_C_refr_ANT_config,                   &
+                     choice_basin_scheme_NAM_config,                  &
+                     choice_basin_scheme_EAS_config,                  &
+                     choice_basin_scheme_GRL_config,                  &
+                     choice_basin_scheme_ANT_config,                  &
+                     filename_basins_NAM_config,                      &
+                     filename_basins_EAS_config,                      &
+                     filename_basins_GRL_config,                      &
+                     filename_basins_ANT_config,                      &
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
@@ -2159,6 +2267,34 @@ CONTAINS
     C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
     C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
 
+    ! Ocean
+    ! =====
+
+    C%choice_ocean_model                       = choice_ocean_model_config
+
+    ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
+    C%filename_PD_obs_ocean                    = filename_PD_obs_ocean_config
+    C%name_ocean_temperature                   = name_ocean_temperature_config
+    C%name_ocean_salinity                      = name_ocean_salinity_config
+
+    ! GCM snapshots in the matrix_warm_cold option
+    C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config
+    C%filename_GCM_ocean_snapshot_warm         = filename_GCM_ocean_snapshot_warm_config
+    C%filename_GCM_ocean_snapshot_cold         = filename_GCM_ocean_snapshot_cold_config
+
+    ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+    C%choice_ocean_vertical_grid               = choice_ocean_vertical_grid_config
+    C%ocean_vertical_grid_max_depth            = ocean_vertical_grid_max_depth_config
+    C%ocean_regular_grid_dz                    = ocean_regular_grid_dz_config
+    C%ocean_extrap_dir                         = ocean_extrap_dir_config
+    C%ocean_extrap_res                         = ocean_extrap_res_config
+    C%ocean_extrap_Gauss_sigma                 = ocean_extrap_Gauss_sigma_config
+    C%ocean_extrap_hires_geo_filename_NAM      = ocean_extrap_hires_geo_filename_NAM_config
+    C%ocean_extrap_hires_geo_filename_EAS      = ocean_extrap_hires_geo_filename_EAS_config
+    C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
+    C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
+    C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
+
     ! Surface mass balance
     ! ====================
 
@@ -2188,6 +2324,18 @@ CONTAINS
     C%SMB_IMAUITM_C_refr_EAS                   = SMB_IMAUITM_C_refr_EAS_config
     C%SMB_IMAUITM_C_refr_GRL                   = SMB_IMAUITM_C_refr_GRL_config
     C%SMB_IMAUITM_C_refr_ANT                   = SMB_IMAUITM_C_refr_ANT_config
+
+    ! Basal mass balance - sub-shelf melt
+    ! ===================================
+
+    C%choice_basin_scheme_NAM                  = choice_basin_scheme_NAM_config
+    C%choice_basin_scheme_EAS                  = choice_basin_scheme_EAS_config
+    C%choice_basin_scheme_GRL                  = choice_basin_scheme_GRL_config
+    C%choice_basin_scheme_ANT                  = choice_basin_scheme_ANT_config
+    C%filename_basins_NAM                      = filename_basins_NAM_config
+    C%filename_basins_EAS                      = filename_basins_EAS_config
+    C%filename_basins_GRL                      = filename_basins_GRL_config
+    C%filename_basins_ANT                      = filename_basins_ANT_config
 
     ! Sea level and GIA
     ! =================

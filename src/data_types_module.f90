@@ -13,7 +13,8 @@ MODULE data_types_module
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
                                          type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux, &
                                          type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
-                                         type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional
+                                         type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
+                                         type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data
 
   IMPLICIT NONE
   
@@ -95,8 +96,11 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_b
+    INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
+    INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
     INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
+    INTEGER :: wbasin_ID, wnbasins
     
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
@@ -549,6 +553,12 @@ MODULE data_types_module
     ! Lat-lon coordinates
     REAL(dp), DIMENSION(:,:  ), POINTER     :: lat, lon
     INTEGER :: wlat, wlon
+
+    ! Projection parameters for the grid
+    REAL(dp),                   POINTER     :: lambda_M
+    REAL(dp),                   POINTER     :: phi_M
+    REAL(dp),                   POINTER     :: alpha_stereo
+    INTEGER :: wlambda_M, wphi_M, walpha_stereo
   
   END TYPE type_grid
   
@@ -982,6 +992,128 @@ MODULE data_types_module
 
   END TYPE type_climate_matrix_regional
 
+  TYPE type_ocean_snapshot_global
+    ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM ocean snapshot.
+
+    CHARACTER(LEN=256)                      :: name                          ! 'WOA', 'COSMOS_LGM', etc.
+
+    ! NetCDF file containing the data
+    TYPE(type_netcdf_ocean_data)            :: netcdf
+
+    ! Grid
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon
+    INTEGER :: wnlat, wnlon, wlat, wlon
+
+    ! General forcing info (not relevant for PD observations)
+    REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
+    REAL(dp),                   POINTER     :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_obl
+    REAL(dp),                   POINTER     :: orbit_pre
+    INTEGER :: wCO2, worbit_time, worbit_ecc, worbit_obl, worbit_pre
+
+    ! Global 3-D ocean data on the original vertical grid
+    REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
+    REAL(dp), DIMENSION(:    ), POINTER     :: z_ocean_raw                   ! Vertical coordinate of the 3-D ocean fields [m below sea surface]
+    INTEGER,                    POINTER     :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean_raw                   ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean_raw                   ! 3-D annual mean ocean salinity    [PSU]
+    INTEGER :: wT_ocean_mean, wz_ocean_raw, wnz_ocean_raw, wT_ocean_raw, wS_ocean_raw
+
+    ! Global 3-D ocean data on the ice-model vertical grid
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
+    INTEGER :: wT_ocean, wS_ocean
+
+    ! Paralelisation
+    INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
+
+  END TYPE type_ocean_snapshot_global
+
+  TYPE type_ocean_matrix_global
+    ! The ocean matrix data structure. Contains the PD observations and all the different global GCM snapshots.
+
+    ! The present-day observed ocean (e.g. WOA18)
+    TYPE(type_ocean_snapshot_global)        :: PD_obs
+
+    ! The GCM ocean snapshots for climate and ocean.
+    TYPE(type_ocean_snapshot_global)        :: GCM_PI
+    TYPE(type_ocean_snapshot_global)        :: GCM_warm
+    TYPE(type_ocean_snapshot_global)        :: GCM_cold
+
+  END TYPE type_ocean_matrix_global
+
+  TYPE type_ocean_snapshot_regional
+    ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM snapshot, projected onto the regional model mesh.
+
+    CHARACTER(LEN=256)                      :: name                          ! 'ERA40', 'HadCM3_PI', etc.
+
+    ! General forcing info (not relevant for PD observations)
+    REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
+    REAL(dp),                   POINTER     :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_obl
+    REAL(dp),                   POINTER     :: orbit_pre
+    REAL(dp),                   POINTER     :: sealevel
+    INTEGER :: wCO2, worbit_time, worbit_ecc, worbit_obl, worbit_pre, wsealevel
+
+    ! Ocean data
+    REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T_ocean_ext                   ! 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ocean_ext                   ! 3-D annual mean ocean salinity   , extrapolated beneath ice shelves [PSU]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: T_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean salinity,    extrapolated beneath ice shelves [PSU]
+    INTEGER :: wT_ocean_mean, wT_ocean, wS_ocean, wT_ocean_ext, wS_ocean_ext, wT_ocean_corr_ext, wS_ocean_corr_ext
+
+    ! History of the weighing fields
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_tot_history
+    INTEGER,                    POINTER     :: nw_tot_history
+    INTEGER :: ww_tot_history, wnw_tot_history
+
+  END TYPE type_ocean_snapshot_regional
+
+  TYPE type_ocean_matrix_regional
+    ! All the relevant ocean data fields (PD observations, GCM snapshots, and final, applied ocean) on the model region grid
+
+    TYPE(type_ocean_snapshot_regional)      :: PD_obs                        ! PD observations (e.g. WOA18)
+    TYPE(type_ocean_snapshot_regional)      :: GCM_PI                        ! Pre-industrial reference snapshot, for bias correction
+    TYPE(type_ocean_snapshot_regional)      :: GCM_warm                      ! Warm snapshot
+    TYPE(type_ocean_snapshot_regional)      :: GCM_cold                      ! Cold snapshot
+    TYPE(type_ocean_snapshot_regional)      :: applied                       ! Final applied ocean
+
+  END TYPE type_ocean_matrix_regional
+
+  TYPE type_highres_ocean_data
+    ! High-resolution (extrapolated) regional ocean data
+
+    ! NetCDF files
+    TYPE( type_netcdf_reference_geometry)      :: netcdf_geo
+    TYPE( type_netcdf_extrapolated_ocean_data) :: netcdf
+
+    ! Grid
+    TYPE( type_grid)                        :: grid
+
+    ! Geometry data
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi                            ! Ice thickness [m]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb                            ! Bedrock elevation [m]
+    INTEGER :: wHi, wHb
+
+    ! Ice basins
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: basin_ID                      ! The drainage basin to which each grid cell belongs
+    INTEGER,                    POINTER     :: nbasins                       ! Total number of basins defined for this region
+    INTEGER :: wbasin_ID, wnbasins
+
+    ! Raw and extrapolated ocean data
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
+    INTEGER ::wT_ocean, wS_ocean
+
+  END TYPE type_highres_ocean_data
+
   ! Updated model region type including new climate matrix version (move it up at the end of the climate port)
   ! ==========================================================================================================
 
@@ -1071,6 +1203,7 @@ MODULE data_types_module
     TYPE(type_mesh)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
     TYPE(type_ice_model)                    :: ice                                       ! All the ice model data for this model region
     TYPE(type_climate_matrix_regional)      :: climate_matrix                            ! All the climate data for this model region (new version)
+    TYPE(type_ocean_matrix_regional)        :: ocean_matrix                              ! All the ocean data for this model region
     TYPE(type_SMB_model)                    :: SMB                                       ! The different SMB components for this model region
     TYPE(type_BMB_model)                    :: BMB                                       ! The different BMB components for this model region
 

@@ -967,6 +967,82 @@ MODULE data_types_netcdf_module
 
   END TYPE type_netcdf_direct_SMB_forcing_regional
 
+  TYPE type_netcdf_ocean_data
+    ! For reading an input file containing either a GCM ocean snapshot or a PD observations data set (e.g. WOA18),
+    ! describing the global ocean with yearly fields on a lat/lon/depth grid
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! ID's for variables:
+    ! ===================
+
+    ! Dimensions
+    INTEGER :: id_dim_lon
+    INTEGER :: id_dim_lat
+    INTEGER :: id_dim_z_ocean
+
+    CHARACTER(LEN=256) :: name_dim_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_dim_lat                   = 'lat                  '
+    CHARACTER(LEN=256) :: name_dim_z_ocean               = 'depth                '
+
+    ! Variables
+    INTEGER :: id_var_lon
+    INTEGER :: id_var_lat
+    INTEGER :: id_var_z_ocean
+    INTEGER :: id_var_T_ocean
+    INTEGER :: id_var_S_ocean
+
+    CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
+    CHARACTER(LEN=256) :: name_var_z_ocean               = 'depth                '
+
+  END TYPE type_netcdf_ocean_data
+
+  TYPE type_netcdf_extrapolated_ocean_data
+    ! Integers describing open ports to different variables in an opened NetCDF file,
+    ! plus character strings describing the names of those variables.
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! Index of time frame to be written to
+    INTEGER :: ti
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_x
+    INTEGER :: id_dim_y
+    INTEGER :: id_dim_z_ocean
+
+    CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
+    CHARACTER(LEN=256) :: name_dim_z_ocean               = 'z_ocean              '
+
+    INTEGER :: id_var_x
+    INTEGER :: id_var_y
+    INTEGER :: id_var_z_ocean
+
+    CHARACTER(LEN=256) :: name_var_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
+    CHARACTER(LEN=256) :: name_var_z_ocean               = 'z_ocean              '
+
+  ! Variables
+  ! =========
+
+    INTEGER :: id_var_T_ocean
+    INTEGER :: id_var_S_ocean
+
+    CHARACTER(LEN=256) :: name_var_T_ocean               = 'T_ocean              '
+    CHARACTER(LEN=256) :: name_var_S_ocean               = 'S_ocean              '
+
+  END TYPE type_netcdf_extrapolated_ocean_data
+
 CONTAINS
 
 END MODULE data_types_netcdf_module

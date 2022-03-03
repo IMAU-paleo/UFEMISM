@@ -58,6 +58,7 @@ UFEMISM_program_objects = \
         basal_conditions_and_sliding_module.o \
         SMB_module.o \
         BMB_module.o \
+        ocean_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
         ice_velocity_module.o \

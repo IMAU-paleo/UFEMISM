@@ -22,7 +22,8 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_climate_matrix_global, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
+                                             type_climate_matrix_global, type_ocean_matrix_global
   USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
@@ -33,9 +34,10 @@ MODULE UFEMISM_main_model
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
                                              associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
-  USE general_ice_model_data_module,   ONLY: initialise_mask_noice
+  USE general_ice_model_data_module,   ONLY: initialise_mask_noice, initialise_basins
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
   USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
+  USE ocean_module,                    ONLY: initialise_ocean_model_regional
   USE climate_module,                  ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
   USE SMB_module,                      ONLY: initialise_SMB_model,      remap_SMB_model,      run_SMB_model
   USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
@@ -316,8 +318,8 @@ CONTAINS
   END SUBROUTINE run_model_update_mesh
   
   ! Initialise the entire model region - read initial and PD data, create the mesh,
-  ! initialise the ice dynamics, climate and SMB sub models
-  SUBROUTINE initialise_model( region, name, climate_matrix_global)
+  ! initialise the ice dynamics, climate, ocean, and SMB sub models
+  SUBROUTINE initialise_model( region, name, climate_matrix_global, ocean_matrix_global)
 
     IMPLICIT NONE
 
@@ -325,6 +327,7 @@ CONTAINS
     TYPE(type_model_region),          INTENT(INOUT)     :: region
     CHARACTER(LEN=3),                 INTENT(IN)        :: name
     TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
+    TYPE(type_ocean_matrix_global),   INTENT(INOUT)     :: ocean_matrix_global
 
     ! Local variables
     CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model'
@@ -405,22 +408,38 @@ CONTAINS
 
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
 
+    ! ===== Define ice basins =====
+    ! =============================
+
+    ! Allocate shared memory
+    CALL allocate_shared_int_1D( region%mesh%nV, region%ice%basin_ID, region%ice%wbasin_ID)
+    CALL allocate_shared_int_0D(                 region%ice%nbasins,  region%ice%wnbasins )
+
+    ! Define basins
+    CALL initialise_basins( region%mesh, region%ice%basin_ID, region%ice%nbasins, region%name)
+
     ! ===== The climate model =====
     ! =============================
 
     CALL initialise_climate_model_regional( region, climate_matrix_global)
+
+    ! ===== The ocean model =====
+    ! ===========================
+
+    CALL initialise_ocean_model_regional( region, ocean_matrix_global)
 
     ! ===== The SMB model =====
     ! =========================
 
     CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
 
-    stop 'All good until here (initialise_model).'
+    WRITE(0,*) 'All good until here (initialise_model). [Next: Update BMB model]'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%BMB, region%name) 
+    CALL initialise_BMB_model( region%mesh, region%BMB, region%name)
     
     ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
     CALL run_climate_model( region, climate_matrix_global, region%time)

@@ -36,10 +36,11 @@ PROGRAM UFEMISM_program
   USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
-  USE data_types_module,           ONLY: type_model_region, type_climate_matrix_global
+  USE data_types_module,           ONLY: type_model_region, type_climate_matrix_global, type_ocean_matrix_global
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
   USE climate_module,              ONLY: initialise_climate_model_global
+  USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
@@ -53,6 +54,7 @@ PROGRAM UFEMISM_program
 
   ! The global climate matrix
   TYPE(type_climate_matrix_global)       :: climate_matrix_global
+  TYPE(type_ocean_matrix_global)         :: ocean_matrix_global
 
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
@@ -93,13 +95,19 @@ PROGRAM UFEMISM_program
 
   CALL initialise_climate_model_global( climate_matrix_global)
 
+  ! ===== Initialise the ocean matrix =====
+  ! =======================================
+
+  CALL initialise_ocean_vertical_grid
+  CALL initialise_ocean_model_global( ocean_matrix_global)
+
   ! ===== Initialise the model regions ======
   ! =========================================
 
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', climate_matrix_global)
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', climate_matrix_global)
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', climate_matrix_global)
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', climate_matrix_global)
+  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', climate_matrix_global, ocean_matrix_global)
 
   ! ===== Initial contributions ======
   ! ==================================

@@ -464,6 +464,14 @@ MODULE configuration_module
   ! Basal mass balance
   ! ==================
 
+  CHARACTER(LEN=256)  :: choice_BMB_shelf_model_config               = 'ANICE_legacy'                   ! Choice of shelf BMB: "uniform", "idealised", "ANICE_legacy", "Favier2019_lin", "Favier2019_quad", "Favier2019_Mplus", "Lazeroms2018_plume", "PICO", "PICOP"
+  CHARACTER(LEN=256)  :: choice_idealised_BMB_shelf_config           = 'MISMIP+'
+  CHARACTER(LEN=256)  :: choice_BMB_sheet_model_config               = 'uniform'                        ! Choice of sheet BMB: "uniform"
+  REAL(dp)            :: BMB_shelf_uniform_config                    = 0._dp                            ! Uniform shelf BMB, applied when choice_BMB_shelf_model = "uniform" [mie/yr]
+  REAL(dp)            :: BMB_sheet_uniform_config                    = 0._dp                            ! Uniform sheet BMB, applied when choice_BMB_sheet_model = "uniform" [mie/yr]
+  CHARACTER(LEN=256)  :: choice_BMB_subgrid_config                   = 'FCMP'                           ! Choice of sub-grid BMB scheme: "FCMP", "PMP", "NMP" (following Leguy et al., 2021)
+  LOGICAL             :: do_asynchronous_BMB_config                  = .FALSE.                          ! Whether or not to run the BMB asynchronously from the ice dynamics (if so, run it at dt_BMB; if not, run it in every ice dynamics time step)
+
   CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
   CHARACTER(LEN=256)  :: choice_basin_scheme_GRL_config              = 'none'
@@ -472,6 +480,69 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_basins_EAS_config                  = ''
   CHARACTER(LEN=256)  :: filename_basins_GRL_config                  = ''
   CHARACTER(LEN=256)  :: filename_basins_ANT_config                  = ''
+
+  ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
+  REAL(dp)            :: BMB_Favier2019_lin_GammaT_config            = 3.3314E-05_dp  ! 2.03E-5_dp      ! Heat exchange velocity [m s^-1]
+  REAL(dp)            :: BMB_Favier2019_quad_GammaT_config           = 111.6E-5_dp    ! 99.32E-5_dp     ! Commented values are from Favier et al. (2019), Table 3
+  REAL(dp)            :: BMB_Favier2019_Mplus_GammaT_config          = 108.6E-5_dp    ! 132.9E-5_dp     ! Actual value are re-tuned for IMAU-ICE, following the same approach (see Asay-Davis et al., 2016, ISOMIP+)
+
+  ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
+  REAL(dp)            :: BMB_Lazeroms2018_GammaT_config              = 3.7506E-04_dp  ! 1.1E-3_dp       ! Thermal exchange velocity; tuned following ISOMIP+ protocol (Asay-Davis et al., 2016, Sect. 3.2.1), commented value from Lazeroms et al. (2018)
+  CHARACTER(LEN=256)  :: BMB_Lazeroms2018_find_GL_scheme_config      = 'along_ice_flow'                 ! How to determine the GL origin of a plume: "GL_average", "along_ice_flow"
+
+  ! Parameters for the PICO BMB model
+  INTEGER             :: BMB_PICO_nboxes_config                      = 5                                ! Number of sub-shelf ocean boxes used by PICO
+  REAL(dp)            :: BMB_PICO_GammaTstar_config                  = 3.6131E-05_dp  ! 2.0E-5_dp       ! Effective turbulent temperature exchange velocity [m s^-1]; tuned following ISOMIP+ protocol (Asay-Davis et al., 2016, Sect. 3.2.1), commented value from Reese et al. (2018)
+
+  ! Parameters for the ANICE_legacy sub-shelf melt model
+  REAL(dp)            :: T_ocean_mean_PD_NAM_config                  = -1.7_dp                          ! Present day temperature of the ocean beneath the shelves [Celcius]
+  REAL(dp)            :: T_ocean_mean_PD_EAS_config                  = -1.7_dp
+  REAL(dp)            :: T_ocean_mean_PD_GRL_config                  =  2.0_dp
+  REAL(dp)            :: T_ocean_mean_PD_ANT_config                  = -1.7_dp
+  REAL(dp)            :: T_ocean_mean_cold_NAM_config                = -5.0_dp                          ! Cold period temperature of the ocean beneath the shelves [Celcius]
+  REAL(dp)            :: T_ocean_mean_cold_EAS_config                = -5.0_dp
+  REAL(dp)            :: T_ocean_mean_cold_GRL_config                =  0.0_dp
+  REAL(dp)            :: T_ocean_mean_cold_ANT_config                = -5.0_dp
+  REAL(dp)            :: T_ocean_mean_warm_NAM_config                =  2.0_dp                          ! Warm period temperature of the ocean beneath the shelves [Celcius]
+  REAL(dp)            :: T_ocean_mean_warm_EAS_config                =  2.0_dp
+  REAL(dp)            :: T_ocean_mean_warm_GRL_config                =  4.0_dp
+  REAL(dp)            :: T_ocean_mean_warm_ANT_config                =  2.0_dp
+
+  REAL(dp)            :: BMB_deepocean_PD_NAM_config                 =  -5._dp                          ! Present-day sub-shelf melt rate for deep-ocean areas [m/year]
+  REAL(dp)            :: BMB_deepocean_PD_EAS_config                 =  -5._dp
+  REAL(dp)            :: BMB_deepocean_PD_GRL_config                 =  -5._dp
+  REAL(dp)            :: BMB_deepocean_PD_ANT_config                 =  -5._dp
+  REAL(dp)            :: BMB_deepocean_cold_NAM_config               =  -2._dp                          ! Cold period sub-shelf melt rate for deep-ocean areas [m/year]
+  REAL(dp)            :: BMB_deepocean_cold_EAS_config               =  -2._dp
+  REAL(dp)            :: BMB_deepocean_cold_GRL_config               =  -2._dp
+  REAL(dp)            :: BMB_deepocean_cold_ANT_config               =  -2._dp
+  REAL(dp)            :: BMB_deepocean_warm_NAM_config               = -10._dp                          ! Warm period sub-shelf melt rate for deep-ocean areas [m/year]
+  REAL(dp)            :: BMB_deepocean_warm_EAS_config               = -10._dp
+  REAL(dp)            :: BMB_deepocean_warm_GRL_config               = -10._dp
+  REAL(dp)            :: BMB_deepocean_warm_ANT_config               = -10._dp
+
+  REAL(dp)            :: BMB_shelf_exposed_PD_NAM_config             =  -3._dp                          ! Present-day sub-shelf melt rate for exposed areas    [m/year]
+  REAL(dp)            :: BMB_shelf_exposed_PD_EAS_config             =  -3._dp
+  REAL(dp)            :: BMB_shelf_exposed_PD_GRL_config             =  -3._dp
+  REAL(dp)            :: BMB_shelf_exposed_PD_ANT_config             =  -3._dp
+  REAL(dp)            :: BMB_shelf_exposed_cold_NAM_config           =  -0._dp                          ! Cold period sub-shelf melt rate for exposed areas    [m/year]
+  REAL(dp)            :: BMB_shelf_exposed_cold_EAS_config           =  -0._dp
+  REAL(dp)            :: BMB_shelf_exposed_cold_GRL_config           =  -0._dp
+  REAL(dp)            :: BMB_shelf_exposed_cold_ANT_config           =  -0._dp
+  REAL(dp)            :: BMB_shelf_exposed_warm_NAM_config           =  -6._dp                          ! Warm period sub-shelf melt rate for exposed areas    [m/year]
+  REAL(dp)            :: BMB_shelf_exposed_warm_EAS_config           =  -6._dp
+  REAL(dp)            :: BMB_shelf_exposed_warm_GRL_config           =  -6._dp
+  REAL(dp)            :: BMB_shelf_exposed_warm_ANT_config           =  -6._dp
+
+  REAL(dp)            :: subshelf_melt_factor_NAM_config             = 0.005_dp                         ! Overall tuning factor for sub-shelf melt rate
+  REAL(dp)            :: subshelf_melt_factor_EAS_config             = 0.005_dp
+  REAL(dp)            :: subshelf_melt_factor_GRL_config             = 0.005_dp
+  REAL(dp)            :: subshelf_melt_factor_ANT_config             = 0.005_dp
+
+  REAL(dp)            :: deep_ocean_threshold_depth_NAM_config       = 1200._dp                         ! Threshold water depth for "deep ocean" (as opposed to continental shelf);
+  REAL(dp)            :: deep_ocean_threshold_depth_EAS_config       = 800._dp                          ! this mostly prevents ice shelves from growing beyond the continental shelf
+  REAL(dp)            :: deep_ocean_threshold_depth_GRL_config       = 800._dp                          ! Different depths for different regions is a bit ad hoc, but in reality
+  REAL(dp)            :: deep_ocean_threshold_depth_ANT_config       = 1800._dp                         ! the different surface ocean temperatures probably result in the same effect...
 
   ! Sea level and GIA
   ! =================
@@ -532,56 +603,6 @@ MODULE configuration_module
   REAL(dp)            :: ocean_temperature_PD_config                 = 271.46_dp                        ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
   REAL(dp)            :: ocean_temperature_cold_config               = 268.16_dp                        ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
   REAL(dp)            :: ocean_temperature_warm_config               = 275.16_dp                        ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
-  
-  ! Mean ocean temperatures and deep ocean & exposed shelf melt rates were tuned by Bas de Boer in 2011.
-  REAL(dp)            :: T_ocean_mean_PD_NAM_config                  = -1.7_dp                          ! Present day temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_PD_EAS_config                  = -1.7_dp
-  REAL(dp)            :: T_ocean_mean_PD_GRL_config                  =  2.0_dp
-  REAL(dp)            :: T_ocean_mean_PD_ANT_config                  = -1.7_dp
-  REAL(dp)            :: T_ocean_mean_cold_NAM_config                = -5.0_dp                          ! Cold period temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_cold_EAS_config                = -5.0_dp
-  REAL(dp)            :: T_ocean_mean_cold_GRL_config                =  0.0_dp
-  REAL(dp)            :: T_ocean_mean_cold_ANT_config                = -5.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_NAM_config                =  2.0_dp                          ! Warm period temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_warm_EAS_config                =  2.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_GRL_config                =  4.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_ANT_config                =  2.0_dp
-            
-  REAL(dp)            :: BMB_deepocean_PD_NAM_config                 =  -5._dp                          ! Present-day sub-shelf melt rate for deep-ocean areas [m/year]
-  REAL(dp)            :: BMB_deepocean_PD_EAS_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_PD_GRL_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_PD_ANT_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_cold_NAM_config               =  -2._dp                          ! Cold period sub-shelf melt rate for deep-ocean areas [m/year]
-  REAL(dp)            :: BMB_deepocean_cold_EAS_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_cold_GRL_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_cold_ANT_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_warm_NAM_config               = -10._dp                          ! Warm period sub-shelf melt rate for deep-ocean areas [m/year]    
-  REAL(dp)            :: BMB_deepocean_warm_EAS_config               = -10._dp
-  REAL(dp)            :: BMB_deepocean_warm_GRL_config               = -10._dp
-  REAL(dp)            :: BMB_deepocean_warm_ANT_config               = -10._dp
-
-  REAL(dp)            :: BMB_shelf_exposed_PD_NAM_config             =  -3._dp                          ! Present-day sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_PD_EAS_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_PD_GRL_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_PD_ANT_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_NAM_config           =  -0._dp                          ! Cold period sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_cold_EAS_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_GRL_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_ANT_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_NAM_config           =  -6._dp                          ! Warm period sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_warm_EAS_config           =  -6._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_GRL_config           =  -6._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_ANT_config           =  -6._dp
-    
-  REAL(dp)            :: subshelf_melt_factor_NAM_config             = 0.005_dp                         ! Overall tuning factor for sub-shelf melt rate
-  REAL(dp)            :: subshelf_melt_factor_EAS_config             = 0.005_dp
-  REAL(dp)            :: subshelf_melt_factor_GRL_config             = 0.005_dp
-  REAL(dp)            :: subshelf_melt_factor_ANT_config             = 0.005_dp
-  
-  REAL(dp)            :: deep_ocean_threshold_depth_NAM_config       = 1200._dp                         ! Threshold water depth for "deep ocean" (as opposed to continental shelf);
-  REAL(dp)            :: deep_ocean_threshold_depth_EAS_config       = 800._dp                          ! this mostly prevents ice shelves from growing beyond the continental shelf
-  REAL(dp)            :: deep_ocean_threshold_depth_GRL_config       = 800._dp                          ! Different depths for different regions is a bit ad hoc, but in reality
-  REAL(dp)            :: deep_ocean_threshold_depth_ANT_config       = 1800._dp                         ! the different surface ocean temperatures probably result in the same effect...
   
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
@@ -1067,6 +1088,14 @@ MODULE configuration_module
     ! Basal mass balance - sub-shelf melt
     ! ===================================
 
+    CHARACTER(LEN=256)                  :: choice_BMB_shelf_model
+    CHARACTER(LEN=256)                  :: choice_idealised_BMB_shelf
+    CHARACTER(LEN=256)                  :: choice_BMB_sheet_model
+    REAL(dp)                            :: BMB_shelf_uniform
+    REAL(dp)                            :: BMB_sheet_uniform
+    CHARACTER(LEN=256)                  :: choice_BMB_subgrid
+    LOGICAL                             :: do_asynchronous_BMB
+
     CHARACTER(LEN=256)                  :: choice_basin_scheme_NAM
     CHARACTER(LEN=256)                  :: choice_basin_scheme_EAS
     CHARACTER(LEN=256)                  :: choice_basin_scheme_GRL
@@ -1075,6 +1104,69 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_basins_EAS
     CHARACTER(LEN=256)                  :: filename_basins_GRL
     CHARACTER(LEN=256)                  :: filename_basins_ANT
+
+    ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
+    REAL(dp)                            :: BMB_Favier2019_lin_GammaT
+    REAL(dp)                            :: BMB_Favier2019_quad_GammaT
+    REAL(dp)                            :: BMB_Favier2019_Mplus_GammaT
+
+    ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
+    REAL(dp)                            :: BMB_Lazeroms2018_GammaT
+    CHARACTER(LEN=256)                  :: BMB_Lazeroms2018_find_GL_scheme
+
+    ! Parameters for the PICO BMB model
+    INTEGER                             :: BMB_PICO_nboxes
+    REAL(dp)                            :: BMB_PICO_GammaTstar
+
+    ! Parameters for the ANICE_legacy sub-shelf melt model
+    REAL(dp)                            :: T_ocean_mean_PD_NAM
+    REAL(dp)                            :: T_ocean_mean_PD_EAS
+    REAL(dp)                            :: T_ocean_mean_PD_GRL
+    REAL(dp)                            :: T_ocean_mean_PD_ANT
+    REAL(dp)                            :: T_ocean_mean_cold_NAM
+    REAL(dp)                            :: T_ocean_mean_cold_EAS
+    REAL(dp)                            :: T_ocean_mean_cold_GRL
+    REAL(dp)                            :: T_ocean_mean_cold_ANT
+    REAL(dp)                            :: T_ocean_mean_warm_NAM
+    REAL(dp)                            :: T_ocean_mean_warm_EAS
+    REAL(dp)                            :: T_ocean_mean_warm_GRL
+    REAL(dp)                            :: T_ocean_mean_warm_ANT
+
+    REAL(dp)                            :: BMB_deepocean_PD_NAM
+    REAL(dp)                            :: BMB_deepocean_PD_EAS
+    REAL(dp)                            :: BMB_deepocean_PD_GRL
+    REAL(dp)                            :: BMB_deepocean_PD_ANT
+    REAL(dp)                            :: BMB_deepocean_cold_NAM
+    REAL(dp)                            :: BMB_deepocean_cold_EAS
+    REAL(dp)                            :: BMB_deepocean_cold_GRL
+    REAL(dp)                            :: BMB_deepocean_cold_ANT
+    REAL(dp)                            :: BMB_deepocean_warm_NAM
+    REAL(dp)                            :: BMB_deepocean_warm_EAS
+    REAL(dp)                            :: BMB_deepocean_warm_GRL
+    REAL(dp)                            :: BMB_deepocean_warm_ANT
+
+    REAL(dp)                            :: BMB_shelf_exposed_PD_NAM
+    REAL(dp)                            :: BMB_shelf_exposed_PD_EAS
+    REAL(dp)                            :: BMB_shelf_exposed_PD_GRL
+    REAL(dp)                            :: BMB_shelf_exposed_PD_ANT
+    REAL(dp)                            :: BMB_shelf_exposed_cold_NAM
+    REAL(dp)                            :: BMB_shelf_exposed_cold_EAS
+    REAL(dp)                            :: BMB_shelf_exposed_cold_GRL
+    REAL(dp)                            :: BMB_shelf_exposed_cold_ANT
+    REAL(dp)                            :: BMB_shelf_exposed_warm_NAM
+    REAL(dp)                            :: BMB_shelf_exposed_warm_EAS
+    REAL(dp)                            :: BMB_shelf_exposed_warm_GRL
+    REAL(dp)                            :: BMB_shelf_exposed_warm_ANT
+
+    REAL(dp)                            :: subshelf_melt_factor_NAM
+    REAL(dp)                            :: subshelf_melt_factor_EAS
+    REAL(dp)                            :: subshelf_melt_factor_GRL
+    REAL(dp)                            :: subshelf_melt_factor_ANT
+
+    REAL(dp)                            :: deep_ocean_threshold_depth_NAM
+    REAL(dp)                            :: deep_ocean_threshold_depth_EAS
+    REAL(dp)                            :: deep_ocean_threshold_depth_GRL
+    REAL(dp)                            :: deep_ocean_threshold_depth_ANT
 
     ! Sea level and GIA
     ! =================
@@ -1126,58 +1218,6 @@ MODULE configuration_module
     REAL(dp)                            :: C_refr_EAS
     REAL(dp)                            :: C_refr_GRL
     REAL(dp)                            :: C_refr_ANT
-  
-    ! Sub-shelf melt parameterisation
-    ! ===============================
-    
-    REAL(dp)                            :: T_ocean_mean_PD_NAM
-    REAL(dp)                            :: T_ocean_mean_PD_EAS
-    REAL(dp)                            :: T_ocean_mean_PD_GRL
-    REAL(dp)                            :: T_ocean_mean_PD_ANT
-    REAL(dp)                            :: T_ocean_mean_cold_NAM
-    REAL(dp)                            :: T_ocean_mean_cold_EAS
-    REAL(dp)                            :: T_ocean_mean_cold_GRL
-    REAL(dp)                            :: T_ocean_mean_cold_ANT
-    REAL(dp)                            :: T_ocean_mean_warm_NAM
-    REAL(dp)                            :: T_ocean_mean_warm_EAS
-    REAL(dp)                            :: T_ocean_mean_warm_GRL
-    REAL(dp)                            :: T_ocean_mean_warm_ANT
-              
-    REAL(dp)                            :: BMB_deepocean_PD_NAM
-    REAL(dp)                            :: BMB_deepocean_PD_EAS
-    REAL(dp)                            :: BMB_deepocean_PD_GRL
-    REAL(dp)                            :: BMB_deepocean_PD_ANT
-    REAL(dp)                            :: BMB_deepocean_cold_NAM
-    REAL(dp)                            :: BMB_deepocean_cold_EAS
-    REAL(dp)                            :: BMB_deepocean_cold_GRL
-    REAL(dp)                            :: BMB_deepocean_cold_ANT
-    REAL(dp)                            :: BMB_deepocean_warm_NAM
-    REAL(dp)                            :: BMB_deepocean_warm_EAS
-    REAL(dp)                            :: BMB_deepocean_warm_GRL
-    REAL(dp)                            :: BMB_deepocean_warm_ANT
-  
-    REAL(dp)                            :: BMB_shelf_exposed_PD_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_PD_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_PD_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_PD_ANT
-    REAL(dp)                            :: BMB_shelf_exposed_cold_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_cold_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_cold_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_cold_ANT
-    REAL(dp)                            :: BMB_shelf_exposed_warm_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_warm_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_warm_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_warm_ANT
-      
-    REAL(dp)                            :: subshelf_melt_factor_NAM
-    REAL(dp)                            :: subshelf_melt_factor_EAS
-    REAL(dp)                            :: subshelf_melt_factor_GRL
-    REAL(dp)                            :: subshelf_melt_factor_ANT
-    
-    REAL(dp)                            :: deep_ocean_threshold_depth_NAM
-    REAL(dp)                            :: deep_ocean_threshold_depth_EAS
-    REAL(dp)                            :: deep_ocean_threshold_depth_GRL
-    REAL(dp)                            :: deep_ocean_threshold_depth_ANT
   
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
@@ -1744,6 +1784,13 @@ CONTAINS
                      SMB_IMAUITM_C_refr_EAS_config,                   &
                      SMB_IMAUITM_C_refr_GRL_config,                   &
                      SMB_IMAUITM_C_refr_ANT_config,                   &
+                     choice_BMB_shelf_model_config,                   &
+                     choice_idealised_BMB_shelf_config,               &
+                     choice_BMB_sheet_model_config,                   &
+                     BMB_shelf_uniform_config,                        &
+                     BMB_sheet_uniform_config,                        &
+                     choice_BMB_subgrid_config,                       &
+                     do_asynchronous_BMB_config,                      &
                      choice_basin_scheme_NAM_config,                  &
                      choice_basin_scheme_EAS_config,                  &
                      choice_basin_scheme_GRL_config,                  &
@@ -1752,42 +1799,13 @@ CONTAINS
                      filename_basins_EAS_config,                      &
                      filename_basins_GRL_config,                      &
                      filename_basins_ANT_config,                      &
-                     do_ocean_floodfill_config,                       &
-                     choice_sealevel_model_config,                    &
-                     fixed_sealevel_config,                           &
-                     filename_sealevel_record_config,                 &
-                     sealevel_record_length_config,                   &
-                     choice_GIA_model_config,                         &
-                     ELRA_lithosphere_flex_rigidity_config,           &
-                     ELRA_bedrock_relaxation_time_config,             &
-                     ELRA_mantle_density_config,                      &
-                     filename_PD_obs_climate_config,                  &
-                     choice_climate_matrix_config,                    &
-                     filename_GCM_snapshot_PI_config,                 &
-                     filename_GCM_snapshot_LGM_config,                &
-                     filename_ICE5G_PD_config,                        &
-                     filename_ICE5G_LGM_config,                       &
-                     choice_ocean_temperature_model_config,           &
-                     ocean_temperature_PD_config,                     &
-                     ocean_temperature_cold_config,                   &
-                     ocean_temperature_warm_config,                   &
-                     constant_lapserate_config,                       &
-                     C_abl_constant_NAM_config,                       &
-                     C_abl_constant_EAS_config,                       &
-                     C_abl_constant_GRL_config,                       &
-                     C_abl_constant_ANT_config,                       &
-                     C_abl_Ts_NAM_config,                             &
-                     C_abl_Ts_EAS_config,                             &
-                     C_abl_Ts_GRL_config,                             &
-                     C_abl_Ts_ANT_config,                             &
-                     C_abl_Q_NAM_config,                              &
-                     C_abl_Q_EAS_config,                              &
-                     C_abl_Q_GRL_config,                              &
-                     C_abl_Q_ANT_config,                              &
-                     C_refr_NAM_config,                               &
-                     C_refr_EAS_config,                               &
-                     C_refr_GRL_config,                               &
-                     C_refr_ANT_config,                               &
+                     BMB_Favier2019_lin_GammaT_config,                &
+                     BMB_Favier2019_quad_GammaT_config,               &
+                     BMB_Favier2019_Mplus_GammaT_config,              &
+                     BMB_Lazeroms2018_GammaT_config,                  &
+                     BMB_Lazeroms2018_find_GL_scheme_config,          &
+                     BMB_PICO_nboxes_config,                          &
+                     BMB_PICO_GammaTstar_config,                      &
                      T_ocean_mean_PD_NAM_config,                      &
                      T_ocean_mean_PD_EAS_config,                      &
                      T_ocean_mean_PD_GRL_config,                      &
@@ -1832,6 +1850,42 @@ CONTAINS
                      deep_ocean_threshold_depth_EAS_config,           &
                      deep_ocean_threshold_depth_GRL_config,           &
                      deep_ocean_threshold_depth_ANT_config,           &
+                     do_ocean_floodfill_config,                       &
+                     choice_sealevel_model_config,                    &
+                     fixed_sealevel_config,                           &
+                     filename_sealevel_record_config,                 &
+                     sealevel_record_length_config,                   &
+                     choice_GIA_model_config,                         &
+                     ELRA_lithosphere_flex_rigidity_config,           &
+                     ELRA_bedrock_relaxation_time_config,             &
+                     ELRA_mantle_density_config,                      &
+                     filename_PD_obs_climate_config,                  &
+                     choice_climate_matrix_config,                    &
+                     filename_GCM_snapshot_PI_config,                 &
+                     filename_GCM_snapshot_LGM_config,                &
+                     filename_ICE5G_PD_config,                        &
+                     filename_ICE5G_LGM_config,                       &
+                     choice_ocean_temperature_model_config,           &
+                     ocean_temperature_PD_config,                     &
+                     ocean_temperature_cold_config,                   &
+                     ocean_temperature_warm_config,                   &
+                     constant_lapserate_config,                       &
+                     C_abl_constant_NAM_config,                       &
+                     C_abl_constant_EAS_config,                       &
+                     C_abl_constant_GRL_config,                       &
+                     C_abl_constant_ANT_config,                       &
+                     C_abl_Ts_NAM_config,                             &
+                     C_abl_Ts_EAS_config,                             &
+                     C_abl_Ts_GRL_config,                             &
+                     C_abl_Ts_ANT_config,                             &
+                     C_abl_Q_NAM_config,                              &
+                     C_abl_Q_EAS_config,                              &
+                     C_abl_Q_GRL_config,                              &
+                     C_abl_Q_ANT_config,                              &
+                     C_refr_NAM_config,                               &
+                     C_refr_EAS_config,                               &
+                     C_refr_GRL_config,                               &
+                     C_refr_ANT_config,                               &
                      help_field_01_config,                            &
                      help_field_02_config,                            &
                      help_field_03_config,                            &
@@ -2328,6 +2382,14 @@ CONTAINS
     ! Basal mass balance - sub-shelf melt
     ! ===================================
 
+    C%choice_BMB_shelf_model                   = choice_BMB_shelf_model_config
+    C%choice_idealised_BMB_shelf               = choice_idealised_BMB_shelf_config
+    C%choice_BMB_sheet_model                   = choice_BMB_sheet_model_config
+    C%BMB_shelf_uniform                        = BMB_shelf_uniform_config
+    C%BMB_sheet_uniform                        = BMB_sheet_uniform_config
+    C%choice_BMB_subgrid                       = choice_BMB_subgrid_config
+    C%do_asynchronous_BMB                      = do_asynchronous_BMB_config
+
     C%choice_basin_scheme_NAM                  = choice_basin_scheme_NAM_config
     C%choice_basin_scheme_EAS                  = choice_basin_scheme_EAS_config
     C%choice_basin_scheme_GRL                  = choice_basin_scheme_GRL_config
@@ -2336,6 +2398,69 @@ CONTAINS
     C%filename_basins_EAS                      = filename_basins_EAS_config
     C%filename_basins_GRL                      = filename_basins_GRL_config
     C%filename_basins_ANT                      = filename_basins_ANT_config
+
+    ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
+    C%BMB_Favier2019_lin_GammaT                = BMB_Favier2019_lin_GammaT_config
+    C%BMB_Favier2019_quad_GammaT               = BMB_Favier2019_quad_GammaT_config
+    C%BMB_Favier2019_Mplus_GammaT              = BMB_Favier2019_Mplus_GammaT_config
+
+    ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
+    C%BMB_Lazeroms2018_GammaT                  = BMB_Lazeroms2018_GammaT_config
+    C%BMB_Lazeroms2018_find_GL_scheme          = BMB_Lazeroms2018_find_GL_scheme_config
+
+    ! Parameters for the PICO BMB model
+    C%BMB_PICO_nboxes                          = BMB_PICO_nboxes_config
+    C%BMB_PICO_GammaTstar                      = BMB_PICO_GammaTstar_config
+
+    ! Parameters for the ANICE_legacy sub-shelf melt model
+    C%T_ocean_mean_PD_NAM                      = T_ocean_mean_PD_NAM_config
+    C%T_ocean_mean_PD_EAS                      = T_ocean_mean_PD_EAS_config
+    C%T_ocean_mean_PD_GRL                      = T_ocean_mean_PD_GRL_config
+    C%T_ocean_mean_PD_ANT                      = T_ocean_mean_PD_ANT_config
+    C%T_ocean_mean_cold_NAM                    = T_ocean_mean_cold_NAM_config
+    C%T_ocean_mean_cold_EAS                    = T_ocean_mean_cold_EAS_config
+    C%T_ocean_mean_cold_GRL                    = T_ocean_mean_cold_GRL_config
+    C%T_ocean_mean_cold_ANT                    = T_ocean_mean_cold_ANT_config
+    C%T_ocean_mean_warm_NAM                    = T_ocean_mean_warm_NAM_config
+    C%T_ocean_mean_warm_EAS                    = T_ocean_mean_warm_EAS_config
+    C%T_ocean_mean_warm_GRL                    = T_ocean_mean_warm_GRL_config
+    C%T_ocean_mean_warm_ANT                    = T_ocean_mean_warm_ANT_config
+
+    C%BMB_deepocean_PD_NAM                     = BMB_deepocean_PD_NAM_config
+    C%BMB_deepocean_PD_EAS                     = BMB_deepocean_PD_EAS_config
+    C%BMB_deepocean_PD_GRL                     = BMB_deepocean_PD_GRL_config
+    C%BMB_deepocean_PD_ANT                     = BMB_deepocean_PD_ANT_config
+    C%BMB_deepocean_cold_NAM                   = BMB_deepocean_cold_NAM_config
+    C%BMB_deepocean_cold_EAS                   = BMB_deepocean_cold_EAS_config
+    C%BMB_deepocean_cold_GRL                   = BMB_deepocean_cold_GRL_config
+    C%BMB_deepocean_cold_ANT                   = BMB_deepocean_cold_ANT_config
+    C%BMB_deepocean_warm_NAM                   = BMB_deepocean_warm_NAM_config
+    C%BMB_deepocean_warm_EAS                   = BMB_deepocean_warm_EAS_config
+    C%BMB_deepocean_warm_GRL                   = BMB_deepocean_warm_GRL_config
+    C%BMB_deepocean_warm_ANT                   = BMB_deepocean_warm_ANT_config
+
+    C%BMB_shelf_exposed_PD_NAM                 = BMB_shelf_exposed_PD_NAM_config
+    C%BMB_shelf_exposed_PD_EAS                 = BMB_shelf_exposed_PD_EAS_config
+    C%BMB_shelf_exposed_PD_GRL                 = BMB_shelf_exposed_PD_GRL_config
+    C%BMB_shelf_exposed_PD_ANT                 = BMB_shelf_exposed_PD_ANT_config
+    C%BMB_shelf_exposed_cold_NAM               = BMB_shelf_exposed_cold_NAM_config
+    C%BMB_shelf_exposed_cold_EAS               = BMB_shelf_exposed_cold_EAS_config
+    C%BMB_shelf_exposed_cold_GRL               = BMB_shelf_exposed_cold_GRL_config
+    C%BMB_shelf_exposed_warm_NAM               = BMB_shelf_exposed_warm_NAM_config
+    C%BMB_shelf_exposed_cold_ANT               = BMB_shelf_exposed_cold_ANT_config
+    C%BMB_shelf_exposed_warm_EAS               = BMB_shelf_exposed_warm_EAS_config
+    C%BMB_shelf_exposed_warm_GRL               = BMB_shelf_exposed_warm_GRL_config
+    C%BMB_shelf_exposed_warm_ANT               = BMB_shelf_exposed_warm_ANT_config
+
+    C%subshelf_melt_factor_NAM                 = subshelf_melt_factor_NAM_config
+    C%subshelf_melt_factor_EAS                 = subshelf_melt_factor_EAS_config
+    C%subshelf_melt_factor_GRL                 = subshelf_melt_factor_GRL_config
+    C%subshelf_melt_factor_ANT                 = subshelf_melt_factor_ANT_config
+
+    C%deep_ocean_threshold_depth_NAM           = deep_ocean_threshold_depth_NAM_config
+    C%deep_ocean_threshold_depth_EAS           = deep_ocean_threshold_depth_EAS_config
+    C%deep_ocean_threshold_depth_GRL           = deep_ocean_threshold_depth_GRL_config
+    C%deep_ocean_threshold_depth_ANT           = deep_ocean_threshold_depth_ANT_config
 
     ! Sea level and GIA
     ! =================
@@ -2388,58 +2513,6 @@ CONTAINS
     C%C_refr_GRL                               = C_refr_GRL_config
     C%C_refr_ANT                               = C_refr_ANT_config
 
-    ! Sub-shelf melt parameterisation
-    ! ===============================
-
-    C%T_ocean_mean_PD_NAM                      = T_ocean_mean_PD_NAM_config
-    C%T_ocean_mean_PD_EAS                      = T_ocean_mean_PD_EAS_config
-    C%T_ocean_mean_PD_GRL                      = T_ocean_mean_PD_GRL_config
-    C%T_ocean_mean_PD_ANT                      = T_ocean_mean_PD_ANT_config
-    C%T_ocean_mean_cold_NAM                    = T_ocean_mean_cold_NAM_config
-    C%T_ocean_mean_cold_EAS                    = T_ocean_mean_cold_EAS_config
-    C%T_ocean_mean_cold_GRL                    = T_ocean_mean_cold_GRL_config
-    C%T_ocean_mean_cold_ANT                    = T_ocean_mean_cold_ANT_config
-    C%T_ocean_mean_warm_NAM                    = T_ocean_mean_warm_NAM_config
-    C%T_ocean_mean_warm_EAS                    = T_ocean_mean_warm_EAS_config
-    C%T_ocean_mean_warm_GRL                    = T_ocean_mean_warm_GRL_config
-    C%T_ocean_mean_warm_ANT                    = T_ocean_mean_warm_ANT_config
-    
-    C%BMB_deepocean_PD_NAM                     = BMB_deepocean_PD_NAM_config
-    C%BMB_deepocean_PD_EAS                     = BMB_deepocean_PD_EAS_config
-    C%BMB_deepocean_PD_GRL                     = BMB_deepocean_PD_GRL_config
-    C%BMB_deepocean_PD_ANT                     = BMB_deepocean_PD_ANT_config
-    C%BMB_deepocean_cold_NAM                   = BMB_deepocean_cold_NAM_config
-    C%BMB_deepocean_cold_EAS                   = BMB_deepocean_cold_EAS_config
-    C%BMB_deepocean_cold_GRL                   = BMB_deepocean_cold_GRL_config
-    C%BMB_deepocean_cold_ANT                   = BMB_deepocean_cold_ANT_config
-    C%BMB_deepocean_warm_NAM                   = BMB_deepocean_warm_NAM_config
-    C%BMB_deepocean_warm_EAS                   = BMB_deepocean_warm_EAS_config
-    C%BMB_deepocean_warm_GRL                   = BMB_deepocean_warm_GRL_config
-    C%BMB_deepocean_warm_ANT                   = BMB_deepocean_warm_ANT_config
-    
-    C%BMB_shelf_exposed_PD_NAM                 = BMB_shelf_exposed_PD_NAM_config
-    C%BMB_shelf_exposed_PD_EAS                 = BMB_shelf_exposed_PD_EAS_config
-    C%BMB_shelf_exposed_PD_GRL                 = BMB_shelf_exposed_PD_GRL_config
-    C%BMB_shelf_exposed_PD_ANT                 = BMB_shelf_exposed_PD_ANT_config
-    C%BMB_shelf_exposed_cold_NAM               = BMB_shelf_exposed_cold_NAM_config
-    C%BMB_shelf_exposed_cold_EAS               = BMB_shelf_exposed_cold_EAS_config
-    C%BMB_shelf_exposed_cold_GRL               = BMB_shelf_exposed_cold_GRL_config
-    C%BMB_shelf_exposed_warm_NAM               = BMB_shelf_exposed_warm_NAM_config
-    C%BMB_shelf_exposed_cold_ANT               = BMB_shelf_exposed_cold_ANT_config
-    C%BMB_shelf_exposed_warm_EAS               = BMB_shelf_exposed_warm_EAS_config
-    C%BMB_shelf_exposed_warm_GRL               = BMB_shelf_exposed_warm_GRL_config
-    C%BMB_shelf_exposed_warm_ANT               = BMB_shelf_exposed_warm_ANT_config
-    
-    C%subshelf_melt_factor_NAM                 = subshelf_melt_factor_NAM_config
-    C%subshelf_melt_factor_EAS                 = subshelf_melt_factor_EAS_config
-    C%subshelf_melt_factor_GRL                 = subshelf_melt_factor_GRL_config
-    C%subshelf_melt_factor_ANT                 = subshelf_melt_factor_ANT_config
-    
-    C%deep_ocean_threshold_depth_NAM           = deep_ocean_threshold_depth_NAM_config
-    C%deep_ocean_threshold_depth_EAS           = deep_ocean_threshold_depth_EAS_config
-    C%deep_ocean_threshold_depth_GRL           = deep_ocean_threshold_depth_GRL_config
-    C%deep_ocean_threshold_depth_ANT           = deep_ocean_threshold_depth_ANT_config
-  
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
     

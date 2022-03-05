@@ -611,12 +611,22 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: SMB_year                      ! Yearly  SMB (m)
     INTEGER :: wQ_TOA, wAlbedoSurf, wMeltPreviousYear, wFirnDepth, wRainfall, wSnowfall
     INTEGER :: wAddedFirn, wMelt, wRefreezing, wRefreezing_year, wRunoff, wAlbedo, wAlbedo_year, wSMB, wSMB_year
-  
+
   END TYPE type_SMB_model
-  
+
   TYPE type_BMB_model
     ! The different BMB components
-    
+
+    ! General data fields
+    !====================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB                           ! The basal mass balance (same as SMB: negative means ice loss, positive means ice gain!) [m/yr]
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_sheet                     ! The basal mass balance underneath the land-based ice sheet [m/yr]
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf                     ! The basal mass balance underneath the floating   ice shelf [m/yr]
+
+    ! The ANICE_legacy BMB model
+    ! ==========================
+
     ! Tuning parameters (different for each region, set from config)
     REAL(dp),                   POINTER     :: T_ocean_mean_PD
     REAL(dp),                   POINTER     :: T_ocean_mean_cold
@@ -633,15 +643,54 @@ MODULE data_types_module
     INTEGER :: wBMB_deepocean_PD, wBMB_deepocean_cold, wBMB_deepocean_warm
     INTEGER :: wBMB_shelf_exposed_PD, wBMB_shelf_exposed_cold, wBMB_shelf_exposed_warm
     INTEGER :: wsubshelf_melt_factor, wdeep_ocean_threshold_depth
-    
-    ! Data fields
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB                           ! The basal mass balance (same as SMB: negative means melt)
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_sheet                     ! The basal mass balance underneath the land-based ice sheet
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf                     ! The basal mass balance underneath the floating   ice shelf
+
+    ! The linear/quadratic models from Favier et al. (2019)
+    ! =====================================================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_base                  ! Ocean temperature    at the ice shelf base
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_freeze_base           ! Ocean freezing point at the ice shelf base (depends on pressure and salinity)
+    INTEGER :: wT_ocean_base, wT_ocean_freeze_base
+
+    ! The Lazeroms (2018) plume model
+    ! ===============================
+
+    ! NOTE: also uses T_ocean_base!
+
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: search_directions             ! The 16 search directions
+    REAL(dp), DIMENSION(:    ), POINTER     :: eff_plume_source_depth        ! Effective plume source depth (average source depth over all valid plume paths)
+    REAL(dp), DIMENSION(:    ), POINTER     :: eff_basal_slope               ! Effective basal slope        (average slope        over all valid plume paths)
+    INTEGER :: wsearch_directions, weff_plume_source_depth, weff_basal_slope
+
+    ! The PICO model
+    ! ==============
+
+    ! NOTE: also uses search_directions!
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_GL                     ! Distance to grounding line [m]
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_IF                     ! Distance to ice front      [m]
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_r                        ! Relative distance to grounding line [0-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_A                        ! Area covered by each ocean box in each basin [n_basins x n_boxes]
+    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_n_D                      ! Number of ocean boxes for each ice basin
+    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_k                        ! PICO ocean box number to which the shelf grid cells belong
+    INTEGER :: wPICO_d_GL, wPICO_d_IF, wPICO_r, wPICO_A, wPICO_n_D, wPICO_k
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_T                        ! 2-D     ambient temperature [K]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Tk                       ! Average ambient temperature within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_S                        ! 2-D     ambient salinity    [PSU]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Sk                       ! Average ambient salinity    within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_p                        ! 2-D     basal pressure      [Pa]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_pk                       ! Average basal pressure      within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_m                        ! 2-D     melt rate           [m/yr]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_mk                       ! Average melt rate           within each basin-box
+    INTEGER :: wPICO_T, wPICO_Tk, wPICO_S, wPICO_Sk, wPICO_p, wPICO_pk, wPICO_m, wPICO_mk
+
+    ! Additional data fields
+    !=======================
+
     REAL(dp), DIMENSION(:    ), POINTER     :: sub_angle                     ! "subtended angle"      for the sub-shelf melt parameterisation
     REAL(dp), DIMENSION(:    ), POINTER     :: dist_open                     ! distance to open ocean for the sub-shelf melt parameterisation
     INTEGER :: wBMB, wBMB_sheet, wBMB_shelf, wsub_angle, wdist_open
-  
+
   END TYPE type_BMB_model
   
   TYPE type_reference_geometry

@@ -316,7 +316,7 @@ CONTAINS
     region%do_ELRA        = .TRUE.
       
   END SUBROUTINE run_model_update_mesh
-  
+
   ! Initialise the entire model region - read initial and PD data, create the mesh,
   ! initialise the ice dynamics, climate, ocean, and SMB sub models
   SUBROUTINE initialise_model( region, name, climate_matrix_global, ocean_matrix_global)
@@ -335,8 +335,8 @@ CONTAINS
 
     n1 = par%mem%n
 
-    ! Basic initialisation
-    ! ====================
+    ! ===== Basic initialisation =====
+    ! ================================
 
     ! Region name
     region%name      = name    
@@ -373,8 +373,8 @@ CONTAINS
 
     CALL map_reference_geometries_to_mesh( region, region%mesh)
 
-    ! The different square grids
-    ! ==========================
+    ! ===== The different square grids =====
+    ! ======================================
 
     IF (par%master) WRITE(0,*) '  Initialising square grids for output, GIA, and data smoothing...'
 
@@ -382,29 +382,29 @@ CONTAINS
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
 
-    ! ===== Initialise dummy fields for debugging
-    ! ===========================================
+    ! ===== Initialise dummy fields for debugging =====
+    ! =================================================
 
     IF (par%master) WRITE(0,*) '  Initialising debug fields...'
 
     CALL initialise_debug_fields( region)
 
     ! ===== Output files =====
-    ! =======================
+    ! ========================
 
     CALL create_output_files(    region)
     CALL associate_debug_fields( region)
     region%output_file_exists = .TRUE.
     CALL sync
 
-    ! ===== The "no ice" mask
-    ! =======================
+    ! ===== The "no ice" mask =====
+    ! =============================
 
     CALL allocate_shared_int_1D( region%mesh%nV, region%mask_noice, region%wmask_noice)
     CALL initialise_mask_noice( region, region%mesh)
 
-    ! ===== The ice dynamics model
-    ! ============================
+    ! ===== The ice dynamics model =====
+    ! ==================================
 
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
 
@@ -433,35 +433,14 @@ CONTAINS
 
     CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
 
-    WRITE(0,*) 'All good until here (initialise_model). [Next: Update BMB model]'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%BMB, region%name)
-    
-    ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
-    CALL run_climate_model( region, climate_matrix_global, region%time)
-    CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
-    
-    ! Initialise the ice temperature profile
-    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%name)
-    
-    ! Initialise the rheology
-    CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
-    
-    ! Calculate ice sheet metadata (volume, area, GMSL contribution) for writing to the first line of the output file
-    CALL calculate_icesheet_volume_and_area( region)
-    
-    ! ===== The isotopes model =====
-    ! ==============================
-   
-    CALL initialise_isotopes_model( region)
-    
-    ! ===== The ELRA GIA model =====
-    ! ==============================
-    
+    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+
+    ! ===== The GIA model =====
+    ! =========================
+
     IF     (C%choice_GIA_model == 'none') THEN
       ! Nothing to be done
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
@@ -470,15 +449,51 @@ CONTAINS
       WRITE(0,*) '  ERROR - choice_GIA_model "', C%choice_GIA_model, '" not implemented in initialise_model!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
-    
-    IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
-    
-!    ! ===== ASCII output (computation time tracking, general output)
-!    IF (par%master) CALL create_text_output_files( region)
-    
+
+    ! ===== The isotopes model =====
+    ! ==============================
+
+    CALL initialise_isotopes_model( region)
+
+    ! ===== Geothermal heat flux =====
+    ! ================================
+
+    ! This is currently done in the forcing and ice dynamics modules. Check that with IMAU-ICE.
+
+    WRITE(0,*) 'All good until here (initialise_model). [Next: Update init of temperature profile]'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+    ! ===== Initialise the ice temperature profile =====
+    ! ==================================================
+
+    ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
+    CALL run_climate_model( region, climate_matrix_global, C%start_time_of_run)
+    CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
+
+    ! Initialise the ice temperature profile
+    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%name)
+
+    ! Initialise the rheology
+    CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
+
+    ! ===== Scalar output (regionally integrated ice volume, SMB components, etc.) =====
+    ! ==================================================================================
+
+    ! Calculate ice sheet metadata (volume, area, GMSL contribution) for writing to the first line of the output file
+    CALL calculate_icesheet_volume_and_area( region)
+
+    ! ===== ASCII output (computation time tracking, general output) =====
+    ! ====================================================================
+
+    ! IF (par%master) CALL create_text_output_files( region)
+
+    ! ===== Memory log =====
+    ! ======================
     n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
-    
+    CALL write_to_memory_log( routine_name, n1, n2)
+
+    IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
+
   END SUBROUTINE initialise_model
   SUBROUTINE allocate_region_timers_and_scalars( region)
     ! Allocate shared memory for this region's timers (used for the asynchronous coupling between the

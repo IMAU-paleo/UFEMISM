@@ -163,7 +163,7 @@ CONTAINS
     ! ==============
     
       t1 = MPI_WTIME()
-      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_thermo = region%tcomp_thermo + t2 - t1
       
@@ -458,10 +458,8 @@ CONTAINS
     ! ===== Geothermal heat flux =====
     ! ================================
 
-    ! This is currently done in the forcing and ice dynamics modules. Check that with IMAU-ICE.
-
-    WRITE(0,*) 'All good until here (initialise_model). [Next: Update init of temperature profile]'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! This (init regional GHF) is currently done in the ice dynamics module (initialise_ice_model).
+    ! Might be good to move it to the forcing module later.
 
     ! ===== Initialise the ice temperature profile =====
     ! ==================================================
@@ -471,7 +469,7 @@ CONTAINS
     CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
 
     ! Initialise the ice temperature profile
-    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%name)
+    CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name)
 
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)

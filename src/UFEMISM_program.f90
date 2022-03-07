@@ -121,11 +121,13 @@ PROGRAM UFEMISM_program
   IF (C%do_EAS) GMSL_EAS = EAS%GMSL_contribution
   IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
   IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
-  GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT 
+  GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
 
   ! Determine d18O contributions of all simulated ice sheets
-  CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-  CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+  IF (C%do_calculate_benthic_d18O) THEN
+    CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
+    CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+  END IF
 
   ! ===== Initial global output =====
   ! =================================
@@ -151,8 +153,12 @@ PROGRAM UFEMISM_program
     forcing%dT_glob,                   &  ! global mean surface temperature anomaly
     forcing%dT_deepwater               )  ! deep-water temperature anomaly
 
-  ! ===== The big time loop =====
-  ! =============================
+  WRITE(0,*) 'All good until here (UFEMISM_program). [Next: Climate stuff during the Big Loop]'
+  CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+! =============================
+! ===== The big time loop =====
+! =============================
 
   t_coupling = C%start_time_of_run
 

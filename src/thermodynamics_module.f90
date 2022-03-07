@@ -24,9 +24,11 @@ MODULE thermodynamics_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_climate_snapshot_regional, type_SMB_model, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
+                                             type_climate_snapshot_regional, type_ocean_snapshot_regional, &
+                                             type_SMB_model
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
-  USE utilities_module,                ONLY: tridiagonal_solve, vertical_average
+  USE utilities_module,                ONLY: tridiagonal_solve, vertical_average, interpolate_ocean_depth
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_a_to_b_3D, ddy_a_to_b_3D
   USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex      
@@ -37,7 +39,7 @@ MODULE thermodynamics_module
 CONTAINS
    
 ! == Run the chosen thermodynamics model
-  SUBROUTINE run_thermo_model( mesh, ice, climate, SMB, time, do_solve_heat_equation)
+  SUBROUTINE run_thermo_model( mesh, ice, climate, ocean, SMB, time, do_solve_heat_equation)
     ! Run the thermodynamics model. If so specified, solve the heat equation;
     ! if not, only prescribe a vertically uniform temperature to newly ice-covered grid cells.
     
@@ -47,6 +49,7 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     REAL(dp),                             INTENT(IN)    :: time
     LOGICAL,                              INTENT(IN)    :: do_solve_heat_equation
@@ -129,7 +132,7 @@ CONTAINS
       CALL calc_pressure_melting_point( mesh, ice)
       
       ! If so specified, solve the heat equation
-      IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, SMB)
+      IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
       
       ! Safety
       CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a', 'run_thermo_model')
@@ -145,7 +148,7 @@ CONTAINS
   END SUBROUTINE run_thermo_model
   
 ! == Solve the 3-D heat equation
-  SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, SMB)
+  SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
     
     IMPLICIT NONE
     
@@ -153,6 +156,7 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
 
     ! Local variables:
@@ -318,7 +322,7 @@ CONTAINS
       ! replace the temperature profile in those cells with the Robin solution
       
       DO vi = mesh%vi1, mesh%vi2
-        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, SMB, Ti_new, vi)
+        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new, vi)
       END DO
       CALL sync
       
@@ -446,18 +450,19 @@ CONTAINS
   END SUBROUTINE calc_upwind_heat_flux_derivatives
 
 ! == The Robin temperature solution
-  SUBROUTINE replace_Ti_with_robin_solution( ice, climate, SMB, Ti, vi)
+  SUBROUTINE replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti, vi)
     ! This function calculates for one horizontal grid point the temperature profiles
     ! using the surface temperature and the geothermal heat flux as boundary conditions.
     ! See Robin solution in: Cuffey & Paterson 2010, 4th ed, chapter 9, eq. (9.13) - (9.22).
-    
+
     USE parameters_module, ONLY: pi, sec_per_year
-    
+
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_ice_model),                 INTENT(IN)    :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:,:  ),           INTENT(INOUT) :: Ti
     INTEGER,                              INTENT(IN)    :: vi
@@ -469,27 +474,29 @@ CONTAINS
     REAL(dp)                                           :: distance_above_bed
     REAL(dp)                                           :: erf1
     REAL(dp)                                           :: erf2
-    
+
     REAL(dp)                                           :: thermal_conductivity_robin
     REAL(dp)                                           :: thermal_diffusivity_robin
     REAL(dp)                                           :: bottom_temperature_gradient_robin
-    
+
     REAL(dp), PARAMETER                                :: kappa_0_ice_conductivity     = 9.828_dp                   ! The linear constant in the thermal conductivity of ice [J m^-1 K^-1 s^-1], see equation (12.6), Ritz (1987), Cuffey & Paterson (2010, p. 400), Zwinger (2007)
     REAL(dp), PARAMETER                                :: kappa_e_ice_conductivity     = 0.0057_dp                  ! The exponent constant in the thermal conductivity of ice [K^-1], see equation (12.6), Ritz (1987), Cuffey & Paterson (2010, p. 400), Zwinger (2007)
     REAL(dp), PARAMETER                                :: c_0_specific_heat            = 2127.5_dp                  ! The constant in the specific heat capacity of ice [J kg^-1 K^-1], see equation (12.5), Zwinger (2007), Cuffey & Paterson (2010, p. 400)
-    REAL(dp), PARAMETER                                :: Claus_Clap_gradient          = 8.7E-04_dp                 ! config variable   ! Clausius Clapeyron gradient [K m^-1]
-    
+
+    REAL(dp)                                            :: depth
+    REAL(dp)                                            :: T_ocean_at_shelf_base
+
     thermal_conductivity_robin        = kappa_0_ice_conductivity * sec_per_year * EXP(-kappa_e_ice_conductivity * T0)           ! Thermal conductivity            [J m^-1 K^-1 y^-1]
     thermal_diffusivity_robin         = thermal_conductivity_robin / (ice_density * c_0_specific_heat)         ! Thermal diffusivity             [m^2 y^-1]
     bottom_temperature_gradient_robin = - ice%GHF_a( vi) / thermal_conductivity_robin                    ! Temperature gradient at bedrock
-    
+
     Ts = MIN( T0, SUM(climate%T2m( vi,:)) / 12._dp)
-    
+
     IF (ice%mask_sheet_a( vi) == 1 ) THEN
-    
+
       IF (SMB%SMB_year( vi) > 0._dp) THEN    
         ! The Robin solution can be used to estimate the subsurface temperature profile in an accumulation area
-        
+
         thermal_length_scale = SQRT(2._dp * thermal_diffusivity_robin * ice%Hi_a( vi) / SMB%SMB_year( vi))
         DO k = 1, C%nz
           distance_above_bed = (1._dp - C%zeta(k)) * ice%Hi_a( vi)
@@ -497,29 +504,31 @@ CONTAINS
           erf2 = erf( ice%Hi_a( vi) / thermal_length_scale)
           Ti( vi,k) = Ts + SQRT(pi) / 2._dp * thermal_length_scale * bottom_temperature_gradient_robin * (erf1 - erf2)
         END DO
-      
+
       ELSE
-    
+
         ! Ablation area: use linear temperature profile from Ts to (offset below) T_pmp
-        Ti( vi,:) = Ts + ((T0 - Claus_Clap_gradient * ice%Hi_a( vi)) - Ts) * C%zeta(:)
-      
+        Ti( vi,:) = Ts + ((T0 - CC * ice%Hi_a( vi)) - Ts) * C%zeta(:)
+
       END IF
-      
+
     ELSEIF( ice%mask_shelf_a(vi) == 1) THEN
-    
+
       ! Use a linear profile between Ts and seawater temperature:
-      Ti( vi,:) = Ts + C%zeta(:) * (SMT - Ts)
-      
+      depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+      CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
+      Ti( vi,:) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
+
     ELSE
-    
+
       ! No ice present: use Ts everywhere
       Ti( vi,:) = Ts
-      
+
     END IF
 
     ! Correct all temperatures above T_pmp:
     DO k = 1, C%nz
-      Ti( vi,k) = MIN( Ti( vi,k), T0 - Claus_Clap_gradient * ice%Hi_a( vi) * C%zeta(k))
+      Ti( vi,k) = MIN( Ti( vi,k), ice%Ti_pmp_a( vi,k))
     END DO
 
   END SUBROUTINE replace_Ti_with_robin_solution  
@@ -791,20 +800,21 @@ CONTAINS
   END SUBROUTINE calc_ice_rheology
   
 ! == Initialise the englacial ice temperature at the start of a simulation
-  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, SMB, region_name)
+  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, ocean, SMB, region_name)
     ! Initialise the englacial ice temperature at the start of a simulation
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
-    
+
     IF (par%master) WRITE (0,*) '  Initialising ice temperature profile "', TRIM(C%choice_initial_ice_temperature), '"...'
-    
+
     IF     (C%choice_initial_ice_temperature == 'uniform') THEN
       ! Simple uniform temperature
       CALL initialise_ice_temperature_uniform( mesh, ice)
@@ -813,7 +823,7 @@ CONTAINS
       CALL initialise_ice_temperature_linear( mesh, ice, climate)
     ELSEIF (C%choice_initial_ice_temperature == 'Robin') THEN
       ! Initialise with the Robin solution
-      CALL initialise_ice_temperature_Robin( mesh, ice, climate, SMB)
+      CALL initialise_ice_temperature_Robin( mesh, ice, climate, ocean, SMB)
     ELSEIF (C%choice_initial_ice_temperature == 'restart') THEN
       ! Initialise with the temperature field from the provided restart file
       CALL initialise_ice_temperature_restart( mesh, ice, region_name)
@@ -879,7 +889,7 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE initialise_ice_temperature_linear
-  SUBROUTINE initialise_ice_temperature_Robin( mesh, ice, climate, SMB)
+  SUBROUTINE initialise_ice_temperature_Robin( mesh, ice, climate, ocean, SMB)
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Initialise with the Robin solution
@@ -890,6 +900,7 @@ CONTAINS
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
+    TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     
     ! Local variables
@@ -900,7 +911,7 @@ CONTAINS
     
     ! Initialise with the Robin solution
     DO vi = mesh%vi1, mesh%vi2
-      CALL replace_Ti_with_robin_solution( ice, climate, SMB, ice%Ti_a, vi)    
+      CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, ice%Ti_a, vi)
     END DO
     CALL sync
     

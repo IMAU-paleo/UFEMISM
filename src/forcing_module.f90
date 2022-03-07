@@ -110,9 +110,6 @@ CONTAINS
   SUBROUTINE initialise_global_forcing
     ! Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux)
 
-    ! Insolation
-    CALL initialise_insolation_data
-
     ! Climate forcing stuff: CO2, d18O, inverse routine data
     IF     (C%choice_forcing_method == 'none') THEN
       ! Nothing needed; climate is either parameterised, or prescribed directly
@@ -124,7 +121,7 @@ CONTAINS
       CALL initialise_CO2_record
 
       IF (C%do_calculate_benthic_d18O) THEN
-        CALL initialise_d18O_data
+        CALL initialise_modelled_benthic_d18O_data
       END IF
 
       ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
@@ -132,7 +129,7 @@ CONTAINS
       ! temperature offset, which is calculated using the inverse routine, following de Boer et al. (2014)
 
       CALL initialise_d18O_record
-      CALL initialise_d18O_data
+      CALL initialise_modelled_benthic_d18O_data
       CALL initialise_inverse_routine_data
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
@@ -141,7 +138,7 @@ CONTAINS
       ! glacial-index method or a climate-matrix method
 
       CALL initialise_CO2_record
-      CALL initialise_d18O_data
+      CALL initialise_modelled_benthic_d18O_data
       CALL initialise_inverse_routine_data
 
     ELSE
@@ -149,8 +146,11 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Insolation
+    CALL initialise_insolation_data
+
     ! Geothermal heat flux
-    CALL initialise_geothermal_heat_flux
+    CALL initialise_geothermal_heat_flux_global
 
   END SUBROUTINE initialise_global_forcing
 
@@ -384,7 +384,7 @@ CONTAINS
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dT, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 
   END SUBROUTINE calculate_mean_temperature_change_region
-  SUBROUTINE initialise_d18O_data
+  SUBROUTINE initialise_modelled_benthic_d18O_data
     ! Allocate shared memory for the d18O and global temperature variables.
 
     IMPLICIT NONE
@@ -418,7 +418,7 @@ CONTAINS
     IF (par%master) forcing%d18O_obs_PD = 3.23_dp
     CALL sync
 
-  END SUBROUTINE initialise_d18O_data
+  END SUBROUTINE initialise_modelled_benthic_d18O_data
 
   ! == Inverse forward routine
   SUBROUTINE inverse_routine_global_temperature_offset
@@ -944,6 +944,7 @@ CONTAINS
 
 
 
+  ! == Insolation
   SUBROUTINE get_insolation_at_time( mesh, time, Q_TOA)
     ! Get monthly insolation at time t on the regional grid
 
@@ -1126,35 +1127,9 @@ CONTAINS
   END SUBROUTINE initialise_insolation_data
 
   ! == Geothermal heat flux
-  SUBROUTINE initialise_geothermal_heat_flux
+  SUBROUTINE initialise_geothermal_heat_flux_global
 
     IMPLICIT NONE
-
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_geothermal_heat_flux!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
 
     IF (C%choice_geothermal_heat_flux == 'constant') THEN
       ! Just use a constant value, no need to read a file.
@@ -1186,11 +1161,11 @@ CONTAINS
 
     ELSE ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
 
-      IF (par%master) WRITE(0,*) '  ERROR: choice_geothermal_heat_flux "', TRIM(C%choice_geothermal_heat_flux), '" not implemented in initialise_geothermal_heat_flux!'
+      IF (par%master) WRITE(0,*) '  ERROR: choice_geothermal_heat_flux "', TRIM(C%choice_geothermal_heat_flux), '" not implemented in initialise_geothermal_heat_flux_global!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
     END IF ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
 
-  END SUBROUTINE initialise_geothermal_heat_flux
+  END SUBROUTINE initialise_geothermal_heat_flux_global
 
 END MODULE forcing_module

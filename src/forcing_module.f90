@@ -52,12 +52,6 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
     CHARACTER(LEN=*),                    INTENT(IN)    :: switch
 
-    ! ! Insolation
-    ! IF (switch == 'pre') THEN
-    !   CALL update_insolation_data( time)
-    ! END IF
-    ! Not needed anymore, as this is now managed per region by get_insolation_at_time
-
     ! Climate forcing stuff: CO2, d18O, inverse routine data
     IF     (C%choice_forcing_method == 'none') THEN
       ! Nothing needed; climate is either parameterised, or prescribed directly
@@ -67,6 +61,8 @@ CONTAINS
       ! either using a glacial-index method or a climate-matrix method, following Berends et al. (2018)
 
       IF (switch == 'pre') THEN
+        ! Not really needed, as this is done regionally. But since the other methods still seem to
+        ! need this, let's do it here to keep the symmetry, as computing it does not hurt the run.
         CALL update_CO2_at_model_time( time)
       ELSEIF (switch == 'post') THEN
         IF (C%do_calculate_benthic_d18O) THEN
@@ -82,8 +78,10 @@ CONTAINS
       IF (switch == 'pre') THEN
         CALL update_d18O_at_model_time( time)
       ELSEIF (switch == 'post') THEN
-        CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-        CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+        IF (C%do_calculate_benthic_d18O) THEN
+          CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
+          CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+        END IF
         CALL inverse_routine_global_temperature_offset
       END IF
 
@@ -95,8 +93,10 @@ CONTAINS
       IF (switch == 'pre') THEN
         CALL update_CO2_at_model_time( time)
       ELSEIF (switch == 'post') THEN
-        CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-        CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+        IF (C%do_calculate_benthic_d18O) THEN
+          CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
+          CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+        END IF
         CALL inverse_routine_CO2
       END IF
 

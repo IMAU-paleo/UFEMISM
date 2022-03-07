@@ -153,9 +153,6 @@ PROGRAM UFEMISM_program
     forcing%dT_glob,                   &  ! global mean surface temperature anomaly
     forcing%dT_deepwater               )  ! deep-water temperature anomaly
 
-  WRITE(0,*) 'All good until here (UFEMISM_program). [Next: Climate stuff during the Big Loop]'
-  CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
 ! =============================
 ! ===== The big time loop =====
 ! =============================

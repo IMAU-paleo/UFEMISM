@@ -35,9 +35,10 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
                                              associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
   USE general_ice_model_data_module,   ONLY: initialise_mask_noice, initialise_basins
+
   USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
   USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
-  USE ocean_module,                    ONLY: initialise_ocean_model_regional
+  USE ocean_module,                    ONLY: initialise_ocean_model_regional, run_ocean_model
   USE climate_module,                  ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
   USE SMB_module,                      ONLY: initialise_SMB_model,      remap_SMB_model,      run_SMB_model
   USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
@@ -51,26 +52,26 @@ CONTAINS
 
   SUBROUTINE run_model( region, climate_matrix_global, t_end)
     ! Run the model until t_end (usually a 100 years further)
-  
+
     IMPLICIT NONE  
-    
+
     ! In/output variables:
     TYPE(type_model_region),           INTENT(INOUT)     :: region
     TYPE(type_climate_matrix_global),  INTENT(INOUT)     :: climate_matrix_global
     REAL(dp),                          INTENT(IN)        :: t_end
-    
+
     ! Local variables
     INTEGER                                              :: it
     REAL(dp)                                             :: meshfitness
     REAL(dp)                                             :: t1, t2
-    
+
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), & 
                                                           ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
-    
+
     ! Set the intermediary pointers in "debug" to this region's debug data fields
     CALL associate_debug_fields(  region)
-               
+
     ! Computation time tracking
     region%tcomp_total          = 0._dp
     region%tcomp_ice            = 0._dp
@@ -78,21 +79,21 @@ CONTAINS
     region%tcomp_climate        = 0._dp
     region%tcomp_GIA            = 0._dp
     region%tcomp_mesh           = 0._dp
-       
+
     t1 = MPI_WTIME()
     t2 = 0._dp
-                            
+
   ! ====================================
   ! ===== The main model time loop =====
   ! ====================================
-    
+
     it = 0
     DO WHILE (region%time < t_end)
       it = it + 1
-      
+
     ! GIA
     ! ===
-    
+
       t1 = MPI_WTIME()
       IF     (C%choice_GIA_model == 'none') THEN
         ! Nothing to be done
@@ -104,58 +105,66 @@ CONTAINS
       END IF
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_GIA = region%tcomp_GIA + t2 - t1
-      
+
     ! Mesh update
     ! ===========
-      
+
       ! Check if the mesh needs to be updated
       IF (par%master) t2 = MPI_WTIME()
       meshfitness = 1._dp
       IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
-        CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)    
+        CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)
       END IF
-      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
-    
+      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+
       ! If required, update the mesh
       IF (meshfitness < C%mesh_fitness_threshold) THEN
-    !  IF (.FALSE.) THEN
-    !  IF (.TRUE.) THEN 
+      ! IF (.FALSE.) THEN
+      ! IF (.TRUE.) THEN
         region%t_last_mesh = region%time
         IF (par%master) t2 = MPI_WTIME()
         CALL run_model_update_mesh( region, climate_matrix_global)
         IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
-      
+
     ! Ice dynamics
     ! ============
-    
+
       ! Calculate ice velocities and the resulting change in ice geometry
       ! NOTE: geometry is not updated yet; this happens at the end of the time loop
       t1 = MPI_WTIME()
       CALL run_ice_model( region, t_end)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_ice = region%tcomp_ice + t2 - t1
-      
-    ! Climate , SMB and BMB
+
+    ! Climate, SMB and BMB
     ! =====================
-    
+
       t1 = MPI_WTIME()
-            
+
       ! Run the climate model
       IF (region%do_climate) THEN
         CALL run_climate_model( region, climate_matrix_global, region%time)
-      END IF     
-    
+      END IF
+
+      ! Run the ocean model
+      IF (region%do_ocean) THEN
+        CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
+      END IF
+
       ! Run the SMB model
       IF (region%do_SMB) THEN
         CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
       END IF
-    
+
+      WRITE(0,*) 'All good until here (run_model). [Next: Fill in run_BMB_model]'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
       ! Run the BMB model
       IF (region%do_BMB) THEN
         CALL run_BMB_model( region%mesh, region%ice, region%climate_matrix%applied, region%BMB, region%name)
       END IF
-      
+
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_climate = region%tcomp_climate + t2 - t1
       

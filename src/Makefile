@@ -4,19 +4,19 @@
 #     http://www.gnu.org/software/make/manual/make.html
 
 # For compiling setting, Makefile will point to the uncommented file below:
-#include Makefile_include_local.txt
+include Makefile_include_local.txt
 #include Makefile_include_mac.txt
-include Makefile_include_snellius.txt
+#include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files
 MOD_PATH = module-files
 
 # Pattern rules for creating object files from *.f90 (fortran 90) source files
-$(OBJ_PATH)/%.o : %.f90
+$(OBJ_PATH)/%.o : %.f90 Makefile
 	$(F90) $(F90FLAGS) -c -o $@ $<
 
-$(OBJ_PATH)/%.o : %.F90
+$(OBJ_PATH)/%.o : %.F90 Makefile
 	$(F90) $(F90FLAGS) -c -o $@ $<
 
 # This rule is used to build an executable from the object files:
@@ -94,3 +94,8 @@ clean :
 .PHONY : all
 
 all : $(all_programs)
+
+include .depend
+
+.depend: Makefile *.f90
+	makedepf90 -b object-files *.f90 *.F90 > .depend

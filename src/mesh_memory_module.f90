@@ -50,12 +50,19 @@ CONTAINS
     ! Allocate memory for mesh data    
     
     IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    CHARACTER(LEN=3),           INTENT(IN)        :: region_name
-    INTEGER,                    INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
     
-    mesh%region_name = region_name ! Done by all processes, since I haven't yet figured out how to allocate shared memory for character strings...
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    CHARACTER(LEN=3),                INTENT(IN)        :: region_name
+    INTEGER,                         INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_mesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    mesh%region_name = region_name
     
     CALL allocate_shared_dp_0D(  mesh%lambda_M,         mesh%wlambda_M        )
     CALL allocate_shared_dp_0D(  mesh%phi_M,            mesh%wphi_M           )
@@ -154,6 +161,9 @@ CONTAINS
     CALL allocate_shared_dp_1D(  mesh%nPOI,    mesh%POI_resolutions,           mesh%wPOI_resolutions          )
     CALL allocate_shared_int_2D( mesh%nPOI, 3, mesh%POI_vi,                    mesh%wPOI_vi                   )
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 46)
 
   END SUBROUTINE allocate_mesh_primary
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
@@ -161,9 +171,16 @@ CONTAINS
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.    
     
     IMPLICIT NONE
- 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER,                    INTENT(IN)        :: nV_mem_new, nTri_mem_new
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_mesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) mesh%nV_mem   = nV_mem_new
     IF (par%master) mesh%nTri_mem = nTri_mem_new
@@ -197,14 +214,24 @@ CONTAINS
     CALL adapt_shared_dist_int_1D( mesh%nTri, nTri_mem_new,               mesh%TriStack1,      mesh%wTriStack1     )
     CALL adapt_shared_dist_int_1D( mesh%nTri, nTri_mem_new,               mesh%TriStack2,      mesh%wTriStack2     )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE extend_mesh_primary
   SUBROUTINE crop_mesh_primary(           mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (smaller) one, and copy the data back.    
     
     IMPLICIT NONE
- 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'crop_mesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
    
     IF (par%master) mesh%nV_mem   = mesh%nV
     IF (par%master) mesh%nTri_mem = mesh%nTri
@@ -234,14 +261,24 @@ CONTAINS
     CALL adapt_shared_dist_int_1D( mesh%nTri, mesh%nTri,                mesh%TriStack1,      mesh%wTriStack1     )
     CALL adapt_shared_dist_int_1D( mesh%nTri, mesh%nTri,                mesh%TriStack2,      mesh%wTriStack2     )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE crop_mesh_primary
   SUBROUTINE allocate_mesh_secondary(     mesh)
     ! Allocate memory for mesh data    
     
     IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER                                       :: nV, nTri
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    INTEGER                                            :: nV, nTri
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_mesh_secondary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     nV   = mesh%nV
     nTri = mesh%nTri
@@ -258,13 +295,23 @@ CONTAINS
     CALL allocate_shared_dp_1D(  nV,                  mesh%lat,             mesh%wlat            )
     CALL allocate_shared_dp_1D(  nV,                  mesh%lon,             mesh%wlon            )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
+    
   END SUBROUTINE allocate_mesh_secondary
   SUBROUTINE deallocate_mesh_all(         mesh)
     ! Deallocate memory for mesh data
     
     IMPLICIT NONE
-     
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh    
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh    
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_mesh_all'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL deallocate_shared( mesh%wlambda_M)
     CALL deallocate_shared( mesh%wphi_M)
@@ -385,6 +432,9 @@ CONTAINS
     CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b_CSR  )
     
     CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_CSR)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
  
    END SUBROUTINE deallocate_mesh_all
   
@@ -392,10 +442,17 @@ CONTAINS
     ! Allocate memory for mesh data    
     
     IMPLICIT NONE
-
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    CHARACTER(LEN=3),           INTENT(IN)        :: region_name
-    INTEGER,                    INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    CHARACTER(LEN=3),                INTENT(IN)        :: region_name
+    INTEGER,                         INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_submesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     mesh%region_name = region_name
     
@@ -493,15 +550,25 @@ CONTAINS
     CALL allocate_shared_int_2D( mesh%nPOI, 3, mesh%POI_vi,                    mesh%wPOI_vi                   )
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 6)
+    
   END SUBROUTINE allocate_submesh_primary
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.    
     
     IMPLICIT NONE
- 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER,                    INTENT(IN)        :: nV_mem_new, nTri_mem_new
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_submesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
  
     mesh%nV_mem   = nV_mem_new
     mesh%nTri_mem = nTri_mem_new
@@ -533,14 +600,24 @@ CONTAINS
     CALL adapt_shared_dist_int_1D( mesh%nTri, nTri_mem_new,                mesh%TriStack1,      mesh%wTriStack1     )
     CALL adapt_shared_dist_int_1D( mesh%nTri, nTri_mem_new,                mesh%TriStack2,      mesh%wTriStack2     )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE extend_submesh_primary
   SUBROUTINE crop_submesh_primary(        mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (smaller) one, and copy the data back.    
     
     IMPLICIT NONE
- 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'crop_submesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
    
     mesh%nV_mem = mesh%nV
        
@@ -569,13 +646,23 @@ CONTAINS
     CALL adapt_shared_dist_int_1D( mesh%nTri, mesh%nTri,                mesh%TriStack1,      mesh%wTriStack1     )
     CALL adapt_shared_dist_int_1D( mesh%nTri, mesh%nTri,                mesh%TriStack2,      mesh%wTriStack2     )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE crop_submesh_primary
   SUBROUTINE deallocate_submesh_primary(  mesh)
     ! Deallocate memory for mesh data
     
     IMPLICIT NONE
-     
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_submesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL deallocate_shared( mesh%wlambda_M)
     CALL deallocate_shared( mesh%wphi_M)
@@ -680,6 +767,9 @@ CONTAINS
     NULLIFY( mesh%POI_resolutions)
     NULLIFY( mesh%POI_vi)
     NULLIFY( mesh%POI_w)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
  
    END SUBROUTINE deallocate_submesh_primary
   SUBROUTINE share_submesh_access( p_left, p_right, submesh, submesh_right)
@@ -690,18 +780,24 @@ CONTAINS
     
     IMPLICIT NONE
  
-    INTEGER,                    INTENT(IN)        :: p_left
-    INTEGER,                    INTENT(IN)        :: p_right
-    TYPE(type_mesh),            INTENT(IN)        :: submesh
-    TYPE(type_mesh),            INTENT(INOUT)     :: submesh_right
+    ! In/output variables:
+    INTEGER,                         INTENT(IN)        :: p_left
+    INTEGER,                         INTENT(IN)        :: p_right
+    TYPE(type_mesh),                 INTENT(IN)        :: submesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: submesh_right
     
-    INTEGER                                       :: nV, nTri, nconmax
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'share_submesh_access'
+    INTEGER                                            :: nV, nTri, nconmax
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL share_memory_access_dp_0D(  p_left, p_right, submesh_right%xmin,             submesh%wxmin,             submesh_right%wxmin            )
     CALL share_memory_access_dp_0D(  p_left, p_right, submesh_right%xmax,             submesh%wxmax,             submesh_right%wxmax            )
     CALL share_memory_access_dp_0D(  p_left, p_right, submesh_right%ymin,             submesh%wymin,             submesh_right%wymin            )
     CALL share_memory_access_dp_0D(  p_left, p_right, submesh_right%ymax,             submesh%wymax,             submesh_right%wymax            )
-    CALL share_memory_access_int_0D( p_left, p_right, submesh_right%nC_mem,          submesh%wnC_mem,          submesh_right%wnC_mem         )
+    CALL share_memory_access_int_0D( p_left, p_right, submesh_right%nC_mem,           submesh%wnC_mem,           submesh_right%wnC_mem          )
     CALL share_memory_access_int_0D( p_left, p_right, submesh_right%nV_mem,           submesh%wnV_mem,           submesh_right%wnV_mem          )
     CALL share_memory_access_int_0D( p_left, p_right, submesh_right%nTri_mem,         submesh%wnTri_mem,         submesh_right%wnTri_mem        )
     CALL share_memory_access_int_0D( p_left, p_right, submesh_right%nV,               submesh%wnV,               submesh_right%wnV              )
@@ -743,26 +839,35 @@ CONTAINS
     CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriStack1,        submesh%wTriStack1,        submesh_right%wTriStack1,        nTri         )
     CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriStack2,        submesh%wTriStack2,        submesh_right%wTriStack2,        nTri         )  
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE share_submesh_access
   
   SUBROUTINE move_data_from_submesh_to_mesh( mesh, submesh)    
     
     IMPLICIT NONE
   
-    ! Input variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    TYPE(type_mesh),            INTENT(IN)        :: submesh
+    ! In/output variables:
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(IN)        :: submesh
     
-    mesh%nV       = submesh%nV
-    mesh%nTri     = submesh%nTri
-    mesh%nV_mem   = submesh%nV_mem
-    mesh%nTri_mem = submesh%nTri_mem
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'move_data_from_submesh_to_mesh'
     
-    mesh%xmin     = submesh%xmin
-    mesh%xmax     = submesh%xmax
-    mesh%ymin     = submesh%ymin
-    mesh%ymax     = submesh%ymax
-    mesh%tol_dist = submesh%tol_dist
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    mesh%nV          = submesh%nV
+    mesh%nTri        = submesh%nTri
+    mesh%nV_mem      = submesh%nV_mem
+    mesh%nTri_mem    = submesh%nTri_mem
+    
+    mesh%xmin        = submesh%xmin
+    mesh%xmax        = submesh%xmax
+    mesh%ymin        = submesh%ymin
+    mesh%ymax        = submesh%ymax
+    mesh%tol_dist    = submesh%tol_dist
     
     mesh%perturb_dir = submesh%perturb_dir
         
@@ -783,6 +888,9 @@ CONTAINS
     mesh%RefMap(         1:submesh%nTri  ) = submesh%RefMap(         1:submesh%nTri  )
     mesh%RefStack(       1:submesh%nTri  ) = submesh%RefStack(       1:submesh%nTri  )
     mesh%RefStackN                         = submesh%RefStackN
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE move_data_from_submesh_to_mesh
 

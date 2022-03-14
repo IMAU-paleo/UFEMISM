@@ -37,19 +37,25 @@ MODULE mesh_Delaunay_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),                  INTENT(INOUT) :: mesh
-    INTEGER,                          INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(2),           INTENT(IN)    :: p_new
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    INTEGER,                             INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p_new
 
-    INTEGER                                         :: v1, v2, t1, n, nc, nnext, t_old
-    INTEGER                                         :: vi, vj, p1, p2, p3, tn1, tn2, tn3, t_new1, t_new2, t_new3
-    REAL(dp)                                        :: la, lb, lc, le, lf, lg, la2, lb2, lc2, le2, lf2, lg2
-    REAL(dp), DIMENSION(2)                          :: p, q, cc2
-    INTEGER                                         :: nf, e
-    INTEGER,  DIMENSION(5)                          :: edgevals, edgevals_left, edgevals_right
-    LOGICAL                                         :: isencroached
-    INTEGER                                         :: va, vb
-    LOGICAL                                         :: did_flip
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'split_triangle'
+    INTEGER                                            :: v1, v2, t1, n, nc, nnext, t_old
+    INTEGER                                            :: vi, vj, p1, p2, p3, tn1, tn2, tn3, t_new1, t_new2, t_new3
+    REAL(dp)                                           :: la, lb, lc, le, lf, lg, la2, lb2, lc2, le2, lf2, lg2
+    REAL(dp), DIMENSION(2)                             :: p, q, cc2
+    INTEGER                                            :: nf, e
+    INTEGER,  DIMENSION(5)                             :: edgevals, edgevals_left, edgevals_right
+    LOGICAL                                            :: isencroached
+    INTEGER                                            :: va, vb
+    LOGICAL                                            :: did_flip
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
      
     ! Check fi this triangle's circumcenter encroaches upon a boundary segment.
     ! If so, split that segment.
@@ -57,14 +63,14 @@ MODULE mesh_Delaunay_module
     IF (isencroached) THEN
       p = (mesh%V(va,:) + mesh%V(vb,:)) / 2._dp
       CALL split_segment( mesh, va, vb, p)
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
 
     ! == If the circumcenter lies outside of the grid, split a segment instead.
     IF (p_new(1)<mesh%xmin) THEN
       IF (p_new(2)<mesh%ymin .OR. p_new(2)>mesh%ymax) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies way outside of grid!'
-        STOP
+        CALL crash('circumcenter lies way outside of grid!')
       END IF
       ! Find the two vertices of the segment.
       v1 = 0
@@ -82,17 +88,16 @@ MODULE mesh_Delaunay_module
         END DO
       END DO
       IF (v1==0) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies outside of grid; couldnt find segment to split!'
-        STOP
+        CALL crash('circumcenter lies outside of grid; couldnt find segment to split!')
       END IF
       p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
       CALL split_segment( mesh, v1, v2, p)
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
     IF (p_new(1)>mesh%xmax) THEN
       IF (p_new(2)<mesh%ymin .OR. p_new(2)>mesh%ymax) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies way outside of grid!'
-        STOP
+        CALL crash('circumcenter lies way outside of grid!')
       END IF
       ! Find the two vertices of the segment.
       v1 = 0;
@@ -110,17 +115,16 @@ MODULE mesh_Delaunay_module
         END DO
       END DO
       IF (v1==0) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies outside of grid; couldnt find segment to split!'
-        STOP
+        CALL crash('circumcenter lies outside of grid; couldnt find segment to split!')
       END IF
       p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
       CALL split_segment( mesh, v1, v2, p)
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
     IF (p_new(2)<mesh%ymin) THEN
       IF (p_new(1)<mesh%xmin .OR. p_new(1)>mesh%xmax) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies way outside of grid!'
-        STOP
+        CALL crash('circumcenter lies way outside of grid!')
       END IF
       ! Find the two vertices of the segment.
       v1 = 0
@@ -138,17 +142,16 @@ MODULE mesh_Delaunay_module
         END DO
       END DO
       IF (v1==0) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies outside of grid; couldnt find segment to split!'
-        STOP
+        CALL crash('circumcenter lies outside of grid; couldnt find segment to split!')
       END IF
       p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
       CALL split_segment( mesh, v1, v2, p)
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
     IF (p_new(2)>mesh%ymax) THEN
       IF (p_new(1)<mesh%xmin .OR. p_new(1)>mesh%xmax) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies way outside of grid!'
-        STOP
+        CALL crash('circumcenter lies way outside of grid!')
       END IF
       ! Find the two vertices of the segment.
       v1 = 0
@@ -166,11 +169,11 @@ MODULE mesh_Delaunay_module
         END DO
       END DO
       IF (v1==0) THEN
-        WRITE(0,*) 'split_triangle - ERROR - circumcenter lies outside of grid; couldnt find segment to split!'
-        STOP
+        CALL crash('circumcenter lies outside of grid; couldnt find segment to split!')
       END IF
       p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
       CALL split_segment( mesh, v1, v2, p)
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
 
@@ -200,6 +203,7 @@ MODULE mesh_Delaunay_module
 
       IF (abs(cc2(1))>(mesh%xmax-mesh%xmin)*1000._dp .OR. abs(cc2(2))>(mesh%ymax-mesh%ymin)*1000._dp) THEN
         CALL split_line( mesh, vi, vj, p_new)
+        CALL finalise_routine( routine_name)
         RETURN
       END IF
     END DO
@@ -387,24 +391,33 @@ MODULE mesh_Delaunay_module
     DO WHILE (nf>0)
       CALL flip_triangle_pairs( mesh, nf, did_flip)
     END DO
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE split_triangle
   SUBROUTINE split_line(     mesh, v1a, v2a, p_new)
      ! Split the line between vertices v1a and v2a at point p_new    
     
     IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    INTEGER,                             INTENT(IN)    :: v1a, v2a
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p_new
 
-    TYPE(type_mesh),                  INTENT(INOUT) :: mesh
-    INTEGER,                          INTENT(IN)    :: v1a, v2a
-    REAL(dp), DIMENSION(2),           INTENT(IN)    :: p_new
-
-    INTEGER                                         :: v1, v2, ti, t1, t2, n, nc, nnext, vo1, vo2
-    INTEGER                                         :: t1new1, t1new2, t2new1, t2new2, t1nv1, t1nv2, t2nv1, t2nv2
-    LOGICAL                                         :: AreConnected, SwitchThem
-    REAL(dp), DIMENSION(2)                          :: p
-    INTEGER                                         :: nf, e
-    INTEGER,  DIMENSION(5)                          :: edgevals, edgevals_left, edgevals_right
-    LOGICAL                                         :: did_flip
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'split_line'
+    INTEGER                                            :: v1, v2, ti, t1, t2, n, nc, nnext, vo1, vo2
+    INTEGER                                            :: t1new1, t1new2, t2new1, t2new2, t1nv1, t1nv2, t2nv1, t2nv2
+    LOGICAL                                            :: AreConnected, SwitchThem
+    REAL(dp), DIMENSION(2)                             :: p
+    INTEGER                                            :: nf, e
+    INTEGER,  DIMENSION(5)                             :: edgevals, edgevals_left, edgevals_right
+    LOGICAL                                            :: did_flip
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     v1 = v1a
     v2 = v2a
@@ -415,16 +428,16 @@ MODULE mesh_Delaunay_module
       IF (mesh%C(v1,n)==v2) AreConnected = .TRUE.
     END DO
     IF (.NOT. AreConnected) THEN
-      WRITE(0,*) 'split_line - ERROR: trying to split a non-existing line!'
-      STOP
+      CALL crash('trying to split a non-existing line!')
     END IF
 
     ! If both of those are boundary vertices, the line is a Segment - refer
     ! to that function instead.
     IF (is_boundary_segment(mesh,v1,v2)) THEN
-     p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
-     CALL split_segment( mesh, v1, v2, p)
-     RETURN
+      p = (mesh%V(v1,:) + mesh%V(v2,:)) / 2._dp
+      CALL split_segment( mesh, v1, v2, p)
+      CALL finalise_routine( routine_name)
+      RETURN
     END IF
 
     ! Find the triangles t1 and t2 that contain v1 and v2
@@ -445,7 +458,7 @@ MODULE mesh_Delaunay_module
     END DO
 
     IF (t1==0 .OR. t2==0) THEN
-      WRITE(0,*) 'split_line - ERROR: couldnt find two triangles containing both vertices!'
+      CALL crash('couldnt find two triangles containing both vertices!')
     END IF
 
     ! Order v1 and v2 anticlockwise in triangle t1
@@ -711,23 +724,31 @@ MODULE mesh_Delaunay_module
     DO WHILE (nf>0)
       CALL flip_triangle_pairs( mesh, nf, did_flip)
     END DO
-
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE split_line
   SUBROUTINE split_segment(  mesh, v1a, v2a, p_new)
     ! Split an Edge segment in two, adding a vertex halfway.    
     
     IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    INTEGER,                             INTENT(IN)    :: v1a, v2a
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p_new
 
-    TYPE(type_mesh),                  INTENT(INOUT) :: mesh
-    INTEGER,                          INTENT(IN)    :: v1a, v2a
-    REAL(dp), DIMENSION(2),           INTENT(IN)    :: p_new
-
-    INTEGER                                         :: v1, v2, ti, t1, n, nc, nnext, tnv1, tnv2, vo
-    INTEGER                                         :: tnew1, tnew2
-    LOGICAL                                         :: SwitchThem
-    INTEGER                                         :: nf
-    LOGICAL                                         :: did_flip
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'split_segment'
+    INTEGER                                            :: v1, v2, ti, t1, n, nc, nnext, tnv1, tnv2, vo
+    INTEGER                                            :: tnew1, tnew2
+    LOGICAL                                            :: SwitchThem
+    INTEGER                                            :: nf
+    LOGICAL                                            :: did_flip
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     v1 = v1a
     v2 = v2a
@@ -745,13 +766,11 @@ MODULE mesh_Delaunay_module
     END DO
 
     IF (t1==0) THEN
-      WRITE(0,*) 'split_segment - ERROR: couldnt find triangle containing both vertices!'
-      STOP
+      CALL crash('couldnt find triangle containing both vertices!')
     END IF
-
+    
     IF (mesh%edge_index(v1)==0 .OR. mesh%edge_index(v2)==0) THEN
-      WRITE(0,*) 'split_segment - ERROR: segment isnt made up of boundary vertices!'
-      STOP
+      CALL crash('segment isnt made up of boundary vertices!')
     END IF
 
     ! Order v1 and v2 anticlockwise in triangle t1
@@ -798,8 +817,7 @@ MODULE mesh_Delaunay_module
       ELSEIF ( mesh%edge_index(v2)==3 .OR. mesh%edge_index(v2)==4) THEN
         mesh%edge_index(mesh%nV) = 3
       ELSE
-        WRITE(0,*) 'split_segment - ERROR: edge indices of v1 and v2 dont make sense!'
-        STOP
+        CALL crash('edge indices of v1 and v2 dont make sense!')
       END IF
     ELSEIF (   mesh%edge_index(v1)==3) THEN
       mesh%edge_index(mesh%nV) = 3
@@ -809,8 +827,7 @@ MODULE mesh_Delaunay_module
       ELSEIF ( mesh%edge_index(v2)==5 .OR. mesh%edge_index(v2)==6) THEN
         mesh%edge_index(mesh%nV) = 5
       ELSE
-        WRITE(0,*) 'split_segment - ERROR: edge indices of v1 and v2 dont make sense!'
-        STOP
+        CALL crash('edge indices of v1 and v2 dont make sense!')
       END IF
     ELSEIF (   mesh%edge_index(v1)==5) THEN
       mesh%edge_index(mesh%nV) = 5
@@ -820,8 +837,7 @@ MODULE mesh_Delaunay_module
       ELSEIF ( mesh%edge_index(v2)==7 .OR. mesh%edge_index(v2)==8) THEN
         mesh%edge_index(mesh%nV) = 7
       ELSE
-        WRITE(0,*) 'split_segment - ERROR: edge indices of v1 and v2 dont make sense!'
-        STOP
+        CALL crash('edge indices of v1 and v2 dont make sense!')
       END IF
     ELSEIF (   mesh%edge_index(v1)==7) THEN
       mesh%edge_index(mesh%nV) = 7
@@ -831,12 +847,10 @@ MODULE mesh_Delaunay_module
       ELSEIF ( mesh%edge_index(v2)==1 .OR. mesh%edge_index(v2)==2) THEN
         mesh%edge_index(mesh%nV) = 1
       ELSE
-        WRITE(0,*) 'split_segment - ERROR: edge indices of v1 and v2 dont make sense!'
-        STOP
+        CALL crash('edge indices of v1 and v2 dont make sense!')
       END IF
     ELSE
-      WRITE(0,*) 'split_segment - ERROR: edge indices of v1 and v2 dont make sense!'
-      STOP
+      CALL crash('edge indices of v1 and v2 dont make sense!')
     END IF
 
     ! == Create two new triangles
@@ -950,6 +964,9 @@ MODULE mesh_Delaunay_module
     DO WHILE (nf>0)
       CALL flip_triangle_pairs( mesh, nf, did_flip)
     END DO
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE split_segment
   SUBROUTINE flip_triangle_pairs( mesh, nf, did_flip)
@@ -957,224 +974,233 @@ MODULE mesh_Delaunay_module
     ! pairs to the list.    
     
     IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    INTEGER,                             INTENT(INOUT) :: nf
+    LOGICAL,                             INTENT(OUT)   :: did_flip
 
-    TYPE(type_mesh),                  INTENT(INOUT) :: mesh
-    INTEGER,                          INTENT(INOUT) :: nf
-    LOGICAL,                          INTENT(OUT)   :: did_flip
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_triangle_pairs'
+    INTEGER                                            :: t1, t2, n, vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2
+    INTEGER                                            :: e, contains_edge
+    LOGICAL                                            :: n1to2, n2to1, FlipThem
+    INTEGER,  DIMENSION(5)                             :: edgevals, edgevals_left, edgevals_right
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    did_flip = .FALSE.
+    
+    t1 = mesh%Triflip(1,1)
+    t2 = mesh%Triflip(1,2)
+    
+    IF (t1 == 0 .OR. t2 == 0) THEN
+      CALL crash('received t=0!')
+    END IF
+    
+    ! == First, check if the two are really adjacent. If not, that's because of an earlier flip operation.
+    ! The current one is now redundant, so remove it from the list.
+    n1to2 = .FALSE.
+    n2to1 = .FALSE.
+    DO n = 1, 3
+      IF (mesh%TriC(t1,n)==t2) n1to2 = .TRUE.
+      IF (mesh%TriC(t2,n)==t1) n2to1 = .TRUE.
+    END DO
 
-    INTEGER                                         :: t1, t2, n, vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2
-    INTEGER                                         :: e, contains_edge
-    LOGICAL                                         :: n1to2, n2to1, FlipThem
-    INTEGER,  DIMENSION(5)                          :: edgevals, edgevals_left, edgevals_right
-     
-     did_flip = .FALSE.
+    IF ((n1to2 .AND. .NOT. n2to1) .OR. (n2to1 .AND. .NOT. n1to2)) THEN
+      CALL crash('somethings really wrong with the triangle connectivity matrix!')
+    END IF
+    IF (.NOT. n1to2 .AND. .NOT. n2to1) THEN
+      ! The two triangles are no longer connected; remove them from the list and return.
+      mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
+      nf = nf-1
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
-     t1 = mesh%Triflip(1,1)
-     t2 = mesh%Triflip(1,2)
-     
-     IF (t1 == 0 .OR. t2 == 0) THEN
-       WRITE(0,*) 'flip_triangle_pairs - ERROR: received t=0!'
-       STOP
-     END IF
+    ! == Check if a flip is necessary
+    ! If not, remove the pair from the flip list.
+    CALL need_flipping( mesh, t1, t2, FlipThem, vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2)
 
-     ! == First, check if the two are really adjacent. If not, that's because of an earlier flip operation.
-     ! The current one is now redundant, so remove it from the list.
-     n1to2 = .FALSE.
-     n2to1 = .FALSE.
+    IF (.NOT. FlipThem) THEN
+      ! The two triangles do not need to be flipped; remove them from the list and return.
+      mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
+      nf = nf-1
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! == Flip them
+    
+    did_flip = .TRUE.
+    
+    ! WRITE(0,'(A,I6,A,I6)') '     Flipping triangles ', t1, ' and ', t2
+
+    ! == Update the triangle matrix
+    mesh%Tri(t1,:) = [vo1, v1, vo2]
+    mesh%Tri(t2,:) = [vo2, v2, vo1]
+
+    ! Add these to the mesh%RefStack (if they're not in there already)
+    IF (mesh%RefMap(t1)==0) THEN
+      mesh%RefMap(t1) = 1
+      mesh%RefStackN = mesh%RefStackN+1
+      mesh%RefStack(mesh%RefStackN) = t1
+    END IF
+    IF (mesh%RefMap(t2)==0) THEN
+      mesh%RefMap(t2) = 1
+      mesh%RefStackN = mesh%RefStackN+1
+      mesh%RefStack(mesh%RefStackN) = t2
+    END IF
+
+    ! == Update the triangle connectivity matrix
+    ! t1nv1
+    IF (t1nv1>0) THEN
+      DO n = 1, 3
+        IF (mesh%TriC(t1nv1,n)==t1) mesh%TriC(t1nv1,n) = t2
+      END DO
+    END IF
+    ! t1nv2: nothing changes
+    ! t2nv1: nothing changes
+    ! t2nv2
+    IF (t2nv2>0) THEN
+      DO n = 1, 3
+        IF (mesh%TriC(t2nv2,n)==t2) mesh%TriC(t2nv2,n) = t1
+      END DO
+    END IF
+    ! The two new triangles
+    mesh%TriC(t1,:) = [t2nv2, t2, t1nv2]
+    mesh%TriC(t2,:) = [t1nv1, t1, t2nv1]
+
+    ! == Update inverse triangle matrix
+    ! v1
+    DO n = 1, mesh%niTri(v1)
+      IF (mesh%iTri(v1,n)==t2) THEN
+        mesh%iTri(v1,:) = [mesh%iTri(v1,1:n-1), mesh%iTri(v1,n+1:mesh%nC_mem), 0]
+        mesh%niTri(v1) = mesh%niTri(v1)-1
+        EXIT
+      END IF
+    END DO
+    ! v2
+    DO n = 1, mesh%niTri(v2)
+      IF (mesh%iTri(v2,n)==t1) THEN
+        mesh%iTri(v2,:) = [mesh%iTri(v2,1:n-1), mesh%iTri(v2,n+1:mesh%nC_mem), 0]
+        mesh%niTri(v2) = mesh%niTri(v2)-1
+        EXIT
+      END IF
+    END DO
+    ! vo1
+    DO n = 1, mesh%niTri(vo1)
+      IF (mesh%iTri(vo1,n)==t1) THEN
+        mesh%iTri(vo1,:) = [mesh%iTri(vo1,1:n), t2, mesh%iTri(vo1,n+1:mesh%nC_mem-1)]
+        mesh%niTri(vo1) = mesh%niTri(vo1)+1
+        EXIT
+      END IF
+    END DO
+    ! vo2
+    DO n = 1, mesh%niTri(vo2)
+      IF (mesh%iTri(vo2,n)==t2) THEN
+        mesh%iTri(vo2,:) = [mesh%iTri(vo2,1:n), t1, mesh%iTri(vo2,n+1:mesh%nC_mem-1)]
+        mesh%niTri(vo2) = mesh%niTri(vo2)+1
+        EXIT
+      END IF
+    END DO
+
+    ! == Update vertex connectivity matrix
+    ! v1
+    DO n = 1, mesh%nC(v1)
+      IF (mesh%C(v1,n)==v2) THEN
+        mesh%C(v1,:) = [mesh%C(v1,1:n-1), mesh%C(v1,n+1:mesh%nC_mem), 0]
+        mesh%nC(v1) = mesh%nC(v1)-1
+        EXIT
+      END IF
+    END DO
+    ! v2
+    DO n = 1, mesh%nC(v2)
+      IF (mesh%C(v2,n)==v1) THEN
+        mesh%C(v2,:) = [mesh%C(v2,1:n-1), mesh%C(v2,n+1:mesh%nC_mem), 0]
+        mesh%nC(v2) = mesh%nC(v2)-1
+        EXIT
+      END IF
+    END DO
+    ! vo1
+    DO n = 1, mesh%nC(vo1)
+      IF (mesh%C(vo1,n)==v1) THEN
+        mesh%C(vo1,:) = [mesh%C(vo1,1:n), vo2, mesh%C(vo1,n+1:mesh%nC_mem-1)]
+        mesh%nC(vo1) = mesh%nC(vo1)+1
+        EXIT
+      END IF
+    END DO
+    ! vo2
+    DO n = 1, mesh%nC(vo2)
+      IF (mesh%C(vo2,n)==v2) THEN
+        mesh%C(vo2,:) = [mesh%C(vo2,1:n), vo1, mesh%C(vo2,n+1:mesh%nC_mem-1)]
+        mesh%nC(vo2) = mesh%nC(vo2)+1
+        EXIT
+      END IF
+    END DO
+
+    ! == Update triangle circumcenters
+   CALL update_triangle_circumcenter( mesh, t1)
+   CALL update_triangle_circumcenter( mesh, t2)
+
+    ! == Update triangle edge indices
+    mesh%Tri_edge_index(t1) = 0
+    mesh%Tri_edge_index(t2) = 0
+    edgevals       = [0, 1, 3, 5, 7]
+    edgevals_left  = [0, 8, 2, 4, 6]
+    edgevals_right = [0, 2, 4, 6, 8]
+    DO e = 1, 5
+     contains_edge = 0
      DO n = 1, 3
-       IF (mesh%TriC(t1,n)==t2) n1to2 = .TRUE.
-       IF (mesh%TriC(t2,n)==t1) n2to1 = .TRUE.
+      IF (mesh%edge_index(mesh%Tri(t1,n)) == edgevals(e) .OR. &
+          mesh%edge_index(mesh%Tri(t1,n)) == edgevals_left(e) .OR. &
+          mesh%edge_index(mesh%Tri(t1,n)) == edgevals_right(e)) THEN
+       contains_edge = contains_edge+1
+      END IF
      END DO
+     IF (contains_edge==2) mesh%Tri_edge_index(t1) = edgevals(e);
 
-     IF ((n1to2 .AND. .NOT. n2to1) .OR. (n2to1 .AND. .NOT. n1to2)) THEN
-       WRITE(0,*) 'flip_triangle_pairs - ERROR: Somethings really wrong with the triangle connectivity matrix!'
-       STOP
-     END IF
-     IF (.NOT. n1to2 .AND. .NOT. n2to1) THEN
-       ! The two triangles are no longer connected; remove them from the list and return.
-       mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
-       nf = nf-1
-       RETURN
-     END IF
-
-     ! == Check if a flip is necessary
-     ! If not, remove the pair from the flip list.
-     CALL need_flipping( mesh, t1, t2, FlipThem, vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2)
-
-     IF (.NOT. FlipThem) THEN
-       ! The two triangles do not need to be flipped; remove them from the list and return.
-       mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
-       nf = nf-1
-       RETURN
-     END IF
-
-     ! == Flip them
-     
-     did_flip = .TRUE.
-     
-     ! WRITE(0,'(A,I6,A,I6)') '     Flipping triangles ', t1, ' and ', t2
-
-     ! == Update the triangle matrix
-     mesh%Tri(t1,:) = [vo1, v1, vo2]
-     mesh%Tri(t2,:) = [vo2, v2, vo1]
-
-     ! Add these to the mesh%RefStack (if they're not in there already)
-     IF (mesh%RefMap(t1)==0) THEN
-       mesh%RefMap(t1) = 1
-       mesh%RefStackN = mesh%RefStackN+1
-       mesh%RefStack(mesh%RefStackN) = t1
-     END IF
-     IF (mesh%RefMap(t2)==0) THEN
-       mesh%RefMap(t2) = 1
-       mesh%RefStackN = mesh%RefStackN+1
-       mesh%RefStack(mesh%RefStackN) = t2
-     END IF
-
-     ! == Update the triangle connectivity matrix
-     ! t1nv1
-     IF (t1nv1>0) THEN
-       DO n = 1, 3
-         IF (mesh%TriC(t1nv1,n)==t1) mesh%TriC(t1nv1,n) = t2
-       END DO
-     END IF
-     ! t1nv2: nothing changes
-     ! t2nv1: nothing changes
-     ! t2nv2
-     IF (t2nv2>0) THEN
-       DO n = 1, 3
-         IF (mesh%TriC(t2nv2,n)==t2) mesh%TriC(t2nv2,n) = t1
-       END DO
-     END IF
-     ! The two new triangles
-     mesh%TriC(t1,:) = [t2nv2, t2, t1nv2]
-     mesh%TriC(t2,:) = [t1nv1, t1, t2nv1]
-
-     ! == Update inverse triangle matrix
-     ! v1
-     DO n = 1, mesh%niTri(v1)
-       IF (mesh%iTri(v1,n)==t2) THEN
-         mesh%iTri(v1,:) = [mesh%iTri(v1,1:n-1), mesh%iTri(v1,n+1:mesh%nC_mem), 0]
-         mesh%niTri(v1) = mesh%niTri(v1)-1
-         EXIT
-       END IF
+     contains_edge = 0
+     DO n = 1, 3
+      IF (mesh%edge_index(mesh%Tri(t2,n)) == edgevals(e) .OR. &
+          mesh%edge_index(mesh%Tri(t2,n)) == edgevals_left(e) .OR. &
+          mesh%edge_index(mesh%Tri(t2,n)) == edgevals_right(e)) THEN
+       contains_edge = contains_edge+1
+      END IF
      END DO
-     ! v2
-     DO n = 1, mesh%niTri(v2)
-       IF (mesh%iTri(v2,n)==t1) THEN
-         mesh%iTri(v2,:) = [mesh%iTri(v2,1:n-1), mesh%iTri(v2,n+1:mesh%nC_mem), 0]
-         mesh%niTri(v2) = mesh%niTri(v2)-1
-         EXIT
-       END IF
-     END DO
-     ! vo1
-     DO n = 1, mesh%niTri(vo1)
-       IF (mesh%iTri(vo1,n)==t1) THEN
-         mesh%iTri(vo1,:) = [mesh%iTri(vo1,1:n), t2, mesh%iTri(vo1,n+1:mesh%nC_mem-1)]
-         mesh%niTri(vo1) = mesh%niTri(vo1)+1
-         EXIT
-       END IF
-     END DO
-     ! vo2
-     DO n = 1, mesh%niTri(vo2)
-       IF (mesh%iTri(vo2,n)==t2) THEN
-         mesh%iTri(vo2,:) = [mesh%iTri(vo2,1:n), t1, mesh%iTri(vo2,n+1:mesh%nC_mem-1)]
-         mesh%niTri(vo2) = mesh%niTri(vo2)+1
-         EXIT
-       END IF
-     END DO
+     IF (contains_edge==2) mesh%Tri_edge_index(t2) = edgevals(e);
+    END DO ! Do e = 1, 5
 
-     ! == Update vertex connectivity matrix
-     ! v1
-     DO n = 1, mesh%nC(v1)
-       IF (mesh%C(v1,n)==v2) THEN
-         mesh%C(v1,:) = [mesh%C(v1,1:n-1), mesh%C(v1,n+1:mesh%nC_mem), 0]
-         mesh%nC(v1) = mesh%nC(v1)-1
-         EXIT
-       END IF
-     END DO
-     ! v2
-     DO n = 1, mesh%nC(v2)
-       IF (mesh%C(v2,n)==v1) THEN
-         mesh%C(v2,:) = [mesh%C(v2,1:n-1), mesh%C(v2,n+1:mesh%nC_mem), 0]
-         mesh%nC(v2) = mesh%nC(v2)-1
-         EXIT
-       END IF
-     END DO
-     ! vo1
-     DO n = 1, mesh%nC(vo1)
-       IF (mesh%C(vo1,n)==v1) THEN
-         mesh%C(vo1,:) = [mesh%C(vo1,1:n), vo2, mesh%C(vo1,n+1:mesh%nC_mem-1)]
-         mesh%nC(vo1) = mesh%nC(vo1)+1
-         EXIT
-       END IF
-     END DO
-     ! vo2
-     DO n = 1, mesh%nC(vo2)
-       IF (mesh%C(vo2,n)==v2) THEN
-         mesh%C(vo2,:) = [mesh%C(vo2,1:n), vo1, mesh%C(vo2,n+1:mesh%nC_mem-1)]
-         mesh%nC(vo2) = mesh%nC(vo2)+1
-         EXIT
-       END IF
-     END DO
+    ! == Remove current triangle pair from flip list, add 4 new ones
+    mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
+    nf = nf-1
 
-     ! == Update triangle circumcenters
-    CALL update_triangle_circumcenter( mesh, t1)
-    CALL update_triangle_circumcenter( mesh, t2)
+    IF (t1nv1>0) THEN
+      mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
+      mesh%Triflip(1,:) = [t1nv1, t2]
+      nf = nf+1
+    END IF
+    IF (t1nv2>0) THEN
+      mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
+      mesh%Triflip(1,:) = [t1nv2, t1]
+      nf = nf+1
+    END IF
+    IF (t2nv1>0) THEN
+      mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
+      mesh%Triflip(1,:) = [t2nv1, t2]
+      nf = nf+1
+    END IF
+    IF (t2nv2>0) THEN
+      mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
+      mesh%Triflip(1,:) = [t2nv2, t1]
+      nf = nf+1
+    END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
-     ! == Update triangle edge indices
-     mesh%Tri_edge_index(t1) = 0
-     mesh%Tri_edge_index(t2) = 0
-     edgevals       = [0, 1, 3, 5, 7]
-     edgevals_left  = [0, 8, 2, 4, 6]
-     edgevals_right = [0, 2, 4, 6, 8]
-     DO e = 1, 5
-      contains_edge = 0
-      DO n = 1, 3
-       IF (mesh%edge_index(mesh%Tri(t1,n)) == edgevals(e) .OR. &
-           mesh%edge_index(mesh%Tri(t1,n)) == edgevals_left(e) .OR. &
-           mesh%edge_index(mesh%Tri(t1,n)) == edgevals_right(e)) THEN
-        contains_edge = contains_edge+1
-       END IF
-      END DO
-      IF (contains_edge==2) mesh%Tri_edge_index(t1) = edgevals(e);
-
-      contains_edge = 0
-      DO n = 1, 3
-       IF (mesh%edge_index(mesh%Tri(t2,n)) == edgevals(e) .OR. &
-           mesh%edge_index(mesh%Tri(t2,n)) == edgevals_left(e) .OR. &
-           mesh%edge_index(mesh%Tri(t2,n)) == edgevals_right(e)) THEN
-        contains_edge = contains_edge+1
-       END IF
-      END DO
-      IF (contains_edge==2) mesh%Tri_edge_index(t2) = edgevals(e);
-     END DO ! Do e = 1, 5
-
-     ! == Remove current triangle pair from flip list, add 4 new ones
-     mesh%Triflip(1:mesh%nTri-1,:) = mesh%Triflip(2:mesh%nTri,:)
-     nf = nf-1
-
-     IF (t1nv1>0) THEN
-       mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
-       mesh%Triflip(1,:) = [t1nv1, t2]
-       nf = nf+1
-     END IF
-     IF (t1nv2>0) THEN
-       mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
-       mesh%Triflip(1,:) = [t1nv2, t1]
-       nf = nf+1
-     END IF
-     IF (t2nv1>0) THEN
-       mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
-       mesh%Triflip(1,:) = [t2nv1, t2]
-       nf = nf+1
-     END IF
-     IF (t2nv2>0) THEN
-       mesh%Triflip(2:mesh%nTri,:) = mesh%Triflip(1:mesh%nTri-1,:)
-       mesh%Triflip(1,:) = [t2nv2, t1]
-       nf = nf+1
-     END IF
-
-   END SUBROUTINE flip_triangle_pairs
+  END SUBROUTINE flip_triangle_pairs
   SUBROUTINE need_flipping( mesh, t1, t2, isso, vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2)
     ! == First, determine general info
     ! Shared vertices v1 and v2 (sorted clockwise in t1), non-shared
@@ -1182,15 +1208,21 @@ MODULE mesh_Delaunay_module
     ! t1nv2 (across from v2) and neighbours to t2 t2nv1 and t2nv2 (idem)    
     
     IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    INTEGER,                             INTENT(IN)    :: t1, t2
+    LOGICAL,                             INTENT(OUT)   :: isso
+    INTEGER,                             INTENT(OUT)   :: vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2
 
-    TYPE(type_mesh),                  INTENT(IN)    :: mesh
-    INTEGER,                          INTENT(IN)    :: t1, t2
-    LOGICAL,                          INTENT(OUT)   :: isso
-    INTEGER,                          INTENT(OUT)   :: vo1, vo2, v1, v2, t1nv1, t1nv2, t2nv1, t2nv2
-
-    REAL(dp), DIMENSION(2)                          :: p, q, r, s
-    INTEGER                                         :: n, n1, n2, nnext
-    LOGICAL                                         :: isint2, SwitchThem
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'need_flipping'
+    REAL(dp), DIMENSION(2)                             :: p, q, r, s
+    INTEGER                                            :: n, n1, n2, nnext
+    LOGICAL                                            :: isint2, SwitchThem
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     v1  = 0
     v2  = 0
@@ -1256,6 +1288,9 @@ MODULE mesh_Delaunay_module
          is_in_triangle(p, q, r, s)) THEN
       isso = .FALSE.
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE need_flipping
   
@@ -1265,13 +1300,17 @@ MODULE mesh_Delaunay_module
     IMPLICIT NONE
   
     ! In/output variables:
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    INTEGER,                    INTENT(IN)        :: vi
-    REAL(dp), DIMENSION(2),     INTENT(IN)        :: p
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
+    INTEGER,                         INTENT(IN)        :: vi
+    REAL(dp), DIMENSION(2),          INTENT(IN)        :: p
     
     ! Local variables:
-    INTEGER                                       :: iti, ti, t1, t2, n, nf
-    LOGICAL                                       :: did_flip, did_flip_pair
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'move_vertex'
+    INTEGER                                            :: iti, ti, t1, t2, n, nf
+    LOGICAL                                            :: did_flip, did_flip_pair
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Move the vertex
     mesh%V( vi,:) = p
@@ -1308,6 +1347,9 @@ MODULE mesh_Delaunay_module
       END DO
       
     END DO ! DO WHILE (did_flip)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE move_vertex
 

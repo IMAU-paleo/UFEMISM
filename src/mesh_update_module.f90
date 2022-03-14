@@ -257,9 +257,8 @@ MODULE mesh_update_module
     ! Input variables
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'create_new_mesh'
-    INTEGER                                       :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_new_mesh'
     INTEGER                                       :: vi
     REAL(dp), DIMENSION(:    ), POINTER           ::  d2dx2,  d2dxdy,  d2dy2
     INTEGER                                       :: wd2dx2, wd2dxdy, wd2dy2
@@ -269,7 +268,8 @@ MODULE mesh_update_module
     REAL(dp)                                      :: res_min_inc
     CHARACTER(LEN=2)                              :: str_processid
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) WRITE(0,*) '  Creating a new mesh for region ', region%mesh%region_name, '...'
     
@@ -371,8 +371,8 @@ MODULE mesh_update_module
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh_new%resolution_min/1000._dp, ' - ', region%mesh_new%resolution_max/1000._dp, ' km'
     END IF
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_new_mesh
   
@@ -390,17 +390,24 @@ MODULE mesh_update_module
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp),                            INTENT(IN)    :: time
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'widen_high_res_zones'
     INTEGER                                            :: vi, ci, vc
     REAL(dp)                                           :: D
     INTEGER, DIMENSION(mesh%nV)                        :: mask_widened
     REAL(dp), PARAMETER                                :: widening_factor = 1.2_dp
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Exception for the first mesh update in benchmark experiments. Since these start with
     ! zero ice thickness, at the time of the first mesh update the ice margin will lie in a
     ! very low resolution area. Widening the margin will result in a huge swath of the domain getting
     ! a high resolution after the update, which will prevent any further updates.
-    IF (time < C%start_time_of_run + 100._dp) RETURN
+    IF (time < C%start_time_of_run + 100._dp) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
             
     IF (par%master) THEN
     
@@ -463,6 +470,9 @@ MODULE mesh_update_module
       
     END IF ! IF (par%master) THEN
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE widen_high_res_zones
   
@@ -478,10 +488,14 @@ MODULE mesh_update_module
     TYPE(type_ice_model),       INTENT(IN)        :: ice
     TYPE(type_reference_geometry), INTENT(IN)     :: refgeo_PD
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh'
     INTEGER                                       :: ti
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
     REAL(dp), DIMENSION(2)                        :: p
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     FinishedRefining = .FALSE.
     DoExtendMemory   = .FALSE.
@@ -554,6 +568,9 @@ MODULE mesh_update_module
       END IF
     
     END DO ! DO WHILE (.NOT. FinishedRefining)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_mesh
   
@@ -563,14 +580,13 @@ MODULE mesh_update_module
     
     IMPLICIT NONE
   
-    ! Input variables
+    ! In/output variables
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     TYPE(type_ice_model),       INTENT(INOUT)     :: ice
-    
-    ! Output variables
     REAL(dp),                   INTENT(OUT)       :: fitness
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_mesh_fitness'
     INTEGER                                       :: ti, i, status(MPI_STATUS_SIZE)
     INTEGER                                       :: v1, v2, v3
     REAL(dp), DIMENSION(2)                        :: p,q,r,pq,qr,rp
@@ -579,6 +595,9 @@ MODULE mesh_update_module
     INTEGER                                       :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
     REAL(dp)                                      :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
     REAL(dp)                                      :: fcoast, fmargin, fgl, fcf
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     fitness = 1._dp
    
@@ -700,6 +719,9 @@ MODULE mesh_update_module
     CALL sync
       
     !IF (par%master) WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(meshfitness * 100._dp), ' %'
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE determine_mesh_fitness
 

@@ -17,7 +17,7 @@ MODULE configuration_module
   !
   ! Some day I'll figure out a more elegant solution for this...
   
-  USE mpi
+  USE mpi_f08
 
   IMPLICIT NONE
   

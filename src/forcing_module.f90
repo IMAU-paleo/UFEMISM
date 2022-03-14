@@ -6,21 +6,11 @@ MODULE forcing_module
 
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
-  USE mpi
+  USE mpi_f08
   USE configuration_module,            ONLY: dp, C
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
@@ -87,23 +77,19 @@ CONTAINS
       IF (par%master) WRITE(0,*) '           If you really want to simulate only one ice sheet, consider using direct CO2 forcing.'
     END IF
     
-    IF (par%master) THEN
     
-      ! Average dT_glob_inverse over the moving time window
-      dT_glob_inverse_average_over_window = SUM( forcing%dT_glob_inverse_history) / REAL(forcing%ndT_glob_inverse_history,dp)
-      
-      ! Update dT_glob_inverse based on the difference between modelled and observed d18O
-      forcing%dT_glob_inverse = dT_glob_inverse_average_over_window + (forcing%d18O_mod - forcing%d18O_obs) * C%inverse_d18O_to_dT_glob_scaling
-      
-      ! Update the moving time window
-      forcing%dT_glob_inverse_history( 2:forcing%ndT_glob_inverse_history) = forcing%dT_glob_inverse_history( 1:forcing%ndT_glob_inverse_history-1)
-      forcing%dT_glob_inverse_history( 1) = forcing%dT_glob_inverse
-      
-      !WRITE(0,*) ' dT_glob_inverse_history = ', forcing%dT_glob_inverse_history
-      
-    END IF ! IF (par%master) THEN
-    CALL sync
+    ! Average dT_glob_inverse over the moving time window
+    dT_glob_inverse_average_over_window = SUM( forcing%dT_glob_inverse_history) / REAL(forcing%ndT_glob_inverse_history,dp)
     
+    ! Update dT_glob_inverse based on the difference between modelled and observed d18O
+    forcing%dT_glob_inverse = dT_glob_inverse_average_over_window + (forcing%d18O_mod - forcing%d18O_obs) * C%inverse_d18O_to_dT_glob_scaling
+    
+    ! Update the moving time window
+    forcing%dT_glob_inverse_history( 2:forcing%ndT_glob_inverse_history) = forcing%dT_glob_inverse_history( 1:forcing%ndT_glob_inverse_history-1)
+    forcing%dT_glob_inverse_history( 1) = forcing%dT_glob_inverse
+    
+    !WRITE(0,*) ' dT_glob_inverse_history = ', forcing%dT_glob_inverse_history
+      
   END SUBROUTINE inverse_routine_global_temperature_offset
   SUBROUTINE inverse_routine_CO2
     ! Use the inverse routine to calculate modelled CO2
@@ -139,22 +125,18 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    IF (par%master) THEN
+    ! Average CO2_inverse over the moving time window
+    CO2_inverse_average_over_window = SUM( forcing%CO2_inverse_history) / REAL(forcing%nCO2_inverse_history,dp)
     
-      ! Average CO2_inverse over the moving time window
-      CO2_inverse_average_over_window = SUM( forcing%CO2_inverse_history) / REAL(forcing%nCO2_inverse_history,dp)
+    ! Update CO2_inverse based on the difference between modelled and observed d18O
+    forcing%CO2_inverse = CO2_inverse_average_over_window + (forcing%d18O_mod - forcing%d18O_obs) * C%inverse_d18O_to_CO2_scaling
+    
+    ! Update the moving time window
+    forcing%CO2_inverse_history( 2:forcing%nCO2_inverse_history) = forcing%CO2_inverse_history( 1:forcing%nCO2_inverse_history-1)
+    forcing%CO2_inverse_history( 1) = forcing%CO2_inverse
+    
+    forcing%CO2_mod = forcing%CO2_inverse
       
-      ! Update CO2_inverse based on the difference between modelled and observed d18O
-      forcing%CO2_inverse = CO2_inverse_average_over_window + (forcing%d18O_mod - forcing%d18O_obs) * C%inverse_d18O_to_CO2_scaling
-      
-      ! Update the moving time window
-      forcing%CO2_inverse_history( 2:forcing%nCO2_inverse_history) = forcing%CO2_inverse_history( 1:forcing%nCO2_inverse_history-1)
-      forcing%CO2_inverse_history( 1) = forcing%CO2_inverse
-      
-      forcing%CO2_mod = forcing%CO2_inverse
-      
-    END IF ! IF (par%master) THEN
-    CALL sync
     
   END SUBROUTINE inverse_routine_CO2
   SUBROUTINE calculate_modelled_d18O( NAM, EAS, GRL, ANT)
@@ -190,28 +172,24 @@ CONTAINS
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
-    IF (par%master) THEN
-      
-      ! Determine contributions to benthic d18O from the four ice sheets
-      forcing%d18O_NAM = 0._dp
-      forcing%d18O_EAS = 0._dp
-      forcing%d18O_GRL = 0._dp
-      forcing%d18O_ANT = 0._dp
-      IF (C%do_NAM) forcing%d18O_NAM = NAM%d18O_contribution - NAM%d18O_contribution_PD
-      IF (C%do_EAS) forcing%d18O_EAS = EAS%d18O_contribution - EAS%d18O_contribution_PD
-      IF (C%do_GRL) forcing%d18O_GRL = GRL%d18O_contribution - GRL%d18O_contribution_PD
-      IF (C%do_ANT) forcing%d18O_ANT = ANT%d18O_contribution - ANT%d18O_contribution_PD
-      forcing%d18O_from_ice_volume_mod = forcing%d18O_NAM + forcing%d18O_EAS + forcing%d18O_GRL + forcing%d18O_ANT
-      
-      ! Determine contributions to benthic d18O from ocean temperature,
-      ! which we assume scales with global mean surface temperature
-      forcing%d18O_from_temperature_mod = forcing%dT_deepwater * C%d18O_dT_deepwater_ratio
-      
-      ! Determine total change in modelled benthic d18O
-      forcing%d18O_mod = forcing%d18O_obs_PD + forcing%d18O_from_ice_volume_mod + forcing%d18O_from_temperature_mod
     
-    END IF ! IF (par%master) THEN
-    CALL sync
+    ! Determine contributions to benthic d18O from the four ice sheets
+    forcing%d18O_NAM = 0._dp
+    forcing%d18O_EAS = 0._dp
+    forcing%d18O_GRL = 0._dp
+    forcing%d18O_ANT = 0._dp
+    IF (C%do_NAM) forcing%d18O_NAM = NAM%d18O_contribution - NAM%d18O_contribution_PD
+    IF (C%do_EAS) forcing%d18O_EAS = EAS%d18O_contribution - EAS%d18O_contribution_PD
+    IF (C%do_GRL) forcing%d18O_GRL = GRL%d18O_contribution - GRL%d18O_contribution_PD
+    IF (C%do_ANT) forcing%d18O_ANT = ANT%d18O_contribution - ANT%d18O_contribution_PD
+    forcing%d18O_from_ice_volume_mod = forcing%d18O_NAM + forcing%d18O_EAS + forcing%d18O_GRL + forcing%d18O_ANT
+    
+    ! Determine contributions to benthic d18O from ocean temperature,
+    ! which we assume scales with global mean surface temperature
+    forcing%d18O_from_temperature_mod = forcing%dT_deepwater * C%d18O_dT_deepwater_ratio
+    
+    ! Determine total change in modelled benthic d18O
+    forcing%d18O_mod = forcing%d18O_obs_PD + forcing%d18O_from_ice_volume_mod + forcing%d18O_from_temperature_mod
     
   END SUBROUTINE calculate_modelled_d18O
   SUBROUTINE update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
@@ -266,47 +244,42 @@ CONTAINS
     IF (C%do_GRL) CALL calculate_mean_temperature_change_region( GRL, dT_GRL)
     IF (C%do_ANT) CALL calculate_mean_temperature_change_region( ANT, dT_ANT)
     
-    IF (par%master) THEN
+    ! Weighted average of all model regions
+    forcing%dT_glob = 0._dp
+    A_glob          = 0._dp
     
-      ! Weighted average of all model regions
-      forcing%dT_glob = 0._dp
-      A_glob          = 0._dp
-      
-      IF (C%do_NAM) THEN
-        A_reg = (NAM%mesh%xmax - NAM%mesh%xmin) * (NAM%mesh%ymax - NAM%mesh%ymin)
-        forcing%dT_glob = forcing%dT_glob + (dT_NAM * A_reg)
-        A_glob = A_glob + A_reg
-      END IF
-      IF (C%do_EAS) THEN
-        A_reg = (EAS%mesh%xmax - EAS%mesh%xmin) * (EAS%mesh%ymax - EAS%mesh%ymin)
-        forcing%dT_glob = forcing%dT_glob + (dT_EAS * A_reg)
-        A_glob = A_glob + A_reg
-      END IF
-      IF (C%do_GRL) THEN
-        A_reg = (GRL%mesh%xmax - GRL%mesh%xmin) * (GRL%mesh%ymax - GRL%mesh%ymin)
-        forcing%dT_glob = forcing%dT_glob + (dT_GRL * A_reg)
-        A_glob = A_glob + A_reg
-      END IF
-      IF (C%do_ANT) THEN
-        A_reg = (ANT%mesh%xmax - ANT%mesh%xmin) * (ANT%mesh%ymax - ANT%mesh%ymin)
-        forcing%dT_glob = forcing%dT_glob + (dT_ANT * A_reg)
-        A_glob = A_glob + A_reg
-      END IF
-      
-      forcing%dT_glob = forcing%dT_glob / A_glob
-      
-      ! Update the global mean temperature change history
-      ! 1st entry is the current value, 2nd is 1*dt_coupling ago, 3d is 2*dt_coupling ago, etc.
-      forcing%dT_glob_history( 2:forcing%ndT_glob_history) = forcing%dT_glob_history( 1:forcing%ndT_glob_history-1)
-      forcing%dT_glob_history( 1) = forcing%dT_glob
-      
-      ! Calculate deep-water temperature anomaly by averaging over the specified time window (default value 3000 years)
-      ! and scaling with the specified factor (default value 0.25)
-      dT_glob_average_over_window = SUM( forcing%dT_glob_history) / REAL( forcing%ndT_glob_history,dp)
-      forcing%dT_deepwater = C%dT_deepwater_dT_surf_ratio * dT_glob_average_over_window
+    IF (C%do_NAM) THEN
+      A_reg = (NAM%mesh%xmax - NAM%mesh%xmin) * (NAM%mesh%ymax - NAM%mesh%ymin)
+      forcing%dT_glob = forcing%dT_glob + (dT_NAM * A_reg)
+      A_glob = A_glob + A_reg
+    END IF
+    IF (C%do_EAS) THEN
+      A_reg = (EAS%mesh%xmax - EAS%mesh%xmin) * (EAS%mesh%ymax - EAS%mesh%ymin)
+      forcing%dT_glob = forcing%dT_glob + (dT_EAS * A_reg)
+      A_glob = A_glob + A_reg
+    END IF
+    IF (C%do_GRL) THEN
+      A_reg = (GRL%mesh%xmax - GRL%mesh%xmin) * (GRL%mesh%ymax - GRL%mesh%ymin)
+      forcing%dT_glob = forcing%dT_glob + (dT_GRL * A_reg)
+      A_glob = A_glob + A_reg
+    END IF
+    IF (C%do_ANT) THEN
+      A_reg = (ANT%mesh%xmax - ANT%mesh%xmin) * (ANT%mesh%ymax - ANT%mesh%ymin)
+      forcing%dT_glob = forcing%dT_glob + (dT_ANT * A_reg)
+      A_glob = A_glob + A_reg
+    END IF
     
-    END IF ! IF (par%master) THEN
-    CALL sync
+    forcing%dT_glob = forcing%dT_glob / A_glob
+    
+    ! Update the global mean temperature change history
+    ! 1st entry is the current value, 2nd is 1*dt_coupling ago, 3d is 2*dt_coupling ago, etc.
+    forcing%dT_glob_history( 2:forcing%ndT_glob_history) = forcing%dT_glob_history( 1:forcing%ndT_glob_history-1)
+    forcing%dT_glob_history( 1) = forcing%dT_glob
+    
+    ! Calculate deep-water temperature anomaly by averaging over the specified time window (default value 3000 years)
+    ! and scaling with the specified factor (default value 0.25)
+    dT_glob_average_over_window = SUM( forcing%dT_glob_history) / REAL( forcing%ndT_glob_history,dp)
+    forcing%dT_deepwater = C%dT_deepwater_dT_surf_ratio * dT_glob_average_over_window
     
   END SUBROUTINE update_global_mean_temperature_change_history
   SUBROUTINE calculate_mean_temperature_change_region( region, dT)
@@ -370,25 +343,10 @@ CONTAINS
     IMPLICIT NONE
     
     ! Determine number of entries in the global mean temperature change history
-    CALL allocate_shared_int_0D( forcing%ndT_glob_history, forcing%wndT_glob_history)
-    IF (par%master) forcing%ndT_glob_history = CEILING( C%dT_deepwater_averaging_window / C%dt_coupling)
-    CALL sync
+    forcing%ndT_glob_history = CEILING( C%dT_deepwater_averaging_window / C%dt_coupling)
+
     ! Allocate memory for the global mean temperature change history
-    CALL allocate_shared_dp_1D( forcing%ndT_glob_history, forcing%dT_glob_history, forcing%wdT_glob_history)
-    
-    CALL allocate_shared_dp_0D( forcing%dT_glob,                   forcing%wdT_glob                  )
-    CALL allocate_shared_dp_0D( forcing%dT_deepwater,              forcing%wdT_deepwater             )
-    CALL allocate_shared_dp_0D( forcing%d18O_NAM,                  forcing%wd18O_NAM                 )
-    CALL allocate_shared_dp_0D( forcing%d18O_EAS,                  forcing%wd18O_EAS                 )
-    CALL allocate_shared_dp_0D( forcing%d18O_GRL,                  forcing%wd18O_GRL                 )
-    CALL allocate_shared_dp_0D( forcing%d18O_ANT,                  forcing%wd18O_ANT                 )
-    CALL allocate_shared_dp_0D( forcing%d18O_from_ice_volume_mod,  forcing%wd18O_from_ice_volume_mod )
-    CALL allocate_shared_dp_0D( forcing%d18O_from_temperature_mod, forcing%wd18O_from_temperature_mod)
-    CALL allocate_shared_dp_0D( forcing%d18O_obs,                  forcing%wd18O_obs                 )
-    CALL allocate_shared_dp_0D( forcing%d18O_obs_PD,               forcing%wd18O_obs_PD              )
-    CALL allocate_shared_dp_0D( forcing%d18O_mod,                  forcing%wd18O_mod                 )
-    CALL allocate_shared_dp_0D( forcing%CO2_obs,                   forcing%wCO2_obs                  )
-    CALL allocate_shared_dp_0D( forcing%CO2_mod,                   forcing%wCO2_mod                  )
+    allocate(forcing%dT_glob_history(forcing%ndT_glob_history))
     
     forcing%d18O_obs_PD = 3.23_dp
     
@@ -430,20 +388,17 @@ CONTAINS
     ! Not everything is needed for all forcing methods
     IF (C%choice_forcing_method == 'CO2_direct') THEN
     
-      IF (par%master) forcing%CO2_mod = forcing%CO2_obs
+      forcing%CO2_mod = forcing%CO2_obs
       
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
     
-      CALL allocate_shared_dp_0D( forcing%dT_glob_inverse, forcing%wdT_glob_inverse)
       ! Determine number of entries in the history
-      CALL allocate_shared_int_0D( forcing%ndT_glob_inverse_history, forcing%wndT_glob_inverse_history)
-      IF (par%master) forcing%ndT_glob_inverse_history = CEILING( C%dT_glob_inverse_averaging_window / C%dt_coupling)
-      CALL sync
+      forcing%ndT_glob_inverse_history = CEILING( C%dT_glob_inverse_averaging_window / C%dt_coupling)
       ! Allocate memory for the global mean temperature change history
-      CALL allocate_shared_dp_1D( forcing%ndT_glob_inverse_history, forcing%dT_glob_inverse_history, forcing%wdT_glob_inverse_history)
-      IF (par%master) forcing%dT_glob_inverse_history = 0._dp
-      IF (par%master) forcing%dT_glob_inverse         = 0._dp
-      IF (par%master) forcing%CO2_mod                 = 0._dp
+      allocate(forcing%dT_glob_inverse_history(forcing%ndT_glob_inverse_history))
+      forcing%dT_glob_inverse_history = 0._dp
+      forcing%dT_glob_inverse         = 0._dp
+      forcing%CO2_mod                 = 0._dp
       
 !      ! If we're restarting a previous run, read inverse routine history from one of the restart files
 !      IF (C%is_restart) THEN
@@ -464,16 +419,13 @@ CONTAINS
       
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
     
-      CALL allocate_shared_dp_0D( forcing%CO2_inverse, forcing%wCO2_inverse)
       ! Determine number of entries in the history
-      CALL allocate_shared_int_0D( forcing%nCO2_inverse_history, forcing%wnCO2_inverse_history)
-      IF (par%master) forcing%nCO2_inverse_history = CEILING( C%CO2_inverse_averaging_window / C%dt_coupling)
-      CALL sync
+      forcing%nCO2_inverse_history = CEILING( C%CO2_inverse_averaging_window / C%dt_coupling)
       ! Allocate memory for the global mean temperature change history
-      CALL allocate_shared_dp_1D( forcing%nCO2_inverse_history, forcing%CO2_inverse_history, forcing%wCO2_inverse_history)
-      IF (par%master) forcing%CO2_inverse_history = C%inverse_d18O_to_CO2_initial_CO2
-      IF (par%master) forcing%CO2_inverse         = C%inverse_d18O_to_CO2_initial_CO2
-      IF (par%master) forcing%CO2_mod             = C%inverse_d18O_to_CO2_initial_CO2
+      allocate(forcing%CO2_inverse_history(forcing%nCO2_inverse_history))
+      forcing%CO2_inverse_history = C%inverse_d18O_to_CO2_initial_CO2
+      forcing%CO2_inverse         = C%inverse_d18O_to_CO2_initial_CO2
+      forcing%CO2_mod             = C%inverse_d18O_to_CO2_initial_CO2
       
 !      ! If we're restarting a previous run, read inverse routine history from one of the restart files
 !      IF (C%is_restart) THEN
@@ -557,29 +509,26 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
     
-    IF (par%master) THEN
-      IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
-        IF (par%master) WRITE(0,*) '  WARNING: model time before start of CO2 record, using constant extrapolation!'
-        forcing%CO2_obs = forcing%CO2_record( 1)
-      ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
-        IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of CO2 record, using constant extrapolation!'
-        forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
-      ELSE
-        iu = 1
-        DO WHILE (forcing%CO2_time(iu) * 1000._dp < time)
-          iu = iu+1
-        END DO
-        il = iu-1
-        
-        wl = (forcing%CO2_time(iu)*1000._dp - time) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
-        wu = (time - forcing%CO2_time(il)*1000._dp) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
-        
-        forcing%CO2_obs = forcing%CO2_record(il) * wl + forcing%CO2_record(iu) * wu
-   
-      END IF
+    IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
+      IF (par%master) WRITE(0,*) '  WARNING: model time before start of CO2 record, using constant extrapolation!'
+      forcing%CO2_obs = forcing%CO2_record( 1)
+    ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
+      IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of CO2 record, using constant extrapolation!'
+      forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
+    ELSE
+      iu = 1
+      DO WHILE (forcing%CO2_time(iu) * 1000._dp < time)
+        iu = iu+1
+      END DO
+      il = iu-1
+      
+      wl = (forcing%CO2_time(iu)*1000._dp - time) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
+      wu = (time - forcing%CO2_time(il)*1000._dp) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
+      
+      forcing%CO2_obs = forcing%CO2_record(il) * wl + forcing%CO2_record(iu) * wu
+ 
     END IF
-    CALL sync
-    
+  
   END SUBROUTINE update_CO2_at_model_time
   SUBROUTINE initialise_CO2_record
     ! Read the CO2 record specified in C%filename_CO2_record. Assumes this is an ASCII text file with at least two columns (time in kyr and CO2 in ppmv)
@@ -589,7 +538,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables
-    INTEGER                                            :: i,ios
+    INTEGER                                            :: i,ios, fp
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -633,23 +582,21 @@ CONTAINS
     IF (par%master) WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
     
     ! Allocate shared memory to take the data
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_time,   forcing%wCO2_time  )
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_record, forcing%wCO2_record)
+    allocate(forcing%CO2_time  ( C%CO2_record_length ))
+    allocate(forcing%CO2_record( C%CO2_record_length ))
     
     ! Read CO2 record (time and values) from specified text file
-    IF (par%master) THEN
+
+    OPEN(  newunit=fp, FILE=C%filename_CO2_record, ACTION='READ')
+    DO i = 1, C%CO2_record_length
+      READ( UNIT = fp, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i) 
+      IF (ios /= 0) THEN
+        WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
+    CLOSE( UNIT  = fp)
     
-        OPEN(   UNIT = 1337, FILE=C%filename_CO2_record, ACTION='READ')
-        DO i = 1, C%CO2_record_length
-          READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i) 
-          IF (ios /= 0) THEN
-            WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-          END IF
-        END DO
-        CLOSE( UNIT  = 1337)
-    
-    END IF ! IF (par%master) THEN
     CALL sync
     
     ! Set the value for the current (starting) model time
@@ -694,7 +641,7 @@ CONTAINS
         RETURN
       ELSE 
         WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in update_d18O_at_model_time!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL MPI_ABORT( MPI_COMM_WORLD, -1, ierr)
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -707,32 +654,30 @@ CONTAINS
       !RETURN
     ELSE
       WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in update_d18O_at_model_time!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL MPI_ABORT( MPI_COMM_WORLD, -1, ierr)
     END IF
     
-    IF (par%master) THEN
   
-      IF     (time < MINVAL( forcing%d18O_time)) THEN ! times 1000 because forcing%d18O_time is in kyr
-        IF (par%master) WRITE(0,*) '  WARNING: model time before start of d18O record, using constant extrapolation!'
-        forcing%d18O_obs = forcing%d18O_record( 1)
-      ELSEIF (time > MAXVAL( forcing%d18O_time)) THEN
-        IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of d18O record, using constant extrapolation!'
-        forcing%d18O_obs = forcing%d18O_record( C%d18O_record_length)
-      ELSE
-        iu = 1
-        DO WHILE (forcing%d18O_time(iu) < time)
-          iu = iu+1
-        END DO
-        il = iu-1
-        
-        wl = (forcing%d18O_time(iu) - time) / (forcing%d18O_time(iu)-forcing%d18O_time(il))
-        wu = (time - forcing%d18O_time(il)) / (forcing%d18O_time(iu)-forcing%d18O_time(il))
-        
-        forcing%d18O_obs = forcing%d18O_record(il) * wl + forcing%d18O_record(iu) * wu
-        
-      END IF
+    IF     (time < MINVAL( forcing%d18O_time)) THEN ! times 1000 because forcing%d18O_time is in kyr
+      IF (par%master) WRITE(0,*) '  WARNING: model time before start of d18O record, using constant extrapolation!'
+      forcing%d18O_obs = forcing%d18O_record( 1)
+    ELSEIF (time > MAXVAL( forcing%d18O_time)) THEN
+      IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of d18O record, using constant extrapolation!'
+      forcing%d18O_obs = forcing%d18O_record( C%d18O_record_length)
+    ELSE
+      iu = 1
+      DO WHILE (forcing%d18O_time(iu) < time)
+        iu = iu+1
+      END DO
+      il = iu-1
+      
+      wl = (forcing%d18O_time(iu) - time) / (forcing%d18O_time(iu)-forcing%d18O_time(il))
+      wu = (time - forcing%d18O_time(il)) / (forcing%d18O_time(iu)-forcing%d18O_time(il))
+      
+      forcing%d18O_obs = forcing%d18O_record(il) * wl + forcing%d18O_record(iu) * wu
+      
+    END IF
     
-    END IF ! IF (par%master) THEN
     CALL sync
     
   END SUBROUTINE update_d18O_at_model_time
@@ -744,7 +689,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables
-    INTEGER                                            :: i,ios
+    INTEGER                                            :: i,ios, fp
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -788,25 +733,21 @@ CONTAINS
     IF (par%master) WRITE(0,*) ' Reading d18O record from ', TRIM(C%filename_d18O_record), '...'
     
     ! Allocate shared memory to take the data
-    CALL allocate_shared_dp_1D( C%d18O_record_length, forcing%d18O_time,   forcing%wd18O_time  )
-    CALL allocate_shared_dp_1D( C%d18O_record_length, forcing%d18O_record, forcing%wd18O_record)
-    CALL allocate_shared_dp_0D(                       forcing%d18O_obs,    forcing%wd18O_obs   )
+    allocate(forcing%d18O_time(C%d18O_record_length))
+    allocate(forcing%d18O_record(C%d18O_record_length))
     
     ! Read d18O record (time and values) from specified text file
-    IF (par%master) THEN
-      
-      OPEN(   UNIT = 1337, FILE=C%filename_d18O_record, ACTION='READ')
-      DO i = 1, C%d18O_record_length
-        READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%d18O_time(i), forcing%d18O_record(i)
-        IF (ios /= 0) THEN
-          WRITE(0,*) ' read_d18O_record - ERROR: length of text file "', TRIM(C%filename_d18O_record), '" does not match C%d18O_record_length = ', C%d18O_record_length
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        END IF
-      END DO
+    OPEN(newunit=fp, FILE=C%filename_d18O_record, ACTION='READ')
+    DO i = 1, C%d18O_record_length
+      READ( UNIT = fp, FMT=*, IOSTAT=ios) forcing%d18O_time(i), forcing%d18O_record(i)
+      IF (ios /= 0) THEN
+        WRITE(0,*) ' read_d18O_record - ERROR: length of text file "', TRIM(C%filename_d18O_record), '" does not match C%d18O_record_length = ', C%d18O_record_length
+        CALL MPI_ABORT( MPI_COMM_WORLD, -1, ierr)
+      END IF
+    END DO
+  
+    CLOSE( UNIT  = fp)
     
-      CLOSE( UNIT  = 1337)
-    
-    END IF ! IF (par%master) THEN
     CALL sync
     
     ! Set the PD value
@@ -863,10 +804,8 @@ CONTAINS
     IF (par%master) WRITE(0,*) ' Updating insolation data...'
     
     ! Initialise at zero
-    IF (par%master) THEN
-      forcing%ins_Q_TOA0 = 0._dp
-      forcing%ins_Q_TOA1 = 0._dp
-    END IF
+    forcing%ins_Q_TOA0 = 0._dp
+    forcing%ins_Q_TOA1 = 0._dp
     
     ! Check if data for model time is available
     IF (t_coupling < forcing%ins_time(1)) THEN
@@ -875,29 +814,26 @@ CONTAINS
     END IF
     
     ! Find time indices to be read
-    IF (par%master) THEN
-      IF (t_coupling <= forcing%ins_time( forcing%ins_nyears)) THEN
-        ti1 = 1
-        DO WHILE (forcing%ins_time(ti1) < t_coupling)
-          ti1 = ti1 + 1
-        END DO
-        ti0 = ti1 - 1
-        
-        forcing%ins_t0 = forcing%ins_time(ti0)
-        forcing%ins_t1 = forcing%ins_time(ti1)
-      ELSE
-        IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
-        ti0 = forcing%ins_nyears
-        ti1 = forcing%ins_nyears
-        
-        forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
-        forcing%ins_t1 = forcing%ins_time(ti1)
-      END IF
-    END IF ! IF (par%master) THEN
+    IF (t_coupling <= forcing%ins_time( forcing%ins_nyears)) THEN
+      ti1 = 1
+      DO WHILE (forcing%ins_time(ti1) < t_coupling)
+        ti1 = ti1 + 1
+      END DO
+      ti0 = ti1 - 1
+      
+      forcing%ins_t0 = forcing%ins_time(ti0)
+      forcing%ins_t1 = forcing%ins_time(ti1)
+    ELSE
+      IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+      ti0 = forcing%ins_nyears
+      ti1 = forcing%ins_nyears
+      
+      forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
+      forcing%ins_t1 = forcing%ins_time(ti1)
+    END IF
         
     ! Read new insolation fields from the NetCDF file
-    IF (par%master) CALL read_insolation_data_file( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
-    CALL sync
+    CALL read_insolation_data_file( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
     
   END SUBROUTINE update_insolation_data
   SUBROUTINE map_insolation_to_mesh( mesh, ins_t0, ins_t1, Q_TOA0, Q_TOA1, time, Q_TOA, Q_TOA_jun_65N, Q_TOA_jan_80S)
@@ -940,19 +876,16 @@ CONTAINS
     CALL sync
     
     ! Find summer values at 65 N and 80 S
-    IF (par%master) THEN
-      ilat_l = 1
-      DO WHILE (forcing%ins_lat( ilat_l) < 65._dp)
-        ilat_l = ilat_l + 1
-      END DO
-      ilat_u = 1
-      DO WHILE (forcing%ins_lat( ilat_u) < -80._dp)
-        ilat_u = ilat_u + 1
-      END DO
-      Q_TOA_jun_65N = wt0 * Q_TOA0( ilat_l,6) + wt1 * Q_TOA1( ilat_l,6)
-      Q_TOA_jan_80S = wt0 * Q_TOA0( ilat_u,1) + wt1 * Q_TOA1( ilat_u,1)
-    END IF ! IF (par%master) THEN
-    CALL sync
+    ilat_l = 1
+    DO WHILE (forcing%ins_lat( ilat_l) < 65._dp)
+      ilat_l = ilat_l + 1
+    END DO
+    ilat_u = 1
+    DO WHILE (forcing%ins_lat( ilat_u) < -80._dp)
+      ilat_u = ilat_u + 1
+    END DO
+    Q_TOA_jun_65N = wt0 * Q_TOA0( ilat_l,6) + wt1 * Q_TOA1( ilat_l,6)
+    Q_TOA_jan_80S = wt0 * Q_TOA0( ilat_u,1) + wt1 * Q_TOA1( ilat_u,1)
     
   END SUBROUTINE map_insolation_to_mesh
   SUBROUTINE initialise_insolation_data
@@ -992,33 +925,22 @@ CONTAINS
     ! The times at which we have insolation fields from Laskar, between which we'll interpolate
     ! to find the insolation at model time (ins_t0 < model_time < ins_t1)
     
-    CALL allocate_shared_dp_0D( forcing%ins_t0, forcing%wins_t0)
-    CALL allocate_shared_dp_0D( forcing%ins_t1, forcing%wins_t1)
-    
-    IF (par%master) THEN
-      forcing%ins_t0 = C%start_time_of_run
-      forcing%ins_t1 = C%end_time_of_run
-    END IF ! IF (par%master) THEN
-    CALL sync
+    forcing%ins_t0 = C%start_time_of_run
+    forcing%ins_t1 = C%end_time_of_run
     
     ! Inquire into the insolation forcing netcdf file    
-    CALL allocate_shared_int_0D( forcing%ins_nyears, forcing%wins_nyears)
-    CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
-    
     forcing%netcdf_ins%filename = C%filename_insolation
     
-    IF (par%master) CALL inquire_insolation_data_file( forcing)
-    CALL sync
+    CALL inquire_insolation_data_file( forcing)
     
     ! Insolation    
-    CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
-    CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,     forcing%wins_lat    )
-    CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0,  forcing%wins_Q_TOA0 )
-    CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
+    allocate( forcing%ins_time(forcing%ins_nyears))
+    allocate( forcing%ins_lat (forcing%ins_nlat  ))
+    allocate( forcing%ins_Q_TOA0(forcing%ins_nlat, 12))
+    allocate( forcing%ins_Q_TOA1(forcing%ins_nlat, 12))
     
     ! Read time and latitude data
-    IF (par%master) CALL read_insolation_data_file_time_lat( forcing)
-    CALL sync
+    CALL read_insolation_data_file_time_lat( forcing)
     
     ! Read insolation data
     CALL update_insolation_data( C%start_time_of_run)
@@ -1066,23 +988,18 @@ CONTAINS
       IF (par%master) WRITE(0,*) ' Initialising geothermal heat flux data from ', TRIM(C%filename_geothermal_heat_flux), '...'
   
       ! Inquire into the insolation forcing netcdf file
-      CALL allocate_shared_int_0D( forcing%grid_ghf%nlat, forcing%grid_ghf%wnlat)
-      CALL allocate_shared_int_0D( forcing%grid_ghf%nlon, forcing%grid_ghf%wnlon)
-  
       forcing%netcdf_ghf%filename = C%filename_geothermal_heat_flux
   
       ! Read size of data fields from NetCDF file
-      IF (par%master) CALL inquire_geothermal_heat_flux_file( forcing)
-      CALL sync
+      CALL inquire_geothermal_heat_flux_file( forcing)
   
       ! Allocate shared memory
-      CALL allocate_shared_dp_1D( forcing%grid_ghf%nlon,                        forcing%grid_ghf%lon, forcing%grid_ghf%wlon)
-      CALL allocate_shared_dp_1D(                        forcing%grid_ghf%nlat, forcing%grid_ghf%lat, forcing%grid_ghf%wlat)
-      CALL allocate_shared_dp_2D( forcing%grid_ghf%nlon, forcing%grid_ghf%nlat, forcing%ghf_ghf,      forcing%wghf_ghf     )
+      allocate(forcing%grid_ghf%lon(forcing%grid_ghf%nlon))
+      allocate(forcing%grid_ghf%lat(forcing%grid_ghf%nlat))
+      allocate(forcing%ghf_ghf(forcing%grid_ghf%nlon, forcing%grid_ghf%nlat))
   
       ! Read data from NetCDF file
-      IF (par%master) CALL read_geothermal_heat_flux_file( forcing)
-      CALL sync
+      CALL read_geothermal_heat_flux_file( forcing)
       
     ELSE ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
       

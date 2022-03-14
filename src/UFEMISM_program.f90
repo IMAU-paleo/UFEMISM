@@ -30,12 +30,11 @@ PROGRAM UFEMISM_program
 !   "remap_COMPONENT" routines contained in the different model component modules.
   
 #include <petsc/finclude/petscksp.h>
-  USE mpi
+  USE parallel_module,                  ONLY: par, initialise_parallelisation, ierr, reset_memory_use_tracker
   USE petscksp
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
                                          initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
@@ -175,7 +174,7 @@ PROGRAM UFEMISM_program
       IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
     ELSE
       IF (par%master) WRITE(0,*) '  ERROR: choice_sealevel_model "', TRIM(C%choice_sealevel_model), '" not implemented in IMAU_ICE_program!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL MPI_ABORT( MPI_COMM_WORLD, -1, ierr)
     END IF
     
     ! Run all four model regions for 100 years
@@ -213,7 +212,8 @@ PROGRAM UFEMISM_program
       ! No inverse routine is used in these forcing methods
     ELSE
       IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in IMAU_ICE_program!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL MPI_ABORT( MPI_COMM_WORLD, -1, ierr)
+
     END IF
     
     ! Write global data to output file
@@ -246,7 +246,7 @@ PROGRAM UFEMISM_program
   ! Write total elapsed time to screen
   tstop = MPI_WTIME()
   IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
-  CALL sync
+  CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
   
   ! Finalise MPI and PETSc
   CALL PetscFinalize( perr)

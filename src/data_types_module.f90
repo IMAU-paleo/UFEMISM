@@ -570,6 +570,17 @@ MODULE data_types_module
     INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
     
   END TYPE type_latlongrid
+
+  TYPE type_latlongrid_new
+    ! A global lat-lon grid
+    
+    INTEGER                                 :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), allocatable :: lat, lon
+    REAL(dp)                                :: dlat, dlon
+    
+    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
+    
+  END TYPE type_latlongrid_new
   
   TYPE type_subclimate_global
     ! Global climate data, either from present-day observations (ERA40) or from a GCM snapshot.
@@ -794,55 +805,48 @@ MODULE data_types_module
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
     
     ! Data for the inverse routine
-    REAL(dp),                   POINTER     :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
-    REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
-    INTEGER,                    POINTER     :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
-    INTEGER :: wdT_glob, wdT_glob_history, wndT_glob_history, wdT_deepwater
+    REAL(dp)                                :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
+    REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
+    INTEGER                                 :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
     
-    REAL(dp),                   POINTER     :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
-    REAL(dp),                   POINTER     :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
-    REAL(dp),                   POINTER     :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
-    REAL(dp),                   POINTER     :: d18O_mod                                  ! Modelled benthic d18O
-    INTEGER :: wd18O_NAM, wd18O_EAS, wd18O_GRL, wd18O_ANT, wd18O_from_ice_volume_mod, wd18O_from_temperature_mod, wd18O_mod
+    REAL(dp)                                :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
+    REAL(dp)                                :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
+    REAL(dp)                                :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
+    REAL(dp)                                :: d18O_mod                                  ! Modelled benthic d18O
     
-    REAL(dp),                   POINTER     :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
-    REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
-    INTEGER,                    POINTER     :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: CO2_inverse                               ! CO2 resulting from the inverse method
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_inverse_history                       ! Time window (length set in config) listing previous CO2_inverse values
-    INTEGER,                    POINTER     :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
-    INTEGER :: wdT_glob_inverse, wdT_glob_inverse_history, wndT_glob_inverse_history, wCO2_inverse, wCO2_inverse_history, wnCO2_inverse_history, wCO2_mod
+    REAL(dp)                                :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
+    REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
+    INTEGER                                 :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: CO2_inverse                               ! CO2 resulting from the inverse method
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_inverse_history                       ! Time window (length set in config) listing previous CO2_inverse values
+    INTEGER                                 :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
     
     ! External forcing: CO2 record
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_record
-    REAL(dp),                   POINTER     :: CO2_obs
-    INTEGER :: wCO2_time, wCO2_record, wCO2_obs
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_time
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_record
+    REAL(dp)                                :: CO2_obs
     
     ! External forcing: d18O record
-    REAL(dp), DIMENSION(:    ), POINTER     :: d18O_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: d18O_record
-    REAL(dp),                   POINTER     :: d18O_obs
-    REAL(dp),                   POINTER     :: d18O_obs_PD
-    INTEGER :: wd18O_time, wd18O_record, wd18O_obs, wd18O_obs_PD
+    REAL(dp), DIMENSION(:    ), allocatable :: d18O_time
+    REAL(dp), DIMENSION(:    ), allocatable :: d18O_record
+    REAL(dp)                                :: d18O_obs
+    REAL(dp)                                :: d18O_obs_PD
     
     ! External forcing: insolation
     TYPE(type_netcdf_insolation)            :: netcdf_ins
-    INTEGER,                    POINTER     :: ins_nyears
-    INTEGER,                    POINTER     :: ins_nlat
-    REAL(dp), DIMENSION(:    ), POINTER     :: ins_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: ins_lat
-    REAL(dp),                   POINTER     :: ins_t0, ins_t1
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
-    INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
+    INTEGER                                 :: ins_nyears
+    INTEGER                                 :: ins_nlat
+    REAL(dp), DIMENSION(:    ), allocatable :: ins_time
+    REAL(dp), DIMENSION(:    ), allocatable :: ins_lat
+    REAL(dp)                                :: ins_t0, ins_t1
+    REAL(dp), DIMENSION(:,:  ), allocatable :: ins_Q_TOA0, ins_Q_TOA1
     
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_latlongrid)                   :: grid_ghf
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
-    INTEGER :: wghf_ghf
+    TYPE(type_latlongrid_new)               :: grid_ghf
+    REAL(dp), DIMENSION(:,:  ), allocatable :: ghf_ghf
     
   END TYPE type_forcing_data
   

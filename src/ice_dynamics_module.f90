@@ -701,7 +701,7 @@ CONTAINS
   
     USE data_types_module,          ONLY: type_remapping_latlon2mesh
     USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
+    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh_new, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
       
     IMPLICIT NONE
     
@@ -713,7 +713,7 @@ CONTAINS
     TYPE(type_remapping_latlon2mesh)                   :: map
     
     ! Calculate mapping arrays
-    CALL create_remapping_arrays_glob_mesh( mesh, forcing%grid_ghf, map)
+    CALL create_remapping_arrays_glob_mesh_new( mesh, forcing%grid_ghf, map)
     
     ! Map global climate data to the mesh
     CALL map_latlon2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)

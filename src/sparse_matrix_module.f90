@@ -4,7 +4,7 @@ MODULE sparse_matrix_module
 
   ! Import basic functionality
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
@@ -55,15 +55,20 @@ CONTAINS
     INTEGER,  DIMENSION(5)    , OPTIONAL, INTENT(IN)   :: colour_v1, colour_v2
     INTEGER,  DIMENSION(:,:  ), OPTIONAL, INTENT(IN)   :: colour_vi
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_CSR'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%m /= AA%n .OR. AA%m /= SIZE( b,1) .OR. AA%m /= SIZE( x,1)) THEN
-      IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: matrix sizes dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matrix sizes dont match!')
     END IF
     
-    CALL check_for_NaN_dp_1D(  AA%val, 'AA%val', 'solve_matrix_equation_CSR')
-    CALL check_for_NaN_dp_1D(  b,      'b',      'solve_matrix_equation_CSR')
-    CALL check_for_NaN_dp_1D(  x,      'x',      'solve_matrix_equation_CSR')
+    CALL check_for_NaN_dp_1D(  AA%val, 'AA%val')
+    CALL check_for_NaN_dp_1D(  b,      'b'      )
+    CALL check_for_NaN_dp_1D(  x,      'x'      )
     
     IF (choice_matrix_solver == 'SOR') THEN
       ! Use the old simple SOR solver
@@ -76,9 +81,11 @@ CONTAINS
       CALL solve_matrix_equation_CSR_PETSc( AA, b, x, PETSc_rtol, PETSc_abstol)
     
     ELSE
-      IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR - ERROR: unknown choice_matrix_solver "', choice_matrix_solver, '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_matrix_solver "' // TRIM( choice_matrix_solver) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR
   SUBROUTINE solve_matrix_equation_CSR_SOR( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
@@ -97,16 +104,24 @@ CONTAINS
     INTEGER,  DIMENSION(5)    , OPTIONAL, INTENT(IN)   :: colour_v1, colour_v2
     INTEGER,  DIMENSION(:,:  ), OPTIONAL, INTENT(IN)   :: colour_vi
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_CSR_SOR'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     IF (PRESENT( colour_v1)) THEN
       ! Safety
       IF ((.NOT. PRESENT( colour_v2)) .OR. (.NOT. PRESENT( colour_vi))) THEN
-        IF (par%master) WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: needs all three colour arguments!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('needs all three colour arguments!')
       END IF
       CALL solve_matrix_equation_CSR_SOR_coloured( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
     ELSE
       CALL solve_matrix_equation_CSR_SOR_regular(  AA, b, x, nit, tol, omega)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR_SOR
   SUBROUTINE solve_matrix_equation_CSR_SOR_regular( AA, b, x, nit, tol, omega)
@@ -124,11 +139,15 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: omega
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_CSR_SOR_regular'
     INTEGER                                            :: i,j,k,it,i1,i2
     REAL(dp)                                           :: lhs, res, res_max, omega_dyn
     REAL(dp), DIMENSION(:    ), POINTER                ::  diagA
     INTEGER                                            :: wdiagA
     LOGICAL                                            :: found_it
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( AA%m, diagA, wdiagA)
@@ -147,8 +166,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. found_it) THEN
-        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element in row ', i, '!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('matrix is missing a diagonal element in row {int_01} !', int_01 = i)
       END IF
     END DO
     CALL sync
@@ -187,15 +205,13 @@ CONTAINS
       IF (it > 100 .AND. res_max > 1E3_dp ) THEN
         
         ! Divergence detected - decrease omega, reset solution to zero, restart SOR.
-        IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - divergence detected; decrease omega, reset solution to zero, restart SOR'
+        IF (par%master) CALL warning('divergence detected; decrease omega, reset solution to zero, restart SOR')
         omega_dyn = omega_dyn - 0.1_dp
         it = 0
         x( i1:i2) = 0._dp
         CALL sync
         
         IF (omega_dyn <= 0.1_dp) THEN
-          IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - ERROR: divergence detected even with extremely low relaxation parameter!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         END IF
       END IF
       
@@ -203,6 +219,9 @@ CONTAINS
     
     ! Clean up after yourself
     CALL deallocate_shared( wdiagA)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR_SOR_regular
   SUBROUTINE solve_matrix_equation_CSR_SOR_coloured( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
@@ -224,11 +243,15 @@ CONTAINS
     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)    :: colour_vi
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_CSR_SOR_coloured'
     INTEGER                                            :: fci,fcvi,i,j,k,it,i1,i2
     REAL(dp)                                           :: lhs, res, res_max, omega_dyn
     REAL(dp), DIMENSION(:    ), POINTER                ::  diagA
     INTEGER                                            :: wdiagA
     LOGICAL                                            :: found_it
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( AA%m, diagA, wdiagA)
@@ -247,8 +270,7 @@ CONTAINS
         END IF
       END DO
       IF (.NOT. found_it) THEN
-        WRITE(0,*) 'solve_matrix_equation_CSR_SOR - ERROR: matrix is missing a diagonal element!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('matrix is missing a diagonal element!')
       END IF
     END DO
     CALL sync
@@ -291,15 +313,14 @@ CONTAINS
       IF (it > 100 .AND. res_max > 1E3_dp ) THEN
         
         ! Divergence detected - decrease omega, reset solution to zero, restart SOR.
-        IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - divergence detected; decrease omega, reset solution to zero, restart SOR'
+        IF (par%master) CALL warning('divergence detected; decrease omega, reset solution to zero, restart SOR')
         omega_dyn = omega_dyn - 0.1_dp
         it = 0
         x( i1:i2) = 0._dp
         CALL sync
         
         IF (omega_dyn <= 0.1_dp) THEN
-          IF (par%master) WRITE(0,*) '  solve_matrix_equation_CSR_SOR - ERROR: divergence detected even with extremely low relaxation parameter!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('divergence detected even with extremely low relaxation parameter!')
         END IF
       END IF
       
@@ -307,6 +328,9 @@ CONTAINS
     
     ! Clean up after yourself
     CALL deallocate_shared( wdiagA)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR_SOR_coloured
   
@@ -326,10 +350,15 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp), OPTIONAL, INTENT(IN)    :: nz_template
     TYPE(type_sparse_matrix_CSR_dp),           INTENT(INOUT) :: CC
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_matrix_matrix_CSR'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%n /= BB%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_matrix_CSR - ERROR: sizes of A and B dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     
     IF (PRESENT( nz_template)) THEN
@@ -337,6 +366,9 @@ CONTAINS
     ELSE
       CALL multiply_matrix_matrix_CSR_notemplate( AA, BB, CC)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE multiply_matrix_matrix_CSR
   SUBROUTINE multiply_matrix_matrix_CSR_template( AA, BB, CC, nz_template)
@@ -353,6 +385,7 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),           INTENT(INOUT) :: CC
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_matrix_matrix_CSR_template'
     TYPE(type_sparse_matrix_CSR_dp)                    :: BBT
     INTEGER                                            :: i1,i2,k1,k2,ic,kc1,kc2,kc,jc
     INTEGER                                            :: ka1 , ka2,  nnz_row_a,  ja1,  ja2
@@ -361,10 +394,12 @@ CONTAINS
     LOGICAL                                            :: finished
     REAL(dp)                                           :: Cij
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%n /= BB%m .OR. nz_template%m /= AA%m .OR. nz_template%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_matrix_CSR - ERROR: sizes of A and B dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     
     ! Allocate shared distributed memory for C
@@ -452,6 +487,9 @@ CONTAINS
     ! Deallocate BT
     CALL deallocate_matrix_CSR( BBT)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE multiply_matrix_matrix_CSR_template
   SUBROUTINE multiply_matrix_matrix_CSR_notemplate( AA, BB, CC)
     ! Perform the matrix multiplication C = A*B, where all three
@@ -466,6 +504,7 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),           INTENT(INOUT) :: CC
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_matrix_matrix_CSR_notemplate'
     INTEGER                                            :: nnz_max_loc
     TYPE(type_sparse_matrix_CSR_dp)                    :: BBT
     INTEGER                                            :: i1, i2, ic, jc
@@ -476,10 +515,12 @@ CONTAINS
     LOGICAL                                            :: is_nonzero
     REAL(dp)                                           :: Cij
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%n /= BB%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_matrix_CSR - ERROR: sizes of A and B dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     
     ! Allocate shared distributed memory for C
@@ -567,6 +608,9 @@ CONTAINS
     ! Deallocate BT
     CALL deallocate_matrix_CSR( BBT)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE multiply_matrix_matrix_CSR_notemplate
   
   ! Addition: C = A+B
@@ -583,12 +627,15 @@ CONTAINS
     LOGICAL,  OPTIONAL,                  INTENT(IN)    :: same_structure
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_matrix_matrix_CSR'
     LOGICAL                                            :: same_structurep
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR - ERROR: A and B are not of the same size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     
     IF (PRESENT( same_structure)) THEN
@@ -602,6 +649,9 @@ CONTAINS
     ELSE
       CALL add_matrix_matrix_CSR_notemplate( AA, BB, CC, alpha, beta)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE add_matrix_matrix_CSR
   SUBROUTINE add_matrix_matrix_CSR_template( AA, BB, CC, alpha, beta)
@@ -618,17 +668,19 @@ CONTAINS
     REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_matrix_matrix_CSR_template'
     REAL(dp)                                           :: alphap, betap
     INTEGER                                            :: k1,k2
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR_template - ERROR: A and B are not of the same size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     IF (AA%nnz /= BB%nnz) THEN
-      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR_template - ERROR: A and B dont have the same non-zero structure!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('A and B dont have the same non-zero structure!')
     END IF
     
     ! If no coefficients are provided, assume unity
@@ -651,6 +703,9 @@ CONTAINS
     CC%val( k1:k2) = alphap * AA%val( k1:k2) + betap * BB%val( k1:k2)
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE add_matrix_matrix_CSR_template
   SUBROUTINE add_matrix_matrix_CSR_notemplate( AA, BB, CC, alpha, beta)
     ! Perform the matrix addition C = (alpha*A) + (beta*B), where all three
@@ -666,6 +721,7 @@ CONTAINS
     REAL(dp), OPTIONAL,                  INTENT(IN)    :: alpha, beta
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_matrix_matrix_CSR_notemplate'
     REAL(dp)                                           :: alphap, betap
     INTEGER                                            :: i1, i2, ic
     INTEGER                                            :: ka1, ka2, nnz_row_a
@@ -674,10 +730,12 @@ CONTAINS
     REAL(dp)                                           :: vc
     LOGICAL                                            :: finished_a, finished_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (AA%m /= BB%m .OR. AA%n /= BB%n) THEN
-      IF (par%master) WRITE(0,*) 'add_matrix_matrix_CSR - ERROR: A and B are not of the same size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A and B dont match!')
     END IF
     
     ! If no coefficients are provided, assume unity
@@ -793,6 +851,9 @@ CONTAINS
     ! Combine results from the different processes
     CALL finalise_matrix_CSR_dist( CC, i1, i2)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE add_matrix_matrix_CSR_notemplate
   
   ! Vector multiplication c = Ab
@@ -808,15 +869,18 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: CC
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_matrix_vector_CSR'
     INTEGER                                            :: mb, mc, i1, i2, i, k, j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     mb = SIZE( BB,1)
     mc = SIZE( CC,1)
     
     ! Safety
     IF (mb /= AA%n .OR. mc /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A, B, and C dont match!')
     END IF
     
     ! Partition rows over the processors
@@ -830,6 +894,9 @@ CONTAINS
       END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE multiply_matrix_vector_CSR
   SUBROUTINE multiply_matrix_vector_2D_CSR( AA, BB, CC)
@@ -846,15 +913,18 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: CC
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_matrix_vector_2D_CSR'
     INTEGER                                            :: mb, mc, i1, i2, i, k, j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     mb = SIZE( BB,1)
     mc = SIZE( CC,1)
     
     ! Safety
     IF (mb /= AA%n .OR. mc /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'multiply_matrix_vector_CSR - ERROR: sizes of A, B, and C dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('sizes of A, B, and C dont match!')
     END IF
     
     ! Partition rows over the processors
@@ -868,6 +938,9 @@ CONTAINS
       END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE multiply_matrix_vector_2D_CSR
   
@@ -883,7 +956,11 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AAT
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'transpose_matrix_CSR'
     INTEGER                                            :: nnz_max_loc, i1, i2, i, ii, kk1, kk2, kk, jj
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Allocate shared distributed memory for AAT
     nnz_max_loc = CEILING( REAL( AA%nnz,dp) / REAL( par%n,dp))
@@ -913,6 +990,9 @@ CONTAINS
     ! Combine results from the different processes
     CALL finalise_matrix_CSR_dist( AAT, i1, i2)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE transpose_matrix_CSR
   
   ! Sort the column entries in a CSR matrix in ascending order
@@ -925,8 +1005,12 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'sort_columns_in_CSR'
     INTEGER                                            :: i1,i2,i,k1,k2,k,kk,jk,jkk
     REAL(dp)                                           :: vk, vkk
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Partition rows over the processors
     CALL partition_list( AA%m, par%i, par%n, i1, i2)
@@ -958,6 +1042,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE sort_columns_in_CSR
   
 ! == Basic memory operations on sparse matrices in CSR format
@@ -971,7 +1058,11 @@ CONTAINS
     INTEGER,                             INTENT(IN)    :: m, n, nnz_max
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_matrix_CSR_shared'
     INTEGER                                            :: i1,i2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL allocate_shared_int_0D( AA%m,       AA%wm      )
     CALL allocate_shared_int_0D( AA%n,       AA%wn      )
@@ -995,6 +1086,9 @@ CONTAINS
     IF (par%master) AA%ptr( AA%m+1) = 1
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
+    
   END SUBROUTINE allocate_matrix_CSR_shared
   SUBROUTINE initialise_matrix_CSR_from_nz_template( AA, nz_template)
     ! Allocate shared memory and initialise row/column indices from a non-zero-structure template
@@ -1006,7 +1100,11 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: nz_template
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_matrix_CSR_from_nz_template'
     INTEGER                                            :: i1,i2,k1,k2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_matrix_CSR_shared( AA, nz_template%m, nz_template%n, nz_template%nnz)
@@ -1025,6 +1123,9 @@ CONTAINS
     END IF
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_matrix_CSR_from_nz_template
   SUBROUTINE deallocate_matrix_CSR( AA)
     ! Deallocate the memory used by the CSR-format sparse m-by-n matrix A
@@ -1033,6 +1134,12 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_matrix_CSR'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL deallocate_shared( AA%wm)
     CALL deallocate_shared( AA%wn)
@@ -1049,6 +1156,9 @@ CONTAINS
     NULLIFY( AA%ptr    )
     NULLIFY( AA%index  )
     NULLIFY( AA%val    )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE deallocate_matrix_CSR
   
@@ -1063,6 +1173,12 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
     INTEGER,                             INTENT(IN)    :: m, n, nnz_max_proc
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_matrix_CSR_dist'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Matrix dimensions should be the same everywhere, so use the shared version for that.
     CALL allocate_shared_int_0D( AA%m, AA%wm)
@@ -1088,6 +1204,9 @@ CONTAINS
     AA%ptr   = 1
     AA%index = 0
     AA%val   = 0._dp
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 2)
     
   END SUBROUTINE allocate_matrix_CSR_dist
   SUBROUTINE add_entry_CSR_dist( AA, i, j, v)
@@ -1131,8 +1250,12 @@ CONTAINS
     INTEGER,                             INTENT(IN)    :: nnz_extra
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_matrix_CSR_dist'
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: index_temp
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_temp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate temporary memory
     ALLOCATE( index_temp( AA%nnz))
@@ -1160,6 +1283,9 @@ CONTAINS
     ! Deallocate temporary memory
     DEALLOCATE( index_temp)
     DEALLOCATE( val_temp  )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE extend_matrix_CSR_dist
   SUBROUTINE finalise_matrix_CSR_dist( AA, i1, i2)
@@ -1176,6 +1302,7 @@ CONTAINS
     INTEGER,                             INTENT(IN)    :: i1, i2
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'finalise_matrix_CSR_dist'
     INTEGER                                            :: status(MPI_STATUS_SIZE)
     INTEGER                                            :: nnz_tot
     INTEGER,  DIMENSION(:    ), POINTER                :: ptr, index
@@ -1185,6 +1312,9 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Determine total number of non-zero elements in A
     CALL MPI_ALLREDUCE( AA%nnz, nnz_tot, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -1258,6 +1388,9 @@ CONTAINS
     
     ! Sort the column entries in the assembled matrix
     CALL sort_columns_in_CSR( AA)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 5)
   
   END SUBROUTINE finalise_matrix_CSR_dist
   
@@ -1272,33 +1405,31 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: matname
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_CSR'
     INTEGER                                            :: i1,i2,i,k1,k2,k,j1,j2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Dimensions
     IF (SIZE( AA%ptr,1)-1 /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': m = ', AA%m, ', but SIZE( ptr,1) = ', SIZE( AA%ptr,1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; m = {int_01}, but SIZE( ptr,1) = {int_02}', int_01 = AA%m, int_02 = SIZE( AA%ptr,1))
     END IF
     IF (AA%ptr( AA%m+1) /= AA%nnz+1) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', AA%nnz, ', but ptr( end)) = ', AA%ptr( AA%m+1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; nnz = {int_01}, but ptr( end) = {int_02}', int_01 = AA%nnz, int_02 = AA%ptr( AA%m+1))
     END IF
     IF (SIZE( AA%index,1) /= AA%nnz) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', AA%nnz, ', but SIZE( index,1) = ', SIZE( AA%index,1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; nnz = {int_01}, but SIZE( index,1) = {int_02}', int_01 = AA%nnz, int_02 = SIZE( AA%index,1))
     END IF
     IF (SIZE( AA%val,1) /= AA%nnz) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': nnz = ', AA%nnz, ', but SIZE( val,1) = ', SIZE( AA%val,1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; nnz = {int_01}, but SIZE( val,1) = {int_02}', int_01 = AA%nnz, int_02 = SIZE( AA%val,1))
     END IF
     
     ! Check if the ptr values are ascending
     CALL partition_list( AA%m, par%i, par%n, i1, i2)
     DO i = i1, i2
       IF (AA%ptr( i+1) < AA%ptr( i)) THEN
-        WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': ptr not ascending!'
-        WRITE(0,*) 'check : row ', i, ': k1 = ', k1, ', k2 = ', k2
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('matname = ' // TRIM( matname) // '; ptr not ascending! (row {int_01}; k1 = {int_02}, k2 = {int_03})', int_01 = i, int_02 = k1, int_03 = k2)
       END IF
     END DO
     
@@ -1314,20 +1445,20 @@ CONTAINS
         j2 = AA%index( k+1)
         
         IF (j2 <= j1) THEN
-          WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': columns not sorted in ascending order!'
-          WRITE(0,*) '    row ', i, ': index = ', AA%index(k1:k2)
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('matname = ' // TRIM( matname) // '; columns not sorted in ascending order!')
         END IF
         
         IF (j1 > AA%n .OR. j2 > AA%n) THEN
-          WRITE(0,*) 'check_CSR - ERROR in ', TRIM(matname), ': A%index(', k, ') > A%n = ', AA%n, '!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('matname = ' // TRIM( matname) // '; A%index({int_01}) = {int_02} > A%n = {int_03}!', int_01 = k, int_02 = j1, int_03 = AA%n)
         END IF
         
       END DO
       
     END DO ! DO i = i1, i2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE check_CSR
   SUBROUTINE check_CSR_dist( AA, matname, i1, i2)
@@ -1341,24 +1472,24 @@ CONTAINS
     INTEGER,                             INTENT(IN)    :: i1,i2
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_CSR_dist'
     INTEGER                                            :: i,k1,k2,k,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Dimensions
     IF (SIZE( AA%ptr,1)-1 /= AA%m) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR_dist - ERROR in ', TRIM(matname), ': m = ', AA%m, ', but SIZE( ptr,1) = ', SIZE( AA%ptr,1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; m = {int_01}, but SIZE( ptr,1) = {int_02}', int_01 = AA%m, int_02 = SIZE( AA%ptr,1))
     END IF
     IF (AA%ptr( AA%m+1) /= AA%nnz+1) THEN
-      IF (par%master) WRITE(0,*) 'check_CSR_dist - ERROR in ', TRIM(matname), ': nnz = ', AA%nnz, ', but ptr( end)) = ', AA%ptr( AA%m+1)
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matname = ' // TRIM( matname) // '; nnz = {int_01}, but ptr( end)) = {int_02}', int_01 = AA%nnz, int_02 = AA%ptr( AA%m+1))
     END IF
     
     ! Check if the ptr values are ascending
     DO i = i1, i2
       IF (AA%ptr( i+1) < AA%ptr( i)) THEN
-        WRITE(0,*) 'check_CSR_dist - ERROR in ', TRIM(matname), ': ptr not ascending!'
-        WRITE(0,*) 'check : row ', i, ': k1 = ', k1, ', k2 = ', k2
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('matname = ' // TRIM( matname) // '; ptr not ascending! (row {int_01}; k1 = {int_02}, k2 = {int_03})', int_01 = i, int_02 = k1, int_03 = k2)
       END IF
     END DO
     
@@ -1373,19 +1504,20 @@ CONTAINS
         j = AA%index( k)
         
         IF (j > AA%n) THEN
-          WRITE(0,*) 'check_CSR_dist - ERROR in ', TRIM(matname), ': A%index(', k, ') > A%n = ', AA%n, '!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('matname = ' // TRIM( matname) // '; A%index({int_01}) = {int_02} > A%n = {int_03}!', int_01 = k, int_02 = j, int_03 = AA%n)
         END IF
         
         IF (j <= 0) THEN
-          WRITE(0,*) 'check_CSR_dist - ERROR in ', TRIM(matname), ': A%index(', k, ') = ', AA%index( k), '!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('matname = ' // TRIM( matname) // '; A%index({int_01}) = {int_02}!', int_01 = k, int_02 = j)
         END IF
         
       END DO
       
     END DO ! DO i = i1, i2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE check_CSR_dist
   SUBROUTINE are_identical_matrices_CSR( AA, BB, isso)
@@ -1398,13 +1530,18 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: isso
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'are_identical_matrices_CSR'
     INTEGER                                            :: i1, i2, k1, k2, i, k
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     isso = .TRUE.
     
     ! Simple dimension check
     IF (AA%m /= BB%m .OR. AA%n /= BB%n .OR. AA%nnz /= BB%nnz) THEN
       isso = .FALSE.
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
     
@@ -1417,7 +1554,10 @@ CONTAINS
       END IF
     END DO
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, isso, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
-    IF (.NOT. isso) RETURN
+    IF (.NOT. isso) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! index, val
     CALL partition_list( AA%nnz, par%i, par%n, k1, k2)
@@ -1428,7 +1568,13 @@ CONTAINS
       END IF
     END DO
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, isso, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
-    IF (.NOT. isso) RETURN
+    IF (.NOT. isso) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE are_identical_matrices_CSR
 

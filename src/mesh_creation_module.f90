@@ -5,7 +5,7 @@ MODULE mesh_creation_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -333,16 +333,16 @@ MODULE mesh_creation_module
     ! Input variables
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'create_mesh_from_cart_data'
-    INTEGER                                       :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_mesh_from_cart_data'
     INTEGER                                       :: orientation
     TYPE(type_mesh)                               :: submesh
     REAL(dp)                                      :: xmin, xmax, ymin, ymax
     REAL(dp)                                      :: res_min_inc
     CHARACTER(LEN=2)                              :: str_processid
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) WRITE(0,*) '  Creating the first mesh...'
     
@@ -394,8 +394,7 @@ MODULE mesh_creation_module
               C%choice_benchmark_experiment == 'mesh_generation_test') THEN
         ! No need for an exception here either, as the initial state has a coastline.
       ELSE
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in create_mesh_from_cart_data!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF
         
@@ -459,8 +458,8 @@ MODULE mesh_creation_module
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
     END IF
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_mesh_from_cart_data
   
@@ -474,10 +473,14 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     TYPE(type_reference_geometry),INTENT(IN)      :: refgeo_init
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     FinishedRefining = .FALSE.
     DoExtendMemory   = .FALSE.
@@ -548,6 +551,9 @@ MODULE mesh_creation_module
       END IF
     
     END DO ! DO WHILE (.NOT. FinishedRefining)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_mesh
   SUBROUTINE refine_mesh_geo_only( mesh)
@@ -560,10 +566,14 @@ MODULE mesh_creation_module
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh_geo_only'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! List all triangles for checking
     IF (par%master) THEN
@@ -632,6 +642,9 @@ MODULE mesh_creation_module
       END IF
     
     END DO !DO WHILE (.NOT. FinishedRefining)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_mesh_geo_only
   SUBROUTINE refine_submesh_geo_only( mesh)
@@ -642,10 +655,14 @@ MODULE mesh_creation_module
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_submesh_geo_only'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     FinishedRefining = .FALSE.
     DoExtendMemory   = .FALSE.
@@ -716,6 +733,9 @@ MODULE mesh_creation_module
       END IF
     
     END DO ! DO WHILE (.NOT. FinishedRefining)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_submesh_geo_only
   
@@ -730,10 +750,14 @@ MODULE mesh_creation_module
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'Lloyds_algorithm_single_iteration_submesh'
     INTEGER                                       :: vi, ci, cip1
     REAL(dp)                                      :: VorTriA, sumVorTriA
     REAL(dp), DIMENSION(2)                        :: pa, pb, pc, VorGC
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Move all non-boundary vertices to their Voronoi cell geometric centre
     DO vi = 1, mesh%nV
@@ -769,6 +793,9 @@ MODULE mesh_creation_module
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE Lloyds_algorithm_single_iteration_submesh
   
   ! == Align and merge submeshes created by parallel processes
@@ -779,11 +806,19 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER,                    INTENT(IN)        :: orientation
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_all_submeshes'
     INTEGER, DIMENSION(:,:  ), ALLOCATABLE        :: alignlist
     INTEGER                                       :: nalign, i_left, i_right, i, nVl_east, nVr_west
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! No need for this if we're running on a single core
-    IF (par%n == 1) RETURN
+    IF (par%n == 1) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Since each submesh can only be aligned with one neighbour at a time, and each one has
     ! at most two neighbours, we need two passes.
@@ -851,6 +886,9 @@ MODULE mesh_creation_module
     
     DEALLOCATE( alignlist)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE align_all_submeshes
   SUBROUTINE align_submeshes( submesh, orientation, p_left, p_right, nVl_east, nVr_west)
     ! Align: make sure two adjacent submeshes share all their boundary vertices
@@ -863,22 +901,24 @@ MODULE mesh_creation_module
     INTEGER,                    INTENT(IN)        :: p_left, p_right
     INTEGER,                    INTENT(OUT)       :: nVl_east, nVr_west
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_submeshes'
     INTEGER                                       :: status(MPI_STATUS_SIZE)
-    
     INTEGER                                       :: nVl_tot, nVr_tot, nV_extra
     INTEGER,  DIMENSION(:  ), ALLOCATABLE         :: Vil_east, Vir_west, Vi_dummy
     REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vl_east, Vr_west, V_dummy
     INTEGER                                       :: vi_prev, vi
     LOGICAL                                       :: FoundNorth
-    
     INTEGER,  DIMENSION(:,:), ALLOCATABLE         :: T
     INTEGER                                       :: nT
     INTEGER                                       :: vil, vir
     LOGICAL,  DIMENSION(:  ), ALLOCATABLE         :: FoundAsMatchl, FoundAsMatchr
     REAL(dp), DIMENSION(2  )                      :: p_new, pc, pu, pl
     INTEGER                                       :: vilc, vilu, vill, virc, viru, virl
-    
     INTEGER                                       :: vi2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
 !    IF (par%i == p_left .OR. par%i == p_right) THEN
 !      WRITE(0,'(A,I2,A,I2,A,I2)') '  align_submeshes - process ', par%i, ': aligning mesh ', p_left, ' with mesh ', p_right
@@ -1275,18 +1315,30 @@ MODULE mesh_creation_module
     
 !    WRITE(0,'(A,I2,A)') '  align_submeshes - process ', par%i, ': finished'
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE align_submeshes
   SUBROUTINE merge_all_submeshes( submesh, orientation)
     ! Iteratively merge the submeshes created by the different processes.
-  
+    
+    ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER,                    INTENT(IN)        :: orientation
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_all_submeshes'
     INTEGER, DIMENSION(:,:), ALLOCATABLE          :: mergelist
     INTEGER                                       :: nmerge, merge_it, n_merge_it, i
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! No need for this if we're running on a single core
-    IF (par%n == 1) RETURN
+    IF (par%n == 1) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ALLOCATE( mergelist( par%n, 2))
     
@@ -1319,6 +1371,9 @@ MODULE mesh_creation_module
   ! =======================
     
     DEALLOCATE( mergelist)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE merge_all_submeshes
   SUBROUTINE merge_submeshes( submesh, mergelist, nmerge, orientation)
@@ -1326,31 +1381,30 @@ MODULE mesh_creation_module
     
     IMPLICIT NONE
   
-    ! Input variables
+    ! In/output variables
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER, DIMENSION(:,:),    INTENT(IN)        :: mergelist
     INTEGER,                    INTENT(IN)        :: nmerge
     INTEGER,                    INTENT(IN)        :: orientation  ! 0 = eastwest, 1 = northsouth
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_submeshes'
     TYPE(type_mesh)                               :: submesh_right
-    
     INTEGER                                       :: status(MPI_STATUS_SIZE)
-    
     INTEGER                                       :: p_left, p_right, i
-    
     INTEGER,  DIMENSION(:,:), ALLOCATABLE         :: T
     INTEGER                                       :: nT, ti, nVl_east, nVr_west
     LOGICAL                                       :: FoundNorth
     INTEGER                                       :: vi, vil, vir, vil_prev, vir_prev
-    
     INTEGER                                       :: nVl, nVr, nVtot, nTril, nTrir, nTritot, RefStackNl, RefStackNr, RefStackNtot
     INTEGER                                       :: ci, iti, n, vi1, vi2, nf, ti1, ti2
     LOGICAL                                       :: did_flip
-    
     INTEGER                                       :: cip1
     REAL(dp)                                      :: VorTriA, sumVorTriA
     REAL(dp), DIMENSION(2)                        :: pa, pb, pc, VorGC
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Determine if we're participating as Left, Right or Passive
     ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)
@@ -1661,6 +1715,9 @@ MODULE mesh_creation_module
     
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE merge_submeshes
   
   ! == Once merging is finished, finalise the mesh
@@ -1672,8 +1729,12 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
     INTEGER                                       :: nV, nTri
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Communicate final merged mesh size to all processes
     ! ===================================================
@@ -1718,6 +1779,9 @@ MODULE mesh_creation_module
     
     CALL check_mesh( mesh)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 49)
+    
   END SUBROUTINE create_final_mesh_from_merged_submesh
   
   ! == Create the list of vertex indices and weights used in making transects
@@ -1731,6 +1795,7 @@ MODULE mesh_creation_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_transect'
     REAL(dp), DIMENSION(2)                        :: p_start, p_end
     INTEGER                                       :: vi_cur, vj_cur, ti_cur, vi_next, vj_next, ti_next, vi_end, vj_end, ti_end, ti
     INTEGER                                       :: nV_transect
@@ -1740,6 +1805,9 @@ MODULE mesh_creation_module
     REAL(dp), DIMENSION(2)                        :: pi_next, pj_next, llis
     LOGICAL                                       :: do_cross
     INTEGER                                       :: iti, n2, n3
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate temporary memory for the list of transect vertex pairs
     ! (since we don't know in advance how many there will be)
@@ -1834,8 +1902,7 @@ MODULE mesh_creation_module
         
         ! Check if we managed to find the crossing
         IF (ti_next == 0) THEN
-          WRITE(0,*) '  create_transect - ERROR: couldnt find next triangle along transect!'
-          STOP
+          CALL crash('couldnt find next triangle along transect!')
         END IF
         
         ! Add this new vertex pair to the list
@@ -1872,6 +1939,9 @@ MODULE mesh_creation_module
     DEALLOCATE( vi_transect)
     DEALLOCATE( w_transect)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
+    
   END SUBROUTINE create_transect
   
   ! == Initialise a five-vertex dummy mesh
@@ -1904,8 +1974,12 @@ MODULE mesh_creation_module
     REAL(dp),                   INTENT(IN)        :: ymin
     REAL(dp),                   INTENT(IN)        :: ymax
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_dummy_mesh'
     REAL(dp), PARAMETER                           :: tol = 1E-9_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Meta properties
     mesh%xmin                 = xmin    ! Boundaries of the square domain.
@@ -1991,14 +2065,15 @@ MODULE mesh_creation_module
     mesh%RefMap    = 0
     mesh%RefStack  = 0
     mesh%RefStackN = 0
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_dummy_mesh
   SUBROUTINE perturb_dummy_mesh( mesh, perturb_dir_global)
     ! "Perturb" the five-vertex dummy mesh; slightly offset the centre vertex,
     ! and split the four edges just next to their midpoints. This ensures that
     ! any new triangles created during mesh refinement are never cocircular.
-    
-    USE parameters_module, ONLY: pi
     
     IMPLICIT NONE
 
@@ -2007,9 +2082,13 @@ MODULE mesh_creation_module
     INTEGER,                    INTENT(IN)        :: perturb_dir_global
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'perturb_dummy_mesh'
     INTEGER                                       :: perturb_dir_local, i, vi1, vi2
     REAL(dp), DIMENSION(2)                        :: p
     REAL(dp)                                      :: dx, dy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     perturb_dir_local = perturb_dir_global
     DO i = 1, par%i
@@ -2023,8 +2102,7 @@ MODULE mesh_creation_module
       dx = (mesh%xmin - mesh%xmax) *  pi     / 1000._dp ! Offset in x-direction by ~0.3 % of domain width
       dy = (mesh%ymin - mesh%ymax) * (pi**2) / 1000._dp ! Offset in y-direction by ~1   % of domain width
     ELSE
-      WRITE(0,*) ' ERROR: mesh perturbation direction can only be 0 or 1!'
-      STOP
+      CALL crash('mesh perturbation direction can only be 0 or 1!')
     END IF
     
     ! Save perturbation direction
@@ -2063,6 +2141,9 @@ MODULE mesh_creation_module
     vi2 = 1
     p = [mesh%xmin, (mesh%ymax + mesh%ymin) / 2._dp - dy]
     CALL split_segment( mesh, vi1, vi2, p)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE perturb_dummy_mesh
 

@@ -5,7 +5,7 @@ MODULE general_ice_model_data_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -42,12 +42,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'update_general_ice_model_data'
-    INTEGER                                            :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_general_ice_model_data'
     INTEGER                                            :: vi
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate surface elevation and thickness above floatation
     DO vi = mesh%vi1, mesh%vi2
@@ -59,8 +59,8 @@ CONTAINS
     ! Determine masks
     CALL determine_masks( mesh, ice)
     
-    n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE update_general_ice_model_data
   SUBROUTINE determine_masks( mesh, ice)
@@ -71,8 +71,13 @@ CONTAINS
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
     TYPE(type_ice_model),                INTENT(INOUT) :: ice 
-  
-    INTEGER                                       :: vi, ci, vc
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_masks'
+    INTEGER                                            :: vi, ci, vc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Start out with land everywhere, fill in the rest based on input.
     ice%mask_land_a(   mesh%vi1:mesh%vi2) = 1
@@ -170,6 +175,9 @@ CONTAINS
       END IF
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE determine_masks
   
@@ -183,8 +191,17 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     CALL determine_grounded_fractions_a( mesh, ice)
     CALL determine_grounded_fractions_b( mesh, ice)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE determine_grounded_fractions
   SUBROUTINE determine_grounded_fractions_a( mesh, ice)
@@ -197,12 +214,16 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_a'
     REAL(dp), DIMENSION(:    ), POINTER                ::  TAF_b
     INTEGER                                            :: wTAF_b
     INTEGER                                            :: vi, ci, vj, iti, iti2, ti1, ti2
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, ccb1, ccb2
     REAL(dp)                                           :: TAFa, TAFb, TAFc, A_vor, A_tri_tot, A_tri_grnd, A_grnd
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Map thickness-above-floatation to the b-grid
     CALL allocate_shared_dp_1D( mesh%nTri, TAF_b, wTAF_b)
@@ -279,6 +300,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wTAF_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE determine_grounded_fractions_a
   SUBROUTINE determine_grounded_fractions_b( mesh, ice)
     ! Determine the grounded fractions of all grid cells on the b-grid
@@ -290,10 +314,14 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_b'
     INTEGER                                            :: ti, via, vib, vic
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, vb, vc
     REAL(dp)                                           :: TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   
     DO ti = mesh%ti1, mesh%ti2
       
@@ -335,6 +363,9 @@ CONTAINS
       
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE determine_grounded_fractions_b
   SUBROUTINE determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
@@ -385,8 +416,7 @@ CONTAINS
         A_tri_grnd = A_tri_tot - A_flt
       ELSE
         A_tri_grnd = 0._dp
-        WRITE(0,*) 'determine_grounded_fraction_triangle - ERROR: TAF = [', TAFa, ',', TAFb, ',', TAFc, ']'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('TAF = [{dp_01},{dp_02},{dp_03}]', dp_01 = TAFa, dp_02 = TAFb, dp_03 = TAFc)
       END IF
       
     END IF
@@ -454,6 +484,12 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Initialise
     region%mask_noice( mesh%vi1:mesh%vi2) = 0
     CALL sync
@@ -467,8 +503,7 @@ CONTAINS
         ! Prevent ice growth in the Greenlandic part of the North America domain
         CALL initialise_mask_noice_NAM_remove_GRL( mesh, region%mask_noice)
       ELSE
-        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_NAM "', TRIM(C%choice_mask_noice_NAM), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_mask_noice_NAM "' // TRIM( C%choice_mask_noice_NAM) // '"!')
       END IF
       
     ELSEIF (region%name == 'EAS') THEN
@@ -480,8 +515,7 @@ CONTAINS
         ! Prevent ice growth in the Greenlandic part of the Eurasia domain
         CALL initialise_mask_noice_EAS_remove_GRL( mesh, region%mask_noice)
       ELSE
-        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_EAS "', TRIM(C%choice_mask_noice_EAS), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_mask_noice_EAS "' // TRIM( C%choice_mask_noice_EAS) // '"!')
       END IF
       
     ELSEIF (region%name == 'GRL') THEN
@@ -493,8 +527,7 @@ CONTAINS
         ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
         CALL initialise_mask_noice_GRL_remove_Ellesmere( mesh, region%mask_noice)
       ELSE
-        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_GRL "', TRIM(C%choice_mask_noice_GRL), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_mask_noice_GRL "' // TRIM( C%choice_mask_noice_GRL) // '"!')
       END IF
       
     ELSEIF (region%name == 'ANT') THEN
@@ -509,11 +542,13 @@ CONTAINS
         ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
         CALL initialise_mask_noice_MISMIPplus( mesh, region%mask_noice)
       ELSE
-        IF (par%master) WRITE(0,*) 'initialise_mask_noice - ERROR: unknown choice_mask_noice_ANT "', TRIM(C%choice_mask_noice_ANT), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_mask_noice_ANT "' // TRIM( C%choice_mask_noice_ANT) // '"!')
       END IF
       
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice
   SUBROUTINE initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
@@ -526,9 +561,13 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
   
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_NAM_remove_GRL'
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb
     REAL(dp)                                           :: yl_ab
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     pa = [ 490000._dp, 1530000._dp]
     pb = [2030000._dp,  570000._dp]
@@ -542,6 +581,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice_NAM_remove_GRL
   SUBROUTINE initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
@@ -554,9 +596,13 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
   
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_EAS_remove_GRL'
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
     REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     pa = [-2900000._dp, 1300000._dp]
     pb = [-1895000._dp,  900000._dp]
@@ -577,6 +623,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice_EAS_remove_GRL
   SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
@@ -589,9 +638,13 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
   
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb
     REAL(dp)                                           :: yl_ab
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     pa = [-750000._dp,  900000._dp]
     pb = [-250000._dp, 1250000._dp]
@@ -605,6 +658,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere
   SUBROUTINE initialise_mask_noice_MISMIP_mod( mesh, mask_noice)
@@ -617,7 +673,11 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
   
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIP_mod'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Create a nice circular ice shelf
     DO vi = mesh%vi1, mesh%vi2
@@ -628,6 +688,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice_MISMIP_mod
   SUBROUTINE initialise_mask_noice_MISMIPplus( mesh, mask_noice)
@@ -640,7 +703,11 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
   
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIPplus'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     DO vi = mesh%vi1, mesh%vi2
       ! NOTE: because UFEMISM wants to centre the domain at x=0, the front now lies at x = 240 km
@@ -651,6 +718,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_mask_noice_MISMIPplus
 

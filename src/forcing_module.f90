@@ -7,7 +7,7 @@ MODULE forcing_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -51,7 +51,11 @@ CONTAINS
     ! A continuous simulation of global ice volume over the past 1 million years with 3-D ice-sheet models, Climate Dynamics 41, 1365-1384, 2013)
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inverse_routine_global_temperature_offset'
     REAL(dp)                                           :: dT_glob_inverse_average_over_window
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -72,19 +76,19 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
-      ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in inverse_routine_global_temperature_offset!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSE
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
     ! The inverse routine might not work properly when not all ice sheets are simulated
     IF ((.NOT. C%do_NAM) .OR. (.NOT. C%do_EAS) .OR. (.NOT. C%do_GRL) .OR. (.NOT. C%do_ANT)) THEN
-      IF (par%master) WRITE(0,*) '  WARNING: The inverse routine only works properly when all four ice sheets are simulated!'
-      IF (par%master) WRITE(0,*) '           Leaving one out means you will miss that contribution to the d18O, which the'
-      IF (par%master) WRITE(0,*) '           routine will try to compensate for by making the world colder.'
-      IF (par%master) WRITE(0,*) '           If you really want to simulate only one ice sheet, consider using direct CO2 forcing.'
+      CALL warning('the inverse routine only works properly when all four ice sheets are simulated! ' // &
+                  'Leaving one out means you will miss that contribution to the d18O, which the ' // &
+                  'routine will try to compensate for by making the world colder. ' // &
+                  'If you really want to simulate only one ice sheet, consider using direct CO2 forcing.')
     END IF
     
     IF (par%master) THEN
@@ -104,6 +108,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inverse_routine_global_temperature_offset
   SUBROUTINE inverse_routine_CO2
     ! Use the inverse routine to calculate modelled CO2
@@ -111,7 +118,11 @@ CONTAINS
     ! (Berends, C. J., de Boer, B., Dolan, A. M., Hill, D. J., and van de Wal, R. S. W.: Modelling ice sheet evolution and atmospheric CO2 during the Late Pliocene, Climate of the Past 15, 1603-1619, 2019)
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inverse_routine_CO2'
     REAL(dp)                                           :: CO2_inverse_average_over_window
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -132,10 +143,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
-      ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in inverse_routine_global_temperature_offset!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSE
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -156,13 +167,20 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inverse_routine_CO2
   SUBROUTINE calculate_modelled_d18O( NAM, EAS, GRL, ANT)
     
     IMPLICIT NONE
     
-    ! In/output variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_modelled_d18O'
     TYPE(type_model_region),             INTENT(IN)    :: NAM, EAS, GRL, ANT
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -183,10 +201,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
-      ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in calculate_modelled_d18O!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      ELSE
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -213,6 +231,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calculate_modelled_d18O
   SUBROUTINE update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
     ! Calculate the annual mean surface temperature change w.r.t PD for all
@@ -227,8 +248,12 @@ CONTAINS
     TYPE(type_model_region),             INTENT(IN)    :: NAM, EAS, GRL, ANT
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_global_mean_temperature_change_history'
     REAL(dp)                                           :: dT_NAM, dT_EAS, dT_GRL, dT_ANT, dT_glob_average_over_window
     REAL(dp)                                           :: A_reg, A_glob
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -249,10 +274,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in update_global_mean_temperature_change_history!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -308,6 +333,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE update_global_mean_temperature_change_history
   SUBROUTINE calculate_mean_temperature_change_region( region, dT)
     ! Calculate the annual mean surface temperature change w.r.t PD (corrected for elevation changes) over a model region
@@ -319,8 +347,12 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: dT
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_mean_temperature_change_region'
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: dT_lapse_mod, dT_lapse_PD, T_pot_mod, T_pot_PD, A_reg
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -341,10 +373,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in calculate_mean_temperature_change_region!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -363,11 +395,20 @@ CONTAINS
     
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dT, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calculate_mean_temperature_change_region
   SUBROUTINE initialise_d18O_data
     ! Allocate shared memory for the d18O and global temperature variables.
     
     IMPLICIT NONE
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_d18O_data'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Determine number of entries in the global mean temperature change history
     CALL allocate_shared_int_0D( forcing%ndT_glob_history, forcing%wndT_glob_history)
@@ -392,14 +433,20 @@ CONTAINS
     
     forcing%d18O_obs_PD = 3.23_dp
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 15)
+    
   END SUBROUTINE initialise_d18O_data
   SUBROUTINE initialise_inverse_routine_data
     ! Allocate shared memory for the moving time windows used in the inverse routine
     
     IMPLICIT NONE
     
-    ! Local variables
-    !CHARACTER(LEN=256)                                 :: filename
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_inverse_routine_data'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -420,10 +467,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_inverse_routine_data!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -494,9 +541,11 @@ CONTAINS
 !      END IF
       
     ELSE
-      WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_inverse_routine_data!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_inverse_routine_data
 
@@ -515,9 +564,13 @@ CONTAINS
     ! In/output variables:
     REAL(dp),                            INTENT(IN)    :: time
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_CO2_at_model_time'
     INTEGER                                            :: il, iu
     REAL(dp)                                           :: wl, wu
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -538,10 +591,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in update_CO2_at_model_time!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -551,10 +604,10 @@ CONTAINS
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob' .OR. &
             C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! Observed CO2 is not needed for these forcing methods
+      CALL finalise_routine( routine_name)
       RETURN
     ELSE
-      WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in update_CO2_at_model_time!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
     IF (par%master) THEN
@@ -580,6 +633,9 @@ CONTAINS
     END IF
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE update_CO2_at_model_time
   SUBROUTINE initialise_CO2_record
     ! Read the CO2 record specified in C%filename_CO2_record. Assumes this is an ASCII text file with at least two columns (time in kyr and CO2 in ppmv)
@@ -588,8 +644,12 @@ CONTAINS
     
     IMPLICIT NONE
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_CO2_record'
     INTEGER                                            :: i,ios
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -610,10 +670,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_CO2_record!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -623,10 +683,10 @@ CONTAINS
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob' .OR. &
             C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! Observed CO2 is not needed for these forcing methods
+      CALL finalise_routine( routine_name)
       RETURN
     ELSE
-      WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_CO2_record!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
     IF (par%master) WRITE(0,*) ''
@@ -643,8 +703,7 @@ CONTAINS
         DO i = 1, C%CO2_record_length
           READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i) 
           IF (ios /= 0) THEN
-            WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('length of text file "' // TRIM( C%filename_CO2_record) // '" does not match C%CO2_record_length = {int_01}!', int_01 = C%CO2_record_length)
           END IF
         END DO
         CLOSE( UNIT  = 1337)
@@ -654,6 +713,9 @@ CONTAINS
     
     ! Set the value for the current (starting) model time
     CALL update_CO2_at_model_time( C%start_time_of_run)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_CO2_record
   
@@ -667,10 +729,14 @@ CONTAINS
     
     ! In/output variables:
     REAL(dp),                            INTENT(IN)    :: time
-    
-    ! Local variables
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_d18O_at_model_time'
     INTEGER                                            :: il, iu
     REAL(dp)                                           :: wl, wu
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -691,10 +757,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in update_d18O_at_model_time!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -706,8 +772,7 @@ CONTAINS
       ! Observed d18O is not needed for these forcing methods
       !RETURN
     ELSE
-      WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in update_d18O_at_model_time!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
     IF (par%master) THEN
@@ -735,6 +800,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE update_d18O_at_model_time
   SUBROUTINE initialise_d18O_record
     ! Read the d18O record specified in C%filename_d18O_record. Assumes this is an ASCII text file with at least two columns (time in yr and d18O in per mil)
@@ -743,8 +811,12 @@ CONTAINS
     
     IMPLICIT NONE
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_d18O_record'
     INTEGER                                            :: i,ios
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -765,10 +837,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_d18O_record!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -780,8 +852,7 @@ CONTAINS
       ! Observed d18O is not needed for these forcing methods
       !RETURN
     ELSE
-      WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_d18O_record!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
     IF (par%master) WRITE(0,*) ''
@@ -799,8 +870,7 @@ CONTAINS
       DO i = 1, C%d18O_record_length
         READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%d18O_time(i), forcing%d18O_record(i)
         IF (ios /= 0) THEN
-          WRITE(0,*) ' read_d18O_record - ERROR: length of text file "', TRIM(C%filename_d18O_record), '" does not match C%d18O_record_length = ', C%d18O_record_length
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('length of text file "' // TRIM( C%filename_d18O_record) // '" doesn not match C%d18O_record_length = {int_01}!', int_01 = C%d18O_record_length)
         END IF
       END DO
     
@@ -815,6 +885,9 @@ CONTAINS
     
     ! Set the value for the current (starting) model time
     CALL update_d18O_at_model_time( C%start_time_of_run)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_d18O_record
 
@@ -831,7 +904,11 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: t_coupling
     
     ! Local variables:
-    INTEGER                                       :: ti0, ti1
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_insolation_data'
+    INTEGER                                            :: ti0, ti1
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -852,10 +929,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in update_insolation_data!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -870,8 +947,7 @@ CONTAINS
     
     ! Check if data for model time is available
     IF (t_coupling < forcing%ins_time(1)) THEN
-      WRITE(0,*) '  update_insolation_data - ERROR: insolation data only available between ', MINVAL(forcing%ins_time), ' y and ', MAXVAL(forcing%ins_time), ' y'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('insolation data only available between {dp_01} yr and {dp_02} yr!', dp_01 = MINVAL(forcing%ins_time), dp_02 = MAXVAL(forcing%ins_time))
     END IF
     
     ! Find time indices to be read
@@ -886,7 +962,7 @@ CONTAINS
         forcing%ins_t0 = forcing%ins_time(ti0)
         forcing%ins_t1 = forcing%ins_time(ti1)
       ELSE
-        IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+        CALL warning('using constant PD insolation for future projections!')
         ti0 = forcing%ins_nyears
         ti1 = forcing%ins_nyears
         
@@ -898,6 +974,9 @@ CONTAINS
     ! Read new insolation fields from the NetCDF file
     IF (par%master) CALL read_insolation_data_file( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE update_insolation_data
   SUBROUTINE map_insolation_to_mesh( mesh, ins_t0, ins_t1, Q_TOA0, Q_TOA1, time, Q_TOA, Q_TOA_jun_65N, Q_TOA_jan_80S)
@@ -914,8 +993,12 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: Q_TOA_jun_65N, Q_TOA_jan_80S
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_insolation_to_mesh'
     INTEGER                                            :: vi,m,ilat_l,ilat_u
     REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate time interpolation weights
     wt0 = (ins_t1 - time) / (ins_t1 - ins_t0)
@@ -954,11 +1037,20 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_insolation_to_mesh
   SUBROUTINE initialise_insolation_data
     ! Allocate shared memory for the forcing data fields
     
     IMPLICIT NONE
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_insolation_data'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -979,10 +1071,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_insolation_data!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -1023,12 +1115,21 @@ CONTAINS
     ! Read insolation data
     CALL update_insolation_data( C%start_time_of_run)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_insolation_data
   
   ! Geothermal heat flux
   SUBROUTINE initialise_geothermal_heat_flux
 
     IMPLICIT NONE
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_geothermal_heat_flux'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -1049,10 +1150,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_geothermal_heat_flux!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
 
@@ -1085,11 +1186,11 @@ CONTAINS
       CALL sync
       
     ELSE ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
-      
-      IF (par%master) WRITE(0,*) '  ERROR: choice_geothermal_heat_flux "', TRIM(C%choice_geothermal_heat_flux), '" not implemented in initialise_geothermal_heat_flux!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    
+      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
     END IF ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_geothermal_heat_flux
 

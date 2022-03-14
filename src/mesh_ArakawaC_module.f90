@@ -5,7 +5,7 @@ MODULE mesh_ArakawaC_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -35,12 +35,18 @@ MODULE mesh_ArakawaC_module
     ! For a detailed explanation, read the documentation (not kidding, its in there).    
     
     IMPLICIT NONE
-
+    
+    ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'make_Ac_mesh'
     INTEGER                                       :: vi, ci, vj, cj, iti, ti, n1, n2, n3, vil, vir, til, tir
     INTEGER,  DIMENSION(:,:), ALLOCATABLE         :: Aci_temp
     REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: VAc_temp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
                 
     ! Allocate memory for the mapping arrays. Aci is stored in temporary memory on the master process first,
     ! once we know how much is needed, we will allocate shared memory and transfer the data there.
@@ -173,6 +179,9 @@ MODULE mesh_ArakawaC_module
     ! Find Ac edge indices
     CALL find_Ac_edge_indices( mesh)  
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 5)
+    
   END SUBROUTINE make_Ac_mesh
   SUBROUTINE find_Ac_edge_indices( mesh)
     ! Find the edge indices of the Ac vertices
@@ -183,7 +192,11 @@ MODULE mesh_ArakawaC_module
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'find_Ac_edge_indices'
     INTEGER                                       :: aci, vi, vj
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALl allocate_shared_int_1D( mesh%nAc, mesh%edge_index_Ac, mesh%wedge_index_Ac)
@@ -216,6 +229,9 @@ MODULE mesh_ArakawaC_module
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
     
   END SUBROUTINE find_Ac_edge_indices
 

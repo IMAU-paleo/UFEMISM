@@ -1,7 +1,7 @@
 MODULE global_text_output_module
 
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parallel_module,                 ONLY: par, sync, ierr, cerr
 
   IMPLICIT NONE
@@ -12,9 +12,14 @@ CONTAINS
     
     IMPLICIT NONE
     
-    CHARACTER(LEN=256)                            :: filename
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_text_output_files'
+    CHARACTER(LEN=256)                                 :: filename
     
     IF (.NOT. par%master) RETURN
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! The general output file
     ! =======================
@@ -62,7 +67,10 @@ CONTAINS
       
       CLOSE(UNIT = 1337)
   
-    END IF ! IF (C%do_write_memory_tracker) THENc
+    END IF ! IF (C%do_write_memory_tracker) THEN
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_text_output_files
   SUBROUTINE write_text_output( time, SL_glob, CO2_obs, CO2_mod, d18O_obs, d18O_mod, d18O_ice, d18O_Tdw, &
@@ -72,15 +80,19 @@ CONTAINS
     IMPLICIT NONE  
     
     ! In/output variables:
-    REAL(dp),                   INTENT(IN)        :: time, SL_glob, CO2_obs, CO2_mod, d18O_obs, d18O_mod, d18O_ice, d18O_Tdw
-    REAL(dp),                   INTENT(IN)        :: SL_NAM, SL_EAS, SL_GRL, SL_ANT
-    REAL(dp),                   INTENT(IN)        :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT
-    REAL(dp),                   INTENT(IN)        :: dT_glob, dT_deepwater
+    REAL(dp),                        INTENT(IN)        :: time, SL_glob, CO2_obs, CO2_mod, d18O_obs, d18O_mod, d18O_ice, d18O_Tdw
+    REAL(dp),                        INTENT(IN)        :: SL_NAM, SL_EAS, SL_GRL, SL_ANT
+    REAL(dp),                        INTENT(IN)        :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT
+    REAL(dp),                        INTENT(IN)        :: dT_glob, dT_deepwater
     
     ! Local variables:
-    CHARACTER(LEN=256)                            :: filename
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_text_output'
+    CHARACTER(LEN=256)                                 :: filename
     
     IF (.NOT. par%master) RETURN
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! The general output file
     ! =======================
@@ -110,6 +122,9 @@ CONTAINS
       REAL(MAXVAL(par%mem%h(1:par%mem%n)),dp)/1e9_dp ! 19
     
     CLOSE(UNIT = 1337)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_text_output
 

@@ -5,7 +5,7 @@ MODULE tests_and_checks_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -43,6 +43,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_all_matrix_tests'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) '========================================'
     IF (par%master) WRITE(0,*) '=== Testing all the matrix operators ==='
@@ -72,6 +78,9 @@ CONTAINS
     IF (par%master) WRITE(0,*) '================================================='
     IF (par%master) WRITE(0,*) ''
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_all_matrix_tests
   
 ! == Test petsc-to-CSR conversion
@@ -81,12 +90,16 @@ CONTAINS
       
     IMPLICIT NONE
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'test_petsc_to_csr'
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
     TYPE(tMat)                                         :: A
     INTEGER                                            :: nrows, ncols, nnz
     REAL(dp), DIMENSION(:    ), POINTER                ::  xx,  yy
     INTEGER                                            :: wxx, wyy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Set up CSR matrix
     nrows = 5
@@ -121,6 +134,9 @@ CONTAINS
       WRITE(0,*) 'test_petsc_to_csr - ERROR: did not find the correct answer!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE test_petsc_to_csr
   
@@ -167,6 +183,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'test_matrix_operators_abc_2D'
     INTEGER                                            :: vi, ti, aci
     REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
     
@@ -221,6 +238,9 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_a_to_a
     REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_a_to_a
     INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/b/c - a/b/c, 2D)...'
     CALL sync
@@ -453,6 +473,9 @@ CONTAINS
     CALL deallocate_shared( wd2dxdy_a_to_a  )
     CALL deallocate_shared( wd2dy2_a_to_a   )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE test_matrix_operators_abc_2D
   SUBROUTINE test_matrix_operators_abc_3D( mesh)
     ! Test all the matrix operators on the three basic grids (a,b,c)
@@ -494,6 +517,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'test_matrix_operators_abc_3D'
     INTEGER                                            :: vi, ti, aci
     REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
     
@@ -548,6 +572,9 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dxdy_a_to_a
     REAL(dp), DIMENSION(:,:  ), POINTER                :: d2dy2_a_to_a
     INTEGER :: wd2dx2_a_ex, wd2dxdy_a_ex, wd2dy2_a_ex, wd2dx2_a_to_a, wd2dxdy_a_to_a, wd2dy2_a_to_a
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     IF (par%master) WRITE(0,*) '  Testing the matrix operators (a/b/c - a/b/c, 3D)...'
     CALL sync
@@ -734,6 +761,9 @@ CONTAINS
     CALL deallocate_shared( wd2dxdy_a_to_a  )
     CALL deallocate_shared( wd2dy2_a_to_a   )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE test_matrix_operators_abc_3D
   
   ! 2nd-order accurate matrix operators on the b-grid
@@ -746,6 +776,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'test_matrix_operators_2nd_order_b_to_b_2D'
     INTEGER                                            :: ti
     REAL(dp)                                           :: x, y, d, ddx, ddy, d2dx2, d2dxdy, d2dy2
     
@@ -763,6 +794,9 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), POINTER                :: d2dxdy_b
     REAL(dp), DIMENSION(:    ), POINTER                :: d2dy2_b
     INTEGER :: wddx_b, wddy_b, wd2dx2_b, wd2dxdy_b, wd2dy2_b
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     IF (par%master) WRITE(0,*) '  Testing the 2nd-order accurate matrix operators on the b-grid...'
     CALL sync
@@ -849,6 +883,9 @@ CONTAINS
     CALL deallocate_shared( wd2dxdy_b   )
     CALL deallocate_shared( wd2dy2_b    )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE test_matrix_operators_2nd_order_b_to_b_2D
   
   SUBROUTINE test_matrix_operators_test_function( x, y, xmin, xmax, ymin, ymax, d, ddx, ddy, d2dx2, d2dxdy, d2dy2)
@@ -904,6 +941,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_modified_Laplace_equation_b'
     INTEGER                                            :: vi, ti
     REAL(dp)                                           :: x, y, xp, yp
     REAL(dp), PARAMETER                                :: amp = 7._dp
@@ -919,6 +957,9 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER                ::  Tri_BC
     INTEGER                                            :: wTri_BC
     REAL(dp)                                           :: rtol, abstol
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     IF (par%master) WRITE(0,*) '  Solving the modified Laplace equation on the b-grid...'
     
@@ -1068,6 +1109,9 @@ CONTAINS
     CALL deallocate_shared( wdN_dy_b)
     CALL deallocate_shared( wx_b)
     CALL deallocate_shared( wb_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_modified_Laplace_equation_b
 

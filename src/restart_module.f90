@@ -6,7 +6,7 @@ MODULE restart_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -50,12 +50,16 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_mesh_from_restart_file'
 !    INTEGER                                            :: nV, nTri, nC_mem
 !    REAL(dp)                                           :: xmin, xmax, ymin, ymax
 !    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
     
-    WRITE(0,*) 'read_mesh_from_restart_file - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! DENK DROM
+    CALL crash('FIXME!')
     
 !    ! Set the filename
 !    IF     (region%name == 'NAM') THEN
@@ -125,6 +129,9 @@ CONTAINS
 !      WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh%nTri
 !      WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
 !    END IF
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE read_mesh_from_restart_file
   SUBROUTINE read_init_data_from_restart_file( region)
@@ -135,8 +142,14 @@ CONTAINS
     ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
-    WRITE(0,*) 'read_init_data_from_restart_file - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_init_data_from_restart_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! DENK DROM
+    CALL crash('FIXME!')
     
 !    IF (par%master) WRITE(0,*) '  Reading initial data from restart file "', TRIM(region%init%netcdf_restart%filename), '"...'
 !    
@@ -157,6 +170,9 @@ CONTAINS
 !    ! Read data from the restart file
 !    IF (par%master) CALL read_restart_file_init( region%init, region%init%netcdf_restart)
 !    CALL sync
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE read_init_data_from_restart_file
   

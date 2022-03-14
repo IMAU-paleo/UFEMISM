@@ -5,7 +5,7 @@ MODULE netcdf_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -25,7 +25,8 @@ MODULE netcdf_module
   ! Import specific functionality
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
-                                           type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, type_sparse_matrix_CSR_dp
+                                           type_subclimate_global, type_debug_fields, type_ICE5G_timeframe, type_sparse_matrix_CSR_dp, &
+                                           type_netcdf_resource_tracker
   USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -53,7 +54,16 @@ CONTAINS
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
     
-    IF (.NOT. par%master) RETURN
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_output_files'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     IF (par%master) WRITE(0,*) '  Creating output files...'
     
@@ -67,6 +77,9 @@ CONTAINS
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_output_files
   SUBROUTINE write_to_output_files( region)
     ! Write the current model state to the existing output files
@@ -76,12 +89,21 @@ CONTAINS
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_output_files'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
     
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_to_output_files
   SUBROUTINE get_output_filenames( region)
@@ -91,12 +113,20 @@ CONTAINS
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_output_filenames'
     CHARACTER(LEN=256)          :: short_filename
     LOGICAL                     :: ex
     INTEGER                     :: n    
     CHARACTER(LEN=256)          :: ns
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! restart file (mesh)
     ! ===================
@@ -191,6 +221,9 @@ CONTAINS
       region%help_fields_grid%filename(n:n) = ' '
     END DO
     region%help_fields_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE get_output_filenames
 
@@ -206,7 +239,16 @@ CONTAINS
     TYPE(type_model_region),   INTENT(INOUT) :: region
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
-    IF (.NOT. par%master) RETURN
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_restart_file_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Open the file for writing
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -235,6 +277,9 @@ CONTAINS
     
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE write_to_restart_file_mesh
   SUBROUTINE write_to_help_fields_file_mesh( region, netcdf)
@@ -246,7 +291,16 @@ CONTAINS
     TYPE(type_model_region),       INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
     
-    IF (.NOT. par%master) RETURN
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Open the file for writing
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -311,6 +365,9 @@ CONTAINS
     
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE write_to_help_fields_file_mesh
   SUBROUTINE write_help_field_mesh( region, netcdf, id_var, field_name)
@@ -324,7 +381,16 @@ CONTAINS
     INTEGER,                        INTENT(IN)    :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
-    IF (field_name == 'none') RETURN
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (field_name == 'none') THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
       
     ! Fields with no time dimension
     ! =============================
@@ -519,9 +585,11 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
     
     ELSE
-      WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_mesh!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_help_field_mesh
   
@@ -535,10 +603,17 @@ CONTAINS
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_restart_file_mesh'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Set time frame index to 1
     netcdf%ti = 1
@@ -547,8 +622,7 @@ CONTAINS
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
-      WRITE(0,*) 'ERROR: ', TRIM(netcdf%filename), ' already exists!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
     END IF
     
     ! Create netCDF file
@@ -665,6 +739,9 @@ CONTAINS
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_restart_file_mesh
   SUBROUTINE create_help_fields_file_mesh( region, netcdf)
     ! Create a new help_fields NetCDF file, write the current mesh data to it.
@@ -676,10 +753,17 @@ CONTAINS
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_mesh'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Set time frame index to 1
     netcdf%ti = 1
@@ -688,8 +772,7 @@ CONTAINS
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
-      WRITE(0,*) 'ERROR: ', TRIM(netcdf%filename), ' already exists!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
     END IF
     
     ! Create netCDF file
@@ -844,6 +927,9 @@ CONTAINS
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_help_fields_file_mesh
   SUBROUTINE create_help_field_mesh( netcdf, id_var, field_name)
     ! Add a data field to the help_fields file
@@ -856,7 +942,11 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_mesh'
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
@@ -875,6 +965,7 @@ CONTAINS
     m         = netcdf%id_dim_month
     
     IF (field_name == 'none') THEN
+      CALL finalise_routine( routine_name)
       RETURN
       
     ! Fields with no time dimension
@@ -1070,9 +1161,11 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHb',                      [vi,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
       
     ELSE
-      WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in create_help_field_mesh!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_help_field_mesh
   
@@ -1086,6 +1179,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_model_region),   INTENT(INOUT) :: region
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_restart_file_grid'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -1115,6 +1214,9 @@ CONTAINS
     ! Increase time frame counter
     IF (par%master) netcdf%ti = netcdf%ti + 1
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE write_to_restart_file_grid
   SUBROUTINE write_to_help_fields_file_grid( region, netcdf)
@@ -1124,6 +1226,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_model_region),       INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_grid'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -1189,6 +1297,9 @@ CONTAINS
     ! Increase time frame counter
     IF (par%master) netcdf%ti = netcdf%ti + 1
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE write_to_help_fields_file_grid
   SUBROUTINE write_help_field_grid( region, netcdf, id_var, field_name)
@@ -1203,11 +1314,18 @@ CONTAINS
     CHARACTER(LEN=*),              INTENT(IN)    :: field_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_grid'
     INTEGER                                       :: vi
     REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
     INTEGER                                       :: wdp_2D_a
     
-    IF (field_name == 'none') RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (field_name == 'none') THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( region%mesh%nV, dp_2D_a, wdp_2D_a)
@@ -1433,12 +1551,14 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     
     ELSE
-      WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in write_help_field_grid!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
     
     ! Clean up after yourself
     CALL deallocate_shared( wdp_2D_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_help_field_grid
 
@@ -1452,14 +1572,24 @@ CONTAINS
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_restart_file_grid'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: x,y,z,m,t
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! If the file already exists, return.
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
-    IF (file_exists) RETURN
+    IF (file_exists) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Create netCDF file
 !    WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
@@ -1524,6 +1654,9 @@ CONTAINS
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_restart_file_grid
   SUBROUTINE create_help_fields_file_grid( region, netcdf)
     ! Create a new help fields file, containing secondary model output (not needed for a restart, but interesting to look at)
@@ -1535,14 +1668,24 @@ CONTAINS
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_grid'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: x, y, z, m, t
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! If the file already exists, return.
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
-    IF (file_exists) RETURN
+    IF (file_exists) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Create netCDF file
     !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
@@ -1639,6 +1782,9 @@ CONTAINS
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_help_fields_file_grid
   SUBROUTINE create_help_field_grid( netcdf, id_var, field_name)
     ! Add a data field to the help_fields file
@@ -1651,7 +1797,11 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_grid'
     INTEGER                                       :: x, y, t, z, m
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Placeholders for the dimension ID's, for shorter code
     x         = netcdf%id_dim_x
@@ -1661,6 +1811,7 @@ CONTAINS
     m         = netcdf%id_dim_month
     
     IF (field_name == 'none') THEN
+      CALL finalise_routine( routine_name)
       RETURN
       
     ! Fields with no time dimension
@@ -1859,9 +2010,11 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHb',                      [x, y,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
       
     ELSE
-      WRITE(0,*) ' ERROR: help field "', TRIM(field_name), '" not implemented in create_help_field_grid!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_help_field_grid
   
@@ -1879,8 +2032,12 @@ CONTAINS
     INTEGER,                    INTENT(IN)        :: ti
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D'
     REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
     INTEGER                                       :: wd_grid
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
@@ -1893,6 +2050,9 @@ CONTAINS
     
     ! Deallocate shared memory
     CALL deallocate_shared( wd_grid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D
   SUBROUTINE map_and_write_to_grid_netcdf_dp_3D(  ncid, mesh, grid, d_mesh, id_var, ti, nz)
@@ -1909,8 +2069,12 @@ CONTAINS
     INTEGER,                    INTENT(IN)        :: nz
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_3D'
     REAL(dp), DIMENSION(:,:,:), POINTER           :: d_grid
     INTEGER                                       :: wd_grid
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz, d_grid, wd_grid)
@@ -1924,6 +2088,9 @@ CONTAINS
     ! Deallocate shared memory
     CALL deallocate_shared( wd_grid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_3D
   
 ! Create and write to debug NetCDF file
@@ -1935,11 +2102,21 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_debug_file'
     INTEGER                                :: ncid
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
-    IF (.NOT. C%do_write_debug_data) RETURN
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    IF (.NOT. C%do_write_debug_data) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     ! Open the file for writing
     CALL open_netcdf_file( debug%netcdf%filename, ncid)
@@ -2035,6 +2212,9 @@ CONTAINS
 
     ! Close the file
     CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE write_to_debug_file
   SUBROUTINE create_debug_file( region)
@@ -2048,15 +2228,25 @@ CONTAINS
     TYPE(type_model_region),        INTENT(INOUT) :: region
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_debug_file'
     TYPE(type_netcdf_debug)                       :: debug_temp
     CHARACTER(LEN=20)                             :: short_filename
     INTEGER                                       :: n
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, zeta, month
     
-    IF (.NOT. par%master) RETURN
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
-    IF (.NOT. C%do_write_debug_data) RETURN
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    IF (.NOT. C%do_write_debug_data) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Determine debug NetCDF filename for this model region
     short_filename = 'debug_NAM.nc'
@@ -2267,6 +2457,9 @@ CONTAINS
       debug_ANT%netcdf = debug_temp
     END IF
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_debug_file
   
   ! Manage memory for the debug data fields
@@ -2282,6 +2475,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_model_region),        INTENT(IN)    :: region
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'associate_debug_fields'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Copy the netcdf ID's
     IF (par%master) THEN
@@ -2753,6 +2952,9 @@ CONTAINS
       
     END IF
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE associate_debug_fields
   SUBROUTINE initialise_debug_fields( region)
   
@@ -2762,10 +2964,10 @@ CONTAINS
     TYPE(type_model_region),         INTENT(INOUT)     :: region
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_debug_fields'
-    INTEGER                                       :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_debug_fields'
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF     (region%name == 'NAM') THEN
       CALL initialise_debug_fields_region( debug_NAM, region%mesh)
@@ -2777,8 +2979,8 @@ CONTAINS
       CALL initialise_debug_fields_region( debug_ANT, region%mesh)
     END IF
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 80)
     
   END SUBROUTINE initialise_debug_fields
   SUBROUTINE initialise_debug_fields_region( debug, mesh)
@@ -2788,6 +2990,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
     TYPE(type_mesh),                 INTENT(IN)        :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_debug_fields_region'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_01, debug%wint_2D_a_01)
     CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_02, debug%wint_2D_a_02)
@@ -2877,6 +3085,9 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_09, debug%wdp_2D_monthly_a_09)
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_10, debug%wdp_2D_monthly_a_10)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 80)
+    
   END SUBROUTINE initialise_debug_fields_region
   SUBROUTINE reallocate_debug_fields( region)
   
@@ -2884,6 +3095,12 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'reallocate_debug_fields'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF     (region%name == 'NAM') THEN
       CALL deallocate_debug_fields_region( debug_NAM)
@@ -2900,6 +3117,9 @@ CONTAINS
     END IF
     CALL associate_debug_fields( region)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE reallocate_debug_fields
   SUBROUTINE deallocate_debug_fields_region( debug)
   
@@ -2907,6 +3127,12 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_debug_fields_region'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL deallocate_shared( debug%wint_2D_a_01)
     CALL deallocate_shared( debug%wint_2D_a_02)
@@ -2996,7 +3222,362 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_monthly_a_09)
     CALL deallocate_shared( debug%wdp_2D_monthly_a_10)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE deallocate_debug_fields_region
+  
+! Create and write to resource tracking file
+! ==========================================
+
+  SUBROUTINE write_to_resource_tracking_file( netcdf, time)
+    ! Write to the resource tracking output file
+    
+    USE configuration_module, ONLY: resource_tracker
+   
+    IMPLICIT NONE
+    
+    ! Input variables:
+    TYPE(type_netcdf_resource_tracker), INTENT(INOUT) :: netcdf
+    REAL(dp),                           INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'write_to_resource_tracking_file'
+    INTEGER                                           :: i,n
+    INTEGER,  DIMENSION(1024)                         :: path_int_enc
+    
+    IF (.NOT. par%master) RETURN
+    
+    ! Open the file for writing
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+        
+    ! Time
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, time, start = (/netcdf%ti/)))
+    
+    ! Actual variables
+    ! ================
+    
+    n = SIZE( resource_tracker)
+    
+    DO i = 1, n
+      
+      ! Subroutine name
+      CALL encode_subroutine_path_as_integer( resource_tracker( i)%routine_path, path_int_enc)
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_names( i), path_int_enc ))
+    
+      ! Computation time
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_vars( i), resource_tracker( i)%tcomp, start = (/ netcdf%ti /) ))
+      
+    END DO
+    
+    ! Close the file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Increase time frame counter
+    netcdf%ti = netcdf%ti + 1
+    
+  END SUBROUTINE write_to_resource_tracking_file
+  SUBROUTINE create_resource_tracking_file( netcdf)
+    ! Create the resource tracking output file
+    
+    USE configuration_module, ONLY: resource_tracker
+   
+    IMPLICIT NONE
+    
+    ! Input variables:
+    TYPE(type_netcdf_resource_tracker), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'create_resource_tracking_file'
+    LOGICAL                                           :: file_exists
+    INTEGER                                           :: t,nl
+    INTEGER                                           :: i,n
+    CHARACTER(LEN=256)                                :: var_name, long_name
+    
+    IF (.NOT. par%master) RETURN
+    
+    ! Set time frame index to 1
+    netcdf%ti = 1
+
+    ! Create a new file if none exists and, to prevent loss of data, 
+    ! stop with an error message if one already exists (not when differences are considered):
+    netcdf%filename = TRIM(C%output_dir) // '/resource_tracking.nc'
+    INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
+    END IF
+    
+    ! Create netCDF file
+    !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
+    CALL handle_error( nf90_create( netcdf%filename, IOR( nf90_clobber, nf90_share), netcdf%ncid))
+        
+    ! Define dimensions:
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_time       , nf90_unlimited, netcdf%id_dim_time       )
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_name_length, 1024          , netcdf%id_dim_name_length)
+    
+    ! Placeholders for the dimension ID's, for shorter code
+    t  = netcdf%id_dim_time
+    nl = netcdf%id_dim_name_length
+    
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+    
+    ! Dimension variables: time
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time, [t], netcdf%id_var_time, long_name='Time', units='years'   )
+    
+    ! Actual variables
+    ! ================
+    
+    n = SIZE( resource_tracker)
+    
+    ALLOCATE( netcdf%id_vars(      n))
+    ALLOCATE( netcdf%id_var_names( n))
+    
+    DO i = 1, n
+      
+      ! Subroutine name
+      ! ===============
+      
+      ! Generate variable name (name_00001, name_00002, etc.)
+      var_name(  1:256) = ' '
+      long_name( 1:256) = ' '
+      IF     (i < 10) THEN
+        WRITE( var_name ,'(A,I1)') 'name_0000', i
+      ELSEIF (i < 100) THEN
+        WRITE( var_name,'(A,I2)') 'name_000', i
+      ELSEIF (i < 1000) THEN
+        WRITE( var_name,'(A,I3)') 'name_00', i
+      ELSEIF (i < 10000) THEN
+        WRITE( var_name,'(A,I4)') 'name_0', i
+      ELSEIF (i < 100000) THEN
+        WRITE( var_name,'(A,I5)') 'name_', i
+      END IF
+      
+      WRITE( long_name,'(A,I1)') 'Full name of subroutine #', i
+      
+      ! Create the variable in the NetCDF file
+      CALL create_int_var( netcdf%ncid, var_name, [nl], netcdf%id_var_names( i),  long_name = long_name)
+    
+      ! Computation time
+      ! ================
+      
+      ! Generate variable name (tcomp_00001, tcomp_00002, etc.)
+      var_name(  1:256) = ' '
+      long_name( 1:256) = ' '
+      IF     (i < 10) THEN
+        WRITE( var_name ,'(A,I1)') 'tcomp_0000', i
+      ELSEIF (i < 100) THEN
+        WRITE( var_name,'(A,I2)') 'tcomp_000', i
+      ELSEIF (i < 1000) THEN
+        WRITE( var_name,'(A,I3)') 'tcomp_00', i
+      ELSEIF (i < 10000) THEN
+        WRITE( var_name,'(A,I4)') 'tcomp_0', i
+      ELSEIF (i < 100000) THEN
+        WRITE( var_name,'(A,I5)') 'tcomp_', i
+      END IF
+      
+      WRITE( long_name,'(A,I1)') 'Computation time for subroutine #', i
+      
+      ! Create the variable in the NetCDF file
+      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_vars( i),  long_name = long_name, units = 's', missing_value = 0._dp)
+      
+    END DO
+    
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+        
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( netcdf%ncid))
+    
+    ! Close the file
+    CALL close_netcdf_file(netcdf%ncid)
+    
+  END SUBROUTINE create_resource_tracking_file 
+  SUBROUTINE encode_subroutine_path_as_integer( subroutine_path, path_int_enc)
+    ! Encode the current subroutine path as an integer array so it can be saved as a NetCDF variable
+    ! 
+    ! Use the simplest possible encoding:
+    !
+    !  ' ' = -1 (empty character)
+    !
+    !    0 = 0
+    !    1 = 1
+    !    ...
+    !    9 = 9
+    !
+    !    a = 10
+    !    b = 11
+    !    c = 12
+    !    ...
+    !    z = 36
+    !
+    !    A = 37
+    !    B = 38
+    !    C = 39
+    !    ...
+    !    Z = 62
+    !
+    !    _ = 63 (underscore)
+    !    / = 64 (forward slash)
+    !    ( = 65 (left  bracket)
+    !    ) = 66 (right bracket)
+   
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    CHARACTER(LEN=1024),                INTENT(IN)    :: subroutine_path
+    INTEGER,  DIMENSION(1024),          INTENT(OUT)   :: path_int_enc
+    
+    ! Local variables:
+    INTEGER                                           :: i
+    
+    path_int_enc = 0
+    
+    DO i = 1, 1024
+      
+      SELECT CASE ( subroutine_path( i:i))
+      CASE( ' ')
+        path_int_enc( i) = -1
+      CASE( '0')
+        path_int_enc( i) = 0
+      CASE( '1')
+        path_int_enc( i) = 1
+      CASE( '2')
+        path_int_enc( i) = 2
+      CASE( '3')
+        path_int_enc( i) = 3
+      CASE( '4')
+        path_int_enc( i) = 4
+      CASE( '5')
+        path_int_enc( i) = 5
+      CASE( '6')
+        path_int_enc( i) = 6
+      CASE( '7')
+        path_int_enc( i) = 7
+      CASE( '8')
+        path_int_enc( i) = 8
+      CASE( '9')
+        path_int_enc( i) = 9
+      CASE( 'a')
+        path_int_enc( i) = 11
+      CASE( 'b')
+        path_int_enc( i) = 12
+      CASE( 'c')
+        path_int_enc( i) = 13
+      CASE( 'd')
+        path_int_enc( i) = 14
+      CASE( 'e')
+        path_int_enc( i) = 15
+      CASE( 'f')
+        path_int_enc( i) = 16
+      CASE( 'g')
+        path_int_enc( i) = 17
+      CASE( 'h')
+        path_int_enc( i) = 18
+      CASE( 'i')
+        path_int_enc( i) = 19
+      CASE( 'j')
+        path_int_enc( i) = 20
+      CASE( 'k')
+        path_int_enc( i) = 21
+      CASE( 'l')
+        path_int_enc( i) = 22
+      CASE( 'm')
+        path_int_enc( i) = 23
+      CASE( 'n')
+        path_int_enc( i) = 24
+      CASE( 'o')
+        path_int_enc( i) = 25
+      CASE( 'p')
+        path_int_enc( i) = 26
+      CASE( 'q')
+        path_int_enc( i) = 27
+      CASE( 'r')
+        path_int_enc( i) = 28
+      CASE( 's')
+        path_int_enc( i) = 29
+      CASE( 't')
+        path_int_enc( i) = 30
+      CASE( 'u')
+        path_int_enc( i) = 31
+      CASE( 'v')
+        path_int_enc( i) = 32
+      CASE( 'w')
+        path_int_enc( i) = 33
+      CASE( 'x')
+        path_int_enc( i) = 34
+      CASE( 'y')
+        path_int_enc( i) = 35
+      CASE( 'z')
+        path_int_enc( i) = 36
+      CASE( 'A')
+        path_int_enc( i) = 37
+      CASE( 'B')
+        path_int_enc( i) = 38
+      CASE( 'C')
+        path_int_enc( i) = 39
+      CASE( 'D')
+        path_int_enc( i) = 40
+      CASE( 'E')
+        path_int_enc( i) = 41
+      CASE( 'F')
+        path_int_enc( i) = 42
+      CASE( 'G')
+        path_int_enc( i) = 43
+      CASE( 'H')
+        path_int_enc( i) = 44
+      CASE( 'I')
+        path_int_enc( i) = 45
+      CASE( 'J')
+        path_int_enc( i) = 46
+      CASE( 'K')
+        path_int_enc( i) = 47
+      CASE( 'L')
+        path_int_enc( i) = 48
+      CASE( 'M')
+        path_int_enc( i) = 49
+      CASE( 'N')
+        path_int_enc( i) = 50
+      CASE( 'O')
+        path_int_enc( i) = 51
+      CASE( 'P')
+        path_int_enc( i) = 52
+      CASE( 'Q')
+        path_int_enc( i) = 53
+      CASE( 'R')
+        path_int_enc( i) = 54
+      CASE( 'S')
+        path_int_enc( i) = 55
+      CASE( 'T')
+        path_int_enc( i) = 56
+      CASE( 'U')
+        path_int_enc( i) = 57
+      CASE( 'V')
+        path_int_enc( i) = 58
+      CASE( 'W')
+        path_int_enc( i) = 59
+      CASE( 'X')
+        path_int_enc( i) = 60
+      CASE( 'Y')
+        path_int_enc( i) = 61
+      CASE( 'Z')
+        path_int_enc( i) = 62
+      CASE( '_')
+        path_int_enc( i) = 63
+      CASE( '/')
+        path_int_enc( i) = 64
+      CASE( '(')
+        path_int_enc( i) = 65
+      CASE( ')')
+        path_int_enc( i) = 66
+      CASE DEFAULT
+        CALL crash('unknown character in routine_path "' // TRIM( subroutine_path) // '"!')
+      END SELECT
+      
+    END DO
+    
+  END SUBROUTINE encode_subroutine_path_as_integer
   
 ! Read all kinds of input files
 ! =============================
@@ -3012,11 +3593,14 @@ CONTAINS
     INTEGER,                   INTENT(OUT)   :: nV, nTri, nC_mem
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_restart_file_mesh'
 !    INTEGER                                  :: int_dummy
     
-    WRITE(0,*) 'inquire_restart_file_mesh - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    CALL crash('FIXME!')
+    
 !    ! Open the netcdf file
 !    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 !    
@@ -3041,6 +3625,9 @@ CONTAINS
 !        
 !    ! Close the netcdf file
 !    CALL close_netcdf_file( netcdf%ncid)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE inquire_restart_file_mesh
   SUBROUTINE inquire_restart_file_init( netcdf)
@@ -3052,12 +3639,15 @@ CONTAINS
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_restart_file_init'
 !    INTEGER                                  :: nZ, nt, nm, k
 !    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
     
-    WRITE(0,*) 'inquire_restart_file_init - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    CALL crash('FIXME!')
+    
 !    ! Open the netcdf file
 !    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 !    
@@ -3102,6 +3692,9 @@ CONTAINS
 !        
 !    ! Close the netcdf file
 !    CALL close_netcdf_file( netcdf%ncid)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE inquire_restart_file_init
   SUBROUTINE read_restart_file_mesh( mesh, netcdf)
@@ -3113,8 +3706,13 @@ CONTAINS
     TYPE(type_mesh),           INTENT(INOUT) :: mesh
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
     
-    WRITE(0,*) 'read_restart_file_mesh - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    CALL crash('FIXME!')
     
 !    ! Open the netcdf file
 !    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -3133,6 +3731,9 @@ CONTAINS
 !        
 !    ! Close the netcdf file
 !    CALL close_netcdf_file( netcdf%ncid)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE read_restart_file_mesh
   SUBROUTINE read_restart_file_init( refgeo_init, netcdf)
@@ -3145,12 +3746,15 @@ CONTAINS
     TYPE(type_netcdf_restart),   INTENT(INOUT) :: netcdf
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_init'
 !    INTEGER                                    :: nt, ti, ti_min
 !    REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
 !    REAL(dp)                                   :: dt_min, dt
     
-    WRITE(0,*) 'read_restart_file_init - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    CALL crash('FIXME!')
     
 !    ! Open the netcdf file
 !    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -3194,6 +3798,9 @@ CONTAINS
 !        
 !    ! Close the netcdf file
 !    CALL close_netcdf_file( netcdf%ncid)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE read_restart_file_init 
   
@@ -3205,6 +3812,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_reference_geometry_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Open the netcdf file
     CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
@@ -3224,6 +3837,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file( refgeo%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inquire_reference_geometry_file
   SUBROUTINE read_reference_geometry_file(    refgeo)
     ! Read reference geometry data from a NetCDF file
@@ -3232,6 +3848,12 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_reference_geometry_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the netcdf file
     CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
@@ -3246,6 +3868,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file( refgeo%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE read_reference_geometry_file
   
   ! Present-day observed global climate (e.g. ERA-40)
@@ -3258,7 +3883,11 @@ CONTAINS
     TYPE(type_subclimate_global), INTENT(INOUT) :: PD_obs
  
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_PD_obs_data_file'
     INTEGER                               :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Open the netcdf file
     CALL open_netcdf_file(PD_obs%netcdf%filename, PD_obs%netcdf%ncid)
@@ -3280,6 +3909,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(PD_obs%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inquire_PD_obs_data_file
   SUBROUTINE read_PD_obs_data_file(    PD_obs)
     ! Read the PD_obs0 netcdf file
@@ -3288,6 +3920,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_subclimate_global), INTENT(INOUT) :: PD_obs
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_PD_obs_data_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the netcdf file
     CALL open_netcdf_file(PD_obs%netcdf%filename, PD_obs%netcdf%ncid)
@@ -3304,6 +3942,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(PD_obs%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE read_PD_obs_data_file
   
   ! GCM global climate (climate matrix snapshots)
@@ -3316,7 +3957,11 @@ CONTAINS
     TYPE(type_subclimate_global), INTENT(INOUT) :: snapshot
  
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_GCM_snapshot'
     INTEGER                               :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Open the netcdf file
     CALL open_netcdf_file( snapshot%netcdf%filename, snapshot%netcdf%ncid)
@@ -3339,6 +3984,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(snapshot%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inquire_GCM_snapshot
   SUBROUTINE read_GCM_snapshot(    snapshot)
     ! Read the PD_obs0 netcdf file
@@ -3347,6 +3995,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_subclimate_global), INTENT(INOUT) :: snapshot
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_GCM_snapshot'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the netcdf file
     CALL open_netcdf_file(snapshot%netcdf%filename, snapshot%netcdf%ncid)
@@ -3364,6 +4018,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(snapshot%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE read_GCM_snapshot
   
   ! ICE5G ice geometry (needed for GCM snapshots)
@@ -3374,6 +4031,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_ICE5G_timeframe), INTENT(INOUT) :: ICE5G
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_ICE5G_data'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     ! Open the netcdf file
     CALL open_netcdf_file( ICE5G%netcdf%filename, ICE5G%netcdf%ncid)
@@ -3392,6 +4055,9 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(ICE5G%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inquire_ICE5G_data
   SUBROUTINE read_ICE5G_data(    ICE5G)
     ! Read the PD_obs0 netcdf file
@@ -3400,6 +4066,12 @@ CONTAINS
     
     ! Input variables:
     TYPE(type_ICE5G_timeframe), INTENT(INOUT) :: ICE5G
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_ICE5G_data'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the netcdf file
     CALL open_netcdf_file( ICE5G%netcdf%filename, ICE5G%netcdf%ncid)
@@ -3417,17 +4089,25 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(ICE5G%netcdf%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE read_ICE5G_data
   
   ! Insolation solution (e.g. Laskar 2004)
   SUBROUTINE inquire_insolation_data_file( forcing)
+  
     IMPLICIT NONE
     
     ! Output variable
     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
  
-    ! Local variables:  
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
     INTEGER                                :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
             
     ! Open the netcdf file
     CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
@@ -3446,8 +4126,12 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE inquire_insolation_data_file
   SUBROUTINE read_insolation_data_file( forcing, ti0, ti1, ins_Q_TOA0, ins_Q_TOA1) 
+  
     IMPLICIT NONE
     
     ! In/output variables:
@@ -3456,8 +4140,12 @@ CONTAINS
     REAL(dp), DIMENSION(:,:),       INTENT(OUT)   :: ins_Q_TOA0, ins_Q_TOA1
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file'
     INTEGER                                       :: mi, li
     REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Temporary memory to store the data read from the netCDF file
     ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
@@ -3480,13 +4168,23 @@ CONTAINS
     ! Clean up temporary memory
     DEALLOCATE(Q_temp0)
     DEALLOCATE(Q_temp1)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
    
   END SUBROUTINE read_insolation_data_file
   SUBROUTINE read_insolation_data_file_time_lat( forcing) 
+  
     IMPLICIT NONE
     
     ! Output variable
     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Open the netcdf file
     CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
@@ -3498,14 +4196,24 @@ CONTAINS
     ! Close the netcdf file
     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE read_insolation_data_file_time_lat
   
   ! Geothermal heat flux
   SUBROUTINE inquire_geothermal_heat_flux_file( forcing)
+  
     IMPLICIT NONE
 
     ! Output variable
     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_geothermal_heat_flux_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Open the netcdf file
     CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
@@ -3521,16 +4229,23 @@ CONTAINS
 
     ! Close the netcdf file
     CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE inquire_geothermal_heat_flux_file
   SUBROUTINE read_geothermal_heat_flux_file( forcing)
-  
-    USE parameters_module, ONLY: sec_per_year
   
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_geothermal_heat_flux_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Open the netcdf file
     CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
@@ -3545,6 +4260,9 @@ CONTAINS
 
     ! Convert from W m-2 (J m-2 s-1) to J m-2 yr-1
     forcing%ghf_ghf = forcing%ghf_ghf * sec_per_year
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_geothermal_heat_flux_file
   
@@ -3559,7 +4277,11 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Get matrix in CSR format using native Fortran arrays
     CALL mat_petsc2CSR( A, A_CSR)
@@ -3569,6 +4291,9 @@ CONTAINS
     
     ! Clean up after yourself
     CALL deallocate_matrix_CSR( A_CSR)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_PETSc_matrix_to_NetCDF
   SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
@@ -3581,18 +4306,21 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
     LOGICAL                                            :: file_exists
     INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
     INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) THEN
 
       ! Safety
       INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
       IF (file_exists) THEN
-        WRITE(0,*) 'write_PETSc_matrix_to_NetCDF - ERROR: file "', TRIM(filename), '" already exists!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('file "' // TRIM( filename) // '" already exists!')
       END IF
       
       WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
@@ -3630,6 +4358,9 @@ CONTAINS
     
     END IF ! IF (par%master) THEN
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE write_CSR_matrix_to_NetCDF
 
@@ -3670,6 +4401,26 @@ CONTAINS
     CALL handle_error(nf90_def_dim(ncid,dim_name,length,id_dim))
     
   END SUBROUTINE create_dim
+  SUBROUTINE create_int_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
+    ! Subroutine for creating netCDF variables of type nf90_int more convenient:
+  
+    ! Input variables:
+    INTEGER,                      INTENT(IN)  :: ncid
+    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
+    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
+    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
+
+    ! Output variables:
+    INTEGER,                      INTENT(OUT) :: id_var
+
+    CALL handle_error(nf90_def_var(ncid,var_name,nf90_int,id_dims,id_var))
+    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
+    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
+    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
+    
+  END SUBROUTINE create_int_var
   SUBROUTINE create_double_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
     ! Subroutine for creating netCDF variables of type nf90_DOUBLE more convenient:
   
@@ -3690,26 +4441,6 @@ CONTAINS
     IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
     
   END SUBROUTINE create_double_var
-  SUBROUTINE create_int_var(    ncid, var_name, id_dims, id_var, long_name, units, missing_value)
-    ! Subroutine for creating netCDF variables of type nf90_int more convenient:
-  
-    ! Input variables:
-    INTEGER,                      INTENT(IN)  :: ncid
-    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
-    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
-    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
-
-    ! Output variables:
-    INTEGER,                      INTENT(OUT) :: id_var
-
-    CALL handle_error(nf90_def_var(ncid,var_name,nf90_int,id_dims,id_var))
-    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
-    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
-    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
-    
-  END SUBROUTINE create_int_var
   SUBROUTINE inquire_dim( ncid, dim_name, dim_length, id_dim)
     ! Inquire the id of a dimension and return its length.
     IMPLICIT NONE
@@ -3726,6 +4457,68 @@ CONTAINS
     CALL handle_error(nf90_inquire_dimension(ncid, id_dim, len=dim_length))
     
   END SUBROUTINE inquire_dim
+  SUBROUTINE inquire_int_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_int.
+    IMPLICIT NONE
+  
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF (xtype /= nf90_int) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_int!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+    
+  END SUBROUTINE inquire_int_var
+  SUBROUTINE inquire_single_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_DOUBLE.
+    IMPLICIT NONE
+  
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF (xtype /= nf90_float) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_float!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+    
+  END SUBROUTINE inquire_single_var
   SUBROUTINE inquire_double_var( ncid, var_name, id_dims, id_var)
     ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
     ! that the variable is of type nf90_DOUBLE.
@@ -3746,88 +4539,17 @@ CONTAINS
     CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
     CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
     IF(xtype /= nf90_double) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual type of variable "',var_name,'" is not nf90_DOUBLE.'
-     STOP
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_double!')
     END IF
-    IF(ndims /= SIZE(id_dims)) THEN
-     WRITE(0,'(A,I5,3A,I5,A)') 'ERROR: Actual number of dimensions(', &
-            ndims,') of variable "',var_name,'": does not match required number of dimensions (',SIZE(id_dims),').'
-     STOP
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
     END IF
-    IF(ANY(actual_id_dims(1:ndims) /= id_dims)) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual dimensions of variable "',var_name,'" does not match required dimensions.'
-     STOP
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
     END IF
     
   END SUBROUTINE inquire_double_var
-  SUBROUTINE inquire_single_var( ncid, var_name, id_dims, id_var)
-    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
-    ! that the variable is of type nf90_float.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)    :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
-    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
-
-    ! Output variables:
-    INTEGER,                INTENT(OUT)   :: id_var
-
-    ! Local variables:
-    INTEGER                               :: xtype, ndims
-    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
-
-    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
-    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
-    IF(xtype /= nf90_float) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual type of variable "',var_name,'" is not nf90_float.'
-     STOP
-    END IF
-    IF(ndims /= SIZE(id_dims)) THEN
-     WRITE(0,'(A,I5,3A,I5,A)') 'ERROR: Actual number of dimensions(', &
-            ndims,') of variable "',var_name,'": does not match required number of dimensions (',SIZE(id_dims),').'
-     STOP
-    END IF
-    IF(ANY(actual_id_dims(1:ndims) /= id_dims)) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual dimensions of variable "',var_name,'" does not match required dimensions.'
-     STOP
-    END IF
-    
-  END SUBROUTINE inquire_single_var
-  SUBROUTINE inquire_int_var( ncid, var_name, id_dims, id_var)
-    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
-    ! that the variable is of type nf90_int.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)    :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
-    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
-
-    ! Output variables:
-    INTEGER,                INTENT(OUT)   :: id_var
-
-    ! Local variables:
-    INTEGER                               :: xtype, ndims
-    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
-
-    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
-    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
-    IF(xtype /= nf90_int) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual type of variable "',var_name,'" is not nf90_int.'
-     STOP
-    END IF
-    IF(ndims /= SIZE(id_dims)) THEN
-     WRITE(0,'(A,I5,3A,I5,A)') 'ERROR: Actual number of dimensions(', &
-            ndims,') of variable "',var_name,'": does not match required number of dimensions (',SIZE(id_dims),').'
-     STOP
-    END IF
-    IF(ANY(actual_id_dims(1:ndims) /= id_dims)) THEN
-     WRITE(0,'(3A)') 'ERROR: Actual dimensions of variable "',var_name,'" does not match required dimensions.'
-     STOP
-    END IF
-    
-  END SUBROUTINE inquire_int_var
   SUBROUTINE handle_error( stat, message)
     USE netcdf, ONLY: nf90_noerr, nf90_strerror
     IMPLICIT NONE
@@ -3836,13 +4558,12 @@ CONTAINS
     INTEGER,                    INTENT(IN) :: stat
     CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
 
-    IF(stat /= nf90_noerr) THEN
-     IF(PRESENT(message)) THEN
-      WRITE(0,'(A,A,A,A)') 'ERROR: ', TRIM(nf90_strerror(stat)), ' concerning: ', message
-     ELSE
-      WRITE(0,'(A,A)')     'ERROR: ', TRIM(nf90_strerror(stat))
-     END IF
-     STOP
+    IF (stat /= nf90_noerr) THEN
+      IF (PRESENT( message)) THEN
+        CALL crash( message)
+      ELSE
+        CALL crash( 'netcdf error')
+      END IF
     END IF
     
   END SUBROUTINE handle_error

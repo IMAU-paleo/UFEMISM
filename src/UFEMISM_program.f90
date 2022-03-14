@@ -34,7 +34,8 @@ PROGRAM UFEMISM_program
   USE petscksp
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   USE petsc_module,                ONLY: perr
-  USE configuration_module,        ONLY: dp, C, initialise_model_configuration, write_total_model_time_to_screen
+  USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, write_total_model_time_to_screen, &
+                                         reset_computation_times
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
   USE data_types_module,           ONLY: type_model_region, type_climate_matrix
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
@@ -61,6 +62,8 @@ PROGRAM UFEMISM_program
   REAL(dp)                               :: tstart, tstop
   
   ! ======================================================================================
+  
+  routine_path = 'UFEMISM_program'
   
   ! Initialise MPI and PETSc
   CALL initialise_parallelisation

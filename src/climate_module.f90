@@ -5,7 +5,7 @@ MODULE climate_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -55,10 +55,10 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_climate_model'
-    INTEGER                                            :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model'
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Check if we need to apply any special benchmark experiment climate
     IF (C%do_benchmark_experiment) THEN
@@ -70,6 +70,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'EISMINT_6') THEN
         ! Parameterised climate needed for thermodynamics
         CALL EISMINT_climate( mesh, ice, climate, time)
+        CALL finalise_routine( routine_name)
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
               C%choice_benchmark_experiment == 'Bueler' .OR. &
@@ -82,10 +83,10 @@ CONTAINS
               C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
               C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! Parameterised SMB and no thermodynamics; no climate needed
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_climate_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -105,17 +106,15 @@ CONTAINS
         ! Use the two-snapshot climate matrix
         CALL run_climate_model_matrix_PI_LGM( mesh, ice, SMB, climate, region_name, grid_smooth)
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: choice_climate_matrix "', TRIM(C%choice_climate_matrix), '" not implemented in run_climate_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_climate_matrix "' // TRIM( C%choice_climate_matrix) // '"!')
       END IF
       
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_climate_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
-    n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE run_climate_model
   
@@ -135,15 +134,17 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_dT_glob'
     INTEGER                                            :: vi,m
-    
     REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_ref,  dHs_dy_ref
     INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_ref, wdHs_dy_ref
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  Precip_RL_ref,  Precip_RL_mod,  dPrecip_RL
     INTEGER                                            :: wPrecip_RL_ref, wPrecip_RL_mod, wdPrecip_RL
     REAL(dp)                                           :: dT_lapse
-    
     REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx       , wdHs_dx       )
@@ -205,6 +206,9 @@ CONTAINS
     CALL deallocate_shared( wPrecip_RL_mod)
     CALL deallocate_shared( wdPrecip_RL)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_climate_model_dT_glob
   
   ! Climate matrix with PI + LGM snapshots, forced with CO2 (from record or from inverse routine) from Berends et al., 2018
@@ -222,7 +226,11 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_PI_LGM'
     INTEGER                                            :: vi,m
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Use the (CO2 + absorbed insolation)-based interpolation scheme for temperature
     CALL run_climate_model_matrix_PI_LGM_temperature( mesh, ice, SMB, climate, region_name, grid_smooth)
@@ -252,6 +260,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_climate_model_matrix_PI_LGM
   SUBROUTINE run_climate_model_matrix_PI_LGM_temperature( mesh, ice, SMB, climate, region_name, grid_smooth)
     ! The (CO2 + absorbed insolation)-based matrix interpolation for temperature, from Berends et al. (2018)
@@ -267,6 +278,7 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_PI_LGM_temperature'
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: CO2, w_CO2
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
@@ -278,6 +290,9 @@ CONTAINS
     
     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
     REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV    , w_ins,          ww_ins         )
@@ -297,12 +312,10 @@ CONTAINS
       CO2 = forcing%CO2_mod
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       CO2 = 0._dp
-      WRITE(0,*) '  ERROR - run_climate_model_matrix_PI_LGM must only be called with the correct forcing method, check your code!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('must only be called with the correct forcing method, check your code!')
     ELSE
       CO2 = 0._dp
-      WRITE(0,*) '  ERROR - choice_forcing_method "', C%choice_forcing_method, '" not implemented in run_climate_model_matrix_PI_LGM!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - 190._dp) / (280._dp - 190._dp) ))   ! Berends et al., 2018 - Eq. 1
@@ -381,6 +394,9 @@ CONTAINS
     CALL deallocate_shared( wHs_ref_GCM)
     CALL deallocate_shared( wlambda_ref_GCM)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_climate_model_matrix_PI_LGM_temperature
   SUBROUTINE run_climate_model_matrix_PI_LGM_precipitation( mesh, ice, climate, region_name, grid_smooth)
     ! The (CO2 + ice geometry)-based matrix interpolation for precipitation, from Berends et al. (2018)
@@ -399,6 +415,7 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_PI_LGM_precipitation'
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_PD,  w_LGM
     INTEGER                                            :: ww_PD, ww_LGM
@@ -408,6 +425,9 @@ CONTAINS
     INTEGER                                            :: wT_ref_GCM, wP_ref_GCM, wlambda_GCM, wHs_GCM, wHs_ref_GCM
     
     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV    , w_PD,           ww_PD          )
@@ -508,6 +528,9 @@ CONTAINS
     CALL deallocate_shared( wHs_GCM)
     CALL deallocate_shared( wHs_ref_GCM)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_climate_model_matrix_PI_LGM_precipitation
   
   ! Two different parameterised precipitation models:
@@ -530,10 +553,14 @@ CONTAINS
     ! Output variables:         
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM      ! Climate matrix precipitation
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'adapt_precip_CC'
     INTEGER                                            :: vi,m
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_inv,  T_inv_ref
     INTEGER                                            :: wT_inv, wT_inv_ref
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, T_inv,     wT_inv    )
@@ -569,13 +596,15 @@ CONTAINS
       CALL sync
       
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR - adapt_precip_CC should only be used for Greenland and Antarctica!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be used for Greenland and Antarctica!')
     END IF
     
     ! Clean up after yourself
     CALL deallocate_shared( wT_inv)
     CALL deallocate_shared( wT_inv_ref)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE adapt_precip_CC
   SUBROUTINE adapt_precip_Roe( mesh, Hs, Hs_GCM, Hs_ref_GCM, lambda_GCM, T_ref_GCM, P_ref_GCM, Wind_LR, Wind_DU, Precip_GCM)
@@ -595,11 +624,15 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: Precip_GCM
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'adapt_precip_Roe'
     INTEGER                                            :: vi,m
     REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx,  dHs_dy,  dHs_dx_GCM,  dHs_dy_GCM
     INTEGER                                            :: wdHs_dx, wdHs_dy, wdHs_dx_GCM, wdHs_dy_GCM
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  T_mod,  P_RL_ref_GCM,  P_RL_mod,  dP_RL
     INTEGER                                            :: wT_mod, wP_RL_ref_GCM, wP_RL_mod, wdP_RL
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV    , dHs_dx    ,     wdHs_dx        )
@@ -648,6 +681,9 @@ CONTAINS
     CALL deallocate_shared( wP_RL_mod)
     CALL deallocate_shared( wdP_RL)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE adapt_precip_Roe
   SUBROUTINE precipitation_model_Roe( T2m, dHs_dx, dHs_dy, Wind_LR, Wind_DU, Precip)
     ! Precipitation model of Roe (J. Glac, 2002), integration from Roe and Lindzen (J. Clim. 2001)
@@ -663,6 +699,7 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: Precip               ! Modelled precipitation
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'precipitation_model_Roe'
     REAL(dp)                                           :: upwind_slope         ! Upwind slope
     REAL(dp)                                           :: E_sat                ! Saturation vapour pressure as function of temperature [Pa]
     REAL(dp)                                           :: x0                   ! Integration parameter x0 [m s-1]
@@ -675,6 +712,9 @@ CONTAINS
     REAL(dp), PARAMETER                                :: a_par   = 2.5E-11_dp ! Constant a [m2 s  kg-1] (from Roe et al., J. Clim. 2001)
     REAL(dp), PARAMETER                                :: b_par   = 5.9E-09_dp ! Constant b [m  s2 kg-1] (from Roe et al., J. Clim. 2001)
     REAL(dp), PARAMETER                                :: alpha   = 100.0_dp   ! Constant alpha [s m-1]
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate the upwind slope
     upwind_slope = MAX(0._dp, Wind_LR * dHs_dx + Wind_DU * dHs_dy)
@@ -692,6 +732,9 @@ CONTAINS
     ! Calculate precipitation rate as in Appendix of Roe et al. (J. Clim, 2001)
     Precip = ( b_par * E_sat ) * ( x0 / 2._dp + x0**2 * err_out / (2._dp * ABS(x0)) + &
                                          EXP (-alpha**2 * x0**2) / (2._dp * SQRT(pi) * alpha) ) * sec_per_year
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE precipitation_model_Roe
   
@@ -699,19 +742,22 @@ CONTAINS
   SUBROUTINE EISMINT_climate( mesh, ice, climate, time)
     ! Simple lapse-rate temperature parameterisation
     
-    USe parameters_module,           ONLY: pi
-    
     IMPLICIT NONE
-
+    
+    ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh   
     TYPE(type_ice_model),                INTENT(IN)    :: ice 
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     REAL(dp),                            INTENT(IN)    :: time
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'EISMINT_climate'
     REAL(dp), PARAMETER                                :: lambda = -0.010_dp
-    
     INTEGER                                            :: vi, m
     REAL(dp)                                           :: dT_lapse, d, dT
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Set precipitation to zero - SMB is parameterised anyway...
     climate%applied%Precip(mesh%vi1:mesh%vi2,:) = 0._dp
@@ -767,6 +813,9 @@ CONTAINS
     END IF
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE EISMINT_climate
   
   ! Initialising the region-specific climate model, containing all the subclimates
@@ -787,10 +836,10 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_climate_model'
-    INTEGER                                            :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model'
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) WRITE (0,*) '  Initialising climate model...'
     
@@ -818,11 +867,11 @@ CONTAINS
         CALL allocate_subclimate( mesh, climate%PD_obs,  'none')
         CALL allocate_subclimate( mesh, climate%GCM_PI,  'none')
         CALL allocate_subclimate( mesh, climate%GCM_LGM, 'none')
+        CALL finalise_routine( routine_name, n_extra_windows_expected = 23)
         RETURN
         
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_climate_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -879,13 +928,11 @@ CONTAINS
         CALL initialise_subclimate_absorbed_insolation( mesh, climate%GCM_LGM, region_name, mask_noice, climate%GCM_bias_T2m, climate%GCM_bias_Precip)
         
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: choice_climate_matrix "', TRIM(C%choice_climate_matrix), '" not implemented in initialise_climate_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_climate_matrix "' // TRIM( C%choice_climate_matrix) // '"!')
       END IF
       
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_climate_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
   
     ! Initialise applied climate with present-day observations
@@ -898,8 +945,8 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
   
   END SUBROUTINE initialise_climate_model  
   SUBROUTINE allocate_subclimate( mesh, subclimate, name)
@@ -907,14 +954,24 @@ CONTAINS
     
     IMPLICIT NONE
     
+    ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh  
     TYPE(type_subclimate_region),        INTENT(INOUT) :: subclimate
     CHARACTER(LEN=*),                    INTENT(IN)    :: name
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_subclimate'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     subclimate%name = name
     
     ! If this snapshot is not used, don't allocate any memory
-    IF (name == 'none') RETURN
+    IF (name == 'none') THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%T2m,            subclimate%wT2m           )
     CALL allocate_shared_dp_2D( mesh%nV, 12, subclimate%Precip,         subclimate%wPrecip        )
@@ -944,6 +1001,9 @@ CONTAINS
     
     CALL allocate_shared_dp_0D(              subclimate%T_ocean_mean,   subclimate%wT_ocean_mean  )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 23)
+    
   END SUBROUTINE allocate_subclimate
   SUBROUTINE initialise_climate_model_GCM_bias( mesh, climate)
     ! Calculate the GCM climate bias
@@ -955,8 +1015,12 @@ CONTAINS
     TYPE(type_climate_model),            INTENT(INOUT) :: climate
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_GCM_bias'
     INTEGER                                            :: vi
     REAL(dp), PARAMETER                                :: P_offset = 0.008_dp       ! Normalisation term in precipitation anomaly to avoid divide-by-nearly-zero
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_T2m,    climate%wGCM_bias_T2m   )
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%GCM_bias_Precip, climate%wGCM_bias_Precip)
@@ -968,6 +1032,9 @@ CONTAINS
       
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_climate_model_GCM_bias
   SUBROUTINE initialise_subclimate_ICE5G_geometry( mesh, snapshot, refgeo_PD, ICE5G, ICE5G_PD, mask_noice)
@@ -984,10 +1051,14 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_subclimate_ICE5G_geometry'
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_ICE5G,  Hb_ICE5G,  Hb_ICE5G_PD,  mask_ice_ICE5G,  dHb_ICE5G
     INTEGER                                            :: wHi_ICE5G, wHb_ICE5G, wHb_ICE5G_PD, wmask_ice_ICE5G, wdHb_ICE5G
     TYPE(type_remapping_latlon2mesh)                   :: map
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Downscale the GCM snapshot from the (coarse) GCM geometry to the (fine) ISM geometry
     ! Store the downscaled climate in temporary memory.
@@ -1063,6 +1134,9 @@ CONTAINS
     CALL deallocate_shared( wmask_ice_ICE5G)
     CALL deallocate_shared( wdHb_ICE5G)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_subclimate_ICE5G_geometry
   SUBROUTINE initialise_subclimate_spatially_variable_lapserate( mesh, grid_smooth, snapshot, snapshot_PI)
     ! Calculate the spatially variable lapse-rate (for non-PI GCM snapshots; see Berends et al., 2018)
@@ -1078,6 +1152,7 @@ CONTAINS
     TYPE(type_subclimate_region),        INTENT(IN)    :: snapshot_PI
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_subclimate_spatially_variable_lapserate'
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: dT_mean_nonice
     INTEGER                                            :: n_nonice, n_ice
@@ -1085,6 +1160,9 @@ CONTAINS
     
     REAL(dp), PARAMETER                                :: lambda_min = 0.002_dp
     REAL(dp), PARAMETER                                :: lambda_max = 0.05_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     ! Calculate the regional average temperature change outside of the ice sheet.
     ! ===========================================================================
@@ -1151,6 +1229,9 @@ CONTAINS
     ! Normalise the entire region to a mean lapse rate of 8 K /km
     snapshot%lambda( mesh%vi1:mesh%vi2) = snapshot%lambda( mesh%vi1:mesh%vi2) * (0.008_dp / lambda_mean_ice)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_subclimate_spatially_variable_lapserate
   SUBROUTINE initialise_subclimate_absorbed_insolation( mesh, snapshot, region_name, mask_noice, GCM_bias_T2m, GCM_bias_Precip)
     ! Calculate the yearly absorbed insolation for this (regional) GCM snapshot, to be used in the matrix interpolation
@@ -1169,6 +1250,7 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: GCM_bias_Precip
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_subclimate_absorbed_insolation'
     INTEGER                                            :: vi,m,y
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  Q_TOA0,  Q_TOA1
     INTEGER                                            :: wQ_TOA0, wQ_TOA1
@@ -1187,6 +1269,9 @@ CONTAINS
     TYPE(type_ice_model)                               :: ice_dummy
     TYPE(type_subclimate_region)                       :: climate_dummy
     TYPE(type_SMB_model)                               :: SMB_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, Q_TOA0, wQ_TOA0)
@@ -1209,8 +1294,8 @@ CONTAINS
       ins_t0 = forcing%ins_time(ti0)
       ins_t1 = forcing%ins_time(ti1)
     ELSE
-      WRITE(0,*) '  ERROR - orbit_time ', snapshot%orbit_time, ' for snapshot ', TRIM(snapshot%name), ' outside of range of insolation solution file "', TRIM(forcing%netcdf_ins%filename), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('orbit time {dp_01} for snapshot ' // TRIM( snapshot%name) // ' outside of range of insolation solution file "' &
+        // TRIM( forcing%netcdf_ins%filename) // '"!', dp_01 = snapshot%orbit_time)
     END IF
     
     ! Read insolation time frames enveloping desired time from netcdf file
@@ -1439,6 +1524,9 @@ CONTAINS
     CALL deallocate_shared( SMB_dummy%wC_abl_Q)
     CALL deallocate_shared( SMB_dummy%wC_refr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_subclimate_absorbed_insolation
   
   ! Map a global subclimate from the matrix (PD observed or GCM snapshot) to a region mesh
@@ -1453,10 +1541,17 @@ CONTAINS
     TYPE(type_subclimate_region),        INTENT(INOUT) :: creg     ! Mesh   climate
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_subclimate_to_mesh'
     TYPE(type_remapping_latlon2mesh)                   :: map
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! If this snapshot is not used, don't do anything
-    IF (creg%name == 'none') RETURN
+    IF (creg%name == 'none') THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
     
     IF (par%master) WRITE(0,*) '   Mapping ', TRIM(cglob%name), ' data from global grid to mesh...'
     
@@ -1475,6 +1570,9 @@ CONTAINS
     
     ! Rotate zonal/meridional wind to x,y wind
     CALL rotate_wind_to_model_mesh( mesh, creg%wind_WE, creg%wind_SN, creg%wind_LR, creg%wind_DU)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE map_subclimate_to_mesh
 
@@ -1486,13 +1584,13 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_climate_matrix),      INTENT(INOUT) :: matrix
+    TYPE(type_climate_matrix),           INTENT(INOUT) :: matrix
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_climate_matrix'
-    INTEGER                                       :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_matrix'
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (C%do_benchmark_experiment) THEN
       IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
@@ -1512,10 +1610,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         ! Entirely parameterised climate, no need to read anything here
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_PD_obs_data_fields!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF
     
@@ -1528,6 +1626,7 @@ CONTAINS
     ! The differenct GCM snapshots 
     IF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       ! This choice of forcing doesn't use any GCM data
+      CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (C%choice_forcing_method == 'CO2_direct' .OR. C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! These two choices use the climate matrix
@@ -1547,17 +1646,15 @@ CONTAINS
         CALL sync
         
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: choice_climate_matrix "', TRIM(C%choice_climate_matrix), '" not implemented in initialise_climate_matrix!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_climate_matrix "' // TRIM( C%choice_climate_matrix) // '"!')
       END IF
       
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in initialise_climate_matrix!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_climate_matrix  
   SUBROUTINE initialise_PD_obs_data_fields( PD_obs, name)
@@ -1567,8 +1664,14 @@ CONTAINS
     IMPLICIT NONE
       
     ! Input variables:
-    TYPE(type_subclimate_global),   INTENT(INOUT) :: PD_obs
-    CHARACTER(LEN=*),               INTENT(IN)    :: name
+    TYPE(type_subclimate_global),        INTENT(INOUT) :: PD_obs
+    CHARACTER(LEN=*),                    INTENT(IN)    :: name
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_PD_obs_data_fields'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     PD_obs%name = name 
     PD_obs%netcdf%filename   = C%filename_PD_obs_climate 
@@ -1603,6 +1706,9 @@ CONTAINS
     ! Determine process domains
     CALL partition_list( PD_obs%grid%nlon, par%i, par%n, PD_obs%grid%i1, PD_obs%grid%i2)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_PD_obs_data_fields  
   SUBROUTINE initialise_snapshot( snapshot, name, nc_filename, CO2, orbit_time)
     ! Allocate shared memory for the data fields of a GCM snapshot (stored in the climate matrix),
@@ -1611,15 +1717,19 @@ CONTAINS
     IMPLICIT NONE
       
     ! In/output variables:
-    TYPE(type_subclimate_global),   INTENT(INOUT) :: snapshot
-    CHARACTER(LEN=*),               INTENT(IN)    :: name
-    CHARACTER(LEN=*),               INTENT(IN)    :: nc_filename
-    REAL(dp),                       INTENT(IN)    :: CO2
-    REAL(dp),                       INTENT(IN)    :: orbit_time
+    TYPE(type_subclimate_global),        INTENT(INOUT) :: snapshot
+    CHARACTER(LEN=*),                    INTENT(IN)    :: name
+    CHARACTER(LEN=*),                    INTENT(IN)    :: nc_filename
+    REAL(dp),                            INTENT(IN)    :: CO2
+    REAL(dp),                            INTENT(IN)    :: orbit_time
     
     ! Local variables:
-    INTEGER                                       :: i,j,m
-    REAL(dp), PARAMETER                           :: Precip_minval = 1E-5_dp
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_snapshot'
+    INTEGER                                            :: i,j,m
+    REAL(dp), PARAMETER                                :: Precip_minval = 1E-5_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Metadata
     snapshot%name            = name 
@@ -1668,6 +1778,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_snapshot
   SUBROUTINE initialise_ICE5G_timeframe( ICE5G, nc_filename, time)
     ! Initialise and read a global ICE5G timeframe from a NetCDF file
@@ -1675,9 +1788,15 @@ CONTAINS
     IMPLICIT NONE
       
     ! In/output variables:
-    TYPE(type_ICE5G_timeframe),     INTENT(INOUT) :: ICE5G
-    CHARACTER(LEN=*),               INTENT(IN)    :: nc_filename
-    REAL(dp),                       INTENT(IN)    :: time
+    TYPE(type_ICE5G_timeframe),          INTENT(INOUT) :: ICE5G
+    CHARACTER(LEN=*),                    INTENT(IN)    :: nc_filename
+    REAL(dp),                            INTENT(IN)    :: time
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ICE5G_timeframe'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ICE5G%time            = time
     ICE5G%netcdf%filename = nc_filename
@@ -1703,6 +1822,9 @@ CONTAINS
     ! Determine process domains
     CALL partition_list( ICE5G%grid%nlon, par%i, par%n, ICE5G%grid%i1, ICE5G%grid%i2)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE initialise_ICE5G_timeframe
   
   ! Remap the regional climate model after a mesh update
@@ -1724,7 +1846,11 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_climate_model'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -1779,6 +1905,9 @@ CONTAINS
       
     END IF ! IF (.NOT. climate%GCM_PI%name == 'none') THEN
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE remap_climate_model
   SUBROUTINE reallocate_subclimate( mesh_new, subclimate)
     ! Reallocate data fields of a regional subclimate after a mesh update
@@ -1788,6 +1917,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_subclimate_region),        INTENT(INOUT) :: subclimate
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'reallocate_subclimate'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%T2m,            subclimate%wT2m           )
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Precip,         subclimate%wPrecip        )
@@ -1805,6 +1940,9 @@ CONTAINS
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Q_TOA,          subclimate%wQ_TOA         )
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Albedo,         subclimate%wAlbedo        )
     CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%I_abs,          subclimate%wI_abs         )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE reallocate_subclimate
   
@@ -1824,8 +1962,12 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: wind_DU
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'rotate_wind_to_model_mesh'
     INTEGER                                            :: vi,m
     REAL(dp)                                           :: longitude_start, Uwind_x, Uwind_y, Vwind_x, Vwind_y
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! First find the first longitude which defines the start of quadrant I:
     longitude_start = mesh%lambda_M - 90._dp
@@ -1848,6 +1990,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE rotate_wind_to_model_mesh
 

@@ -13,7 +13,7 @@ MODULE petsc_module
                                              allocate_shared_int_2D, allocate_shared_dp_2D, &
                                              allocate_shared_int_3D, allocate_shared_dp_3D, &
                                              deallocate_shared
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE data_types_module,               ONLY: type_sparse_matrix_CSR_dp
 
   IMPLICIT NONE
@@ -53,7 +53,11 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: rtol, abstol
     
     ! Local variables
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_CSR_PETSc'
     TYPE(tMat)                                         :: A
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Convert matrix to PETSc format
     CALL mat_CSR2petsc( A_CSR, A)
@@ -63,6 +67,9 @@ CONTAINS
     
     ! Clean up after yourself
     CALL MatDestroy( A, perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR_PETSc
   SUBROUTINE solve_matrix_equation_PETSc( A, bb, xx, rtol, abstol)
@@ -77,17 +84,20 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: rtol, abstol
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_PETSc'
     INTEGER                                            :: m, n
     TYPE(tVec)                                         :: b
     TYPE(tVec)                                         :: x
     TYPE(tKSP)                                         :: KSP_solver
     INTEGER                                            :: its
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     CALL MatGetSize( A, m, n, perr)
     IF (m /= n .OR. m /= SIZE( xx,1) .OR. m /= SIZE( bb,1)) THEN
-      IF (par%master) WRITE(0,*) 'solve_matrix_equation_PETSc - ERROR: matrix and vector sizes dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matrix and vector sizes dont match!')
     END IF
     
   ! == Set up right-hand side and solution vectors as PETSc data structures
@@ -133,6 +143,9 @@ CONTAINS
     CALL VecDestroy( x, perr)
     CALL VecDestroy( b, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE solve_matrix_equation_PETSc
   
 ! == Conversion between 1-D Fortran double-precision arrays and PETSc parallel vectors
@@ -146,7 +159,11 @@ CONTAINS
     TYPE(tVec),                          INTENT(INOUT) :: x
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'vec_double2petsc'
     TYPE(PetscInt)                                     :: istart,iend,i
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Create parallel vector
     CALL VecCreate( PETSC_COMM_WORLD, x, perr)
@@ -170,6 +187,9 @@ CONTAINS
     CALL VecAssemblyBegin( x, perr)
     CALL VecAssemblyEnd(   x, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE vec_double2petsc
   SUBROUTINE vec_petsc2double( x, xx)
     ! Convert a PETSc parallel vector to a regular 1-D Fortran double-precision array
@@ -181,15 +201,18 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: xx
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'vec_petsc2double'
     TYPE(PetscInt)                                     :: istart,iend,i,n
     TYPE(PetscInt),    DIMENSION(1)                    :: ix
     TYPE(PetscScalar), DIMENSION(1)                    :: v
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     CALL VecGetSize( x, n, perr)
     IF (n /= SIZE( xx,1)) THEN
-      WRITE(0,*) 'vec_petsc2double - ERROR: Fortran and PETSc vector sizes dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('Fortran and PETSc vector sizes dont match!')
     END IF
     
     ! Get parallelisation domains ("ownership ranges")
@@ -203,6 +226,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE vec_petsc2double
   SUBROUTINE mat_petsc2CSR( A, A_CSR)
     ! Convert a PETSC parallel matrix to a CSR-format matrix in regular Fortran arrays
@@ -214,6 +240,7 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(OUT)   :: A_CSR
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_petsc2CSR'
     INTEGER                                            :: m, n, istart, iend, i
     INTEGER                                            :: ncols, nnz
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
@@ -221,6 +248,9 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER                ::  nnz_rows
     INTEGER                                            :: wnnz_rows
     INTEGER                                            :: k1, k2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! First get the number of rows and columns
     CALL MatGetSize( A, m, n, perr)
@@ -284,6 +314,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wnnz_rows)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
+    
   END SUBROUTINE mat_petsc2CSR
   SUBROUTINE mat_CSR2petsc( A_CSR, A)
     ! Convert a CSR-format matrix in regular Fortran arrays to a PETSC parallel matrix
@@ -302,9 +335,13 @@ CONTAINS
     TYPE(tMat),                          INTENT(OUT)   :: A
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_CSR2petsc'
     INTEGER                                            :: i1, i2, nrows_proc, nrows_scan, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: ptr_proc, index_proc
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_proc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Determine process domains
     ! NOTE: slightly different from how it's done in partition_list, this is needed
@@ -368,6 +405,9 @@ CONTAINS
     DEALLOCATE( index_proc)
     DEALLOCATE( val_proc  )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE mat_CSR2petsc
   
 ! == Matrix-vector multiplication
@@ -382,14 +422,17 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: yy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_PETSc_matrix_with_vector_1D'
     TYPE(PetscInt)                                     :: m, n
     TYPE(tVec)                                         :: x, y
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
     IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1)) THEN
-      IF (par%master) WRITE(0,*) 'multiply_PETSc_matrix_with_vector_1D - ERROR: matrix and vector sizes dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('matrix and vector sizes dont match!')
     END IF
 
     ! Convert Fortran array xx to PETSc vector x
@@ -410,6 +453,9 @@ CONTAINS
     CALL VecDestroy( x, perr)
     CALL VecDestroy( y, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE multiply_PETSc_matrix_with_vector_1D
   SUBROUTINE multiply_PETSc_matrix_with_vector_2D( A, xx, yy)
     ! Multiply a PETSc matrix with a FORTRAN vector: y = A*x
@@ -422,17 +468,19 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: yy
     
     ! Local variables:
-    TYPE(PetscErrorCode)                               :: perr
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_PETSc_matrix_with_vector_2D'
     INTEGER                                            :: m, n, i1, i2, j1, j2, k
     REAL(dp), DIMENSION(:    ), POINTER                ::  xx_1D,  yy_1D
     INTEGER                                            :: wxx_1D, wyy_1D
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
     
     IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1) .OR. SIZE( xx,2) /= SIZE( yy,2)) THEN
-      IF (par%master) WRITE(0,*) 'multiply_PETSc_matrix_with_vector_2D - ERROR: vector sizes dont match!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('vector sizes dont match!')
     END IF
     
     ! Allocate shared memory
@@ -462,20 +510,9 @@ CONTAINS
     CALL deallocate_shared( wxx_1D)
     CALL deallocate_shared( wyy_1D)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE multiply_PETSc_matrix_with_vector_2D
-  
-! == Error handler
-  SUBROUTINE PETSc_handle_error( routine_name, perr)
-    
-    ! In/output variables:
-    CHARACTER(LEN=*),                    INTENT(IN)    :: routine_Name
-    TYPE(PetscErrorCode),                INTENT(IN)    :: perr
-    
-    IF (perr /= 0) THEN
-      WRITE(0,*) '    PETSc routine "', routine_name, '" returned error flag ', perr
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-    
-  END SUBROUTINE PETSc_handle_error
 
 END MODULE petsc_module

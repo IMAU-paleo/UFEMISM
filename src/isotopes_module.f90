@@ -5,7 +5,7 @@ MODULE isotopes_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -49,13 +49,16 @@ CONTAINS
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_isotopes_model'
     INTEGER                                            :: vi, ci, vj, aci
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
     REAL(dp)                                           :: IsoMin,IsoMax    ! minimum and maximum value of IsoIce
-    
     REAL(dp)                                           :: Upar, dVIso
-    REAL(dp)                                           ::  dIso_dt,  VIso_old,  VIso_new
+    REAL(dp)                                           :: dIso_dt, VIso_old, VIso_new
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -76,18 +79,12 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_isotopes_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    
-    
-    
-    ! DENK DROM
-    RETURN
     
     
     
@@ -141,7 +138,7 @@ CONTAINS
 !
 !    ! Calculate the new d18O_ice from the ice fluxes and applied mass balance
 !    ! =======================================================================
-
+!
 !    DO vi = region%mesh%vi1, region%mesh%vi2
 !    
 !      region%ice%IsoIce_new( vi) = region%ice%IsoIce( vi)
@@ -192,12 +189,15 @@ CONTAINS
 !      
 !    END DO
 !    CALL sync
+!    
+!    ! Update field
+!    region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = region%ice%IsoIce_new( region%mesh%vi1:region%mesh%vi2)
+!    
+!    ! Calculate mean isotope content of the whole ice sheet
+!    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
     
-    ! Update field
-    region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = region%ice%IsoIce_new( region%mesh%vi1:region%mesh%vi2)
-    
-    ! Calculate mean isotope content of the whole ice sheet
-    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE run_isotopes_model
   SUBROUTINE calculate_isotope_content( mesh, Hi, IsoIce, mean_isotope_content, d18O_contribution)
@@ -214,7 +214,8 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: mean_isotope_content
     REAL(dp),                            INTENT(OUT)   :: d18O_contribution
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_isotope_content'
     INTEGER                                            :: vi
     REAL(dp)                                           :: Hi_msle
     REAL(dp)                                           :: total_isotope_content
@@ -229,7 +230,10 @@ CONTAINS
     
     
     
-
+    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
+!
 !    ! Calculate total isotope content
 !    ! ===============================
 !    
@@ -262,6 +266,9 @@ CONTAINS
 !    
 !    ! Contribution to benthic d18O
 !    d18O_contribution = -1._dp * mean_isotope_content * total_ice_volume_msle / mean_ocean_depth
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calculate_isotope_content
   
@@ -274,13 +281,10 @@ CONTAINS
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_isotopes_model'
-    INTEGER                                            :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_isotopes_model'
     INTEGER                                            :: vi
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
-    
-    n1 = par%mem%n
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -303,8 +307,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_isotopes_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -318,6 +321,9 @@ CONTAINS
     
     
     
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
+!    
 !    IF (par%master) WRITE (0,*) '  Initialising isotopes model...'
 !    
 !    ! Allocate memory
@@ -382,8 +388,8 @@ CONTAINS
 !    ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
 !    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
 !    
-!    n2 = par%mem%n
-!    CALL write_to_memory_log( routine_name, n1, n2)
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_isotopes_model
   SUBROUTINE calculate_reference_isotopes( region)
@@ -394,7 +400,8 @@ CONTAINS
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_reference_isotopes'
     INTEGER                                            :: vi
     
     ! Not needed for benchmark experiments
@@ -412,8 +419,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'SSA_icestream') THEN
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in calculate_reference_isotopes!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -426,13 +432,18 @@ CONTAINS
     
     
     
-    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
+!    
 !    ! Calculate reference field of d18O of precipitation
 !    ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
 !    DO vi = region%mesh%vi1, region%mesh%vi2
 !      region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
 !    END DO
 !    CALL sync
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calculate_reference_isotopes
   SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, map, region)
@@ -443,6 +454,9 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_isotopes_model'
     
     ! Not needed for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -459,8 +473,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'SSA_icestream') THEN
         RETURN
       ELSE 
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in remap_isotopes_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -474,6 +487,9 @@ CONTAINS
     
     
     
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
+!    
 !    ! Reallocate memory
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
@@ -483,6 +499,9 @@ CONTAINS
 !    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_isotopes_model
 

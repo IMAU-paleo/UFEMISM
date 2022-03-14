@@ -5,7 +5,7 @@ MODULE basal_conditions_and_sliding_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -41,11 +41,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_basal_conditions'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Basal hydrology
     CALL calc_basal_hydrology( mesh, ice)
     
     ! Bed roughness
     CALL calc_bed_roughness( mesh, ice)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_basal_conditions
   SUBROUTINE initialise_basal_conditions( mesh, ice)
@@ -57,11 +66,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_conditions'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Basal hydrology
     CALL initialise_basal_hydrology( mesh, ice)
     
     ! Bed roughness
     CALL initialise_bed_roughness( mesh, ice)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
     
   END SUBROUTINE initialise_basal_conditions
 
@@ -78,7 +96,11 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_basal_hydrology'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate pore water pressure using the chosen basal hydrology model
     ! ====================================================================
@@ -90,8 +112,7 @@ CONTAINS
       ! The Martin et al. (2011) parameterisation of pore water pressure
       CALL calc_pore_water_pressure_Martin2011( mesh, ice)
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_basal_hydrology - ERROR: unknown choice_basal_hydrology "', TRIM(C%choice_basal_hydrology), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_basal_hydrology "' // TRIM( C%choice_basal_hydrology) // '"!')
     END IF
     
     ! Calculate overburden and effective pressure
@@ -103,6 +124,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_basal_hydrology
   SUBROUTINE initialise_basal_hydrology( mesh, ice)
     ! Allocation and initialisation
@@ -112,6 +136,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_hydrology'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
@@ -123,9 +153,11 @@ CONTAINS
       CALL allocate_shared_dp_1D( mesh%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%Neff_a               , ice%wNeff_a               )
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_basal_hydrology - ERROR: unknown choice_basal_hydrology "', TRIM(C%choice_basal_hydrology), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_basal_hydrology "' // TRIM( C%choice_basal_hydrology) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
     
   END SUBROUTINE initialise_basal_hydrology
   
@@ -141,12 +173,19 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pore_water_pressure_saturated'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       ice%pore_water_pressure_a( vi) = -seawater_density * grav * ice%Hb_a( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_pore_water_pressure_saturated
   SUBROUTINE calc_pore_water_pressure_Martin2011( mesh, ice)
@@ -161,8 +200,12 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pore_water_pressure_Martin2011'
     INTEGER                                            :: vi
     REAL(dp)                                           :: lambda_p
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
 
@@ -174,6 +217,9 @@ CONTAINS
       
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_pore_water_pressure_Martin2011
   
@@ -188,6 +234,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_bed_roughness'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! In case of no sliding or "idealised" sliding (e.g. ISMIP-HOM experiments), no bed roughness is required
     IF (C%choice_sliding_law == 'no_sliding' .OR. &
@@ -217,8 +269,7 @@ CONTAINS
         ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
       ELSE
-        IF (par%master) WRITE(0,*) 'calc_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
     
     ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
@@ -236,8 +287,7 @@ CONTAINS
         ! The basal roughness parameterisation in the MISMIP+ idealised-geometry experiment
         CALL calc_bed_roughness_MISMIPplus( mesh, ice)
       ELSE
-        IF (par%master) WRITE(0,*) 'calc_bed_roughness - ERROR: unknown choice_param_basal_roughness "', TRIM(C%choice_param_basal_roughness), '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_param_basal_roughness "' // TRIM( C%choice_param_basal_roughness) // '"!')
       END IF
       
     ELSEIF (C%choice_basal_roughness == 'prescribed') THEN
@@ -247,9 +297,11 @@ CONTAINS
       ! Basal roughness is updated by the inversion routines; no need to do anything
       
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_bed_roughness - ERROR: unknown choice_basal_roughness "', TRIM(C%choice_basal_roughness), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_bed_roughness
   SUBROUTINE initialise_bed_roughness( mesh, ice)
@@ -260,6 +312,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     IF     (C%choice_sliding_law == 'no_sliding') THEN
@@ -287,6 +345,7 @@ CONTAINS
       CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
     ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       IF (par%master) WRITE(0,*) 'initialise_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -295,6 +354,9 @@ CONTAINS
     IF (C%choice_basal_roughness == 'prescribed') THEN
       CALL initialise_bed_roughness_from_file( mesh, ice)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
     
   END SUBROUTINE initialise_bed_roughness
   
@@ -312,13 +374,16 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_bed_roughness_Martin2011'
     INTEGER                                            :: vi
     REAL(dp)                                           :: w_Hb
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (.NOT. (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson')) THEN
-      IF (par%master) WRITE(0,*) 'calc_bed_roughness_Martin2011 - ERROR: only applicable when choice_sliding_law = "Coulomb", "Coulomb_regularised", or "Zoet-Iverson"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('only applicable when choice_sliding_law = "Coulomb", "Coulomb_regularised", or "Zoet-Iverson"!')
     END IF
   
     DO vi = mesh%vi1, mesh%vi2
@@ -331,7 +396,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%phi_fric_a, 'ice%phi_fric_a', 'Martin_2011_till_model')
+    CALL check_for_NaN_dp_1D( ice%phi_fric_a, 'ice%phi_fric_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_bed_roughness_Martin2011
   
@@ -348,14 +416,21 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_bed_roughness_SSA_icestream'
     INTEGER                                            :: vi
     REAL(dp)                                           :: y, dummy1
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   
     DO vi = mesh%vi1, mesh%vi2
       y = mesh%V( vi,2)
       CALL SSA_Schoof2006_analytical_solution( 0.001_dp, ice%Hi_a( vi), ice%A_flow_vav_a( vi), y, dummy1, ice%tauc_a( vi))
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_bed_roughness_SSA_icestream
   SUBROUTINE calc_bed_roughness_MISMIPplus( mesh, ice)
@@ -365,7 +440,8 @@ CONTAINS
 
     IMPLICIT NONE
 
-    ! Input variables:
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_bed_roughness_MISMIPplus'
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
@@ -373,6 +449,9 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp), PARAMETER                                :: MISMIPplus_alpha_sq = 0.5_dp   ! Coulomb-law friction coefficient [unitless];         see Asay-Davis et al., 2016
     REAL(dp), PARAMETER                                :: MISMIPplus_beta_sq  = 1.0E4_dp ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3]; idem dito
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   
     IF     (C%choice_sliding_law == 'Weertman') THEN
       ! Uniform sliding factor for the MISMIP+ configuration, using the first (Weertman) sliding law option
@@ -401,9 +480,11 @@ CONTAINS
       CALL sync
       
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_bed_roughness_MISMIPplus - ERROR: only defined when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('only defined when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_bed_roughness_MISMIPplus
   
@@ -417,11 +498,16 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     IF     (C%choice_sliding_law == 'no_sliding' .OR. &
             C%choice_sliding_law == 'idealised') THEN
       ! No sliding allowed / sliding laws for some idealised experiments
-      IF (par%master) WRITE(0,*) 'initialise_bed_roughness_from_file - ERROR: not defined for choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('not defined for choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
       CALL initialise_bed_roughness_from_file_Weertman( mesh, ice)
@@ -439,9 +525,11 @@ CONTAINS
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
       CALL initialise_bed_roughness_from_file_ZoetIverson( mesh, ice)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_bed_roughness_from_file - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file
   SUBROUTINE initialise_bed_roughness_from_file_Weertman( mesh, ice)
@@ -455,15 +543,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_Weertman'
+    
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
     
-    WRITE(0,*) 'initialise_bed_roughness_from_file_Weertman - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('FIXME!')
     
 !    ! Local variables:
 !    TYPE(type_BIV_bed_roughness)                       :: BIV
+!    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
 !    
 !    ! Determine filename
 !    BIV%netcdf%filename = C%basal_roughness_filename
@@ -487,7 +580,7 @@ CONTAINS
 !    CALL sync
 !  
 !    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq',  'initialise_bed_roughness_from_file_Weertman')
+!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq')
 !    
 !    ! Since we want data represented as [j,i] internally, transpose the data we just read.
 !    CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
@@ -501,6 +594,9 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wx       )
 !    CALL deallocate_shared( BIV%wy       )
 !    CALL deallocate_shared( BIV%wbeta_sq )
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file_Weertman
   SUBROUTINE initialise_bed_roughness_from_file_Coulomb( mesh, ice)
@@ -514,15 +610,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_Coulomb'
+    
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
     
-    WRITE(0,*) 'initialise_bed_roughness_from_file_Coulomb - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('FIXME!')
     
 !    ! Local variables:
 !    TYPE(type_BIV_bed_roughness)                       :: BIV
+!    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
 !    
 !    ! Determine filename
 !    BIV%netcdf%filename = C%basal_roughness_filename
@@ -546,7 +647,7 @@ CONTAINS
 !    CALL sync
 !  
 !    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric', 'initialise_bed_roughness_from_file_Coulomb')
+!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
 !    
 !    ! Since we want data represented as [j,i] internally, transpose the data we just read.
 !    CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
@@ -560,6 +661,9 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wx       )
 !    CALL deallocate_shared( BIV%wy       )
 !    CALL deallocate_shared( BIV%wphi_fric)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file_Coulomb
   SUBROUTINE initialise_bed_roughness_from_file_Tsai2015( mesh, ice)
@@ -573,15 +677,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_Tsai2015'
+    
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
     
-    WRITE(0,*) 'initialise_bed_roughness_from_file_Tsai2015 - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('FIXME!')
     
 !    ! Local variables:
 !    TYPE(type_BIV_bed_roughness)                       :: BIV
+!    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
 !    
 !    ! Determine filename
 !    BIV%netcdf%filename = C%basal_roughness_filename
@@ -606,8 +715,8 @@ CONTAINS
 !    CALL sync
 !  
 !    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq', 'initialise_bed_roughness_from_file_Tsai2015')
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq',  'initialise_bed_roughness_from_file_Tsai2015')
+!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
+!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
 !    
 !    ! Since we want data represented as [j,i] internally, transpose the data we just read.
 !    CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
@@ -624,6 +733,9 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wy       )
 !    CALL deallocate_shared( BIV%walpha_sq)
 !    CALL deallocate_shared( BIV%wbeta_sq )
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file_Tsai2015
   SUBROUTINE initialise_bed_roughness_from_file_Schoof2005( mesh, ice)
@@ -637,15 +749,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_Schoof2005'
+    
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
     
-    WRITE(0,*) 'initialise_bed_roughness_from_file_Schoof2005 - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('FIXME!')
     
 !    ! Local variables:
 !    TYPE(type_BIV_bed_roughness)                       :: BIV
+!    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
 !    
 !    ! Determine filename
 !    BIV%netcdf%filename = C%basal_roughness_filename
@@ -670,8 +787,8 @@ CONTAINS
 !    CALL sync
 !  
 !    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq', 'initialise_bed_roughness_from_file_Schoof2005')
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq',  'initialise_bed_roughness_from_file_Schoof2005')
+!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
+!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
 !    
 !    ! Since we want data represented as [j,i] internally, transpose the data we just read.
 !    CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
@@ -688,6 +805,9 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wy       )
 !    CALL deallocate_shared( BIV%walpha_sq)
 !    CALL deallocate_shared( BIV%wbeta_sq )
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file_Schoof2005
   SUBROUTINE initialise_bed_roughness_from_file_ZoetIverson( mesh, ice)
@@ -701,15 +821,20 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness_from_file_ZoetIverson'
+    
     REAL(dp) :: dummy_dp
     dummy_dp = mesh%V( 1,1)
     dummy_dp = ice%Hi_a( 1)
     
-    WRITE(0,*) 'initialise_bed_roughness_from_file_ZoetIverson - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('FIXME!')
     
 !    ! Local variables:
 !    TYPE(type_BIV_bed_roughness)                       :: BIV
+!    
+!    ! Add routine to path
+!    CALL init_routine( routine_name)
 !    
 !    ! Determine filename
 !    BIV%netcdf%filename = C%basal_roughness_filename
@@ -733,7 +858,7 @@ CONTAINS
 !    CALL sync
 !  
 !    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric', 'initialise_bed_roughness_from_file_ZoetIverson')
+!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
 !    
 !    ! Since we want data represented as [j,i] internally, transpose the data we just read.
 !    CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
@@ -747,6 +872,9 @@ CONTAINS
 !    CALL deallocate_shared( BIV%wx       )
 !    CALL deallocate_shared( BIV%wy       )
 !    CALL deallocate_shared( BIV%wphi_fric)
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_bed_roughness_from_file_ZoetIverson
   
@@ -764,6 +892,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed (choice of beta is trivial)
@@ -791,9 +925,11 @@ CONTAINS
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
       CALL calc_sliding_law_ZoetIverson(         mesh, ice, u_a, v_a, beta_a)
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_sliding_law - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law
 
@@ -810,8 +946,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Weertman'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate beta
     DO vi = mesh%vi1, mesh%vi2
@@ -826,7 +966,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Weertman')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_Weertman
   SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_a, v_a, beta_a)
@@ -842,8 +985,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
@@ -863,7 +1010,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Coulomb')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_Coulomb
   SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
@@ -879,8 +1029,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb_regularised'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
@@ -900,7 +1054,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Coulomb_regularised')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_Coulomb_regularised
   SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_a, v_a, beta_a)
@@ -924,8 +1081,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Tsai2015'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate beta
     DO vi = mesh%vi1, mesh%vi2
@@ -940,7 +1101,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Tsai2015')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_Tsai2015
   SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_a, v_a, beta_a)
@@ -963,8 +1127,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Schoof2005'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate beta
     DO vi = mesh%vi1, mesh%vi2
@@ -980,7 +1148,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_Schoof2005')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_Schoof2005
   SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_a, v_a, beta_a)
@@ -996,8 +1167,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_ZoetIverson'
     INTEGER                                            :: vi
     REAL(dp)                                           :: uabs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
@@ -1018,7 +1193,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_ZoetIverson')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_ZoetIverson
   
@@ -1035,7 +1213,11 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised'
     REAL(dp) :: dummy_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings...
     dummy_dp = u_a( 1)
@@ -1054,8 +1236,7 @@ CONTAINS
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_E') THEN
       ! ISMIP-HOM experiment E
       
-      WRITE(0,*) 'calc_sliding_law_idealised - the Glacier Arolla experiment is not implemented in UFEMISM!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('the Glacier Arolla experiment is not implemented in UFEMISM!')
       
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP_HOM_F') THEN
       ! ISMIP-HOM experiment F
@@ -1063,9 +1244,11 @@ CONTAINS
       CALL calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
       
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_sliding_law_idealised - ERROR: unknown choice_idealised_sliding_law "', TRIM(C%choice_idealised_sliding_law), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_idealised_sliding_law "' // TRIM( C%choice_idealised_sliding_law) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_idealised
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
@@ -1080,8 +1263,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_C'
     INTEGER                                            :: vi
     REAL(dp)                                           :: x,y
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1)
@@ -1091,7 +1278,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_C')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
@@ -1106,8 +1296,12 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_D'
     INTEGER                                            :: vi
     REAL(dp)                                           :: x
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1)
@@ -1116,7 +1310,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_D')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
@@ -1132,7 +1329,11 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_F'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       beta_a( vi) = (ice%A_flow_vav_a( vi) * 1000._dp)**(-1._dp)
@@ -1140,7 +1341,10 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_1D( beta_a, 'beta_a', 'calc_sliding_law_idealised_ISMIP_HOM_F')
+    CALL check_for_NaN_dp_1D( beta_a, 'beta_a')
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F
   
@@ -1158,11 +1362,20 @@ CONTAINS
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_basal_conditions'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Basal hydrology
     CALL remap_basal_hydrology( mesh_old, mesh_new, map, ice)
     
     ! Bed roughness
     CALL remap_bed_roughness( mesh_old, mesh_new, map, ice)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_basal_conditions
   SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, map, ice)
@@ -1177,7 +1390,11 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_basal_hydrology'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -1194,9 +1411,11 @@ CONTAINS
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
     ELSE
-      IF (par%master) WRITE(0,*) 'remap_basal_hydrology - ERROR: unknown choice_basal_hydrology "', TRIM(C%choice_basal_hydrology), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_basal_hydrology "' // TRIM( C%choice_basal_hydrology) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_basal_hydrology
   SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, map, ice)
@@ -1211,7 +1430,11 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_bed_roughness'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -1244,14 +1467,16 @@ CONTAINS
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
     ELSE
-      IF (par%master) WRITE(0,*) 'remap_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
     
     ! If bed roughness is prescribed, read it from the provided NetCDF file
     IF (C%choice_basal_roughness == 'prescribed') THEN
       CALL initialise_bed_roughness_from_file( mesh_new, ice)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_bed_roughness
   

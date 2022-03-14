@@ -5,7 +5,7 @@ MODULE utilities_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -394,7 +394,8 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),         INTENT(IN)    :: d_src
     REAL(dp), DIMENSION(:,:  ),         INTENT(OUT)   :: d_dst
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'map_square_to_square_cons_2nd_order_2D'
     INTEGER                                           :: i,j,i_src,j_src,i1,i2,igmin,igmax,jgmin,jgmax,j1,j2
     REAL(dp)                                          :: dx_src, dy_src, dx_dst, dy_dst, xcmin, xcmax, ycmin, ycmax
     INTEGER,  DIMENSION(nx_dst,2)                     :: ir_src
@@ -595,7 +596,8 @@ CONTAINS
     REAL(dp), DIMENSION(:,:,:),         INTENT(IN)    :: d_src
     REAL(dp), DIMENSION(:,:,:),         INTENT(OUT)   :: d_dst
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'map_square_to_square_cons_2nd_order_3D'
     INTEGER                                           :: nz, k, i1_src, i2_src, i1_dst, i2_dst
     REAL(dp), DIMENSION(:,:  ), POINTER               ::  d_src_2D,  d_dst_2D
     INTEGER                                           :: wd_src_2D, wd_dst_2D
@@ -729,6 +731,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in m
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_2D_grid'
     INTEGER                                            :: i,j,ii,jj,n
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_ext,  d_ext_smooth
     INTEGER                                            :: wd_ext, wd_ext_smooth
@@ -830,6 +833,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in km
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_3D_grid'
     INTEGER                                            :: k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_2D
     INTEGER                                            :: wd_2D
@@ -858,6 +862,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in m
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Shepard_2D_grid'
     INTEGER                                            :: i,j,k,l,n
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_ext,  d_ext_smooth
     INTEGER                                            :: wd_ext, wd_ext_smooth
@@ -944,6 +949,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in km
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Shepard_3D_grid'
     INTEGER                                            :: k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_2D
     INTEGER                                            :: wd_2D
@@ -967,7 +973,7 @@ CONTAINS
     ! Remove Lake Vostok from Antarctic input geometry data
     ! by manually increasing ice thickness so that Hi = Hs - Hb
     !
-    ! NOTE: since IMAU-ICE doesn't consider subglacial lakes, Vostok simply shows
+    ! NOTE: since UFEMISM doesn't consider subglacial lakes, Vostok simply shows
     !       up as a "dip" in the initial geometry. The model will run fine, the dip
     !       fills up in a few centuries, but it slows down the model for a while and
     !       it looks ugly, so we just remove it right away.
@@ -981,6 +987,7 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Hs
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remove_Lake_Vostok'
     INTEGER                                       :: i,j,nx,ny
     REAL(dp), PARAMETER                           :: lake_Vostok_xmin = 1164250.0
     REAL(dp), PARAMETER                           :: lake_Vostok_xmax = 1514250.0
@@ -1246,7 +1253,7 @@ CONTAINS
   END SUBROUTINE calc_matrix_inverse_general
   
 ! == Debugging
-  SUBROUTINE check_for_NaN_dp_1D(  d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_dp_1D(  d, d_name)
     ! Check if NaN values occur in the 1-D dp data field d
     ! NOTE: parallelised!
     
@@ -1254,11 +1261,11 @@ CONTAINS
     
     ! In/output variables:
     REAL(dp), DIMENSION(:    ),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,i,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1275,11 +1282,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1287,25 +1289,19 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( i) /= d( i)) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_dp_1D - NaN detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      ELSEIF (d (i) > HUGE( d( i))) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_dp_1D - Inf detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      ELSEIF (d (i) < -HUGE( d( i))) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_dp_1D - -Inf detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( i) /= d( i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01}]' ), int_01 = i)
+      ELSEIF (d( i) > HUGE( d( i))) THEN
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01}]' ), int_01 = i)
+      ELSEIF (d( i)  < -HUGE( d( i))) THEN
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01}]'), int_01 = i)
       END IF
       
     END DO
     CALL sync
     
   END SUBROUTINE check_for_NaN_dp_1D
-  SUBROUTINE check_for_NaN_dp_2D(  d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_dp_2D(  d, d_name)
     ! Check if NaN values occur in the 2-D dp data field d
     ! NOTE: parallelised!
     
@@ -1313,11 +1309,11 @@ CONTAINS
     
     ! In/output variables:
     REAL(dp), DIMENSION(:,:  ),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,ny,i,j,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1335,11 +1331,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1348,18 +1339,12 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( j,i) /= d( j,i)) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_2D - NaN detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( j,i) /= d( j,i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       ELSEIF (d( j,i) > HUGE( d( j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_2D - Inf detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       ELSEIF (d( j,i) < -HUGE( d( j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_2D - Inf detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       END IF
       
     END DO
@@ -1367,7 +1352,7 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE check_for_NaN_dp_2D
-  SUBROUTINE check_for_NaN_dp_3D(  d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_dp_3D(  d, d_name)
     ! Check if NaN values occur in the 3-D dp data field d
     ! NOTE: parallelised!
     
@@ -1375,11 +1360,11 @@ CONTAINS
     
     ! In/output variables:
     REAL(dp), DIMENSION(:,:,:),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,ny,nz,i,j,k,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1398,11 +1383,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1412,18 +1392,12 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( k,j,i) /= d( k,j,i)) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_3D - NaN detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( k,j,i) /= d( k,j,i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) > HUGE( d( k,j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_3D - Inf detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) < -HUGE( d( k,j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_dp_3D - -Inf detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       END IF
       
     END DO
@@ -1432,7 +1406,7 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE check_for_NaN_dp_3D
-  SUBROUTINE check_for_NaN_int_1D( d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_int_1D( d, d_name)
     ! Check if NaN values occur in the 1-D int data field d
     ! NOTE: parallelised!
     
@@ -1440,11 +1414,11 @@ CONTAINS
     
     ! In/output variables:
     INTEGER,  DIMENSION(:    ),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,i,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1461,11 +1435,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1473,25 +1442,19 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( i) /= d( i)) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_int_1D - NaN detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( i) /= d( i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01}]' ), int_01 = i)
       ELSEIF (d( i) > HUGE( d( i))) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_int_1D - Inf detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01}]' ), int_01 = i)
       ELSEIF (d( i) < -HUGE( d( i))) THEN
-        WRITE(0,'(A,I4,A,A,A,A,A,A)') 'check_for_NaN_int_1D - -Inf detected at [', i, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01}]'), int_01 = i)
       END IF
       
     END DO
     CALL sync
     
   END SUBROUTINE check_for_NaN_int_1D
-  SUBROUTINE check_for_NaN_int_2D( d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_int_2D( d, d_name)
     ! Check if NaN values occur in the 2-D int data field d
     ! NOTE: parallelised!
     
@@ -1499,11 +1462,11 @@ CONTAINS
     
     ! In/output variables:
     INTEGER,  DIMENSION(:,:  ),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,ny,i,j,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1521,11 +1484,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1534,18 +1492,12 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( j,i) /= d( j,i)) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_2D - NaN detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( j,i) /= d( j,i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       ELSEIF (d( j,i) > HUGE( d( j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_2D - Inf detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       ELSEIF (d( j,i) < -HUGE( d( j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_2D - -Inf detected at [', i, ',', j, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       END IF
       
     END DO
@@ -1553,7 +1505,7 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE check_for_NaN_int_2D
-  SUBROUTINE check_for_NaN_int_3D( d, d_name, routine_name)
+  SUBROUTINE check_for_NaN_int_3D( d, d_name)
     ! Check if NaN values occur in the 3-D int data field d
     ! NOTE: parallelised!
     
@@ -1561,11 +1513,11 @@ CONTAINS
     
     ! In/output variables:
     INTEGER,  DIMENSION(:,:,:),              INTENT(IN)    :: d
-    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name, routine_name
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
     
     ! Local variables:
     INTEGER                                                :: nx,ny,nz,i,j,k,i1,i2
-    CHARACTER(LEN=256)                                     :: d_name_loc, routine_name_loc
+    CHARACTER(LEN=256)                                     :: d_name_loc
     
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
@@ -1584,11 +1536,6 @@ CONTAINS
     ELSE
       d_name_loc = '?'
     END IF
-    IF (PRESENT( routine_name)) THEN
-      routine_name_loc = TRIM(routine_name)
-    ELSE
-      routine_name_loc = '?'
-    END IF
     
     ! Inspect data field
     DO i = i1, i2
@@ -1598,18 +1545,12 @@ CONTAINS
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
       
-      IF (d( k,j,i) /= d( k,j,i)) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_3D - NaN detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      IF     (d( k,j,i) /= d( k,j,i)) THEN
+        CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) > HUGE( d( k,j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_3D - Inf detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash(  ('detected Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) < -HUGE( d( k,j,i))) THEN
-        WRITE(0,'(A,I4,A,I4,A,I4,A,A,A,A,A)') 'check_for_NaN_int_3D - -Inf detected at [', i, ',', j, ',', k, &
-          '] in variable "', TRIM(d_name_loc), '" from routine "', TRIM(routine_name_loc), '"'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       END IF
       
     END DO

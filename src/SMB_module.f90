@@ -5,7 +5,7 @@ MODULE SMB_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
@@ -56,14 +56,14 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_SMB_model'
-    INTEGER                                            :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model'
     INTEGER                                            :: vi,m
     INTEGER                                            :: mprev
     REAL(dp)                                           :: snowfrac, liquid_water, sup_imp_wat
     REAL(dp)                                           :: R
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Check if we need to apply any special benchmark experiment SMB
     IF (C%do_benchmark_experiment) THEN
@@ -75,6 +75,7 @@ CONTAINS
           C%choice_benchmark_experiment == 'EISMINT_6') THEN
           
         CALL EISMINT_SMB( mesh, time, SMB)
+        CALL finalise_routine( routine_name)
         RETURN
         
       ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
@@ -86,16 +87,19 @@ CONTAINS
               C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0._dp
         SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0._dp
+        CALL finalise_routine( routine_name)
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
         DO vi = mesh%vi1, mesh%vi2
           SMB%SMB_year( vi  ) = Bueler_solution_MB( mesh%V(vi,1), mesh%V(vi,2), time)
           SMB%SMB(      vi,:) = SMB%SMB_year( vi) / 12._dp
         END DO
+        CALL finalise_routine( routine_name)
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
         SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0.3_dp
         SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0.3_dp / 12._dp
+        CALL finalise_routine( routine_name)
         RETURN
       ELSEIF (C%choice_benchmark_experiment == 'mesh_generation_test') THEN
         ! Similar to EISMINT
@@ -109,10 +113,10 @@ CONTAINS
           SMB%SMB(      vi,:) = SMB%SMB_year( vi  ) / 12._dp
         END DO ! DO vi = mesh%vi1, mesh%vi2
         CALL sync
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_SMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -183,8 +187,8 @@ CONTAINS
     END DO
     CALL sync
     
-    n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
           
   END SUBROUTINE run_SMB_model
   
@@ -202,12 +206,15 @@ CONTAINS
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'EISMINT_SMB'
     INTEGER                                            :: vi
-    
     REAL(dp)                                           :: E               ! Radius of circle where accumulation is M_max
     REAL(dp)                                           :: dist            ! distance to centre of circle
     REAL(dp)                                           :: S_b             ! Gradient of accumulation-rate change with horizontal distance
     REAL(dp)                                           :: M_max           ! Maximum accumulation rate 
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Default EISMINT configuration
     E         = 450000._dp
@@ -255,6 +262,9 @@ CONTAINS
       SMB%SMB(vi,:) = SMB%SMB_year(vi) / 12._dp
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
           
   END SUBROUTINE EISMINT_SMB
   FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
@@ -315,12 +325,12 @@ CONTAINS
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_SMB_model'
-    INTEGER                                            :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SMB_model'
     INTEGER                                            :: vi
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) WRITE (0,*) '  Initialising SMB model...'
     
@@ -393,8 +403,8 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
   
   END SUBROUTINE initialise_SMB_model  
   SUBROUTINE remap_SMB_model( mesh_old, mesh_new, map, SMB)
@@ -407,7 +417,11 @@ CONTAINS
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_SMB_model'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -434,6 +448,9 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%SMB,              SMB%wSMB             )
     CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%SMB_year,         SMB%wSMB_year        )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_SMB_model
 

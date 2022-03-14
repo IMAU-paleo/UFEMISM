@@ -243,7 +243,7 @@ CONTAINS
     END IF
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
     
   END SUBROUTINE initialise_reference_geometry_from_file
   

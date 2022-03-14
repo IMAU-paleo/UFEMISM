@@ -154,7 +154,6 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
-    REAL(dp)                                           :: t_start, tcomp_assembly, tcomp_solve, tcomp_tot, dt_assembly, dt_solve
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -185,10 +184,6 @@ CONTAINS
     
   ! == Safety - end
   ! ===============
-    
-    tcomp_assembly = 0._dp
-    tcomp_solve    = 0._dp
-    t_start = MPI_WTIME()
     
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -233,9 +228,7 @@ CONTAINS
       CALL sync
       
       ! Solve the linearised SSA
-      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b, dt_assembly, dt_solve)
-      tcomp_assembly = tcomp_assembly + dt_assembly
-      tcomp_solve    = tcomp_solve    + dt_solve
+      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
       
       ! Apply velocity limits (both overflow and underflow) for improved stability
       CALL apply_velocity_limits( mesh, ice%u_base_SSA_b, ice%v_base_SSA_b)
@@ -262,9 +255,6 @@ CONTAINS
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
     
-    tcomp_tot = MPI_WTIME() - t_start
-    !IF (par%master) WRITE(0,*) '     Solved the SSA in ', tcomp_tot, ' s, of which ', tcomp_assembly, ' s was matrix assembly, and ', tcomp_solve, ' s was matrix solving'
-    
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
@@ -285,7 +275,6 @@ CONTAINS
     INTEGER                                            :: viscosity_iteration_i
     REAL(dp)                                           :: resid_UV
     REAL(dp)                                           :: umax_analytical, tauc_analytical
-    REAL(dp)                                           :: t_start, tcomp_assembly, tcomp_solve, tcomp_tot, dt_assembly, dt_solve
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -313,10 +302,6 @@ CONTAINS
     
   ! == Safety - end
   ! ===============
-    
-    tcomp_assembly = 0._dp
-    tcomp_solve    = 0._dp
-    t_start = MPI_WTIME()
     
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -357,9 +342,7 @@ CONTAINS
       CALL sync
       
       ! Solve the linearised DIVA
-      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b, dt_assembly, dt_solve)
-      tcomp_assembly = tcomp_assembly + dt_assembly
-      tcomp_solve    = tcomp_solve    + dt_solve
+      CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
       ! Apply velocity limits (both overflow and underflow) for improved stability
       CALL apply_velocity_limits( mesh, ice%u_vav_b, ice%v_vav_b)
@@ -388,9 +371,6 @@ CONTAINS
     
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
-    
-    tcomp_tot = MPI_WTIME() - t_start
-    !IF (par%master) WRITE(0,*) '     Solved the DIVA in ', tcomp_tot, ' s, of which ', tcomp_assembly, ' s was matrix assembly, and ', tcomp_solve, ' s was matrix solving'
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -702,7 +682,6 @@ CONTAINS
     INTEGER                                            :: ti,k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  visc_eff_3D_b
     INTEGER                                            :: wvisc_eff_3D_b
-    REAL(dp), PARAMETER                                :: visc_min = 1E4_dp
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -716,8 +695,8 @@ CONTAINS
     ! Calculate vertical shear strain rates
     DO ti = mesh%ti1, mesh%ti2
       DO k = 1, C%nz
-        ice%du_dz_3D_b( ti,k) = (ice%taubx_b( ti) / MAX( visc_min, visc_eff_3D_b( ti,k))) * C%zeta( k)
-        ice%dv_dz_3D_b( ti,k) = (ice%tauby_b( ti) / MAX( visc_min, visc_eff_3D_b( ti,k))) * C%zeta( k)
+        ice%du_dz_3D_b( ti,k) = (ice%taubx_b( ti) / visc_eff_3D_b( ti,k)) * C%zeta( k)
+        ice%dv_dz_3D_b( ti,k) = (ice%tauby_b( ti) / visc_eff_3D_b( ti,k)) * C%zeta( k)
       END DO
     END DO
     CALL sync
@@ -748,7 +727,6 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_effective_viscosity'
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: eps_sq
-    REAL(dp), PARAMETER                                :: epsilon_sq_0 = 1E-12_dp   ! Normalisation term so that zero velocity gives non-zero viscosity
     REAL(dp), DIMENSION(C%nz)                          :: prof
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  du_dz_3D_a,  dv_dz_3D_a
     INTEGER                                            :: wdu_dz_3D_a, wdv_dz_3D_a
@@ -778,10 +756,13 @@ CONTAINS
                  ice%du_dx_a( vi) * ice%dv_dy_a( vi) + &
                  0.25_dp * (ice%du_dy_a( vi) + ice%dv_dx_a( vi))**2 + &
                  0.25_dp * (du_dz_3D_a( vi,k)**2 + dv_dz_3D_a( vi,k)**2) + &
-                 epsilon_sq_0
+                 C%DIVA_epsilon_sq_0
         
-        ! Calculate effective viscosity on ab-nodes
+        ! Calculate effective viscosity
         ice%visc_eff_3D_a( vi,k) = 0.5_dp * ice%A_flow_3D_a( vi,k)**(-1._dp/C%n_flow) * (eps_sq)**((1._dp - C%n_flow)/(2._dp*C%n_flow))
+      
+        ! Safety
+        ice%visc_eff_3D_a( vi,k) = MAX( ice%visc_eff_3D_a( vi,k), C%DIVA_visc_eff_min)
 
       END DO ! DO k = 1, C%nz
       
@@ -881,14 +862,13 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_F_integral'
     INTEGER                                            :: vi
     REAL(dp)                                           :: F_int_min
-    REAL(dp), PARAMETER                                :: visc_min = 1E5_dp
     REAL(dp), DIMENSION(C%nz)                          :: prof
     
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Set a lower limit for F2 to improve numerical stability
-    prof = (1._dp / visc_min) * C%zeta**n
+    prof = (1._dp / C%DIVA_visc_eff_min) * C%zeta**n
     CALL vertical_integrate( prof, F_int_min)
 
     DO vi = mesh%vi1, mesh%vi2
@@ -1106,7 +1086,7 @@ CONTAINS
   END SUBROUTINE calc_3D_horizontal_velocities_DIVA
   
   ! Routines for solving the "linearised" SSA/DIVA
-  SUBROUTINE solve_SSADIVA_linearised( mesh, ice, u_b, v_b, dt_assembly, dt_solve)
+  SUBROUTINE solve_SSADIVA_linearised( mesh, ice, u_b, v_b)
     ! Solve the "linearised" version of the SSA (i.e. assuming viscosity and basal stress are
     ! constant rather than functions of velocity) on the b-grid.
     ! 
@@ -1140,7 +1120,6 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
-    REAL(dp),                            INTENT(OUT)   :: dt_assembly, dt_solve
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSADIVA_linearised'
@@ -1149,7 +1128,6 @@ CONTAINS
     INTEGER                                            :: wN_b, wdN_dx_b, wdN_dy_b
     REAL(dp), DIMENSION(:    ), POINTER                ::  b_buv,  uv_buv
     INTEGER                                            :: wb_buv, wuv_buv
-    REAL(dp)                                           :: t_start
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1168,8 +1146,6 @@ CONTAINS
     
   ! Fill in the coefficients of the stiffness matrix
   ! ================================================
-    
-    t_start = MPI_WTIME()
     
     DO ti = mesh%ti1, mesh%ti2
       
@@ -1191,12 +1167,8 @@ CONTAINS
     END DO
     CALL sync
     
-    dt_assembly = MPI_WTIME() - t_start
-    
   ! Solve the matrix equation
   ! =========================
-    
-    t_start = MPI_WTIME()
     
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
       C%DIVA_choice_matrix_solver, &
@@ -1205,8 +1177,6 @@ CONTAINS
       C%DIVA_SOR_omega           , &
       C%DIVA_PETSc_rtol          , &
       C%DIVA_PETSc_abstol)
-    
-    dt_solve = MPI_WTIME() - t_start
     
   ! Get solution back on the b-grid
   ! ================================

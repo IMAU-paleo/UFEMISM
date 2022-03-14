@@ -8,7 +8,7 @@ MODULE mesh_help_functions_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -51,13 +51,13 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_areas'
-    INTEGER                                       :: vi, nVor, n
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
-    REAL(dp)                                      :: Aerr
+    INTEGER                                            :: vi, nVor, n
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
+    REAL(dp)                                           :: Aerr
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -163,12 +163,12 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_connection_widths'
-    INTEGER                                       :: v1, nv2, v2, t1, t2, iti, ti, n
-    LOGICAL                                       :: hasv2
+    INTEGER                                            :: v1, nv2, v2, t1, t2, iti, ti, n
+    LOGICAL                                            :: hasv2
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -239,12 +239,12 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_triangle_areas'
-    INTEGER                                       :: ti
-    REAL(dp), DIMENSION(2)                        :: pa, pb, pc
+    INTEGER                                            :: ti
+    REAL(dp), DIMENSION(2)                             :: pa, pb, pc
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -266,11 +266,11 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_mesh_resolution'
-    INTEGER                                       :: vi, vj, ci
+    INTEGER                                            :: vi, vj, ci
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -297,11 +297,11 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_triangle_geometric_centres'
-    INTEGER                                       :: ti
+    INTEGER                                            :: ti
     
     ! Add routine to path
     CALL init_routine( routine_name)

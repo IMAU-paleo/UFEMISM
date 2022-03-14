@@ -654,8 +654,9 @@ MODULE data_types_netcdf_module
   ! Variables
   ! =========
     
-    INTEGER, DIMENSION(:), ALLOCATABLE :: id_vars
     INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_names
+    INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_tcomp
+    INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_mem
     
   END TYPE type_netcdf_resource_tracker
     

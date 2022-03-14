@@ -7,7 +7,7 @@ MODULE mesh_memory_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: tMat, MatDestroy, perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -163,7 +163,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 46)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
 
   END SUBROUTINE allocate_mesh_primary
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
@@ -272,28 +272,23 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    INTEGER                                            :: nV, nTri
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_mesh_secondary'
     
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    nV   = mesh%nV
-    nTri = mesh%nTri
     
-    CALL allocate_shared_dp_1D(  nV,                  mesh%A,               mesh%wA              )
-    CALL allocate_shared_dp_2D(  nV,    2,            mesh%VorGC,           mesh%wVorGC          )
-    CALL allocate_shared_dp_1D(  nV,                  mesh%R,               mesh%wR              )
-    CALL allocate_shared_dp_2D(  nV,     mesh%nC_mem, mesh%Cw,              mesh%wCw             )
-    CALL allocate_shared_int_1D( nV,                  mesh%mesh_old_ti_in,  mesh%wmesh_old_ti_in )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,              mesh%A,               mesh%wA              )
+    CALL allocate_shared_dp_2D(  mesh%nV  , 2,           mesh%VorGC,           mesh%wVorGC          )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,              mesh%R,               mesh%wR              )
+    CALL allocate_shared_dp_2D(  mesh%nV  , mesh%nC_mem, mesh%Cw,              mesh%wCw             )
         
-    CALL allocate_shared_dp_1D(  nTri,                mesh%TriA,            mesh%wTriA           )
-    CALL allocate_shared_dp_2D(  nTri,  2,            mesh%TriGC,           mesh%wTriGC          )
+    CALL allocate_shared_dp_1D(  mesh%nTri,              mesh%TriA,            mesh%wTriA           )
+    CALL allocate_shared_dp_2D(  mesh%nTri, 2,           mesh%TriGC,           mesh%wTriGC          )
     
-    CALL allocate_shared_dp_1D(  nV,                  mesh%lat,             mesh%wlat            )
-    CALL allocate_shared_dp_1D(  nV,                  mesh%lon,             mesh%wlon            )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,              mesh%lat,             mesh%wlat            )
+    CALL allocate_shared_dp_1D(  mesh%nV  ,              mesh%lon,             mesh%wlon            )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
@@ -312,6 +307,9 @@ CONTAINS
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Basic meta properties
+    ! =====================
     
     CALL deallocate_shared( mesh%wlambda_M)
     CALL deallocate_shared( mesh%wphi_M)
@@ -321,9 +319,9 @@ CONTAINS
     CALL deallocate_shared( mesh%wymin)
     CALL deallocate_shared( mesh%wymax)
     CALL deallocate_shared( mesh%wtol_dist)
-    CALL deallocate_shared( mesh%wnC_mem)
     CALL deallocate_shared( mesh%wnV_mem)
     CALL deallocate_shared( mesh%wnTri_mem)
+    CALL deallocate_shared( mesh%wnC_mem)
     CALL deallocate_shared( mesh%wnV)
     CALL deallocate_shared( mesh%wnTri)
     CALL deallocate_shared( mesh%wperturb_dir)
@@ -338,14 +336,13 @@ CONTAINS
     CALL deallocate_shared( mesh%wres_min)
     CALL deallocate_shared( mesh%wresolution_min)
     CALL deallocate_shared( mesh%wresolution_max)
+
+    ! Primary mesh data (needed for mesh creation & refinement)
+    ! =========================================================
     
     CALL deallocate_shared( mesh%wV)
-    CALL deallocate_shared( mesh%wA)
-    CALL deallocate_shared( mesh%wVorGC)
-    CALL deallocate_shared( mesh%wR)
     CALL deallocate_shared( mesh%wnC)
     CALL deallocate_shared( mesh%wC)
-    CALL deallocate_shared( mesh%wCw)
     CALL deallocate_shared( mesh%wniTri)
     CALL deallocate_shared( mesh%wiTri)
     CALL deallocate_shared( mesh%wedge_index)
@@ -353,14 +350,13 @@ CONTAINS
     
     CALL deallocate_shared( mesh%wTri)
     CALL deallocate_shared( mesh%wTricc)
-    CALL deallocate_shared( mesh%wTriGC)
     CALL deallocate_shared( mesh%wTriC)
     CALL deallocate_shared( mesh%wTri_edge_index)
-    CALL deallocate_shared( mesh%wTriA)
     
     CALL deallocate_shared( mesh%wTriflip)
     CALL deallocate_shared( mesh%wRefMap)
     CALL deallocate_shared( mesh%wRefStack)
+    CALL deallocate_shared( mesh%wRefStackN)
     
     CALL deallocate_shared( mesh%wVMap)
     CALL deallocate_shared( mesh%wVStack1)
@@ -368,6 +364,23 @@ CONTAINS
     CALL deallocate_shared( mesh%wTriMap)
     CALL deallocate_shared( mesh%wTriStack1)
     CALL deallocate_shared( mesh%wTriStack2)
+    
+    CALL deallocate_shared( mesh%wnPOI               )        
+    CALL deallocate_shared( mesh%wPOI_coordinates    )
+    CALL deallocate_shared( mesh%wPOI_XY_coordinates )
+    CALL deallocate_shared( mesh%wPOI_resolutions    )
+    CALL deallocate_shared( mesh%wPOI_vi             )
+    CALL deallocate_shared( mesh%wPOI_w              )
+    
+    ! Secondary mesh data
+    ! ===================
+
+    CALL deallocate_shared( mesh%wA)
+    CALL deallocate_shared( mesh%wVorGC)
+    CALL deallocate_shared( mesh%wR)
+    CALL deallocate_shared( mesh%wCw)
+    CALL deallocate_shared( mesh%wTriGC)
+    CALL deallocate_shared( mesh%wTriA)
     
     CALL deallocate_shared( mesh%wlat)
     CALL deallocate_shared( mesh%wlon)
@@ -377,19 +390,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wAci)
     CALL deallocate_shared( mesh%wiAci)
     CALL deallocate_shared( mesh%wedge_index_Ac)
-    
-    CALL deallocate_shared( mesh%wnPOI               )        
-    CALL deallocate_shared( mesh%wPOI_coordinates    )
-    CALL deallocate_shared( mesh%wPOI_XY_coordinates )
-    CALL deallocate_shared( mesh%wPOI_resolutions    )
-    CALL deallocate_shared( mesh%wPOI_vi             )
-    CALL deallocate_shared( mesh%wPOI_w              )
-    
-    CALL deallocate_shared( mesh%wnV_transect)
-    CALL deallocate_shared( mesh%wvi_transect)
-    CALL deallocate_shared( mesh%ww_transect )
-    
-    ! Matrix operators
+
     CALL MatDestroy( mesh%M_map_a_b             , perr)
     CALL MatDestroy( mesh%M_map_a_c             , perr)
     CALL MatDestroy( mesh%M_map_b_a             , perr)
@@ -423,15 +424,18 @@ CONTAINS
     CALL MatDestroy( mesh%M2_d2dxdy_b_b         , perr)
     CALL MatDestroy( mesh%M2_d2dy2_b_b          , perr)
     
-    CALL MatDestroy( mesh%M_Neumann_BC_b        , perr)
-    
     CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b_CSR    )
     CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b_CSR    )
     CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b_CSR  )
     CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b_CSR )
     CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b_CSR  )
     
+    CALL MatDestroy( mesh%M_Neumann_BC_b        , perr)
     CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_CSR)
+    
+    CALL deallocate_shared( mesh%wnV_transect)
+    CALL deallocate_shared( mesh%wvi_transect)
+    CALL deallocate_shared( mesh%ww_transect )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -551,7 +555,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 6)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
     
   END SUBROUTINE allocate_submesh_primary
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
@@ -677,6 +681,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wnTri_mem)
     CALL deallocate_shared( mesh%wnV)
     CALL deallocate_shared( mesh%wnTri)
+    CALL deallocate_shared( mesh%wperturb_dir)
     CALL deallocate_shared( mesh%walpha_min)
     CALL deallocate_shared( mesh%wdz_max_ice)
     CALL deallocate_shared( mesh%wres_max)
@@ -687,24 +692,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wres_max_coast)
     CALL deallocate_shared( mesh%wres_min)
     CALL deallocate_shared( mesh%wresolution_min)
-    CALL deallocate_shared( mesh%wresolution_max) 
-    
-    NULLIFY( mesh%lambda_M)
-    NULLIFY( mesh%phi_M)
-    NULLIFY( mesh%alpha_stereo)
-    NULLIFY( mesh%xmin)
-    NULLIFY( mesh%xmax)
-    NULLIFY( mesh%ymin)
-    NULLIFY( mesh%ymax)
-    NULLIFY( mesh%nC_mem)
-    NULLIFY( mesh%nV_mem)
-    NULLIFY( mesh%nTri_mem)
-    NULLIFY( mesh%nV)
-    NULLIFY( mesh%nTri)
-    NULLIFY( mesh%alpha_min)
-    NULLIFY( mesh%dz_max_ice)
-    NULLIFY( mesh%resolution_min)
-    NULLIFY( mesh%resolution_max)
+    CALL deallocate_shared( mesh%wresolution_max)
     
     CALL deallocate_shared( mesh%wV)
     CALL deallocate_shared( mesh%wnC)
@@ -714,31 +702,15 @@ CONTAINS
     CALL deallocate_shared( mesh%wedge_index)
     CALL deallocate_shared( mesh%wmesh_old_ti_in)
     
-    NULLIFY( mesh%V)
-    NULLIFY( mesh%nC)
-    NULLIFY( mesh%C)
-    NULLIFY( mesh%niTri)
-    NULLIFY( mesh%iTri)
-    NULLIFY( mesh%edge_index)
-    NULLIFY( mesh%mesh_old_ti_in)
-    
     CALL deallocate_shared( mesh%wTri)
     CALL deallocate_shared( mesh%wTricc)
     CALL deallocate_shared( mesh%wTriC)
     CALL deallocate_shared( mesh%wTri_edge_index)
     
-    NULLIFY( mesh%Tri)
-    NULLIFY( mesh%Tricc)
-    NULLIFY( mesh%TriC)
-    NULLIFY( mesh%Tri_edge_index)
-    
     CALL deallocate_shared( mesh%wTriflip)
     CALL deallocate_shared( mesh%wRefMap)
     CALL deallocate_shared( mesh%wRefStack)
-    
-    NULLIFY( mesh%Triflip)
-    NULLIFY( mesh%RefMap)
-    NULLIFY( mesh%RefStack)
+    CALL deallocate_shared( mesh%wRefStackN)
     
     CALL deallocate_shared( mesh%wVMap)
     CALL deallocate_shared( mesh%wVStack1)
@@ -747,26 +719,12 @@ CONTAINS
     CALL deallocate_shared( mesh%wTriStack1)
     CALL deallocate_shared( mesh%wTriStack2)
     
-    NULLIFY( mesh%VMap)
-    NULLIFY( mesh%VStack1)
-    NULLIFY( mesh%VStack2)
-    NULLIFY( mesh%TriMap)
-    NULLIFY( mesh%TriStack1)
-    NULLIFY( mesh%TriStack2)
-    
     CALL deallocate_shared( mesh%wnPOI               )        
     CALL deallocate_shared( mesh%wPOI_coordinates    )
     CALL deallocate_shared( mesh%wPOI_XY_coordinates )
     CALL deallocate_shared( mesh%wPOI_resolutions    )
     CALL deallocate_shared( mesh%wPOI_vi             )
     CALL deallocate_shared( mesh%wPOI_w              )
-    
-    NULLIFY( mesh%nPOI)
-    NULLIFY( mesh%POI_coordinates)
-    NULLIFY( mesh%POI_XY_coordinates)
-    NULLIFY( mesh%POI_resolutions)
-    NULLIFY( mesh%POI_vi)
-    NULLIFY( mesh%POI_w)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

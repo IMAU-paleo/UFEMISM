@@ -8,7 +8,7 @@ MODULE UFEMISM_main_model
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -503,7 +503,7 @@ CONTAINS
 !    IF (par%master) CALL create_text_output_files( region)
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
     
   END SUBROUTINE initialise_model
   SUBROUTINE allocate_region_timers_and_scalars( region)

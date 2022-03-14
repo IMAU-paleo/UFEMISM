@@ -8,7 +8,7 @@ MODULE mesh_creation_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -459,7 +459,7 @@ MODULE mesh_creation_module
     END IF
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
     
   END SUBROUTINE create_mesh_from_cart_data
   
@@ -1747,9 +1747,9 @@ MODULE mesh_creation_module
     ! Copy data from the final merged submesh, deallocate all the submeshes,
     ! do one final refining pass for the new triangles that may be too sharp.
     ! =======================================================================
-
+    
     CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
-    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)  
+    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)      
     CALL deallocate_submesh_primary( submesh)
     CALL refine_mesh_geo_only( mesh)
     CALL crop_mesh_primary(    mesh)
@@ -1762,14 +1762,14 @@ MODULE mesh_creation_module
     CALL partition_list( mesh%nTri, par%i, par%n, mesh%ti1, mesh%ti2)
     
     ! Calculate extra mesh data
-    CALL allocate_mesh_secondary(             mesh)
+    CALL allocate_mesh_secondary(             mesh)    ! Adds  9 MPI windows
     CALL calc_triangle_geometric_centres(     mesh)
     CALL find_Voronoi_cell_areas(             mesh)
     CALL get_lat_lon_coordinates(             mesh)
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
-    CALL make_Ac_mesh(                        mesh)
-    CALL calc_matrix_operators_mesh(          mesh)
+    CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
+    CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
     CALL determine_mesh_resolution(           mesh)
     IF (par%master) CALL find_POI_xy_coordinates( mesh)
     CALL sync
@@ -1780,7 +1780,7 @@ MODULE mesh_creation_module
     CALL check_mesh( mesh)
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 49)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 58)
     
   END SUBROUTINE create_final_mesh_from_merged_submesh
   

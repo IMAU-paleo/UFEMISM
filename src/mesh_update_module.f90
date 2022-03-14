@@ -8,7 +8,7 @@ MODULE mesh_update_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -335,8 +335,6 @@ MODULE mesh_update_module
       submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
       submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
       
-      IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
-      
       ! Refine the process submesh
       CALL refine_mesh( submesh, region%mesh, region%ice, region%refgeo_PD) 
       
@@ -372,7 +370,7 @@ MODULE mesh_update_module
     END IF
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
     
   END SUBROUTINE create_new_mesh
   

@@ -8,7 +8,7 @@ MODULE netcdf_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -3266,7 +3266,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_names( i), path_int_enc ))
     
       ! Computation time
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_vars( i), resource_tracker( i)%tcomp, start = (/ netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_tcomp( i), resource_tracker( i)%tcomp                 , start = (/ netcdf%ti /) ))
+    
+      ! Memory use (defined as maximum over the preceding coupling interval)
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_mem(   i), resource_tracker( i)%mem_use_max / 1.0E6_dp, start = (/ netcdf%ti /) )) ! Divide by 1E6 to express in MB
       
     END DO
     
@@ -3331,8 +3334,9 @@ CONTAINS
     
     n = SIZE( resource_tracker)
     
-    ALLOCATE( netcdf%id_vars(      n))
     ALLOCATE( netcdf%id_var_names( n))
+    ALLOCATE( netcdf%id_var_tcomp( n))
+    ALLOCATE( netcdf%id_var_mem(   n))
     
     DO i = 1, n
       
@@ -3377,10 +3381,33 @@ CONTAINS
         WRITE( var_name,'(A,I5)') 'tcomp_', i
       END IF
       
-      WRITE( long_name,'(A,I1)') 'Computation time for subroutine #', i
+      WRITE( long_name,'(A,I5)') 'Computation time for subroutine #', i
       
       ! Create the variable in the NetCDF file
-      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_vars( i),  long_name = long_name, units = 's', missing_value = 0._dp)
+      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_tcomp( i),  long_name = long_name, units = 's', missing_value = 0._dp)
+      
+      ! Memory use
+      ! ==========
+      
+      ! Generate variable name (mem_00001, mem_00002, etc.)
+      var_name(  1:256) = ' '
+      long_name( 1:256) = ' '
+      IF     (i < 10) THEN
+        WRITE( var_name ,'(A,I1)') 'mem_0000', i
+      ELSEIF (i < 100) THEN
+        WRITE( var_name,'(A,I2)') 'mem_000', i
+      ELSEIF (i < 1000) THEN
+        WRITE( var_name,'(A,I3)') 'mem_00', i
+      ELSEIF (i < 10000) THEN
+        WRITE( var_name,'(A,I4)') 'mem_0', i
+      ELSEIF (i < 100000) THEN
+        WRITE( var_name,'(A,I5)') 'mem_', i
+      END IF
+      
+      WRITE( long_name,'(A,I5)') 'Memory use for subroutine #', i
+      
+      ! Create the variable in the NetCDF file
+      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_mem( i),  long_name = long_name, units = 'MB', missing_value = 0._dp)
       
     END DO
     

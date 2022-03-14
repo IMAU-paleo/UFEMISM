@@ -959,15 +959,6 @@ MODULE data_types_module
     
   END TYPE type_model_region
   
-  TYPE type_memory_use_tracker
-  
-    ! Memory use history
-    INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
-    INTEGER                             :: n                         ! Number of entries
-    INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
-    
-  END TYPE type_memory_use_tracker
-  
 CONTAINS
 
 END MODULE data_types_module

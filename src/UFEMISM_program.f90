@@ -35,9 +35,9 @@ PROGRAM UFEMISM_program
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, write_total_model_time_to_screen, &
-                                         reset_computation_times
-  USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation, reset_memory_use_tracker
-  USE data_types_module,           ONLY: type_model_region, type_climate_matrix
+                                         reset_resource_tracker
+  USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation
+  USE data_types_module,           ONLY: type_model_region, type_climate_matrix, type_netcdf_resource_tracker
   USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
                                          initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
                                          calculate_modelled_d18O, initialise_inverse_routine_data, inverse_routine_global_temperature_offset, inverse_routine_CO2, &
@@ -46,6 +46,7 @@ PROGRAM UFEMISM_program
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
+  USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
 
   IMPLICIT NONE
   
@@ -57,8 +58,12 @@ PROGRAM UFEMISM_program
   ! The global climate matrix
   TYPE(type_climate_matrix)              :: matrix
   
+  ! Coupling timer
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
+  
+  ! Computation time tracking
+  TYPE(type_netcdf_resource_tracker)     :: resources
   REAL(dp)                               :: tstart, tstop
   
   ! ======================================================================================
@@ -97,6 +102,11 @@ PROGRAM UFEMISM_program
   CALL initialise_d18O_record
   CALL initialise_inverse_routine_data
   CALL initialise_geothermal_heat_flux
+  
+  ! ===== Create the resource tracking output file =====
+  ! ====================================================
+  
+  CALL create_resource_tracking_file( resources)
   
   ! ===== Initialise the climate matrix =====
   ! =========================================
@@ -156,9 +166,6 @@ PROGRAM UFEMISM_program
   
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
-    
-    ! Keep track of how much shared memory was used at the highest point of this coupling interval
-    CALL reset_memory_use_tracker
   
     ! Update global insolation forcing, CO2, and d18O at the current model time
     CALL update_insolation_data(    t_coupling)
@@ -239,6 +246,10 @@ PROGRAM UFEMISM_program
       forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
       forcing%dT_glob,                   &  ! global mean surface temperature anomaly
       forcing%dT_deepwater               )  ! deep-water temperature anomaly
+  
+    ! Write resource use to the resource tracking file
+    CALL write_to_resource_tracking_file( resources, t_coupling)
+    CALL reset_resource_tracker
       
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)
   

@@ -27,12 +27,14 @@ MODULE configuration_module
   
   CHARACTER(LEN=1024) :: routine_path
   INTEGER             :: n_MPI_windows
+  REAL(dp)            :: mem_use_tot, mem_use_tot_max
   
   TYPE subroutine_resource_tracker
     ! Track the resource use (computation time, memory) of a single subroutine
     CHARACTER(LEN = 1024) :: routine_path
     REAL(dp)              :: tstart, tcomp
     INTEGER               :: n_MPI_windows_init, n_MPI_windows_final
+    REAL(dp)              :: mem_use, mem_use_max
   END TYPE subroutine_resource_tracker
   
   TYPE( subroutine_resource_tracker), DIMENSION(:), ALLOCATABLE :: resource_tracker
@@ -1273,8 +1275,8 @@ CONTAINS
     END IF ! IF (master) THEN
     CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
     
-    ! Set up the subroutine resource tracker
-    ! ======================================
+    ! Set up the resource tracker
+    ! ===========================
     
     ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
     n = 1000
@@ -1284,8 +1286,14 @@ CONTAINS
     DO i = 1, n
       resource_tracker( i)%routine_path = 'subroutine_placeholder'
       resource_tracker( i)%tstart       = 0._dp
-      resource_tracker( i)%tcomp       = 0._dp
+      resource_tracker( i)%tcomp        = 0._dp
+      resource_tracker( i)%mem_use      = 0._dp
+      resource_tracker( i)%mem_use_max  = 0._dp
     END DO
+    
+    ! Initialise the total model memory use tracker
+    mem_use_tot     = 0._dp
+    mem_use_tot_max = 0._dp
     
   END SUBROUTINE initialise_model_configuration
   
@@ -2570,8 +2578,8 @@ CONTAINS
     CALL crash('Resource tracker overflows! Allocate more memory for it in initialise_model_configuration.')
     
   END SUBROUTINE find_subroutine_in_resource_tracker
-  SUBROUTINE reset_computation_times
-    ! Reset the computation times in the resource tracker
+  SUBROUTINE reset_resource_tracker
+    ! Reset the computation times and maximum memory use for all subroutines in the resource tracker
 
     IMPLICIT NONE
     
@@ -2581,11 +2589,12 @@ CONTAINS
     n = SIZE( resource_tracker)
     
     DO i = 1, n
-      resource_tracker( i)%tstart = 0._dp
-      resource_tracker( i)%tcomp  = 0._dp
+      resource_tracker( i)%tstart      = 0._dp
+      resource_tracker( i)%tcomp       = 0._dp
+      resource_tracker( i)%mem_use_max = 0._dp
     END DO
     
-  END SUBROUTINE reset_computation_times
+  END SUBROUTINE reset_resource_tracker
   SUBROUTINE crash( err_msg, int_01, int_02, int_03, int_04, int_05, int_06, int_07, int_08, int_09, int_10, &
                               dp_01,  dp_02,  dp_03,  dp_04,  dp_05,  dp_06,  dp_07,  dp_08,  dp_09,  dp_10)
     ! Crash the model, write the error message to the screen

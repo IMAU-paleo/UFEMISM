@@ -47,10 +47,9 @@ CONTAINS
     WRITE(UNIT = 1337, FMT = '(A)') '% d18O_ANT : contribution to benthic d18O       from the Antarctic      ice sheet'
     WRITE(UNIT = 1337, FMT = '(A)') '% dT_glob  : global mean annual surface temperature change (scaled to sea-level)'
     WRITE(UNIT = 1337, FMT = '(A)') '% dT_dw    : deep-water temperature anomaly'
-    WRITE(UNIT = 1337, FMT = '(A)') '% dT_dw    : maximum memory use (GB)'
     WRITE(UNIT = 1337, FMT = '(A)') ''
     WRITE(UNIT = 1337, FMT = '(A,A)') '     Time     sealevel    CO2_obs    CO2_mod   d18O_obs   d18O_mod   d18O_ice   d18O_Tdw     ', &
-                                      'SL_NAM     SL_EAS     SL_GRL     SL_ANT   d18O_NAM   d18O_EAS   d18O_GRL   d18O_ANT    dT_glob      dT_dw    mem_use'
+                                      'SL_NAM     SL_EAS     SL_GRL     SL_ANT   d18O_NAM   d18O_EAS   d18O_GRL   d18O_ANT    dT_glob      dT_dw'
     
     CLOSE(UNIT = 1337)
     
@@ -118,8 +117,7 @@ CONTAINS
       d18O_GRL,     &                       ! 15
       d18O_ANT,     &                       ! 16
       dT_glob,      &                       ! 17
-      dT_deepwater, &                       ! 18
-      REAL(MAXVAL(par%mem%h(1:par%mem%n)),dp)/1e9_dp ! 19
+      dT_deepwater                          ! 18
     
     CLOSE(UNIT = 1337)
     

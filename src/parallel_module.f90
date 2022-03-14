@@ -3,9 +3,10 @@ MODULE parallel_module
   ! A collection of different routines that make parallel programming in UFEMISM a lot easier.
 
   USE mpi
-  USE configuration_module,        ONLY: C, dp, n_MPI_windows
-  USE data_types_module,           ONLY: type_memory_use_tracker
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning, &
+                                             n_MPI_windows, resource_tracker, find_subroutine_in_resource_tracker, &
+                                             mem_use_tot, mem_use_tot_max
+  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: C_PTR, C_F_POINTER
   
   IMPLICIT NONE
   
@@ -16,7 +17,6 @@ MODULE parallel_module
     INTEGER                       :: i        ! ID of this process (0 = master, >0 = slave)
     INTEGER                       :: n        ! Total number of processes (0 = single-core, >0 = master+slaves)
     LOGICAL                       :: master   ! Whether or not the current process is the master process
-    TYPE(type_memory_use_tracker) :: mem      ! Memory use tracker
     
   END TYPE parallel_info
     
@@ -39,13 +39,6 @@ CONTAINS
     CALL MPI_COMM_RANK(       MPI_COMM_WORLD, par%i, ierr)
     CALL MPI_COMM_SIZE(       MPI_COMM_WORLD, par%n, ierr)
     par%master = (par%i == 0)
-    
-    ! Memory use tracker
-    IF (par%master) THEN
-      par%mem%n = 0
-      ALLOCATE( par%mem%h( 500000))
-    END IF
-    CALL sync
     
   END SUBROUTINE initialise_parallelisation
 
@@ -81,57 +74,6 @@ CONTAINS
     END IF
     
   END SUBROUTINE partition_list
-  
-  ! Reset the memory use tracker at the start of the coupling interval
-  SUBROUTINE reset_memory_use_tracker
-  
-    IMPLICIT NONE
-    
-    IF (.NOT. par%master) RETURN
-    
-    par%mem%n = 0
-    par%mem%h = 0_MPI_ADDRESS_KIND
-    
-  END SUBROUTINE reset_memory_use_tracker
-  SUBROUTINE write_to_memory_log( routine_name, n1, n2)
-  
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    CHARACTER(LEN=64),  INTENT(IN)                :: routine_name
-    INTEGER,            INTENT(IN)                :: n1, n2
-    
-    ! Local variables:
-    CHARACTER(LEN=256)                            :: filename
-    REAL(dp)                                      :: m1, m2, m_max
-    
-    IF (.NOT. (par%master .AND. C%do_write_memory_tracker)) RETURN
-      
-    filename = TRIM(C%output_dir) // 'aa_memory_use_log.txt'
-    OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
-    
-    IF (n1 == 0) THEN
-      IF (n2 == 0) THEN
-        m1    = REAL(par%mem%total,dp)/1E6_dp
-        m2    = REAL(par%mem%total,dp)/1E6_dp
-        m_max = REAL(par%mem%total,dp)/1E6_dp
-      ELSE
-        m1    = REAL(par%mem%total,dp)/1E6_dp
-        m2    = REAL(par%mem%h( n2),dp)/1E6_dp
-        m_max = REAL(MAXVAL(par%mem%h(1:n2)),dp)/1E6_dp
-      END IF
-    ELSE
-        m1    = REAL(par%mem%h( n1),dp)/1E6_dp
-        m2    = REAL(par%mem%h( n2),dp)/1E6_dp
-        m_max = REAL(MAXVAL(par%mem%h(n1:n2)),dp)/1E6_dp
-    END IF
-    
-    WRITE(UNIT = 1337, FMT = '(A64,A,F11.2,A,F11.2,A,F11.2,A,F11.2,A,F11.2,A)') routine_name, &
-      ': start = ', m1, ' MB, end = ', m2, ' MB, max = ', m_max, ' MB, base = ', m2 - m1, ' MB, peak = ', m_max - m2, ' MB'
-    
-    CLOSE(UNIT = 1337)
-  
-  END SUBROUTINE write_to_memory_log
     
   ! Allocate some shared memory space on all the processes (cannot be done on only one process).
   ! The slave process allocate zero space. The master process allocates actual space,
@@ -151,7 +93,8 @@ CONTAINS
     
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
-    TYPE(C_PTR)                                        :: baseptr    
+    TYPE(C_PTR)                                        :: baseptr
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -167,14 +110,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED( windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -187,7 +122,13 @@ CONTAINS
     IF (par%master) p = 0
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_int_0D  
@@ -205,6 +146,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -220,14 +162,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -240,7 +174,13 @@ CONTAINS
     IF (par%master) p = 0
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_int_1D  
@@ -257,7 +197,8 @@ CONTAINS
     
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
-    TYPE(C_PTR)                                        :: baseptr    
+    TYPE(C_PTR)                                        :: baseptr  
+    INTEGER                                            :: i  
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -273,14 +214,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN 
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -293,7 +226,13 @@ CONTAINS
     IF (par%master) p = 0
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_int_2D  
@@ -311,6 +250,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -326,14 +266,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -346,7 +278,13 @@ CONTAINS
     IF (par%master) p = 0
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_int_3D  
@@ -363,6 +301,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -378,14 +317,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -398,7 +329,13 @@ CONTAINS
     IF (par%master) p = 0._dp
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dp_0D  
@@ -416,6 +353,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -431,14 +369,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN  
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -451,7 +381,13 @@ CONTAINS
     IF (par%master) p = 0._dp
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dp_1D  
@@ -469,6 +405,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -484,14 +421,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN    
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -504,7 +433,13 @@ CONTAINS
     IF (par%master) p = 0._dp
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dp_2D  
@@ -522,6 +457,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -537,14 +473,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -557,11 +485,17 @@ CONTAINS
     IF (par%master) p = 0._dp
     CALL sync
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dp_3D 
-  SUBROUTINE allocate_shared_bool_0D(                p, win)
+  SUBROUTINE allocate_shared_bool_0D(             p, win)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
     ! Return a pointer associated with that memory space. Makes it so that all processes
     ! can access the same memory directly.      
@@ -575,6 +509,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -598,7 +533,13 @@ CONTAINS
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p)
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_bool_0D 
@@ -616,6 +557,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -631,14 +573,6 @@ CONTAINS
     
     CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
     
-    ! Update memory use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
-    
     IF (.NOT. par%master) THEN   
       ! Get the baseptr, size and disp_unit values of the master's memory space.
       CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
@@ -647,7 +581,13 @@ CONTAINS
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1])
     
-    ! Update the max_window memory leak tracker
+    ! Update the resource use tracker
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
     n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_bool_1D
@@ -664,19 +604,18 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    INTEGER                                            :: i
     
-    ! Update memory use tracker
+    ! Update the resource use tracker
     CALL MPI_WIN_SHARED_QUERY( win, par%i, windowsize, disp_unit, baseptr, ierr)
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total - windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot = mem_use_tot - REAL( windowsize,dp)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use - REAL( windowsize,dp)
+    n_MPI_windows = n_MPI_windows - 1
     
-    CALL MPI_WIN_FREE( win, ierr) 
-    
-    n_MPI_windows = n_MPI_windows - 1 
+    ! Free the memory
+    CALL MPI_WIN_FREE( win, ierr)
   
   END SUBROUTINE deallocate_shared
   
@@ -1070,7 +1009,8 @@ CONTAINS
     
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
-    TYPE(C_PTR)                                        :: baseptr    
+    TYPE(C_PTR)                                        :: baseptr 
+    INTEGER                                            :: i   
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1090,13 +1030,14 @@ CONTAINS
     p = 0
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_int_0D  
   SUBROUTINE allocate_shared_dist_int_1D(  n1,         p, win)
@@ -1111,7 +1052,8 @@ CONTAINS
     
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
-    TYPE(C_PTR)                                        :: baseptr    
+    TYPE(C_PTR)                                        :: baseptr   
+    INTEGER                                            :: i 
     
     ! Allocate MPI-shared memory for data array, with an associated window object    
     windowsize  = n1*4_MPI_ADDRESS_KIND
@@ -1128,13 +1070,14 @@ CONTAINS
     p = 0
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
     
   END SUBROUTINE allocate_shared_dist_int_1D
   SUBROUTINE allocate_shared_dist_int_2D(  n1, n2,     p, win)
@@ -1151,6 +1094,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1170,13 +1114,14 @@ CONTAINS
     p = 0
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_int_2D  
   SUBROUTINE allocate_shared_dist_int_3D(  n1, n2, n3, p, win)
@@ -1193,6 +1138,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1212,13 +1158,14 @@ CONTAINS
     p = 0
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_int_3D 
   SUBROUTINE allocate_shared_dist_dp_0D(               p, win)
@@ -1234,6 +1181,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1253,13 +1201,14 @@ CONTAINS
     p = 0._dp
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_dp_0D  
   SUBROUTINE allocate_shared_dist_dp_1D(   n1,         p, win)
@@ -1276,6 +1225,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1295,13 +1245,14 @@ CONTAINS
     p = 0._dp
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_dp_1D  
   SUBROUTINE allocate_shared_dist_dp_2D(   n1, n2,     p, win)
@@ -1318,6 +1269,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1337,13 +1289,14 @@ CONTAINS
     p = 0._dp
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_dp_2D  
   SUBROUTINE allocate_shared_dist_dp_3D(   n1, n2, n3, p, win)
@@ -1360,6 +1313,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1379,13 +1333,14 @@ CONTAINS
     p = 0._dp
     CALL sync
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_dp_3D  
   SUBROUTINE allocate_shared_dist_bool_1D( n1,         p, win)
@@ -1402,6 +1357,7 @@ CONTAINS
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr    
+    INTEGER                                            :: i
     
     ! ==========
     ! Allocate MPI-shared memory for data array, with an associated window object
@@ -1417,13 +1373,14 @@ CONTAINS
     ! Associate a pointer with this memory space.
     CALL C_F_POINTER(baseptr, p, [n1])
     
-    ! Update shared memory use
+    ! Update the resource use tracker
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    IF (par%master) THEN
-      par%mem%total = par%mem%total + windowsize
-      par%mem%n = par%mem%n + 1
-      par%mem%h( par%mem%n) = par%mem%total
-    END IF
+    mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
+    mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
+    CALL find_subroutine_in_resource_tracker( i)
+    resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use + REAL( windowsize,dp)
+    resource_tracker( i)%mem_use_max = MAX( resource_tracker( i)%mem_use_max, resource_tracker( i)%mem_use)
+    n_MPI_windows = n_MPI_windows + 1
   
   END SUBROUTINE allocate_shared_dist_bool_1D
   

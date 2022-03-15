@@ -47,9 +47,9 @@ MODULE configuration_module
   ! Which ice sheets do we simulate?
   ! ================================
   
-  LOGICAL             :: do_NAM_config                               = .FALSE.                          ! North America
-  LOGICAL             :: do_EAS_config                               = .FALSE.                          ! Eurasia
-  LOGICAL             :: do_GRL_config                               = .FALSE.                          ! Greenland
+  LOGICAL             :: do_NAM_config                               = .TRUE.                          ! North America
+  LOGICAL             :: do_EAS_config                               = .TRUE.                          ! Eurasia
+  LOGICAL             :: do_GRL_config                               = .TRUE.                          ! Greenland
   LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica  
   
   ! Benchmark experiments
@@ -497,6 +497,15 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_basins_ANT_config                  = ''
   LOGICAL             :: do_merge_basins_ANT_config                  = .TRUE.                           ! Whether or not to merge some of the Antarctic basins
   LOGICAL             :: do_merge_basins_GRL_config                  = .TRUE.                           ! Whether or not to merge some of the Greenland basins
+
+  CHARACTER(LEN=256)       ::  choice_BMB_shelf_amplification_config        = 'basin'                   ! Choice of method to determine BMB amplification factors: "uniform", "basin"
+  INTEGER                  ::  basin_BMB_amplification_n_ANT_config         = 17                        ! Number of basins used for ANT
+  REAL(dp), DIMENSION(17)  ::  basin_BMB_amplification_factor_ANT_config    = &                         ! BMB amplification factor for each basin for ANT
+    (/ 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, &
+       1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp /)
+  INTEGER                  ::  basin_BMB_amplification_n_GRL_config         = 8                         ! Number of basins used for GRL
+  REAL(dp), DIMENSION(8)   ::  basin_BMB_amplification_factor_GRL_config    = &                         ! BMB amplification factor for each basin for GRL
+    (/ 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp /)
 
   ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
   REAL(dp)            :: BMB_Favier2019_lin_GammaT_config            = 3.3314E-05_dp  ! 2.03E-5_dp      ! Heat exchange velocity [m s^-1]
@@ -1138,6 +1147,12 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_basins_ANT
     LOGICAL                             :: do_merge_basins_ANT
     LOGICAL                             :: do_merge_basins_GRL
+
+    CHARACTER(LEN=256)                  :: choice_BMB_shelf_amplification
+    INTEGER                             :: basin_BMB_amplification_n_ANT
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: basin_BMB_amplification_factor_ANT
+    INTEGER                             :: basin_BMB_amplification_n_GRL
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: basin_BMB_amplification_factor_GRL
 
     ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
     REAL(dp)                            :: BMB_Favier2019_lin_GammaT
@@ -1843,6 +1858,11 @@ CONTAINS
                      filename_basins_EAS_config,                      &
                      filename_basins_GRL_config,                      &
                      filename_basins_ANT_config,                      &
+                     choice_BMB_shelf_amplification_config,           &
+                     basin_BMB_amplification_n_ANT_config,            &
+                     basin_BMB_amplification_factor_ANT_config,       &
+                     basin_BMB_amplification_n_GRL_config,            &
+                     basin_BMB_amplification_factor_GRL_config,       &
                      do_merge_basins_ANT_config,                      &
                      do_merge_basins_GRL_config,                      &
                      BMB_Favier2019_lin_GammaT_config,                &
@@ -2461,6 +2481,14 @@ CONTAINS
     C%filename_basins_ANT                      = filename_basins_ANT_config
     C%do_merge_basins_ANT                      = do_merge_basins_ANT_config
     C%do_merge_basins_GRL                      = do_merge_basins_GRL_config
+
+    C%choice_BMB_shelf_amplification           = choice_BMB_shelf_amplification_config
+    C%basin_BMB_amplification_n_ANT            = basin_BMB_amplification_n_ANT_config
+    ALLOCATE( C%basin_BMB_amplification_factor_ANT( C%basin_BMB_amplification_n_ANT))
+    C%basin_BMB_amplification_factor_ANT       = basin_BMB_amplification_factor_ANT_config( 1:C%basin_BMB_amplification_n_ANT)
+    C%basin_BMB_amplification_n_GRL            = basin_BMB_amplification_n_GRL_config
+    ALLOCATE( C%basin_BMB_amplification_factor_GRL( C%basin_BMB_amplification_n_GRL))
+    C%basin_BMB_amplification_factor_GRL       = basin_BMB_amplification_factor_GRL_config( 1:C%basin_BMB_amplification_n_GRL)
 
     ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
     C%BMB_Favier2019_lin_GammaT                = BMB_Favier2019_lin_GammaT_config

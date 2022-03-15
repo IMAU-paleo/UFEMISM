@@ -36,14 +36,14 @@ MODULE UFEMISM_main_model
                                              associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
   USE general_ice_model_data_module,   ONLY: initialise_mask_noice, initialise_basins
 
-  USE ice_dynamics_module,             ONLY: initialise_ice_model,      remap_ice_model,      run_ice_model, update_ice_thickness
-  USE thermodynamics_module,           ONLY: initialise_ice_temperature,                      run_thermo_model, calc_ice_rheology
-  USE ocean_module,                    ONLY: initialise_ocean_model_regional, run_ocean_model
+  USE ice_dynamics_module,             ONLY: initialise_ice_model,              remap_ice_model,      run_ice_model,      update_ice_thickness
+  USE thermodynamics_module,           ONLY: initialise_ice_temperature,                              run_thermo_model,   calc_ice_rheology
   USE climate_module,                  ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
-  USE SMB_module,                      ONLY: initialise_SMB_model,      remap_SMB_model,      run_SMB_model
-  USE BMB_module,                      ONLY: initialise_BMB_model,      remap_BMB_model,      run_BMB_model
-  USE isotopes_module,                 ONLY: initialise_isotopes_model, remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
-  USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,     remap_ELRA_model,     run_ELRA_model
+  USE ocean_module,                    ONLY: initialise_ocean_model_regional,   remap_ocean_model,    run_ocean_model
+  USE SMB_module,                      ONLY: initialise_SMB_model,              remap_SMB_model,      run_SMB_model
+  USE BMB_module,                      ONLY: initialise_BMB_model,              remap_BMB_model,      run_BMB_model
+  USE isotopes_module,                 ONLY: initialise_isotopes_model,         remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
+  USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,             remap_ELRA_model,     run_ELRA_model
   USE tests_and_checks_module,         ONLY: run_all_matrix_tests
 
   IMPLICIT NONE
@@ -157,33 +157,30 @@ CONTAINS
         CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
       END IF
 
-      WRITE(0,*) 'All good until here (run_model). [Next: Fill in run_BMB_model]'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
       ! Run the BMB model
       IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%climate_matrix%applied, region%BMB, region%name)
+        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time)
       END IF
 
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_climate = region%tcomp_climate + t2 - t1
-      
+
     ! Thermodynamics
     ! ==============
-    
+
       t1 = MPI_WTIME()
       CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_thermo = region%tcomp_thermo + t2 - t1
-      
+
     ! Isotopes
     ! ========
-    
+
       CALL run_isotopes_model( region)
-      
+
     ! Time step and output
     ! ====================
-                            
+
       ! Write output
       IF (region%do_output) THEN
         ! If the mesh has been updated, create a new NetCDF file
@@ -199,12 +196,15 @@ CONTAINS
       CALL update_ice_thickness( region%mesh, region%ice)
       IF (par%master) region%time = region%time + region%dt
       CALL sync
-      
+
       ! DENK DROM
       !region%time = t_end
-    
+
+      ! WRITE(0,*) 'All good until here (end of run_model). [Next: adapt updated/new submodels to remeshing]'
+      ! CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
     END DO ! DO WHILE (region%time < t_end)
-                            
+
   ! ===========================================
   ! ===== End of the main model time loop =====
   ! ===========================================
@@ -225,105 +225,112 @@ CONTAINS
     CALL calculate_icesheet_volume_and_area( region)
     
   END SUBROUTINE run_model
-  
+
   ! Update the mesh and everything else that needs it
   SUBROUTINE run_model_update_mesh( region, climate_matrix_global)
     ! Perform a mesh update: create a new mesh based on the current modelled ice-sheet
     ! geometry, map all the model data from the old to the new mesh. Deallocate the
     ! old mesh, update the output files and the square grid maps.
-    
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
     TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
-    
+
     ! Local variables
     TYPE(type_remapping_mesh_mesh)                     :: map
-    
+
     ! Create a new mesh
     CALL create_new_mesh( region)
-    
+
     ! Update the mapping operators between the new mesh and the fixed square grids
-    CALL deallocate_remapping_operators_mesh2grid(            region%grid_output)
-    CALL deallocate_remapping_operators_mesh2grid(            region%grid_GIA   )
-    CALL deallocate_remapping_operators_mesh2grid(            region%grid_smooth)
-    
-    CALL deallocate_remapping_operators_grid2mesh(            region%grid_output)
-    CALL deallocate_remapping_operators_grid2mesh(            region%grid_GIA   )
-    CALL deallocate_remapping_operators_grid2mesh(            region%grid_smooth)
+    CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
+    CALL deallocate_remapping_operators_mesh2grid(           region%grid_GIA   )
+    CALL deallocate_remapping_operators_mesh2grid(           region%grid_smooth)
+
+    CALL deallocate_remapping_operators_grid2mesh(           region%grid_output)
+    CALL deallocate_remapping_operators_grid2mesh(           region%grid_GIA   )
+    CALL deallocate_remapping_operators_grid2mesh(           region%grid_smooth)
 
     CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
     CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
     CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
-    
+
     CALL calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
     CALL calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
     CALL calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
 
     ! Calculate the mapping arrays
     CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
-    
+
     ! Recalculate the "no ice" mask (also needed for the climate model)
     CALL reallocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
-    CALL initialise_mask_noice(  region, region%mesh_new)
-            
+    CALL initialise_mask_noice( region, region%mesh_new)
+
+    ! Redefine the ice basins
+    CALL reallocate_shared_int_1D( region%mesh_new%nV, region%ice%basin_ID, region%ice%wbasin_ID)
+    CALL initialise_basins( region%mesh_new, region%ice%basin_ID, region%ice%nbasins, region%name)
+
     ! Reallocate and remap reference geometries
-    CALL deallocate_shared(  region%refgeo_init%wHi )
-    CALL deallocate_shared(  region%refgeo_init%wHb )
-    CALL deallocate_shared(  region%refgeo_init%wHs )
-    CALL deallocate_shared(  region%refgeo_PD%wHi   )
-    CALL deallocate_shared(  region%refgeo_PD%wHb   )
-    CALL deallocate_shared(  region%refgeo_PD%wHs   )
-    CALL deallocate_shared(  region%refgeo_GIAeq%wHi)
-    CALL deallocate_shared(  region%refgeo_GIAeq%wHb)
-    CALL deallocate_shared(  region%refgeo_GIAeq%wHs)
+    CALL deallocate_shared( region%refgeo_init%wHi )
+    CALL deallocate_shared( region%refgeo_init%wHb )
+    CALL deallocate_shared( region%refgeo_init%wHs )
+    CALL deallocate_shared( region%refgeo_PD%wHi   )
+    CALL deallocate_shared( region%refgeo_PD%wHb   )
+    CALL deallocate_shared( region%refgeo_PD%wHs   )
+    CALL deallocate_shared( region%refgeo_GIAeq%wHi)
+    CALL deallocate_shared( region%refgeo_GIAeq%wHb)
+    CALL deallocate_shared( region%refgeo_GIAeq%wHs)
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
-    
+
     ! Remap all the submodels
     CALL remap_ELRA_model(     region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
     CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
     CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name)
+    CALL remap_ocean_model(    region%mesh, region%mesh_new, map, region%ocean_matrix)
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
-            
+
     ! Deallocate shared memory for the mapping arrays
     CALL deallocate_remapping_operators_mesh_mesh( map)
-    
+
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
-    
+
     ! When the next output is written, new output files must be created.
     region%output_file_exists = .FALSE.
-    
+
     ! Reallocate the debug fields for the new mesh, create a new debug file
     CALL reallocate_debug_fields( region)
     CALL create_debug_file(       region)
-    
+
     ! Recalculate the reference precipitation isotope content (must be done after region%mesh has been cycled)
     CALL calculate_reference_isotopes( region)
-    
+
     ! Run all model components again after updating the mesh
     region%t_next_SIA     = region%time
     region%t_next_SSA     = region%time
     region%t_next_DIVA    = region%time
     region%t_next_thermo  = region%time
     region%t_next_climate = region%time
+    region%t_next_ocean   = region%time
     region%t_next_SMB     = region%time
     region%t_next_BMB     = region%time
     region%t_next_ELRA    = region%time
-    
+
     region%do_SIA         = .TRUE.
     region%do_SSA         = .TRUE.
     region%do_DIVA        = .TRUE.
     region%do_thermo      = .TRUE.
     region%do_climate     = .TRUE.
+    region%do_ocean       = .TRUE.
     region%do_SMB         = .TRUE.
     region%do_BMB         = .TRUE.
     region%do_ELRA        = .TRUE.
-      
+
   END SUBROUTINE run_model_update_mesh
 
   ! Initialise the entire model region - read initial and PD data, create the mesh,

@@ -1116,6 +1116,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ocean_ext                   ! 3-D annual mean ocean salinity   , extrapolated beneath ice shelves [PSU]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: T_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: S_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean salinity,    extrapolated beneath ice shelves [PSU]
+    CHARACTER(LEN=256)                      :: hires_ocean_foldername        ! Name of folder containing the extrapolated ocean data (not bias-corrected)
     INTEGER :: wT_ocean_mean, wT_ocean, wS_ocean, wT_ocean_ext, wS_ocean_ext, wT_ocean_corr_ext, wS_ocean_corr_ext
 
     ! History of the weighing fields

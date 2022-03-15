@@ -655,6 +655,7 @@ CONTAINS
     
     INTEGER                                       :: vi
     REAL(dp)                                      :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
+    REAL(dp), dimension(3)                        :: buffer
     
     ice_area                   = 0._dp
     ice_volume                 = 0._dp
@@ -674,12 +675,17 @@ CONTAINS
       END IF     
       
     END DO
-    CALL sync
     
-    CALL MPI_ALLREDUCE( ice_area,                   region%ice_area,                   1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
+    buffer(1) = ice_area
+    buffer(2) = ice_volume
+    buffer(3) = ice_volume_above_flotation
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, buffer, 3, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
     
+    region% ice_area = buffer(1)
+    region% ice_volume = buffer(2)
+    region% ice_volume_above_flotation = buffer(3) 
+
     ! Calculate GMSL contribution
     region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
     

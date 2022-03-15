@@ -104,27 +104,27 @@ CONTAINS
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
       t2 = MPI_WTIME()
-      IF (par%master) region%tcomp_GIA = region%tcomp_GIA + t2 - t1
+      region%tcomp_GIA = region%tcomp_GIA + t2 - t1
       
     ! Mesh update
     ! ===========
       
       ! Check if the mesh needs to be updated
-      IF (par%master) t2 = MPI_WTIME()
+      t2 = MPI_WTIME()
       meshfitness = 1._dp
       IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
         CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)    
       END IF
-      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
+      region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
     
       ! If required, update the mesh
       IF (meshfitness < C%mesh_fitness_threshold) THEN
     !  IF (.FALSE.) THEN
     !  IF (.TRUE.) THEN 
         region%t_last_mesh = region%time
-        IF (par%master) t2 = MPI_WTIME()
+        t2 = MPI_WTIME()
         CALL run_model_update_mesh( region, matrix)
-        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+        region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
       
     ! Ice dynamics
@@ -135,7 +135,7 @@ CONTAINS
       t1 = MPI_WTIME()
       CALL run_ice_model( region, t_end)
       t2 = MPI_WTIME()
-      IF (par%master) region%tcomp_ice = region%tcomp_ice + t2 - t1
+      region%tcomp_ice = region%tcomp_ice + t2 - t1
       
     ! Climate , SMB and BMB
     ! =====================
@@ -158,7 +158,7 @@ CONTAINS
       END IF
       
       t2 = MPI_WTIME()
-      IF (par%master) region%tcomp_climate = region%tcomp_climate + t2 - t1
+      region%tcomp_climate = region%tcomp_climate + t2 - t1
       
     ! Thermodynamics
     ! ==============
@@ -166,7 +166,7 @@ CONTAINS
       t1 = MPI_WTIME()
       CALL run_thermo_model( region%mesh, region%ice, region%climate%applied, region%SMB, region%time, do_solve_heat_equation = region%do_thermo)
       t2 = MPI_WTIME()
-      IF (par%master) region%tcomp_thermo = region%tcomp_thermo + t2 - t1
+      region%tcomp_thermo = region%tcomp_thermo + t2 - t1
       
     ! Isotopes
     ! ========
@@ -189,7 +189,7 @@ CONTAINS
 
       ! Update ice geometry and advance region time
       CALL update_ice_thickness( region%mesh, region%ice)
-      IF (par%master) region%time = region%time + region%dt
+      region%time = region%time + region%dt
       CALL sync
       
       ! DENK DROM
@@ -257,7 +257,9 @@ CONTAINS
     CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
     
     ! Recalculate the "no ice" mask (also needed for the climate model)
-    CALL reallocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
+    deallocate(region%mask_noice)
+    allocate(region%mask_noice(region%mesh_new%vi1:region%mesh_new%vi2))
+
     CALL initialise_mask_noice(  region, region%mesh_new)
             
     ! Reallocate and remap reference geometries
@@ -398,7 +400,7 @@ CONTAINS
     ! ===== The "no ice" mask
     ! =======================
 
-    CALL allocate_shared_int_1D( region%mesh%nV, region%mask_noice, region%wmask_noice)
+    allocate(region%mask_noice(region%mesh%vi1:region%mesh%vi2))
     CALL initialise_mask_noice( region, region%mesh)
   
     ! ===== The ice dynamics model
@@ -472,144 +474,53 @@ CONTAINS
     
     ! Timers and time steps
     ! =====================
+    region%time           = C%start_time_of_run
+    region%dt             = C%dt_min
+    region%dt_prev        = C%dt_min
     
-    CALL allocate_shared_dp_0D(   region%time,             region%wtime            )
-    CALL allocate_shared_dp_0D(   region%dt,               region%wdt              )
-    CALL allocate_shared_dp_0D(   region%dt_prev,          region%wdt_prev         )
-    CALL allocate_shared_dp_0D(   region%dt_crit_SIA,      region%wdt_crit_SIA     )
-    CALL allocate_shared_dp_0D(   region%dt_crit_SSA,      region%wdt_crit_SSA     )
-    CALL allocate_shared_dp_0D(   region%dt_crit_ice,      region%wdt_crit_ice     )
-    CALL allocate_shared_dp_0D(   region%dt_crit_ice_prev, region%wdt_crit_ice_prev)
+    region%t_last_mesh    = C%start_time_of_run
+    region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
+    region%do_mesh        = .FALSE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_mesh,      region%wt_last_mesh     )
-    CALL allocate_shared_dp_0D(   region%t_next_mesh,      region%wt_next_mesh     )
-    CALL allocate_shared_bool_0D( region%do_mesh,          region%wdo_mesh         ) 
+    region%t_last_SIA     = C%start_time_of_run
+    region%t_next_SIA     = C%start_time_of_run
+    region%do_SIA         = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_SIA,       region%wt_last_SIA      )
-    CALL allocate_shared_dp_0D(   region%t_next_SIA,       region%wt_next_SIA      )
-    CALL allocate_shared_bool_0D( region%do_SIA,           region%wdo_SIA          )
+    region%t_last_SSA     = C%start_time_of_run
+    region%t_next_SSA     = C%start_time_of_run
+    region%do_SSA         = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_SSA,       region%wt_last_SSA      )
-    CALL allocate_shared_dp_0D(   region%t_next_SSA,       region%wt_next_SSA      )
-    CALL allocate_shared_bool_0D( region%do_SSA,           region%wdo_SSA          )
+    region%t_last_DIVA    = C%start_time_of_run
+    region%t_next_DIVA    = C%start_time_of_run
+    region%do_DIVA        = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_DIVA,      region%wt_last_DIVA     )
-    CALL allocate_shared_dp_0D(   region%t_next_DIVA,      region%wt_next_DIVA     )
-    CALL allocate_shared_bool_0D( region%do_DIVA,          region%wdo_DIVA         )
+    region%t_last_thermo  = C%start_time_of_run
+    region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
+    region%do_thermo      = .FALSE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_thermo,    region%wt_last_thermo   )
-    CALL allocate_shared_dp_0D(   region%t_next_thermo,    region%wt_next_thermo   )
-    CALL allocate_shared_bool_0D( region%do_thermo,        region%wdo_thermo       )
+    region%t_last_climate = C%start_time_of_run
+    region%t_next_climate = C%start_time_of_run
+    region%do_climate     = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_climate,   region%wt_last_climate  )
-    CALL allocate_shared_dp_0D(   region%t_next_climate,   region%wt_next_climate  )
-    CALL allocate_shared_bool_0D( region%do_climate,       region%wdo_climate      )
+    region%t_last_ocean   = C%start_time_of_run
+    region%t_next_ocean   = C%start_time_of_run
+    region%do_ocean       = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_ocean,     region%wt_last_ocean    )
-    CALL allocate_shared_dp_0D(   region%t_next_ocean,     region%wt_next_ocean    )
-    CALL allocate_shared_bool_0D( region%do_ocean,         region%wdo_ocean        )
+    region%t_last_SMB     = C%start_time_of_run
+    region%t_next_SMB     = C%start_time_of_run
+    region%do_SMB         = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_SMB,       region%wt_last_SMB      )
-    CALL allocate_shared_dp_0D(   region%t_next_SMB,       region%wt_next_SMB      )
-    CALL allocate_shared_bool_0D( region%do_SMB,           region%wdo_SMB          )
+    region%t_last_BMB     = C%start_time_of_run
+    region%t_next_BMB     = C%start_time_of_run
+    region%do_BMB         = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_BMB,       region%wt_last_BMB      )
-    CALL allocate_shared_dp_0D(   region%t_next_BMB,       region%wt_next_BMB      )
-    CALL allocate_shared_bool_0D( region%do_BMB,           region%wdo_BMB          )
+    region%t_last_ELRA    = C%start_time_of_run
+    region%t_next_ELRA    = C%start_time_of_run
+    region%do_ELRA        = .TRUE.
     
-    CALL allocate_shared_dp_0D(   region%t_last_ELRA,      region%wt_last_ELRA     )
-    CALL allocate_shared_dp_0D(   region%t_next_ELRA,      region%wt_next_ELRA     )
-    CALL allocate_shared_bool_0D( region%do_ELRA,          region%wdo_ELRA         )
-    
-    CALL allocate_shared_dp_0D(   region%t_last_output,    region%wt_last_output   )
-    CALL allocate_shared_dp_0D(   region%t_next_output,    region%wt_next_output   )
-    CALL allocate_shared_bool_0D( region%do_output,        region%wdo_output       )
-    
-    IF (par%master) THEN
-      region%time           = C%start_time_of_run
-      region%dt             = C%dt_min
-      region%dt_prev        = C%dt_min
-      
-      region%t_last_mesh    = C%start_time_of_run
-      region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
-      region%do_mesh        = .FALSE.
-      
-      region%t_last_SIA     = C%start_time_of_run
-      region%t_next_SIA     = C%start_time_of_run
-      region%do_SIA         = .TRUE.
-      
-      region%t_last_SSA     = C%start_time_of_run
-      region%t_next_SSA     = C%start_time_of_run
-      region%do_SSA         = .TRUE.
-      
-      region%t_last_DIVA    = C%start_time_of_run
-      region%t_next_DIVA    = C%start_time_of_run
-      region%do_DIVA        = .TRUE.
-      
-      region%t_last_thermo  = C%start_time_of_run
-      region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
-      region%do_thermo      = .FALSE.
-      
-      region%t_last_climate = C%start_time_of_run
-      region%t_next_climate = C%start_time_of_run
-      region%do_climate     = .TRUE.
-      
-      region%t_last_ocean   = C%start_time_of_run
-      region%t_next_ocean   = C%start_time_of_run
-      region%do_ocean       = .TRUE.
-      
-      region%t_last_SMB     = C%start_time_of_run
-      region%t_next_SMB     = C%start_time_of_run
-      region%do_SMB         = .TRUE.
-      
-      region%t_last_BMB     = C%start_time_of_run
-      region%t_next_BMB     = C%start_time_of_run
-      region%do_BMB         = .TRUE.
-      
-      region%t_last_ELRA    = C%start_time_of_run
-      region%t_next_ELRA    = C%start_time_of_run
-      region%do_ELRA        = .TRUE.
-      
-      region%t_last_output  = C%start_time_of_run
-      region%t_next_output  = C%start_time_of_run
-      region%do_output      = .TRUE.
-    END IF
-    
-    ! ===== Scalars =====
-    ! ===================
-    
-    ! Ice-sheet volume and area
-    CALL allocate_shared_dp_0D( region%ice_area                     , region%wice_area                     )
-    CALL allocate_shared_dp_0D( region%ice_volume                   , region%wice_volume                   )
-    CALL allocate_shared_dp_0D( region%ice_volume_PD                , region%wice_volume_PD                )
-    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation   , region%wice_volume_above_flotation   )
-    CALL allocate_shared_dp_0D( region%ice_volume_above_flotation_PD, region%wice_volume_above_flotation_PD)
-    
-    ! Regionally integrated SMB components
-    CALL allocate_shared_dp_0D( region%int_T2m                      , region%wint_T2m                      )
-    CALL allocate_shared_dp_0D( region%int_snowfall                 , region%wint_snowfall                 )
-    CALL allocate_shared_dp_0D( region%int_rainfall                 , region%wint_rainfall                 )
-    CALL allocate_shared_dp_0D( region%int_melt                     , region%wint_melt                     )
-    CALL allocate_shared_dp_0D( region%int_refreezing               , region%wint_refreezing               )
-    CALL allocate_shared_dp_0D( region%int_runoff                   , region%wint_runoff                   )
-    CALL allocate_shared_dp_0D( region%int_SMB                      , region%wint_SMB                      )
-    CALL allocate_shared_dp_0D( region%int_BMB                      , region%wint_BMB                      )
-    CALL allocate_shared_dp_0D( region%int_MB                       , region%wint_MB                       )
-    
-    ! Englacial isotope content
-    CALL allocate_shared_dp_0D( region%GMSL_contribution            , region%wGMSL_contribution            )
-    CALL allocate_shared_dp_0D( region%mean_isotope_content         , region%wmean_isotope_content         )
-    CALL allocate_shared_dp_0D( region%mean_isotope_content_PD      , region%wmean_isotope_content_PD      )
-    CALL allocate_shared_dp_0D( region%d18O_contribution            , region%wd18O_contribution            )
-    CALL allocate_shared_dp_0D( region%d18O_contribution_PD         , region%wd18O_contribution_PD         )
-    
-    ! Computation times
-    CALL allocate_shared_dp_0D( region%tcomp_total                  , region%wtcomp_total                  )
-    CALL allocate_shared_dp_0D( region%tcomp_ice                    , region%wtcomp_ice                    )
-    CALL allocate_shared_dp_0D( region%tcomp_thermo                 , region%wtcomp_thermo                 )
-    CALL allocate_shared_dp_0D( region%tcomp_climate                , region%wtcomp_climate                )
-    CALL allocate_shared_dp_0D( region%tcomp_GIA                    , region%wtcomp_GIA                    )
-    CALL allocate_shared_dp_0D( region%tcomp_mesh                   , region%wtcomp_mesh                   )
+    region%t_last_output  = C%start_time_of_run
+    region%t_next_output  = C%start_time_of_run
+    region%do_output      = .TRUE.
     
   END SUBROUTINE allocate_region_timers_and_scalars
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
@@ -765,13 +676,12 @@ CONTAINS
     END DO
     CALL sync
     
-    CALL MPI_REDUCE( ice_area,                   region%ice_area,                   1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_REDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( ice_area,                   region%ice_area,                   1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
     
     ! Calculate GMSL contribution
-    IF (par%master) region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
-    CALL sync
+    region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
     
   END SUBROUTINE calculate_icesheet_volume_and_area
   SUBROUTINE calculate_PD_sealevel_contribution( region)
@@ -803,8 +713,8 @@ CONTAINS
     END DO
     END DO
     
-    CALL MPI_REDUCE( ice_volume                , region%ice_volume_PD,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation_PD, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( ice_volume                , region%ice_volume_PD,                 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation_PD, 1, MPI_DOUBLE_PRECISION, MPI_SUM,  MPI_COMM_WORLD, ierr)
     
   END SUBROUTINE calculate_PD_sealevel_contribution
   

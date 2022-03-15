@@ -456,7 +456,6 @@ CONTAINS
     
     ! Initialise
     region%mask_noice( mesh%vi1:mesh%vi2) = 0
-    CALL sync
     
     IF     (region%name == 'NAM') THEN
       ! Define a no-ice mask for North America
@@ -523,7 +522,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT) :: mask_noice
   
     ! Local variables:
     INTEGER                                            :: vi
@@ -551,7 +550,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT) :: mask_noice
   
     ! Local variables:
     INTEGER                                            :: vi
@@ -586,7 +585,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT) :: mask_noice
   
     ! Local variables:
     INTEGER                                            :: vi
@@ -614,7 +613,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT) :: mask_noice
   
     ! Local variables:
     INTEGER                                            :: vi
@@ -637,7 +636,7 @@ CONTAINS
     
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT) :: mask_noice
   
     ! Local variables:
     INTEGER                                            :: vi

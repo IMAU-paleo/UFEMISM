@@ -92,12 +92,11 @@ CONTAINS
     
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-        IF (par%master) region%dt_crit_SIA = dt_crit_SIA
+        region%dt_crit_SIA = dt_crit_SIA
         
         ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
-        CALL sync
+        region%t_last_SIA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_SIA
         
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
       
@@ -111,12 +110,11 @@ CONTAINS
     
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-        IF (par%master) region%dt_crit_SSA = dt_crit_SSA
+        region%dt_crit_SSA = dt_crit_SSA
         
         ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
-        CALL sync
+        region%t_last_SSA = region%time
+        region%t_next_SSA = region%time + region%dt_crit_SSA
         
       END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
       
@@ -130,12 +128,11 @@ CONTAINS
     
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-        IF (par%master) region%dt_crit_SIA = dt_crit_SIA
+        region%dt_crit_SIA = dt_crit_SIA
         
         ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
-        CALL sync
+        region%t_last_SIA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_SIA
         
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
       
@@ -146,12 +143,11 @@ CONTAINS
     
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-        IF (par%master) region%dt_crit_SSA = dt_crit_SSA
+        region%dt_crit_SSA = dt_crit_SSA
         
         ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
-        CALL sync
+        region%t_last_SSA = region%time
+        region%t_next_SSA = region%time + region%dt_crit_SSA
         
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
       
@@ -187,7 +183,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    REAL(dp),                            INTENT(IN)    :: t_end
+    REAL(dp),                                INTENT(IN)    :: t_end
     
     ! Local variables:
     INTEGER                                            :: vi1,vi2
@@ -220,16 +216,18 @@ CONTAINS
     
       ! Calculate time step based on the truncation error in ice thickness (Robinson et al., 2020, Eq. 33)
       CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_adv)
-      IF (par%master) THEN
-        region%dt_crit_ice_prev = region%dt_crit_ice
-        region%ice%pc_eta_prev  = region%ice%pc_eta
-        dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
-        region%dt_crit_ice      = MAX(C%dt_min, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc]))
-        region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
-        region%ice%pc_beta1     = 1._dp + region%ice%pc_zeta / 2._dp
-        region%ice%pc_beta2     =       - region%ice%pc_zeta / 2._dp
-      END IF
-      CALL sync
+      region%dt_crit_ice_prev = region%dt_crit_ice
+
+      ! RACE CONDITION, TODO (BUG in next line)
+      if (par%master) region%ice%pc_eta_prev  = region%ice%pc_eta
+      call sync
+
+      ! TODO BUG pc_eta == pc_eta_prev
+      dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
+      region%dt_crit_ice      = MAX(C%dt_min, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc]))
+      region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
+      region%ice%pc_beta1     = 1._dp + region%ice%pc_zeta / 2._dp
+      region%ice%pc_beta2     =       - region%ice%pc_zeta / 2._dp
       
       ! Predictor step
       ! ==============
@@ -255,9 +253,8 @@ CONTAINS
         CALL solve_SIA(  region%mesh, region%ice)
         
         ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_ice
-        CALL sync
+        region%t_last_SIA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_ice
         
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
       
@@ -265,9 +262,8 @@ CONTAINS
         CALL solve_SSA(  region%mesh, region%ice)
         
         ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_ice
-        CALL sync
+        region%t_last_SSA = region%time
+        region%t_next_SSA = region%time + region%dt_crit_ice
         
       ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
       
@@ -276,11 +272,10 @@ CONTAINS
         CALL solve_SSA(  region%mesh, region%ice)
         
         ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_ice
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_ice
-        CALL sync
+        region%t_last_SIA = region%time
+        region%t_last_SSA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_ice
+        region%t_next_SSA = region%time + region%dt_crit_ice
         
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
       
@@ -288,9 +283,8 @@ CONTAINS
         CALL solve_DIVA( region%mesh, region%ice)
         
         ! Update timer
-        IF (par%master) region%t_last_DIVA = region%time
-        IF (par%master) region%t_next_DIVA = region%time + region%dt_crit_ice
-        CALL sync
+        region%t_last_DIVA = region%time
+        region%t_next_DIVA = region%time + region%dt_crit_ice
         
       ELSE
         IF (par%master) WRITE(0,*) 'run_ice_dynamics_pc - ERROR: unknown choice_ice_dynamics "', C%choice_ice_dynamics, '"'
@@ -545,101 +539,96 @@ CONTAINS
     ! Local variables:
     REAL(dp)                                           :: t_next
     
-    IF (par%master) THEN
-      
-      ! Determine when each model components should be updated
-      
-      t_next = MIN(t_end, region%time + C%dt_max)
-      
-      ! First the ice dynamics
-      ! ======================
-      
-      IF     (C%choice_ice_dynamics == 'none') THEN
-        ! Just stick to the maximum time step
-      ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
-        t_next = MIN( t_next, region%t_next_SIA)
-      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-        t_next = MIN( t_next, region%t_next_SSA)
-      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-        t_next = MIN( t_next, region%t_next_SIA)
-        t_next = MIN( t_next, region%t_next_SSA)
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-        t_next = MIN( t_next, region%t_next_DIVA)
-      ELSE
-        WRITE(0,*) 'determine_timesteps_and_actions_direct - ERROR: unknown choice_ice_dynamics "', C%choice_ice_dynamics, '"!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF ! IF (C%choice_ice_dynamics == 'SIA') THEN
-      
-      ! Then the other model components
-      ! ===============================
-      
-      region%do_thermo  = .FALSE.
-      IF (region%time == region%t_next_thermo) THEN
-        region%do_thermo      = .TRUE.
-        region%t_last_thermo  = region%time
-        region%t_next_thermo  = region%t_last_thermo + C%dt_thermo
-      END IF
-      t_next = MIN( t_next, region%t_next_thermo)
-      
-      region%do_climate = .FALSE.
-      IF (region%time == region%t_next_climate) THEN
-        region%do_climate     = .TRUE.
-        region%t_last_climate = region%time
-        region%t_next_climate = region%t_last_climate + C%dt_climate
-      END IF
-      t_next = MIN( t_next, region%t_next_climate)
-      
-      region%do_ocean   = .FALSE.
-      IF (region%time == region%t_next_ocean) THEN
-        region%do_ocean       = .TRUE.
-        region%t_last_ocean   = region%time
-        region%t_next_ocean   = region%t_last_ocean + C%dt_ocean
-      END IF
-      t_next = MIN( t_next, region%t_next_ocean)
-      
-      region%do_SMB     = .FALSE.
-      IF (region%time == region%t_next_SMB) THEN
-        region%do_SMB         = .TRUE.
-        region%t_last_SMB     = region%time
-        region%t_next_SMB     = region%t_last_SMB + C%dt_SMB
-      END IF
-      t_next = MIN( t_next, region%t_next_SMB)
-      
-      region%do_BMB     = .FALSE.
+    ! Determine when each model components should be updated
+    
+    t_next = MIN(t_end, region%time + C%dt_max)
+    
+    ! First the ice dynamics
+    ! ======================
+    
+    IF     (C%choice_ice_dynamics == 'none') THEN
+      ! Just stick to the maximum time step
+    ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
+      t_next = MIN( t_next, region%t_next_SIA)
+    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+      t_next = MIN( t_next, region%t_next_SSA)
+    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      t_next = MIN( t_next, region%t_next_SIA)
+      t_next = MIN( t_next, region%t_next_SSA)
+    ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+      t_next = MIN( t_next, region%t_next_DIVA)
+    ELSE
+      WRITE(0,*) 'determine_timesteps_and_actions_direct - ERROR: unknown choice_ice_dynamics "', C%choice_ice_dynamics, '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF ! IF (C%choice_ice_dynamics == 'SIA') THEN
+    
+    ! Then the other model components
+    ! ===============================
+    
+    region%do_thermo  = .FALSE.
+    IF (region%time == region%t_next_thermo) THEN
+      region%do_thermo      = .TRUE.
+      region%t_last_thermo  = region%time
+      region%t_next_thermo  = region%t_last_thermo + C%dt_thermo
+    END IF
+    t_next = MIN( t_next, region%t_next_thermo)
+    
+    region%do_climate = .FALSE.
+    IF (region%time == region%t_next_climate) THEN
+      region%do_climate     = .TRUE.
+      region%t_last_climate = region%time
+      region%t_next_climate = region%t_last_climate + C%dt_climate
+    END IF
+    t_next = MIN( t_next, region%t_next_climate)
+    
+    region%do_ocean   = .FALSE.
+    IF (region%time == region%t_next_ocean) THEN
+      region%do_ocean       = .TRUE.
+      region%t_last_ocean   = region%time
+      region%t_next_ocean   = region%t_last_ocean + C%dt_ocean
+    END IF
+    t_next = MIN( t_next, region%t_next_ocean)
+    
+    region%do_SMB     = .FALSE.
+    IF (region%time == region%t_next_SMB) THEN
+      region%do_SMB         = .TRUE.
+      region%t_last_SMB     = region%time
+      region%t_next_SMB     = region%t_last_SMB + C%dt_SMB
+    END IF
+    t_next = MIN( t_next, region%t_next_SMB)
+    
+    region%do_BMB     = .FALSE.
 !      IF (C%do_asynchronous_BMB) THEN
-        IF (region%time == region%t_next_BMB) THEN
-          region%do_BMB         = .TRUE.
-          region%t_last_BMB     = region%time
-          region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
-        END IF
-        t_next = MIN( t_next, region%t_next_BMB)
+      IF (region%time == region%t_next_BMB) THEN
+        region%do_BMB         = .TRUE.
+        region%t_last_BMB     = region%time
+        region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
+      END IF
+      t_next = MIN( t_next, region%t_next_BMB)
 !      ELSE
 !        ! Don't use separate timestepping for the BMB; just run it in every ice dynamics time step
 !        region%do_BMB = .TRUE.
 !      END IF
-      
-      region%do_ELRA    = .FALSE.
-      IF (region%time == region%t_next_ELRA) THEN
-        region%do_ELRA        = .TRUE.
-        region%t_last_ELRA    = region%time
-        region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
-      END IF
-      t_next = MIN( t_next, region%t_next_ELRA)
-      
-      region%do_output  = .FALSE.
-      IF (region%time == region%t_next_output) THEN
-        region%do_output      = .TRUE.
-        region%t_last_output  = region%time
-        region%t_next_output  = region%t_last_output + C%dt_output
-      END IF
-      t_next = MIN( t_next, region%t_next_output)
-      
-      ! Set time step so that we move forward to the next action
-      region%dt = t_next - region%time
     
-    END IF ! IF (par%master) THEN
-    CALL sync
+    region%do_ELRA    = .FALSE.
+    IF (region%time == region%t_next_ELRA) THEN
+      region%do_ELRA        = .TRUE.
+      region%t_last_ELRA    = region%time
+      region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
+    END IF
+    t_next = MIN( t_next, region%t_next_ELRA)
     
+    region%do_output  = .FALSE.
+    IF (region%time == region%t_next_output) THEN
+      region%do_output      = .TRUE.
+      region%t_last_output  = region%time
+      region%t_next_output  = region%t_last_output + C%dt_output
+    END IF
+    t_next = MIN( t_next, region%t_next_output)
+    
+    ! Set time step so that we move forward to the next action
+    region%dt = t_next - region%time
+  
   END SUBROUTINE determine_timesteps_and_actions
   
 ! == Administration: allocation, initialisation, and remapping

@@ -53,7 +53,7 @@ CONTAINS
     TYPE(type_subclimate_region),        INTENT(IN)    :: climate
     REAL(dp),                            INTENT(IN)    :: time
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
     
     ! Local variables:
     CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_SMB_model'

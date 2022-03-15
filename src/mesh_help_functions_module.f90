@@ -23,7 +23,7 @@ MODULE mesh_help_functions_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region
+  USE data_types_module,               ONLY: type_mesh
   USE utilities_module,                ONLY: line_integral_mxydx, line_integral_xydy
 
   IMPLICIT NONE

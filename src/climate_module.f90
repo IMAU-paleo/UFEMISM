@@ -783,7 +783,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in) :: mask_noice
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
     
     ! Local variables:
@@ -981,7 +981,7 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G
     TYPE(type_ICE5G_timeframe),          INTENT(IN)    :: ICE5G_PD
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
     
     ! Local variables:
     INTEGER                                            :: vi
@@ -1164,7 +1164,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh  
     TYPE(type_subclimate_region),        INTENT(INOUT) :: snapshot
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: GCM_bias_T2m
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: GCM_bias_Precip
     
@@ -1720,7 +1720,7 @@ CONTAINS
     TYPE(type_climate_matrix),           INTENT(IN)    :: matrix
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_grid),                     INTENT(IN)    :: grid_smooth
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh_new%vi1:mesh_new%vi2), INTENT(in) :: mask_noice
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables:

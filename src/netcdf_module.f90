@@ -1226,7 +1226,7 @@ CONTAINS
     
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
-      IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF_a ))
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%GHF_a, id_var, netcdf%ti)
       
     ! Fields with a time dimension
     ! ============================

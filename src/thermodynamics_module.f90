@@ -146,12 +146,12 @@ CONTAINS
     CALL calc_ice_rheology( mesh, ice, time)
 
   END SUBROUTINE run_thermo_model
-  
+
 ! == Solve the 3-D heat equation
   SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
@@ -168,89 +168,89 @@ CONTAINS
     REAL(dp), DIMENSION(C%nz)                          :: beta
     REAL(dp), DIMENSION(C%nz-1)                        :: gamma
     REAL(dp), DIMENSION(C%nz)                          :: delta
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: Ti_new
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Ti_new
     INTEGER                                            :: wTi_new
+    REAL(dp)                                           :: depth
     REAL(dp), DIMENSION(:    ), POINTER                ::  T_ocean_at_shelf_base
     INTEGER                                            :: wT_ocean_at_shelf_base
     INTEGER,  DIMENSION(:    ), POINTER                ::  is_unstable
     INTEGER                                            :: wis_unstable
     INTEGER                                            :: n_unstable
     LOGICAL                                            :: hasnan
-    
+
     ! Allocate shared memory
     CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, u_times_dT_dx_upwind_a, wu_times_dT_dx_upwind_a)
     CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, v_times_dT_dy_upwind_a, wv_times_dT_dy_upwind_a)
     CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable           , wis_unstable           )
     CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new                , wTi_new                )
     CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base , wT_ocean_at_shelf_base )
-    
+
     ! Calculate upwind heat flux
     CALL calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
-    
+
     ! Calculate zeta derivatives required for solving the heat equation
     CALL calculate_zeta_derivatives( mesh, ice)
-    
+
     ! Calculate heating terms
     CALL calc_internal_heating(   mesh, ice)
     CALL calc_frictional_heating( mesh, ice)
-    
+
     ! Set ice surface temperature equal to annual mean 2m air temperature
     DO vi = mesh%vi1, mesh%vi2
       ice%Ti_a( vi,1) = MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
     END DO
     CALL sync
-    
+
     ! Find ocean temperature at the shelf base
     DO vi = mesh%vi1, mesh%vi2
-    
-      T_ocean_at_shelf_base( vi) = SMT
-    
-!      IF (ice%mask_shelf_a( j,i) == 1) THEN
-!        depth = MAX( 0.1_dp, ice%Hi_a( j,i) - ice%Hs_a( j,i))   ! Depth is positive when below the sea surface!
-!        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( :,j,i), depth, T_ocean_at_shelf_base( j,i))
-!      ELSE
-!        T_ocean_at_shelf_base( j,i) = 0._dp
-!      END IF
-!      
-!      ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
-!      T_ocean_at_shelf_base( j,i) = T_ocean_at_shelf_base( j,i) + T0
-      
+
+
+     IF (ice%mask_shelf_a( vi) == 1) THEN
+       depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+       CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base( vi))
+     ELSE
+       T_ocean_at_shelf_base( vi) = 0._dp
+     END IF
+
+     ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
+     T_ocean_at_shelf_base( vi) = T_ocean_at_shelf_base( vi) + T0
+
     END DO
     CALL sync
-    
+
     ! Solve the heat equation for all vertices
     is_unstable( mesh%vi1:mesh%vi2) = 0
-    n_unstable                    = 0
+    n_unstable                      = 0
     DO vi = mesh%vi1, mesh%vi2
-      
+
       ! Skip ice-free vertices
       IF (ice%mask_ice_a( vi) == 0) CYCLE
-      
+
       ! Ice surface boundary condition
       beta(  1) = 1._dp
       gamma( 1) = 0._dp
       delta( 1) = ice%Ti_a( vi,1)
-  
+
       ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
       DO k = 2, C%nz-1
 
         f1 = (ice%Ki_a( vi,k) * ice%dzeta_dz_a( vi)**2) / (ice_density * ice%Cpi_a( vi,k))
 
         f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a( vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
- 
+
         f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind_a( vi,k) + v_times_dT_dy_upwind_a( vi,k)) - ice%Ti_a( vi,k) / C%dt_thermo
 
         alpha(k) = f1 * p_zeta%a_zetazeta(k) - f2 * p_zeta%a_zeta(k)
         beta (k) = f1 * p_zeta%b_zetazeta(k) - f2 * p_zeta%b_zeta(k) - 1._dp / C%dt_thermo
         gamma(k) = f1 * p_zeta%c_zetazeta(k) - f2 * p_zeta%c_zeta(k)
         delta(k) = f3
-        
+
 !        ! DENK DROM - only vertical diffusion
 !        alpha(k) = (p_zeta%a_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%a_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
 !        beta( k) = (p_zeta%b_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%b_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2)) + (1._dp / C%dt_thermo)
 !        gamma(k) = (p_zeta%c_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%c_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
 !        delta(k) = ice%Ti(vi,k) / C%dt_thermo
-        
+
 !        ! DENK DROM - only vertical diffusion + vertical advection
 !        alpha(k) = (p_zeta%a_zeta(k) * (ice%dzeta_dt(vi,k) - ice%W_3D(vi,k) / ice%Hi(vi))) - ((p_zeta%a_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
 !        beta( k) = (p_zeta%b_zeta(k) * (ice%dzeta_dt(vi,k) - ice%W_3D(vi,k) / ice%Hi(vi))) - ((p_zeta%b_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2)) + (1._dp / C%dt_thermo)
@@ -258,12 +258,12 @@ CONTAINS
 !        delta(k) = ice%Ti(vi,k) / C%dt_thermo
 
       END DO ! DO k = 2, C%nz-1
-      
+
       ! Boundary conditions at the surface: set ice temperature equal to annual mean surface temperature
       beta(  1) = 1._dp
       gamma( 1) = 0._dp
       delta( 1) =  MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
-      
+
       ! Boundary conditions at the base
       IF (ice%mask_shelf_a( vi) == 1) THEN
         ! Set ice bottom temperature equal to seawater temperature (limited to the PMP)
@@ -280,23 +280,23 @@ CONTAINS
           ! Set a Neumann BC so the temperature gradient at the base is equal to basal heating rate (= geothermal + friction)
           alpha( C%nz) = 1._dp
           beta ( C%nz) = -1._dp
-          delta( C%nz) = (C%zeta(C%nz) - C%zeta(C%nz-1)) * (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz)) 
+          delta( C%nz) = (C%zeta(C%nz) - C%zeta(C%nz-1)) * (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz))
         END IF
       END IF ! IF (ice%mask_shelf_a( vi) == 1) THEN
 
       ! Solve the tridiagonal matrix equation representing the heat equation for this grid cell
       Ti_new( vi,:) = tridiagonal_solve( alpha, beta, gamma, delta)
-      
+
       ! Make sure ice temperature doesn't exceed pressure melting point
       DO k = 1, C%nz-1
         Ti_new( vi,k) = MIN( Ti_new( vi,k), ice%Ti_pmp_a( vi,k))
       END DO
-      
+
       IF (Ti_new( vi,C%nz) >= ice%Ti_pmp_a( vi,C%nz)) THEN
         Ti_new( vi,C%nz) = MIN( ice%Ti_pmp_a( vi,C%nz), ice%Ti_a( vi,C%nz-1) - (C%zeta(C%nz) - C%zeta(C%nz-1)) * &
           (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz)))
       END IF
-    
+
       ! Mark temperatures below 150 K or NaN as unstable, to be replaced with the Robin solution.
       hasnan = .FALSE.
       DO k = 1, C%nz
@@ -309,26 +309,27 @@ CONTAINS
         n_unstable  = n_unstable + 1
         !WRITE(0,*) 'instability detected; Hi = ', ice%Hi_a( j,i), ', dHi_dt = ', ice%dHi_dt_a( j,i)
       END IF
-      
+
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
-        
+
+    ! Apply Neumann boundary conditions to the temperature field
     CALL apply_Neumann_BC_direct_a_3D( mesh, Ti_new)
-    
+
     ! Cope with instability
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_unstable, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)    
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_unstable, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     IF (n_unstable < CEILING( REAL( mesh%nV) / 100._dp)) THEN
       ! Instability is limited to an acceptably small number (< 1%) of grid cells;
       ! replace the temperature profile in those cells with the Robin solution
-      
+
       DO vi = mesh%vi1, mesh%vi2
         IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new, vi)
       END DO
       CALL sync
-      
+
     ELSE
       ! An unacceptably large number of grid cells was unstable; throw an error.
-      
+
       IF (par%master) THEN
         WRITE(0,*) '   solve_heat_equation - ERROR:  heat equation solver unstable for more than 1% of grid cells!'
         debug%dp_2D_a_01  = ice%Hi_a
@@ -338,20 +339,20 @@ CONTAINS
         CALL write_to_debug_file
       END IF
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      
+
     END IF
-    
+
     ! Move the new temperature field to the ice data structure
     ice%Ti_a( mesh%vi1:mesh%vi2,:) = Ti_new( mesh%vi1:mesh%vi2,:)
     CALL sync
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wu_times_dT_dx_upwind_a)
     CALL deallocate_shared( wv_times_dT_dy_upwind_a)
     CALL deallocate_shared( wTi_new                )
     CALL deallocate_shared( wis_unstable           )
     CALL deallocate_shared( wT_ocean_at_shelf_base )
-    
+
     ! Safety
     CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a', 'solve_heat_equation')
 
@@ -486,15 +487,15 @@ CONTAINS
     REAL(dp)                                            :: depth
     REAL(dp)                                            :: T_ocean_at_shelf_base
 
-    thermal_conductivity_robin        = kappa_0_ice_conductivity * sec_per_year * EXP(-kappa_e_ice_conductivity * T0)           ! Thermal conductivity            [J m^-1 K^-1 y^-1]
-    thermal_diffusivity_robin         = thermal_conductivity_robin / (ice_density * c_0_specific_heat)         ! Thermal diffusivity             [m^2 y^-1]
-    bottom_temperature_gradient_robin = - ice%GHF_a( vi) / thermal_conductivity_robin                    ! Temperature gradient at bedrock
+    thermal_conductivity_robin        = kappa_0_ice_conductivity * sec_per_year * EXP(-kappa_e_ice_conductivity * T0) ! Thermal conductivity            [J m^-1 K^-1 y^-1]
+    thermal_diffusivity_robin         = thermal_conductivity_robin / (ice_density * c_0_specific_heat)                ! Thermal diffusivity             [m^2 y^-1]
+    bottom_temperature_gradient_robin = - ice%GHF_a( vi) / thermal_conductivity_robin                                 ! Temperature gradient at bedrock
 
     Ts = MIN( T0, SUM(climate%T2m( vi,:)) / 12._dp)
 
     IF (ice%mask_sheet_a( vi) == 1 ) THEN
 
-      IF (SMB%SMB_year( vi) > 0._dp) THEN    
+      IF (SMB%SMB_year( vi) > 0._dp) THEN
         ! The Robin solution can be used to estimate the subsurface temperature profile in an accumulation area
 
         thermal_length_scale = SQRT(2._dp * thermal_diffusivity_robin * ice%Hi_a( vi) / SMB%SMB_year( vi))
@@ -531,8 +532,8 @@ CONTAINS
       Ti( vi,k) = MIN( Ti( vi,k), ice%Ti_pmp_a( vi,k))
     END DO
 
-  END SUBROUTINE replace_Ti_with_robin_solution  
-  
+  END SUBROUTINE replace_Ti_with_robin_solution
+
 ! == Calculate various physical terms
   SUBROUTINE calc_internal_heating( mesh, ice)
     ! Calculate internal heating due to deformation

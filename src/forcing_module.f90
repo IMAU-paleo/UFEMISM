@@ -1015,6 +1015,60 @@ CONTAINS
     CALL deallocate_shared( wQ_TOA_int)
 
   END SUBROUTINE get_insolation_at_time
+  SUBROUTINE get_insolation_at_time_month_and_lat( time, month, lat, Q_TOA)
+    ! Get monthly insolation at time t, month m and latitude l on the regional grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+    INTEGER,                             INTENT(IN)    :: month
+    REAL(dp),                            INTENT(IN)    :: lat
+    REAL(dp),                            INTENT(OUT)   :: Q_TOA
+
+    ! Local variables:
+    REAL(dp)                                           :: time_applied
+    INTEGER                                            :: ilat_l,ilat_u
+    REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
+
+    time_applied = 0._dp
+
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: choice_insolation_forcing = "none"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_insolation_forcing == 'static') THEN
+      time_applied = C%static_insolation_time
+    ELSEIF (C%choice_insolation_forcing == 'realistic') THEN
+      time_applied = time
+    ELSE
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Check if the requested time is enveloped by the two timeframes;
+    ! if not, read the two relevant timeframes from the NetCDF file
+    IF (time_applied < forcing%ins_t0 .AND. time_applied > forcing%ins_t1) THEN
+      CALL update_insolation_timeframes_from_file( time_applied)
+    END IF
+
+    ! Calculate timeframe interpolation weights
+    wt0 = (forcing%ins_t1 - time) / (forcing%ins_t1 - forcing%ins_t0)
+    wt1 = 1._dp - wt0
+
+    ! Get value at month m and latitude l
+    ilat_l = FLOOR(lat + 91)
+    ilat_u = ilat_l + 1
+
+    wlat_l = (forcing%ins_lat( ilat_u) - lat) / (forcing%ins_lat( ilat_u) - forcing%ins_lat( ilat_l))
+    wlat_u = 1._dp - wlat_l
+
+    IF (par%master) Q_TOA = wt0 * wlat_l * forcing%ins_Q_TOA0( ilat_l,month) + &
+                            wt0 * wlat_u * forcing%ins_Q_TOA0( ilat_u,month) + &
+                            wt1 * wlat_l * forcing%ins_Q_TOA1( ilat_l,month) + &
+                            wt1 * wlat_u * forcing%ins_Q_TOA1( ilat_u,month)
+    CALL sync
+
+  END SUBROUTINE get_insolation_at_time_month_and_lat
   SUBROUTINE update_insolation_timeframes_from_file( time)
     ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
     ! coupling timestep to save on memory usage. Only done by master.

@@ -654,6 +654,11 @@ MODULE data_types_netcdf_module
   ! Variables
   ! =========
     
+    ! Total model resource use
+    INTEGER :: id_var_tcomp_tot
+    INTEGER :: id_var_mem_tot
+    
+    ! Per-subroutine resource use
     INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_names
     INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_tcomp
     INTEGER, DIMENSION(:), ALLOCATABLE :: id_var_mem

@@ -3230,16 +3230,17 @@ CONTAINS
 ! Create and write to resource tracking file
 ! ==========================================
 
-  SUBROUTINE write_to_resource_tracking_file( netcdf, time)
+  SUBROUTINE write_to_resource_tracking_file( netcdf, time, tcomp_tot)
     ! Write to the resource tracking output file
     
-    USE configuration_module, ONLY: resource_tracker
+    USE configuration_module, ONLY: resource_tracker, mem_use_tot_max
    
     IMPLICIT NONE
     
     ! Input variables:
     TYPE(type_netcdf_resource_tracker), INTENT(INOUT) :: netcdf
     REAL(dp),                           INTENT(IN)    :: time
+    REAL(dp),                           INTENT(IN)    :: tcomp_tot
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'write_to_resource_tracking_file'
@@ -3257,6 +3258,12 @@ CONTAINS
     ! Actual variables
     ! ================
     
+    ! Total model resource use
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_tcomp_tot, tcomp_tot      , start = (/ netcdf%ti /) ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_mem_tot  , mem_use_tot_max, start = (/ netcdf%ti /) ))
+    
+    ! Per-subroutine resource use
+    
     n = SIZE( resource_tracker)
     
     DO i = 1, n
@@ -3266,10 +3273,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_names( i), path_int_enc ))
     
       ! Computation time
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_tcomp( i), resource_tracker( i)%tcomp                 , start = (/ netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_tcomp( i), resource_tracker( i)%tcomp      , start = (/ netcdf%ti /) ))
     
       ! Memory use (defined as maximum over the preceding coupling interval)
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_mem(   i), resource_tracker( i)%mem_use_max / 1.0E6_dp, start = (/ netcdf%ti /) )) ! Divide by 1E6 to express in MB
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_mem(   i), resource_tracker( i)%mem_use_max, start = (/ netcdf%ti /) ))
       
     END DO
     
@@ -3327,10 +3334,16 @@ CONTAINS
     ! order of appearence in the netcdf file.
     
     ! Dimension variables: time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time, [t], netcdf%id_var_time, long_name='Time', units='years'   )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time , [t], netcdf%id_var_time, long_name='Time', units='years'   )
     
     ! Actual variables
     ! ================
+    
+    ! Total model resource use
+    CALL create_double_var( netcdf%ncid, 'tcomp_tot', [t], netcdf%id_var_tcomp_tot, long_name='Computation time', units='s'    )
+    CALL create_double_var( netcdf%ncid, 'mem_tot'  , [t], netcdf%id_var_mem_tot  , long_name='Memory use'      , units='bytes')
+    
+    ! Per-subroutine resource use
     
     n = SIZE( resource_tracker)
     
@@ -3407,7 +3420,7 @@ CONTAINS
       WRITE( long_name,'(A,I5)') 'Memory use for subroutine #', i
       
       ! Create the variable in the NetCDF file
-      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_mem( i),  long_name = long_name, units = 'MB', missing_value = 0._dp)
+      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_mem( i),  long_name = long_name, units = 'bytes', missing_value = 0._dp)
       
     END DO
     

@@ -1279,7 +1279,11 @@ CONTAINS
     ! ===========================
     
     ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
-    n = 1000
+    n = 0
+    IF (C%do_NAM) n = n + 1000
+    IF (C%do_EAS) n = n + 1000
+    IF (C%do_GRL) n = n + 1000
+    IF (C%do_ANT) n = n + 1000
     ALLOCATE( resource_tracker( n))
     
     ! Initialise values
@@ -2585,6 +2589,8 @@ CONTAINS
     
     ! Local variables:
     INTEGER                                            :: i,n
+    
+    mem_use_tot_max = 0._dp
     
     n = SIZE( resource_tracker)
     

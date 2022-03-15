@@ -64,7 +64,7 @@ PROGRAM UFEMISM_program
   
   ! Computation time tracking
   TYPE(type_netcdf_resource_tracker)     :: resources
-  REAL(dp)                               :: tstart, tstop
+  REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
   
   ! ======================================================================================
   
@@ -81,6 +81,7 @@ PROGRAM UFEMISM_program
   IF (par%master) WRITE(0,*) ''
   
   tstart = MPI_WTIME()
+  t1     = MPI_WTIME()
     
   ! Set up the model configuration from the provided config file(s) and create an output directory
   ! ==============================================================================================
@@ -248,7 +249,9 @@ PROGRAM UFEMISM_program
       forcing%dT_deepwater               )  ! deep-water temperature anomaly
   
     ! Write resource use to the resource tracking file
-    CALL write_to_resource_tracking_file( resources, t_coupling)
+    tcomp_loop = MPI_WTIME() - t1
+    CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
+    t1 = MPI_WTIME()
     CALL reset_resource_tracker
       
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)

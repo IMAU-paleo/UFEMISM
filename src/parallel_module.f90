@@ -123,7 +123,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -175,7 +174,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -227,7 +225,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -279,7 +276,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -330,7 +326,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -382,7 +377,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -434,7 +428,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -486,7 +479,6 @@ CONTAINS
     CALL sync
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -534,7 +526,6 @@ CONTAINS
     CALL C_F_POINTER(baseptr, p)
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -582,7 +573,6 @@ CONTAINS
     CALL C_F_POINTER(baseptr, p, [n1])
     
     ! Update the resource use tracker
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot     = mem_use_tot + REAL( windowsize,dp)
     mem_use_tot_max = MAX( mem_use_tot_max, mem_use_tot)
     CALL find_subroutine_in_resource_tracker( i)
@@ -608,7 +598,6 @@ CONTAINS
     
     ! Update the resource use tracker
     CALL MPI_WIN_SHARED_QUERY( win, par%i, windowsize, disp_unit, baseptr, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, windowsize, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     mem_use_tot = mem_use_tot - REAL( windowsize,dp)
     CALL find_subroutine_in_resource_tracker( i)
     resource_tracker( i)%mem_use     = resource_tracker( i)%mem_use - REAL( windowsize,dp)

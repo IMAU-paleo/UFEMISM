@@ -57,8 +57,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -86,8 +85,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -115,8 +113,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -144,8 +141,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -173,8 +169,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -202,8 +197,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -233,8 +227,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,2) /= SIZE( d_b,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -262,8 +255,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,2) /= SIZE( d_c,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -291,8 +283,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,2) /= SIZE( d_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -320,8 +311,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,2) /= SIZE( d_c,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -349,8 +339,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,2) /= SIZE( d_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -378,8 +367,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,2) /= SIZE( d_b,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -411,8 +399,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -440,8 +427,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -469,8 +455,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -498,8 +483,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -527,8 +511,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -556,8 +539,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -585,8 +567,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -614,8 +595,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -643,8 +623,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -674,8 +653,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -703,8 +681,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -732,8 +709,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -761,8 +737,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -790,8 +765,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -819,8 +793,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -848,8 +821,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -877,8 +849,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -906,8 +877,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -939,8 +909,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -968,8 +937,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -997,8 +965,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1026,8 +993,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1055,8 +1021,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1084,8 +1049,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1113,8 +1077,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1142,8 +1105,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1171,8 +1133,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1202,8 +1163,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1231,8 +1191,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1260,8 +1219,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1289,8 +1247,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1318,8 +1275,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1347,8 +1303,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1376,8 +1331,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1405,8 +1359,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1434,8 +1387,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
@@ -1468,8 +1420,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dx2_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dx2_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1508,8 +1459,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dxdy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dxdy_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1548,8 +1498,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dy2_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dy2_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1589,8 +1538,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dx2_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dx2_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dx2_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1629,8 +1577,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dxdy_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dxdy_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dxdy_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1669,8 +1616,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dy2_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dy2_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dy2_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1710,8 +1656,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_buv,1) /= 2*mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_buv_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     DO ti = mesh%ti1, mesh%ti2
@@ -3496,8 +3441,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ! First the borders - average over adjacent non-boundary vertices
@@ -3523,8 +3467,7 @@ CONTAINS
         d_a( vi) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border vertex {int_01} has no non-border neighbours!', int_01 = vi)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
@@ -3573,8 +3516,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ALLOCATE( sumd( SIZE( d_a,2)))
@@ -3602,8 +3544,7 @@ CONTAINS
         d_a( vi,:) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border vertex {int_01} has no non-border neighbours!', int_01 = vi)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
@@ -3653,8 +3594,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     DO ti = mesh%ti1, mesh%ti2
@@ -3676,8 +3616,7 @@ CONTAINS
         d_b( ti) = sumd / sumw
       ELSE
         ! This border triangle has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border triangle {int_01} has no non-border neighbours!', int_01 = ti)
       END IF
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
@@ -3707,8 +3646,7 @@ CONTAINS
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ALLOCATE( sumd( SIZE( d_b,2)))
@@ -3732,8 +3670,7 @@ CONTAINS
         d_b( ti,:) = sumd / sumw
       ELSE
         ! This border triangle has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border triangle {int_01} has no non-border neighbours!', int_01 = ti)
       END IF
       
     END DO ! DO ti = mesh%ti1, mesh%ti2

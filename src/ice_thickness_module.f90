@@ -5,10 +5,10 @@ MODULE ice_thickness_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -49,6 +49,12 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Use the specified time integration method to calculate the ice thickness at t+dt
     IF     (C%choice_ice_integration_method == 'none') THEN
       ice%dHi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
@@ -56,16 +62,17 @@ CONTAINS
     ELSEIF (C%choice_ice_integration_method == 'explicit') THEN
       CALL calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
     ELSEIF (C%choice_ice_integration_method == 'semi-implicit') THEN
-      WRITE(0,*) 'calc_dHi_dt - calc_dHi_dt_semiimplicit: FIXME!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
       !CALL calc_dHi_dt_semiimplicit( mesh, ice, SMB, BMB, dt)
     ELSE
-      IF (par%master) WRITE(0,*) 'calc_dHi_dt - ERROR: unknown choice_ice_integration_method "', TRIM(C%choice_ice_integration_method), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ice_integration_method "' // TRIM( C%choice_ice_integration_method) // '"')
     END IF
     
     ! Apply boundary conditions
     CALL apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_dHi_dt
   
@@ -82,12 +89,16 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(IN)    :: BMB
     REAL(dp),                            INTENT(IN)    :: dt
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
     REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
     INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_SMB
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
             
     ! Initialise at zero
     ice%dVi_in(  mesh%vi1:mesh%vi2, :) = 0._dp
@@ -231,6 +242,9 @@ CONTAINS
     CALL deallocate_shared( wup_c)
     CALL deallocate_shared( wuo_c)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_dHi_dt_explicit
     
   ! Some useful tools
@@ -247,7 +261,11 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
-    INTEGER                                            :: vi
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_ice_thickness_BC'
+    INTEGER                                            :: vi, vvi, vj, n
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       
@@ -257,11 +275,9 @@ CONTAINS
           ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
           ice%Hi_tplusdt_a( vi) = 0._dp
         ELSEIF (C%ice_thickness_west_BC == 'infinite') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_west_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_west_BC = infinite - FIXME!')
         ELSEIF (C%ice_thickness_west_BC == 'periodic') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_west_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_west_BC = periodic - FIXME!')
         ELSEIF (C%ice_thickness_west_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
@@ -269,8 +285,7 @@ CONTAINS
           ice%dHi_dt_a(     vi) = 0._dp
           ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
-          IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_west_BC "', TRIM(C%ice_thickness_west_BC), '"!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('unknown ice_thickness_west_BC "' // TRIM( C%ice_thickness_west_BC) // '"!')
         END IF
       END IF
         
@@ -280,11 +295,9 @@ CONTAINS
           ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
           ice%Hi_tplusdt_a( vi) = 0._dp
         ELSEIF (C%ice_thickness_east_BC == 'infinite') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_east_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_east_BC = infinite - FIXME!')
         ELSEIF (C%ice_thickness_east_BC == 'periodic') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_east_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_east_BC = periodic - FIXME!')
         ELSEIF (C%ice_thickness_east_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
@@ -292,8 +305,7 @@ CONTAINS
           ice%dHi_dt_a(     vi) = 0._dp
           ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
-          IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_east_BC "', TRIM(C%ice_thickness_east_BC), '"!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('unknown ice_thickness_east_BC "' // TRIM( C%ice_thickness_east_BC) // '"!')
         END IF
       END IF
         
@@ -303,11 +315,9 @@ CONTAINS
           ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
           ice%Hi_tplusdt_a( vi) = 0._dp
         ELSEIF (C%ice_thickness_south_BC == 'infinite') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_south_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_south_BC = infinite - FIXME!')
         ELSEIF (C%ice_thickness_south_BC == 'periodic') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_south_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_south_BC = periodic - FIXME!')
         ELSEIF (C%ice_thickness_south_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
@@ -315,8 +325,7 @@ CONTAINS
           ice%dHi_dt_a(     vi) = 0._dp
           ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
-          IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_south_BC "', TRIM(C%ice_thickness_south_BC), '"!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('unknown ice_thickness_south_BC "' // TRIM( C%ice_thickness_south_BC) // '"!')
         END IF
       END IF
         
@@ -326,11 +335,9 @@ CONTAINS
           ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
           ice%Hi_tplusdt_a( vi) = 0._dp
         ELSEIF (C%ice_thickness_north_BC == 'infinite') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_north_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_north_BC = infinite - FIXME!')
         ELSEIF (C%ice_thickness_north_BC == 'periodic') THEN
-          WRITE(0,*) 'apply_ice_thickness_BC - ice_thickness_north_BC: FIXME!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('ice_thickness_north_BC = periodic - FIXME!')
         ELSEIF (C%ice_thickness_north_BC == 'ISMIP_HOM_F') THEN
           ice%dHi_dt_a(     vi) = (1000._dp - ice%Hi_a( vi)) / dt
           ice%Hi_tplusdt_a( vi) = 1000._dp
@@ -338,8 +345,7 @@ CONTAINS
           ice%dHi_dt_a(     vi) = 0._dp
           ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
         ELSE
-          IF (par%master) WRITE(0,*) 'apply_ice_thickness_BC - ERROR: unknown ice_thickness_north_BC "', TRIM(C%ice_thickness_north_BC), '"!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('unknown ice_thickness_north_BC "' // TRIM( C%ice_thickness_north_BC) // '"!')
         END IF
       END IF
       
@@ -379,8 +385,7 @@ CONTAINS
     
     ! If so specified, remove all floating ice crossing the continental shelf edge
     IF (C%continental_shelf_calving) THEN
-      WRITE(0,*) 'apply_ice_thickness_BC - continental_shelf_calving: FIXME!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('continental_shelf_calving: FIXME!')
 !      DO i = grid%i1, grid%i2
 !      DO j = 1, grid%ny
 !        IF (refgeo_GIAeq%Hi( j,i) == 0._dp .AND. refgeo_GIAeq%Hb( j,i) < C%continental_shelf_min_height) THEN
@@ -391,6 +396,9 @@ CONTAINS
 !      END DO
 !      CALL sync
     END IF ! IF (C%continental_shelf_calving) THEN
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE apply_ice_thickness_BC
   

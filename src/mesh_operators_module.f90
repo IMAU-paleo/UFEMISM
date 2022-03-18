@@ -6,10 +6,10 @@ MODULE mesh_operators_module
 #include <petsc/finclude/petscksp.h>
   USE mpi
   USE petscksp
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -49,14 +49,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_a_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_a_b, d_a, d_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_b_2D
   SUBROUTINE map_a_to_c_2D( mesh, d_a, d_c)
@@ -69,14 +77,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_a_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_a_c, d_a, d_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_c_2D
   SUBROUTINE map_b_to_a_2D( mesh, d_b, d_a)
@@ -89,14 +105,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_b_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_a, d_b, d_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_a_2D
   SUBROUTINE map_b_to_c_2D( mesh, d_b, d_c)
@@ -109,14 +133,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_b_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_b_c, d_b, d_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_c_2D
   SUBROUTINE map_c_to_a_2D( mesh, d_c, d_a)
@@ -129,14 +161,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_c_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_c_a, d_c, d_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_c_to_a_2D
   SUBROUTINE map_c_to_b_2D( mesh, d_c, d_b)
@@ -149,14 +189,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_c_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_map_c_b, d_c, d_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_c_to_b_2D
   
@@ -171,14 +219,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_a_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,2) /= SIZE( d_b,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_a_b, d_a, d_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_b_3D
   SUBROUTINE map_a_to_c_3D( mesh, d_a, d_c)
@@ -191,14 +247,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_a_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,2) /= SIZE( d_c,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_a_c, d_a, d_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_c_3D
   SUBROUTINE map_b_to_a_3D( mesh, d_b, d_a)
@@ -211,14 +275,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_b_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,2) /= SIZE( d_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_b_a, d_b, d_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_a_3D
   SUBROUTINE map_b_to_c_3D( mesh, d_b, d_c)
@@ -231,14 +303,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_b_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,2) /= SIZE( d_c,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_b_c, d_b, d_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_c_3D
   SUBROUTINE map_c_to_a_3D( mesh, d_c, d_a)
@@ -251,14 +331,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_c_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,2) /= SIZE( d_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_c_a, d_c, d_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_c_to_a_3D
   SUBROUTINE map_c_to_b_3D( mesh, d_c, d_b)
@@ -271,14 +359,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_c_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,2) /= SIZE( d_b,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_map_c_b, d_c, d_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_c_to_b_3D
   
@@ -295,14 +391,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_a, d_a, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_a_2D
   SUBROUTINE ddx_a_to_b_2D( mesh, d_a, ddx_b)
@@ -315,14 +419,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_b_2D
   SUBROUTINE ddx_a_to_c_2D( mesh, d_a, ddx_c)
@@ -335,14 +447,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_c, d_a, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_c_2D
   SUBROUTINE ddx_b_to_a_2D( mesh, d_b, ddx_a)
@@ -355,14 +475,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_a, d_b, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_a_2D
   SUBROUTINE ddx_b_to_b_2D( mesh, d_b, ddx_b)
@@ -375,14 +503,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_b, d_b, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_b_2D
   SUBROUTINE ddx_b_to_c_2D( mesh, d_b, ddx_c)
@@ -395,14 +531,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_c, d_b, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_c_2D
   SUBROUTINE ddx_c_to_a_2D( mesh, d_c, ddx_a)
@@ -415,14 +559,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_a, d_c, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_a_2D
   SUBROUTINE ddx_c_to_b_2D( mesh, d_c, ddx_b)
@@ -435,14 +587,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_b, d_c, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_b_2D
   SUBROUTINE ddx_c_to_c_2D( mesh, d_c, ddx_c)
@@ -455,14 +615,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_c_c, d_c, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_c_2D
 
@@ -477,14 +645,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_a, d_a, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_a_3D
   SUBROUTINE ddx_a_to_b_3D( mesh, d_a, ddx_b)
@@ -497,14 +673,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_b, d_a, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_b_3D
   SUBROUTINE ddx_a_to_c_3D( mesh, d_a, ddx_c)
@@ -517,14 +701,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_a_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_a_c, d_a, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_c_3D
   SUBROUTINE ddx_b_to_a_3D( mesh, d_b, ddx_a)
@@ -537,14 +729,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_a, d_b, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_a_3D
   SUBROUTINE ddx_b_to_b_3D( mesh, d_b, ddx_b)
@@ -557,14 +757,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_b, d_b, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_b_3D
   SUBROUTINE ddx_b_to_c_3D( mesh, d_b, ddx_c)
@@ -577,14 +785,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_b_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_b_c, d_b, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_c_3D
   SUBROUTINE ddx_c_to_a_3D( mesh, d_c, ddx_a)
@@ -597,14 +813,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_a, d_c, ddx_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_a_3D
   SUBROUTINE ddx_c_to_b_3D( mesh, d_c, ddx_b)
@@ -617,14 +841,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_b, d_c, ddx_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_b_3D
   SUBROUTINE ddx_c_to_c_3D( mesh, d_c, ddx_c)
@@ -637,14 +869,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddx_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddx_c_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddx_c_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddx_c_c, d_c, ddx_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_c_to_c_3D
   
@@ -661,14 +901,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_a, d_a, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_a_2D
   SUBROUTINE ddy_a_to_b_2D( mesh, d_a, ddy_b)
@@ -681,14 +929,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_b, d_a, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_b_2D
   SUBROUTINE ddy_a_to_c_2D( mesh, d_a, ddy_c)
@@ -701,14 +957,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_c, d_a, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_c_2D
   SUBROUTINE ddy_b_to_a_2D( mesh, d_b, ddy_a)
@@ -721,14 +985,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, d_b, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_a_2D
   SUBROUTINE ddy_b_to_b_2D( mesh, d_b, ddy_b)
@@ -741,14 +1013,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_b, d_b, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_b_2D
   SUBROUTINE ddy_b_to_c_2D( mesh, d_b, ddy_c)
@@ -761,14 +1041,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_c, d_b, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_c_2D
   SUBROUTINE ddy_c_to_a_2D( mesh, d_c, ddy_a)
@@ -781,14 +1069,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_a_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_a, d_c, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_a_2D
   SUBROUTINE ddy_c_to_b_2D( mesh, d_c, ddy_b)
@@ -801,14 +1097,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_b_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_b_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_b, d_c, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_b_2D
   SUBROUTINE ddy_c_to_c_2D( mesh, d_c, ddy_c)
@@ -821,14 +1125,22 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_c_2D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_c_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_c_c, d_c, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_c_2D
 
@@ -843,14 +1155,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_a, d_a, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_a_3D
   SUBROUTINE ddy_a_to_b_3D( mesh, d_a, ddy_b)
@@ -863,14 +1183,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_b, d_a, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_b_3D
   SUBROUTINE ddy_a_to_c_3D( mesh, d_a, ddy_c)
@@ -883,14 +1211,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_a
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_a_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_a_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_a_c, d_a, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_c_3D
   SUBROUTINE ddy_b_to_a_3D( mesh, d_b, ddy_a)
@@ -903,14 +1239,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_a, d_b, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_a_3D
   SUBROUTINE ddy_b_to_b_3D( mesh, d_b, ddy_b)
@@ -923,14 +1267,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_b, d_b, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_b_3D
   SUBROUTINE ddy_b_to_c_3D( mesh, d_b, ddy_c)
@@ -943,14 +1295,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_b
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_b_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_b_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_b_c, d_b, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_c_3D
   SUBROUTINE ddy_c_to_a_3D( mesh, d_c, ddy_a)
@@ -963,14 +1323,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_a
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_a_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_a, d_c, ddy_a)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_a_3D
   SUBROUTINE ddy_c_to_b_3D( mesh, d_c, ddy_b)
@@ -983,14 +1351,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_b
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_b_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_b_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_b, d_c, ddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_b_3D
   SUBROUTINE ddy_c_to_c_3D( mesh, d_c, ddy_c)
@@ -1003,14 +1379,22 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_c
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: ddy_c
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'ddy_c_to_c_3D'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
-      IF (par%master) WRITE(0,*) 'ddy_c_to_c_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Perform the operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( mesh%M_ddy_c_c, d_c, ddy_c)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_c_3D
   
@@ -1027,13 +1411,16 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d2dx2_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dx2_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddx_b
     INTEGER                                            :: wddx_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dx2_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dx2_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1048,6 +1435,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE d2dx2_a_to_a_2D
   SUBROUTINE d2dxdy_a_to_a_2D( mesh, d_a, d2dxdy_a)
     ! d2/dxdy a 2-D data field from the a (vertex) to the a (vertex) grid
@@ -1060,13 +1450,16 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d2dxdy_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dxdy_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddx_b
     INTEGER                                            :: wddx_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dxdy_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dxdy_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1081,6 +1474,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE d2dxdy_a_to_a_2D
   SUBROUTINE d2dy2_a_to_a_2D(  mesh, d_a, d2dy2_a)
     ! d2/dy2 a 2-D data field from the a (vertex) to the a (vertex) grid
@@ -1093,13 +1489,16 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d2dy2_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dy2_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddy_b
     INTEGER                                            :: wddy_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dy2_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'd2dy2_a_to_a_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1114,6 +1513,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wddy_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE d2dy2_a_to_a_2D
 
   SUBROUTINE d2dx2_a_to_a_3D(  mesh, d_a, d2dx2_a)
@@ -1127,13 +1529,16 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d2dx2_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dx2_a_to_a_3D'
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  ddx_b
     INTEGER                                            :: wddx_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dx2_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dx2_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dx2_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1148,6 +1553,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE d2dx2_a_to_a_3D
   SUBROUTINE d2dxdy_a_to_a_3D( mesh, d_a, d2dxdy_a)
     ! d2/dxdy a 3-D data field from the a (vertex) to the a (vertex) grid
@@ -1160,13 +1568,16 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d2dxdy_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dxdy_a_to_a_3D'
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  ddx_b
     INTEGER                                            :: wddx_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dxdy_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dxdy_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dxdy_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1181,6 +1592,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wddx_b)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE d2dxdy_a_to_a_3D
   SUBROUTINE d2dy2_a_to_a_3D(  mesh, d_a, d2dy2_a)
     ! d2/dy2 a 3-D data field from the a (vertex) to the a (vertex) grid
@@ -1193,13 +1607,16 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d2dy2_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dy2_a_to_a_3D'
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  ddy_b
     INTEGER                                            :: wddy_b
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dy2_a,1) /= mesh%nV .OR. SIZE( d_a,2) /= SIZE( d2dy2_a,2)) THEN
-      IF (par%master) WRITE(0,*) 'd2dy2_a_to_a_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -1213,6 +1630,9 @@ CONTAINS
     
     ! Clean up after yourself
     CALL deallocate_shared( wddy_b)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE d2dy2_a_to_a_3D
   
@@ -1228,12 +1648,15 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_buv
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_b_to_buv_2D'
     INTEGER                                            :: ti, tiu, tiv
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_buv,1) /= 2*mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'map_b_to_buv_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     DO ti = mesh%ti1, mesh%ti2
@@ -1242,6 +1665,9 @@ CONTAINS
       d_buv( tiu:tiv) = d_b( ti)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_buv_2D
   
@@ -1254,6 +1680,12 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate matrix operators from the a (vertex)   to the other grids
     CALL calc_matrix_operators_a_a( mesh,                  mesh%M_ddx_a_a,  mesh%M_ddy_a_a)
@@ -1289,6 +1721,9 @@ CONTAINS
     CALL mat_petsc2CSR( mesh%M2_d2dy2_b_b  , mesh%M2_d2dy2_b_b_CSR  )
     CALL mat_petsc2CSR( mesh%M_Neumann_BC_b, mesh%M_Neumann_BC_b_CSR)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 42)
+    
   END SUBROUTINE calc_matrix_operators_mesh
   
   SUBROUTINE calc_matrix_operators_a_a( mesh,        M_ddx, M_ddy)
@@ -1302,6 +1737,7 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_a_a'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
@@ -1309,6 +1745,9 @@ CONTAINS
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Matrix size
     ncols           = mesh%nV      ! from
@@ -1396,6 +1835,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_a_a
   SUBROUTINE calc_matrix_operators_a_b( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1408,12 +1850,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_a_b'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, vii, vi, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nV      ! from
     nrows           = mesh%nTri    ! to
@@ -1508,6 +1954,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_a_b
   SUBROUTINE calc_matrix_operators_a_c( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1520,12 +1969,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_a_c'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: aci, n, acii, vi, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nV      ! from
     nrows           = mesh%nAc     ! to
@@ -1620,6 +2073,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_a_c
   SUBROUTINE calc_matrix_operators_b_a( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1632,12 +2088,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_b_a'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: vi, n, iti, ti, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nV      ! to
@@ -1731,6 +2191,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_b_a
   SUBROUTINE calc_matrix_operators_b_b( mesh,        M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1743,6 +2206,7 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_b_b'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
@@ -1750,6 +2214,9 @@ CONTAINS
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
@@ -1836,6 +2303,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_b_b
   SUBROUTINE calc_matrix_operators_b_c( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1848,6 +2318,7 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_b_c'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
@@ -1855,6 +2326,9 @@ CONTAINS
     LOGICAL                                            :: is_listed
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nAc     ! to
@@ -1975,6 +2449,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_b_c
   SUBROUTINE calc_matrix_operators_c_a( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -1987,12 +2464,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_c_a'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: vi, n, ci, aci, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nV      ! to
@@ -2086,6 +2567,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_c_a
   SUBROUTINE calc_matrix_operators_c_b( mesh, M_map, M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -2098,12 +2582,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_map, M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_c_b'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
     INTEGER                                            :: ti, n, via, vib, vic, ci, vj, acab, acbc, acca, i
     REAL(dp)                                           :: x, y
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfc, Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nTri    ! to
@@ -2237,6 +2725,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_c_b
   SUBROUTINE calc_matrix_operators_c_c( mesh,        M_ddx, M_ddy)
     ! Calculate all the matrix operators representing the mapping,
@@ -2249,6 +2740,7 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_c_c'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
@@ -2256,6 +2748,9 @@ CONTAINS
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nAc     ! from
     nrows           = mesh%nAc     ! to
@@ -2348,6 +2843,9 @@ CONTAINS
     DEALLOCATE( Nfxc)
     DEALLOCATE( Nfyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_c_c
   
   SUBROUTINE calc_matrix_operators_2nd_order_b_b( mesh, M_ddx, M_ddy, M_d2dx2, M_d2dxdy, M_d2dy2)
@@ -2361,6 +2859,7 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy, M_d2dx2, M_d2dxdy, M_d2dy2
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_2nd_order_b_b'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
@@ -2369,6 +2868,9 @@ CONTAINS
     REAL(dp)                                           :: x, y
     REAL(dp)                                           :: Nfxi, Nfyi, Nfxxi, Nfxyi, Nfyyi
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfxc, Nfyc, Nfxxc, Nfxyc, Nfyyc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
@@ -2511,6 +3013,9 @@ CONTAINS
     DEALLOCATE( Nfxyc)
     DEALLOCATE( Nfyyc)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operators_2nd_order_b_b
   SUBROUTINE calc_matrix_operator_Neumann_BC_b( mesh)
     ! Calculate matrix operator for applying Neumann boundary conditions on border triangles
@@ -2521,8 +3026,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operator_Neumann_BC_b'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: ti, n, tti, tj
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = mesh%nTri    ! from
     nrows           = mesh%nTri    ! to
@@ -2585,6 +3094,9 @@ CONTAINS
     CALL MatAssemblyBegin( mesh%M_Neumann_BC_b, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   mesh%M_Neumann_BC_b, MAT_FINAL_ASSEMBLY, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_matrix_operator_Neumann_BC_b
   
   SUBROUTINE calc_matrix_operators_grid( grid, M_ddx, M_ddy)
@@ -2597,9 +3109,13 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: M_ddx, M_ddy
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_grid'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: n, i, j, n_ip1, n_im1, n_jp1, n_jm1
     REAL(dp)                                           :: v1, v2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ncols           = grid%n      ! from
     nrows           = grid%n      ! to
@@ -2690,6 +3206,9 @@ CONTAINS
     
     CALL MatAssemblyEnd(   M_ddx, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   M_ddy, MAT_FINAL_ASSEMBLY, perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_matrix_operators_grid
   
@@ -2913,13 +3432,16 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_Neumann_BC_direct_a_2D'
     INTEGER                                            :: vi, vvi, vj
     REAL(dp)                                           :: sumd, sumw
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ! First the borders - average over adjacent non-boundary vertices
@@ -2945,8 +3467,7 @@ CONTAINS
         d_a( vi) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_a_2D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border vertex {int_01} has no non-border neighbours!', int_01 = vi)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
@@ -2971,6 +3492,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE apply_Neumann_BC_direct_a_2D
   SUBROUTINE apply_Neumann_BC_direct_a_3D( mesh, d_a)
     ! Directly apply a Neumann boundary condition to a data field
@@ -2982,14 +3506,17 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_a
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_Neumann_BC_direct_a_3D'
     INTEGER                                            :: vi, vvi, vj
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: sumd
     REAL(dp)                                           :: sumw
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_a,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ALLOCATE( sumd( SIZE( d_a,2)))
@@ -3017,8 +3544,7 @@ CONTAINS
         d_a( vi,:) = sumd / sumw
       ELSE
         ! This border vertex has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_a_3D - ERROR: border vertex ', vi, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border vertex {int_01} has no non-border neighbours!', int_01 = vi)
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
@@ -3045,6 +3571,9 @@ CONTAINS
     
     DEALLOCATE( sumd)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE apply_Neumann_BC_direct_a_3D
   SUBROUTINE apply_Neumann_BC_direct_b_2D( mesh, d_b)
     ! Directly apply a Neumann boundary condition to a data field
@@ -3056,13 +3585,16 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_b
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_Neumann_BC_direct_b_2D'
     INTEGER                                            :: ti, tti, tj
     REAL(dp)                                           :: sumd, sumw
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     DO ti = mesh%ti1, mesh%ti2
@@ -3084,12 +3616,14 @@ CONTAINS
         d_b( ti) = sumd / sumw
       ELSE
         ! This border triangle has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_b_2D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border triangle {int_01} has no non-border neighbours!', int_01 = ti)
       END IF
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE apply_Neumann_BC_direct_b_2D
   SUBROUTINE apply_Neumann_BC_direct_b_3D( mesh, d_b)
@@ -3102,14 +3636,17 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_b
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_Neumann_BC_direct_b_3D'
     INTEGER                                            :: ti, tti, tj
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: sumd
     REAL(dp)                                           :: sumw
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_b,1) /= mesh%nTri) THEN
-      IF (par%master) WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: data field is of the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ALLOCATE( sumd( SIZE( d_b,2)))
@@ -3133,14 +3670,16 @@ CONTAINS
         d_b( ti,:) = sumd / sumw
       ELSE
         ! This border triangle has no non-border neighbours, which shouldn't be possible!
-        WRITE(0,*) 'apply_Neumann_BC_direct_b_3D - ERROR: border triangle ', ti, ' has no non-border neighbours!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('border triangle {int_01} has no non-border neighbours!', int_01 = ti)
       END IF
       
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
     
     DEALLOCATE( sumd)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE apply_Neumann_BC_direct_b_3D
 

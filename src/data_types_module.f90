@@ -11,7 +11,8 @@ MODULE data_types_module
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
-                                         type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux
+                                         type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux, &
+                                         type_netcdf_resource_tracker
 
   IMPLICIT NONE
   
@@ -957,15 +958,6 @@ MODULE data_types_module
     INTEGER :: wtcomp_total, wtcomp_ice, wtcomp_thermo, wtcomp_climate, wtcomp_GIA, wtcomp_mesh
     
   END TYPE type_model_region
-  
-  TYPE type_memory_use_tracker
-  
-    ! Memory use history
-    INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
-    INTEGER                             :: n                         ! Number of entries
-    INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
-    
-  END TYPE type_memory_use_tracker
   
 CONTAINS
 

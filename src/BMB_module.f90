@@ -5,10 +5,10 @@ MODULE BMB_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -45,9 +45,8 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'run_BMB_model'
-    INTEGER                                            :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model'
     INTEGER                                            :: vi
     REAL(dp)                                           :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
     REAL(dp)                                           :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
@@ -58,7 +57,8 @@ CONTAINS
     REAL(dp), PARAMETER                                :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1) 
     REAL(dp), PARAMETER                                :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -80,10 +80,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
         CALL sync
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
       
@@ -159,8 +159,7 @@ CONTAINS
         weight = MAX(0._dp, MIN(2._dp, 1._dp + forcing%dT_glob/12._dp + w_ins))
         
       ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
-        WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
       END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
       
       IF (weight < 1._dp) THEN
@@ -178,8 +177,7 @@ CONTAINS
       BMB_shelf_exposed    = w_PD * BMB%BMB_shelf_exposed_PD + w_warm * BMB%BMB_shelf_exposed_warm + w_cold * BMB%BMB_shelf_exposed_cold
       
     ELSE ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
-      WRITE(0,*) '  ERROR: choice_ocean_temperature_model "', TRIM(C%choice_ocean_temperature_model), '" not implemented in run_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ocean_temperature_model "' // TRIM( C%choice_ocean_temperature_model) // '"!')
     END IF ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
     
     ! Use the (interpolated, spatially uniform) ocean temperature and the subtended angle + distance-to-open-ocean
@@ -221,8 +219,8 @@ CONTAINS
     BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
     CALL sync
     
-    n2 = par%mem%n
-    !CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
           
   END SUBROUTINE run_BMB_model
   
@@ -367,10 +365,10 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_BMB_model'
-    INTEGER                                            :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model'
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     IF (par%master) WRITE (0,*) '  Initialising BMB model...'
     
@@ -444,8 +442,8 @@ CONTAINS
       BMB%deep_ocean_threshold_depth = C%deep_ocean_threshold_depth_ANT
     END IF
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
       
   END SUBROUTINE initialise_BMB_model
   SUBROUTINE remap_BMB_model( mesh_old, mesh_new, map, BMB)
@@ -458,7 +456,11 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -471,6 +473,9 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%BMB_shelf,        BMB%wBMB_shelf       )
     CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%sub_angle,        BMB%wsub_angle       )
     CALL reallocate_shared_dp_1D( mesh_new%nV,     BMB%dist_open,        BMB%wdist_open       )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_BMB_model
   

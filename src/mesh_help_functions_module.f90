@@ -5,10 +5,10 @@ MODULE mesh_help_functions_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -51,12 +51,16 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
-    ! Local variables
-    INTEGER                                       :: vi, nVor, n
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
-    REAL(dp)                                      :: Aerr
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_areas'
+    INTEGER                                            :: vi, nVor, n
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
+    REAL(dp)                                           :: Aerr
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ALLOCATE(Vor(mesh%nC_mem+2,2))
 
@@ -77,9 +81,12 @@ MODULE mesh_help_functions_module
 
     ! Check if everything went alright
     IF (par%master) THEN
-      Aerr = ABS(1._dp - SUM(mesh%A ) / ((mesh%xmax-mesh%xmin)*(mesh%ymax-mesh%ymin)))
-      IF (Aerr > 0.0001_dp) WRITE(0,*) 'find_Voronoi_cell_areas - WARNING: sum of Voronoi cell areas doesnt match square area of mesh! (error of ', Aerr/100._dp ,' %)'
+      Aerr = ABS(1._dp - SUM(mesh%A ) / ((mesh%xmax-mesh%xmin)*(mesh%ymax-mesh%ymin))) / 100._dp
+      IF (Aerr > 0.0001_dp) CALL warning('sum of Voronoi cell areas doesnt match square area of mesh! (error of {dp_01} %)', dp_01 = Aerr)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE find_Voronoi_cell_areas 
   SUBROUTINE find_Voronoi_cell_geometric_centres( mesh)
@@ -89,13 +96,17 @@ MODULE mesh_help_functions_module
 
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_geometric_centres'
     INTEGER                                       :: vi, nvi
     REAL(dp), DIMENSION(:,:), ALLOCATABLE         :: Vor
     INTEGER                                       :: nVor
     REAL(dp), DIMENSION(2)                        :: p, q
     REAL(dp)                                      :: LI_mxydx, LI_xydy
     REAL(dp)                                      :: LI_mxydx_seg, LI_xydy_seg
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
         
     mesh%VorGC( mesh%vi1:mesh%vi2,:) = 0._dp
     
@@ -142,6 +153,9 @@ MODULE mesh_help_functions_module
     
     DEALLOCATE(Vor)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE find_Voronoi_cell_geometric_centres
   SUBROUTINE find_connection_widths( mesh)
     ! Find the width of the line separating two connected vertices (equal to the distance
@@ -149,11 +163,15 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
-    ! Local variables
-    INTEGER                                       :: v1, nv2, v2, t1, t2, iti, ti, n
-    LOGICAL                                       :: hasv2
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_connection_widths'
+    INTEGER                                            :: v1, nv2, v2, t1, t2, iti, ti, n
+    LOGICAL                                            :: hasv2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     mesh%Cw(mesh%vi2:mesh%vi2,:) = 0._dp
     CALL sync
@@ -185,8 +203,7 @@ MODULE mesh_help_functions_module
 
         ! We should now have at least a single shared triangle.
         IF (t1==0) THEN
-          WRITE(0,*) 'find_connection_widths: ERROR - Couldnt find a single shared triangle!'
-          STOP
+          CALL crash('couldnt find a single shared triangle!')
         END IF
 
         IF (t2>0) THEN
@@ -205,14 +222,16 @@ MODULE mesh_help_functions_module
           ELSEIF (mesh%Tri_edge_index(t1)==7) THEN
             mesh%Cw(v1,nv2) = MAX(0._dp, mesh%Tricc(t1,1) - mesh%xmin)
           ELSE
-            WRITE(0,*) 'find_connection_widths: ERROR - The only shared triangle isnt a Boundary triangle - this cannot be!'
-            STOP
+            CALL crash('the only shared triangle isnt a Boundary triangle - this cannot be!')
           END IF
         END IF ! IF (t2>0) THEN
 
       END DO ! DO nv2 = 1, mesh%nC(v1)
     END DO ! DO v1 = mesh%vi1, mesh%vi2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_connection_widths   
   SUBROUTINE find_triangle_areas( mesh)
@@ -220,11 +239,15 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
-    ! Local variables
-    INTEGER                                       :: ti
-    REAL(dp), DIMENSION(2)                        :: pa, pb, pc
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_triangle_areas'
+    INTEGER                                            :: ti
+    REAL(dp), DIMENSION(2)                             :: pa, pb, pc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     DO ti = mesh%ti1, mesh%ti2
       pa = mesh%V( mesh%Tri( ti,1),:)
@@ -233,6 +256,9 @@ MODULE mesh_help_functions_module
       CALL find_triangle_area( pa, pb, pc, mesh%TriA(ti))
     END DO ! DO ti = mesh%ti1, mesh%ti2
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_triangle_areas
   SUBROUTINE determine_mesh_resolution( mesh)
@@ -240,10 +266,14 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
-    ! Local variables
-    INTEGER                                       :: vi, vj, ci
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_mesh_resolution'
+    INTEGER                                            :: vi, vj, ci
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     mesh%R(mesh%vi1:mesh%vi2) = mesh%xmax - mesh%xmin
     
@@ -257,6 +287,9 @@ MODULE mesh_help_functions_module
       
     mesh%resolution_min = MINVAL(mesh%R)
     mesh%resolution_max = MAXVAL(mesh%R)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE determine_mesh_resolution
   SUBROUTINE calc_triangle_geometric_centres( mesh)
@@ -264,15 +297,22 @@ MODULE mesh_help_functions_module
     
     IMPLICIT NONE
 
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
-    INTEGER                                       :: ti
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_triangle_geometric_centres'
+    INTEGER                                            :: ti
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO ti = mesh%ti1, mesh%ti2
       CALL update_triangle_geometric_center( mesh, ti)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_triangle_geometric_centres
   

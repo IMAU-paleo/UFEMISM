@@ -3,7 +3,7 @@ MODULE ocean_module
   ! Contains all the routines for calculating the ocean forcing.
 
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parallel_module,                 ONLY: par, sync, cerr, ierr, &
                                              allocate_shared_int_0D, allocate_shared_dp_0D, &
                                              allocate_shared_int_1D, allocate_shared_dp_1D, &
@@ -48,6 +48,12 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     REAL(dp),                            INTENT(IN)    :: time
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     IF     (C%choice_ocean_model == 'none') THEN
       ! No ocean data is used at all
     ELSEIF (C%choice_ocean_model == 'idealised') THEN
@@ -87,6 +93,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model
 
   SUBROUTINE initialise_ocean_model_regional( region, ocean_matrix_global)
@@ -97,6 +106,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
     TYPE(type_ocean_matrix_global),      INTENT(IN)    :: ocean_matrix_global
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_model_regional'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE (0,*) '  Initialising regional ocean model "', TRIM(C%choice_ocean_model), '"...'
 
@@ -129,6 +144,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_model_regional
 
   SUBROUTINE initialise_ocean_model_global( ocean_matrix)
@@ -138,6 +156,12 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_ocean_matrix_global),      INTENT(INOUT) :: ocean_matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_model_global'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE (0,*) ' Initialising global ocean model "', TRIM(C%choice_ocean_model), '"...'
 
@@ -165,6 +189,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_model_global
 
   ! == Idealised ocean configurations
@@ -183,6 +210,12 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     REAL(dp),                            INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_idealised'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Safety
     IF (.NOT. C%choice_ocean_model == 'idealised') THEN
@@ -204,6 +237,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model_idealised
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD( mesh, ocean)
     ! Run the regional ocean model
@@ -216,7 +252,8 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_idealised_MISMIPplus_COLD'
     INTEGER                                            :: vi,k
     REAL(dp)                                           :: w
     REAL(dp), PARAMETER                                :: Tzero     = -1.9_dp    ! Sea surface temperature [degC] (originally T0, but that name is already taken...)
@@ -224,6 +261,9 @@ CONTAINS
     REAL(dp), PARAMETER                                :: Szero     = 33.8_dp    ! Sea surface salinity    [PSU]
     REAL(dp), PARAMETER                                :: Sbot      = 34.55_dp   ! Sea floor   salinity    [PSU]
     REAL(dp), PARAMETER                                :: depth_max = 720._dp    ! Maximum depth for the profile (constant values below that)
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Fill in the temperature and salinity profiles
     DO vi = mesh%vi1, mesh%vi2
@@ -245,6 +285,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM( mesh, ocean)
@@ -258,7 +301,8 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_idealised_MISMIPplus_WARM'
     INTEGER                                            :: vi,k
     REAL(dp)                                           :: w
     REAL(dp), PARAMETER                                :: Tzero     = -1.9_dp    ! Sea surface temperature [degC] (originally T0, but that name is already taken...)
@@ -266,6 +310,9 @@ CONTAINS
     REAL(dp), PARAMETER                                :: Szero     = 33.8_dp    ! Sea surface salinity    [PSU]
     REAL(dp), PARAMETER                                :: Sbot      = 34.7_dp    ! Sea floor   salinity    [PSU]
     REAL(dp), PARAMETER                                :: depth_max = 720._dp    ! Maximum depth for the profile (constant values below that)
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Fill in the temperature and salinity profiles
     DO vi = mesh%vi1, mesh%vi2
@@ -288,6 +335,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM
   SUBROUTINE run_ocean_model_idealised_MISOMIP1( mesh, ocean, time)
     ! Run the regional ocean model
@@ -300,6 +350,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
     REAL(dp),                            INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_idealised_MISOMIP1'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF     (C%MISOMIP1_scenario == 'IceOcean0') THEN
       ! Cold ocean always
@@ -333,6 +389,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model_idealised_MISOMIP1
   SUBROUTINE run_ocean_model_idealised_Reese2018_ANT( mesh, ice, ocean, region_name)
     ! Run the regional ocean model
@@ -348,9 +407,13 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_idealised_Reese2018_ANT'
     INTEGER                                            :: vi
     REAL(dp)                                           :: T,S
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Safety
     IF (.NOT. region_name == 'ANT') THEN
@@ -441,6 +504,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model_idealised_Reese2018_ANT
 
   ! == Uniform warm/cold ocean model (the old ANICE way)
@@ -458,7 +524,12 @@ CONTAINS
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
     REAL(dp),                            INTENT(IN)    :: time
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_uniform_warm_cold'
     REAL(dp) :: dummy_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) 'run_ocean_model_uniform_warm_cold - ERROR: need to port this stuff from the ANICE_legacy BMB routine!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -466,6 +537,9 @@ CONTAINS
     dummy_dp = mesh%nV
     dummy_dp = ocean_matrix%applied%T_ocean_mean
     dummy_dp = time
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_uniform_warm_cold
 
@@ -484,7 +558,11 @@ CONTAINS
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_PD_obs'
     INTEGER                                            :: vi,k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     DO vi = mesh%vi2, mesh%vi2
     DO k = 1, C%nz_ocean
@@ -497,6 +575,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_PD_obs
 
@@ -512,7 +593,11 @@ CONTAINS
     TYPE(type_ocean_matrix_global),      INTENT(IN)    :: ocean_matrix_global
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_model_PD_obs_regional'
     INTEGER                                            :: vi,k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Allocate all the snapshots
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%PD_obs,  name = 'PD_obs')
@@ -542,6 +627,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_model_PD_obs_regional
 
 ! == Ocean matrix with warm and cold snapshots
@@ -563,6 +651,7 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_matrix_warm_cold'
     INTEGER                                            :: vi,k
     REAL(dp)                                           :: a
     REAL(dp)                                           :: CO2
@@ -572,6 +661,9 @@ CONTAINS
     INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot, ww_tot_final
     REAL(dp)                                           :: w_ins_av
     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, w_ins,        ww_ins                  )
@@ -663,6 +755,9 @@ CONTAINS
     CALL deallocate_shared( ww_tot)
     CALL deallocate_shared( ww_tot_final)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_ocean_model_matrix_warm_cold
 
 ! == Initialise the global ocean matrix
@@ -674,6 +769,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_ocean_matrix_global),      INTENT(INOUT) :: ocean_matrix
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_matrix_global'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! Initialise the present-day observed global ocean (e.g. WOA18)
     CALL initialise_ocean_PD_obs_global(   ocean_matrix%PD_obs,   name = 'WOA18')
 
@@ -681,6 +782,9 @@ CONTAINS
     CALL initialise_ocean_snapshot_global( ocean_matrix%GCM_PI,   name = 'ref_PI', nc_filename = C%filename_GCM_ocean_snapshot_PI,   CO2 = 280._dp,                 orbit_time = 0._dp                   )
     CALL initialise_ocean_snapshot_global( ocean_matrix%GCM_warm, name = 'warm',   nc_filename = C%filename_GCM_ocean_snapshot_warm, CO2 = C%matrix_high_CO2_level, orbit_time = C%matrix_warm_orbit_time)
     CALL initialise_ocean_snapshot_global( ocean_matrix%GCM_cold, name = 'cold',   nc_filename = C%filename_GCM_ocean_snapshot_cold, CO2 = C%matrix_low_CO2_level,  orbit_time = C%matrix_cold_orbit_time)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ocean_matrix_global
 
@@ -692,6 +796,12 @@ CONTAINS
     ! Input variables:
     TYPE(type_ocean_snapshot_global),   INTENT(INOUT) :: PD_obs
     CHARACTER(LEN=*),                   INTENT(IN)    :: name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_PD_obs_global'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     PD_obs%name            = name
     PD_obs%netcdf%filename = C%filename_PD_obs_ocean
@@ -722,6 +832,9 @@ CONTAINS
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( PD_obs)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_PD_obs_global
 
   SUBROUTINE initialise_ocean_snapshot_global( snapshot, name, nc_filename, CO2, orbit_time)
@@ -735,6 +848,12 @@ CONTAINS
     CHARACTER(LEN=*),                 INTENT(IN)    :: nc_filename
     REAL(dp),                         INTENT(IN)    :: CO2
     REAL(dp),                         INTENT(IN)    :: orbit_time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_snapshot_global'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Metadata
     snapshot%name            = name
@@ -775,6 +894,9 @@ CONTAINS
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( snapshot)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_snapshot_global
 
   ! == Initialising the regional ocean matrix
@@ -788,7 +910,11 @@ CONTAINS
     TYPE(type_ocean_matrix_global),      INTENT(IN)    :: ocean_matrix_global
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_matrix_regional'
     INTEGER                                            :: vi,k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Allocate all the snapshots
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%PD_obs,   name = 'PD_obs')
@@ -836,6 +962,9 @@ CONTAINS
     CALL allocate_shared_dp_2D(  region%mesh%nV, region%ocean_matrix%applied%nw_tot_history, region%ocean_matrix%applied%w_tot_history, region%ocean_matrix%applied%ww_tot_history)
     region%ocean_matrix%applied%w_tot_history = 0._dp ! Initiate at cold conditions
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_matrix_regional
 
   SUBROUTINE allocate_ocean_snapshot_regional( mesh, ocean, name)
@@ -848,6 +977,12 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
     CHARACTER(LEN=*),                    INTENT(IN)    :: name
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_ocean_snapshot_regional'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ocean%name = name
 
     ! Allocate shared memory
@@ -858,6 +993,9 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean%S_ocean_ext,      ocean%wS_ocean_ext     )
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean%T_ocean_corr_ext, ocean%wT_ocean_corr_ext)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean%S_ocean_corr_ext, ocean%wS_ocean_corr_ext)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE allocate_ocean_snapshot_regional
 
@@ -872,8 +1010,12 @@ CONTAINS
     TYPE(type_ocean_matrix_regional),    INTENT(IN)    :: ocean_matrix
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'correct_GCM_bias_ocean'
     INTEGER                                            :: vi,k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     DO k = 1, C%nz_ocean
     DO vi = mesh%vi1, mesh%vi2
@@ -882,6 +1024,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE correct_GCM_bias_ocean
 
@@ -898,10 +1043,14 @@ CONTAINS
     TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocean_glob
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_global_ocean_data_to_UFEMISM_vertical_grid'
     INTEGER                                       :: i,j,k
     INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: z_mask_old, z_mask_new
     REAL(dp)                                      :: z_floor
     REAL(dp)                                      :: NaN
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! A trick
     NaN = -1._dp
@@ -968,12 +1117,21 @@ CONTAINS
     DEALLOCATE( z_mask_old)
     DEALLOCATE( z_mask_new)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE map_global_ocean_data_to_UFEMISM_vertical_grid
 
   SUBROUTINE initialise_ocean_vertical_grid
     ! Set up the vertical grid used for ocean data
 
     IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_vertical_grid'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (C%choice_ocean_vertical_grid == 'regular') THEN
       CALL initialise_ocean_vertical_grid_regular
@@ -982,6 +1140,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ocean_vertical_grid
   SUBROUTINE initialise_ocean_vertical_grid_regular
     ! Set up the vertical grid used for ocean data - regular grid
@@ -989,7 +1150,11 @@ CONTAINS
     IMPLICIT NONE
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_vertical_grid_regular'
     INTEGER                                       :: k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Determine the number of vertical layers to be used
     C%nz_ocean = 1 + FLOOR( C%ocean_vertical_grid_max_depth / C%ocean_regular_grid_dz)
@@ -1001,6 +1166,9 @@ CONTAINS
     DO k = 1, C%nz_ocean
       C%z_ocean( k) = REAL(k-1,dp) * C%ocean_regular_grid_dz
     END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ocean_vertical_grid_regular
 
@@ -1026,10 +1194,14 @@ CONTAINS
     CHARACTER(LEN=256),                  INTENT(IN)    :: filename_ocean_glob
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_extrapolated_ocean_data'
     LOGICAL                                            :: foundmatch
     TYPE(type_highres_ocean_data)                      :: hires
     INTEGER                                            :: i,j,n
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ===== Initialise the high-resolution extrapolated ocean data =====
     ! ==================================================================
@@ -1113,18 +1285,27 @@ CONTAINS
     CALL deallocate_shared( hires%wT_ocean             )
     CALL deallocate_shared( hires%wS_ocean             )
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE get_extrapolated_ocean_data
 
   SUBROUTINE get_hires_ocean_data_from_file( mesh, hires, hires_foldername)
     ! Read high-resolution extrapolated ocean data from an external file
+
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
     CHARACTER(LEN=256),                  INTENT(IN)    :: hires_foldername
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_hires_ocean_data_from_file'
     INTEGER                                            :: i,j
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Check if the NetCDF file has all the required dimensions and variables
     CALL allocate_shared_int_0D( hires%grid%nx,  hires%grid%wnx)
@@ -1184,6 +1365,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE get_hires_ocean_data_from_file
 
   SUBROUTINE write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, hires_foldername)
@@ -1200,7 +1384,11 @@ CONTAINS
     CHARACTER(LEN=256),                  INTENT(IN)    :: hires_foldername
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_hires_extrapolated_ocean_data_to_file'
     CHARACTER(LEN=256)                                 :: hires_ocean_filename
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Create a new folder where the new extrapolated ocean file will be stored.
     IF (par%master) CALL system('mkdir ' // TRIM(hires_foldername))
@@ -1212,6 +1400,9 @@ CONTAINS
     IF (par%master) hires_ocean_filename = TRIM(hires_foldername)//'/extrapolated_ocean_data.nc'
     IF (par%master) WRITE(0,*) '    Writing extrapolated ocean data to file "', TRIM(hires_ocean_filename), '"...'
     CALL create_extrapolated_ocean_file( hires, hires_ocean_filename)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_hires_extrapolated_ocean_data_to_file
 
@@ -1230,6 +1421,7 @@ CONTAINS
     CHARACTER(LEN=256),                  INTENT(OUT)   :: hires_foldername
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_for_matching_ocean_header'
     INTEGER                                            :: cerr, ierr
     CHARACTER(LEN=256)                                 :: header_filename
     LOGICAL                                            :: header_exists
@@ -1244,6 +1436,9 @@ CONTAINS
     REAL(dp)                                           :: lambda_M_read
     REAL(dp)                                           :: phi_M_read
     REAL(dp)                                           :: alpha_stereo_read
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) THEN
 
@@ -1319,6 +1514,9 @@ CONTAINS
     CALL MPI_BCAST( header_filename,          256, MPI_CHAR,    0, MPI_COMM_WORLD, ierr)
     CALL MPI_BCAST( folder_i,                 1,   MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE check_for_matching_ocean_header
   SUBROUTINE read_ocean_header( &
             header_filename,                    &
@@ -1348,6 +1546,7 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: alpha_stereo
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_ocean_header'
     INTEGER                                            :: ios, cerr, ierr
 
     ! The NAMELIST that's used to read the external header file.
@@ -1360,6 +1559,9 @@ CONTAINS
                      lambda_M,                            &
                      phi_M,                               &
                      alpha_stereo
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     OPEN( UNIT = 29, FILE = TRIM(header_filename), STATUS='OLD', ACTION='READ', iostat=ios)
     IF (ios /= 0) THEN
@@ -1376,6 +1578,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE read_ocean_header
   SUBROUTINE write_ocean_header( hires, filename_ocean_glob, hires_foldername)
 
@@ -1387,8 +1592,12 @@ CONTAINS
     CHARACTER(LEN=256),                  INTENT(IN)    :: hires_foldername
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_ocean_header'
     INTEGER, DIMENSION(8)                              :: datevec
     CHARACTER(LEN=256)                                 :: header_filename
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Let the Master do the work
     IF (par%master) THEN
@@ -1434,6 +1643,9 @@ CONTAINS
     END IF ! IF (par%master) THEN
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE write_ocean_header
 
   SUBROUTINE map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires)
@@ -1449,12 +1661,16 @@ CONTAINS
     TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_extrapolate_hires_ocean_data'
     INTEGER                                            :: vi,i,j
     REAL(dp), DIMENSION(:    ), POINTER                ::  basin_ID_dp_lores
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  basin_ID_dp_hires,  basin_ID_dp_hires_ext
     INTEGER                                            :: wbasin_ID_dp_lores, wbasin_ID_dp_hires, wbasin_ID_dp_hires_ext
     INTEGER                                            :: ii,jj,n
     LOGICAL                                            :: foundit
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ===== Read the high-resolution geometry data and generate the hi-res grid based on that=====
     ! ============================================================================================
@@ -1663,16 +1879,22 @@ CONTAINS
     CALL deallocate_shared( hires%wbasin_ID)
     CALL deallocate_shared( hires%wnbasins )
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE map_and_extrapolate_hires_ocean_data
   SUBROUTINE extend_regional_ocean_data_to_cover_domain( hires)
     ! Extend global ocean data over the whole grid, based on the procedure outlined in
     ! Jourdain, N. C., Asay-Davis, X., Hattermann, T., Straneo, F., Seroussi, H., Little, C. M., & Nowicki, S. (2020).
     ! A protocol for calculating basal melt rates in the ISMIP6 Antarctic ice sheet projections. The Cryosphere, 14(9), 3111-3134.
 
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_regional_ocean_data_to_cover_domain'
     INTEGER                                            :: i,j,k
     REAL(dp)                                           :: NaN, Hs, z_bedrock, z_icebase, z
     INTEGER,  DIMENSION(:,:,:), POINTER                ::  mask_wetdry,  mask_hasdata
@@ -1684,6 +1906,9 @@ CONTAINS
     INTEGER                                            :: wT_ocean_ext, wS_ocean_ext
 
     LOGICAL,  PARAMETER                                :: verbose = .FALSE.
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Useful
     NaN = -1._dp
@@ -2052,6 +2277,9 @@ CONTAINS
     CALL deallocate_shared( wT_ocean_ext )
     CALL deallocate_shared( wS_ocean_ext )
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE extend_regional_ocean_data_to_cover_domain
 
 ! == Remap ocean fields after mesh update
@@ -2070,7 +2298,11 @@ CONTAINS
     TYPE(type_ocean_matrix_regional),    INTENT(INOUT) :: ocean_matrix
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ocean_model'
     INTEGER                                            :: vi,k
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE (0,*) '  Reallocating regional ocean model...'
 
@@ -2161,6 +2393,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE remap_ocean_model
 
   SUBROUTINE reallocate_subocean( mesh_new, ocean_reg)
@@ -2172,6 +2407,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean_reg
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'reallocate_subocean'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! Reallocate shared memory
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz_ocean, ocean_reg%T_ocean,          ocean_reg%wT_ocean         )
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz_ocean, ocean_reg%S_ocean,          ocean_reg%wS_ocean         )
@@ -2179,6 +2420,9 @@ CONTAINS
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz_ocean, ocean_reg%S_ocean_ext,      ocean_reg%wS_ocean_ext     )
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz_ocean, ocean_reg%T_ocean_corr_ext, ocean_reg%wT_ocean_corr_ext)
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz_ocean, ocean_reg%S_ocean_corr_ext, ocean_reg%wS_ocean_corr_ext)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE reallocate_subocean
 
@@ -2195,10 +2439,14 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(INOUT) :: ocean_reg
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ocean_data'
     LOGICAL                                            :: folder_exists
     TYPE(type_highres_ocean_data)                      :: hires
     INTEGER                                            :: i,j,n
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ===== Read the high-resolution extrapolated ocean data =====
     ! ============================================================
@@ -2275,6 +2523,9 @@ CONTAINS
     CALL deallocate_shared( hires%grid%wn2ij           )
     CALL deallocate_shared( hires%wT_ocean             )
     CALL deallocate_shared( hires%wS_ocean             )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_ocean_data
 

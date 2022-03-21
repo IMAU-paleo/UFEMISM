@@ -5,10 +5,10 @@ MODULE bedrock_ELRA_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -44,7 +44,11 @@ CONTAINS
     TYPE(type_model_region),         INTENT(INOUT)     :: region
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ELRA_model'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -65,10 +69,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
         region%t_last_ELRA = region%time
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_ELRA_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -85,6 +89,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE run_ELRA_model
   SUBROUTINE calculate_ELRA_bedrock_deformation_rate( mesh, grid, ice)
     ! Use the ELRA model to update bedrock deformation rates.
@@ -97,8 +104,12 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_ELRA_bedrock_deformation_rate'
     INTEGER                                            :: vi,i,j,n,k,l
     REAL(dp)                                           :: Lr
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Influence radius of the lithospheric rigidity
     Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
@@ -179,6 +190,9 @@ CONTAINS
     ! Map the deformation rate back to the model mesh
     CALL map_grid2mesh_2D( grid, mesh, ice%dHb_dt_grid, ice%dHb_dt_a)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
   
   SUBROUTINE initialise_ELRA_model( mesh, grid, ice, refgeo_PD)
@@ -193,12 +207,12 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                       :: routine_name = 'initialise_ELRA_model'
-    INTEGER                                            :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ELRA_model'
     INTEGER                                            :: i,j,n,k,l
     REAL(dp)                                           :: Lr, r
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -218,10 +232,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
           C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in initialise_ELRA_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -270,8 +284,8 @@ CONTAINS
     
     CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
         
   END SUBROUTINE initialise_ELRA_model
   SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
@@ -285,7 +299,11 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ELRA_PD_reference_load'
     INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Calculate PD reference load on the mesh
     DO vi = mesh%vi1, mesh%vi2
@@ -296,6 +314,9 @@ CONTAINS
       END IF
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_ELRA_PD_reference_load
   SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, refgeo_PD, grid)
@@ -310,7 +331,11 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ELRA_model'
     INTEGER                                            :: int_dummy
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Exceptions for benchmark experiments
     IF (C%do_benchmark_experiment) THEN
@@ -324,10 +349,10 @@ CONTAINS
           C%choice_benchmark_experiment == 'Bueler' .OR. &
           C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
           C%choice_benchmark_experiment == 'MISMIP_mod') THEN
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in remap_ELRA_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
       END IF
     END IF ! IF (C%do_benchmark_experiment) THEN
     
@@ -340,6 +365,9 @@ CONTAINS
     
     ! Recalculate the PD reference load on the GIA grid
     CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, refgeo_PD)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_ELRA_model
 

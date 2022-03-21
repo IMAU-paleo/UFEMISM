@@ -5,10 +5,10 @@ MODULE UFEMISM_main_model
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -53,17 +53,22 @@ CONTAINS
   SUBROUTINE run_model( region, climate_matrix_global, t_end)
     ! Run the model until t_end (usually a 100 years further)
 
-    IMPLICIT NONE  
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),           INTENT(INOUT)     :: region
     TYPE(type_climate_matrix_global),  INTENT(INOUT)     :: climate_matrix_global
     REAL(dp),                          INTENT(IN)        :: t_end
 
-    ! Local variables
-    INTEGER                                              :: it
-    REAL(dp)                                             :: meshfitness
-    REAL(dp)                                             :: t1, t2
+    ! Local variables:
+    CHARACTER(LEN=256)                            :: routine_name
+    INTEGER                                       :: it
+    REAL(dp)                                      :: meshfitness
+    REAL(dp)                                      :: t1, t2
+
+    ! Add routine to path
+    routine_name = 'run_model('  //  region%name  //  ')'
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), & 
@@ -224,6 +229,9 @@ CONTAINS
     ! used for writing to text output and in the inverse routine
     CALL calculate_icesheet_volume_and_area( region)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_model
 
   ! Update the mesh and everything else that needs it
@@ -238,8 +246,12 @@ CONTAINS
     TYPE(type_model_region),             INTENT(INOUT) :: region
     TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_model_update_mesh'
     TYPE(type_remapping_mesh_mesh)                     :: map
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Create a new mesh
     CALL create_new_mesh( region)
@@ -272,16 +284,32 @@ CONTAINS
     CALL reallocate_shared_int_1D( region%mesh_new%nV, region%ice%basin_ID, region%ice%wbasin_ID)
     CALL initialise_basins( region%mesh_new, region%ice%basin_ID, region%ice%nbasins, region%name)
 
-    ! Reallocate and remap reference geometries
+    ! Reallocate memory for reference geometries
     CALL deallocate_shared( region%refgeo_init%wHi )
     CALL deallocate_shared( region%refgeo_init%wHb )
     CALL deallocate_shared( region%refgeo_init%wHs )
+
     CALL deallocate_shared( region%refgeo_PD%wHi   )
     CALL deallocate_shared( region%refgeo_PD%wHb   )
     CALL deallocate_shared( region%refgeo_PD%wHs   )
+
     CALL deallocate_shared( region%refgeo_GIAeq%wHi)
     CALL deallocate_shared( region%refgeo_GIAeq%wHb)
     CALL deallocate_shared( region%refgeo_GIAeq%wHs)
+
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hi , region%refgeo_init%wHi )
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
+
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
+
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
+    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
+
+    ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
     ! Remap all the submodels
@@ -331,6 +359,9 @@ CONTAINS
     region%do_BMB         = .TRUE.
     region%do_ELRA        = .TRUE.
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_model_update_mesh
 
   ! Initialise the entire model region - read initial and PD data, create the mesh,
@@ -345,11 +376,12 @@ CONTAINS
     TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
     TYPE(type_ocean_matrix_global),   INTENT(INOUT)     :: ocean_matrix_global
 
-    ! Local variables
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model'
-    INTEGER                                       :: n1, n2
+    ! Local variables:
+    CHARACTER(LEN=256)                            :: routine_name
 
-    n1 = par%mem%n
+    ! Add routine to path
+    routine_name = 'initialise_model('  //  name  //  ')'
+    CALL init_routine( routine_name)
 
     ! ===== Basic initialisation =====
     ! ================================
@@ -387,6 +419,20 @@ CONTAINS
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
 
+    ! Allocate memory for reference data on the mesh
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hi , region%refgeo_init%wHi )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
+
+    ! Map data from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh)
 
     ! ===== The different square grids =====
@@ -501,12 +547,10 @@ CONTAINS
 
     ! IF (par%master) CALL create_text_output_files( region)
 
-    ! ===== Memory log =====
-    ! ======================
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
-
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_model
   SUBROUTINE allocate_region_timers_and_scalars( region)
@@ -519,6 +563,12 @@ CONTAINS
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_region_timers_and_scalars'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! Timers and time steps
     ! =====================
     
@@ -660,6 +710,9 @@ CONTAINS
     CALL allocate_shared_dp_0D( region%tcomp_GIA                    , region%wtcomp_GIA                    )
     CALL allocate_shared_dp_0D( region%tcomp_mesh                   , region%wtcomp_mesh                   )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 65)
+
   END SUBROUTINE allocate_region_timers_and_scalars
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
     ! Initialise a regular square grid enveloping this model region
@@ -672,13 +725,13 @@ CONTAINS
     REAL(dp),                   INTENT(IN)        :: dx
     
     ! Local variables:
-    CHARACTER(LEN=64), PARAMETER                  :: routine_name = 'initialise_model_square_grid'
-    INTEGER                                       :: n1, n2
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_model_square_grid'
     REAL(dp)                                      :: xmid, ymid
     INTEGER                                       :: nsx, nsy, i, j, n
     REAL(dp), PARAMETER                           :: tol = 1E-9_dp
     
-    n1 = par%mem%n
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     nsx = 0
     nsy = 0
@@ -779,8 +832,8 @@ CONTAINS
     CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
     CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
     
-    n2 = par%mem%n
-    CALL write_to_memory_log( routine_name, n1, n2)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 15)
     
   END SUBROUTINE initialise_model_square_grid
   
@@ -789,11 +842,17 @@ CONTAINS
   
     IMPLICIT NONE  
     
+    ! In/output variables:
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_icesheet_volume_and_area'
     INTEGER                                       :: vi
     REAL(dp)                                      :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ice_area                   = 0._dp
     ice_volume                 = 0._dp
     ice_volume_above_flotation = 0._dp
@@ -822,16 +881,25 @@ CONTAINS
     IF (par%master) region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calculate_icesheet_volume_and_area
   SUBROUTINE calculate_PD_sealevel_contribution( region)
   
     IMPLICIT NONE  
     
+    ! In/output variables:
     TYPE(type_model_region),    INTENT(INOUT)     :: region
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_PD_sealevel_contribution'
     INTEGER                                       :: i, j
     REAL(dp)                                      :: ice_volume, thickness_above_flotation, ice_volume_above_flotation
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ice_volume                 = 0._dp
     ice_volume_above_flotation = 0._dp
     
@@ -855,6 +923,9 @@ CONTAINS
     CALL MPI_REDUCE( ice_volume                , region%ice_volume_PD,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation_PD, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calculate_PD_sealevel_contribution
   
 !  ! Create and write to this region's text output files - both the region-wide one,

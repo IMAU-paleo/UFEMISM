@@ -6,10 +6,10 @@ MODULE mesh_mapping_module
 #include <petsc/finclude/petscksp.h>
   USE mpi
   USE petscksp
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr, MatDestroy
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -54,14 +54,17 @@ CONTAINS
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_2D'
     INTEGER                                            :: n1,n2,n,i,j
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
     INTEGER                                            :: wd_grid_vec
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
-      IF (par%master) WRITE(0,*) 'map_grid2mesh_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -85,6 +88,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_grid2mesh_2D
   SUBROUTINE map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
     ! Map a 3-D data field from the grid to the mesh using 2nd-order conservative remapping.
@@ -98,14 +104,17 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_3D'
     INTEGER                                            :: n1,n2,n,i,j,nz
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
     INTEGER                                            :: wd_grid_vec
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_grid,3) /= SIZE( d_mesh,2)) THEN
-      IF (par%master) WRITE(0,*) 'map_grid2mesh_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     nz = SIZE( d_mesh,2)
@@ -131,6 +140,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_grid2mesh_3D
   SUBROUTINE map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
     ! Map a 2-D data field from the mesh to the grid using 2nd-order conservative remapping.
@@ -144,14 +156,17 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_grid
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_2D'
     INTEGER                                            :: n1,n2,n,i,j
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
     INTEGER                                            :: wd_grid_vec
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
-      IF (par%master) WRITE(0,*) 'map_mesh2grid_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -172,6 +187,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_mesh2grid_2D
   SUBROUTINE map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
     ! Map a 3-D data field from the mesh to the grid using 2nd-order conservative remapping.
@@ -185,14 +203,17 @@ CONTAINS
     REAL(dp), DIMENSION(:,:,:),          INTENT(OUT)   :: d_grid
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_3D'
     INTEGER                                            :: n1,n2,n,i,j,nz
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
     INTEGER                                            :: wd_grid_vec
     
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_mesh,2) /= SIZE( d_grid,3)) THEN
-      IF (par%master) WRITE(0,*) 'map_mesh2grid_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     nz = SIZE( d_grid,3)
@@ -215,6 +236,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid_vec)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_mesh2grid_3D
   
   ! == Subroutine for mapping data from a global lat-lon grid and the mesh ==
@@ -225,13 +249,18 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                         INTENT(IN)    :: mesh
-    TYPE(type_latlongrid),                   INTENT(IN)    :: grid
-    TYPE(type_remapping_latlon2mesh),        INTENT(INOUT) :: map
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_latlongrid),               INTENT(IN)    :: grid
+    TYPE(type_remapping_latlon2mesh),    INTENT(INOUT) :: map
     
-    INTEGER                                                :: vi
-    INTEGER                                                :: il,iu,jl,ju
-    REAL(dp)                                               :: wil,wiu,wjl,wju
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_remapping_arrays_glob_mesh'
+    INTEGER                                            :: vi
+    INTEGER                                            :: il,iu,jl,ju
+    REAL(dp)                                           :: wil,wiu,wjl,wju
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory for the mapping arrays
     CALL allocate_shared_int_1D( mesh%nV, map%ilat1, map%wilat1)
@@ -282,6 +311,9 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE create_remapping_arrays_glob_mesh
   SUBROUTINE map_latlon2mesh_2D( mesh, map, d_grid, d_mesh)
     ! Map data from a global lat-lon grid to the model mesh using bilinear interpolation
@@ -289,15 +321,19 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                         INTENT(IN)    :: mesh
-    TYPE(type_remapping_latlon2mesh),        INTENT(IN)    :: map
-    REAL(dp), DIMENSION(:,:  ),              INTENT(IN)    :: d_grid
-    REAL(dp), DIMENSION(:    ),              INTENT(OUT)   :: d_mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_remapping_latlon2mesh),    INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
     
     ! Local variables:
-    INTEGER                                                :: vi
-    INTEGER                                                :: il,iu,jl,ju
-    REAL(dp)                                               :: wil,wiu,wjl,wju
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_latlon2mesh_2D'
+    INTEGER                                            :: vi
+    INTEGER                                            :: il,iu,jl,ju
+    REAL(dp)                                           :: wil,wiu,wjl,wju
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
     
@@ -318,6 +354,9 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_latlon2mesh_2D
   SUBROUTINE map_latlon2mesh_3D( mesh, map, d_grid, d_mesh)
     ! Map data from a global lat-lon grid to the model mesh using bilinear interpolation
@@ -325,15 +364,19 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                         INTENT(IN)    :: mesh
-    TYPE(type_remapping_latlon2mesh),        INTENT(IN)    :: map
-    REAL(dp), DIMENSION(:,:,:),              INTENT(IN)    :: d_grid
-    REAL(dp), DIMENSION(:,:  ),              INTENT(OUT)   :: d_mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_remapping_latlon2mesh),    INTENT(IN)    :: map
+    REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
     
     ! Local variables:
-    INTEGER                                                :: vi
-    INTEGER                                                :: il,iu,jl,ju
-    REAL(dp)                                               :: wil,wiu,wjl,wju
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_latlon2mesh_3D'
+    INTEGER                                            :: vi
+    INTEGER                                            :: il,iu,jl,ju
+    REAL(dp)                                           :: wil,wiu,wjl,wju
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
     
@@ -354,13 +397,22 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE map_latlon2mesh_3D
   SUBROUTINE deallocate_remapping_arrays_glob_mesh( map)
     
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_remapping_latlon2mesh),        INTENT(INOUT) :: map
+    TYPE(type_remapping_latlon2mesh),    INTENT(INOUT) :: map
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_arrays_glob_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL deallocate_shared( map%wilat1)
     CALL deallocate_shared( map%wilat2)
@@ -370,6 +422,9 @@ CONTAINS
     CALL deallocate_shared( map%wwlat2)
     CALL deallocate_shared( map%wwlon1)
     CALL deallocate_shared( map%wwlon2)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE deallocate_remapping_arrays_glob_mesh
   
@@ -387,9 +442,18 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
     CHARACTER(LEN=*),                    INTENT(IN)    :: method
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_2D'
     REAL(dp), DIMENSION(:    ), POINTER                :: d_temp
     INTEGER                                            :: w_temp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Safety
+    IF (SIZE( d,1) /= mesh_src%nV) THEN
+      CALL crash('data field is the wrong size!')
+    END IF
     
     ! Allocate temporary memory
     CALL allocate_shared_dp_1D( mesh_src%nV, d_temp, w_temp)
@@ -413,12 +477,14 @@ CONTAINS
     ELSEIF (method == 'cons_2nd_order') THEN
       CALL multiply_PETSc_matrix_with_vector_1D( map%M_cons_2nd_order,    d_temp, d)
     ELSE
-      IF (par%master) WRITE(0,*) ' remap_field_dp_2D - ERROR: "method" can only be "trilin", "nearest_neighbour", "cons_1st_order" or "cons_2nd_order"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown remapping method "' // TRIM( method) // '"!')
     END IF
     
     ! Deallocate temporary memory
     CALL deallocate_shared( w_temp)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_2D
   SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, map, d, w, method)
@@ -434,9 +500,18 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
     CHARACTER(LEN=*),                    INTENT(IN)    :: method
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_3D'
     REAL(dp), DIMENSION(:,:  ), POINTER                :: d_temp
     INTEGER                                            :: w_temp, nz
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Safety
+    IF (SIZE( d,1) /= mesh_src%nV) THEN
+      CALL crash('data field is the wrong size!')
+    END IF
     
     nz = SIZE( d,2)
     
@@ -462,12 +537,14 @@ CONTAINS
     ELSEIF (method == 'cons_2nd_order') THEN
       CALL multiply_PETSc_matrix_with_vector_2D( map%M_cons_2nd_order,    d_temp, d)
     ELSE
-      IF (par%master) WRITE(0,*) ' remap_field_dp_3D - ERROR: "method" can only be "trilin", "nearest_neighbour", "cons_1st_order" or "cons_2nd_order"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data fields are the wrong size!')
     END IF
     
     ! Deallocate temporary memory
     CALL deallocate_shared( w_temp)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_3D
   
@@ -481,19 +558,22 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                         INTENT(IN)    :: mesh
-    TYPE(type_grid),                         INTENT(IN)    :: grid
-    REAL(dp), DIMENSION(:    ),              INTENT(INOUT) :: d_mesh
-    REAL(dp),                                INTENT(IN)    :: r
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d_mesh
+    REAL(dp),                            INTENT(IN)    :: r
     
     ! Local variables:
-    REAL(dp), DIMENSION(:,:  ), POINTER                    :: d_grid
-    INTEGER                                                :: wd_grid
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_2D'
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_grid
+    INTEGER                                            :: wd_grid
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'smooth_Gaussian_2D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     ! Allocate shared memory
@@ -511,6 +591,9 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE smooth_Gaussian_2D
   SUBROUTINE smooth_Gaussian_3D( mesh, grid, d_mesh, r)
     ! Use 2nd-order conservative remapping to map the 3-D data from the mesh
@@ -521,19 +604,22 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                         INTENT(IN)    :: mesh
-    TYPE(type_grid),                         INTENT(IN)    :: grid
-    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: d_mesh
-    REAL(dp),                                INTENT(IN)    :: r
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d_mesh
+    REAL(dp),                            INTENT(IN)    :: r
     
     ! Local variables:
-    REAL(dp), DIMENSION(:,:,:), POINTER                    :: d_grid
-    INTEGER                                                :: wd_grid, nz
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_3D'
+    REAL(dp), DIMENSION(:,:,:), POINTER                :: d_grid
+    INTEGER                                            :: wd_grid, nz
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Safety
     IF (SIZE( d_mesh,1) /= mesh%nV) THEN
-      IF (par%master) WRITE(0,*) 'smooth_Gaussian_3D - ERROR: data fields are the wrong size!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('data field is the wrong size!')
     END IF
     
     nz = SIZE( d_mesh,2)
@@ -553,17 +639,20 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wd_grid)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE smooth_Gaussian_3D
   
 ! == Calculating the remapping matrices
   SUBROUTINE calc_remapping_operator_grid2mesh( grid, mesh)
     ! Calculate the remapping operators from the square grid to the mesh using 2nd-order conservative remapping
     ! 
-    ! NOTE: the current implementation is a compromise. For "small" triangles (defined as being having an area smaller
+    ! NOTE: the current implementation is a compromise. For "small" triangles (defined as having an area smaller
     !       than four times that of a square grid cell), a 2nd-order conservative remapping operation is calculated
     !       explicitly, using the line integrals around area of overlap. However, for "large" triangles (defined as
     !       all the rest), the result is generally very close to simply averaging over all the overlapping grid cells.
-    !       Explicitly calculating the line integrals around all the grid cells is prohibitively slow, so this
+    !       Explicitly calculating the line integrals around all the grid cells is very slow, so this
     !       seems like a reasonable compromise.
     
     IMPLICIT NONE
@@ -572,7 +661,8 @@ CONTAINS
     TYPE(type_grid),                     INTENT(INOUT) :: grid
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_grid2mesh'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
@@ -596,9 +686,9 @@ CONTAINS
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: grid_M_ddx, grid_M_ddy
     TYPE(tMat)                                         :: M1, M2
-    REAL(dp)                                           :: tstart, tcomp
     
-    tstart = MPI_WTIME()
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
   ! == Initialise the three matrices using the native UFEMISM CSR-matrix format
   ! ===========================================================================
@@ -886,8 +976,8 @@ CONTAINS
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
     
-    tcomp = MPI_WTIME() - tstart
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - done in ', tcomp, ' s!'
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_remapping_operator_grid2mesh
   SUBROUTINE calc_remapping_operator_mesh2grid( mesh, grid)
@@ -906,7 +996,8 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(INOUT) :: grid
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_mesh2grid'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER,  DIMENSION(:,:  ), POINTER                ::  overlaps_with_small_triangle,  containing_triangle
@@ -933,9 +1024,9 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: M1, M2
-    REAL(dp)                                           :: tstart, tcomp
     
-    tstart = MPI_WTIME()
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
   ! == Find all grid cells that overlap with small triangles
   ! ========================================================
@@ -1294,8 +1385,8 @@ CONTAINS
     CALL MatDestroy( M1, perr)
     CALL MatDestroy( M2, perr)
     
-    tcomp = MPI_WTIME() - tstart
-    !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - done in ', tcomp, ' s!'
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_remapping_operator_mesh2grid
   SUBROUTINE calc_remapping_operators_mesh_mesh( mesh_src, mesh_dst, map)
@@ -1308,9 +1399,18 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     TYPE(type_remapping_mesh_mesh),      INTENT(INOUT) :: map
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
     CALL calc_remapping_operators_mesh_mesh_trilin(            mesh_src, mesh_dst, map%M_trilin)
     CALL calc_remapping_operators_mesh_mesh_nearest_neighbour( mesh_src, mesh_dst, map%M_nearest_neighbour)
     CALL calc_remapping_operators_mesh_mesh_conservative(      mesh_src, mesh_dst, map%M_cons_1st_order, map%M_cons_2nd_order)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_remapping_operators_mesh_mesh
   SUBROUTINE calc_remapping_operators_mesh_mesh_trilin( mesh_src, mesh_dst, M_trilin)
@@ -1323,13 +1423,17 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     TYPE(tMat),                          INTENT(INOUT) :: M_trilin
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_trilin'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: vi_dst
     REAL(dp), DIMENSION(2)                             :: p
     INTEGER                                            :: ti_src, via, vib, vic
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc
     REAL(dp)                                           :: Atri_abp, Atri_bcp, Atri_cap, Atri_abc, wa, wb, wc
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
   ! == Use PETSc routines to initialise the matrix object
   ! =====================================================
@@ -1398,6 +1502,9 @@ CONTAINS
     CALL MatAssemblyBegin( M_trilin, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   M_trilin, MAT_FINAL_ASSEMBLY, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_remapping_operators_mesh_mesh_trilin
   SUBROUTINE calc_remapping_operators_mesh_mesh_nearest_neighbour( mesh_src, mesh_dst, M_nearest_neighbour)
     ! Calculate the nearest-neighbour interpolation operator from mesh_src to mesh_dst
@@ -1409,11 +1516,15 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     TYPE(tMat),                          INTENT(INOUT) :: M_nearest_neighbour
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_nearest_neighbour'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, istart, iend
     INTEGER                                            :: vi_dst
     REAL(dp), DIMENSION(2)                             :: p
     INTEGER                                            :: vi_src
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
   ! == Use PETSc routines to initialise the matrix object
   ! =====================================================
@@ -1462,6 +1573,9 @@ CONTAINS
     CALL MatAssemblyBegin( M_nearest_neighbour, MAT_FINAL_ASSEMBLY, perr)
     CALL MatAssemblyEnd(   M_nearest_neighbour, MAT_FINAL_ASSEMBLY, perr)
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_remapping_operators_mesh_mesh_nearest_neighbour
   SUBROUTINE calc_remapping_operators_mesh_mesh_conservative( mesh_src, mesh_dst, M_cons_1st_order, M_cons_2nd_order)
     ! Calculate the 1st- and 2nd-order conservative remapping operators from mesh_src to mesh_dst
@@ -1473,7 +1587,8 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh_dst
     TYPE(tMat),                          INTENT(INOUT) :: M_cons_1st_order, M_cons_2nd_order
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operators_mesh_mesh_conservative'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
     INTEGER                                            :: nnz_per_row_max
@@ -1487,6 +1602,9 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
     TYPE(tMat)                                         :: M1, M2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Integrate around the Voronoi cells of the destination mesh through the triangles of the source mesh
     count_coincidences = .TRUE.
@@ -1592,6 +1710,9 @@ CONTAINS
     
     !IF (par%master) WRITE(0,*) 'calc_remapping_operators_mesh_mesh_conservative - done!'
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE calc_remapping_operators_mesh_mesh_conservative
   
   ! Integrate around triangles/Voronoi cells through triangles/Voronoi cells
@@ -1608,12 +1729,16 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: B_xydy_b_a
     LOGICAL,                             INTENT(IN)    :: count_coincidences
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'integrate_triangles_through_Voronoi_cells'
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: B_xdy_b_a_CSR, B_mxydx_b_a_CSR, B_xydy_b_a_CSR
     TYPE(type_single_row_mapping_matrices)             :: single_row
     INTEGER                                            :: via, vib, vic, ti, vi_hint, k
     REAL(dp), DIMENSION(2)                             :: p, q
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
   ! == Initialise the three matrices using the native UFEMISM CSR-matrix format
   ! ===========================================================================
@@ -1703,6 +1828,9 @@ CONTAINS
     DEALLOCATE( single_row%LI_mxydx   )
     DEALLOCATE( single_row%LI_xydy    )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE integrate_triangles_through_Voronoi_cells
   SUBROUTINE integrate_Voronoi_cells_through_triangles( mesh_Vor, mesh_tri, B_xdy_a_b, B_mxydx_a_b, B_xydy_a_b, count_coincidences)
     ! Integrate around the grid cells of the grid through the triangles of the mesh
@@ -1717,7 +1845,8 @@ CONTAINS
     TYPE(tMat),                          INTENT(INOUT) :: B_xydy_a_b
     LOGICAL,                             INTENT(IN)    :: count_coincidences
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'integrate_Voronoi_cells_through_triangles'
     INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: B_xdy_a_b_CSR, B_mxydx_a_b_CSR, B_xydy_a_b_CSR
     TYPE(type_single_row_mapping_matrices)             :: single_row
@@ -1725,6 +1854,9 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
     REAL(dp), DIMENSION(2)                             :: p, q
     
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   ! == Initialise the three matrices using the native UFEMISM CSR-matrix format
   ! ===========================================================================
     
@@ -1812,6 +1944,9 @@ CONTAINS
     DEALLOCATE( single_row%LI_mxydx   )
     DEALLOCATE( single_row%LI_xydy    )
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
   END SUBROUTINE integrate_Voronoi_cells_through_triangles
   
   ! Add the values for a single row of the three line-integral matrices
@@ -1871,7 +2006,7 @@ CONTAINS
     TYPE(type_single_row_mapping_matrices), INTENT(INOUT) :: single_row
     INTEGER,                                INTENT(IN)    :: n_extra
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: n
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: index_left_temp
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: LI_xdy_temp, LI_mxydx_temp, LI_xydy_temp
@@ -1931,7 +2066,7 @@ CONTAINS
     LOGICAL,                             INTENT(IN)    :: count_coincidences
     INTEGER,                             INTENT(INOUT) :: ti_hint
     
-    ! Local variables
+    ! Local variables:
     REAL(dp), DIMENSION(2)                             :: pp, qq, pa, pb, pc
     LOGICAL                                            :: is_valid_line
     INTEGER                                            :: edge_index_pq
@@ -2008,8 +2143,7 @@ CONTAINS
         ! Safety
         n_cycles = n_cycles + 1
         IF (n_cycles > mesh%nV) THEN
-          WRITE(0,*) 'trace_line_tri - ERROR: iterative tracer got stuck!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - iterative tracer got stuck!')
         END IF
       
         ! Update ti_hint, for more efficiency
@@ -2024,26 +2158,22 @@ CONTAINS
       IF (edge_index_pq == 1) THEN
         ! North; q should be west of p
         IF (qq(1) >= pp(1)) THEN
-          WRITE( 0,*) 'trace_line_tri - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 3) THEN
         ! East; q should be north of p
         IF (qq(2) <= pp(2)) THEN
-          WRITE( 0,*) 'trace_line_tri - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 5) THEN
         ! South; q should be eat of p
         IF (qq(1) <= pp(1)) THEN
-          WRITE( 0,*) 'trace_line_tri - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 7) THEN
         ! West; q should be south of p
         IF (qq(2) >= pp(2)) THEN
-          WRITE( 0,*) 'trace_line_tri - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - pq is not oriented counter-clockwise!')
         END IF
       END IF
       
@@ -2127,16 +2257,14 @@ CONTAINS
       pb = mesh%V( mesh%Tri( ti_p,2),:)
       pc = mesh%V( mesh%Tri( ti_p,3),:)
       IF (.NOT. is_in_triangle( pa, pb, pc, pp)) THEN
-        WRITE(0,*) 'trace_line_tri - ERROR: border version, p is not inside ti_p!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('trace_line_tri - border version, p is not inside ti_p!')
       END IF
       
       pa = mesh%V( mesh%Tri( ti_q,1),:)
       pb = mesh%V( mesh%Tri( ti_q,2),:)
       pc = mesh%V( mesh%Tri( ti_q,3),:)
       IF (.NOT. is_in_triangle( pa, pb, pc, qq)) THEN
-        WRITE(0,*) 'trace_line_tri - ERROR: border version, q is not inside ti_q!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('trace_line_tri - border version, p is not inside ti_q!')
       END IF
   
       ! Iteratively trace the line through the mesh
@@ -2162,8 +2290,7 @@ CONTAINS
         ! Safety
         n_cycles = n_cycles + 1
         IF (n_cycles > mesh%nV) THEN
-          WRITE(0,*) 'trace_line_tri - ERROR: iterative tracer (border version) got stuck!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_tri - iterative tracer (border version) got stuck!')
         END IF
         
       END DO ! DO WHILE (.NOT. finished)
@@ -2278,7 +2405,7 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vic
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc
     INTEGER                                            :: vvi, vj, aci
@@ -2296,8 +2423,7 @@ CONTAINS
     
     ! Safety
     IF (ti_in == 0 .OR. vi_on > 0 .OR. aci_on > 0 .OR. (.NOT. is_in_triangle( pa, pb, pc, p))) THEN
-      WRITE(0,*) 'trace_line_tri_ti - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_tri_ti - coincidence indicators dont make sense!')
     END IF
     
     ! Check if q lies inside the same triangle
@@ -2497,8 +2623,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_tri_ti - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_tri_ti - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_tri_ti
   SUBROUTINE trace_line_tri_vi(  mesh, p, q, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
@@ -2518,7 +2643,7 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vic
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pv
     INTEGER                                            :: vvi, vj, aci, n1, n2, n3, vti, ti
@@ -2527,8 +2652,7 @@ CONTAINS
     
     ! Safety
     IF (ti_in > 0 .OR. vi_on == 0 .OR. aci_on > 0 .OR. NORM2( p - mesh%V( vi_on,:)) > mesh%tol_dist) THEN
-      WRITE(0,*) 'trace_line_tri_vi - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_tri_vi - coincidence indicators dont make sense!')
     END IF
     
     ! Check IF q lies on any of the edges originating in this vertex
@@ -2640,8 +2764,7 @@ CONTAINS
     END DO
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_tri_vi - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_tri_vi - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_tri_vi
   SUBROUTINE trace_line_tri_aci( mesh, p, q, p_next, ti_in, vi_on, aci_on, ti_left, coincides, finished)
@@ -2661,7 +2784,7 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vil, vir, til, tir
     REAL(dp), DIMENSION(2)                             :: pa, pb, pl, pr
     INTEGER                                            :: vvi, vj, aci
@@ -2683,8 +2806,7 @@ CONTAINS
     
     ! Safety
     IF (ti_in > 0 .OR. vi_on > 0 .OR. aci_on == 0 .OR. (.NOT. lies_on_line_segment( pa, pb, p, mesh%tol_dist))) THEN
-      WRITE(0,*) 'trace_line_tri_ti - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_tri_aci - coincidence indicators dont make sense!')
     END IF
     
     ! Check IF q lies on the same edge in the direction of via
@@ -2894,8 +3016,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_tri_ti - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_tri_aci - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_tri_aci
   SUBROUTINE trace_line_tri_border( mesh, p, q, ti_p, ti_q, p_next, ti_next, coincides, finished)
@@ -2913,7 +3034,7 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished  
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vic, vi_exit
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc
     
@@ -2950,8 +3071,7 @@ CONTAINS
     
     ! Safety
     IF (vi_exit == 0) THEN
-      WRITE(0,*) 'trace_line_tri_border - ERROR: couldnt find vertex where [pq] exits triangle ti_p!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_tri_border - couldnt find vertex where [pq] exits triangle ti_p!')
     END IF
     
     ! Answer
@@ -2976,7 +3096,7 @@ CONTAINS
     LOGICAL,                             INTENT(IN)    :: count_coincidences
     INTEGER,                             INTENT(INOUT) :: vi_hint
     
-    ! Local variables
+    ! Local variables:
     REAL(dp), DIMENSION(2)                             :: pp,qq
     LOGICAL                                            :: is_valid_line
     INTEGER                                            :: edge_index_pq
@@ -3055,8 +3175,7 @@ CONTAINS
         ! Safety
         n_cycles = n_cycles + 1
         IF (n_cycles > mesh%nV) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: iterative tracer got stuck!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - iterative tracer got stuck!')
         END IF
       
         ! Update vi_hint, for more efficiency
@@ -3071,26 +3190,22 @@ CONTAINS
       IF (edge_index_pq == 1) THEN
         ! North; q should be west of p
         IF (qq(1) >= pp(1)) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 3) THEN
         ! East; q should be north of p
         IF (qq(2) <= pp(2)) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 5) THEN
         ! South; q should be eat of p
         IF (qq(1) <= pp(1)) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 7) THEN
         ! West; q should be south of p
         IF (qq(2) >= pp(2)) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - pq is not oriented counter-clockwise!')
         END IF
       END IF
       
@@ -3128,8 +3243,7 @@ CONTAINS
         ! Safety
         n_cycles = n_cycles + 1
         IF (n_cycles > mesh%nV) THEN
-          WRITE(0,*) 'trace_line_Vor - ERROR: iterative tracer (border version) got stuck!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_Vor - iterative tracer (border version) got stuck!')
         END IF
         
       END DO ! DO WHILE (.NOT.finished)
@@ -3153,7 +3267,7 @@ CONTAINS
     INTEGER,                             INTENT(OUT)   :: ti_on
     INTEGER,                             INTENT(OUT)   :: aci_on
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: vti, ti, vvi, aci
     REAL(dp), DIMENSION(2)                             :: cc1, cc2
       
@@ -3207,15 +3321,14 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: vti, ti, vvi, aci
     REAL(dp), DIMENSION(2)                             :: cc1, cc2, r, llis
     LOGICAL                                            :: do_cross
     
     ! Safety
     IF (vi_in == 0 .OR. ti_on > 0 .OR. aci_on > 0 .OR. (.NOT. is_in_Voronoi_cell( mesh, p, vi_in))) THEN
-      WRITE(0,*) 'trace_line_Vor_vi - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_Vor_vi - coincidence indicators dont make sense!')
     END IF
     
     ! Check IF q lies inside the same Voronoi cell
@@ -3300,8 +3413,7 @@ CONTAINS
     END DO
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_Vor_vi - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_Vor_vi - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_Vor_vi
   SUBROUTINE trace_line_Vor_ti(  mesh, p, q, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
@@ -3321,15 +3433,14 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vic, vvi, vj, aci, acab, acbc, acca, tj
     REAL(dp), DIMENSION(2)                             :: cc, cc1, cc2, llis
     LOGICAL                                            :: do_cross
     
     ! Safety
     IF (vi_in > 0 .OR. ti_on == 0 .OR. aci_on > 0 .OR. NORM2( mesh%Tricc( ti_on,:) - p) > mesh%tol_dist) THEN
-      WRITE(0,*) 'trace_line_Vor_ti - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_Vor_ti - coincidence indicators dont make sense!')
     END IF
     
     ! The three vertices spanning the triangle
@@ -3571,8 +3682,7 @@ CONTAINS
     END DO
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_Vor_ti - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_Vor_ti - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_Vor_ti
   SUBROUTINE trace_line_Vor_aci( mesh, p, q, p_next, vi_in, ti_on, aci_on, vi_left, coincides, finished)
@@ -3592,7 +3702,7 @@ CONTAINS
     LOGICAL,                             INTENT(OUT)   :: coincides
     LOGICAL,                             INTENT(OUT)   :: finished
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: via, vib, vil, vir, til, tir, vvi, aci, vti, ti
     REAL(dp), DIMENSION(2)                             :: cc1, cc2, ccl, ccr, llis
     LOGICAL                                            :: do_cross
@@ -3602,8 +3712,7 @@ CONTAINS
     
     ! Safety
     IF (vi_in > 0 .OR. ti_on > 0 .OR. aci_on == 0 .OR. (.NOT. lies_on_line_segment( cc1, cc2, p, mesh%tol_dist))) THEN
-      WRITE(0,*) 'trace_line_Vor_aci - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_Vor_aci - coincidence indicators dont make sense!')
     END IF
     
     ! A bit more detail is needed
@@ -3809,8 +3918,7 @@ CONTAINS
     END DO
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_Vor_aci - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_Vor_aci - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_Vor_aci
   SUBROUTINE trace_line_Vor_border( mesh, q, vi_p, vi_q, p_next, vi_next, coincides, finished)
@@ -3859,7 +3967,7 @@ CONTAINS
     TYPE(type_single_row_mapping_matrices), INTENT(INOUT) :: single_row
     LOGICAL,                             INTENT(IN)    :: count_coincidences
     
-    ! Local variables
+    ! Local variables:
     REAL(dp)                                           :: xmin, xmax, ymin, ymax
     REAL(dp), DIMENSION(2)                             :: pp,qq
     LOGICAL                                            :: is_valid_line
@@ -3944,8 +4052,7 @@ CONTAINS
         ! Safety
         n_cycles = n_cycles + 1
         IF (n_cycles > grid%n) THEN
-          IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: iterative tracer got stuck!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_grid - iterative tracer got stuck!')
         END IF
   
       END DO ! DO WHILE (.NOT. finished)
@@ -3957,26 +4064,22 @@ CONTAINS
       IF (edge_index_pq == 1) THEN
         ! North; q should be west of p
         IF (qq(1) >= pp(1)) THEN
-          IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 3) THEN
         ! East; q should be north of p
         IF (qq(2) <= pp(2)) THEN
-          IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 5) THEN
         ! South; q should be eat of p
         IF (qq(1) <= pp(1)) THEN
-          IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
         END IF
       ELSEIF (edge_index_pq == 7) THEN
         ! West; q should be south of p
         IF (qq(2) >= pp(2)) THEN
-          IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: pq is not oriented counter-clockwise!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash('trace_line_grid - pq is not oriented counter-clockwise!')
         END IF
       END IF
       
@@ -4014,8 +4117,7 @@ CONTAINS
           ! Safety
           n_cycles = n_cycles + 1
           IF (n_cycles > grid%nx) THEN
-            IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: iterative tracer (north border version) got stuck!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('trace_line_grid - iterative tracer (north border version) got stuck!')
           END IF
           
         END DO ! DO WHILE (i_p > i_q)
@@ -4062,8 +4164,7 @@ CONTAINS
           ! Safety
           n_cycles = n_cycles + 1
           IF (n_cycles > grid%nx) THEN
-            IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: iterative tracer (east border version) got stuck!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('trace_line_grid - iterative tracer (east border version) got stuck!')
           END IF
           
         END DO ! DO WHILE (j_p < j_q)
@@ -4110,8 +4211,7 @@ CONTAINS
           ! Safety
           n_cycles = n_cycles + 1
           IF (n_cycles > grid%nx) THEN
-            IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: iterative tracer (south border version) got stuck!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('trace_line_grid - iterative tracer (south border version) got stuck!')
           END IF
           
         END DO ! DO WHILE (i_p < i_q)
@@ -4158,8 +4258,7 @@ CONTAINS
           ! Safety
           n_cycles = n_cycles + 1
           IF (n_cycles > grid%nx) THEN
-            IF (par%master) WRITE(0,*) 'trace_line_grid - ERROR: iterative tracer (west border version) got stuck!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('trace_line_grid - iterative tracer (west border version) got stuck!')
           END IF
           
         END DO ! DO WHILE (j_p > j_q)
@@ -4191,7 +4290,7 @@ CONTAINS
     REAL(dp), DIMENSION(2),              INTENT(IN)    :: p
     INTEGER,  DIMENSION(2),              INTENT(OUT)   :: aij_in, bij_on, cxij_on, cyij_on
     
-    ! Local variables
+    ! Local variables:
     INTEGER                                            :: i,j
     REAL(dp)                                           :: xl,xu,yl,yu
     
@@ -4276,8 +4375,7 @@ CONTAINS
     
     ! Safety
     IF (aij_in(1) == 0 .OR. bij_on(1) > 0 .OR. cxij_on(1) > 0 .OR. cyij_on(1) > 0) THEN
-      WRITE(0,*) 'trace_line_grid_a - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_a - coincidence indicators dont make sense!')
     END IF
     
     i = aij_in( 1)
@@ -4291,8 +4389,7 @@ CONTAINS
     
     ! More safety
     IF (p(1) < xl .OR. p(1) > xu .OR. p(2) < yl .OR. p(2) > yu) THEN
-      WRITE(0,*) 'trace_line_grid_a - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_a - coincidence indicators dont make sense!')
     END IF
     
     ! Check if q lies inside the same grid cell
@@ -4428,8 +4525,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_grid_a - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_grid_a - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_grid_a
   SUBROUTINE trace_line_grid_b(     grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
@@ -4455,8 +4551,7 @@ CONTAINS
     
     ! Safety
     IF (aij_in(1) > 0 .OR. bij_on(1) == 0 .OR. cxij_on(1) > 0 .OR. cyij_on(1) > 0) THEN
-      WRITE(0,*) 'trace_line_grid_b - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_b - coincidence indicators dont make sense!')
     END IF
     
     i = bij_on( 1)
@@ -4481,8 +4576,7 @@ CONTAINS
     
     ! More safety
     IF (abs( p(1) - x) > grid%tol_dist .OR. abs( p(2) - y) > grid%tol_dist) THEN
-      WRITE(0,*) 'trace_line_grid_b - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_b - coincidence indicators dont make sense!')
     END IF
     
     ! Check if q lies on the cy-grid edge to the west
@@ -4778,8 +4872,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_grid_b - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_grid_b - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_grid_b
   SUBROUTINE trace_line_grid_cx(    grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
@@ -4805,8 +4898,7 @@ CONTAINS
     
     ! Safety
     IF (aij_in(1) > 0 .OR. bij_on(1) > 0 .OR. cxij_on(1) == 0 .OR. cyij_on(1) > 0) THEN
-      WRITE(0,*) 'trace_line_grid_cx - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_cx - coincidence indicators dont make sense!')
     END IF
     
     i = cxij_on( 1)
@@ -4827,8 +4919,7 @@ CONTAINS
     
     ! More safety
     IF (p(2) < yl .OR. p(2) > yu .OR. ABS( p(1) - x) > grid%tol_dist) THEN
-      WRITE(0,*) 'trace_line_grid_cx - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_cx - coincidence indicators dont make sense!')
     END IF
      
     ! Check IF q lies on the same cx-grid cell in the southern direction
@@ -5064,8 +5155,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_grid_cx - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_grid_cx - reached the unreachable end of the subroutine!')
   
   END SUBROUTINE trace_line_grid_cx
   SUBROUTINE trace_line_grid_cy(    grid, p, q, aij_in, bij_on, cxij_on, cyij_on, p_next, n_left, coincides, finished)
@@ -5091,8 +5181,7 @@ CONTAINS
     
     ! Safety
     IF (aij_in(1) > 0 .OR. bij_on(1) > 0 .OR. cxij_on(1) > 0 .OR. cyij_on(1) == 0) THEN
-      WRITE(0,*) 'trace_line_grid_cy - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_cy - coincidence indicators dont make sense!')
     END IF
     
     i = cyij_on( 1)
@@ -5113,8 +5202,7 @@ CONTAINS
     
     ! More safety
     IF (p(1) < xl .OR. p(1) > xu .OR. abs( p(2) - y) > grid%tol_dist) THEN
-      WRITE(0,*) 'trace_line_grid_cy - ERROR: coincidence indicators dont make sense!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('trace_line_grid_cy - coincidence indicators dont make sense!')
     END IF
     
     ! Check if q lies on the same cy-grid cell in the western direction
@@ -5350,8 +5438,7 @@ CONTAINS
     END IF
     
     ! This point should not be reachable!
-    WRITE(0,*) 'trace_line_grid_cy - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('trace_line_grid_cy - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE trace_line_grid_cy
   
@@ -5367,7 +5454,7 @@ CONTAINS
     REAL(dp), DIMENSION(2),              INTENT(OUT)   :: pp, qq
     LOGICAL,                             INTENT(OUT)   :: is_valid_line
     
-    ! Local variables
+    ! Local variables:
     REAL(dp), DIMENSION(2)                             :: sw, se, nw, ne, llis
     INTEGER                                            :: edge_index_p, edge_index_q
     LOGICAL                                            :: do_cross
@@ -5504,8 +5591,7 @@ CONTAINS
       END IF
   
       ! This point should be unreachable
-      WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: reached the unreachable point (p inside, q outside)!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (p inside, q outside)!')
       
     END IF ! IF (edge_index_p == 0 .AND. edge_index_q > 0)
     
@@ -5566,8 +5652,7 @@ CONTAINS
       END IF
   
       ! This point should be unreachable
-      WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: reached the unreachable point (q inside, p outside)!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('crop_line_to_mesh_domain - reached the unreachable point (q inside, p outside)!')
       
     END IF ! IF (edge_index_q == 0 .AND. edge_index_p > 0)
     
@@ -5601,14 +5686,12 @@ CONTAINS
           ! [pq] cuts through the northeast corner
           CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect nw-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect ne-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5625,14 +5708,12 @@ CONTAINS
           ! [pq] cuts through the northeast corner
           CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect nw-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, nw, sw, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect nw-sw, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-sw, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5643,8 +5724,7 @@ CONTAINS
         END IF
         
       ELSE
-        WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: edge_index_p = ', edge_index_p, ', edge_index_q = ', edge_index_q
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
       END IF
       
     ELSEIF (edge_index_p == 3) THEN
@@ -5657,14 +5737,12 @@ CONTAINS
           ! [pq] cuts through the northeast corner
           CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect nw-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
           END IF
           qq = llis
           CALL segment_intersection( pp, qq, ne, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect ne-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect ne-se, but it doesnt!')
           END IF
           pp = llis
           RETURN
@@ -5681,14 +5759,12 @@ CONTAINS
           ! [pq] cuts through the southeast corner
           CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect se-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5699,8 +5775,7 @@ CONTAINS
         END IF
         
       ELSE
-        WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: edge_index_p = ', edge_index_p, ', edge_index_q = ', edge_index_q
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
       END IF
       
     ELSEIF (edge_index_p == 5) THEN
@@ -5713,14 +5788,12 @@ CONTAINS
           ! [pq] cuts through the southwest corner
           CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, se, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect se-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect se-ne, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5737,14 +5810,12 @@ CONTAINS
           ! [pq] cuts through the southwest corner
           CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-nw, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5755,8 +5826,7 @@ CONTAINS
         END IF
         
       ELSE
-        WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: edge_index_p = ', edge_index_p, ', edge_index_q = ', edge_index_q
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
       END IF
       
     ELSEIF (edge_index_p == 7) THEN
@@ -5769,14 +5839,12 @@ CONTAINS
           ! [pq] cuts through the southwest corner
           CALL segment_intersection( pp, qq, sw, se, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-se, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-se, but it doesnt!')
           END IF
           qq = llis
           CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-nw, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
           END IF
           pp = llis
           RETURN
@@ -5793,14 +5861,12 @@ CONTAINS
           ! [pq] cuts through the northwest corner
           CALL segment_intersection( pp, qq, sw, nw, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect sw-nw, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect sw-nw, but it doesnt!')
           END IF
           pp = llis
           CALL segment_intersection( pp, qq, nw, ne, llis, do_cross, tol_dist)
           IF (.NOT. do_cross) THEN
-            WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: [pq] should intersect nw-ne, but it doesnt!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('crop_line_to_mesh_domain - [pq] should intersect nw-ne, but it doesnt!')
           END IF
           qq = llis
           RETURN
@@ -5811,15 +5877,13 @@ CONTAINS
         END IF
         
       ELSE
-        WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: edge_index_p = ', edge_index_p, ', edge_index_q = ', edge_index_q
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('crop_line_to_mesh_domain - edge_index_p = {int_01}, edge_index_q = {int_02}', int_01 = edge_index_p, int_02 = edge_index_q)
       END IF
       
     END IF ! IF (edge_index_p == 1)
     
     ! This point should be unreachable
-    WRITE(0,*) 'crop_line_to_mesh_domain - ERROR: reached the unreachable end of the subroutine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('crop_line_to_mesh_domain - reached the unreachable end of the subroutine!')
     
   END SUBROUTINE crop_line_to_domain
   
@@ -5832,10 +5896,16 @@ CONTAINS
     ! In/output variables
     TYPE(type_grid),                     INTENT(INOUT) :: grid
     
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_mesh2grid'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL MatDestroy( grid%M_map_mesh2grid, perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE deallocate_remapping_operators_mesh2grid
   SUBROUTINE deallocate_remapping_operators_grid2mesh( grid)
@@ -5846,10 +5916,16 @@ CONTAINS
     ! In/output variables
     TYPE(type_grid),                     INTENT(INOUT) :: grid
     
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_grid2mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL MatDestroy( grid%M_map_grid2mesh, perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE deallocate_remapping_operators_grid2mesh
   SUBROUTINE deallocate_remapping_operators_mesh_mesh( map)
@@ -5860,13 +5936,19 @@ CONTAINS
     ! In/output variables
     TYPE(type_remapping_mesh_mesh),      INTENT(INOUT) :: map
     
-    ! Local variables
-    TYPE(PetscErrorCode)                               :: perr
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_operators_mesh_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     CALL MatDestroy( map%M_trilin           , perr)
     CALL MatDestroy( map%M_nearest_neighbour, perr)
     CALL MatDestroy( map%M_cons_1st_order   , perr)
     CALL MatDestroy( map%M_cons_2nd_order   , perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
     
   END SUBROUTINE deallocate_remapping_operators_mesh_mesh
   

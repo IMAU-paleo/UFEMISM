@@ -5,10 +5,10 @@ MODULE BMB_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -51,8 +51,12 @@ CONTAINS
     REAL(dp),                             INTENT(IN)    :: time
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model'
     INTEGER                                            :: vi
     REAL(dp)                                           :: amplification_factor
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Initialise at zero
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
@@ -145,9 +149,12 @@ CONTAINS
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( BMB%BMB_sheet, 'BMB%BMB_sheet', 'run_BMB_model')
-    CALL check_for_NaN_dp_1D( BMB%BMB_shelf, 'BMB%BMB_shelf', 'run_BMB_model')
-    CALL check_for_NaN_dp_1D( BMB%BMB,       'BMB%BMB',       'run_BMB_model')
+    CALL check_for_NaN_dp_1D( BMB%BMB_sheet, 'BMB%BMB_sheet')
+    CALL check_for_NaN_dp_1D( BMB%BMB_shelf, 'BMB%BMB_shelf')
+    CALL check_for_NaN_dp_1D( BMB%BMB,       'BMB%BMB'      )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model
   SUBROUTINE initialise_BMB_model( mesh, ice, BMB, region_name)
@@ -160,6 +167,12 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE (0,*) '  Initialising BMB model: sheet = "', TRIM(C%choice_BMB_sheet_model), '", shelf = "', TRIM(C%choice_BMB_shelf_model), '"...'
 
@@ -197,6 +210,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_BMB_model
 
 ! == Idealised BMB schemes
@@ -213,6 +229,12 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     REAL(dp),                            INTENT(IN)    :: time
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_idealised'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     IF     (C%choice_idealised_BMB_shelf == 'MISMIP+') THEN
       ! The schematic basal melt used in the MISMIPplus experiments
 
@@ -222,6 +244,9 @@ CONTAINS
       IF (par%master) WRITE(0,*) 'run_BMB_model_idealised - ERROR: unknown choice_idealised_BMB_shelf "', TRIM(C%choice_idealised_BMB_shelf), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_idealised
   SUBROUTINE run_BMB_model_MISMIPplus( mesh, ice, BMB, time)
@@ -236,8 +261,12 @@ CONTAINS
     REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_MISMIPplus'
     INTEGER                                            :: vi
     REAL(dp)                                           :: zd, cavity_thickness
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF     (C%MISMIPplus_scenario == 'ice0') THEN
       ! The reference scenario; no basal melt ever
@@ -376,6 +405,9 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_MISMIPplus
 
 ! == The ANICE_legacy sub-shelf melt model
@@ -395,7 +427,8 @@ CONTAINS
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     REAL(dp),                            INTENT(IN)    :: time
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_ANICE_legacy'
     INTEGER                                            :: vi
     REAL(dp)                                           :: T_ocean_mean, Q_TOA_jun_65N, Q_TOA_jan_80S
     REAL(dp)                                           :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
@@ -406,6 +439,9 @@ CONTAINS
     REAL(dp)                                           :: water_depth
     REAL(dp), PARAMETER                                :: cp0     = 3974._dp                    ! specific heat capacity of the ocean mixed layer (J kg-1 K-1)
     REAL(dp), PARAMETER                                :: gamma_T = 1.0E-04_dp                  ! Thermal exchange velocity (m s-1)
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Initialise
     BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
@@ -541,9 +577,12 @@ CONTAINS
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( BMB%sub_angle, 'BMB%sub_angle', 'run_BMB_model_ANICE_legacy')
-    CALL check_for_NaN_dp_1D( BMB%dist_open, 'BMB%dist_open', 'run_BMB_model_ANICE_legacy')
-    CALL check_for_NaN_dp_1D( BMB%BMB_shelf, 'BMB%BMB_shelf', 'run_BMB_model_ANICE_legacy')
+    CALL check_for_NaN_dp_1D( BMB%sub_angle, 'BMB%sub_angle')
+    CALL check_for_NaN_dp_1D( BMB%dist_open, 'BMB%dist_open')
+    CALL check_for_NaN_dp_1D( BMB%BMB_shelf, 'BMB%BMB_shelf')
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_ANICE_legacy
   SUBROUTINE initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
@@ -555,6 +594,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_ANICE_legacy'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Variables
     CALL allocate_shared_dp_1D( mesh%nV, BMB%sub_angle, BMB%wsub_angle)
@@ -623,6 +668,9 @@ CONTAINS
       BMB%deep_ocean_threshold_depth = C%deep_ocean_threshold_depth_ANT
     END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_BMB_model_ANICE_legacy
 
 ! == The Favier et al. (2019) sub-shelf melt parameterisations
@@ -639,9 +687,13 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_Favier2019_linear'
     INTEGER                                            :: vi
     REAL(dp)                                           :: dT
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Calculate ocean temperature and freezing point at the base of the shelf
     CALL calc_ocean_temperature_at_shelf_base(    mesh, ice, ocean, BMB)
@@ -665,6 +717,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_Favier2019_linear
   SUBROUTINE run_BMB_model_Favier2019_quadratic( mesh, ice, ocean, BMB)
     ! Calculate sub-shelf melt with Favier et al. (2019) quadratic parameterisation
@@ -677,9 +732,13 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_Favier2019_quadratic'
     INTEGER                                            :: vi
     REAL(dp)                                           :: dT
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Calculate ocean temperature and freezing point at the base of the shelf
     CALL calc_ocean_temperature_at_shelf_base(    mesh, ice, ocean, BMB)
@@ -705,6 +764,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_Favier2019_quadratic
   SUBROUTINE run_BMB_model_Favier2019_Mplus( mesh, ice, ocean, BMB)
     ! Calculate sub-shelf melt with Favier et al. (2019) M+ parameterisation
@@ -717,9 +779,13 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_Favier2019_Mplus'
     INTEGER                                            :: vi,n_shelf,basin_i
     REAL(dp)                                           :: dT,dT_av
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Calculate ocean temperature and freezing point at the base of the shelf
     CALL calc_ocean_temperature_at_shelf_base(    mesh, ice, ocean, BMB)
@@ -777,6 +843,9 @@ CONTAINS
 
     END DO ! DO basin_i = 1, ice%nbasins
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_Favier2019_Mplus
   SUBROUTINE calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate ocean temperature at the base of the shelf by interpolating
@@ -790,9 +859,13 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ocean_temperature_at_shelf_base'
     INTEGER                                            :: vi
     REAL(dp)                                           :: depth
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -812,6 +885,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calc_ocean_temperature_at_shelf_base
   SUBROUTINE calc_ocean_freezing_point_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate the ocean freezing point at the base of the shelf, needed to calculate
@@ -825,13 +901,17 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ocean_freezing_point_at_shelf_base'
     INTEGER                                            :: vi
     REAL(dp)                                           :: depth
     REAL(dp)                                           :: S0                   ! Practical salinity [PSU]
     REAL(dp), PARAMETER                                :: lambda1 = -0.0575_dp ! Liquidus slope                [degC PSU^-1] (Favier et al. (2019), Table 2)
     REAL(dp), PARAMETER                                :: lambda2 = 0.0832_dp  ! Liquidus intercept            [degC]        (Favier et al. (2019), Table 2)
     REAL(dp), PARAMETER                                :: lambda3 = 7.59E-4_dp ! Liquidus pressure coefficient [degC m^-1]   (Favier et al. (2019), Table 2)
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -854,6 +934,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calc_ocean_freezing_point_at_shelf_base
   SUBROUTINE initialise_BMB_model_Favier2019( mesh, BMB)
     ! Allocate memory for the data fields of the Favier et al. (2019) shelf BMB parameterisations.
@@ -864,9 +947,18 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_Favier2019'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! Variables
     CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_base,        BMB%wT_ocean_base       )
     CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_freeze_base, BMB%wT_ocean_freeze_base)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_BMB_model_Favier2019
 
@@ -885,6 +977,7 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_Lazeroms2018_plume'
     INTEGER                                            :: vi
     REAL(dp)                                           :: depth                               ! Ice-shelf base depth ("draft") [m]
     REAL(dp)                                           :: Ta                                  ! Ambient temperature at the ice-shelf base [degC]
@@ -911,6 +1004,9 @@ CONTAINS
     REAL(dp), PARAMETER                                :: gamma1          =  0.545_dp         ! Heat exchange parameter             [unitless]
     REAL(dp), PARAMETER                                :: gamma2          =  3.5E-5_dp        ! Heat exchange parameter             [m^-1]
     REAL(dp), PARAMETER                                :: x0              =  0.56_dp          ! Empirically derived dimensionless scaling factor
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -983,6 +1079,9 @@ CONTAINS
     ! END DO
     ! CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_Lazeroms2018_plume
   SUBROUTINE find_effective_plume_path( mesh, ice, BMB, vi, eff_plume_source_depth, eff_basal_slope)
     ! Find the effective plume source depth and basal slope for shelf grid cell [i,j]
@@ -997,6 +1096,12 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: eff_plume_source_depth
     REAL(dp),                            INTENT(OUT)   :: eff_basal_slope
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_effective_plume_path'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! IF     (C%BMB_Lazeroms2018_find_GL_scheme == 'GL_average') THEN
     !   CALL find_effective_plume_path_GL_average(     mesh, ice, BMB, vi, eff_plume_source_depth, eff_basal_slope)
     ! ELSEIF (C%BMB_Lazeroms2018_find_GL_scheme == 'along_ice_flow') THEN
@@ -1005,6 +1110,9 @@ CONTAINS
     !   IF (par%master) WRITE(0,*) '  ERROR: BMB_Lazeroms2018_find_GL_scheme "', TRIM(C%BMB_Lazeroms2018_find_GL_scheme), '" not implemented in find_effective_plume_path!'
     !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     ! END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_effective_plume_path
   SUBROUTINE find_effective_plume_path_GL_average( mesh, ice, BMB, vi, eff_plume_source_depth, eff_basal_slope)
@@ -1045,6 +1153,7 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: eff_basal_slope
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_effective_plume_path_GL_average'
     INTEGER                                            :: n
     INTEGER                                            :: dpi,dpj,ip1,jp1,ip2,jp2
     REAL(dp)                                           :: basal_slope
@@ -1054,6 +1163,9 @@ CONTAINS
     REAL(dp)                                           :: Hb1,Hb2,plume_source_depth
     INTEGER                                            :: n_valid_plumes
     REAL(dp)                                           :: sum_plume_source_depths, sum_basal_slopes
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ! Initialise
     ! n_valid_plumes          = 0
@@ -1157,6 +1269,9 @@ CONTAINS
     !   eff_basal_slope        = 1E-10_dp   ! Because the melt parameterisation yields NaN for a zero slope
     ! END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE find_effective_plume_path_GL_average
   SUBROUTINE find_effective_plume_path_along_ice_flow( mesh, ice, vi, eff_plume_source_depth, eff_basal_slope)
     ! Find the effective plume source depth and basal slope for shelf grid cell [i,j] by
@@ -1172,11 +1287,15 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: eff_basal_slope
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_effective_plume_path_along_ice_flow'
     REAL(dp), DIMENSION(2)                             :: t1 ,t2 ,uv
     INTEGER                                            :: nit, nit_max
     REAL(dp)                                           :: u1, v1, TAF1, TAF2, depth1, Hi2, Hs2, depth2, lambda, GLx, GLy
     LOGICAL                                            :: found_GL, got_stuck
     REAL(dp)                                           :: zb_shelf, dist
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ! Calculate the shelf base depth (draft)
     ! zb_shelf = ice%Hs_a( vi) - ice%Hi_a( vi)
@@ -1257,6 +1376,9 @@ CONTAINS
     !   eff_basal_slope        = 1E-10_dp   ! Because the melt parameterisation yields NaN for a zero slope
     ! END IF
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE find_effective_plume_path_along_ice_flow
   FUNCTION Lazeroms2018_dimensionless_melt_curve( xhat) RESULT( Mhat)
     ! The dimensionless melt curve from Lazeroms et al. (2018), Appendix A, Eq. A13
@@ -1302,6 +1424,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_Lazeroms2018_plume'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
@@ -1332,6 +1460,9 @@ CONTAINS
     ! END IF
     ! CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_BMB_model_Lazeroms2018_plume
 
 ! == The PICO ocean box model
@@ -1349,7 +1480,11 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_PICO'
     INTEGER                                            :: basin_i
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -1361,6 +1496,9 @@ CONTAINS
     ! DO basin_i = 1, ice%nbasins
     !   CALL run_BMB_model_PICO_basin( grid, ice, ocean, BMB, basin_i)
     ! END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_PICO
   SUBROUTINE PICO_assign_ocean_boxes( mesh, ice, BMB)
@@ -1375,6 +1513,7 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'PICO_assign_ocean_boxes'
     INTEGER                                            :: i,j,k
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_GL_D
     INTEGER                                            :: wd_GL_D
@@ -1382,6 +1521,9 @@ CONTAINS
     INTEGER                                            :: basin_i
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: n_cells_per_box
     LOGICAL                                            :: do_reduce_n_D
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
   ! ! Determine number of PICO boxes to be used for each basin
   ! ! ========================================================
@@ -1484,6 +1626,9 @@ CONTAINS
   !   DEALLOCATE( n_cells_per_box)
   !   CALL deallocate_shared( wd_GL_D)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE PICO_assign_ocean_boxes
   SUBROUTINE run_BMB_model_PICO_basin( mesh, ice, ocean, BMB, basin_i)
     ! Calculate basal melt for ice basin i using the PICO ocean box model
@@ -1498,6 +1643,7 @@ CONTAINS
     INTEGER,                             INTENT(IN)    :: basin_i
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_PICO_basin'
     INTEGER                                            :: i,j,k
     REAL(dp)                                           :: Tk0,Sk0
     REAL(dp)                                           :: nu,lambda
@@ -1512,6 +1658,9 @@ CONTAINS
     REAL(dp), PARAMETER                                :: beta        =  7.7E-4_dp     ! Salt contraction coefficient in EOS               [PSU^-1]
     REAL(dp), PARAMETER                                :: rhostar     = 1033_dp        ! Reference density in EOS                          [kg m^-3]
     REAL(dp), PARAMETER                                :: C_overturn  = 1.0E6_dp       ! Overturning strength                              [m^6 s^-1 kg^-1]
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
   !   ! Initialise
   !   DO i = grid%i1, grid%i2
@@ -1632,6 +1781,9 @@ CONTAINS
   !   END DO
   !   CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE run_BMB_model_PICO_basin
   SUBROUTINE calc_dGL_dIF_r( mesh, ice, BMB, vi, d_GL, d_IF, r)
     ! For each shelf grid cell, calculate the distance to the grounding line dGL,
@@ -1649,16 +1801,21 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: d_GL, d_IF, r
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dGL_dIF_r'
     INTEGER                                            :: n
     INTEGER                                            :: dpi,dpj,ip1,jp1,ip2,jp2
     REAL(dp)                                           :: dist
     LOGICAL                                            :: reached_end
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ! Exception for when this grid cell isn't shelf
     ! IF (ice%mask_shelf_a( j,i) == 0) THEN
     !   d_GL = 0._dp
     !   d_IF = 0._dp
     !   r    = 0._dp
+    !   CALL finalise_routine( routine_name)
     !   RETURN
     ! END IF
 
@@ -1722,6 +1879,9 @@ CONTAINS
     ! ! Reese et al. (2018), Eq. 10
     ! r = d_GL / (d_GL + d_IF)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calc_dGL_dIF_r
   SUBROUTINE PICO_calc_T0_S0( mesh, ice, ocean, basin_i, Tk0, Sk0)
     ! Find temperature and salinity in box B0 (defined as mean ocean-floor value at the calving front)
@@ -1736,9 +1896,13 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: Tk0,Sk0
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'PICO_calc_T0_S0'
     INTEGER                                            :: vi,n
     REAL(dp)                                           :: depth, T_floor, S_floor, depth_max
     INTEGER                                            :: ii,jj
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! ! Average ocean-floor temperature and salinity over this basin's ocean-next-to-floating-ice pixels
     ! n   = 0
@@ -1824,6 +1988,9 @@ CONTAINS
 
     ! END IF ! IF (n == 0) THEN
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE PICO_calc_T0_S0
   SUBROUTINE PICO_calc_box_average( mesh, ice, BMB, d, basin_i, k, d_av)
     ! Calculate the average d_av of field d over ocean box k in basin i
@@ -1840,8 +2007,12 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: d_av
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'PICO_calc_box_average'
     INTEGER                                            :: vi,n
     REAL(dp)                                           :: d_sum
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! n     = 0
     ! d_sum = 0._dp
@@ -1858,6 +2029,9 @@ CONTAINS
 
     ! d_av = d_sum / REAL(n,dp)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE PICO_calc_box_average
   SUBROUTINE initialise_BMB_model_PICO( mesh, ice, BMB)
     ! Allocate memory for the data fields of the PICO ocean box model
@@ -1868,6 +2042,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_PICO'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -1912,6 +2092,9 @@ CONTAINS
     ! END IF
     ! CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_BMB_model_PICO
 
 ! == The PICOP ocean box + plume model
@@ -1928,6 +2111,12 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_PICOP'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
@@ -1936,6 +2125,9 @@ CONTAINS
 
     ! ! Then run the Lazeroms (2018) plume parameterisation to calculate melt rates
     ! CALL run_BMB_model_Lazeroms2018_plume( mesh, ice, ocean, BMB)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_PICOP
   SUBROUTINE initialise_BMB_model_PICOP( mesh, ice, BMB)
@@ -1947,6 +2139,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_PICOP'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -1995,6 +2193,9 @@ CONTAINS
     ! END IF
     ! CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_BMB_model_PICOP
 
 ! == Some generally useful tools
@@ -2014,21 +2215,27 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: dist_open
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_sub_angle_dist_open'
     INTEGER                                            :: thetai
     REAL(dp)                                           :: theta
     INTEGER,  PARAMETER                                :: ntheta            = 16         ! Number of directions we'll look into
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: sees_ocean_in_dir
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: dist_ocean_in_dir
 
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
     ! Only calculate the angle for shelf vertices
     IF (.NOT. ice%mask_shelf_a( vi) == 1) THEN
       IF (ice%mask_ocean_a( vi) == 1) THEN
         sub_angle = 360._dp
         dist_open = 0._dp
+        CALL finalise_routine( routine_name)
         RETURN
       ELSE
         sub_angle = 0._dp
         dist_open = mesh%xmax + mesh%ymax - mesh%xmin - mesh%ymin
+        CALL finalise_routine( routine_name)
         RETURN
       END IF
     END IF
@@ -2048,6 +2255,9 @@ CONTAINS
     DEALLOCATE( sees_ocean_in_dir)
     DEALLOCATE( dist_ocean_in_dir)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE calculate_sub_angle_dist_open
   SUBROUTINE look_for_ocean( mesh, ice, vi, theta, sees_ocean, dist_ocean)
     ! Look outward from vertex vi in direction theta and check if we can "see"
@@ -2064,11 +2274,15 @@ CONTAINS
     REAL(dp),                            INTENT(OUT)   :: dist_ocean
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'look_for_ocean'
     REAL(dp), PARAMETER                                :: max_look_distance = 750000._dp ! Maximum distance to look before we decide no ocean will ever be found.
     REAL(dp), DIMENSION(2)                             :: p, q
     REAL(dp)                                           :: d_min, d, distance_along_line
     INTEGER                                            :: vi_prev, vi_cur, vi_next, ci, vc
     LOGICAL                                            :: Finished
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     sees_ocean = 0
     dist_ocean = mesh%xmax + mesh%ymax - mesh%xmin - mesh%ymin
@@ -2127,6 +2341,9 @@ CONTAINS
 
     END DO ! DO WHILE (.NOT. Finished)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE look_for_ocean
 
   ! Routine for extrapolating melt field from the regular (FCMP) mask
@@ -2146,12 +2363,16 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extrapolate_melt_from_FCMP_to_PMP'
     INTEGER                                            :: vi,i1,i2,j1,j2,ii,jj,n,n_ext
     INTEGER,  DIMENSION(:    ), POINTER                :: mask_FCMP, mask_PMP
     REAL(dp), DIMENSION(:    ), POINTER                :: BMB_shelf_extra
     REAL(dp), DIMENSION(:    ), POINTER                :: dBMBdx, dBMBdy
     INTEGER                                            :: wmask_FCMP, wmask_PMP, wBMB_shelf_extra, wdBMBdx, wdBMBdy
     REAL(dp)                                           :: BMB_av
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  ERROR: extrapolate_melt_from_FCMP_to_PMP not yet implemented for a triangular mesh!'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -2278,6 +2499,9 @@ CONTAINS
     ! CALL deallocate_shared( wdBMBdx         )
     ! CALL deallocate_shared( wdBMBdy         )
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE extrapolate_melt_from_FCMP_to_PMP
 
 !== Remapping after mesh update
@@ -2293,7 +2517,11 @@ CONTAINS
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_BMB_model'
     INTEGER                                            :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
@@ -2382,6 +2610,9 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not implemented in remap_BMB_model!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_BMB_model
 

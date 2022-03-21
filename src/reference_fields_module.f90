@@ -9,10 +9,10 @@ MODULE reference_fields_module
 #include <petsc/finclude/petscksp.h>
   USE mpi
   USE petscksp
-  USE configuration_module,            ONLY: dp, C
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, write_to_memory_log, &
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
                                              allocate_shared_int_2D,   allocate_shared_dp_2D, &
@@ -50,9 +50,13 @@ CONTAINS
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometries'
     CHARACTER(LEN=256)                            :: choice_refgeo_init, choice_refgeo_PD, choice_refgeo_GIAeq
     CHARACTER(LEN=256)                            :: filename_refgeo_init, filename_refgeo_PD, filename_refgeo_GIAeq
     REAL(dp)                                      :: time_to_restart_from
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Determine parameters for this region
     IF     (region_name == 'NAM') THEN
@@ -99,8 +103,7 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from file ', TRIM( filename_refgeo_init), '...'
       CALL initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_init "', TRIM(choice_refgeo_init), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
     
     ! Present-day ice-sheet geometry
@@ -113,8 +116,7 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from file ', TRIM( filename_refgeo_PD), '...'
       CALL initialise_reference_geometry_from_file( refgeo_PD, filename_refgeo_PD, region_name)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_PD "', TRIM(choice_refgeo_PD), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
     
     ! GIA equilibrium ice-sheet geometry
@@ -127,14 +129,16 @@ CONTAINS
       IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from file ', TRIM( filename_refgeo_GIAeq), '...'
       CALL initialise_reference_geometry_from_file( refgeo_GIAeq, filename_refgeo_GIAeq, region_name)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_GIAeq "', TRIM(choice_refgeo_GIAeq), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
     
     ! Fill in secondary data for the reference geometry (used to force mesh creation)
     CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
     CALL calc_reference_geometry_secondary_data( refgeo_PD%grid   , refgeo_PD   )
     CALL calc_reference_geometry_secondary_data( refgeo_GIAeq%grid, refgeo_GIAeq)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 78)
     
   END SUBROUTINE initialise_reference_geometries
   
@@ -150,8 +154,12 @@ CONTAINS
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_from_file'
     INTEGER                                       :: i,j,n
     REAL(dp), PARAMETER                           :: tol = 1E-9_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
@@ -225,14 +233,17 @@ CONTAINS
     CALL sync
     
     ! Safety
-    CALL check_for_NaN_dp_2D( refgeo%Hi_grid, 'refgeo%Hi_grid', 'initialise_reference_geometry_from_file')
-    CALL check_for_NaN_dp_2D( refgeo%Hb_grid, 'refgeo%Hb_grid', 'initialise_reference_geometry_from_file')
-    CALL check_for_NaN_dp_2D( refgeo%Hs_grid, 'refgeo%Hs_grid', 'initialise_reference_geometry_from_file')
+    CALL check_for_NaN_dp_2D( refgeo%Hi_grid, 'refgeo%Hi_grid')
+    CALL check_for_NaN_dp_2D( refgeo%Hb_grid, 'refgeo%Hb_grid')
+    CALL check_for_NaN_dp_2D( refgeo%Hs_grid, 'refgeo%Hs_grid')
     
     ! Remove Lake Vostok from Antarctica (because it's annoying)
     IF (region_name == 'ANT'.AND. C%remove_Lake_Vostok) THEN
       CALL remove_Lake_Vostok( refgeo%grid%x, refgeo%grid%y, refgeo%Hi_grid, refgeo%Hb_grid, refgeo%Hs_grid)
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
     
   END SUBROUTINE initialise_reference_geometry_from_file
   
@@ -248,7 +259,11 @@ CONTAINS
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
     REAL(dp),                       INTENT(IN)    :: dx
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Set up a grid
     CALL setup_idealised_geometry_grid( refgeo%grid, region_name, dx)
@@ -293,9 +308,11 @@ CONTAINS
       ! The MISMIP+ fjord geometry
       CALL initialise_reference_geometry_idealised_grid_MISMIPplus(    refgeo%grid, refgeo)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometry_idealised_grid - ERROR: unknown "', TRIM(choice_refgeo_idealised), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_idealised "' // TRIM( choice_refgeo_idealised) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid
   SUBROUTINE initialise_reference_geometry_idealised_grid_flatearth(     grid, refgeo)
@@ -309,8 +326,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_flatearth'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -320,6 +341,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_flatearth
   SUBROUTINE initialise_reference_geometry_idealised_grid_Halfar(        grid, refgeo)
@@ -333,8 +357,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_Halfar'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -344,6 +372,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_Halfar
   SUBROUTINE initialise_reference_geometry_idealised_grid_Bueler(        grid, refgeo)
@@ -357,8 +388,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_Bueler'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -368,6 +403,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_Bueler
   SUBROUTINE initialise_reference_geometry_idealised_grid_SSA_icestream( grid, refgeo)
@@ -381,8 +419,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_SSA_icestream'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -392,6 +434,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_SSA_icestream
   SUBROUTINE initialise_reference_geometry_idealised_grid_MISMIP_mod(    grid, refgeo)
@@ -405,8 +450,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_MISMIP_mod'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -423,6 +472,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_MISMIP_mod
   SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_A(   grid, refgeo)
@@ -436,8 +488,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_ISMIP_HOM_A'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -447,6 +503,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_A
   SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_B(   grid, refgeo)
@@ -460,8 +519,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_ISMIP_HOM_B'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -471,6 +534,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_B
   SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_CD(  grid, refgeo)
@@ -484,8 +550,12 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_ISMIP_HOM_CD'
     INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -495,6 +565,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_CD
   SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_E(   grid, refgeo)
@@ -508,10 +581,14 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_ISMIP_HOM_E'
     INTEGER                                       :: i,j
     REAL(dp)                                      :: x,Hs,Hb
     INTEGER                                       :: ios,slides
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! To prevent compiler warnings from unused variables
     i = grid%nx
@@ -528,14 +605,16 @@ CONTAINS
           refgeo%Hs_grid( i,j) = Hs
         END DO
         IF (ios /= 0) THEN
-          WRITE(0,*) ' initialise_reference_geometry_idealised_grid_ISMIP_HOM_E - ERROR: length of text file "', TRIM(C%ISMIP_HOM_E_Arolla_filename), '" should be 51 lines!'
-          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+          CALL crash(' length of text file "' // TRIM( C%ISMIP_HOM_E_Arolla_filename) // '" should be 51 lines!')
         END IF
       END DO
       CLOSE( UNIT  = 1337)
       
     END IF ! IF (par%master) THEN
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_E
   SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_F(   grid, refgeo)
@@ -549,12 +628,16 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_ISMIP_HOM_F'
     INTEGER                                       :: i,j
     
     REAL(dp), PARAMETER                           :: H0    = 1000._dp
     REAL(dp), PARAMETER                           :: a0    = 100._dp
     REAL(dp), PARAMETER                           :: sigma = 10000._dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -572,6 +655,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_ISMIP_HOM_F
   SUBROUTINE initialise_reference_geometry_idealised_grid_MISMIPplus(    grid, refgeo)
@@ -585,7 +671,8 @@ CONTAINS
     TYPE(type_grid),                INTENT(IN)    :: grid
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_MISMIPplus'
     INTEGER                                       :: i,j
     
     REAL(dp)                                      :: x,y,xtilde,Bx,By
@@ -598,6 +685,9 @@ CONTAINS
     REAL(dp), PARAMETER                           :: dc     = 500._dp
     REAL(dp), PARAMETER                           :: wc     = 24000._dp
     REAL(dp), PARAMETER                           :: zbdeep = -720._dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
@@ -613,6 +703,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_grid_MISMIPplus
   
@@ -628,9 +721,13 @@ CONTAINS
     REAL(dp),                        INTENT(IN)        :: dx
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'setup_idealised_geometry_grid'
     INTEGER                                            :: nsx, nsy, i, j, n
     REAL(dp)                                           :: xmin, xmax, ymin, ymax, xmid, ymid
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Assign dummy values to suppress compiler warnings
     xmin = 0._dp
@@ -749,6 +846,9 @@ CONTAINS
     END IF
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 13)
+    
   END SUBROUTINE setup_idealised_geometry_grid
   
   ! Fill in secondary data for the reference geometry (used to force mesh creation)
@@ -762,8 +862,12 @@ CONTAINS
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'calc_reference_geometry_secondary_data'
     INTEGER                                       :: i,j,ii,jj
     REAL(dp)                                      :: d2Hs_dx2, d2Hs_dxdy, d2Hs_dy2
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv  , refgeo%wsurf_curv  )
@@ -885,6 +989,9 @@ CONTAINS
     END DO
     CALL sync
     
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 10)
+    
   END SUBROUTINE calc_reference_geometry_secondary_data
   
   ! Initialise a reference geometry according to an idealised world on the model mesh
@@ -898,7 +1005,11 @@ CONTAINS
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     CHARACTER(LEN=256),             INTENT(IN)    :: choice_refgeo_idealised
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hi, refgeo%wHi)
@@ -940,9 +1051,11 @@ CONTAINS
       ! The MISMIP+ fjord geometry
       CALL initialise_reference_geometry_idealised_mesh_MISMIPplus(    mesh, refgeo)
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometry_idealised_mesh - ERROR: unknown "', TRIM(choice_refgeo_idealised), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_idealised "' // TRIM( choice_refgeo_idealised) // '"!')
     END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh
   SUBROUTINE initialise_reference_geometry_idealised_mesh_flatearth(     mesh, refgeo)
@@ -956,8 +1069,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_flatearth'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hi( vi) = 0._dp
@@ -965,6 +1082,9 @@ CONTAINS
       refgeo%Hs( vi) = 0._dp
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_flatearth
   SUBROUTINE initialise_reference_geometry_idealised_mesh_Halfar(        mesh, refgeo)
@@ -978,8 +1098,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_Halfar'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hi( vi) = Halfar_solution( mesh%V( vi,1), mesh%V( vi,2), C%start_time_of_run)
@@ -987,6 +1111,9 @@ CONTAINS
       refgeo%Hs( vi) = refgeo%Hi( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_Halfar
   SUBROUTINE initialise_reference_geometry_idealised_mesh_Bueler(        mesh, refgeo)
@@ -1000,8 +1127,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_Bueler'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hi( vi) = Bueler_solution( mesh%V( vi,1), mesh%V( vi,2), C%start_time_of_run)
@@ -1009,6 +1140,9 @@ CONTAINS
       refgeo%Hs( vi) = refgeo%Hi( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_Bueler
   SUBROUTINE initialise_reference_geometry_idealised_mesh_SSA_icestream( mesh, refgeo)
@@ -1022,8 +1156,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_SSA_icestream'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hi( vi) = 2000._dp
@@ -1031,6 +1169,9 @@ CONTAINS
       refgeo%Hs( vi) = refgeo%Hb( vi) + refgeo%Hi( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_SSA_icestream
   SUBROUTINE initialise_reference_geometry_idealised_mesh_MISMIP_mod(    mesh, refgeo)
@@ -1044,8 +1185,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_MISMIP_mod'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1060,6 +1205,9 @@ CONTAINS
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_MISMIP_mod
   SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_A(   mesh, refgeo)
@@ -1073,8 +1221,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_A'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = 2000._dp - mesh%V( vi,1) * TAN( 0.5_dp * pi / 180._dp)
@@ -1082,6 +1234,9 @@ CONTAINS
       refgeo%Hi( vi) = refgeo%Hs( vi) - refgeo%Hb( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_A
   SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_B(   mesh, refgeo)
@@ -1095,8 +1250,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_B'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = 2000._dp - mesh%V( vi,1) * TAN( 0.5_dp * pi / 180._dp)
@@ -1104,6 +1263,9 @@ CONTAINS
       refgeo%Hi( vi) = refgeo%Hs( vi) - refgeo%Hb( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_B
   SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_CD(  mesh, refgeo)
@@ -1117,8 +1279,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_CD'
     INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
       
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = 2000._dp - mesh%V( vi,1) * TAN( 0.1_dp * pi / 180._dp)
@@ -1126,6 +1292,9 @@ CONTAINS
       refgeo%Hi( vi) = refgeo%Hs( vi) - refgeo%Hb( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_CD
   SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_E(   mesh, refgeo)
@@ -1139,12 +1308,19 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_E'
+    
     ! DENK DROM
     REAL(dp) :: dp_dummy
-    IF (par%master) WRITE(0,*) 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_E - FIXME!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! DENK DROM
     dp_dummy = mesh%V( 1,1)
     dp_dummy = refgeo%Hi( 1)
+    CALL crash('FIXME!')
     
 !    ! Local variables
 !    INTEGER                                       :: vi
@@ -1174,6 +1350,9 @@ CONTAINS
 !      
 !    END IF ! IF (par%master) THEN
 !    CALL sync
+!    
+!    ! Finalise routine path
+!    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_E
   SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_F(   mesh, refgeo)
@@ -1187,12 +1366,16 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_ISMIP_HOM_F'
     INTEGER                                       :: vi
     
     REAL(dp), PARAMETER                           :: H0    = 1000._dp
     REAL(dp), PARAMETER                           :: a0    = 100._dp
     REAL(dp), PARAMETER                           :: sigma = 10000._dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = 5000._dp - mesh%V( vi,1) * TAN( 3._dp * pi / 180._dp)
@@ -1208,6 +1391,9 @@ CONTAINS
       refgeo%Hi( vi) = refgeo%Hs( vi) - refgeo%Hb( vi)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_ISMIP_HOM_F
   SUBROUTINE initialise_reference_geometry_idealised_mesh_MISMIPplus(    mesh, refgeo)
@@ -1221,7 +1407,8 @@ CONTAINS
     TYPE(type_mesh),                INTENT(IN)    :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_MISMIPplus'
     INTEGER                                       :: vi
     
     REAL(dp)                                      :: x,y,xtilde,Bx,By
@@ -1234,6 +1421,9 @@ CONTAINS
     REAL(dp), PARAMETER                           :: dc     = 500._dp
     REAL(dp), PARAMETER                           :: wc     = 24000._dp
     REAL(dp), PARAMETER                           :: zbdeep = -720._dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
   
     DO vi = mesh%vi1, mesh%vi2
       x = mesh%V( vi,1) + 400000._dp
@@ -1247,6 +1437,9 @@ CONTAINS
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_reference_geometry_idealised_mesh_MISMIPplus
 
@@ -1265,9 +1458,13 @@ CONTAINS
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_mesh),                INTENT(INOUT) :: mesh
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'map_reference_geometries_to_mesh'
     CHARACTER(LEN=256)                            :: choice_refgeo_init, choice_refgeo_PD, choice_refgeo_GIAeq
     LOGICAL                                       :: did_remap_init, did_remap_PD, did_remap_GIAeq, do_reuse_init_map, do_reuse_PD_map
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Determine parameters for this region
     IF     (region%name == 'NAM') THEN
@@ -1298,7 +1495,7 @@ CONTAINS
     IF     (choice_refgeo_init == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
       
-      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
       
     ELSEIF (choice_refgeo_init == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
@@ -1308,8 +1505,7 @@ CONTAINS
       did_remap_init = .TRUE.
       
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_init "', TRIM(choice_refgeo_init), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
     
     ! Present-day ice-sheet geometry
@@ -1322,7 +1518,7 @@ CONTAINS
     IF     (choice_refgeo_PD == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
       
-      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
       
     ELSEIF (choice_refgeo_PD == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
@@ -1350,8 +1546,7 @@ CONTAINS
       did_remap_PD = .TRUE.
       
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_PD "', TRIM(choice_refgeo_PD), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
     
     ! GIA equilibrium ice-sheet geometry
@@ -1364,7 +1559,7 @@ CONTAINS
     IF     (choice_refgeo_GIAeq == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
       
-      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
       
     ELSEIF (choice_refgeo_GIAeq == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
@@ -1406,14 +1601,16 @@ CONTAINS
       did_remap_GIAeq = .TRUE.
       
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_reference_geometries - ERROR: unknown choice_refgeo_GIAeq "', TRIM(choice_refgeo_GIAeq), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
     
     ! Clean up after yourself
     IF (did_remap_init ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_init%grid )
     IF (did_remap_PD   ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_PD%grid   )
     IF (did_remap_GIAeq) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_GIAeq%grid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
     
   END SUBROUTINE map_reference_geometries_to_mesh
   SUBROUTINE map_reference_geometry_to_mesh( mesh, refgeo)
@@ -1425,13 +1622,12 @@ CONTAINS
     TYPE(type_mesh),                INTENT(INOUT) :: mesh
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
     
-    ! Local variables
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'map_reference_geometry_to_mesh'
     INTEGER                                       :: vi
     
-    ! Allocate memory for reference data on the mesh
-    CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hi, refgeo%wHi)
-    CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hb, refgeo%wHb)
-    CALL allocate_shared_dp_1D( mesh%nV, refgeo%Hs, refgeo%wHs)
+    ! Add routine to path
+    CALL init_routine( routine_name)
     
     ! Map PD data to the mesh
     CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
@@ -1441,6 +1637,9 @@ CONTAINS
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
     CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
   
   END SUBROUTINE map_reference_geometry_to_mesh
 

@@ -14,7 +14,8 @@ MODULE data_types_module
                                          type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux, &
                                          type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
                                          type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
-                                         type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data
+                                         type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data, &
+                                         type_netcdf_resource_tracker
 
   IMPLICIT NONE
   
@@ -789,7 +790,7 @@ MODULE data_types_module
     INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
     INTEGER                             :: n                         ! Number of entries
     INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
-    
+
   END TYPE type_memory_use_tracker
 
   !===============================

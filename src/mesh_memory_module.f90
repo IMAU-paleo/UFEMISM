@@ -18,9 +18,7 @@ MODULE mesh_memory_module
                                              reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  
+
   ! Import specific functionality
   USE parallel_module,                 ONLY: adapt_shared_int_1D,    adapt_shared_dp_1D, &
                                              adapt_shared_int_2D,    adapt_shared_dp_2D, &
@@ -47,7 +45,7 @@ MODULE mesh_memory_module
 CONTAINS
   
   SUBROUTINE allocate_mesh_primary(       mesh, region_name, nV_mem, nTri_mem, nC_mem)
-    ! Allocate memory for mesh data    
+    ! Allocate memory for mesh data
     
     IMPLICIT NONE
     
@@ -168,7 +166,7 @@ CONTAINS
   END SUBROUTINE allocate_mesh_primary
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
-    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.    
+    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
     
     IMPLICIT NONE
     
@@ -189,7 +187,7 @@ CONTAINS
     CALL adapt_shared_dp_2D(       mesh%nV,   nV_mem_new,    2,           mesh%V,              mesh%wV             )
     CALL adapt_shared_dp_2D(       mesh%nV,   nV_mem_new,    2,           mesh%V,              mesh%wV             )
     CALL adapt_shared_int_1D(      mesh%nV,   nV_mem_new,                 mesh%nC,             mesh%wnC            )
-    CALL adapt_shared_int_2D(      mesh%nV,   nV_mem_new,    mesh%nC_mem, mesh%C,              mesh%wC             )   
+    CALL adapt_shared_int_2D(      mesh%nV,   nV_mem_new,    mesh%nC_mem, mesh%C,              mesh%wC             )
     CALL adapt_shared_int_1D(      mesh%nV,   nV_mem_new,                 mesh%niTri,          mesh%wniTri         )
     CALL adapt_shared_int_2D(      mesh%nV,   nV_mem_new,    mesh%nC_mem, mesh%iTri,           mesh%wiTri          )
     CALL adapt_shared_int_1D(      mesh%nV,   nV_mem_new,                 mesh%edge_index,     mesh%wedge_index    )
@@ -198,8 +196,8 @@ CONTAINS
     IF (par%master) mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
     
     CALL adapt_shared_int_2D(      mesh%nTri, nTri_mem_new, 3,            mesh%Tri,            mesh%wTri           )
-    CALL adapt_shared_dp_2D(       mesh%nTri, nTri_mem_new, 2,            mesh%Tricc,          mesh%wTricc         )    
-    CALL adapt_shared_int_2D(      mesh%nTri, nTri_mem_new, 3,            mesh%TriC,           mesh%wTriC          )  
+    CALL adapt_shared_dp_2D(       mesh%nTri, nTri_mem_new, 2,            mesh%Tricc,          mesh%wTricc         )
+    CALL adapt_shared_int_2D(      mesh%nTri, nTri_mem_new, 3,            mesh%TriC,           mesh%wTriC          )
     CALL adapt_shared_int_1D(      mesh%nTri, nTri_mem_new,               mesh%Tri_edge_index, mesh%wTri_edge_index)
     
     CALL adapt_shared_int_2D(      mesh%nTri, nTri_mem_new, 2,            mesh%Triflip,        mesh%wTriflip       )
@@ -220,7 +218,7 @@ CONTAINS
   END SUBROUTINE extend_mesh_primary
   SUBROUTINE crop_mesh_primary(           mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
-    ! deallocate the old field, allocate a new (smaller) one, and copy the data back.    
+    ! deallocate the old field, allocate a new (smaller) one, and copy the data back.
     
     IMPLICIT NONE
     
@@ -238,15 +236,15 @@ CONTAINS
        
     CALL adapt_shared_dp_2D(       mesh%nV,   mesh%nV,   2,             mesh%V,              mesh%wV             )
     CALL adapt_shared_int_1D(      mesh%nV,   mesh%nV,                  mesh%nC,             mesh%wnC            )
-    CALL adapt_shared_int_2D(      mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%C,              mesh%wC             )   
+    CALL adapt_shared_int_2D(      mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%C,              mesh%wC             )
     CALL adapt_shared_int_1D(      mesh%nV,   mesh%nV,                  mesh%niTri,          mesh%wniTri         )
     CALL adapt_shared_int_2D(      mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%iTri,           mesh%wiTri          )
     CALL adapt_shared_int_1D(      mesh%nV,   mesh%nV,                  mesh%edge_index,     mesh%wedge_index    )
     CALL adapt_shared_int_1D(      mesh%nV,   mesh%nV,                  mesh%mesh_old_ti_in, mesh%wmesh_old_ti_in)
     
     CALL adapt_shared_int_2D(      mesh%nTri, mesh%nTri, 3,             mesh%Tri,            mesh%wTri           )
-    CALL adapt_shared_dp_2D(       mesh%nTri, mesh%nTri, 2,             mesh%Tricc,          mesh%wTricc         )    
-    CALL adapt_shared_int_2D(      mesh%nTri, mesh%nTri, 3,             mesh%TriC,           mesh%wTriC          )  
+    CALL adapt_shared_dp_2D(       mesh%nTri, mesh%nTri, 2,             mesh%Tricc,          mesh%wTricc         )
+    CALL adapt_shared_int_2D(      mesh%nTri, mesh%nTri, 3,             mesh%TriC,           mesh%wTriC          )
     CALL adapt_shared_int_1D(      mesh%nTri, mesh%nTri,                mesh%Tri_edge_index, mesh%wTri_edge_index)
     
     CALL adapt_shared_int_2D(      mesh%nTri, mesh%nTri, 2,             mesh%Triflip,        mesh%wTriflip       )
@@ -266,7 +264,7 @@ CONTAINS
     
   END SUBROUTINE crop_mesh_primary
   SUBROUTINE allocate_mesh_secondary(     mesh)
-    ! Allocate memory for mesh data    
+    ! Allocate memory for mesh data
     
     IMPLICIT NONE
     
@@ -300,7 +298,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! In/output variables:
-    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh    
+    TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_mesh_all'
@@ -365,7 +363,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wTriStack1)
     CALL deallocate_shared( mesh%wTriStack2)
     
-    CALL deallocate_shared( mesh%wnPOI               )        
+    CALL deallocate_shared( mesh%wnPOI               )
     CALL deallocate_shared( mesh%wPOI_coordinates    )
     CALL deallocate_shared( mesh%wPOI_XY_coordinates )
     CALL deallocate_shared( mesh%wPOI_resolutions    )
@@ -443,7 +441,7 @@ CONTAINS
    END SUBROUTINE deallocate_mesh_all
   
   SUBROUTINE allocate_submesh_primary(    mesh, region_name, nV_mem, nTri_mem, nC_mem)
-    ! Allocate memory for mesh data    
+    ! Allocate memory for mesh data
     
     IMPLICIT NONE
     
@@ -560,7 +558,7 @@ CONTAINS
   END SUBROUTINE allocate_submesh_primary
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
-    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.    
+    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
     
     IMPLICIT NONE
     
@@ -579,7 +577,7 @@ CONTAINS
        
     CALL adapt_shared_dist_dp_2D(  mesh%nV,   nV_mem_new,   2,             mesh%V,              mesh%wV             )
     CALL adapt_shared_dist_int_1D( mesh%nV,   nV_mem_new,                  mesh%nC,             mesh%wnC            )
-    CALL adapt_shared_dist_int_2D( mesh%nV,   nV_mem_new,   mesh%nC_mem,   mesh%C,              mesh%wC             )   
+    CALL adapt_shared_dist_int_2D( mesh%nV,   nV_mem_new,   mesh%nC_mem,   mesh%C,              mesh%wC             )
     CALL adapt_shared_dist_int_1D( mesh%nV,   nV_mem_new,                  mesh%niTri,          mesh%wniTri         )
     CALL adapt_shared_dist_int_2D( mesh%nV,   nV_mem_new,   mesh%nC_mem,   mesh%iTri,           mesh%wiTri          )
     CALL adapt_shared_dist_int_1D( mesh%nV,   nV_mem_new,                  mesh%edge_index,     mesh%wedge_index    )
@@ -588,8 +586,8 @@ CONTAINS
     mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
     
     CALL adapt_shared_dist_int_2D( mesh%nTri, nTri_mem_new, 3,             mesh%Tri,            mesh%wTri           )
-    CALL adapt_shared_dist_dp_2D(  mesh%nTri, nTri_mem_new, 2,             mesh%Tricc,          mesh%wTricc         )    
-    CALL adapt_shared_dist_int_2D( mesh%nTri, nTri_mem_new, 3,             mesh%TriC,           mesh%wTriC          )  
+    CALL adapt_shared_dist_dp_2D(  mesh%nTri, nTri_mem_new, 2,             mesh%Tricc,          mesh%wTricc         )
+    CALL adapt_shared_dist_int_2D( mesh%nTri, nTri_mem_new, 3,             mesh%TriC,           mesh%wTriC          )
     CALL adapt_shared_dist_int_1D( mesh%nTri, nTri_mem_new,                mesh%Tri_edge_index, mesh%wTri_edge_index)
     
     CALL adapt_shared_dist_int_2D( mesh%nTri, nTri_mem_new, 2,             mesh%Triflip,        mesh%wTriflip       )
@@ -610,7 +608,7 @@ CONTAINS
   END SUBROUTINE extend_submesh_primary
   SUBROUTINE crop_submesh_primary(        mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
-    ! deallocate the old field, allocate a new (smaller) one, and copy the data back.    
+    ! deallocate the old field, allocate a new (smaller) one, and copy the data back.
     
     IMPLICIT NONE
     
@@ -627,15 +625,15 @@ CONTAINS
        
     CALL adapt_shared_dist_dp_2D(  mesh%nV,   mesh%nV,   2,             mesh%V,              mesh%wV             )
     CALL adapt_shared_dist_int_1D( mesh%nV,   mesh%nV,                  mesh%nC,             mesh%wnC            )
-    CALL adapt_shared_dist_int_2D( mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%C,              mesh%wC             )   
+    CALL adapt_shared_dist_int_2D( mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%C,              mesh%wC             )
     CALL adapt_shared_dist_int_1D( mesh%nV,   mesh%nV,                  mesh%niTri,          mesh%wniTri         )
     CALL adapt_shared_dist_int_2D( mesh%nV,   mesh%nV,   mesh%nC_mem,   mesh%iTri,           mesh%wiTri          )
     CALL adapt_shared_dist_int_1D( mesh%nV,   mesh%nV,                  mesh%edge_index,     mesh%wedge_index    )
     CALL adapt_shared_dist_int_1D( mesh%nV,   mesh%nV,                  mesh%mesh_old_ti_in, mesh%wmesh_old_ti_in)
     
     CALL adapt_shared_dist_int_2D( mesh%nTri, mesh%nTri, 3,             mesh%Tri,            mesh%wTri           )
-    CALL adapt_shared_dist_dp_2D(  mesh%nTri, mesh%nTri, 2,             mesh%Tricc,          mesh%wTricc         )    
-    CALL adapt_shared_dist_int_2D( mesh%nTri, mesh%nTri, 3,             mesh%TriC,           mesh%wTriC          )  
+    CALL adapt_shared_dist_dp_2D(  mesh%nTri, mesh%nTri, 2,             mesh%Tricc,          mesh%wTricc         )
+    CALL adapt_shared_dist_int_2D( mesh%nTri, mesh%nTri, 3,             mesh%TriC,           mesh%wTriC          )
     CALL adapt_shared_dist_int_1D( mesh%nTri, mesh%nTri,                mesh%Tri_edge_index, mesh%wTri_edge_index)
     
     CALL adapt_shared_dist_int_2D( mesh%nTri, mesh%nTri, 2,             mesh%Triflip,        mesh%wTriflip       )
@@ -719,7 +717,7 @@ CONTAINS
     CALL deallocate_shared( mesh%wTriStack1)
     CALL deallocate_shared( mesh%wTriStack2)
     
-    CALL deallocate_shared( mesh%wnPOI               )        
+    CALL deallocate_shared( mesh%wnPOI               )
     CALL deallocate_shared( mesh%wPOI_coordinates    )
     CALL deallocate_shared( mesh%wPOI_XY_coordinates )
     CALL deallocate_shared( mesh%wPOI_resolutions    )
@@ -734,7 +732,7 @@ CONTAINS
     ! Give process p_left access to the submesh memory of p_right
     ! Used in submesh merging
     
-    USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER, C_LOC    
+    USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER, C_LOC
     
     IMPLICIT NONE
  
@@ -795,14 +793,14 @@ CONTAINS
     
     CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriMap,           submesh%wTriMap,           submesh_right%wTriMap,           nTri         )
     CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriStack1,        submesh%wTriStack1,        submesh_right%wTriStack1,        nTri         )
-    CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriStack2,        submesh%wTriStack2,        submesh_right%wTriStack2,        nTri         )  
+    CALL share_memory_access_int_1D( p_left, p_right, submesh_right%TriStack2,        submesh%wTriStack2,        submesh_right%wTriStack2,        nTri         )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE share_submesh_access
   
-  SUBROUTINE move_data_from_submesh_to_mesh( mesh, submesh)    
+  SUBROUTINE move_data_from_submesh_to_mesh( mesh, submesh)
     
     IMPLICIT NONE
   

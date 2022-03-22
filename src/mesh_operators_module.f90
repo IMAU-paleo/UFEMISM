@@ -20,16 +20,10 @@ MODULE mesh_operators_module
                                              reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  
+
   ! Import specific functionality
-  USE parallel_module,                 ONLY: adapt_shared_int_1D,    adapt_shared_dp_1D, &
-                                             adapt_shared_int_2D,    adapt_shared_dp_2D, &
-                                             adapt_shared_int_3D,    adapt_shared_dp_3D, &
-                                             adapt_shared_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid
-  USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general 
+  USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general
   USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_petsc2CSR
 
   IMPLICIT NONE

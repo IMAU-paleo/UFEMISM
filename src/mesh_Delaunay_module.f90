@@ -19,21 +19,19 @@ MODULE mesh_Delaunay_module
                                              reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh
-  USE mesh_help_functions_module,      ONLY: is_in_triangle, is_boundary_segment, find_circumcenter, find_containing_triangle, &
-                                             line_from_points, line_line_intersection, perpendicular_bisector_from_line, &
-                                             encroaches_upon, update_triangle_circumcenter
+  USE mesh_help_functions_module,      ONLY: update_triangle_circumcenter, is_in_triangle, encroaches_upon, &
+                                             find_containing_triangle, line_from_points, line_line_intersection, &
+                                             is_boundary_segment, perpendicular_bisector_from_line
 
   IMPLICIT NONE
 
   CONTAINS
   
   SUBROUTINE split_triangle( mesh, ti, p_new)
-     ! Split mesh triangle ti into three new ones, adding a vertex at p_new    
+     ! Split mesh triangle ti into three new ones, adding a vertex at p_new
     
     IMPLICIT NONE
 
@@ -397,7 +395,7 @@ MODULE mesh_Delaunay_module
 
   END SUBROUTINE split_triangle
   SUBROUTINE split_line(     mesh, v1a, v2a, p_new)
-     ! Split the line between vertices v1a and v2a at point p_new    
+     ! Split the line between vertices v1a and v2a at point p_new
     
     IMPLICIT NONE
     
@@ -730,7 +728,7 @@ MODULE mesh_Delaunay_module
 
   END SUBROUTINE split_line
   SUBROUTINE split_segment(  mesh, v1a, v2a, p_new)
-    ! Split an Edge segment in two, adding a vertex halfway.    
+    ! Split an Edge segment in two, adding a vertex halfway.
     
     IMPLICIT NONE
     
@@ -971,7 +969,7 @@ MODULE mesh_Delaunay_module
   END SUBROUTINE split_segment
   SUBROUTINE flip_triangle_pairs( mesh, nf, did_flip)
     ! Flip adjacent triangles, if possible and neccesary. Add new triangle
-    ! pairs to the list.    
+    ! pairs to the list.
     
     IMPLICIT NONE
     
@@ -1205,7 +1203,7 @@ MODULE mesh_Delaunay_module
     ! == First, determine general info
     ! Shared vertices v1 and v2 (sorted clockwise in t1), non-shared
     ! vertices vo1 and vo2, neigbours to t1 t1nv1 (across from v1) and
-    ! t1nv2 (across from v2) and neighbours to t2 t2nv1 and t2nv2 (idem)    
+    ! t1nv2 (across from v2) and neighbours to t2 t2nv1 and t2nv2 (idem)
     
     IMPLICIT NONE
     

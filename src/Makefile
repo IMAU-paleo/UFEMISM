@@ -5,8 +5,8 @@
 
 # For compiling setting, Makefile will point to the uncommented file below:
 #include Makefile_include_local.txt
-#include Makefile_include_mac.txt
-include Makefile_include_snellius.txt
+include Makefile_include_mac.txt
+#include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files
@@ -52,24 +52,12 @@ UFEMISM_program_objects = \
         mesh_update_module.o \
         zeta_module.o \
         netcdf_module.o \
-        restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
-        SMB_module.o \
-        BMB_module.o \
-        ocean_module.o \
-        climate_module.o \
         general_ice_model_data_module.o \
-        ice_velocity_module.o \
-        ice_thickness_module.o \
-        thermodynamics_module.o \
         ice_dynamics_module.o \
-        isotopes_module.o \
-        bedrock_ELRA_module.o \
-        tests_and_checks_module.o \
         UFEMISM_main_model.o \
-        global_text_output_module.o \
         UFEMISM_program.o
 
 # The executable (the target) depends on the object files:

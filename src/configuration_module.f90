@@ -260,7 +260,7 @@ MODULE configuration_module
   INTEGER             :: d18O_record_length_config                   = 2051
 
   ! Geothermal heat flux
-  CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
+  CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'constant'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   REAL(dp)            :: constant_geothermal_heat_flux_config        = 1.72E06_dp                       ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
   CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
@@ -1435,6 +1435,10 @@ CONTAINS
         ! Run the model with a single config file
         CALL getarg( 1, config_filename)
         config_mode = 'single_config'
+
+        WRITE(0,*) ''
+        WRITE(0,*) ' Simulation settings from configuration file: ', TRIM(config_filename)
+        WRITE(0,*) ''
         
       ELSEIF (iargc() == 2) THEN
       
@@ -1442,6 +1446,10 @@ CONTAINS
         CALL getarg( 1, template_filename )
         CALL getarg( 2, variation_filename)
         config_mode = 'template+variation'
+
+        WRITE(0,*) ''
+        WRITE(0,*) ' Simulation settings from configuration files: ', TRIM(template_filename), ' & ', TRIM(variation_filename)
+        WRITE(0,*) ''
         
       ELSE
       

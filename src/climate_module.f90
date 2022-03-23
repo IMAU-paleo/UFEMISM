@@ -172,7 +172,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=56)
 
   END SUBROUTINE initialise_climate_model_global
   SUBROUTINE initialise_climate_model_regional( region, climate_matrix_global)
@@ -239,7 +239,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=113)
 
   END SUBROUTINE initialise_climate_model_regional
 
@@ -942,7 +942,7 @@ CONTAINS
     CALL initialise_climate_snapshot_global( climate_matrix_global%GCM_cold, name = 'GCM_cold', nc_filename = C%filename_climate_snapshot_cold, CO2 = C%matrix_low_CO2_level,  orbit_time = C%matrix_cold_orbit_time)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=56)
 
   END SUBROUTINE initialise_climate_matrix_global
   SUBROUTINE initialise_climate_PD_obs_global( PD_obs, name)
@@ -995,7 +995,7 @@ CONTAINS
     CALL partition_list( PD_obs%nlon, par%i, par%n, PD_obs%i1, PD_obs%i2)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=14)
 
   END SUBROUTINE initialise_climate_PD_obs_global
   SUBROUTINE initialise_climate_snapshot_global( snapshot, name, nc_filename, CO2, orbit_time)
@@ -1091,7 +1091,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=14)
 
   END SUBROUTINE initialise_climate_snapshot_global
 
@@ -1170,7 +1170,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=113)
 
   END SUBROUTINE initialise_climate_matrix_regional
   SUBROUTINE allocate_climate_snapshot_regional( mesh, climate, name)
@@ -1216,7 +1216,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV,     climate%I_abs,       climate%wI_abs      )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=19)
 
   END SUBROUTINE allocate_climate_snapshot_regional
   SUBROUTINE calculate_GCM_bias( mesh, climate_matrix)
@@ -1262,7 +1262,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE calculate_GCM_bias
   SUBROUTINE correct_GCM_bias( mesh, climate_matrix, climate, do_correct_bias)
@@ -2682,7 +2682,7 @@ CONTAINS
   ! ==============================
 
   SUBROUTINE map_subclimate_to_mesh( mesh, cglob, creg)
-    ! Map data from a global "subclimate" (PD observed or cglobM snapshot) to the mesh
+    ! Map data from a global "subclimate" (PD observed or cglob snapshot) to the mesh
 
     IMPLICIT NONE
 
@@ -2732,6 +2732,13 @@ CONTAINS
 
     ! Rotate zonal/meridional wind to x,y wind
     CALL rotate_wind_to_model_mesh( mesh, creg%wind_WE, creg%wind_SN, creg%wind_LR, creg%wind_DU)
+
+    ! Clean up after yourself
+
+    CALL deallocate_shared( grid%wnlon)
+    CALL deallocate_shared( grid%wnlat)
+    CALL deallocate_shared( grid%wlon )
+    CALL deallocate_shared( grid%wlat )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

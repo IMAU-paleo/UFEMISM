@@ -285,7 +285,7 @@ CONTAINS
     CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=10)
         
   END SUBROUTINE initialise_ELRA_model
   SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)

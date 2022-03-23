@@ -145,7 +145,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=37)
 
   END SUBROUTINE initialise_ocean_model_regional
 
@@ -190,7 +190,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=39)
 
   END SUBROUTINE initialise_ocean_model_global
 
@@ -784,7 +784,7 @@ CONTAINS
     CALL initialise_ocean_snapshot_global( ocean_matrix%GCM_cold, name = 'cold',   nc_filename = C%filename_GCM_ocean_snapshot_cold, CO2 = C%matrix_low_CO2_level,  orbit_time = C%matrix_cold_orbit_time)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=39)
 
   END SUBROUTINE initialise_ocean_matrix_global
 
@@ -832,8 +832,14 @@ CONTAINS
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( PD_obs)
 
+    ! Deallocate raw ocean data
+    CALL deallocate_shared( PD_obs%wnz_ocean_raw)
+    CALL deallocate_shared( PD_obs%wz_ocean_raw )
+    CALL deallocate_shared( PD_obs%wT_ocean_raw )
+    CALL deallocate_shared( PD_obs%wS_ocean_raw )
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=6)
 
   END SUBROUTINE initialise_ocean_PD_obs_global
 
@@ -894,8 +900,14 @@ CONTAINS
     ! Map the data to the desired vertical grid
     CALL map_global_ocean_data_to_UFEMISM_vertical_grid( snapshot)
 
+    ! Deallocate raw ocean data
+    CALL deallocate_shared( snapshot%wnz_ocean_raw)
+    CALL deallocate_shared( snapshot%wz_ocean_raw )
+    CALL deallocate_shared( snapshot%wT_ocean_raw )
+    CALL deallocate_shared( snapshot%wS_ocean_raw )
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=11)
 
   END SUBROUTINE initialise_ocean_snapshot_global
 
@@ -963,7 +975,7 @@ CONTAINS
     region%ocean_matrix%applied%w_tot_history = 0._dp ! Initiate at cold conditions
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=37)
 
   END SUBROUTINE initialise_ocean_matrix_regional
 
@@ -995,7 +1007,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, ocean%S_ocean_corr_ext, ocean%wS_ocean_corr_ext)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=7)
 
   END SUBROUTINE allocate_ocean_snapshot_regional
 
@@ -1043,11 +1055,11 @@ CONTAINS
     TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocean_glob
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_global_ocean_data_to_UFEMISM_vertical_grid'
-    INTEGER                                       :: i,j,k
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE       :: z_mask_old, z_mask_new
-    REAL(dp)                                      :: z_floor
-    REAL(dp)                                      :: NaN
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'map_global_ocean_data_to_UFEMISM_vertical_grid'
+    INTEGER                                         :: i,j,k
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE         :: z_mask_old, z_mask_new
+    REAL(dp)                                        :: z_floor
+    REAL(dp)                                        :: NaN
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1107,18 +1119,12 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Deallocate old ocean data
-    CALL deallocate_shared( ocean_glob%wnz_ocean_raw)
-    CALL deallocate_shared( ocean_glob%wz_ocean_raw )
-    CALL deallocate_shared( ocean_glob%wT_ocean_raw )
-    CALL deallocate_shared( ocean_glob%wS_ocean_raw )
-
     ! Clean up after yourself
     DEALLOCATE( z_mask_old)
     DEALLOCATE( z_mask_new)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE map_global_ocean_data_to_UFEMISM_vertical_grid
 
@@ -1366,7 +1372,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=16)
 
   END SUBROUTINE get_hires_ocean_data_from_file
 

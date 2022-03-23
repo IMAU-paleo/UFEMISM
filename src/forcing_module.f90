@@ -168,7 +168,7 @@ CONTAINS
     CALL initialise_geothermal_heat_flux_global
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=30)
 
   END SUBROUTINE initialise_global_forcing
 
@@ -388,7 +388,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=13)
 
   END SUBROUTINE initialise_modelled_benthic_d18O_data
 
@@ -671,7 +671,7 @@ CONTAINS
     CALL update_CO2_at_model_time( C%start_time_of_run)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=4)
 
   END SUBROUTINE initialise_CO2_record
 
@@ -1045,7 +1045,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=8)
 
   END SUBROUTINE initialise_insolation_data
 
@@ -1097,7 +1097,7 @@ CONTAINS
     END IF ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=5)
 
   END SUBROUTINE initialise_geothermal_heat_flux_global
 

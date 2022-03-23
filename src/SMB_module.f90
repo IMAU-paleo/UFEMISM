@@ -151,7 +151,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=18)
 
   END SUBROUTINE initialise_SMB_model
 
@@ -709,7 +709,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=18)
 
   END SUBROUTINE initialise_SMB_model_IMAU_ITM
   SUBROUTINE initialise_IMAU_ITM_firn_restart( mesh, SMB, region_name)

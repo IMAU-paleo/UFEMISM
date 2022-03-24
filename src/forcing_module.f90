@@ -107,7 +107,7 @@ CONTAINS
       END IF
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_global_forcing - ERROR: unknown choice_forcing_method "', TRIM(C%choice_forcing_method), '"!'
+      IF (par%master) WRITE(0,*) 'update_global_forcing - ERROR: unknown choice_forcing_method "', TRIM(C%choice_forcing_method), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
@@ -118,6 +118,8 @@ CONTAINS
 
   SUBROUTINE initialise_global_forcing
     ! Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux)
+
+    IMPLICIT NONE
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER :: routine_name = 'initialise_global_forcing'
@@ -143,8 +145,8 @@ CONTAINS
       ! The global climate is calculated using the observed present-day climate plus a global
       ! temperature offset, which is calculated using the inverse routine, following de Boer et al. (2014)
 
-      CALL initialise_d18O_record
       CALL initialise_modelled_benthic_d18O_data
+      CALL initialise_d18O_record
       CALL initialise_inverse_routine_data
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
@@ -152,8 +154,8 @@ CONTAINS
       ! (following Berends et al., 2019). The climate itself can then be calculated using either a
       ! glacial-index method or a climate-matrix method
 
-      CALL initialise_CO2_record
       CALL initialise_modelled_benthic_d18O_data
+      CALL initialise_CO2_record
       CALL initialise_inverse_routine_data
 
     ELSE
@@ -360,8 +362,7 @@ CONTAINS
 
     ! Safety
     IF (.NOT. C%do_calculate_benthic_d18O) THEN
-      IF (par%master) WRITE(0,*) 'calculate_modelled_d18O - ERROR: this routine should only be called when do_calculate_benthic_d18O = .TRUE.!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when do_calculate_benthic_d18O = .TRUE.!')
     END IF
 
     ! Allocate shared memory
@@ -490,8 +491,7 @@ CONTAINS
 
     IF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
 
-      IF (par%master) WRITE(0,*) 'initialise_inverse_routine_data - ERROR: need to fix the inverse routine stuff to cope with restarting!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('need to fix the inverse routine stuff to cope with restarting!')
 
 !      CALL allocate_shared_dp_0D( forcing%dT_glob_inverse, forcing%wdT_glob_inverse)
 !      ! Determine number of entries in the history
@@ -523,8 +523,7 @@ CONTAINS
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
 
-      IF (par%master) WRITE(0,*) 'initialise_inverse_routine_data - ERROR: need to fix the inverse routine stuff to cope with restarting!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('need to fix the inverse routine stuff to cope with restarting!')
 
 !      CALL allocate_shared_dp_0D( forcing%CO2_inverse, forcing%wCO2_inverse)
 !      ! Determine number of entries in the history
@@ -556,8 +555,7 @@ CONTAINS
 !      END IF
 
     ELSE
-      WRITE(0,*) 'initialise_inverse_routine_data - ERROR: unknown choice_forcing_method "', TRIM(C%choice_forcing_method), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
     END IF
 
     ! Finalise routine path
@@ -638,8 +636,7 @@ CONTAINS
     IF     (C%choice_forcing_method == 'CO2_direct') THEN
       ! Observed CO2 is needed for these forcing methods.
     ELSE
-      WRITE(0,*) '  ERROR: initialise_CO2_record should only be called when choice_forcing_method = "CO2_direct"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
     END IF
 
     ! Allocate shared memory to take the data
@@ -648,18 +645,16 @@ CONTAINS
     CALL allocate_shared_dp_0D(                      forcing%CO2_obs,    forcing%wCO2_obs   )
     CALL allocate_shared_dp_0D(                      forcing%CO2_mod,    forcing%wCO2_mod   )
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
-
     ! Read CO2 record (time and values) from specified text file
     IF (par%master) THEN
+
+        IF (par%master) WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
 
         OPEN(   UNIT = 1337, FILE=C%filename_CO2_record, ACTION='READ')
         DO i = 1, C%CO2_record_length
           READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
           IF (ios /= 0) THEN
-            WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+            CALL crash('length of text file "' // TRIM(C%filename_CO2_record) // '" does not match C%CO2_record_length!')
           END IF
         END DO
         CLOSE( UNIT  = 1337)
@@ -737,6 +732,14 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Safety
+    IF     (C%choice_forcing_method == 'd18O_inverse_dT_glob' .OR. &
+            C%choice_forcing_method == 'd18O_inverse_CO2') THEN
+      ! Observed d18O is needed for these forcing methods.
+    ELSE
+      CALL crash('should only be called when choice_forcing_method = "d18O_inverse_dT_glob" or "d18O_inverse_CO2"!')
+    END IF
+
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) ' Reading d18O record from ', TRIM(C%filename_d18O_record), '...'
 
@@ -770,18 +773,9 @@ CONTAINS
     CALL update_d18O_at_model_time( C%start_time_of_run)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
 
   END SUBROUTINE initialise_d18O_record
-
-
-
-
-  !====================================================
-  !====================================================
-
-
-
 
   ! == Insolation
   SUBROUTINE get_insolation_at_time( mesh, time, Q_TOA)
@@ -1003,7 +997,6 @@ CONTAINS
             C%choice_insolation_forcing == 'realistic') THEN
       ! Initialise insolation
 
-      IF (par%master) WRITE(0,*) ''
       IF (par%master) WRITE(0,*) ' Initialising insolation data from ', TRIM(C%filename_insolation), '...'
 
       ! The times at which we have insolation fields from Laskar, between which we'll interpolate
@@ -1040,8 +1033,7 @@ CONTAINS
       CALL sync
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_insolation_data - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_insolation_forcing "' // TRIM( C%choice_insolation_forcing) // '"!')
     END IF
 
     ! Finalise routine path
@@ -1051,6 +1043,7 @@ CONTAINS
 
   ! == Geothermal heat flux
   SUBROUTINE initialise_geothermal_heat_flux_global
+    ! Initialise global geothermal heat flux data
 
     IMPLICIT NONE
 
@@ -1062,12 +1055,10 @@ CONTAINS
 
     IF (C%choice_geothermal_heat_flux == 'constant') THEN
       ! Just use a constant value, no need to read a file.
-      CALL finalise_routine( routine_name)
-      RETURN
+
     ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
       ! Use a spatially variable geothermal heat fux read from the specified NetCDF file.
 
-      IF (par%master) WRITE(0,*) ''
       IF (par%master) WRITE(0,*) ' Initialising geothermal heat flux data from ', TRIM(C%filename_geothermal_heat_flux), '...'
 
       ! Inquire into the insolation forcing netcdf file
@@ -1090,10 +1081,7 @@ CONTAINS
       CALL sync
 
     ELSE ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
-
-      IF (par%master) WRITE(0,*) '  ERROR: choice_geothermal_heat_flux "', TRIM(C%choice_geothermal_heat_flux), '" not implemented in initialise_geothermal_heat_flux_global!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
+      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
     END IF ! IF (C%choice_geothermal_heat_flux == 'constant') THEN
 
     ! Finalise routine path

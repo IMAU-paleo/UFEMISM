@@ -406,6 +406,13 @@ MODULE configuration_module
 
   CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
+  ! NetCDF files containing direct global/regional climate forcing
+  CHARACTER(LEN=256)  :: filename_direct_global_climate_config       = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_climate_NAM_config = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_climate_EAS_config = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_climate_GRL_config = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_climate_ANT_config = ''
+
   ! GCM snapshots in the matrix_warm_cold option
   CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
   CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
@@ -470,6 +477,13 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_SMB_model_config                     = 'IMAU-ITM'                       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
   CHARACTER(LEN=256)  :: choice_idealised_SMB_config                 = 'EISMINT1_A'
   REAL(dp)            :: SMB_uniform_config                          = 0._dp                            ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
+
+  ! NetCDF file containing direct global/regional climate forcing
+  CHARACTER(LEN=256)  :: filename_direct_global_SMB_config           = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_SMB_NAM_config     = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_SMB_EAS_config     = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_SMB_GRL_config     = ''
+  CHARACTER(LEN=256)  :: filename_direct_regional_SMB_ANT_config     = ''
 
   ! Tuning parameters for the IMAU-ITM SMB model
   CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_NAM_config     = 'uniform'                        ! How to initialise the firn layer in the IMAU-ITM SMB model: "uniform", "restart"
@@ -1056,6 +1070,13 @@ MODULE configuration_module
 
     CHARACTER(LEN=256)                  :: choice_climate_model
 
+    ! NetCDF files containing direct global/regional climate forcing
+    CHARACTER(LEN=256)                  :: filename_direct_global_climate
+    CHARACTER(LEN=256)                  :: filename_direct_regional_climate_NAM
+    CHARACTER(LEN=256)                  :: filename_direct_regional_climate_EAS
+    CHARACTER(LEN=256)                  :: filename_direct_regional_climate_GRL
+    CHARACTER(LEN=256)                  :: filename_direct_regional_climate_ANT
+
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_PI
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_warm
@@ -1122,6 +1143,13 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_SMB_model
     CHARACTER(LEN=256)                  :: choice_idealised_SMB
     REAL(dp)                            :: SMB_uniform
+
+    ! NetCDF file containing direct global/regional SMB forcing
+    CHARACTER(LEN=256)                  :: filename_direct_global_SMB
+    CHARACTER(LEN=256)                  :: filename_direct_regional_SMB_NAM
+    CHARACTER(LEN=256)                  :: filename_direct_regional_SMB_EAS
+    CHARACTER(LEN=256)                  :: filename_direct_regional_SMB_GRL
+    CHARACTER(LEN=256)                  :: filename_direct_regional_SMB_ANT
 
     ! Tuning parameters for the IMAU-ITM SMB model
     CHARACTER(LEN=256)                  :: SMB_IMAUITM_choice_init_firn_NAM
@@ -1435,6 +1463,10 @@ CONTAINS
         ! Run the model with a single config file
         CALL getarg( 1, config_filename)
         config_mode = 'single_config'
+
+        WRITE(0,*) ''
+        WRITE(0,*) ' Simulation settings from configuration file: ', TRIM(config_filename)
+        WRITE(0,*) ''
         
       ELSEIF (iargc() == 2) THEN
       
@@ -1442,6 +1474,10 @@ CONTAINS
         CALL getarg( 1, template_filename )
         CALL getarg( 2, variation_filename)
         config_mode = 'template+variation'
+
+        WRITE(0,*) ''
+        WRITE(0,*) ' Simulation settings from configuration files: ', TRIM(template_filename), ' & ', TRIM(variation_filename)
+        WRITE(0,*) ''
         
       ELSE
       
@@ -1828,6 +1864,11 @@ CONTAINS
                      choice_ice_thermal_conductivity_config,          &
                      uniform_ice_thermal_conductivity_config,         &
                      choice_climate_model_config,                     &
+                     filename_direct_global_climate_config,           &
+                     filename_direct_regional_climate_NAM_config,     &
+                     filename_direct_regional_climate_EAS_config,     &
+                     filename_direct_regional_climate_GRL_config,     &
+                     filename_direct_regional_climate_ANT_config,     &
                      filename_climate_snapshot_PI_config,             &
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
@@ -1868,6 +1909,11 @@ CONTAINS
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
+                     filename_direct_global_SMB_config,               &
+                     filename_direct_regional_SMB_NAM_config,         &
+                     filename_direct_regional_SMB_EAS_config,         &
+                     filename_direct_regional_SMB_GRL_config,         &
+                     filename_direct_regional_SMB_ANT_config,         &
                      SMB_IMAUITM_choice_init_firn_NAM_config,         &
                      SMB_IMAUITM_choice_init_firn_EAS_config,         &
                      SMB_IMAUITM_choice_init_firn_GRL_config,         &
@@ -2420,6 +2466,13 @@ CONTAINS
 
     C%choice_climate_model                     = choice_climate_model_config
 
+    ! NetCDF files containing direct global/regional climate forcing
+    C%filename_direct_global_climate           = filename_direct_global_climate_config
+    C%filename_direct_regional_climate_NAM     = filename_direct_regional_climate_NAM_config
+    C%filename_direct_regional_climate_EAS     = filename_direct_regional_climate_EAS_config
+    C%filename_direct_regional_climate_GRL     = filename_direct_regional_climate_GRL_config
+    C%filename_direct_regional_climate_ANT     = filename_direct_regional_climate_ANT_config
+
     ! GCM snapshots in the matrix_warm_cold option
     C%filename_climate_snapshot_PI             = filename_climate_snapshot_PI_config
     C%filename_climate_snapshot_warm           = filename_climate_snapshot_warm_config
@@ -2484,6 +2537,13 @@ CONTAINS
     C%choice_SMB_model                         = choice_SMB_model_config
     C%choice_idealised_SMB                     = choice_idealised_SMB_config
     C%SMB_uniform                              = SMB_uniform_config
+
+    ! NetCDF file containing direct global/regional SMB forcing
+    C%filename_direct_global_SMB               = filename_direct_global_SMB_config
+    C%filename_direct_regional_SMB_NAM         = filename_direct_regional_SMB_NAM_config
+    C%filename_direct_regional_SMB_EAS         = filename_direct_regional_SMB_EAS_config
+    C%filename_direct_regional_SMB_GRL         = filename_direct_regional_SMB_GRL_config
+    C%filename_direct_regional_SMB_ANT         = filename_direct_regional_SMB_ANT_config
 
     ! Tuning parameters for the IMAU-ITM SMB model
     C%SMB_IMAUITM_choice_init_firn_NAM         = SMB_IMAUITM_choice_init_firn_NAM_config

@@ -26,7 +26,9 @@ MODULE climate_module
   ! Import specific functionality
   USE utilities_module,                ONLY: error_function
   USE netcdf_module,                   ONLY: inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file, &
-                                             inquire_GCM_global_climate_file, read_GCM_global_climate_file
+                                             inquire_GCM_global_climate_file, read_GCM_global_climate_file, &
+                                             inquire_direct_global_SMB_forcing_file, read_direct_global_SMB_file_time_latlon, &
+                                             inquire_direct_global_climate_forcing_file, read_direct_global_climate_file_time_latlon
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_remapping_latlon2mesh, type_SMB_model, &
                                              type_climate_matrix_global, type_climate_snapshot_global, &
@@ -127,7 +129,6 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) ' Initialising global climate model "', TRIM(C%choice_climate_model), '"...'
 
     IF     (C%choice_climate_model == 'none') THEN
@@ -167,8 +168,7 @@ CONTAINS
       ! No need to initialise any global climate stuff
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_climate_model_global - ERROR: unknown choice_climate_model "', TRIM(C%choice_climate_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
     END IF
 
     ! Finalise routine path
@@ -430,14 +430,11 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Initialise the present-day observed global climate (e.g. ERA-40)
-    ! CALL initialise_climate_PD_obs_global( climate_matrix%PD_obs, name = 'PD_obs')
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_global_PD_obs) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Initialise the present-day observed global climate (e.g. ERA-40)
+    CALL initialise_climate_PD_obs_global( climate_matrix%PD_obs, name = 'PD_obs')
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=14)
 
   END SUBROUTINE initialise_climate_model_global_PD_obs
   SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, climate_matrix_global, climate_matrix)
@@ -1778,60 +1775,56 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_climate_model == 'direct_global') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_climate_global - ERROR: choice_climate_model should be "direct_global"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
+      CALL crash('choice_climate_model should be "direct_global"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( clim_glob%t0, clim_glob%wt0)
-    ! CALL allocate_shared_dp_0D( clim_glob%t1, clim_glob%wt1)
+    CALL allocate_shared_dp_0D( clim_glob%t0, clim_glob%wt0)
+    CALL allocate_shared_dp_0D( clim_glob%t1, clim_glob%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   clim_glob%t0 = C%start_time_of_run - 100._dp
-    !   clim_glob%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      clim_glob%t0 = C%start_time_of_run - 100._dp
+      clim_glob%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! IF (par%master) WRITE(0,*) ' Initialising direct global climate forcing from ', TRIM( C%filename_direct_global_climate), '...'
+    IF (par%master) WRITE(0,*) '  Initialising direct global climate forcing from ', TRIM( C%filename_direct_global_climate), '...'
 
-    ! ! Inquire into the direct global cliamte forcing netcdf file
-    ! CALL allocate_shared_int_0D( clim_glob%nyears, clim_glob%wnyears)
-    ! CALL allocate_shared_int_0D( clim_glob%nlon,   clim_glob%wnlon  )
-    ! CALL allocate_shared_int_0D( clim_glob%nlat,   clim_glob%wnlat  )
+    ! Inquire into the direct global cliamte forcing netcdf file
+    CALL allocate_shared_int_0D( clim_glob%nyears, clim_glob%wnyears)
+    CALL allocate_shared_int_0D( clim_glob%nlon,   clim_glob%wnlon  )
+    CALL allocate_shared_int_0D( clim_glob%nlat,   clim_glob%wnlat  )
 
-    ! clim_glob%netcdf%filename = C%filename_direct_global_climate
+    clim_glob%netcdf%filename = C%filename_direct_global_climate
 
-    ! IF (par%master) CALL inquire_direct_global_climate_forcing_file( clim_glob)
-    ! CALL sync
+    IF (par%master) CALL inquire_direct_global_climate_forcing_file( clim_glob)
+    CALL sync
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_1D( clim_glob%nyears, clim_glob%time, clim_glob%wtime)
-    ! CALL allocate_shared_dp_1D( clim_glob%nlon,   clim_glob%lon,  clim_glob%wlon )
-    ! CALL allocate_shared_dp_1D( clim_glob%nlat,   clim_glob%lat,  clim_glob%wlat )
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( clim_glob%nyears, clim_glob%time, clim_glob%wtime)
+    CALL allocate_shared_dp_1D( clim_glob%nlon,   clim_glob%lon,  clim_glob%wlon )
+    CALL allocate_shared_dp_1D( clim_glob%nlat,   clim_glob%lat,  clim_glob%wlat )
 
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat,     clim_glob%Hs0,      clim_glob%wHs0     )
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat,     clim_glob%Hs1,      clim_glob%wHs1     )
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%T2m0,     clim_glob%wT2m0    )
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%T2m1,     clim_glob%wT2m1    )
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Precip0,  clim_glob%wPrecip0 )
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Precip1,  clim_glob%wPrecip1 )
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_WE0, clim_glob%wWind_WE0)
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_WE1, clim_glob%wWind_WE1)
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_SN0, clim_glob%wWind_SN0)
-    ! CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_SN1, clim_glob%wWind_SN1)
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat,     clim_glob%Hs0,      clim_glob%wHs0     )
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat,     clim_glob%Hs1,      clim_glob%wHs1     )
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%T2m0,     clim_glob%wT2m0    )
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%T2m1,     clim_glob%wT2m1    )
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Precip0,  clim_glob%wPrecip0 )
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Precip1,  clim_glob%wPrecip1 )
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_WE0, clim_glob%wWind_WE0)
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_WE1, clim_glob%wWind_WE1)
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_SN0, clim_glob%wWind_SN0)
+    CALL allocate_shared_dp_3D( clim_glob%nlon, clim_glob%nlat, 12, clim_glob%Wind_SN1, clim_glob%wWind_SN1)
 
-    ! ! Read time and grid data
-    ! IF (par%master) CALL read_direct_global_climate_file_time_latlon( clim_glob)
-    ! CALL sync
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_climate_global) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Read time and grid data
+    IF (par%master) CALL read_direct_global_climate_file_time_latlon( clim_glob)
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2328,59 +2321,55 @@ CONTAINS
     TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim_glob
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_direct_SMB_global'
+    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'initialise_climate_model_direct_SMB_global'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_SMB_global - ERROR: choice_SMB_model should be "direct_global"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
+      CALL crash('choice_SMB_model should be "direct_global"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( clim_glob%t0, clim_glob%wt0)
-    ! CALL allocate_shared_dp_0D( clim_glob%t1, clim_glob%wt1)
+    CALL allocate_shared_dp_0D( clim_glob%t0, clim_glob%wt0)
+    CALL allocate_shared_dp_0D( clim_glob%t1, clim_glob%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   clim_glob%t0 = C%start_time_of_run - 100._dp
-    !   clim_glob%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      clim_glob%t0 = C%start_time_of_run - 100._dp
+      clim_glob%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! IF (par%master) WRITE(0,*) ' Initialising direct global SMB forcing from ', TRIM( C%filename_direct_global_SMB), '...'
+    IF (par%master) WRITE(0,*) ' Initialising direct global SMB forcing from ', TRIM( C%filename_direct_global_SMB), '...'
 
-    ! ! Inquire into the direct global cliamte forcing netcdf file
-    ! CALL allocate_shared_int_0D( clim_glob%nyears, clim_glob%wnyears)
-    ! CALL allocate_shared_int_0D( clim_glob%nlon,   clim_glob%wnlon  )
-    ! CALL allocate_shared_int_0D( clim_glob%nlat,   clim_glob%wnlat  )
+    ! Inquire into the direct global cliamte forcing netcdf file
+    CALL allocate_shared_int_0D( clim_glob%nyears, clim_glob%wnyears)
+    CALL allocate_shared_int_0D( clim_glob%nlon,   clim_glob%wnlon  )
+    CALL allocate_shared_int_0D( clim_glob%nlat,   clim_glob%wnlat  )
 
-    ! clim_glob%netcdf%filename = C%filename_direct_global_SMB
+    clim_glob%netcdf%filename = C%filename_direct_global_SMB
 
-    ! IF (par%master) CALL inquire_direct_global_SMB_forcing_file( clim_glob)
-    ! CALL sync
+    IF (par%master) CALL inquire_direct_global_SMB_forcing_file( clim_glob)
+    CALL sync
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_1D( clim_glob%nyears, clim_glob%time, clim_glob%wtime)
-    ! CALL allocate_shared_dp_1D( clim_glob%nlon,   clim_glob%lon,  clim_glob%wlon )
-    ! CALL allocate_shared_dp_1D( clim_glob%nlat,   clim_glob%lat,  clim_glob%wlat )
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( clim_glob%nyears, clim_glob%time, clim_glob%wtime)
+    CALL allocate_shared_dp_1D( clim_glob%nlon,   clim_glob%lon,  clim_glob%wlon )
+    CALL allocate_shared_dp_1D( clim_glob%nlat,   clim_glob%lat,  clim_glob%wlat )
 
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%T2m_year0, clim_glob%wT2m_year0)
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%T2m_year1, clim_glob%wT2m_year1)
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%SMB_year0, clim_glob%wSMB_year0)
-    ! CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%SMB_year1, clim_glob%wSMB_year1)
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%T2m_year0, clim_glob%wT2m_year0)
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%T2m_year1, clim_glob%wT2m_year1)
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%SMB_year0, clim_glob%wSMB_year0)
+    CALL allocate_shared_dp_2D( clim_glob%nlon, clim_glob%nlat, clim_glob%SMB_year1, clim_glob%wSMB_year1)
 
-    ! ! Read time and grid data
-    ! IF (par%master) CALL read_direct_global_SMB_file_time_latlon( clim_glob)
-    ! CALL sync
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_SMB_global) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Read time and grid data
+    IF (par%master) CALL read_direct_global_SMB_file_time_latlon( clim_glob)
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

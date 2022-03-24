@@ -377,7 +377,7 @@ CONTAINS
     TYPE(type_ocean_matrix_global),   INTENT(INOUT)     :: ocean_matrix_global
 
     ! Local variables:
-    CHARACTER(LEN=256)                            :: routine_name
+    CHARACTER(LEN=256)                                  :: routine_name
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
@@ -387,7 +387,7 @@ CONTAINS
     ! ================================
 
     ! Region name
-    region%name      = name    
+    region%name      = name
     IF (region%name == 'NAM') THEN
       region%long_name = 'North America'
     ELSE IF (region%name == 'EAS') THEN

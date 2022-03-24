@@ -798,7 +798,7 @@ CONTAINS
     CHARACTER(LEN=*),                   INTENT(IN)    :: name
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_PD_obs_global'
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'initialise_ocean_PD_obs_global'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -856,7 +856,7 @@ CONTAINS
     REAL(dp),                         INTENT(IN)    :: orbit_time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_snapshot_global'
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'initialise_ocean_snapshot_global'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1142,8 +1142,7 @@ CONTAINS
     IF (C%choice_ocean_vertical_grid == 'regular') THEN
       CALL initialise_ocean_vertical_grid_regular
     ELSE
-      IF (par%master) WRITE(0,*) '  create_ocean_vertical_grid - ERROR: choice_ocean_vertical_grid "', TRIM(C%choice_ocean_vertical_grid), '" not implemented!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ocean_vertical_grid "' // TRIM( C%choice_ocean_vertical_grid) // '"!')
     END IF
 
     ! Finalise routine path

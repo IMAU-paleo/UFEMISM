@@ -46,7 +46,7 @@ CONTAINS
     TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     TYPE(type_BMB_model),                INTENT(IN)    :: BMB
     REAL(dp),                            INTENT(IN)    :: dt
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:
@@ -257,7 +257,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp),                            INTENT(IN)    :: dt
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     
     ! Local variables:

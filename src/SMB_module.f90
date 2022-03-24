@@ -60,7 +60,7 @@ CONTAINS
     TYPE(type_climate_matrix_regional),   INTENT(IN)    :: climate_matrix
     REAL(dp),                             INTENT(IN)    :: time
     TYPE(type_SMB_model),                 INTENT(INOUT) :: SMB
-    INTEGER,  DIMENSION(:    ),           INTENT(IN)    :: mask_noice
+    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(IN)  :: mask_noice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'run_SMB_model'

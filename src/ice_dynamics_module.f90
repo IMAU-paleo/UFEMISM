@@ -593,8 +593,6 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    IF (par%master) THEN
-      
       ! Determine when each model components should be updated
       
       t_next = MIN(t_end, region%time + C%dt_max)
@@ -684,7 +682,6 @@ CONTAINS
       ! Set time step so that we move forward to the next action
       region%dt = t_next - region%time
     
-    END IF ! IF (par%master) THEN
     CALL sync
     
     ! Finalise routine path

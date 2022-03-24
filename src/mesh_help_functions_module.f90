@@ -21,7 +21,7 @@ MODULE mesh_help_functions_module
                                              deallocate_shared
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region
+  USE data_types_module,               ONLY: type_mesh
   USE utilities_module,                ONLY: line_integral_mxydx, line_integral_xydy
 
   IMPLICIT NONE

@@ -630,7 +630,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_CO2_record'
-    INTEGER                                            :: i,ios
+    INTEGER                                            :: i,ios, fp
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -644,28 +644,23 @@ CONTAINS
     ! END IF
 
     ! Allocate shared memory to take the data
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_time,   forcing%wCO2_time  )
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_record, forcing%wCO2_record)
-    CALL allocate_shared_dp_0D(                      forcing%CO2_obs,    forcing%wCO2_obs   )
-    CALL allocate_shared_dp_0D(                      forcing%CO2_mod,    forcing%wCO2_mod   )
-
+    allocate(forcing%CO2_time  ( C%CO2_record_length ))
+    allocate(forcing%CO2_record( C%CO2_record_length ))
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
 
     ! Read CO2 record (time and values) from specified text file
-    IF (par%master) THEN
 
-        OPEN(   UNIT = 1337, FILE=C%filename_CO2_record, ACTION='READ')
-        DO i = 1, C%CO2_record_length
-          READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
-          IF (ios /= 0) THEN
-            WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-          END IF
-        END DO
-        CLOSE( UNIT  = 1337)
+    OPEN(  newunit=fp, FILE=C%filename_CO2_record, ACTION='READ')
+    DO i = 1, C%CO2_record_length
+      READ( UNIT = fp, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
+      IF (ios /= 0) THEN
+        WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+    END DO
+    CLOSE( UNIT  = fp)
 
-    END IF ! IF (par%master) THEN
     CALL sync
 
     ! Set the value for the current (starting) model time
@@ -1010,35 +1005,25 @@ CONTAINS
       ! The times at which we have insolation fields from Laskar, between which we'll interpolate
       ! to find the insolation at model time (ins_t0 < model_time < ins_t1)
 
-      CALL allocate_shared_dp_0D( forcing%ins_t0, forcing%wins_t0)
-      CALL allocate_shared_dp_0D( forcing%ins_t1, forcing%wins_t1)
 
-      IF (par%master) THEN
-        ! Give impossible values to timeframes, so that the first call to get_insolation_at_time
-        ! is guaranteed to first read two new timeframes from the NetCDF file
-        forcing%ins_t0 = C%start_time_of_run - 100._dp
-        forcing%ins_t1 = C%start_time_of_run - 90._dp
-      END IF ! IF (par%master) THEN
-      CALL sync
 
       ! Inquire into the insolation forcing netcdf file
-      CALL allocate_shared_int_0D( forcing%ins_nyears, forcing%wins_nyears)
-      CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
+      forcing%ins_t0 = C%start_time_of_run - 100._dp
+      forcing%ins_t1 = C%start_time_of_run - 90._dp
 
       forcing%netcdf_ins%filename = C%filename_insolation
 
-      IF (par%master) CALL inquire_insolation_file( forcing)
-      CALL sync
+      CALL inquire_insolation_file( forcing)
+  
 
       ! Insolation
-      CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
-      CALL allocate_shared_dp_1D( forcing%ins_nlat,     forcing%ins_lat,     forcing%wins_lat    )
-      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA0,  forcing%wins_Q_TOA0 )
-      CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
+      allocate(forcing%ins_time(forcing%ins_nyears))
+      allocate(forcing%ins_lat(forcing%ins_nlat))
+      allocate(forcing%ins_Q_TOA0(forcing%ins_nlat,12))
+      allocate(forcing%ins_Q_TOA1(forcing%ins_nlat,12))
 
       ! Read time and latitude data
-      IF (par%master) CALL read_insolation_file_time_lat( forcing)
-      CALL sync
+      CALL read_insolation_file_time_lat( forcing)
 
     ! ELSE
     !   IF (par%master) WRITE(0,*) 'initialise_insolation_data - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'

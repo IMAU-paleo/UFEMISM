@@ -584,6 +584,17 @@ MODULE data_types_module
     
   END TYPE type_latlongrid
 
+  TYPE type_latlongrid_new
+    ! A global lat-lon grid
+    
+    INTEGER                                 :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), allocatable :: lat, lon
+    REAL(dp)                                :: dlat, dlon
+    
+    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
+    
+  END TYPE type_latlongrid_new
+
   TYPE type_SMB_model
     ! The different SMB components, calculated from the prescribed climate
     
@@ -732,55 +743,48 @@ MODULE data_types_module
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
     
     ! Data for the inverse routine
-    REAL(dp),                   POINTER     :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
-    REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
-    INTEGER,                    POINTER     :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
-    INTEGER :: wdT_glob, wdT_glob_history, wndT_glob_history, wdT_deepwater
+    REAL(dp)                                :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
+    REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
+    INTEGER                                 :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
     
-    REAL(dp),                   POINTER     :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
-    REAL(dp),                   POINTER     :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
-    REAL(dp),                   POINTER     :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
-    REAL(dp),                   POINTER     :: d18O_mod                                  ! Modelled benthic d18O
-    INTEGER :: wd18O_NAM, wd18O_EAS, wd18O_GRL, wd18O_ANT, wd18O_from_ice_volume_mod, wd18O_from_temperature_mod, wd18O_mod
+    REAL(dp)                                :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
+    REAL(dp)                                :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
+    REAL(dp)                                :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
+    REAL(dp)                                :: d18O_mod                                  ! Modelled benthic d18O
     
-    REAL(dp),                   POINTER     :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
-    REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
-    INTEGER,                    POINTER     :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: CO2_inverse                               ! CO2 resulting from the inverse method
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_inverse_history                       ! Time window (length set in config) listing previous CO2_inverse values
-    INTEGER,                    POINTER     :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
-    REAL(dp),                   POINTER     :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
-    INTEGER :: wdT_glob_inverse, wdT_glob_inverse_history, wndT_glob_inverse_history, wCO2_inverse, wCO2_inverse_history, wnCO2_inverse_history, wCO2_mod
+    REAL(dp)                                :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
+    REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
+    INTEGER                                 :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: CO2_inverse                               ! CO2 resulting from the inverse method
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_inverse_history                       ! Time window (length set in config) listing previous CO2_inverse values
+    INTEGER                                 :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
+    REAL(dp)                                :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
     
     ! External forcing: CO2 record
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: CO2_record
-    REAL(dp),                   POINTER     :: CO2_obs
-    INTEGER :: wCO2_time, wCO2_record, wCO2_obs
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_time
+    REAL(dp), DIMENSION(:    ), allocatable :: CO2_record
+    REAL(dp)                                :: CO2_obs
     
     ! External forcing: d18O record
-    REAL(dp), DIMENSION(:    ), POINTER     :: d18O_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: d18O_record
-    REAL(dp),                   POINTER     :: d18O_obs
-    REAL(dp),                   POINTER     :: d18O_obs_PD
-    INTEGER :: wd18O_time, wd18O_record, wd18O_obs, wd18O_obs_PD
+    REAL(dp), DIMENSION(:    ), allocatable :: d18O_time
+    REAL(dp), DIMENSION(:    ), allocatable :: d18O_record
+    REAL(dp)                                :: d18O_obs
+    REAL(dp)                                :: d18O_obs_PD
     
     ! External forcing: insolation
     TYPE(type_netcdf_insolation)            :: netcdf_ins
-    INTEGER,                    POINTER     :: ins_nyears
-    INTEGER,                    POINTER     :: ins_nlat
-    REAL(dp), DIMENSION(:    ), POINTER     :: ins_time
-    REAL(dp), DIMENSION(:    ), POINTER     :: ins_lat
-    REAL(dp),                   POINTER     :: ins_t0, ins_t1
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
-    INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
+    INTEGER                                 :: ins_nyears
+    INTEGER                                 :: ins_nlat
+    REAL(dp), DIMENSION(:    ), allocatable :: ins_time
+    REAL(dp), DIMENSION(:    ), allocatable :: ins_lat
+    REAL(dp)                                :: ins_t0, ins_t1
+    REAL(dp), DIMENSION(:,:  ), allocatable :: ins_Q_TOA0, ins_Q_TOA1
     
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_latlongrid)                   :: grid_ghf
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
-    INTEGER :: wghf_ghf
+    TYPE(type_latlongrid_new)               :: grid_ghf
+    REAL(dp), DIMENSION(:,:  ), allocatable :: ghf_ghf
     
   END TYPE type_forcing_data
 
@@ -1176,79 +1180,70 @@ MODULE data_types_module
     CHARACTER(LEN=256)                      :: long_name                                      ! North America, Eurasia, Greenland, Antarctica
 
     ! The current time (step) of this particular region.
-    REAL(dp), POINTER                       :: time
-    REAL(dp), POINTER                       :: dt
-    REAL(dp), POINTER                       :: dt_prev
-    INTEGER :: wtime, wdt, wdt_prev
-
+    REAL(dp)                                :: time
+    REAL(dp)                                :: dt
+    REAL(dp)                                :: dt_prev
+    
     ! Timers and switches for determining which modules need to be called at what points in time during the simulation
-    REAL(dp), POINTER                       :: dt_crit_SIA
-    REAL(dp), POINTER                       :: dt_crit_SSA
-    REAL(dp), POINTER                       :: dt_crit_ice, dt_crit_ice_prev
-    REAL(dp), POINTER                       :: t_last_mesh,    t_next_mesh
-    REAL(dp), POINTER                       :: t_last_SIA,     t_next_SIA
-    REAL(dp), POINTER                       :: t_last_SSA,     t_next_SSA
-    REAL(dp), POINTER                       :: t_last_DIVA,    t_next_DIVA
-    REAL(dp), POINTER                       :: t_last_thermo,  t_next_thermo
-    REAL(dp), POINTER                       :: t_last_output,  t_next_output
-    REAL(dp), POINTER                       :: t_last_climate, t_next_climate
-    REAL(dp), POINTER                       :: t_last_ocean,   t_next_ocean
-    REAL(dp), POINTER                       :: t_last_SMB,     t_next_SMB
-    REAL(dp), POINTER                       :: t_last_BMB,     t_next_BMB
-    REAL(dp), POINTER                       :: t_last_ELRA,    t_next_ELRA
-    LOGICAL,  POINTER                       :: do_mesh
-    LOGICAL,  POINTER                       :: do_SIA
-    LOGICAL,  POINTER                       :: do_SSA
-    LOGICAL,  POINTER                       :: do_DIVA
-    LOGICAL,  POINTER                       :: do_thermo
-    LOGICAL,  POINTER                       :: do_climate
-    LOGICAL,  POINTER                       :: do_ocean
-    LOGICAL,  POINTER                       :: do_SMB
-    LOGICAL,  POINTER                       :: do_BMB
-    LOGICAL,  POINTER                       :: do_output
-    LOGICAL,  POINTER                       :: do_ELRA
-    INTEGER :: wdt_crit_SIA, wdt_crit_SSA, wdt_crit_ice, wdt_crit_ice_prev
-    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA
-    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA
-    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA
-
+    REAL(dp)                                :: dt_crit_SIA
+    REAL(dp)                                :: dt_crit_SSA
+    REAL(dp)                                :: dt_crit_ice, dt_crit_ice_prev
+    REAL(dp)                                :: t_last_mesh,    t_next_mesh
+    REAL(dp)                                :: t_last_SIA,     t_next_SIA
+    REAL(dp)                                :: t_last_SSA,     t_next_SSA
+    REAL(dp)                                :: t_last_DIVA,    t_next_DIVA
+    REAL(dp)                                :: t_last_thermo,  t_next_thermo
+    REAL(dp)                                :: t_last_output,  t_next_output
+    REAL(dp)                                :: t_last_climate, t_next_climate
+    REAL(dp)                                :: t_last_ocean,   t_next_ocean
+    REAL(dp)                                :: t_last_SMB,     t_next_SMB
+    REAL(dp)                                :: t_last_BMB,     t_next_BMB
+    REAL(dp)                                :: t_last_ELRA,    t_next_ELRA
+    LOGICAL                                 :: do_mesh
+    LOGICAL                                 :: do_SIA
+    LOGICAL                                 :: do_SSA
+    LOGICAL                                 :: do_DIVA
+    LOGICAL                                 :: do_thermo
+    LOGICAL                                 :: do_climate
+    LOGICAL                                 :: do_ocean
+    LOGICAL                                 :: do_SMB
+    LOGICAL                                 :: do_BMB
+    LOGICAL                                 :: do_output
+    LOGICAL                                 :: do_ELRA
+    
     ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
-    REAL(dp), POINTER                       :: ice_area
-    REAL(dp), POINTER                       :: ice_volume
-    REAL(dp), POINTER                       :: ice_volume_PD
-    REAL(dp), POINTER                       :: ice_volume_above_flotation
-    REAL(dp), POINTER                       :: ice_volume_above_flotation_PD
-    REAL(dp), POINTER                       :: GMSL_contribution
-    INTEGER :: wice_area, wice_volume, wice_volume_PD, wice_volume_above_flotation, wice_volume_above_flotation_PD, wGMSL_contribution
-
+    REAL(dp)                                :: ice_area
+    REAL(dp)                                :: ice_volume
+    REAL(dp)                                :: ice_volume_PD
+    REAL(dp)                                :: ice_volume_above_flotation
+    REAL(dp)                                :: ice_volume_above_flotation_PD
+    REAL(dp)                                :: GMSL_contribution
+    
     ! Regionally integrated mass balance components
-    REAL(dp), POINTER                       :: int_T2m
-    REAL(dp), POINTER                       :: int_snowfall
-    REAL(dp), POINTER                       :: int_rainfall
-    REAL(dp), POINTER                       :: int_melt
-    REAL(dp), POINTER                       :: int_refreezing
-    REAL(dp), POINTER                       :: int_runoff
-    REAL(dp), POINTER                       :: int_SMB
-    REAL(dp), POINTER                       :: int_BMB
-    REAL(dp), POINTER                       :: int_MB
-    INTEGER :: wint_T2m, wint_snowfall, wint_rainfall, wint_melt, wint_refreezing, wint_runoff, wint_SMB, wint_BMB, wint_MB
-
+    REAL(dp)                                :: int_T2m
+    REAL(dp)                                :: int_snowfall
+    REAL(dp)                                :: int_rainfall
+    REAL(dp)                                :: int_melt
+    REAL(dp)                                :: int_refreezing
+    REAL(dp)                                :: int_runoff
+    REAL(dp)                                :: int_SMB
+    REAL(dp)                                :: int_BMB
+    REAL(dp)                                :: int_MB
+    
     ! Variables related to the englacial isotope content
-    REAL(dp), POINTER                       :: mean_isotope_content
-    REAL(dp), POINTER                       :: mean_isotope_content_PD
-    REAL(dp), POINTER                       :: d18O_contribution
-    REAL(dp), POINTER                       :: d18O_contribution_PD
-    INTEGER :: wmean_isotope_content, wmean_isotope_content_PD, wd18O_contribution, wd18O_contribution_PD
-
+    REAL(dp)                                :: mean_isotope_content
+    REAL(dp)                                :: mean_isotope_content_PD
+    REAL(dp)                                :: d18O_contribution
+    REAL(dp)                                :: d18O_contribution_PD
+        
     ! Reference geometries
     TYPE(type_reference_geometry)           :: refgeo_init                               ! Initial         ice-sheet geometry
     TYPE(type_reference_geometry)           :: refgeo_PD                                 ! Present-day     ice-sheet geometry
     TYPE(type_reference_geometry)           :: refgeo_GIAeq                              ! GIA equilibrium ice-sheet geometry
 
     ! Mask where ice is not allowed to form (so Greenland is not included in NAM and EAS, and Ellesmere is not included in GRL)
-    INTEGER,  DIMENSION(:), POINTER         :: mask_noice
-    INTEGER                                 :: wmask_noice
-
+    INTEGER,  DIMENSION(:), allocatable     :: mask_noice
+        
     ! Sub-models
     TYPE(type_mesh)                         :: mesh                                      ! The finite element mesh for this model region
     TYPE(type_mesh)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
@@ -1271,14 +1266,13 @@ MODULE data_types_module
     TYPE(type_grid)                         :: grid_smooth                               ! For smoothing data fields (used in the climate matrix)
 
     ! Computation times
-    REAL(dp), POINTER                       :: tcomp_total
-    REAL(dp), POINTER                       :: tcomp_ice
-    REAL(dp), POINTER                       :: tcomp_thermo
-    REAL(dp), POINTER                       :: tcomp_climate
-    REAL(dp), POINTER                       :: tcomp_GIA
-    REAL(dp), POINTER                       :: tcomp_mesh
-    INTEGER :: wtcomp_total, wtcomp_ice, wtcomp_thermo, wtcomp_climate, wtcomp_GIA, wtcomp_mesh
-
+    REAL(dp)                                :: tcomp_total
+    REAL(dp)                                :: tcomp_ice
+    REAL(dp)                                :: tcomp_thermo
+    REAL(dp)                                :: tcomp_climate
+    REAL(dp)                                :: tcomp_GIA
+    REAL(dp)                                :: tcomp_mesh
+    
   END TYPE type_model_region
 
   TYPE type_restart_data

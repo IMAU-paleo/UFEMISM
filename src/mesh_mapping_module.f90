@@ -25,7 +25,7 @@ MODULE mesh_mapping_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_remapping_mesh_mesh, type_grid, type_remapping_latlon2mesh, &
-                                             type_latlongrid, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
+                                             type_latlongrid, type_latlongrid_new, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
   USE mesh_help_functions_module,      ONLY: is_in_triangle, write_mesh_to_text_file, lies_on_line_segment, segment_intersection, &
                                              find_containing_vertex, find_containing_triangle, is_in_Voronoi_cell, &
                                              find_shared_Voronoi_boundary, cross2, find_Voronoi_cell_vertices, find_triangle_area
@@ -315,6 +315,79 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE create_remapping_arrays_glob_mesh
+  SUBROUTINE create_remapping_arrays_glob_mesh_new( mesh, grid, map)
+    ! Create remapping arrays for remapping data from a global lat-lon grid to the model mesh
+    ! using bilinear interpolation
+    
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                         INTENT(IN)    :: mesh
+    TYPE(type_latlongrid_new),               INTENT(IN)    :: grid
+    TYPE(type_remapping_latlon2mesh),        INTENT(INOUT) :: map
+    
+    INTEGER                                                :: vi
+    INTEGER                                                :: il,iu,jl,ju
+    REAL(dp)                                               :: wil,wiu,wjl,wju
+    
+    ! Allocate shared memory for the mapping arrays
+ !  allocate(map%ilat1(mesh%vi1:mesh%vi2))
+ !  allocate(map%ilat2(mesh%vi1:mesh%vi2))
+ !  allocate(map%ilon1(mesh%vi1:mesh%vi2))
+ !  allocate(map%ilon2(mesh%vi1:mesh%vi2))
+ !  allocate(map%wlat1(mesh%vi1:mesh%vi2))
+ !  allocate(map%wlat2(mesh%vi1:mesh%vi2))
+ !  allocate(map%wlon1(mesh%vi1:mesh%vi2))
+ !  allocate(map%wlon2(mesh%vi1:mesh%vi2))
+    ! Allocate shared memory for the mapping arrays
+    CALL allocate_shared_int_1D( mesh%nV, map%ilat1, map%wilat1)
+    CALL allocate_shared_int_1D( mesh%nV, map%ilat2, map%wilat2)
+    CALL allocate_shared_int_1D( mesh%nV, map%ilon1, map%wilon1)
+    CALL allocate_shared_int_1D( mesh%nV, map%ilon2, map%wilon2)
+    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat1, map%wwlat1)
+    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat2, map%wwlat2)
+    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon1, map%wwlon1)
+    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon2, map%wwlon2)
+
+    DO vi = mesh%vi1, mesh%vi2
+      
+      ! Find enveloping lat-lon indices
+      il  = MAX(1, MIN( grid%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid%lon)) / (grid%lon(2) - grid%lon(1)))))
+      iu  = il + 1        
+      wil = (grid%lon(iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+      wiu = 1._dp - wil
+      
+      ! Exception for pixels near the zero meridian
+      IF (mesh%lon( vi) < MINVAL(grid%lon)) THEN
+        il  = grid%nlon
+        iu  = 1      
+        wil = (grid%lon( iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+        wiu = 1._dp - wil
+      ELSEIF (mesh%lon( vi) > MAXVAL(grid%lon)) THEN
+        il  = grid%nlon
+        iu  = 1
+        wiu = (mesh%lon( vi) - grid%lon( il)) / (grid%lon(2) - grid%lon(1))
+        wil = 1._dp - wiu
+      END IF
+          
+      jl  = MAX(1, MIN( grid%nlat-1, 1 + FLOOR((mesh%lat( vi) - MINVAL(grid%lat)) / (grid%lat(2) - grid%lat(1)))))
+      ju  = jl + 1        
+      wjl = (grid%lat( ju) - mesh%lat( vi)) / (grid%lat(2) - grid%lat(1))
+      wju = 1 - wjl
+
+      ! Write to mapping arrays
+      map%ilon1( vi) = il
+      map%ilon2( vi) = iu
+      map%ilat1( vi) = jl
+      map%ilat2( vi) = ju
+      map%wlon1( vi) = wil
+      map%wlon2( vi) = wiu
+      map%wlat1( vi) = wjl
+      map%wlat2( vi) = wju
+
+    END DO ! DO vi = mesh%vi1, mesh%vi2
+    
+  END SUBROUTINE create_remapping_arrays_glob_mesh_new
   SUBROUTINE map_latlon2mesh_2D( mesh, map, d_grid, d_mesh)
     ! Map data from a global lat-lon grid to the model mesh using bilinear interpolation
     

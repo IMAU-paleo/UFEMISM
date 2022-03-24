@@ -522,11 +522,11 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
   CHARACTER(LEN=256)  :: choice_basin_scheme_GRL_config              = 'none'
-  CHARACTER(LEN=256)  :: choice_basin_scheme_ANT_config              = 'none'
+  CHARACTER(LEN=256)  :: choice_basin_scheme_ANT_config              = 'file'
   CHARACTER(LEN=256)  :: filename_basins_NAM_config                  = ''                               ! Path to a text file containing polygons of drainage basins
   CHARACTER(LEN=256)  :: filename_basins_EAS_config                  = ''
-  CHARACTER(LEN=256)  :: filename_basins_GRL_config                  = ''
-  CHARACTER(LEN=256)  :: filename_basins_ANT_config                  = ''
+  CHARACTER(LEN=256)  :: filename_basins_GRL_config                  = 'data/drainage_basins/grndrainagesystems_ekholm.txt'
+  CHARACTER(LEN=256)  :: filename_basins_ANT_config                  = 'data/drainage_basins/ant_full_drainagesystem_polygons.txt'
   LOGICAL             :: do_merge_basins_ANT_config                  = .TRUE.                           ! Whether or not to merge some of the Antarctic basins
   LOGICAL             :: do_merge_basins_GRL_config                  = .TRUE.                           ! Whether or not to merge some of the Greenland basins
 

@@ -2105,7 +2105,7 @@ CONTAINS
     IMPLICIT NONE
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_debug_file'
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'write_to_debug_file'
     INTEGER                                :: ncid
     
     ! Add routine to path
@@ -2231,7 +2231,7 @@ CONTAINS
     TYPE(type_model_region),        INTENT(INOUT) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_debug_file'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_debug_file'
     TYPE(type_netcdf_debug)                       :: debug_temp
     CHARACTER(LEN=20)                             :: short_filename
     INTEGER                                       :: n

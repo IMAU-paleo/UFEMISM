@@ -28,7 +28,8 @@ MODULE climate_module
   USE netcdf_module,                   ONLY: inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file, &
                                              inquire_GCM_global_climate_file, read_GCM_global_climate_file, &
                                              inquire_direct_global_SMB_forcing_file, read_direct_global_SMB_file_time_latlon, &
-                                             inquire_direct_global_climate_forcing_file, read_direct_global_climate_file_time_latlon
+                                             inquire_direct_global_climate_forcing_file, read_direct_global_climate_file_time_latlon, &
+                                             inquire_direct_regional_SMB_forcing_file, read_direct_regional_SMB_file_time_xy
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_remapping_latlon2mesh, type_SMB_model, &
                                              type_climate_matrix_global, type_climate_snapshot_global, &
@@ -451,34 +452,30 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_regional_PD_obs'
-    INTEGER                                            :: i,j,m
+    INTEGER                                            :: vi,m
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Initialise data structures for the regional ERA40 climate and the final applied climate
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%PD_obs,  'PD_obs' )
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%applied, 'applied')
+    ! Initialise data structures for the regional ERA40 climate and the final applied climate
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%PD_obs,  'PD_obs' )
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, 'applied')
 
-    ! ! Map these subclimates from global grid to model grid
-    ! CALL map_snapshot_to_grid( grid,  climate_matrix_global%PD_obs, climate_matrix%PD_obs)
+    ! Map the snapshots from global lat/lon-grid to model mesh
+    CALL map_subclimate_to_mesh( mesh, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
 
-    ! ! Initialise applied climate with present-day observations
-    ! DO i = grid%i2, grid%i2
-    ! DO j = 1, grid%ny
-    ! DO m = 1, 12
-    !   climate_matrix%applied%T2m(     m,j,i) = climate_matrix%PD_obs%T2m(     m,j,i)
-    !   climate_matrix%applied%Precip(  m,j,i) = climate_matrix%PD_obs%Precip(  m,j,i)
-    !   climate_matrix%applied%Hs(        j,i) = climate_matrix%PD_obs%Hs(        j,i)
-    !   climate_matrix%applied%Wind_LR( m,j,i) = climate_matrix%PD_obs%Wind_LR( m,j,i)
-    !   climate_matrix%applied%Wind_DU( m,j,i) = climate_matrix%PD_obs%Wind_DU( m,j,i)
-    ! END DO
-    ! END DO
-    ! END DO
-    ! CALL sync
+    ! Initialise applied climate with present-day observations
 
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_regional_PD_obs) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    DO m = 1, 12
+    DO vi = mesh%vi2, mesh%vi2
+      climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
+      climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
+      climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
+      climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
+      climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
+    END DO
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1842,48 +1839,44 @@ CONTAINS
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_direct_climate_global_regional'
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_direct_climate_global_regional'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_climate_model == 'direct_global') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_climate_global_regional - ERROR: choice_climate_model should be "direct_global"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
+      CALL crash('choice_climate_model should be "direct_global"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( climate_matrix%direct%t0, climate_matrix%direct%wt0)
-    ! CALL allocate_shared_dp_0D( climate_matrix%direct%t1, climate_matrix%direct%wt1)
+    CALL allocate_shared_dp_0D( climate_matrix%direct%t0, climate_matrix%direct%wt0)
+    CALL allocate_shared_dp_0D( climate_matrix%direct%t1, climate_matrix%direct%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   climate_matrix%direct%t0 = C%start_time_of_run - 100._dp
-    !   climate_matrix%direct%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      climate_matrix%direct%t0 = C%start_time_of_run - 100._dp
+      climate_matrix%direct%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_2D(     grid%ny, grid%nx, climate_matrix%direct%Hs0,      climate_matrix%direct%wHs0     )
-    ! CALL allocate_shared_dp_2D(     grid%ny, grid%nx, climate_matrix%direct%Hs1,      climate_matrix%direct%wHs1     )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%T2m0,     climate_matrix%direct%wT2m0    )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%T2m1,     climate_matrix%direct%wT2m1    )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Precip0,  climate_matrix%direct%wPrecip0 )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Precip1,  climate_matrix%direct%wPrecip1 )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_WE0, climate_matrix%direct%wWind_WE0)
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_WE1, climate_matrix%direct%wWind_WE1)
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_SN0, climate_matrix%direct%wWind_SN0)
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_SN1, climate_matrix%direct%wWind_SN1)
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV,     climate_matrix%direct%Hs0,      climate_matrix%direct%wHs0     )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate_matrix%direct%Hs1,      climate_matrix%direct%wHs1     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%T2m0,     climate_matrix%direct%wT2m0    )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%T2m1,     climate_matrix%direct%wT2m1    )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Precip0,  climate_matrix%direct%wPrecip0 )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Precip1,  climate_matrix%direct%wPrecip1 )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_WE0, climate_matrix%direct%wWind_WE0)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_WE1, climate_matrix%direct%wWind_WE1)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_SN0, climate_matrix%direct%wWind_SN0)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_SN1, climate_matrix%direct%wWind_SN1)
 
-    ! ! Lastly, allocate memory for the "applied" snapshot
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%applied, name = 'applied')
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_climate_global_regional) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2069,87 +2062,83 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_climate_regional - ERROR: choice_climate_model should be "direct_regional"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('choice_climate_model should be "direct_regional"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( climate_matrix%direct%t0, climate_matrix%direct%wt0)
-    ! CALL allocate_shared_dp_0D( climate_matrix%direct%t1, climate_matrix%direct%wt1)
+    CALL allocate_shared_dp_0D( climate_matrix%direct%t0, climate_matrix%direct%wt0)
+    CALL allocate_shared_dp_0D( climate_matrix%direct%t1, climate_matrix%direct%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   climate_matrix%direct%t0 = C%start_time_of_run - 100._dp
-    !   climate_matrix%direct%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      climate_matrix%direct%t0 = C%start_time_of_run - 100._dp
+      climate_matrix%direct%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! ! Inquire into the direct global cliamte forcing netcdf file
-    ! CALL allocate_shared_int_0D( climate_matrix%direct%nyears, climate_matrix%direct%wnyears)
-    ! CALL allocate_shared_int_0D( climate_matrix%direct%nx_raw, climate_matrix%direct%wnx_raw)
-    ! CALL allocate_shared_int_0D( climate_matrix%direct%ny_raw, climate_matrix%direct%wny_raw)
+    ! Inquire into the direct global cliamte forcing netcdf file
+    CALL allocate_shared_int_0D( climate_matrix%direct%nyears, climate_matrix%direct%wnyears)
+    CALL allocate_shared_int_0D( climate_matrix%direct%nx_raw, climate_matrix%direct%wnx_raw)
+    CALL allocate_shared_int_0D( climate_matrix%direct%ny_raw, climate_matrix%direct%wny_raw)
 
-    ! ! Determine name of file to read data from
-    ! IF     (region_name == 'NAM') THEN
-    !   climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_NAM
-    ! ELSEIF (region_name == 'EAS') THEN
-    !   climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_EAS
-    ! ELSEIF (region_name == 'GRL') THEN
-    !   climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_GRL
-    ! ELSEIF (region_name == 'ANT') THEN
-    !   climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_ANT
-    ! END IF
+    ! Determine name of file to read data from
+    IF     (region_name == 'NAM') THEN
+      climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      climate_matrix%direct%netcdf%filename = C%filename_direct_regional_climate_ANT
+    END IF
 
-    ! IF (par%master) WRITE(0,*) ' Initialising direct regional climate forcing from ', TRIM( climate_matrix%direct%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) ' Initialising direct regional climate forcing from ', TRIM( climate_matrix%direct%netcdf%filename), '...'
 
-    ! IF (par%master) CALL inquire_direct_regional_climate_forcing_file( climate_matrix%direct)
-    ! CALL sync
+    IF (par%master) CALL inquire_direct_regional_climate_forcing_file( climate_matrix%direct)
+    CALL sync
 
-    ! ! Abbreviations for shorter code
-    ! nx = climate_matrix%direct%nx_raw
-    ! ny = climate_matrix%direct%ny_raw
+    ! Abbreviations for shorter code
+    nx = climate_matrix%direct%nx_raw
+    ny = climate_matrix%direct%ny_raw
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_1D( climate_matrix%direct%nyears, climate_matrix%direct%time, climate_matrix%direct%wtime        )
-    ! CALL allocate_shared_dp_1D(                   nx, climate_matrix%direct%x_raw,        climate_matrix%direct%wx_raw       )
-    ! CALL allocate_shared_dp_1D(          ny,          climate_matrix%direct%y_raw,        climate_matrix%direct%wy_raw       )
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( climate_matrix%direct%nyears, climate_matrix%direct%time, climate_matrix%direct%wtime        )
+    CALL allocate_shared_dp_1D(                   nx, climate_matrix%direct%x_raw,        climate_matrix%direct%wx_raw       )
+    CALL allocate_shared_dp_1D(          ny,          climate_matrix%direct%y_raw,        climate_matrix%direct%wy_raw       )
 
-    ! CALL allocate_shared_dp_2D(          ny,      nx, climate_matrix%direct%Hs0_raw,      climate_matrix%direct%wHs0_raw     )
-    ! CALL allocate_shared_dp_2D(          ny,      nx, climate_matrix%direct%Hs1_raw,      climate_matrix%direct%wHs1_raw     )
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%T2m0_raw,     climate_matrix%direct%wT2m0_raw    )
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%T2m1_raw,     climate_matrix%direct%wT2m1_raw    )
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Precip0_raw,  climate_matrix%direct%wPrecip0_raw )
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Precip1_raw,  climate_matrix%direct%wPrecip1_raw )
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_WE0_raw, climate_matrix%direct%wWind_WE0_raw)
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_WE1_raw, climate_matrix%direct%wWind_WE1_raw)
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_SN0_raw, climate_matrix%direct%wWind_SN0_raw)
-    ! CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_SN1_raw, climate_matrix%direct%wWind_SN1_raw)
+    CALL allocate_shared_dp_2D(          ny,      nx, climate_matrix%direct%Hs0_raw,      climate_matrix%direct%wHs0_raw     )
+    CALL allocate_shared_dp_2D(          ny,      nx, climate_matrix%direct%Hs1_raw,      climate_matrix%direct%wHs1_raw     )
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%T2m0_raw,     climate_matrix%direct%wT2m0_raw    )
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%T2m1_raw,     climate_matrix%direct%wT2m1_raw    )
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Precip0_raw,  climate_matrix%direct%wPrecip0_raw )
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Precip1_raw,  climate_matrix%direct%wPrecip1_raw )
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_WE0_raw, climate_matrix%direct%wWind_WE0_raw)
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_WE1_raw, climate_matrix%direct%wWind_WE1_raw)
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_SN0_raw, climate_matrix%direct%wWind_SN0_raw)
+    CALL allocate_shared_dp_3D( 12,      ny,      nx, climate_matrix%direct%Wind_SN1_raw, climate_matrix%direct%wWind_SN1_raw)
 
-    ! CALL allocate_shared_dp_2D(     grid%ny, grid%nx, climate_matrix%direct%Hs0,          climate_matrix%direct%wHs0         )
-    ! CALL allocate_shared_dp_2D(     grid%ny, grid%nx, climate_matrix%direct%Hs1,          climate_matrix%direct%wHs1         )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%T2m0,         climate_matrix%direct%wT2m0        )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%T2m1,         climate_matrix%direct%wT2m1        )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Precip0,      climate_matrix%direct%wPrecip0     )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Precip1,      climate_matrix%direct%wPrecip1     )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_WE0,     climate_matrix%direct%wWind_WE0    )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_WE1,     climate_matrix%direct%wWind_WE1    )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_SN0,     climate_matrix%direct%wWind_SN0    )
-    ! CALL allocate_shared_dp_3D( 12, grid%ny, grid%nx, climate_matrix%direct%Wind_SN1,     climate_matrix%direct%wWind_SN1    )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate_matrix%direct%Hs0,          climate_matrix%direct%wHs0     )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate_matrix%direct%Hs1,          climate_matrix%direct%wHs1     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%T2m0,         climate_matrix%direct%wT2m0    )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%T2m1,         climate_matrix%direct%wT2m1    )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Precip0,      climate_matrix%direct%wPrecip0 )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Precip1,      climate_matrix%direct%wPrecip1 )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_WE0,     climate_matrix%direct%wWind_WE0)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_WE1,     climate_matrix%direct%wWind_WE1)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_SN0,     climate_matrix%direct%wWind_SN0)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%direct%Wind_SN1,     climate_matrix%direct%wWind_SN1)
 
-    ! ! Read time and grid data
-    ! IF (par%master) CALL read_direct_regional_climate_file_time_xy( climate_matrix%direct)
-    ! CALL sync
+    ! Read time and grid data
+    IF (par%master) CALL read_direct_regional_climate_file_time_xy( climate_matrix%direct)
+    CALL sync
 
-    ! ! Lastly, allocate memory for the "applied" snapshot
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%applied, name = 'applied')
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_climate_regional) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2387,42 +2376,38 @@ CONTAINS
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_direct_SMB_global_regional'
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_direct_SMB_global_regional'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_SMB_global_regional - ERROR: choice_SMB_model should be "direct_global"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
+      CALL crash('choice_SMB_model should be "direct_global"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t0, climate_matrix%SMB_direct%wt0)
-    ! CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t1, climate_matrix%SMB_direct%wt1)
+    CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t0, climate_matrix%SMB_direct%wt0)
+    CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t1, climate_matrix%SMB_direct%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   climate_matrix%SMB_direct%t0 = C%start_time_of_run - 100._dp
-    !   climate_matrix%SMB_direct%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      climate_matrix%SMB_direct%t0 = C%start_time_of_run - 100._dp
+      climate_matrix%SMB_direct%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%T2m_year0, climate_matrix%SMB_direct%wT2m_year0)
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%T2m_year1, climate_matrix%SMB_direct%wT2m_year1)
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%SMB_year0, climate_matrix%SMB_direct%wSMB_year0)
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%SMB_year1, climate_matrix%SMB_direct%wSMB_year1)
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%SMB_direct%T2m_year0, climate_matrix%SMB_direct%wT2m_year0)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%SMB_direct%T2m_year1, climate_matrix%SMB_direct%wT2m_year1)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%SMB_direct%SMB_year0, climate_matrix%SMB_direct%wSMB_year0)
+    CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%SMB_direct%SMB_year1, climate_matrix%SMB_direct%wSMB_year1)
 
-    ! ! Lastly, allocate memory for the "applied" snapshot
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%applied, name = 'applied')
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_SMB_global_regional) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2592,75 +2577,71 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Safety
-    ! IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
-    !   IF (par%master) WRITE(0,*) 'initialise_climate_model_direct_SMB_regional - ERROR: choice_SMB_model should be "direct_regional"!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('choice_SMB_model should be "direct_regional"!')
+    END IF
 
-    ! ! The times at which we have climate fields from input, between which we'll interpolate
-    ! ! to find the climate at model time (t0 <= model_time <= t1)
+    ! The times at which we have climate fields from input, between which we'll interpolate
+    ! to find the climate at model time (t0 <= model_time <= t1)
 
-    ! CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t0, climate_matrix%SMB_direct%wt0)
-    ! CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t1, climate_matrix%SMB_direct%wt1)
+    CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t0, climate_matrix%SMB_direct%wt0)
+    CALL allocate_shared_dp_0D( climate_matrix%SMB_direct%t1, climate_matrix%SMB_direct%wt1)
 
-    ! IF (par%master) THEN
-    !   ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
-    !   ! is guaranteed to first read two new timeframes from the NetCDF file
-    !   climate_matrix%SMB_direct%t0 = C%start_time_of_run - 100._dp
-    !   climate_matrix%SMB_direct%t1 = C%start_time_of_run - 90._dp
-    ! END IF ! IF (par%master) THEN
-    ! CALL sync
+    IF (par%master) THEN
+      ! Give impossible values to timeframes, so that the first call to run_climate_model_direct_climate_global
+      ! is guaranteed to first read two new timeframes from the NetCDF file
+      climate_matrix%SMB_direct%t0 = C%start_time_of_run - 100._dp
+      climate_matrix%SMB_direct%t1 = C%start_time_of_run - 90._dp
+    END IF ! IF (par%master) THEN
+    CALL sync
 
-    ! ! Inquire into the direct global cliamte forcing netcdf file
-    ! CALL allocate_shared_int_0D( climate_matrix%SMB_direct%nyears, climate_matrix%SMB_direct%wnyears)
-    ! CALL allocate_shared_int_0D( climate_matrix%SMB_direct%nx_raw, climate_matrix%SMB_direct%wnx_raw)
-    ! CALL allocate_shared_int_0D( climate_matrix%SMB_direct%ny_raw, climate_matrix%SMB_direct%wny_raw)
+    ! Inquire into the direct global cliamte forcing netcdf file
+    CALL allocate_shared_int_0D( climate_matrix%SMB_direct%nyears, climate_matrix%SMB_direct%wnyears)
+    CALL allocate_shared_int_0D( climate_matrix%SMB_direct%nx_raw, climate_matrix%SMB_direct%wnx_raw)
+    CALL allocate_shared_int_0D( climate_matrix%SMB_direct%ny_raw, climate_matrix%SMB_direct%wny_raw)
 
-    ! ! Determine name of file to read data from
-    ! IF     (region_name == 'NAM') THEN
-    !   climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_NAM
-    ! ELSEIF (region_name == 'EAS') THEN
-    !   climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_EAS
-    ! ELSEIF (region_name == 'GRL') THEN
-    !   climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_GRL
-    ! ELSEIF (region_name == 'ANT') THEN
-    !   climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_ANT
-    ! END IF
+    ! Determine name of file to read data from
+    IF     (region_name == 'NAM') THEN
+      climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      climate_matrix%SMB_direct%netcdf%filename = C%filename_direct_regional_SMB_ANT
+    END IF
 
-    ! IF (par%master) WRITE(0,*) ' Initialising direct regional SMB forcing from ', TRIM( climate_matrix%SMB_direct%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) ' Initialising direct regional SMB forcing from ', TRIM( climate_matrix%SMB_direct%netcdf%filename), '...'
 
-    ! IF (par%master) CALL inquire_direct_regional_SMB_forcing_file( climate_matrix%SMB_direct)
-    ! CALL sync
+    IF (par%master) CALL inquire_direct_regional_SMB_forcing_file( climate_matrix%SMB_direct)
+    CALL sync
 
-    ! ! Abbreviations for shorter code
-    ! nx = climate_matrix%SMB_direct%nx_raw
-    ! ny = climate_matrix%SMB_direct%ny_raw
+    ! Abbreviations for shorter code
+    nx = climate_matrix%SMB_direct%nx_raw
+    ny = climate_matrix%SMB_direct%ny_raw
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_1D( climate_matrix%SMB_direct%nyears, climate_matrix%SMB_direct%time, climate_matrix%SMB_direct%wtime  )
-    ! CALL allocate_shared_dp_1D(               nx, climate_matrix%SMB_direct%x_raw,         climate_matrix%SMB_direct%wx_raw        )
-    ! CALL allocate_shared_dp_1D(      ny,          climate_matrix%SMB_direct%y_raw,         climate_matrix%SMB_direct%wy_raw        )
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( climate_matrix%SMB_direct%nyears, climate_matrix%SMB_direct%time, climate_matrix%SMB_direct%wtime  )
+    CALL allocate_shared_dp_1D(               nx, climate_matrix%SMB_direct%x_raw,         climate_matrix%SMB_direct%wx_raw        )
+    CALL allocate_shared_dp_1D(      ny,          climate_matrix%SMB_direct%y_raw,         climate_matrix%SMB_direct%wy_raw        )
 
-    ! CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%T2m_year0_raw, climate_matrix%SMB_direct%wT2m_year0_raw)
-    ! CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%T2m_year1_raw, climate_matrix%SMB_direct%wT2m_year1_raw)
-    ! CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%SMB_year0_raw, climate_matrix%SMB_direct%wSMB_year0_raw)
-    ! CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%SMB_year1_raw, climate_matrix%SMB_direct%wSMB_year1_raw)
+    CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%T2m_year0_raw, climate_matrix%SMB_direct%wT2m_year0_raw)
+    CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%T2m_year1_raw, climate_matrix%SMB_direct%wT2m_year1_raw)
+    CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%SMB_year0_raw, climate_matrix%SMB_direct%wSMB_year0_raw)
+    CALL allocate_shared_dp_2D(      ny,      nx, climate_matrix%SMB_direct%SMB_year1_raw, climate_matrix%SMB_direct%wSMB_year1_raw)
 
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%T2m_year0,     climate_matrix%SMB_direct%wT2m_year0    )
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%T2m_year1,     climate_matrix%SMB_direct%wT2m_year1    )
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%SMB_year0,     climate_matrix%SMB_direct%wSMB_year0    )
-    ! CALL allocate_shared_dp_2D( grid%ny, grid%nx, climate_matrix%SMB_direct%SMB_year1,     climate_matrix%SMB_direct%wSMB_year1    )
+    CALL allocate_shared_dp_1D( mesh%nV,          climate_matrix%SMB_direct%T2m_year0,     climate_matrix%SMB_direct%wT2m_year0    )
+    CALL allocate_shared_dp_1D( mesh%nV,          climate_matrix%SMB_direct%T2m_year1,     climate_matrix%SMB_direct%wT2m_year1    )
+    CALL allocate_shared_dp_1D( mesh%nV,          climate_matrix%SMB_direct%SMB_year0,     climate_matrix%SMB_direct%wSMB_year0    )
+    CALL allocate_shared_dp_1D( mesh%nV,          climate_matrix%SMB_direct%SMB_year1,     climate_matrix%SMB_direct%wSMB_year1    )
 
-    ! ! Read time and grid data
-    ! IF (par%master) CALL read_direct_regional_SMB_file_time_xy( climate_matrix%SMB_direct)
-    ! CALL sync
+    ! Read time and grid data
+    IF (par%master) CALL read_direct_regional_SMB_file_time_xy( climate_matrix%SMB_direct)
+    CALL sync
 
-    ! ! Lastly, allocate memory for the "applied" snapshot
-    ! CALL allocate_climate_snapshot_regional( grid, climate_matrix%applied, name = 'applied')
-
-    IF (par%master) WRITE(0,*) 'This subroutine (initialise_climate_model_direct_SMB_regional) is empty. Feel free to fill it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Lastly, allocate memory for the "applied" snapshot
+    CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

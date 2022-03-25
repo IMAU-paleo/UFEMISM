@@ -404,7 +404,7 @@ MODULE configuration_module
   ! Climate
   ! =======
 
-  CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+  CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'direct_global'                         ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
   ! NetCDF files containing direct global/regional climate forcing
   CHARACTER(LEN=256)  :: filename_direct_global_climate_config       = ''
@@ -474,7 +474,7 @@ MODULE configuration_module
   ! Surface mass balance
   ! ====================
 
-  CHARACTER(LEN=256)  :: choice_SMB_model_config                     = 'IMAU-ITM'                       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
+  CHARACTER(LEN=256)  :: choice_SMB_model_config                     = 'direct_regional'                       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
   CHARACTER(LEN=256)  :: choice_idealised_SMB_config                 = 'EISMINT1_A'
   REAL(dp)            :: SMB_uniform_config                          = 0._dp                            ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
 

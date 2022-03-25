@@ -29,7 +29,8 @@ MODULE netcdf_module
                                            type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
                                            type_ocean_snapshot_global, type_highres_ocean_data, &
                                            type_restart_data, type_netcdf_resource_tracker, &
-                                           type_direct_SMB_forcing_global, type_direct_climate_forcing_global
+                                           type_direct_SMB_forcing_global, type_direct_climate_forcing_global, &
+                                           type_direct_SMB_forcing_regional
   USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -5331,5 +5332,323 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_direct_global_climate_file_time_latlon
+
+  ! Direct regional SMB forcing
+  SUBROUTINE inquire_direct_regional_SMB_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_direct_regional_SMB_forcing_file'
+    INTEGER                                :: x,y,t
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%nx_raw, clim%netcdf%id_dim_x    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%ny_raw, clim%netcdf%id_dim_y    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+
+    ! Abbreviate dimension ID's for more readable code
+    x = clim%netcdf%id_dim_x
+    y = clim%netcdf%id_dim_y
+    t = clim%netcdf%id_dim_time
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,        (/ x       /), clim%netcdf%id_var_x       )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,        (/    y    /), clim%netcdf%id_var_y       )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,     (/       t /), clim%netcdf%id_var_time    )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m_year, (/ x, y, t /), clim%netcdf%id_var_T2m_year)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_SMB_year, (/ x, y, t /), clim%netcdf%id_var_SMB_year)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_regional_SMB_forcing_file
+  SUBROUTINE read_direct_regional_SMB_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+    INTEGER,                                INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_timeframes'
+    INTEGER                                               :: i,j
+    REAL(dp), DIMENSION(:,:,:  ), ALLOCATABLE             :: T2m_temp0, T2m_temp1, SMB_temp0, SMB_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( T2m_temp0( clim%nx_raw, clim%ny_raw, 1))
+    ALLOCATE( T2m_temp1( clim%nx_raw, clim%ny_raw, 1))
+    ALLOCATE( SMB_temp0( clim%nx_raw, clim%ny_raw, 1))
+    ALLOCATE( SMB_temp1( clim%nx_raw, clim%ny_raw, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 1 /), stride = (/ 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO i = 1, clim%nx_raw
+    DO j = 1, clim%ny_raw
+      clim%T2m_year0_raw( j,i) = T2m_temp0( i,j,1)
+      clim%T2m_year1_raw( j,i) = T2m_temp1( i,j,1)
+      clim%SMB_year0_raw( j,i) = SMB_temp0( i,j,1)
+      clim%SMB_year1_raw( j,i) = SMB_temp1( i,j,1)
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE( T2m_temp0)
+    DEALLOCATE( T2m_temp1)
+    DEALLOCATE( SMB_temp0)
+    DEALLOCATE( SMB_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_SMB_file_timeframes
+  SUBROUTINE read_direct_regional_SMB_file_time_xy( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_SMB_file_time_xy'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,  start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%x_raw, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%y_raw, start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_SMB_file_time_xy
+
+  ! Direct regional climate forcing
+  SUBROUTINE inquire_direct_regional_climate_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                             :: routine_name = 'inquire_direct_regional_climate_forcing_file'
+    INTEGER                                                   :: x,y,t,m
+    INTEGER                                                   :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%nx_raw, clim%netcdf%id_dim_x    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%ny_raw, clim%netcdf%id_dim_y    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,   clim%netcdf%id_dim_month)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+
+    ! Abbreviate dimension ID's for more readable code
+    x = clim%netcdf%id_dim_x
+    y = clim%netcdf%id_dim_y
+    t = clim%netcdf%id_dim_time
+    m = clim%netcdf%id_dim_month
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,      (/ x          /), clim%netcdf%id_var_x     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,      (/    y       /), clim%netcdf%id_var_y     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_month,  (/       m    /), clim%netcdf%id_var_month )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,   (/          t /), clim%netcdf%id_var_time  )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,    (/ x, y, m, t /), clim%netcdf%id_var_T2m   )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip, (/ x, y, m, t /), clim%netcdf%id_var_Precip)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_regional_climate_forcing_file
+  SUBROUTINE read_direct_regional_climate_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_timeframes'
+    INTEGER                                       :: i,j,m
+    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE     :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE(    T2m_temp0( clim%nx_raw, clim%ny_raw, 12, 1))
+    ALLOCATE(    T2m_temp1( clim%nx_raw, clim%ny_raw, 12, 1))
+    ALLOCATE( Precip_temp0( clim%nx_raw, clim%ny_raw, 12, 1))
+    ALLOCATE( Precip_temp1( clim%nx_raw, clim%ny_raw, 12, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO m = 1, 12
+    DO i = 1, clim%nx_raw
+    DO j = 1, clim%ny_raw
+      clim%T2m0_raw(    m,j,i) =    T2m_temp0( i,j,m,1)
+      clim%T2m1_raw(    m,j,i) =    T2m_temp1( i,j,m,1)
+      clim%Precip0_raw( m,j,i) = Precip_temp0( i,j,m,1)
+      clim%Precip1_raw( m,j,i) = Precip_temp1( i,j,m,1)
+    END DO
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE(    T2m_temp0)
+    DEALLOCATE(    T2m_temp1)
+    DEALLOCATE( Precip_temp0)
+    DEALLOCATE( Precip_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_climate_file_timeframes
+  SUBROUTINE read_direct_regional_climate_file_time_xy( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_time_xy'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,  start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%x_raw, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%y_raw, start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_climate_file_time_xy
 
 END MODULE netcdf_module

@@ -600,7 +600,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Allocate all the snapshots
-    CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%PD_obs,  name = 'PD_obs')
+    CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%PD_obs,  name = 'PD_obs' )
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%applied, name = 'applied')
 
     ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,

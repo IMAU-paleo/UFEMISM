@@ -393,6 +393,158 @@ MODULE data_types_module
     INTEGER                                 :: ci1, ci2                      ! Edges
 
   END TYPE type_mesh
+
+  TYPE type_mesh_new
+    ! The unstructured triangular mesh.
+
+    ! Basic meta properties
+    ! =====================
+    
+    CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
+    REAL(dp)                                :: lambda_M                      ! Oblique stereographic projection parameters
+    REAL(dp)                                :: phi_M
+    REAL(dp)                                :: alpha_stereo
+    REAL(dp)                                :: xmin                          ! X and Y range of the square covered by the mesh
+    REAL(dp)                                :: xmax
+    REAL(dp)                                :: ymin
+    REAL(dp)                                :: ymax
+    REAL(dp)                                :: tol_dist                      ! Horizontal distance tolerance; points closer together than this are assumed to be identical (typically set to a billionth of linear domain size)
+    INTEGER                                 :: nV_mem                        ! Size of allocated memory for vertices
+    INTEGER                                 :: nTri_mem                      ! Size of allocated memory for triangles
+    INTEGER                                 :: nC_mem                        ! Maximum allowed number of connections per vertex
+    INTEGER                                 :: nV                            ! Number of vertices
+    INTEGER                                 :: nTri                          ! Number of triangles
+    INTEGER                                 :: perturb_dir                   ! Perturbation direction (0 = anticlockwise, 1 = clockwise)
+    REAL(dp)                                :: alpha_min                     ! Sharpest inner angle allowed by Rupperts algorithm
+    REAL(dp)                                :: dz_max_ice                    ! Maximum allowed vertical error in Rupperts algorithm over ice
+    REAL(dp)                                :: res_max                       ! Maximum resolution anywhere
+    REAL(dp)                                :: res_max_margin                ! Maximum resolution over the ice margin
+    REAL(dp)                                :: res_max_gl                    ! Maximum resolution over the grounding line
+    REAL(dp)                                :: res_max_cf                    ! Maximum resolution over the calving front
+    REAL(dp)                                :: res_max_mountain              ! Maximum resolution over ice-free mountains  (important for getting the inception right)
+    REAL(dp)                                :: res_max_coast                 ! Maximum resolution over ice-free coast line (to make plots look nicer)
+    REAL(dp)                                :: res_min                       ! Minimum resolution anywhere ( = MINVAL([res_max_margin, res_max_gl, res_max_cf]))
+    REAL(dp)                                :: resolution_min                ! Finest   resolution of the mesh ( = MINVAL(R), where R = distance to nearest neighbour)
+    REAL(dp)                                :: resolution_max                ! Coarsest resolution of the mesh
+
+    ! Primary mesh data (needed for mesh creation & refinement)
+    ! =========================================================
+    
+    ! Vertex data
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: V                             ! The X and Y coordinates of all the vertices
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nC                            ! The number of other vertices this vertex is connected to
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: C                             ! The list   of other vertices this vertex is connected to (ordered counter-clockwise, from edge to edge for edge vertices)
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: niTri                         ! The number of triangles this vertex is a part of
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: iTri                          ! The list   of triangles this vertex is a part of (ordered counter-clockwise)
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: edge_index                    ! Each vertex's Edge Index; 0 = free, 1 = north, 2 = northeast, etc.
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: mesh_old_ti_in                ! When creating a new mesh: for every new mesh vertex, the old mesh triangle that contains it
+
+    ! Triangle data
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Tri                           ! The triangle array: Tri(ti) = [vi1, vi2, vi3] (vertices ordered counter-clockwise)
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: TriCC                         ! The X,Y-coordinates of each triangle's circumcenter
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: TriC                          ! The (up to) three neighbour triangles (order across from 1st, 2nd and 3d vertex, respectively)
+    
+    ! Refinement lists
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Triflip                       ! List of triangles to flip, used in updating Delaunay triangulation
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: RefMap                        ! Map   of which triangles      have been marked for refining
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: RefStack                      ! Stack of       triangles that have been marked for refining
+    INTEGER,                    ALLOCATABLE :: RefStackN
+
+    ! Maps+stacks for FloodFill-ALLOCATABLEhing
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: VMap, VStack1, VStack2
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: TriMap, TriStack1, TriStack2
+    INTEGER :: VStackN1, VStackN2
+    INTEGER :: TriStackN1, TriStackN2
+    
+    ! Points-of-Interest
+    INTEGER,                    ALLOCATABLE :: nPOI                          ! Number of Points of Interest (POI) in this mesh
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: POI_coordinates               ! Lat-lon coordinates of a POI
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: POI_XY_coordinates            ! X-Y     coordinates of a POI
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: POI_resolutions               ! Resolution          of a POI (km)
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: POI_vi                        ! The three vertices surrounding a POI
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: POI_w                         ! Their relative weights in trilinear interpolation
+    
+    ! Secondary mesh data
+    ! ===================
+    
+    ! Derived geometry data
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: A                             ! The area             of each vertex's Voronoi cell
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: VorGC                         ! The geometric centre of each vertex's Voronoi cell
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: R                             ! The resolution (defined as distance to nearest neighbour)
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: Cw                            ! The width of all vertex connections (= length of the shared Voronoi cell edge)
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: TriGC                         ! The X,Y-coordinates of each triangle's geometric centre
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: Tri_edge_index                ! Same as for vertices, only NE, SE, etc. aren't used
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: TriA                          ! The area of each triangle
+    
+    ! Staggered (Arakawa C) meshALLOCATABLE
+    INTEGER,                    ALLOCATABLE :: nAc                           ! The number of Ac vertices
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: VAc                           ! x,y coordinates of the Ac vertices
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Aci                           ! Mapping array from the Aa to the Ac mesh
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: iAci                          ! Mapping array from the Ac to the Aa mesh
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: edge_index_Ac
+    
+    ! Matrix operators: mapping
+    TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
+    TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
+    TYPE(tMat)                              :: M_map_b_a                     ! Operation: map     from the b-grid to the a-grid
+    TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
+    TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
+    TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
+   
+    ! Matrix operators: d/dx
+    TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_a_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_b_c                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
+   
+    ! Matrix operators: d/dy
+    TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_a_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_b_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
+    TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
+    
+    ! 2nd-order accurate matrix operators on the b-grid
+    TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
+    
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
+    
+    ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
+    TYPE(tMat)                              :: M_Neumann_BC_b
+    TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
+    
+    ! Lat/lon coordinates
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: lat
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: lon
+    
+    ! Transect
+    INTEGER                                 :: nV_transect                   ! Number of vertex pairs for the transect
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: vi_transect                   ! List   of vertex pairs for the transect
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: w_transect                    ! Interpolation weights for the vertex pairs
+    
+    ! Parallelisation
+    INTEGER                                 :: vi1, vi2                      ! Vertices
+    INTEGER                                 :: ti1, ti2                      ! Triangles
+    INTEGER                                 :: ci1, ci2                      ! Edges
+
+  END TYPE type_mesh_new
   
   TYPE type_debug_fields
     ! Dummy variables for debugging

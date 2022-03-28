@@ -189,57 +189,6 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
 
   END SUBROUTINE allocate_mesh_primary
-  SUBROUTINE extend_submesh_primary_new(      mesh, nV_mem_new, nTri_mem_new)
-    ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
-    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
-    
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh_new),                 INTENT(INOUT)     :: mesh
-    INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_submesh_primary'
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
- 
-    mesh%nV_mem   = nV_mem_new
-    mesh%nTri_mem = nTri_mem_new
-       
-    call reallocate(mesh%V             , nv_mem_new,           2)
-    call reallocate(mesh%V             , nV_mem_new,           2)
-    call reallocate(mesh%nC            , nV_mem_new             )
-    call reallocate(mesh%C             , nV_mem_new, mesh%nC_mem)
-    call reallocate(mesh%niTri         , nV_mem_new             )
-    call reallocate(mesh%iTri          , nV_mem_new, mesh%nC_mem)
-    call reallocate(mesh%edge_index    , nV_mem_new             )
-    call reallocate(mesh%mesh_old_ti_in, nV_mem_new             )
-    
-    mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
-    
-    call reallocate( mesh%Tri,            nTri_mem_new, 3)
-    call reallocate( mesh%Tricc,          nTri_mem_new, 2)
-    call reallocate( mesh%TriC,           nTri_mem_new, 3)
-    call reallocate( mesh%Tri_edge_index, nTri_mem_new   )
-
-    call reallocate( mesh%Triflip,        nTri_mem_new, 2)
-    call reallocate( mesh%RefMap,         nTri_mem_new   )
-    call reallocate( mesh%RefStack,       nTri_mem_new   )
-    
-    ! Distributed shared memory for FloodFill maps and stacks
-    call reallocate( mesh%VMap,      nV_mem_new   )
-    call reallocate( mesh%VStack1,   nV_mem_new   )
-    call reallocate( mesh%VStack2,   nV_mem_new   )
-    call reallocate( mesh%TriMap,    nTri_mem_new )
-    call reallocate( mesh%TriStack1, nTri_mem_new )
-    call reallocate( mesh%TriStack2, nTri_mem_new )
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE extend_submesh_primary_new
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
@@ -669,30 +618,30 @@ CONTAINS
     mesh%nV_mem   = nV_mem
     mesh%nTri_mem = nTri_mem
     mesh%nC_mem   = nC_mem
-    allocate( mesh%V              (nV_mem,   2     ))
-    allocate( mesh%nC             (nV_mem          ))
-    allocate( mesh%C              (nV_mem,   nC_mem))
-    allocate( mesh%niTri          (nV_mem          ))
-    allocate( mesh%iTri           (nV_mem,   nC_mem))
-    allocate( mesh%edge_index     (nV_mem          ))
-    allocate( mesh%mesh_old_ti_in (nV_mem          ))
+    allocate( mesh%V              (nV_mem,   2     ), source=0._dp)
+    allocate( mesh%nC             (nV_mem          ), source=0)
+    allocate( mesh%C              (nV_mem,   nC_mem), source=0)
+    allocate( mesh%niTri          (nV_mem          ), source=0)
+    allocate( mesh%iTri           (nV_mem,   nC_mem), source=0)
+    allocate( mesh%edge_index     (nV_mem          ), source=0)
+    allocate( mesh%mesh_old_ti_in (nV_mem          ), source=0)
 
-    allocate( mesh%Tri            (nTri_mem, 3     ))
-    allocate( mesh%Tricc          (nTri_mem, 2     ))
-    allocate( mesh%TriC           (nTri_mem, 3     )) 
-    allocate( mesh%Tri_edge_index (nTri_mem        )) 
+    allocate( mesh%Tri            (nTri_mem, 3     ), source=0)
+    allocate( mesh%Tricc          (nTri_mem, 2     ), source=0._dp)
+    allocate( mesh%TriC           (nTri_mem, 3     ), source=0) 
+    allocate( mesh%Tri_edge_index (nTri_mem        ), source=0) 
                                                      
-    allocate( mesh%Triflip        (nTri_mem, 2     ))
-    allocate( mesh%RefMap         (nTri_mem        ))
-    allocate( mesh%RefStack       (nTri_mem        ))
+    allocate( mesh%Triflip        (nTri_mem, 2     ), source=0)
+    allocate( mesh%RefMap         (nTri_mem        ), source=0)
+    allocate( mesh%RefStack       (nTri_mem        ), source=0)
     
     ! Distributed shared memory for FloodFill maps and stacks
-    allocate( mesh%VMap           (nV_mem          ))
-    allocate( mesh%VStack1        (nV_mem          ))
-    allocate( mesh%VStack2        (nV_mem          ))
-    allocate( mesh%TriMap         (nTri_mem        ))
-    allocate( mesh%TriStack1      (nTri_mem        ))
-    allocate( mesh%TriStack2      (nTri_mem        ))
+    allocate( mesh%VMap           (nV_mem          ), source=0)
+    allocate( mesh%VStack1        (nV_mem          ), source=0)
+    allocate( mesh%VStack2        (nV_mem          ), source=0)
+    allocate( mesh%TriMap         (nTri_mem        ), source=0)
+    allocate( mesh%TriStack1      (nTri_mem        ), source=0)
+    allocate( mesh%TriStack2      (nTri_mem        ), source=0)
     
     ! POI stuff
     IF (mesh%region_name == 'NAM') THEN
@@ -712,6 +661,57 @@ CONTAINS
     allocate( mesh%POI_w              ( mesh%nPOI, 3 )) 
 
   END SUBROUTINE allocate_submesh_primary_new
+  SUBROUTINE extend_submesh_primary_new(      mesh, nV_mem_new, nTri_mem_new)
+    ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
+    ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh_new),                 INTENT(INOUT)     :: mesh
+    INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_submesh_primary'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+ 
+    mesh%nV_mem   = nV_mem_new
+    mesh%nTri_mem = nTri_mem_new
+       
+    call reallocate(mesh%V             , nv_mem_new,           2)
+    call reallocate(mesh%V             , nV_mem_new,           2)
+    call reallocate(mesh%nC            , nV_mem_new             )
+    call reallocate(mesh%C             , nV_mem_new, mesh%nC_mem)
+    call reallocate(mesh%niTri         , nV_mem_new             )
+    call reallocate(mesh%iTri          , nV_mem_new, mesh%nC_mem)
+    call reallocate(mesh%edge_index    , nV_mem_new             )
+    call reallocate(mesh%mesh_old_ti_in, nV_mem_new             )
+    
+    mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
+    
+    call reallocate( mesh%Tri,            nTri_mem_new, 3)
+    call reallocate( mesh%Tricc,          nTri_mem_new, 2)
+    call reallocate( mesh%TriC,           nTri_mem_new, 3)
+    call reallocate( mesh%Tri_edge_index, nTri_mem_new   )
+
+    call reallocate( mesh%Triflip,        nTri_mem_new, 2)
+    call reallocate( mesh%RefMap,         nTri_mem_new   )
+    call reallocate( mesh%RefStack,       nTri_mem_new   )
+    
+    ! Distributed shared memory for FloodFill maps and stacks
+    call reallocate( mesh%VMap,      nV_mem_new   )
+    call reallocate( mesh%VStack1,   nV_mem_new   )
+    call reallocate( mesh%VStack2,   nV_mem_new   )
+    call reallocate( mesh%TriMap,    nTri_mem_new )
+    call reallocate( mesh%TriStack1, nTri_mem_new )
+    call reallocate( mesh%TriStack2, nTri_mem_new )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE extend_submesh_primary_new
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
@@ -884,7 +884,6 @@ CONTAINS
     deallocate(mesh%Triflip)
     deallocate(mesh%RefMap)
     deallocate(mesh%RefStack)
-    deallocate(mesh%RefStackN)
 
     deallocate(mesh%VMap)
     deallocate(mesh%VStack1)
@@ -1114,30 +1113,30 @@ CONTAINS
 
     if (par%i == p_left) then
       !MAKE ROOM
-      allocate( submesh_right%V             (   nV,   2      ))
-      allocate( submesh_right%nC            (   nV           ))
-      allocate( submesh_right%C             (   nV,   nconmax))
-      allocate( submesh_right%niTri         (   nV           ))
-      allocate( submesh_right%iTri          (   nV,   nconmax))
-      allocate( submesh_right%edge_index    (   nV           ))
-      allocate( submesh_right%mesh_old_ti_in(   nV           ))
+      allocate( submesh_right%V             (   nV,   2      ), source=0._dp)
+      allocate( submesh_right%nC            (   nV           ), source=0)
+      allocate( submesh_right%C             (   nV,   nconmax), source=0)
+      allocate( submesh_right%niTri         (   nV           ), source=0)
+      allocate( submesh_right%iTri          (   nV,   nconmax), source=0)
+      allocate( submesh_right%edge_index    (   nV           ), source=0)
+      allocate( submesh_right%mesh_old_ti_in(   nV           ), source=0)
 
-      allocate( submesh_right%Tri           (   nTri, 3      ))
-      allocate( submesh_right%Tricc         (   nTri, 2      ))
-      allocate( submesh_right%TriC          (   nTri, 3      ))
-      allocate( submesh_right%Tri_edge_index(   nTri         ))
+      allocate( submesh_right%Tri           (   nTri, 3      ), source=0)
+      allocate( submesh_right%Tricc         (   nTri, 2      ), source=0._dp)
+      allocate( submesh_right%TriC          (   nTri, 3      ), source=0)
+      allocate( submesh_right%Tri_edge_index(   nTri         ), source=0)
 
-      allocate( submesh_right%Triflip       (   nTri, 2      ))
-      allocate( submesh_right%RefMap        (   nTri         ))
-      allocate( submesh_right%RefStack      (   nTri         ))
+      allocate( submesh_right%Triflip       (   nTri, 2      ), source=0)
+      allocate( submesh_right%RefMap        (   nTri         ), source=0)
+      allocate( submesh_right%RefStack      (   nTri         ), source=0)
 
-      allocate( submesh_right%VMap          (   nV           ))
-      allocate( submesh_right%VStack1       (   nV           ))
-      allocate( submesh_right%VStack2       (   nV           ))
+      allocate( submesh_right%VMap          (   nV           ), source=0)
+      allocate( submesh_right%VStack1       (   nV           ), source=0)
+      allocate( submesh_right%VStack2       (   nV           ), source=0)
 
-      allocate( submesh_right%TriMap        (   nTri         ))
-      allocate( submesh_right%TriStack1     (   nTri         ))
-      allocate( submesh_right%TriStack2     (   nTri         ))
+      allocate( submesh_right%TriMap        (   nTri         ), source=0)
+      allocate( submesh_right%TriStack1     (   nTri         ), source=0)
+      allocate( submesh_right%TriStack2     (   nTri         ), source=0)
       
       ! ok now we can receive
       call mpi_recv( submesh_right%V,              nV*2      , mpi_real8  , p_right, 1, MPI_COMM_WORLD, status, ierr )

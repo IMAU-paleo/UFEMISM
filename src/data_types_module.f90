@@ -448,13 +448,13 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Triflip                       ! List of triangles to flip, used in updating Delaunay triangulation
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: RefMap                        ! Map   of which triangles      have been marked for refining
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: RefStack                      ! Stack of       triangles that have been marked for refining
-    INTEGER,                    ALLOCATABLE :: RefStackN
+    INTEGER                                 :: RefStackN
 
     ! Maps+stacks for FloodFill-ALLOCATABLEhing
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: VMap, VStack1, VStack2
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: TriMap, TriStack1, TriStack2
-    INTEGER :: VStackN1, VStackN2
-    INTEGER :: TriStackN1, TriStackN2
+    INTEGER                                 :: VStackN1, VStackN2
+    INTEGER                                 :: TriStackN1, TriStackN2
     
     ! Points-of-Interest
     INTEGER,                    ALLOCATABLE :: nPOI                          ! Number of Points of Interest (POI) in this mesh

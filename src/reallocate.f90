@@ -17,8 +17,8 @@ subroutine reallocate_dp_1d(array,newx)
   real(dp), allocatable, dimension(:)                  :: newarray
 
   ! allocate, move, swap pointer(bonus implicit deallocate)
-  allocate(newarray(newx))
-  newarray(1:min(newx,size(array,1))) = array
+  allocate(newarray(newx), source=0._dp)
+  newarray(1:min(newx,size(array,1))) = array(1:min(newx,size(array,1)))
   call move_alloc(newarray, array)
 end subroutine
 subroutine reallocate_dp_2d(array,newx, newy)
@@ -29,8 +29,9 @@ subroutine reallocate_dp_2d(array,newx, newy)
   real(dp), allocatable, dimension(:,:)                :: newarray
   
   ! allocate, move, swap pointer(bonus implicit deallocate)
-  allocate(newarray(newx,newy))
-  newarray(1:min(newx,size(array,1)),1:min(newy,size(array,2))) = array
+  allocate(newarray(newx,newy), source=0._dp)
+  newarray(1:min(newx,size(array,1)),1:min(newy,size(array,2))) &
+      = array(1:min(newx,size(array,1)),1:min(newy,size(array,2)))
   call move_alloc(newarray, array)
 end subroutine
 subroutine reallocate_int_1d(array,newx)
@@ -40,8 +41,8 @@ subroutine reallocate_int_1d(array,newx)
   integer,  allocatable, dimension(:)                  :: newarray
 
   ! allocate, move, swap pointer(bonus implicit deallocate)
-  allocate(newarray(newx))
-  newarray(1:min(newx,size(array,1))) = array
+  allocate(newarray(newx), source=0)
+  newarray(1:min(newx,size(array,1))) = array(1:min(newx,size(array,1)))
   call move_alloc(newarray, array)
 end subroutine
 subroutine reallocate_int_2d(array,newx, newy)
@@ -52,8 +53,9 @@ subroutine reallocate_int_2d(array,newx, newy)
   integer,  allocatable, dimension(:,:)                :: newarray
   
   ! allocate, move, swap pointer(bonus implicit deallocate)
-  allocate(newarray(newx,newy))
-  newarray(1:min(newx,size(array,1)),1:min(newy,size(array,2))) = array
+  allocate(newarray(newx,newy), source=0)
+  newarray(1:min(newx,size(array,1)),1:min(newy,size(array,2))) &
+      = array(1:min(newx,size(array,1)),1:min(newy,size(array,2)))
   call move_alloc(newarray, array)
 end subroutine
 end module

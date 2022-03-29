@@ -1097,36 +1097,37 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    deallocate(mesh%V)
-    deallocate(mesh%nC)
-    deallocate(mesh%C)
-    deallocate(mesh%niTri)
-    deallocate(mesh%iTri)
-    deallocate(mesh%edge_index)
-    deallocate(mesh%mesh_old_ti_in)
-    
-    deallocate(mesh%Tri)
-    deallocate(mesh%Tricc)
-    deallocate(mesh%TriC)
-    deallocate(mesh%Tri_edge_index)
+! Because we switch to allocatable, it will be automatically deallocated when going out of scope, bonus!
+!   deallocate(mesh%V)
+!   deallocate(mesh%nC)
+!   deallocate(mesh%C)
+!   deallocate(mesh%niTri)
+!   deallocate(mesh%iTri)
+!   deallocate(mesh%edge_index)
+!   deallocate(mesh%mesh_old_ti_in)
+!   
+!   deallocate(mesh%Tri)
+!   deallocate(mesh%Tricc)
+!   deallocate(mesh%TriC)
+!   deallocate(mesh%Tri_edge_index)
 
-    deallocate(mesh%Triflip)
-    deallocate(mesh%RefMap)
-    deallocate(mesh%RefStack)
+!   deallocate(mesh%Triflip)
+!   deallocate(mesh%RefMap)
+!   deallocate(mesh%RefStack)
 
-    deallocate(mesh%VMap)
-    deallocate(mesh%VStack1)
-    deallocate(mesh%VStack2)
-    deallocate(mesh%TriMap)
-    deallocate(mesh%TriStack1)
-    deallocate(mesh%TriStack2)
+!   deallocate(mesh%VMap)
+!   deallocate(mesh%VStack1)
+!   deallocate(mesh%VStack2)
+!   deallocate(mesh%TriMap)
+!   deallocate(mesh%TriStack1)
+!   deallocate(mesh%TriStack2)
 
-    deallocate(mesh%nPOI               )
-    deallocate(mesh%POI_coordinates    )
-    deallocate(mesh%POI_XY_coordinates )
-    deallocate(mesh%POI_resolutions    )
-    deallocate(mesh%POI_vi             )
-    deallocate(mesh%POI_w              )
+!   deallocate(mesh%nPOI               )
+!   deallocate(mesh%POI_coordinates    )
+!   deallocate(mesh%POI_XY_coordinates )
+!   deallocate(mesh%POI_resolutions    )
+!   deallocate(mesh%POI_vi             )
+!   deallocate(mesh%POI_w              )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1488,16 +1489,23 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'move_data_from_submesh_to_mesh'
 
     integer                                            :: nconmax
-
     nconmax = C%nconmax
     
     ! Add routine to path
     CALL init_routine( routine_name)
     if (par% master) then  
+
+      call crop_submesh_primary(submesh) !make sure nv_mem == nv and ntri == ntri_mem
+      if ((submesh%nv /= submesh%nv_mem) .or. (submesh%ntri /= submesh%ntri_mem)) then
+        write(0,*) "Error in cropping, memory allocated is still larger then expected"
+        error stop
+      end if
+
       mesh%nV          = submesh%nV
       mesh%nTri        = submesh%nTri
       mesh%nV_mem      = submesh%nV_mem
       mesh%nTri_mem    = submesh%nTri_mem
+      mesh%nC_mem      = submesh%nC_mem
       
       mesh%xmin        = submesh%xmin
       mesh%xmax        = submesh%xmax
@@ -1506,7 +1514,27 @@ CONTAINS
       mesh%tol_dist    = submesh%tol_dist
       
       mesh%perturb_dir = submesh%perturb_dir
-          
+    endif
+
+    ! This can be done in parallel (async)... TODO
+    call mpi_bcast( mesh%nV         , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%nTri       , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%nV_mem     , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%nTri_mem   , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%nC_mem     , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+
+    call mpi_bcast( mesh%xmin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%xmax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%ymin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%ymax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%tol_dist   , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+
+    call mpi_bcast( mesh%perturb_dir, 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+
+    CALL allocate_mesh_primary( mesh, submesh%region_name, mesh%nV, mesh%nTri, mesh%nC_mem)
+
+    ! Fill the good data 
+    if (par% master) then  
       call move_alloc(submesh%V, mesh%V)
       call move_alloc(submesh%nC, mesh%nC)
       call move_alloc(submesh%C, mesh%C)
@@ -1525,24 +1553,9 @@ CONTAINS
       call move_alloc(submesh%RefStack, mesh%RefStack)
 
       mesh% RefStackN = submesh% RefStackN
-
     end if
 
-    ! This can be done in parallel (async)... TODO
-    call mpi_bcast( mesh%nV         , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nTri       , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nV_mem     , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nTri_mem   , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-
-    call mpi_bcast( mesh%xmin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%xmax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%ymin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%ymax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%tol_dist   , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-
-    call mpi_bcast( mesh%perturb_dir, 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-
-    call mpi_bcast( mesh%V          , mesh%nV*2      , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_bcast( mesh%V          , mesh%nV*2      , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
     call mpi_bcast( mesh%nC         , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
     call mpi_bcast( mesh%C          , mesh%nV*nconmax, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
     call mpi_bcast( mesh%niTri      , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )

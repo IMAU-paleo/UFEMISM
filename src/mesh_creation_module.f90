@@ -65,7 +65,6 @@ MODULE mesh_creation_module
     procedure :: merge_all_submeshes_new
   end interface
   interface create_final_mesh_from_merged_submesh
-    procedure :: create_final_mesh_from_merged_submesh
     procedure :: create_final_mesh_from_merged_submesh_new
   end interface
   interface Lloyds_algorithm_single_iteration_submesh
@@ -73,7 +72,6 @@ MODULE mesh_creation_module
     procedure :: Lloyds_algorithm_single_iteration_submesh_new
   end interface
   interface refine_mesh_geo_only
-    procedure :: refine_mesh_geo_only
     procedure :: refine_mesh_geo_only_new
   end interface
   interface create_transect
@@ -81,7 +79,7 @@ MODULE mesh_creation_module
     procedure :: create_transect_new
   end interface
   
-  LOGICAL :: debug_mesh_creation = .FALSE.
+  LOGICAL, parameter :: debug_mesh_creation = .True.
   
   CONTAINS
   
@@ -946,97 +944,6 @@ MODULE mesh_creation_module
     CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_mesh_geo_only_new
-  SUBROUTINE refine_mesh_geo_only( mesh)
-    ! Refine a mesh, using only triangle geometry as a condition (so really the original version of Ruppert's algorithm)
-    ! Meant to be run on the final, merged mesh - called by all processes, but the work is only done by the Master.
-    ! Must be called by all to be able to call ExtendMeshMemory if necessary.
-    
-    IMPLICIT NONE
-  
-    ! Input variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh_geo_only'
-    INTEGER                                       :: ti
-    REAL(dp), DIMENSION(2)                        :: p
-    LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-    
-    ! List all triangles for checking
-    IF (par%master) THEN
-      mesh%RefMap    = 0
-      mesh%RefStack  = 0
-      mesh%RefStackN = 0
-      DO ti = 1, mesh%nTri
-        mesh%RefMap(ti)               = 1
-        mesh%RefStackN                = mesh%RefStackN + 1
-        mesh%RefStack(mesh%RefStackN) = ti
-      END DO
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
-    FinishedRefining = .FALSE.
-    
-    DO WHILE (.NOT. FinishedRefining)
-    
-      ! Refine the mesh until it's done, or until it's almost out of memory.
-      ! ====================================================================
-      
-      DoExtendMemory = .FALSE.
-          
-      IF (par%master) THEN
-      DO WHILE (mesh%RefStackN > 0)
-    
-        ! Check the last triangle list in the RefineStack. If it's
-        ! Bad, refine it and add the affected triangles to the RefineStack.
-      
-        ti = mesh%RefStack( mesh%RefStackN)
-        CALL is_good_triangle_geo_only( mesh, ti, IsGood)
-              
-        IF (IsGood) THEN
-          ! Remove this triangle from the stack
-          mesh%RefMap(ti) = 0
-          mesh%RefStack(mesh%RefStackN) = 0
-          mesh%RefStackN = mesh%RefStackN - 1
-        ELSE
-          ! Spit this triangle, add the affected triangles to the stack
-          p = mesh%Tricc(ti,:)
-          CALL split_triangle( mesh, ti, p)
-        END IF
-        
-        ! If we're reaching the memory limit, stop refining and extend the memory.
-        IF (mesh%nV > mesh%nV_mem - 10) THEN
-          DoExtendMemory = .TRUE.
-          EXIT
-        END IF
-        
-      END DO ! DO WHILE (mesh%RefStackN > 0)
-      END IF ! IF (par%master)
-      
-      FinishedRefining = .FALSE.
-      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
-      
-      ! Check if all processes finished refining. If so, exit.
-      CALL MPI_BCAST( FinishedRefining, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
-      IF (FinishedRefining) EXIT
-      
-      ! Check if any process needs to extend their memory.
-      CALL MPI_BCAST( DoExtendMemory, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
-      IF (DoExtendMemory) THEN
-        ! By extending the memory to mesh%nV + 1000, we ensure that processes that
-        ! have already finished refining do not keep adding useless extra memory.
-        CALL extend_mesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
-      END IF
-    
-    END DO !DO WHILE (.NOT. FinishedRefining)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-  
-  END SUBROUTINE refine_mesh_geo_only
   SUBROUTINE refine_submesh_geo_only( mesh)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
     
@@ -3179,68 +3086,6 @@ MODULE mesh_creation_module
   END SUBROUTINE merge_submeshes
   
   ! == Once merging is finished, finalise the mesh
-  SUBROUTINE create_final_mesh_from_merged_submesh( submesh, mesh)
-    
-    IMPLICIT NONE
-  
-    ! In/output variables
-    TYPE(type_mesh),            INTENT(INOUT)     :: submesh
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
-    INTEGER                                       :: nV, nTri
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-    
-    ! Communicate final merged mesh size to all processes
-    ! ===================================================
-    
-    nV = submesh%nV
-    nTri = submesh%nTri
-    CALL MPI_BCAST( nV,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_BCAST( nTri, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-  
-    ! Copy data from the final merged submesh, deallocate all the submeshes,
-    ! do one final refining pass for the new triangles that may be too sharp.
-    ! =======================================================================
-    
-    CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
-    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)
-    CALL deallocate_submesh_primary( submesh)
-    CALL refine_mesh_geo_only( mesh)
-    CALL crop_mesh_primary(    mesh)
-
-    ! Finish up - mesh metadata and extra info
-    ! ========================================
-                
-    ! Determine vertex and triangle domains
-    CALL partition_list( mesh%nV,   par%i, par%n, mesh%vi1, mesh%vi2)
-    CALL partition_list( mesh%nTri, par%i, par%n, mesh%ti1, mesh%ti2)
-    
-    ! Calculate extra mesh data
-    CALL allocate_mesh_secondary(             mesh)    ! Adds  9 MPI windows
-    CALL calc_triangle_geometric_centres(     mesh)
-    CALL find_Voronoi_cell_areas(             mesh)
-    CALL get_lat_lon_coordinates(             mesh)
-    CALL find_triangle_areas(                 mesh)
-    CALL find_connection_widths(              mesh)
-    CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
-    !CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
-    CALL determine_mesh_resolution(           mesh)
-    IF (par%master) CALL find_POI_xy_coordinates( mesh)
-    CALL sync
-    CALL find_POI_vertices_and_weights(       mesh)
-    CALL find_Voronoi_cell_geometric_centres( mesh)
-    CALL create_transect(                     mesh)
-    
-    CALL check_mesh( mesh)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 58)
-    
-  END SUBROUTINE create_final_mesh_from_merged_submesh
   SUBROUTINE create_final_mesh_from_merged_submesh_new( submesh, mesh)
     
     IMPLICIT NONE
@@ -3252,6 +3097,7 @@ MODULE mesh_creation_module
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
     INTEGER                                       :: nV, nTri
+    CHARACTER(LEN=2)                              :: str_processid
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -3268,9 +3114,11 @@ MODULE mesh_creation_module
     ! do one final refining pass for the new triangles that may be too sharp.
     ! =======================================================================
     
-    CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
+    !CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
     CALL move_data_from_submesh_to_mesh( mesh, submesh)
     CALL deallocate_submesh_primary( submesh)
+    WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
+    IF (debug_mesh_creation) CALL write_mesh_to_text_file( mesh, 'mesh_proc_' // TRIM(str_processid) // '.txt')
     CALL refine_mesh_geo_only( mesh)
     CALL crop_mesh_primary(    mesh)
 

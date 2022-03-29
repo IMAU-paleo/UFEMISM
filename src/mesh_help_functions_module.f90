@@ -3340,7 +3340,7 @@ MODULE mesh_help_functions_module
       ! If no more non-checked neighbours could be found, terminate and throw an error.
       IF (mesh%TriStackN2==0) THEN
         WRITE(0,*) 'find_containing_triangle - ERROR: couldnt find triangle containing this point!'
-        STOP
+        error STOP
       END IF
 
     END DO ! DO WHILE (.NOT. FoundIt)

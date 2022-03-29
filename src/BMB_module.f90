@@ -476,7 +476,14 @@ CONTAINS
     T_ocean_mean = 0._dp
 
     ! Determine mean ocean temperature and basal melt rates for deep ocean and exposed shelves
-    IF (C%choice_forcing_method == 'CO2_direct') THEN
+    IF (C%choice_forcing_method == 'none') THEN
+
+      ! In this case, no CO2/d18O forcing is used; just assume PD weights
+      w_warm = 0._dp
+      w_cold = 0._dp
+      w_PD   = 1._dp
+
+    ELSE IF (C%choice_forcing_method == 'CO2_direct') THEN
 
       ! Use the prescribed CO2 record as a glacial index
       IF (forcing%CO2_obs > 280._dp) THEN
@@ -522,8 +529,8 @@ CONTAINS
       END IF
 
     ELSEIF (C%choice_forcing_method == 'climate_direct' .OR. C%choice_forcing_method == 'SMB_direct') THEN
-      ! In this case, no CO2/d18O forcing is used; just assume PD weights
 
+      ! In this case, no CO2/d18O forcing is used; just assume PD weights
       w_warm = 0._dp
       w_cold = 0._dp
       w_PD   = 1._dp

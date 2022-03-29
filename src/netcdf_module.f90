@@ -30,7 +30,7 @@ MODULE netcdf_module
                                            type_ocean_snapshot_global, type_highres_ocean_data, &
                                            type_restart_data, type_netcdf_resource_tracker, &
                                            type_direct_SMB_forcing_global, type_direct_climate_forcing_global, &
-                                           type_direct_SMB_forcing_regional
+                                           type_direct_SMB_forcing_regional, type_direct_climate_forcing_regional
   USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -5234,12 +5234,12 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
-    INTEGER,                        INTENT(IN)    :: ti0, ti1
+    INTEGER,                        INTENT(IN)              :: ti0, ti1
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_global_climate_file_timeframes'
-    INTEGER                                       :: loni,lati,m
-    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE     :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'read_direct_global_climate_file_timeframes'
+    INTEGER                                                 :: loni,lati,m
+    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE               :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5342,8 +5342,8 @@ CONTAINS
     TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_direct_regional_SMB_forcing_file'
-    INTEGER                                :: x,y,t
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'inquire_direct_regional_SMB_forcing_file'
+    INTEGER                                               :: x,y,t
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5362,9 +5362,9 @@ CONTAINS
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%nx_raw, clim%netcdf%id_dim_x    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%ny_raw, clim%netcdf%id_dim_y    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x   )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y   )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time)
 
     ! Abbreviate dimension ID's for more readable code
     x = clim%netcdf%id_dim_x
@@ -5413,26 +5413,26 @@ CONTAINS
     END IF
 
     ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE( T2m_temp0( clim%nx_raw, clim%ny_raw, 1))
-    ALLOCATE( T2m_temp1( clim%nx_raw, clim%ny_raw, 1))
-    ALLOCATE( SMB_temp0( clim%nx_raw, clim%ny_raw, 1))
-    ALLOCATE( SMB_temp1( clim%nx_raw, clim%ny_raw, 1))
+    ALLOCATE( T2m_temp0( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( T2m_temp1( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( SMB_temp0( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( SMB_temp1( clim%grid%nx, clim%grid%ny, 1))
 
     ! Open netcdf file
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
 
      ! Close netcdf file
     CALL close_netcdf_file( clim%netcdf%ncid)
 
     ! Store the data in the shared memory structure
-    DO i = 1, clim%nx_raw
-    DO j = 1, clim%ny_raw
+    DO i = 1, clim%grid%nx
+    DO j = 1, clim%grid%ny
       clim%T2m_year0_raw( j,i) = T2m_temp0( i,j,1)
       clim%T2m_year1_raw( j,i) = T2m_temp1( i,j,1)
       clim%SMB_year0_raw( j,i) = SMB_temp0( i,j,1)
@@ -5458,7 +5458,7 @@ CONTAINS
     TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_SMB_file_time_xy'
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_time_xy'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5477,9 +5477,9 @@ CONTAINS
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,  start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%x_raw, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%y_raw, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
 
     ! Close the netcdf file
     CALL close_netcdf_file( clim%netcdf%ncid)
@@ -5519,10 +5519,10 @@ CONTAINS
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%nx_raw, clim%netcdf%id_dim_x    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%ny_raw, clim%netcdf%id_dim_y    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,   clim%netcdf%id_dim_month)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,    clim%netcdf%id_dim_month)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time )
 
     ! Abbreviate dimension ID's for more readable code
     x = clim%netcdf%id_dim_x
@@ -5573,27 +5573,27 @@ CONTAINS
     END IF
 
     ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE(    T2m_temp0( clim%nx_raw, clim%ny_raw, 12, 1))
-    ALLOCATE(    T2m_temp1( clim%nx_raw, clim%ny_raw, 12, 1))
-    ALLOCATE( Precip_temp0( clim%nx_raw, clim%ny_raw, 12, 1))
-    ALLOCATE( Precip_temp1( clim%nx_raw, clim%ny_raw, 12, 1))
+    ALLOCATE(    T2m_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE(    T2m_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE( Precip_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE( Precip_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
 
     ! Open netcdf file
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%nx_raw, clim%ny_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%nx_raw, clim%nx_raw, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
 
      ! Close netcdf file
     CALL close_netcdf_file( clim%netcdf%ncid)
 
     ! Store the data in the shared memory structure
     DO m = 1, 12
-    DO i = 1, clim%nx_raw
-    DO j = 1, clim%ny_raw
+    DO i = 1, clim%grid%nx
+    DO j = 1, clim%grid%ny
       clim%T2m0_raw(    m,j,i) =    T2m_temp0( i,j,m,1)
       clim%T2m1_raw(    m,j,i) =    T2m_temp1( i,j,m,1)
       clim%Precip0_raw( m,j,i) = Precip_temp0( i,j,m,1)
@@ -5639,9 +5639,9 @@ CONTAINS
     CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,  start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%x_raw, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%y_raw, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
 
     ! Close the netcdf file
     CALL close_netcdf_file( clim%netcdf%ncid)

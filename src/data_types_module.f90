@@ -956,9 +956,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_climate_forcing_regional) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), POINTER     :: x_raw, y_raw
-    INTEGER :: wnx_raw, wny_raw, wx_raw, wy_raw
+    TYPE(type_grid)                         :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears
@@ -997,9 +995,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_SMB_forcing_regional) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), POINTER     :: x_raw, y_raw
-    INTEGER :: wnx_raw, wny_raw, wx_raw, wy_raw
+    TYPE(type_grid)                         :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears

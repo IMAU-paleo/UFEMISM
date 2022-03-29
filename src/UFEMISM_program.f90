@@ -141,9 +141,11 @@ PROGRAM UFEMISM_program
   GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
 
   ! Determine d18O contributions of all simulated ice sheets
-  IF (C%do_calculate_benthic_d18O) THEN
-    CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-    CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+  IF (.NOT. C%choice_forcing_method == 'none') THEN
+    IF (C%do_calculate_benthic_d18O) THEN
+      CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
+      CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+    END IF
   END IF
 
   ! ===== Initial global output =====

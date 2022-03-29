@@ -280,8 +280,8 @@ MODULE mesh_help_functions_module
     END DO
 
     !local, which now is global
-    mesh%resolution_min = MINVAL(mesh%R(mesh%vi1:mesh%vi2))
-    mesh%resolution_max = MAXVAL(mesh%R(mesh%vi1:mesh%vi2))
+    mesh%resolution_min = MINVAL(mesh%R(1:mesh%nV))
+    mesh%resolution_max = MAXVAL(mesh%R(1:mesh%nV))
     !global
     !call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_min, 1, MPI_REAL8, MPI_MIN, MPI_COMM_WORLD, ierr)
     !call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_max, 1, MPI_REAL8, MPI_MAX, MPI_COMM_WORLD, ierr)

@@ -28,7 +28,7 @@ MODULE reference_fields_module
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_reference_geometry, type_grid, &
-                                             type_model_region, type_mesh => type_mesh_new
+                                             type_model_region, type_mesh
   USE netcdf_module,                   ONLY: inquire_reference_geometry_file, read_reference_geometry_file
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, deallocate_remapping_operators_grid2mesh
   USE utilities_module,                ONLY: remove_Lake_Vostok, is_floating, surface_elevation

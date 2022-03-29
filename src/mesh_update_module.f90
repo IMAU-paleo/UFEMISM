@@ -23,7 +23,7 @@ MODULE mesh_update_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_model_region, type_ice_model, type_reference_geometry
+  USE data_types_module,               ONLY: type_mesh, type_model_region, type_ice_model, type_reference_geometry
   USE mesh_help_functions_module,      ONLY: cart_bilinear_dp, max_cart_over_triangle_dp, mesh_bilinear_dp, is_in_triangle, check_mesh, &
                                              partition_domain_regular, partition_domain_x_balanced, partition_domain_y_balanced, is_walltowall, &
                                              new_triangle_contains_old_mask, write_mesh_to_text_file, is_boundary_segment, is_encroached_upon

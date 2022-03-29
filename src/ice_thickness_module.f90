@@ -24,7 +24,7 @@ MODULE ice_thickness_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_ice_model, type_SMB_model, type_BMB_model, &
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
                                              type_reference_geometry
   USE utilities_module,                ONLY: is_floating
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex

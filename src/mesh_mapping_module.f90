@@ -24,7 +24,7 @@ MODULE mesh_mapping_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_remapping_mesh_mesh, type_grid, type_remapping_latlon2mesh, &
+  USE data_types_module,               ONLY: type_mesh, type_remapping_mesh_mesh, type_grid, type_remapping_latlon2mesh, &
                                              type_latlongrid, type_latlongrid_new, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
   USE mesh_help_functions_module,      ONLY: is_in_triangle, write_mesh_to_text_file, lies_on_line_segment, segment_intersection, &
                                              find_containing_vertex, find_containing_triangle, is_in_Voronoi_cell, &

@@ -24,7 +24,7 @@ MODULE ice_dynamics_module
                                              deallocate_shared
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_ice_model, type_reference_geometry, &
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_model_region
   USE utilities_module,                ONLY: surface_elevation
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D

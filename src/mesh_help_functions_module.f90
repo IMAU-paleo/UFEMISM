@@ -167,8 +167,8 @@ MODULE mesh_help_functions_module
     
     ALLOCATE(Vor(mesh%nC_mem+2,2))
 
-    mesh%A(mesh%vi1:mesh%vi2) = 0._dp
-    DO vi = mesh%vi1, mesh%vi2
+    mesh%A(1:mesh%nV) = 0._dp
+    DO vi = 1, mesh%nV
 
       CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
 
@@ -178,7 +178,6 @@ MODULE mesh_help_functions_module
         [Vor(n-1,1)-mesh%V(vi,1), Vor(n-1,2)-mesh%V(vi,2)] )) / 2._dp
       END DO
     END DO
-    CALL sync
 
     DEALLOCATE(Vor)
 
@@ -591,21 +590,21 @@ MODULE mesh_help_functions_module
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    mesh%R(mesh%vi1:mesh%vi2) = mesh%xmax - mesh%xmin
+    mesh%R(1:mesh%nV) = mesh%xmax - mesh%xmin
 
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = 1, mesh%nV
       DO ci = 1, mesh%nC(vi)
         vj = mesh%C(vi,ci)
         mesh%R(vi) = MIN(mesh%R(vi), SQRT((mesh%V(vj,1)-mesh%V(vi,1))**2 + (mesh%V(vj,2)-mesh%V(vi,2))**2))
       END DO
     END DO
 
-    !local
+    !local, which now is global
     mesh%resolution_min = MINVAL(mesh%R(mesh%vi1:mesh%vi2))
     mesh%resolution_max = MAXVAL(mesh%R(mesh%vi1:mesh%vi2))
     !global
-    call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_min, 1, MPI_REAL8, MPI_MIN, MPI_COMM_WORLD, ierr)
-    call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_max, 1, MPI_REAL8, MPI_MAX, MPI_COMM_WORLD, ierr)
+    !call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_min, 1, MPI_REAL8, MPI_MIN, MPI_COMM_WORLD, ierr)
+    !call mpi_allreduce(MPI_IN_PLACE, mesh%resolution_max, 1, MPI_REAL8, MPI_MAX, MPI_COMM_WORLD, ierr)
 
 
     ! Finalise routine path
@@ -657,7 +656,7 @@ MODULE mesh_help_functions_module
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = 1, mesh%nTri ! Could be distributed, but this is easier.
       CALL update_triangle_geometric_center( mesh, ti)
     END DO
     

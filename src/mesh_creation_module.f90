@@ -79,7 +79,7 @@ MODULE mesh_creation_module
     procedure :: create_transect_new
   end interface
   
-  LOGICAL, parameter :: debug_mesh_creation = .True.
+  LOGICAL, parameter :: debug_mesh_creation = .False.
   
   CONTAINS
   

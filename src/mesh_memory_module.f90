@@ -502,13 +502,13 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    allocate(mesh% A    ( mesh%vi1:mesh%vi2   ))
+    allocate(mesh% A    ( 1       :mesh%nV    )) ! Globally used kinda
     allocate(mesh% VorGC( mesh%vi1:mesh%vi2,2 ))
-    allocate(mesh% R    ( mesh%vi1:mesh%vi2   ))
+    allocate(mesh% R    ( 1       :mesh%nV    )) ! Globally used kinda
     allocate(mesh% Cw   ( mesh%vi1:mesh%vi2,mesh%nC_mem ))
         
     allocate(mesh% TriA ( mesh%ti1:mesh%ti2   ))
-    allocate(mesh% TriGC( mesh%ti1:mesh%ti2,2 ))
+    allocate(mesh% TriGC( 1:mesh%nTri,2       )) ! Globally needed
 
     allocate(mesh% lat  ( mesh%vi1:mesh%vi2   ))
     allocate(mesh% lon  ( mesh%vi1:mesh%vi2   ))

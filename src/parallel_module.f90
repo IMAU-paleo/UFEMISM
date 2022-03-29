@@ -59,10 +59,16 @@ CONTAINS
     ! In/output variables:
     INTEGER,                    INTENT(IN)        :: ntot, i, n
     INTEGER,                    INTENT(OUT)       :: i1, i2
+    integer                                       :: remainder, slice_size
     
+    !it must be calculated exactly as petsc does
+    !TODO it would be better to get this ranges from PetsC then ...
     IF (ntot > n*2) THEN
-      i1 = MAX(1,    FLOOR(REAL(ntot *  i      / n)) + 1)
-      i2 = MIN(ntot, FLOOR(REAL(ntot * (i + 1) / n)))
+      remainder = mod(ntot,n)
+      slice_size = ntot/n
+
+      i1 = slice_size*i     + min(i,remainder) + 1
+      i2 = slice_size*(i+1) + min(i+1, remainder)
     ELSE
       IF (i==0) THEN
         i1 = 1

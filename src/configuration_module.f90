@@ -3193,6 +3193,7 @@ CONTAINS
     WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
     
+    error stop
     ! Stop the program
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     

@@ -346,9 +346,9 @@ MODULE mesh_ArakawaC_module
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    allocate(mesh%edge_index_Ac(mesh%ci1:mesh%ci2))
+    allocate(mesh%edge_index_Ac(1:mesh%nAc))
     
-    DO aci = mesh%ci1, mesh%ci2
+    DO aci = 1, mesh%nAc ! TODO parallel?
   
       vi = mesh%Aci( aci,1)
       vj = mesh%Aci( aci,2)
@@ -375,7 +375,6 @@ MODULE mesh_ArakawaC_module
       END IF
       
     END DO ! DO aci = mesh%ci1, mesh%ci2
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)

@@ -184,9 +184,10 @@ CONTAINS
       CALL run_SMB_model_idealised_EISMINT1( mesh, SMB, time, mask_noice)
     ELSEIF (C%choice_idealised_SMB == 'Bueler') THEN
       CALL run_SMB_model_idealised_Bueler( mesh, SMB, time, mask_noice)
+    ELSEIF (C%choice_idealised_SMB == 'BIVMIP_B') THEN
+      CALL run_SMB_model_idealised_BIVMIP_B( mesh, SMB, mask_noice)
     ELSE
-      IF (par%master) WRITE(0,*) 'run_SMB_model_idealised - ERROR: unknown choice_idealised_SMB "', TRIM(C%choice_idealised_SMB), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_idealised_SMB "' // TRIM( C%choice_idealised_SMB) // '"!')
     END IF
 
     ! Finalise routine path
@@ -298,51 +299,48 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_idealised_Bueler
-  FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
-    ! Describes an ice-sheet at time t (in years) conforming to the Bueler solution
-    ! with dome thickness H0 and margin radius R0 at t0, with a surface mass balance
-    ! determined by lambda.
+  SUBROUTINE run_SMB_model_idealised_BIVMIP_B( mesh, SMB, mask_noice)
+    ! Almost the same as the EISMINT1 moving-margin experiment,
+    ! but slightly smaller so the ice lobe doesn't reach the domain border
 
-    ! Input variables
-    REAL(dp), INTENT(IN) :: x       ! x coordinate [m]
-    REAL(dp), INTENT(IN) :: y       ! y coordinate [m]
-    REAL(dp), INTENT(IN) :: t       ! Time from t0 [years]
+    IMPLICIT NONE
 
-    ! Result
-    REAL(dp)             :: M
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
 
-    ! Local variables
-    REAL(dp) :: A_flow, rho, g, n, alpha, beta, Gamma, f1, f2, t0, tp, f3, f4, H
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_idealised_BIVMIP_B'
+    INTEGER                                            :: vi
 
-    REAL(dp), PARAMETER :: H0     = 3000._dp    ! Ice dome thickness at t=0 [m]
-    REAL(dp), PARAMETER :: R0     = 500000._dp  ! Ice margin radius  at t=0 [m]
-    REAL(dp), PARAMETER :: lambda = 5.0_dp      ! Mass balance parameter
+    REAL(dp)                                           :: E               ! Radius of circle where accumulation is M_max
+    REAL(dp)                                           :: dist            ! distance to centre of circle
+    REAL(dp)                                           :: S_b             ! Gradient of accumulation-rate change with horizontal distance
+    REAL(dp)                                           :: M_max           ! Maximum accumulation rate
 
-    A_flow  = 1E-16_dp
-    rho     = 910._dp
-    g       = 9.81_dp
-    n       = 3._dp
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
-    alpha = (2._dp - (n+1._dp)*lambda) / ((5._dp*n)+3._dp)
-    beta  = (1._dp + ((2._dp*n)+1._dp)*lambda) / ((5._dp*n)+3._dp)
-    Gamma = 2._dp/5._dp * (A_flow/sec_per_year) * (rho * g)**n
+    ! Default EISMINT configuration
+    E         = 400000._dp
+    S_b       = 0.01_dp / 1000._dp
+    M_max     = 0.5_dp
 
-    f1 = ((2._dp*n)+1)/(n+1._dp)
-    f2 = (R0**(n+1._dp))/(H0**((2._dp*n)+1._dp))
-    t0 = (beta / Gamma) * (f1**n) * f2
+    DO vi = mesh%vi1, mesh%vi2
+      IF (mask_noice( vi) == 0) THEN
+        dist = NORM2( mesh%V( vi,:))
+        SMB%SMB_year( vi) = MIN( M_max, S_b * (E - dist))
+      ELSE
+        SMB%SMB_year( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
 
-    !tp = (t * sec_per_year) + t0; % Acutal equation needs t in seconds from zero , but we want to supply t in years from t0
-    tp = t * sec_per_year
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
-    f1 = (tp / t0)**(-alpha)
-    f2 = (tp / t0)**(-beta)
-    f3 = SQRT( (x**2._dp) + (y**2._dp) )/R0
-    f4 = MAX(0._dp, 1._dp - (f2*f3)**((n+1._dp)/n))
-    H = H0 * f1 * f4**(n/((2._dp*n)+1._dp))
-
-    M = (lambda / tp) * H * sec_per_year
-
-  END FUNCTION Bueler_solution_MB
+  END SUBROUTINE run_SMB_model_idealised_BIVMIP_B
 
   ! == The IMAU-ITM SMB model
   ! =========================
@@ -373,10 +371,8 @@ CONTAINS
 
     ! Make sure this routine is called correctly
     IF (.NOT. C%choice_SMB_model == 'IMAU-ITM') THEN
-      IF (par%master) WRITE(0,*) ' run_IMAUITM - ERROR: should only be called when choice_SMB_model == "IMAU-ITM"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when choice_SMB_model == "IMAU-ITM"!')
     END IF
-
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -497,8 +493,7 @@ CONTAINS
 
     ! Make sure this routine is called correctly
     IF (.NOT. C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
-      IF (par%master) WRITE(0,*) ' run_IMAUITM_wrongrefreezing - ERROR: should only be called when choice_SMB_model == "IMAU-ITM_wrongrefreezing"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when choice_SMB_model == "IMAU-ITM_wrongrefreezing"!')
     END IF
 
     DO vi = mesh%vi1, mesh%vi2
@@ -952,5 +947,54 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_SMB_model
+
+! == Some generally useful tools
+! ==============================
+
+  FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
+    ! Describes an ice-sheet at time t (in years) conforming to the Bueler solution
+    ! with dome thickness H0 and margin radius R0 at t0, with a surface mass balance
+    ! determined by lambda.
+
+    ! Input variables
+    REAL(dp), INTENT(IN) :: x       ! x coordinate [m]
+    REAL(dp), INTENT(IN) :: y       ! y coordinate [m]
+    REAL(dp), INTENT(IN) :: t       ! Time from t0 [years]
+
+    ! Result
+    REAL(dp)             :: M
+
+    ! Local variables
+    REAL(dp) :: A_flow, rho, g, n, alpha, beta, Gamma, f1, f2, t0, tp, f3, f4, H
+
+    REAL(dp), PARAMETER :: H0     = 3000._dp    ! Ice dome thickness at t=0 [m]
+    REAL(dp), PARAMETER :: R0     = 500000._dp  ! Ice margin radius  at t=0 [m]
+    REAL(dp), PARAMETER :: lambda = 5.0_dp      ! Mass balance parameter
+
+    A_flow  = 1E-16_dp
+    rho     = 910._dp
+    g       = 9.81_dp
+    n       = 3._dp
+
+    alpha = (2._dp - (n+1._dp)*lambda) / ((5._dp*n)+3._dp)
+    beta  = (1._dp + ((2._dp*n)+1._dp)*lambda) / ((5._dp*n)+3._dp)
+    Gamma = 2._dp/5._dp * (A_flow/sec_per_year) * (rho * g)**n
+
+    f1 = ((2._dp*n)+1)/(n+1._dp)
+    f2 = (R0**(n+1._dp))/(H0**((2._dp*n)+1._dp))
+    t0 = (beta / Gamma) * (f1**n) * f2
+
+    !tp = (t * sec_per_year) + t0; % Acutal equation needs t in seconds from zero , but we want to supply t in years from t0
+    tp = t * sec_per_year
+
+    f1 = (tp / t0)**(-alpha)
+    f2 = (tp / t0)**(-beta)
+    f3 = SQRT( (x**2._dp) + (y**2._dp) )/R0
+    f4 = MAX(0._dp, 1._dp - (f2*f3)**((n+1._dp)/n))
+    H = H0 * f1 * f4**(n/((2._dp*n)+1._dp))
+
+    M = (lambda / tp) * H * sec_per_year
+
+  END FUNCTION Bueler_solution_MB
 
 END MODULE SMB_module

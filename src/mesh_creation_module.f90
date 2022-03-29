@@ -72,6 +72,14 @@ MODULE mesh_creation_module
     procedure :: Lloyds_algorithm_single_iteration_submesh
     procedure :: Lloyds_algorithm_single_iteration_submesh_new
   end interface
+  interface refine_mesh_geo_only
+    procedure :: refine_mesh_geo_only
+    procedure :: refine_mesh_geo_only_new
+  end interface
+  interface create_transect
+    procedure :: create_transect
+    procedure :: create_transect_new
+  end interface
   
   LOGICAL :: debug_mesh_creation = .FALSE.
   
@@ -856,6 +864,88 @@ MODULE mesh_creation_module
     CALL finalise_routine( routine_name)
   
   END SUBROUTINE refine_mesh
+  SUBROUTINE refine_mesh_geo_only_new( mesh)
+    ! Refine a mesh, using only triangle geometry as a condition (so really the original version of Ruppert's algorithm)
+    ! Meant to be run on the final, merged mesh - called by all processes, but the work is only done by the Master.
+    ! Must be called by all to be able to call ExtendMeshMemory if necessary.
+    
+    IMPLICIT NONE
+  
+    ! Input variables
+    TYPE(type_mesh_new),            INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh_geo_only'
+    INTEGER                                       :: ti
+    REAL(dp), DIMENSION(2)                        :: p
+    LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! List all triangles for checking
+    mesh%RefMap    = 0
+    mesh%RefStack  = 0
+    mesh%RefStackN = 0
+    DO ti = 1, mesh%nTri
+      mesh%RefMap(ti)               = 1
+      mesh%RefStackN                = mesh%RefStackN + 1
+      mesh%RefStack(mesh%RefStackN) = ti
+    END DO
+    
+    FinishedRefining = .FALSE.
+    
+    DO WHILE (.NOT. FinishedRefining)
+    
+      ! Refine the mesh until it's done, or until it's almost out of memory.
+      ! ====================================================================
+      
+      DoExtendMemory = .FALSE.
+          
+      DO WHILE (mesh%RefStackN > 0)
+    
+        ! Check the last triangle list in the RefineStack. If it's
+        ! Bad, refine it and add the affected triangles to the RefineStack.
+      
+        ti = mesh%RefStack( mesh%RefStackN)
+        CALL is_good_triangle_geo_only( mesh, ti, IsGood)
+              
+        IF (IsGood) THEN
+          ! Remove this triangle from the stack
+          mesh%RefMap(ti) = 0
+          mesh%RefStack(mesh%RefStackN) = 0
+          mesh%RefStackN = mesh%RefStackN - 1
+        ELSE
+          ! Spit this triangle, add the affected triangles to the stack
+          p = mesh%Tricc(ti,:)
+          CALL split_triangle( mesh, ti, p)
+        END IF
+        
+        ! If we're reaching the memory limit, stop refining and extend the memory.
+        IF (mesh%nV > mesh%nV_mem - 10) THEN
+          DoExtendMemory = .TRUE.
+          EXIT
+        END IF
+        
+      END DO ! DO WHILE (mesh%RefStackN > 0)
+      
+      FinishedRefining = .FALSE.
+      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
+      
+      IF (FinishedRefining) EXIT
+      
+      IF (DoExtendMemory) THEN
+        ! By extending the memory to mesh%nV + 1000, we ensure that processes that
+        ! have already finished refining do not keep adding useless extra memory.
+        CALL extend_mesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
+      END IF
+    
+    END DO !DO WHILE (.NOT. FinishedRefining)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+  
+  END SUBROUTINE refine_mesh_geo_only_new
   SUBROUTINE refine_mesh_geo_only( mesh)
     ! Refine a mesh, using only triangle geometry as a condition (so really the original version of Ruppert's algorithm)
     ! Meant to be run on the final, merged mesh - called by all processes, but the work is only done by the Master.
@@ -3137,7 +3227,7 @@ MODULE mesh_creation_module
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
-    CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
+    !CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
     CALL determine_mesh_resolution(           mesh)
     IF (par%master) CALL find_POI_xy_coordinates( mesh)
     CALL sync
@@ -3157,7 +3247,7 @@ MODULE mesh_creation_module
   
     ! In/output variables
     TYPE(type_mesh_new),            INTENT(INOUT)     :: submesh
-    TYPE(type_mesh),            INTENT(INOUT)     :: mesh
+    TYPE(type_mesh_new),            INTENT(INOUT)     :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
@@ -3179,7 +3269,7 @@ MODULE mesh_creation_module
     ! =======================================================================
     
     CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
-    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)
+    CALL move_data_from_submesh_to_mesh( mesh, submesh)
     CALL deallocate_submesh_primary( submesh)
     CALL refine_mesh_geo_only( mesh)
     CALL crop_mesh_primary(    mesh)
@@ -3215,6 +3305,156 @@ MODULE mesh_creation_module
   END SUBROUTINE create_final_mesh_from_merged_submesh_new
   
   ! == Create the list of vertex indices and weights used in making transects
+  SUBROUTINE create_transect_new( mesh)
+    ! Create a transect along the x-axis, through the centre of the model domain.
+    ! Useful for benchmark experiments, not so much for realistic simulations.
+    
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh_new),            INTENT(INOUT)     :: mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_transect'
+    REAL(dp), DIMENSION(2)                        :: p_start, p_end
+    INTEGER                                       :: vi_cur, vj_cur, ti_cur, vi_next, vj_next, ti_next, vi_end, vj_end, ti_end, ti
+    INTEGER                                       :: nV_transect
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE       :: vi_transect
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE       :: w_transect
+    INTEGER                                       :: n, n1
+    REAL(dp), DIMENSION(2)                        :: pi_next, pj_next, llis
+    LOGICAL                                       :: do_cross
+    INTEGER                                       :: iti, n2, n3
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Allocate temporary memory for the list of transect vertex pairs
+    ! (since we don't know in advance how many there will be)
+    nV_transect = CEILING( 2._dp * (mesh%xmax - mesh%xmin) / mesh%resolution_min)
+    ALLOCATE( vi_transect( nV_transect,2))
+    ALLOCATE( w_transect(  nV_transect,2))
+    nV_transect = 0
+    vi_transect = 0
+    
+    ! The start and end points of the transect
+    p_start = [mesh%xmin, (mesh%ymin + mesh%ymax) / 2._dp]
+    p_end   = [mesh%xmax, (mesh%ymin + mesh%ymax) / 2._dp]
+    
+    ! Find the pair of vertices on whose connection p_start lies, and the
+    ! triangle whose side is made up by that connection
+    vi_cur = 0
+    vj_cur = 1
+    DO WHILE (mesh%V( vj_cur,2) < p_start(2))
+      vi_cur = vj_cur
+      vj_cur = mesh%C( vi_cur, mesh%nC( vi_cur))
+    END DO
+    ti_cur = mesh%iTri( vi_cur, mesh%niTri( vi_cur))
+    
+    ! Exception for Greenland: sometimes the process domain border can intersect with the transect,
+    ! so that it overlaps with lines everywhere. In this case, move it slightly.
+    IF     (p_start(2) == mesh%V( vi_cur,2)) THEN
+      p_start(2) = p_start(2) + 100._dp
+      p_end(  2) = p_end(  2) + 100._dp
+    ELSEIF (p_start(2) == mesh%V( vj_cur,2)) THEN
+      p_start(2) = p_start(2) - 100._dp
+      p_end(  2) = p_end(  2) - 100._dp
+    END IF
+    
+    ! List this as the first pair of transect vertices
+    nV_transect = 1
+    vi_transect( 1,:) = [vi_cur,vj_cur]
+    w_transect(1,:) = [NORM2( mesh%V( vj_cur,:) - p_start), NORM2( mesh%V( vi_cur,:) - p_start)] / NORM2( mesh%V( vj_cur,:) - mesh%V( vi_cur,:))
+    
+    ! Find the pair of vertices on whose connection p_end lies, and the
+    ! triangle whose side is made up by that connection
+    vi_end = 0
+    vj_end = 2
+    DO WHILE (mesh%V( vj_end,2) < p_end(2))
+      vi_end = vj_end
+      vj_end = mesh%C( vi_end, 1)
+    END DO
+    ti_end = mesh%iTri( vi_end, 1)
+    
+    ! Trace the transect through the mesh
+    DO WHILE (ti_cur /= ti_end)
+      
+      ! Find out where the transect exits the current triangle
+      ti_next = 0
+      DO n = 1, 3
+        
+        n1 = n + 1
+        IF (n1==4) n1 = 1
+        
+        vi_next = mesh%Tri( ti_cur,n)
+        vj_next = mesh%Tri( ti_cur,n1)
+        
+        IF ((vi_next == vi_cur .AND. vj_next == vj_cur) .OR. (vi_next == vj_cur .AND. vj_next == vi_cur)) CYCLE
+        
+        pi_next = mesh%V( vi_next,:)
+        pj_next = mesh%V( vj_next,:)
+        
+        CALL segment_intersection( p_start, p_end, pi_next, pj_next, llis, do_cross, mesh%tol_dist)
+        
+        IF (do_cross) THEN
+          ! Find the next triangle
+          DO iti = 1, mesh%niTri( vi_next)
+            ti = mesh%iTri( vi_next, iti)
+            DO n2 = 1, 3
+              n3 = n2 + 1
+              IF (n3 == 4) n3 = 1
+              IF (((mesh%Tri( ti,n2) == vj_next .AND. mesh%Tri( ti,n3) == vi_next) .OR. &
+                   (mesh%Tri( ti,n2) == vi_next .AND. mesh%Tri( ti,n3) == vj_next)) .AND. &
+                  ti /= ti_cur) THEN
+                ti_next = ti
+                EXIT
+              END IF
+            END DO
+          END DO ! DO iti = 1, mesh%niTri( vi_next)
+        
+          EXIT
+        END IF ! IF (do_cross) THEN
+        
+      END DO ! DO n = 1, 3
+      
+      ! Check if we managed to find the crossing
+      IF (ti_next == 0) THEN
+        CALL crash('couldnt find next triangle along transect!')
+      END IF
+      
+      ! Add this new vertex pair to the list
+      nV_transect = nV_transect + 1
+      vi_transect( nV_transect,:) = [vi_next, vj_next]
+      w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_next,:) - llis), NORM2( mesh%V( vi_next,:) - llis)] / NORM2( mesh%V( vj_next,:) - mesh%V( vi_next,:))
+      
+      ! Cycle the vertex pairs
+      vi_cur = vi_next
+      vj_cur = vj_next
+      ti_cur = ti_next
+      
+    END DO ! DO WHILE (ti_cur /= ti_end)
+    
+    ! Add the final pair of vertices to the transect
+    nV_transect = nV_transect + 1
+    vi_transect( nV_transect,:) = [vi_end, vj_end]
+    w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_end,:) - p_end), NORM2( mesh%V( vi_end,:) - p_end)] / NORM2( mesh%V( vj_end,:) - mesh%V( vi_end,:))
+    
+    
+    ! Allocate shared memory, copy list of transect vertex pairs
+    mesh%nV_transect = nV_transect
+    allocate(mesh%vi_transect(mesh%nV_transect,2))
+    allocate(mesh%w_transect(mesh%nV_transect,2))
+    mesh%vi_transect = vi_transect( 1:mesh%nV_transect,:)
+    mesh%w_transect  = w_transect(  1:mesh%nV_transect,:)
+    
+    ! Clean up after yourself
+    DEALLOCATE( vi_transect)
+    DEALLOCATE( w_transect)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
+    
+  END SUBROUTINE create_transect_new
   SUBROUTINE create_transect( mesh)
     ! Create a transect along the x-axis, through the centre of the model domain.
     ! Useful for benchmark experiments, not so much for realistic simulations.

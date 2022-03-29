@@ -17,7 +17,7 @@ subroutine reallocate_dp_1d(array,newx)
   real(dp), allocatable, dimension(:)                  :: newarray
 
   ! allocate, move, swap pointer(bonus implicit deallocate)
-  allocate(newarray(newx), source=0._dp)
+  allocate(newarray(newx))
   newarray(1:min(newx,size(array,1))) = array(1:min(newx,size(array,1)))
   call move_alloc(newarray, array)
 end subroutine

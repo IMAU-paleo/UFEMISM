@@ -1397,8 +1397,8 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:), allocatable     :: mask_noice
         
     ! Sub-models
-    TYPE(type_mesh)                         :: mesh                                      ! The finite element mesh for this model region
-    TYPE(type_mesh)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
+    TYPE(type_mesh_new)                         :: mesh                                      ! The finite element mesh for this model region
+    TYPE(type_mesh_new)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
     TYPE(type_ice_model)                    :: ice                                       ! All the ice model data for this model region
     TYPE(type_climate_matrix_regional)      :: climate_matrix                            ! All the climate data for this model region (new version)
     TYPE(type_ocean_matrix_regional)        :: ocean_matrix                              ! All the ocean data for this model region

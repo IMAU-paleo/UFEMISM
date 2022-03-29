@@ -223,7 +223,7 @@ CONTAINS
     CALL deallocate_remapping_operators_mesh_mesh( map)
 
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
-    CALL deallocate_mesh_all( region%mesh)
+    !CALL deallocate_mesh_all( region%mesh) TODO make this automatic, fix it
     region%mesh = region%mesh_new
 
     ! When the next output is written, new output files must be created.

@@ -22,7 +22,7 @@ MODULE basal_conditions_and_sliding_module
   ! USE utilities_module,                ONLY: check_for_NaN_dp_1D
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_ice_model, type_remapping_mesh_mesh
   ! USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
 
   IMPLICIT NONE

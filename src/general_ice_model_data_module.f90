@@ -21,7 +21,7 @@ MODULE general_ice_model_data_module
                                              deallocate_shared
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model!, type_model_region
+  USE data_types_module,               ONLY: type_mesh => type_mesh_new, type_ice_model!, type_model_region
   USE utilities_module,                ONLY: is_floating, surface_elevation, thickness_above_floatation
   ! USE mesh_help_functions_module,      ONLY: find_triangle_area
   ! USE mesh_operators_module,           ONLY: map_a_to_b_2D

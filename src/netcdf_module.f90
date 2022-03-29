@@ -23,7 +23,8 @@ MODULE netcdf_module
   ! Import specific functionality
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_forcing_data, type_netcdf_resource_tracker, type_reference_geometry, &
-                                           type_model_region, type_debug_fields, type_mesh, type_grid!, &
+                                           type_model_region, type_debug_fields, &
+                                           type_mesh => type_mesh_new, type_grid!, &
   !                                          type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
   !                                          type_ocean_snapshot_global, type_highres_ocean_data, &
   !                                          type_restart_data

@@ -48,190 +48,211 @@
 \@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Modelled surface velocity transects for both versions of ISMIP-HOM experiment E (Haut Glacier d’Arolla, with and without a slippery bed region), calculated with both the hybrid SIA/SSA (red dashed line) and the DIVA (red solid line). The results of the higher-order models (green) and the full-Stokes models (blue) that participated in ISMIP-HOM are shown for comparison. Results produced with IMAU-ICE.\relax }}{11}}
 \@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Modelled surface elevation and velocity transects for both versions of ISMIP-HOM experiment F (infinite ice slab on a sloping bed with a single Gaussian bump, with and without a slippery bed), calculated with both the hybrid SIA/SSA (red dashed line) and the DIVA (red solid line). The results of the higher-order models (green) and the full-Stokes models (blue) that participated in ISMIP-HOM are shown for comparison. Results produced with IMAU-ICE.\relax }}{12}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.6}MISMIP}{12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.7}MISMIP+}{12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.8}MISOMIP1}{12}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Model structure}{13}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}General}{13}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Data structure}{13}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Code structure}{13}}
-\@writefile{toc}{\contentsline {part}{II\hspace  {1em}Physics}{14}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Ice dynamics}{14}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}SIA}{14}}
-\newlabel{eq:SIA_01}{{1}{14}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}SSA}{14}}
-\newlabel{eq:SSA_01}{{4}{14}}
-\newlabel{eq:SSA_02}{{6}{14}}
-\newlabel{eq:SSA_03}{{8}{15}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Hybrid SIA/SSA}{15}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}DIVA}{15}}
-\newlabel{eq:DIVA_01}{{10}{15}}
-\newlabel{eq:DIVA_02}{{12}{15}}
-\newlabel{DIVA_03}{{13}{16}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Thickness equation}{17}}
-\newlabel{eq:thickness_01}{{15}{17}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.1}IMAU-ICE - explicit method}{17}}
-\newlabel{eq:thickness_02}{{16}{17}}
-\newlabel{eq:thickness_03}{{17}{17}}
-\newlabel{eq:thickness_04}{{18}{17}}
-\newlabel{eq:thickness_05}{{19}{17}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.2}IMAU-ICE - implicit method}{17}}
-\newlabel{eq:thickness_06}{{20}{17}}
-\newlabel{eq:thickness_07}{{21}{18}}
-\newlabel{eq:thickness_08}{{22}{18}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.3}UFEMISM - explicit method}{18}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Geometry of the MISMIP\textunderscore mod experiment.\relax }}{13}}
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Panel A: grounding-line position over time in the MISMIP\textunderscore mod experiment, simulated at different resolutions with IMAU-ICE. Panel B: grounding-line hysteresis (defined as the difference in position between t = 15 kyr and t = 45 kyr) as a function of resolution, showing that the hysteresis is consistently smaller than the grid resolution.\relax }}{13}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.7}MISMIP+}{13}}
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Geometry of the MISMIP+ experiment. The grounding line and its vertical projection on the ice surface are marked in red.\relax }}{14}}
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Grounding-line position over time in the different experiments of MISMIP+. The four different experiments (0, r, ra, rr) are shown respectively in blakc, blue, red, and yellow. Panel A shows the ice1 experiment (oceanic warming leading to increased basal melt), panel B shows ice2 (enhanced calving, approximated by greatly increased basal melt near the ice front). Dotted (dashed) lines indicate the mean (range) of the model ensemble published by Cornford et al. (2020); solid lines (shaded areas) indicate the mean (range) of the IMAU-ICE ensemble, which was obtained by varying the stress balance approximation (hybrid, DIVA), sliding law (Weertman, Tsai2015, Schoof2005), and grid resolution (5, 2 km).\relax }}{14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.8}MISOMIP1}{14}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Model structure}{15}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}General}{15}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Data structure}{15}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Code structure}{15}}
+\@writefile{toc}{\contentsline {part}{II\hspace  {1em}Physics}{16}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Ice dynamics}{16}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}SIA}{16}}
+\newlabel{eq:SIA_01}{{1}{16}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}SSA}{16}}
+\newlabel{eq:SSA_01}{{4}{16}}
+\newlabel{eq:SSA_02}{{6}{16}}
+\newlabel{eq:SSA_03}{{8}{17}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Hybrid SIA/SSA}{17}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}DIVA}{17}}
+\newlabel{eq:DIVA_01}{{10}{17}}
+\newlabel{eq:DIVA_02}{{12}{17}}
+\newlabel{DIVA_03}{{13}{18}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Thickness equation}{19}}
+\newlabel{eq:thickness_01}{{15}{19}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.1}IMAU-ICE - explicit method}{19}}
+\newlabel{eq:thickness_02}{{16}{19}}
+\newlabel{eq:thickness_03}{{17}{19}}
+\newlabel{eq:thickness_04}{{18}{19}}
+\newlabel{eq:thickness_05}{{19}{19}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.2}IMAU-ICE - implicit method}{19}}
+\newlabel{eq:thickness_06}{{20}{19}}
+\newlabel{eq:thickness_07}{{21}{20}}
+\newlabel{eq:thickness_08}{{22}{20}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.5.3}UFEMISM - explicit method}{20}}
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:masscontinuity}{{\caption@xref {fig:masscontinuity}{ on input line 479}}{19}}
-\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces The Voronoi cell (grey) of a vertex serves as the control volume in the finite volume approach. Ice flows through the vertical faces of the volume, while the surface and basal mass balance add or remove ice from the top and bottom faces, respectively\relax }}{19}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Time-stepping}{20}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.1}Direct}{20}}
-\newlabel{eq:timestep_01}{{27}{20}}
-\newlabel{eq:timestep_02}{{28}{20}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.2}Predictor/corrector}{20}}
-\newlabel{eq:timestep_03}{{29}{20}}
-\newlabel{eq:timestep_04}{{30}{20}}
-\newlabel{eq:timestep_05}{{31}{20}}
-\newlabel{eq:timestep_06}{{32}{20}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.7}Sliding}{21}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.1}Sliding laws}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Weertman}{21}}
-\newlabel{eq:slid_Weertman}{{35}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Coulomb}{21}}
-\newlabel{eq:slid_Coulomb}{{36}{21}}
-\@writefile{toc}{\contentsline {paragraph}{regularised Coulomb}{21}}
-\newlabel{eq:slid_Coulomb_reg}{{37}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Tsai 2015}{21}}
-\newlabel{eq:slid_Tsai2015}{{38}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Schoof 2005}{21}}
-\newlabel{eq:slid_Schoof2005}{{39}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Zoet-Iverson}{21}}
-\newlabel{eq:slid_ZoetIverson}{{40}{21}}
-\@writefile{toc}{\contentsline {paragraph}{Idealised options}{21}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.2}Sub-grid friction scaling}{22}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.3}Bed roughness}{22}}
-\@writefile{toc}{\contentsline {paragraph}{Uniform}{22}}
-\@writefile{toc}{\contentsline {paragraph}{Martin 2011}{22}}
-\newlabel{eq:slid_bedroughness_01}{{41}{22}}
-\@writefile{toc}{\contentsline {paragraph}{Idealised options}{22}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.4}Basal hydrology}{22}}
-\@writefile{toc}{\contentsline {paragraph}{Saturated}{22}}
-\newlabel{eq:slid_hydro_01}{{43}{22}}
-\@writefile{toc}{\contentsline {paragraph}{Martin2011}{23}}
-\newlabel{eq:slid_hydro_02}{{44}{23}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8}Calving}{23}}
-\@writefile{toc}{\contentsline {section}{\numberline {6}Thermodynamics}{24}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Heat equation}{24}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Geothermal heat flux}{24}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}Climate}{25}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Matrix method}{25}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.1}Temperature}{25}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.2}Precipitation}{25}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Idealised options}{25}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Ocean}{26}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Matrix method}{26}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Shelf cavity extrapolation}{26}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Idealised options}{26}}
-\@writefile{toc}{\contentsline {section}{\numberline {9}Surface mass balance}{27}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}IMAU-ITM}{27}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Idealised options}{27}}
-\@writefile{toc}{\contentsline {section}{\numberline {10}Basal mass balance}{28}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {10.1}Local parameterisations}{28}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {10.2}PICO}{28}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {10.3}Plume model}{28}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {10.4}PICOP}{28}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {10.5}Idealised options}{28}}
-\@writefile{toc}{\contentsline {section}{\numberline {11}GIA}{29}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {11.1}ELRA}{29}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {11.2}SELEN}{29}}
-\@writefile{toc}{\contentsline {section}{\numberline {12}Isotopes}{30}}
-\@writefile{toc}{\contentsline {section}{\numberline {13}Forcing}{31}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {13.1}Direct CO2}{31}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {13.2}Inverse method}{31}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {13.2.1}Global temperature offset}{31}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {13.2.2}Atmospheric CO2}{31}}
-\@writefile{toc}{\contentsline {part}{III\hspace  {1em}Discretisation}{32}}
-\@writefile{toc}{\contentsline {section}{\numberline {14}IMAU-ICE}{32}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {14.1}Arakawa grids}{32}}
-\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces The Arakawa grids used in IMAU-ICE: regular (A; black), x-staggered (Cx; red), y-staggered (Cy; green), and double-staggered (B; blue). A single grid cell is outlined in the centre.\relax }}{32}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {14.2}Discretising the DIVA}{32}}
-\newlabel{eq:DIVA_disc_01}{{46}{32}}
-\newlabel{eq:DIVA_disc_02}{{47}{32}}
-\newlabel{eq:DIVA_disc_03}{{48}{33}}
-\@writefile{toc}{\contentsline {section}{\numberline {15}UFEMISM}{34}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {15.1}Mesh}{34}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.1}Nomenclature}{34}}
-\newlabel{fig:dummymesh}{{\caption@xref {fig:dummymesh}{ on input line 863}}{34}}
-\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces A simple mesh.\relax }}{34}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.2}Voronoi cells and Delaunay triangulation}{34}}
-\newlabel{fig:VoronoiDelaunay}{{\caption@xref {fig:VoronoiDelaunay}{ on input line 876}}{34}}
-\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces (a) A collection of points in $\mathbb  {R}^{2}$, (b) the Voronoi cells of the points, (c) the Delaunay triangulation.\relax }}{34}}
-\newlabel{fig:Delaunayflip}{{\caption@xref {fig:Delaunayflip}{ on input line 904}}{35}}
-\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces (a) This pair of triangles violates the local Delaunay criterion, (b) the pair has been "flipped", and now satisfies the criterion.\relax }}{35}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.3}Data structure}{35}}
-\newlabel{tab:table_vertexdatademo}{{\caption@xref {tab:table_vertexdatademo}{ on input line 923}}{35}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Vertex data\relax }}{35}}
-\newlabel{tab:table_triangledatademo}{{\caption@xref {tab:table_triangledatademo}{ on input line 939}}{35}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces triangle data\relax }}{35}}
-\newlabel{fig:meshdata_02}{{\caption@xref {fig:meshdata_02}{ on input line 970}}{36}}
-\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces Another simple mesh.\relax }}{36}}
-\newlabel{tab:table_vertexdata_01}{{\caption@xref {tab:table_vertexdata_01}{ on input line 977}}{37}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Vertex data\relax }}{37}}
-\newlabel{tab:table_triangledata_01}{{\caption@xref {tab:table_triangledata_01}{ on input line 1000}}{37}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Triangle data\relax }}{37}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.4}Arakawa C-mesh}{37}}
-\newlabel{fig:staggeredmesh}{{\caption@xref {fig:staggeredmesh}{ on input line 1028}}{38}}
-\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces The staggered vertices (green) correspond to the connections between the regular vertices (blue).\relax }}{38}}
-\newlabel{tab:table_Acmesh}{{\caption@xref {tab:table_Acmesh}{ on input line 1035}}{38}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {15.2}Discretisation}{40}}
-\newlabel{eq:disc_mesh_01}{{49}{40}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.1}First-order, regular grid}{40}}
-\newlabel{eq:disc_taylor}{{50}{40}}
-\newlabel{eq:disc_LSmatrix}{{51}{40}}
-\newlabel{eq:disc_LSmatrixz}{{52}{40}}
-\newlabel{eq:disc_LSATWTWA}{{53}{40}}
-\newlabel{eq:disc_LSbetab}{{54}{40}}
-\newlabel{eq:disc_LSfxifyi}{{55}{40}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.2}First-order, staggered grid}{41}}
-\newlabel{eq:disc_LSmatrix2}{{60}{41}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.3}Second-order, regular grid}{42}}
-\newlabel{eq:disc_taylor2}{{66}{42}}
-\newlabel{eq:disc_LSmatrix3}{{67}{42}}
-\newlabel{eq:disc_LSATWTWA2}{{68}{42}}
-\newlabel{eq:disc_LSbetab3}{{69}{42}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.4}Discretising the DIVA}{43}}
-\newlabel{eq:DIVA_discmesh_01}{{75}{43}}
-\newlabel{eq:DIVA_discmesh_02}{{76}{43}}
-\newlabel{eq:DIVA_discmesh_03}{{77}{43}}
-\newlabel{eq:DIVA_discmesh_04}{{78}{43}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {15.3}Mesh refinement}{44}}
-\newlabel{fig:split_triangle}{{\caption@xref {fig:split_triangle}{ on input line 1435}}{44}}
-\@writefile{lof}{\contentsline {figure}{\numberline {21}{\ignorespaces (a) Triangle 8 is marked for splitting. (b) A new vertex is added at the circumcentre of triangle 8, replacing it by three new triangles. (c) New triangle pair 8-1 is found to violate the local Delaunay criterion, and is flipped. (d) New triangle pairs 15-11 and 16-9 were also flipped; the mesh now once again is a Delaunay triangulation.\relax }}{44}}
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces mesh refinement conditions\relax }}{45}}
-\newlabel{fig:stepwise_refinement}{{\caption@xref {fig:stepwise_refinement}{ on input line 1477}}{45}}
-\@writefile{lof}{\contentsline {figure}{\numberline {22}{\ignorespaces Step-wise refinement of a mesh, with the maximum resolution decreasing from 200 km (a) to 12.5 km (e).\relax }}{45}}
-\newlabel{fig:mesh_Lloyds_algorithm}{{\caption@xref {fig:mesh_Lloyds_algorithm}{ on input line 1540}}{46}}
-\@writefile{lof}{\contentsline {figure}{\numberline {23}{\ignorespaces (a) An unsmoothed, 100 km resolution mesh. (b) The same mesh after applying one single iteration of Lloyd's algorithm.\relax }}{46}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {15.4}Parallelised mesh generation}{47}}
-\newlabel{fig:submeshes}{{\caption@xref {fig:submeshes}{ on input line 1560}}{47}}
-\@writefile{lof}{\contentsline {figure}{\numberline {24}{\ignorespaces Four submeshes for Antarctica.\relax }}{47}}
-\newlabel{fig:submeshes_align}{{\caption@xref {fig:submeshes_align}{ on input line 1583}}{47}}
-\@writefile{lof}{\contentsline {figure}{\numberline {25}{\ignorespaces Aligning two simple submeshes: a) before, b) a single non-overlapping (red) vertex is detected, c) after.\relax }}{47}}
-\newlabel{fig:submeshes_merge}{{\caption@xref {fig:submeshes_merge}{ on input line 1602}}{48}}
-\@writefile{lof}{\contentsline {figure}{\numberline {26}{\ignorespaces Merging two simple submeshes. Note that no actual deformation is occurring; the vertices along the seam have the same x-ccordinate, and have only been moved apart for this illustration.\relax }}{48}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {15.5}Remapping}{49}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.5.1}Theory}{49}}
-\newlabel{eq:remap_01}{{79}{49}}
-\newlabel{eq:remap_02}{{80}{49}}
-\newlabel{eq:remap_03}{{81}{49}}
-\newlabel{eq:remap_04}{{84}{49}}
-\newlabel{eq:remap_05}{{87}{50}}
-\newlabel{eq:remap_06}{{88}{50}}
-\newlabel{eq:remap_07}{{91}{50}}
-\newlabel{eq:remap_08}{{94}{50}}
-\newlabel{eq:remap_09}{{95}{50}}
-\newlabel{eq:remap_10}{{96}{50}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.5.2}Implementation}{50}}
-\@writefile{toc}{\contentsline {part}{IV\hspace  {1em}References}{52}}
-\@writefile{toc}{\contentsline {section}{\numberline {16}Publications using IMAU-ICE}{52}}
-\@writefile{toc}{\contentsline {section}{\numberline {17}Publications using UFEMISM}{52}}
-\@writefile{toc}{\contentsline {section}{\numberline {18}Publications using earlier versions (ANICE)}{52}}
-\@writefile{toc}{\contentsline {section}{\numberline {19}Other}{53}}
+\newlabel{fig:masscontinuity}{{\caption@xref {fig:masscontinuity}{ on input line 499}}{21}}
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces The Voronoi cell (grey) of a vertex serves as the control volume in the finite volume approach. Ice flows through the vertical faces of the volume, while the surface and basal mass balance add or remove ice from the top and bottom faces, respectively\relax }}{21}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Time-stepping}{22}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.1}Direct}{22}}
+\newlabel{eq:timestep_01}{{27}{22}}
+\newlabel{eq:timestep_02}{{28}{22}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.2}Predictor/corrector}{22}}
+\newlabel{eq:timestep_03}{{29}{22}}
+\newlabel{eq:timestep_04}{{30}{22}}
+\newlabel{eq:timestep_05}{{31}{22}}
+\newlabel{eq:timestep_06}{{32}{22}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.7}Sliding}{23}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.1}Sliding laws}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Weertman}{23}}
+\newlabel{eq:slid_Weertman}{{35}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Coulomb}{23}}
+\newlabel{eq:slid_Coulomb}{{36}{23}}
+\@writefile{toc}{\contentsline {paragraph}{regularised Coulomb}{23}}
+\newlabel{eq:slid_Coulomb_reg}{{37}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Tsai 2015}{23}}
+\newlabel{eq:slid_Tsai2015}{{38}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Schoof 2005}{23}}
+\newlabel{eq:slid_Schoof2005}{{39}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Zoet-Iverson}{23}}
+\newlabel{eq:slid_ZoetIverson}{{40}{23}}
+\@writefile{toc}{\contentsline {paragraph}{Idealised options}{23}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.2}Sub-grid friction scaling}{24}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.3}Bed roughness}{24}}
+\@writefile{toc}{\contentsline {paragraph}{Uniform}{24}}
+\@writefile{toc}{\contentsline {paragraph}{Martin 2011}{24}}
+\newlabel{eq:slid_bedroughness_01}{{41}{24}}
+\@writefile{toc}{\contentsline {paragraph}{Idealised options}{24}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.7.4}Basal hydrology}{24}}
+\@writefile{toc}{\contentsline {paragraph}{Saturated}{24}}
+\newlabel{eq:slid_hydro_01}{{43}{24}}
+\@writefile{toc}{\contentsline {paragraph}{Martin2011}{25}}
+\newlabel{eq:slid_hydro_02}{{44}{25}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8}Basal inversion}{26}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.1}PDC2012}{26}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.2}Lipscomb2021}{26}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.3}CISM+}{26}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.8.4}Berends2022}{26}}
+\newlabel{eq:BIV_01}{{51}{27}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.9}Calving}{28}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Thermodynamics}{29}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Heat equation}{29}}
+\newlabel{eq:zeta}{{61}{29}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Boundary conditions}{30}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.1}Ice surface}{30}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.2}Ice base}{30}}
+\@writefile{toc}{\contentsline {paragraph}{Geothermal heat flux}{31}}
+\@writefile{toc}{\contentsline {paragraph}{Frictional heating}{31}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.2.3}Internal heating}{31}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Material properties}{31}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.3.1}Viscosity}{31}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.3.2}Heat capacity}{31}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.3.3}Thermal conductivity}{31}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {6.3.4}Pressure melting point}{32}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Climate}{33}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Matrix method}{33}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.1}Temperature}{33}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.2}Precipitation}{33}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Idealised options}{33}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Ocean}{34}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Matrix method}{34}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Shelf cavity extrapolation}{34}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Idealised options}{34}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Surface mass balance}{35}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}IMAU-ITM}{35}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Idealised options}{35}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Basal mass balance}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.1}Local parameterisations}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.2}PICO}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.3}Plume model}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.4}PICOP}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.5}Idealised options}{36}}
+\@writefile{toc}{\contentsline {section}{\numberline {11}GIA}{37}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {11.1}ELRA}{37}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {11.2}SELEN}{37}}
+\@writefile{toc}{\contentsline {section}{\numberline {12}Isotopes}{38}}
+\@writefile{toc}{\contentsline {section}{\numberline {13}Forcing}{39}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {13.1}Direct CO2}{39}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {13.2}Inverse method}{39}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {13.2.1}Global temperature offset}{39}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {13.2.2}Atmospheric CO2}{39}}
+\@writefile{toc}{\contentsline {part}{III\hspace  {1em}Discretisation}{40}}
+\@writefile{toc}{\contentsline {section}{\numberline {14}IMAU-ICE}{40}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {14.1}Arakawa grids}{40}}
+\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces The Arakawa grids used in IMAU-ICE: regular (A; black), x-staggered (Cx; red), y-staggered (Cy; green), and double-staggered (B; blue). A single grid cell is outlined in the centre.\relax }}{40}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {14.2}Discretising the DIVA}{40}}
+\newlabel{eq:DIVA_disc_01}{{81}{40}}
+\newlabel{eq:DIVA_disc_02}{{82}{40}}
+\newlabel{eq:DIVA_disc_03}{{83}{41}}
+\@writefile{toc}{\contentsline {section}{\numberline {15}UFEMISM}{42}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {15.1}Mesh}{42}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.1}Nomenclature}{42}}
+\newlabel{fig:dummymesh}{{\caption@xref {fig:dummymesh}{ on input line 1136}}{42}}
+\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces A simple mesh.\relax }}{42}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.2}Voronoi cells and Delaunay triangulation}{42}}
+\newlabel{fig:VoronoiDelaunay}{{\caption@xref {fig:VoronoiDelaunay}{ on input line 1149}}{42}}
+\@writefile{lof}{\contentsline {figure}{\numberline {21}{\ignorespaces (a) A collection of points in $\mathbb  {R}^{2}$, (b) the Voronoi cells of the points, (c) the Delaunay triangulation.\relax }}{42}}
+\newlabel{fig:Delaunayflip}{{\caption@xref {fig:Delaunayflip}{ on input line 1177}}{43}}
+\@writefile{lof}{\contentsline {figure}{\numberline {22}{\ignorespaces (a) This pair of triangles violates the local Delaunay criterion, (b) the pair has been "flipped", and now satisfies the criterion.\relax }}{43}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.3}Data structure}{43}}
+\newlabel{tab:table_vertexdatademo}{{\caption@xref {tab:table_vertexdatademo}{ on input line 1196}}{43}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Vertex data\relax }}{43}}
+\newlabel{tab:table_triangledatademo}{{\caption@xref {tab:table_triangledatademo}{ on input line 1212}}{43}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces triangle data\relax }}{43}}
+\newlabel{fig:meshdata_02}{{\caption@xref {fig:meshdata_02}{ on input line 1243}}{44}}
+\@writefile{lof}{\contentsline {figure}{\numberline {23}{\ignorespaces Another simple mesh.\relax }}{44}}
+\newlabel{tab:table_vertexdata_01}{{\caption@xref {tab:table_vertexdata_01}{ on input line 1250}}{45}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Vertex data\relax }}{45}}
+\newlabel{tab:table_triangledata_01}{{\caption@xref {tab:table_triangledata_01}{ on input line 1273}}{45}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Triangle data\relax }}{45}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.1.4}Arakawa C-mesh}{45}}
+\newlabel{fig:staggeredmesh}{{\caption@xref {fig:staggeredmesh}{ on input line 1301}}{46}}
+\@writefile{lof}{\contentsline {figure}{\numberline {24}{\ignorespaces The staggered vertices (green) correspond to the connections between the regular vertices (blue).\relax }}{46}}
+\newlabel{tab:table_Acmesh}{{\caption@xref {tab:table_Acmesh}{ on input line 1308}}{46}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {15.2}Discretisation}{48}}
+\newlabel{eq:disc_mesh_01}{{84}{48}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.1}First-order, regular grid}{48}}
+\newlabel{eq:disc_taylor}{{85}{48}}
+\newlabel{eq:disc_LSmatrix}{{86}{48}}
+\newlabel{eq:disc_LSmatrixz}{{87}{48}}
+\newlabel{eq:disc_LSATWTWA}{{88}{48}}
+\newlabel{eq:disc_LSbetab}{{89}{48}}
+\newlabel{eq:disc_LSfxifyi}{{90}{48}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.2}First-order, staggered grid}{49}}
+\newlabel{eq:disc_LSmatrix2}{{95}{49}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.3}Second-order, regular grid}{50}}
+\newlabel{eq:disc_taylor2}{{101}{50}}
+\newlabel{eq:disc_LSmatrix3}{{102}{50}}
+\newlabel{eq:disc_LSATWTWA2}{{103}{50}}
+\newlabel{eq:disc_LSbetab3}{{104}{50}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.2.4}Discretising the DIVA}{51}}
+\newlabel{eq:DIVA_discmesh_01}{{110}{51}}
+\newlabel{eq:DIVA_discmesh_02}{{111}{51}}
+\newlabel{eq:DIVA_discmesh_03}{{112}{51}}
+\newlabel{eq:DIVA_discmesh_04}{{113}{51}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {15.3}Mesh refinement}{52}}
+\newlabel{fig:split_triangle}{{\caption@xref {fig:split_triangle}{ on input line 1708}}{52}}
+\@writefile{lof}{\contentsline {figure}{\numberline {25}{\ignorespaces (a) Triangle 8 is marked for splitting. (b) A new vertex is added at the circumcentre of triangle 8, replacing it by three new triangles. (c) New triangle pair 8-1 is found to violate the local Delaunay criterion, and is flipped. (d) New triangle pairs 15-11 and 16-9 were also flipped; the mesh now once again is a Delaunay triangulation.\relax }}{52}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces mesh refinement conditions\relax }}{53}}
+\newlabel{fig:stepwise_refinement}{{\caption@xref {fig:stepwise_refinement}{ on input line 1750}}{53}}
+\@writefile{lof}{\contentsline {figure}{\numberline {26}{\ignorespaces Step-wise refinement of a mesh, with the maximum resolution decreasing from 200 km (a) to 12.5 km (e).\relax }}{53}}
+\newlabel{fig:mesh_Lloyds_algorithm}{{\caption@xref {fig:mesh_Lloyds_algorithm}{ on input line 1813}}{54}}
+\@writefile{lof}{\contentsline {figure}{\numberline {27}{\ignorespaces (a) An unsmoothed, 100 km resolution mesh. (b) The same mesh after applying one single iteration of Lloyd's algorithm.\relax }}{54}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {15.4}Parallelised mesh generation}{55}}
+\newlabel{fig:submeshes}{{\caption@xref {fig:submeshes}{ on input line 1833}}{55}}
+\@writefile{lof}{\contentsline {figure}{\numberline {28}{\ignorespaces Four submeshes for Antarctica.\relax }}{55}}
+\newlabel{fig:submeshes_align}{{\caption@xref {fig:submeshes_align}{ on input line 1856}}{55}}
+\@writefile{lof}{\contentsline {figure}{\numberline {29}{\ignorespaces Aligning two simple submeshes: a) before, b) a single non-overlapping (red) vertex is detected, c) after.\relax }}{55}}
+\newlabel{fig:submeshes_merge}{{\caption@xref {fig:submeshes_merge}{ on input line 1875}}{56}}
+\@writefile{lof}{\contentsline {figure}{\numberline {30}{\ignorespaces Merging two simple submeshes. Note that no actual deformation is occurring; the vertices along the seam have the same x-ccordinate, and have only been moved apart for this illustration.\relax }}{56}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {15.5}Remapping}{57}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.5.1}Theory}{57}}
+\newlabel{eq:remap_01}{{114}{57}}
+\newlabel{eq:remap_02}{{115}{57}}
+\newlabel{eq:remap_03}{{116}{57}}
+\newlabel{eq:remap_04}{{119}{57}}
+\newlabel{eq:remap_05}{{122}{58}}
+\newlabel{eq:remap_06}{{123}{58}}
+\newlabel{eq:remap_07}{{126}{58}}
+\newlabel{eq:remap_08}{{129}{58}}
+\newlabel{eq:remap_09}{{130}{58}}
+\newlabel{eq:remap_10}{{131}{58}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {15.5.2}Implementation}{58}}
+\@writefile{toc}{\contentsline {part}{IV\hspace  {1em}References}{60}}
+\@writefile{toc}{\contentsline {section}{\numberline {16}Publications using IMAU-ICE}{60}}
+\@writefile{toc}{\contentsline {section}{\numberline {17}Publications using UFEMISM}{60}}
+\@writefile{toc}{\contentsline {section}{\numberline {18}Publications using earlier versions (ANICE)}{60}}
+\@writefile{toc}{\contentsline {section}{\numberline {19}Other}{61}}

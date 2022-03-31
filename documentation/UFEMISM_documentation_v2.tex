@@ -66,7 +66,7 @@ For each model component, different options are available, which can be selected
 The stress balance can be solved using the SIA, the SSA, the hybrid SIA/SSA, or the DIVA. The thickness equation can be solved either explicitly or (semi-)implicitly. Time-stepping is by default done using a predictor/corrector scheme; for the hybrid SIA/SSA, an asynchronous scheme based on the CFL and advective stability criteria is also available. Proper grounding-line dynamics are achieved by using a sub-grid friction-scaling scheme; the grounding-line flux condition previously included in UFEMISM v1.0 is no longer available.
 
 \paragraph{Sliding}
-Currently the following sliding laws are available: Weertman, Coulomb, regularised Coulomb, Tsai2015, Schoof2005, and Zoet-Iverson. Bed roughness and basal hydrology are calculated using the bedrock elevation-dependent parameterisations by Martin et al. (2011).
+Currently the following sliding laws are available: Weertman, Coulomb, regularised Coulomb, Tsai2015, Schoof2005, and Zoet-Iverson. Bed roughness and basal hydrology are calculated using the bedrock elevation-dependent parameterisations by Martin et al. (2011). A simple geometry+velocity-based basal inversion routine is included.
 
 \paragraph{Calving}
 Currently, only a simple threshold-thickness calving law is included.
@@ -222,11 +222,31 @@ The Ice-Sheet Model Intercomparison Project for Higher-Order Models (ISMIP-HOM; 
 
 \subsection{MISMIP}
 
-The first Marine Ice-Sheet Model Intercomparison Project (MISMIP; Pattyn et al., 2012) describes a flowline of an ice-sheet lying on an inclined plane, with part of the domain being subaerial and part being submerged, leading to the formation of a marine ice sheet feeding into an infinite ice shelf. This experiment is (in)famous for showing that, although in this unbuttressed setting the SSA has a unique solution for any uniform flow factor, many models displayed significant hysteresis in the calculated grounding-line position. The original experiment described a flowline; to make this feasible for IMAU-ICE and UFEMISM, we followed Pattyn (2017) by adapting it to plan-view, by extruding the flowline radially. The experiment now describes a cone-shaped island, covered by a radially symmetric ice sheet and shelf.
+The first Marine Ice-Sheet Model Intercomparison Project (MISMIP; Pattyn et al., 2012) describes a flowline of an ice-sheet lying on an inclined plane, with part of the domain being subaerial and part being submerged, leading to the formation of a marine ice sheet feeding into an infinite ice shelf. This experiment is (in)famous for showing that, although in this unbuttressed setting the SSA has a unique solution for any uniform flow factor, many models displayed significant hysteresis in the calculated grounding-line position. The original experiment described a flowline; to make this feasible for IMAU-ICE and UFEMISM, we followed Pattyn (2017) by adapting it to plan-view, by extruding the flowline radially. The experiment now describes a cone-shaped island, covered by a radially symmetric ice sheet and shelf. All model parameters are kept constant in time, except for the Glen's flow law factor, which is subjected to step-wise decreases (increases), causing the ice flow to slow down (speed up) and the grounding line to advance (retreat).
+
+\begin{figure}[H]
+  \includegraphics[width=0.6\linewidth]{Fig_benchmark_MISMIP_mod_geometry.png}
+  \caption{Geometry of the MISMIP\textunderscore mod experiment.}
+\end{figure}
+
+\begin{figure}[H]
+  \includegraphics[width=0.75\linewidth]{Fig_benchmark_MISMIP_mod_GL.png}
+  \caption{Panel A: grounding-line position over time in the MISMIP\textunderscore mod experiment, simulated at different resolutions with IMAU-ICE. Panel B: grounding-line hysteresis (defined as the difference in position between t = 15 kyr and t = 45 kyr) as a function of resolution, showing that the hysteresis is consistently smaller than the grid resolution.}
+\end{figure}
 
 \subsection{MISMIP+}
 
-This schematic experiment, proposed by Asay-Davis et al. (2016) aims to study grounding-line retreat caused by increased melting or calving in a strongly buttressed geometry. The steady state describes an 80-km wide ice stream flowing into an embayed shelf, with the grounding line resting on a retrograde slope. Once the modelled ice sheet has equilibrated, sub-shelf melt is increased, causing the grounding-line to retreat, over a period of 100 years. After that, the experiment splits up, with one branch maintaining the melt for another 100 years, continuing the retreat, while the other stops the melt and produces a re-advance. The modelled grounding-line position over time can be compared to the model ensemble by Cornford et al. (2020).
+This schematic experiment, proposed by Asay-Davis et al. (2016) aims to study grounding-line retreat caused by increased melting or calving in a strongly buttressed geometry. The steady state describes an 80-km wide ice stream flowing down a glacial valley into an embayed shelf, with the grounding line resting on a retrograde slope. Once the modelled ice sheet has equilibrated (with the uniform Glen's flow factor being tuned to achieve a mid-stream grounding-line position at x = 450 km), sub-shelf melt is increased, causing the grounding-line to retreat, over a period of 100 years. After that, the experiment splits up, with one branch maintaining the melt for another 100 years, continuing the retreat, while the other stops the melt and produces a re-advance. The modelled grounding-line position over time can be compared to the model ensemble by Cornford et al. (2020).
+
+\begin{figure}[H]
+  \includegraphics[width=0.6\linewidth]{Fig_benchmark_MISMIPplus_geometry.png}
+  \caption{Geometry of the MISMIP+ experiment. The grounding line and its vertical projection on the ice surface are marked in red.}
+\end{figure}
+
+\begin{figure}[H]
+  \includegraphics[width=0.8\linewidth]{Fig_benchmark_MISMIPplus_GL.png}
+  \caption{Grounding-line position over time in the different experiments of MISMIP+. The four different experiments (0, r, ra, rr) are shown respectively in blakc, blue, red, and yellow. Panel A shows the ice1 experiment (oceanic warming leading to increased basal melt), panel B shows ice2 (enhanced calving, approximated by greatly increased basal melt near the ice front). Dotted (dashed) lines indicate the mean (range) of the model ensemble published by Cornford et al. (2020); solid lines (shaded areas) indicate the mean (range) of the IMAU-ICE ensemble, which was obtained by varying the stress balance approximation (hybrid, DIVA), sliding law (Weertman, Tsai2015, Schoof2005), and grid resolution (5, 2 km).}
+\end{figure}
 
 \subsection{MISOMIP1}
 
@@ -678,6 +698,91 @@ p_w &= 0.96 \rho_i g H \lambda_w, \\
 
 By default, $d_{\textrm{sat}} = 1000$ m.
 
+\newpage
+\subsection{Basal inversion}
+
+A new development in IMAU-ICE is the addition of a few simple basal inversion routines. All are based on the geometry-based inversion procedure by Pollard and DeConto (2012). The basic idea is that, if all other model parameters are reasonably well known, the bed roughness field can be tuned to produce a steady-state ice sheet that matches the observed geometry. This differs from the velocity-based inversion procedures used by model such as Elmer/ice, which use more elaborate mathematical techniques to tune the bed roughness to reproduce the observed velocity field. The basic idea is quite simple; the ice-sheet model is run forward in time, and the bed roughness field is slowly "nudged" according to the difference between the modelled and the observed (or "target") geometry. If the modelled ice at a location is too thick, the bed roughness is lowered; this results in increased ice flow, which generally thins the ice. Conversely, if the ice is too thin, bed roughness is increased, decreasing the flow and leading to more accumulation of ice.\\
+\\
+The CISM group has recently been working on extending the geometry-based inversion procedure to also include a velocity term. Here, the bed roughness is decreased if the ice is too thick, and/or if the velocity is too low, and vice versa. This approach then forms the basis for the final, best-performing inversion routine, which is the Berends2022 algorithm. Here, bed roughness is still scaled with the difference between the modelled and the target ice thickness and velocity. However, the difference is not calculated locally, but rather as an average over the flowline. This is based on the observation that lowering the bed roughness in one place does not just lead to increased ice velocities at that location, but also upstream and downstream; the same holds for ice thickness. This routine performs better in complex geometries, and also is better able to deal with a moving ice margin and grounding line.\\
+\\
+While the inversion routines should in theory be applicable to Antarctica and Greenland, so far they have only been succesfully applied in the idealised-geometry BIVMIP experiments.
+
+\subsubsection{PDC2012}
+
+\subsubsection{Lipscomb2021}
+
+\subsubsection{CISM+}
+
+\subsubsection{Berends2022}
+
+In this novel basal inversion method, the bed roughness is adapted over time during a forward simulation, with the rate of change of the bed roughness determined according to the difference between the modelled and the target ice geometry and velocity. This approach is based on the implementation in CISM (ref?), with one important addition being that the difference between the modelled and the target state is no longer determined locally, but is instead found by integrating both upstream and downstream along the flowline. The rationale behind this approach is that changing the bed roughness at any location will affect the ice geometry and velocity not just at that location, but also upstream and downstream. Reducing the basal roughness will increase the ice velocity along the entire flowline, causing the ice both locally and upstream to become thinner. By including these effects in the inversion procedure, numerical stability is improved, and artefacts arising from differences in the flotation mask between the modelled and the target state are reduced.\\
+\\
+Let $\textbf{p}$ be a point on the ice sheet. We divide the flowline passing through $\textbf{p}$ into an upstream part $\textbf{L}_u \left( \textbf{p},t \right)$ and a downstream part $\textbf{L}_d \left( \textbf{p},t \right)$ (with $t$ representing the distance along the flowline), which can be found by integrating the ice surface velocity field $\textbf{u} \left( x,y \right)$:
+
+\begin{align}
+\textbf{L}_u \left( \textbf{p},t + dt \right) &= \textbf{L}_u \left( \textbf{p},t \right) -
+\textbf{u} \left( \textbf{L}_u \left( \textbf{p},t \right) \right), \\
+\textbf{L}_d \left( \textbf{p},t + dt \right) &= \textbf{L}_d \left( \textbf{p},t \right) +
+\textbf{u} \left( \textbf{L}_d \left( \textbf{p},t \right) \right), \\
+\textbf{L}_u \left( \textbf{p},0 \right) &= \textbf{L}_d \left( \textbf{p},0 \right) = \textbf{p}.
+\end{align}
+
+In the upstream (downstream) direction, the integral is terminated at the ice divide (ice margin), i.e. when $\textbf{u}=0$ ($H=0$), so that:
+
+\begin{align}
+\textbf{u} \left( \textbf{L}_u \left( \textbf{p}, t_u \left( \textbf{p} \right) \right) \right) &= \textbf{0}, \\
+H \left( \textbf{L}_d \left( \textbf{p}, t_d \left( \textbf{p} \right) \right) \right) &= 0.
+\end{align}
+
+In order to calculate the rate of change $\frac{dC}{dt}$ of the bed roughness $C$, the velocity mismatch (defined as the difference between the modelled absolute surface velocity $\left| \textbf{u}_m \right|$ and the target absolute surface velocity $\left| \textbf{u}_t \right|$) is averaged over both the upstream and downstream part of the flowline, whereas the ice thickness mismatch is evaluated only in the upstream direction:
+
+\begin{align} \label{eq:BIV_01}
+I_1(\textbf{p}) &= \int_{t=0}^{t_u(\textbf{p})} \left( 
+\frac{
+\left| \textbf{u}_m \left( \textbf{L}_u \left( \textbf{p},t \right) \right) \right| -
+\left| \textbf{u}_t \left( \textbf{L}_u \left( \textbf{p},t \right) \right) \right| }
+{u_0} \right) w_u \left( t, t_u \left( \textbf{p} \right) \right) dt, \\
+I_2(\textbf{p}) &= \int_{t=0}^{t_d(\textbf{p})} \left( 
+\frac{
+\left| \textbf{u}_m \left( \textbf{L}_d \left( \textbf{p},t \right) \right) \right| -
+\left| \textbf{u}_t \left( \textbf{L}_d \left( \textbf{p},t \right) \right) \right| }
+{u_0} \right) w_d \left( t, t_d \left( \textbf{p} \right) \right) dt, \\
+I_3(\textbf{p}) &= \int_{t=0}^{t_u(\textbf{p})} \left( 
+\frac{
+H_m \left( \textbf{L}_u \left( \textbf{p},t \right) \right) -
+H_t \left( \textbf{L}_u \left( \textbf{p},t \right) \right) }
+{H_0} \right) w_u \left( t, t_u \left( \textbf{p} \right) \right) dt.
+\end{align}
+
+The default values for the scaling parameters are $H_0$ = 100 $m$, $u_0$ = 250 $m$ $yr^{-1}$. The linear scaling functions $w_u \left( t \right)$, $w_d \left( t \right)$ serve to assign more weight to anomalies close to $\textbf{p}$, decreasing to zero at the respective ends of the flowline, as well as to normalise the integral:
+
+\begin{align}
+w_u \left( t, t_u \left( \textbf{p} \right) \right) &= \frac{2}{t_u \left( \textbf{p} \right)}
+\left( 1 - \frac{t}{t_u \left( \textbf{p} \right)}\right), \\
+w_d \left( t, t_d \left( \textbf{p} \right) \right) &= \frac{2}{t_d \left( \textbf{p} \right)}
+\left( 1 - \frac{t}{t_d \left( \textbf{p} \right)}\right).
+\end{align}
+
+The three line integrals from \eqref{eq:BIV_01} are then added together, and scaled with the local ice thickness $H \left( \textbf{p} \right)$ and velocity $\left| \textbf{u} \left( \textbf{p} \right) \right|$. This reflects the fact that bed roughness underneath slow-moving, thin ice has less effect on the large-scale ice-sheet geometry than does the roughness underneath fast-flowing, thick ice:
+
+\begin{align}
+I_{\textrm{tot}} \left( \textbf{p} \right) &= \left[
+I_1 \left( \textbf{p} \right) + I_2 \left( \textbf{p} \right) + I_3 \left( \textbf{p} \right)
+\right] R \left( \textbf{p} \right), \\
+R \left( \textbf{p} \right) &=
+\frac{ \left| \textbf{u} \left( \textbf{p} \right) \right| }{u_s}
+\frac{ H \left( \textbf{p} \right) }{H_s}, 0 \leq R \left( \textbf{p} \right) \leq 1.
+\end{align}
+
+The default values for the scaling parameters are $H_s$ = 300 $m$, $u_s$ = 3,000 $m$ $yr^{-1}$. Finally, the rate of change $\frac{dC}{dt}$ of the bed roughness $C$ can be calculated:
+
+\begin{equation}
+\frac{ dC \left( \textbf{p} \right) }{dt} = -C \left( \textbf{p} \right) \frac{I_{\textrm{tot}} \left( \textbf{p} \right)}{\tau}.
+\end{equation}
+
+The default value for the time scale is $\tau$ = 500 $yr$.
+
+\newpage
 \subsection{Calving}
 
 Right now, the only available calving law is a simple threshold-thickness law, with a default threshold value \textsc{calving\textunderscore threshold\textunderscore thickness} = 200 m. Some additional calving-related options are:
@@ -691,13 +796,181 @@ Right now, the only available calving law is a simple threshold-thickness law, w
 \newpage
 \section{Thermodynamics}
 
+IMAU-ICE and UFEMISM are thermomechanically coupled; the heat equation in the ice is solved through time, where heat is both diffused and advected through the ice. The ice temperature, in turn, determines the ice viscosity, which affects how the ice flows.\\
+\\
+The heat equation is solved asynchronously from the ice velocity equations, with a constant (configurable) time step.
+
 \subsection{Heat equation}
 
-\textit{Copy the derivation of the discretisation from the old documentation.}
+The general form of the heat equation in an ice sheet reads as follows:
 
-\subsection{Geothermal heat flux}
+\begin{equation}
+\frac{\partial T}{\partial t} = \frac{k}{\rho c_p} \nabla^2 T - \mathbf{u} \cdot \nabla T + \frac{\Phi}{\rho c_p}.
+\end{equation}
 
-\textit{Uniform or from a provided external file.}
+Here, the first term $\frac{k}{\rho c_p} \nabla^2 T$ represents diffusion, the second term $\mathbf{u} \cdot \nabla T$ represent advection, and the third term $\frac{\Phi}{\rho c_p}$ represents internal heating. Since the horizontal dimensions of the ice sheet are so much larger than the vertical dimension, horizontal diffusion is typically very small. Neglecting it simplifies the equation to:
+
+\begin{equation}
+\frac{\partial T}{\partial t} = \frac{k}{\rho c_p} \frac{\partial^2 T}{\partial z^2} - \mathbf{u} \cdot \nabla T + \frac{\Phi}{\rho c_p}.
+\end{equation}
+
+This equation is discretised on an irregular grid in the vertical direction. All vertical derivatives are discretised implicitly, whereas horizontal derivatives are discretised explicitly. This mixed approach, which was first used in the ice-sheet model SICOPOLIS (Greve, 1997), is numerically stable (since both the steepest gradients and shortest grid distances are in the vertical direction), relatively easy to implement, and fast to compute. Using 15 layers in the vertical direction (currently the default in IMAU-ICE and UFEMISM), a time step of 10 years is typically sufficient to maintain numerical stability, although smaller values may be appropriate when using a higher grid resolution (< 10 km).\\
+\\
+The models use a scaled vertical coordinate:
+
+\begin{equation} \label{eq:zeta}
+\zeta = \frac{h-z}{H}
+\end{equation}
+
+This guarantees that the top and bottom of the vertical ice column always coincide with the first and last vertical grid point, respectively. This coordinate transformation results in the appearance of a few extra terms in the heat equation:
+
+\begin{equation}
+\frac{\partial T}{\partial t} + \frac{\partial T}{\partial \zeta} \frac{\partial \zeta}{\partial t} =
+\frac{k}{\rho c_p} \frac{\partial^2 T}{\partial \zeta^2} {\left( \frac{\partial \zeta}{\partial z} \right) }^2
+- u \left( \frac{\partial T}{\partial x} + \frac{\partial T}{\partial \zeta} \frac{\partial \zeta}{\partial x} \right)
+- v \left( \frac{\partial T}{\partial y} + \frac{\partial T}{\partial \zeta} \frac{\partial \zeta}{\partial y} \right)
+- w \left( \frac{\partial T}{\partial \zeta} \frac{\partial \zeta}{\partial z} \right)
++ \frac{\Phi}{\rho c_p}.
+\end{equation}
+
+The different spatial derivatives of $\zeta$ follow from \eqref{eq:zeta}:
+
+\begin{align}
+\frac{\partial \zeta}{\partial t} &= \frac{1}{H} \left( \frac{\partial h}{\partial t} - \zeta \frac{\partial H}{\partial t} \right), \\
+\frac{\partial \zeta}{\partial x} &= \frac{1}{H} \left( \frac{\partial h}{\partial x} - \zeta \frac{\partial H}{\partial x} \right), \\
+\frac{\partial \zeta}{\partial y} &= \frac{1}{H} \left( \frac{\partial h}{\partial y} - \zeta \frac{\partial H}{\partial y} \right), \\
+\frac{\partial \zeta}{\partial z} &= \frac{-1}{H}.
+\end{align}
+
+The partial derivatives $\frac{\partial T}{\partial \zeta}, \frac{\partial^2 T}{\partial \zeta^2}$ can be discretised on the irregular vertical grid using Taylor expansions, yielding expressions of the form:
+
+\begin{align}
+\frac{\partial T^k}{\partial \zeta} &= a_{\zeta} T^{k-1} + b_{\zeta} T^k + c_{\zeta} T^{k+1}, \\
+\frac{\partial^2 T^k}{\partial \zeta^2} &= a_{\zeta \zeta} T^{k-1} + b_{\zeta \zeta} T^k + c_{\zeta \zeta} T^{k+1}.
+\end{align}
+
+Using these expressions to discretise the vertical derivatives of $T$, and using an implicit time-discretisation for the vertical derivatives, yields:
+
+\begin{equation}
+\begin{split}
+\frac{T_k^{t + \Delta t} - T_k^t}{\Delta t} + & \frac{\partial \zeta}{\partial t} 
+\left( a_{\zeta} T_{k-1}^{t+\Delta t} + b_{\zeta} T_k^{t+\Delta t} + c_{\zeta} T_{k+1}^{t+\Delta t} \right) = \\
+& \frac{k}{\rho c_p H^2} \left( a_{\zeta \zeta} T_{k-1}^{t+\Delta t} + b_{\zeta \zeta} T_k^{t+\Delta t} + c_{\zeta \zeta} T_{k+1}^{t+\Delta t} \right) \\
+- & u \left[ \frac{\partial \zeta}{\partial x} \left( a_{\zeta} T_{k-1}^{t+\Delta t} + b_{\zeta} T_k^{t+\Delta t} + c_{\zeta} T_{k+1}^{t+\Delta t} \right) + \frac{\partial T}{\partial x} \right] \\
+- & v \left[ \frac{\partial \zeta}{\partial y} \left( a_{\zeta} T_{k-1}^{t+\Delta t} + b_{\zeta} T_k^{t+\Delta t} + c_{\zeta} T_{k+1}^{t+\Delta t} \right) + \frac{\partial T}{\partial y} \right] \\
+- & w \left[ \frac{-1}{H} \left( a_{\zeta} T_{k-1}^{t+\Delta t} + b_{\zeta} T_k^{t+\Delta t} + c_{\zeta} T_{k+1}^{t+\Delta t} \right) \right]
++ \frac{\Phi}{\rho c_p}.
+\end{split}
+\end{equation}
+
+This can be rearranged to read:
+
+\begin{equation}
+\begin{split}
+T_{k-1}^{t+\Delta t} & \left[ a_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{a_{\zeta \zeta} k}{\rho c_p H^2} \right] \\
++ T_k^{t+\Delta t} & \left[ b_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{b_{\zeta \zeta} k}{\rho c_p H^2} - \frac{1}{\Delta t} \right] \\
++ T_{k+1}^{t+\Delta t} & \left[ c_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{c_{\zeta \zeta} k}{\rho c_p H^2} \right] \\
+= & \frac{T_k^t}{\Delta t} - u \frac{\partial T}{\partial x} - v \frac{\partial T}{\partial y} + \frac{\Phi}{\rho c_p}.
+\end{split}
+\end{equation}
+
+If the vertical direction is discretised into $n$ unevenly spaced layers, this system of equations can be represented by the matrix equation $A T^{t+\Delta t} = \delta$, where the lower diagonal $\alpha$, central diagonal $\beta$, and upper diagonal $\gamma$ of the tridiagonal $n$-by-$n$ matrix $A$, and the right-hand side vector $\delta$ are given by:
+
+\begin{align}
+\alpha &= a_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{a_{\zeta \zeta} k}{\rho c_p H^2}, \\
+\beta &= b_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{b_{\zeta \zeta} k}{\rho c_p H^2} - \frac{1}{\Delta t}, \\
+\gamma &= c_{\zeta} \left( \frac{\partial \zeta}{\partial t} + u \frac{\partial \zeta}{\partial x} + v \frac{\partial \zeta}{\partial y} - \frac{w}{H} \right) - \frac{c_{\zeta \zeta} k}{\rho c_p H^2}, \\
+\delta &= \frac{T_k^t}{\Delta t} - u \frac{\partial T}{\partial x} - v \frac{\partial T}{\partial y} + \frac{\Phi}{\rho c_p}.
+\end{align}
+
+This matrix equation can be solved for every individual grid cell independently, making this an embarrassingly parallel problem. In UFEMISM and IMAU-ICE, this is done with the Fortran package LAPACK; in Matlab, it can be done with the “backslash method”: T = A \textbackslash delta.\\
+\\
+Ice temperatures throughout the vertical column are limited to the depth-dependent pressure melting point (a non-energy-conserving approach).
+
+\subsection{Boundary conditions}
+
+\subsubsection{Ice surface}
+
+At the top of the ice column, ice temperature is kept equal to the annual mean surface air temperature (limited to melting point).
+
+\subsubsection{Ice base}
+
+For grounded ice, a Neumann boundary condition is applied at the base of the ice column, using the basal heat flux, which is the sum of the geothermal heat flux and the basal frictional heating. For floating ice, the basal temperature is kept equal to the ocean temperature at the ice draft.
+
+\paragraph{Geothermal heat flux}
+The config option \textsc{choice\textunderscore geothermal\textunderscore heat\textunderscore flux} can currently be set to two options: \textsc{'constant'} and \textsc{'spatial'}. In the 'spatial' case, data is read from the external NetCDF file specified by \textsc{filename\textunderscore geothermal\textunderscore heat\textunderscore flux}, which provides the geothermal heat flux in $W m^{-2}$ on a global lat/lon-grid. Currently, the default option is to use the data from Shapiro and Ritzwoller (2004).
+
+\paragraph{Frictional heating}
+The frictional heating $F$ at the base of the ice column is calculated using the basal ice velocity $\textbf{u}_b$:
+
+\begin{equation}
+F = \beta_b \left| \textbf{u}_b\right|
+\end{equation}
+
+Here, the basal friction coefficient $\beta_b$ is the same as in Eq, \eqref{eq:SSA_01}, which is calculated using the specified sliding law.
+
+\subsubsection{Internal heating}
+
+For ice on land, internal heating $\Phi$ is related to the vertical shear strain rates:
+
+\begin{equation}
+\Phi = 2 \left( \dot{\epsilon}_{xz} \tau_{xz} + \dot{\epsilon}_{yz} \tau_{yz} \right).
+\end{equation}
+
+Currently, no internal heating is calculated for floating ice. This shortcoming will be improved in future updates.
+
+\subsection{Material properties}
+
+Several material properties of the ice, such as the viscosity, heat capacity, and thermal conductivity, depend on, and in turn affect, the englacial temperature.
+
+\subsubsection{Viscosity}
+
+Ice viscosity is described by the flow factor $A$ in Glen's flow law, which depends on the englacial temperature $T$ via an Arrhenius relation (Huybrechts, 1992):
+
+\begin{equation}
+A \left( T \right) = \left\{
+\begin{array}{ c l }
+1.14 \cdot 10^{-5} e^{-\frac{6 \cdot 10^4}{RT}}& \textrm{if } T < -10 \degree C, \\
+5.47 \cdot 10^{10} e^{-\frac{1.39 \cdot 10^5}{RT}} & \textrm{otherwise}.
+\end{array}
+\right.
+\end{equation}
+
+Here, $R = 8.314 \textrm{ J} \textrm{ mol}^{-1} \textrm{ K}^{-1}$ is the gas constant.\\
+\\
+Optionally, a uniform, constant flow factor can be prescribed by setting \textsc{choice\textunderscore ice\textunderscore rheology = 'uniform'}.
+
+\subsubsection{Heat capacity}
+
+The heat capacity $c_p$ depends on the englacial temperature $T$ using the relation described by Pounder (1965):
+
+\begin{equation}
+c_p \left( T \right) = 2115.3 + 7.79293 (T - T_0).
+\end{equation}
+
+Here, $T_0 = 273.15 K$ is the freezing temperature of water.\\
+\\
+Optionally, a uniform, constant heat capacity can be prescribed by setting \textsc{choice\textunderscore ice\textunderscore heat\textunderscore capacity = 'uniform'}.
+
+\subsubsection{Thermal conductivity}
+
+The thermal conductivity $k$ depends on the englacial temperature $T$ using the relation described by Ritz et al. (1987):
+
+\begin{equation}
+k \left( T \right) = 3.101 \cdot 10^8 e^{-5.7 \cdot 10^{-3} T}.
+\end{equation}
+
+Optionally, a uniform, constant thermal conductivity can be prescribed by setting \textsc{choice\textunderscore ice\textunderscore thermal\textunderscore conductivity = 'uniform'}.
+
+\subsubsection{Pressure melting point}
+
+The relation between the englacial pressure and the melting-point temperature $T_{pmp}$ is desribed by a Clausius-Clapeyron relation (Huybrechts, 1992):
+
+\begin{equation}
+T_{pmp} = T_0 - c_C H \zeta
+\end{equation}
+
+Here, $T_0 = 273.15 K$ is the freezing temperature of water, $c_C = 8.7 \cdot 10^{-4}$ is the Clausius-Clapeyron gradient, $H$ is the ice thickness, and $\zeta$ is the scaled vertical coordinate.
 
 \newpage
 \section{Climate}

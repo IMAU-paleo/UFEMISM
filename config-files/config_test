@@ -3,7 +3,7 @@
   ! Time steps and range
   ! ====================
 
-  start_time_of_run_config                    = -1000.0                          ! Start time (in years) of the simulations
+  start_time_of_run_config                    = -1.0                          ! Start time (in years) of the simulations
   end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
@@ -19,9 +19,9 @@
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .TRUE.                           ! North America
-  do_EAS_config                               = .TRUE.                           ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_NAM_config                               = .FALSE.                          ! North America
+  do_EAS_config                               = .FALSE.                          ! Eurasia
+  do_GRL_config                               = .FALSE.                          ! Greenland
   do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Benchmark experiments

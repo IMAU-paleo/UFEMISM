@@ -522,7 +522,7 @@ MODULE configuration_module
 
   CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
-  CHARACTER(LEN=256)  :: choice_basin_scheme_GRL_config              = 'none'
+  CHARACTER(LEN=256)  :: choice_basin_scheme_GRL_config              = 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_ANT_config              = 'file'
   CHARACTER(LEN=256)  :: filename_basins_NAM_config                  = ''                               ! Path to a text file containing polygons of drainage basins
   CHARACTER(LEN=256)  :: filename_basins_EAS_config                  = ''

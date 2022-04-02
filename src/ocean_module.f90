@@ -25,6 +25,9 @@ MODULE ocean_module
                                              map_glob_to_grid_3D, surface_elevation, &
                                              extrapolate_Gaussian_floodfill
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
+                                             calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
+                                             deallocate_remapping_operators_mesh2grid, &
+                                             deallocate_remapping_operators_grid2mesh, &
                                              smooth_Gaussian_2D, remap_field_dp_3D
 
   IMPLICIT NONE
@@ -1267,6 +1270,7 @@ CONTAINS
     CALL calc_remapping_operator_grid2mesh( hires%grid, region%mesh)
     CALL map_grid2mesh_3D( hires%grid, region%mesh, hires%T_ocean, ocean_reg%T_ocean_ext)
     CALL map_grid2mesh_3D( hires%grid, region%mesh, hires%S_ocean, ocean_reg%S_ocean_ext)
+    CALL deallocate_remapping_operators_mesh2grid( hires%grid)
 
     ! Clean up after yourself
     CALL deallocate_shared( hires%grid%wnx             )
@@ -1661,18 +1665,21 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),             INTENT(INOUT) :: region
-    TYPE(type_ocean_snapshot_global),    INTENT(IN)    :: ocean_glob
-    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
+    TYPE(type_model_region),          INTENT(INOUT) :: region
+    TYPE(type_ocean_snapshot_global), INTENT(IN)    :: ocean_glob
+    TYPE(type_highres_ocean_data),    INTENT(INOUT) :: hires
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_extrapolate_hires_ocean_data'
-    INTEGER                                            :: vi,i,j
-    REAL(dp), DIMENSION(:    ), POINTER                ::  basin_ID_dp_lores
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  basin_ID_dp_hires,  basin_ID_dp_hires_ext
-    INTEGER                                            :: wbasin_ID_dp_lores, wbasin_ID_dp_hires, wbasin_ID_dp_hires_ext
-    INTEGER                                            :: ii,jj,n
-    LOGICAL                                            :: foundit
+    CHARACTER(LEN=256), PARAMETER                   :: routine_name = 'map_and_extrapolate_hires_ocean_data'
+    INTEGER                                         :: vi,i,j
+    REAL(dp), DIMENSION(:    ), POINTER             ::  basin_ID_dp_lores
+    REAL(dp), DIMENSION(:,:  ), POINTER             ::  basin_ID_dp_hires,  basin_ID_dp_hires_ext
+    INTEGER                                         :: wbasin_ID_dp_lores, wbasin_ID_dp_hires, wbasin_ID_dp_hires_ext
+    INTEGER                                         :: ii,jj,n
+    LOGICAL                                         :: foundit
+    REAL(dp), PARAMETER                             :: tol = 1E-9_dp
+    CHARACTER(LEN=256)                              :: choice_basin_scheme
+    CHARACTER(LEN=256)                              :: filename_basins
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1683,12 +1690,20 @@ CONTAINS
     ! Determine which file to use for this region
     IF     (region%name == 'NAM') THEN
       hires%netcdf_geo%filename = C%ocean_extrap_hires_geo_filename_NAM
+      choice_basin_scheme       = C%choice_basin_scheme_NAM
+      filename_basins           = C%filename_basins_NAM
     ELSEIF (region%name == 'EAS') THEN
       hires%netcdf_geo%filename = C%ocean_extrap_hires_geo_filename_EAS
+      choice_basin_scheme       = C%choice_basin_scheme_EAS
+      filename_basins           = C%filename_basins_EAS
     ELSEIF (region%name == 'GRL') THEN
       hires%netcdf_geo%filename = C%ocean_extrap_hires_geo_filename_GRL
+      choice_basin_scheme       = C%choice_basin_scheme_GRL
+      filename_basins           = C%filename_basins_GRL
     ELSEIF (region%name == 'ANT') THEN
       hires%netcdf_geo%filename = C%ocean_extrap_hires_geo_filename_ANT
+      choice_basin_scheme       = C%choice_basin_scheme_ANT
+      filename_basins           = C%filename_basins_ANT
     END IF
 
     ! Check if the NetCDF file has all the required dimensions and variables
@@ -1736,9 +1751,39 @@ CONTAINS
       hires%grid%ymax         = hires%grid%y( hires%grid%ny)
       ! Check if this is the resolution we want
       IF (hires%grid%dx /= C%ocean_extrap_res) THEN
-        WRITE(0,*) '     map_and_extrapolate_ocean_data - ERROR: high-resolution geometry file " ', TRIM( hires%netcdf_geo%filename), ' " has a different resolution from C%ocean_extrap_res = ', C%ocean_extrap_res
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('high-resolution geometry file "' // TRIM( hires%netcdf_geo%filename) // '" has a different resolution from C%ocean_extrap_res = {dp_01}', dp_01 = C%ocean_extrap_res)
       END IF
+    END IF
+    CALL sync
+
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
+    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
+
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D( hires%grid%n, hires%grid%wn)
+    IF (par%master) hires%grid%n = hires%grid%nx * hires%grid%ny
+    CALL sync
+
+    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
+    CALL allocate_shared_int_2D( hires%grid%n , 2,             hires%grid%n2ij, hires%grid%wn2ij)
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, hires%grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, hires%grid%ny
+            n = n+1
+            hires%grid%ij2n( i,j) = n
+            hires%grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = hires%grid%ny, 1, -1
+            n = n+1
+            hires%grid%ij2n( i,j) = n
+            hires%grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
     END IF
     CALL sync
 
@@ -1790,84 +1835,89 @@ CONTAINS
     CALL allocate_shared_dp_2D( hires%grid%nx,  hires%grid%ny,  basin_ID_dp_hires,     wbasin_ID_dp_hires    )
     CALL allocate_shared_dp_2D( hires%grid%nx,  hires%grid%ny,  basin_ID_dp_hires_ext, wbasin_ID_dp_hires_ext)
 
-    ! Convert basin ID field to double precision (for remapping)
-    DO vi = region%mesh%vi1, region%mesh%vi2
-      basin_ID_dp_lores( vi) = REAL( region%ice%basin_ID( vi), dp)
-    END DO
-    CALL sync
+    IF     (choice_basin_scheme == 'none') THEN
+      ! No basins are defined (i.e. the whole region is one big, big basin)
 
-    !========================================================
-    !========================================================
+      DO j = 1, hires%grid%ny
+      DO i = hires%grid%i1, hires%grid%i2
+        hires%basin_ID( i,j) = 1
+      END DO
+      END DO
+      CALL sync
 
-    ! Map double-precision basin ID from ice-model grid to high-resolution grid
-    ! CALL map_square_to_square_cons_2nd_order_2D( region%grid%nx, region%grid%ny, region%grid%x, region%grid%y, hires%grid%nx, hires%grid%ny, hires%grid%x, hires%grid%y, basin_ID_dp_lores, basin_ID_dp_hires)
+    ELSEIF (choice_basin_scheme == 'file') THEN
 
-    ! Map double-precision basin ID from ice-model mesh to high-resolution grid
-    ! CALL calc_remapping_operator_mesh2grid( region%mesh, hires%grid)
-    ! CALL map_mesh2grid_2D( region%mesh, hires%grid, basin_ID_dp_lores, basin_ID_dp_hires)
+      ! Convert basin ID field to double precision (for remapping)
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        basin_ID_dp_lores( vi) = REAL( region%ice%basin_ID( vi), dp)
+      END DO
+      CALL sync
 
-    ! WIP: This line should be removed after implementing the multi-basins option, after figuring out how to do the mapping and remapping above efficiently.
-    basin_ID_dp_hires(hires%grid%i1:hires%grid%i2,:) = 1.0_dp
+      ! Map double-precision basin ID from ice-model mesh to high-resolution grid
+      CALL calc_remapping_operator_mesh2grid( region%mesh, hires%grid)
+      CALL map_mesh2grid_2D( region%mesh, hires%grid, basin_ID_dp_lores, basin_ID_dp_hires)
+      CALL deallocate_remapping_operators_mesh2grid( hires%grid)
 
-    !========================================================
-    !========================================================
+      ! Remove all near-boundary cells
+      DO j = 1, hires%grid%ny
+      DO i = hires%grid%i1, hires%grid%i2
+        IF (MODULO( basin_ID_dp_hires( i,j), 1._dp) > 0.01_dp) THEN
+          basin_ID_dp_hires( i,j) = -1._dp
+        END IF
+      END DO
+      END DO
+      CALL sync
 
-    ! Remove all near-boundary cells
-    DO j = 1, hires%grid%ny
-    DO i = hires%grid%i1, hires%grid%i2
-      IF (MODULO( basin_ID_dp_hires( i,j), 1._dp) > 0.01_dp) THEN
-        basin_ID_dp_hires( i,j) = -1._dp
-      END IF
-    END DO
-    END DO
-    CALL sync
+      ! For those, use extrapolation instead
+      basin_ID_dp_hires_ext( hires%grid%i1:hires%grid%i2,:) = basin_ID_dp_hires( hires%grid%i1:hires%grid%i2,:)
+      CALL sync
 
-    ! For those, use extrapolation instead
-    basin_ID_dp_hires_ext( hires%grid%i1:hires%grid%i2,:) = basin_ID_dp_hires( hires%grid%i1:hires%grid%i2,:)
-    CALL sync
+      DO j = 1, hires%grid%ny
+      DO i = hires%grid%i1, hires%grid%i2
+        IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
 
-    DO j = 1, hires%grid%ny
-    DO i = hires%grid%i1, hires%grid%i2
-      IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
+            n = 0
+            foundit = .FALSE.
+            DO WHILE (.NOT. foundit)
 
-        n = 0
-        foundit = .FALSE.
-        DO WHILE (.NOT. foundit)
+              n = n+1
 
-          n = n+1
+              ! Take the value of the nearest non-boundary cell
+              DO jj = MAX(1,j-n), MIN(hires%grid%ny,j+n)
+              DO ii = MAX(1,i-n), MIN(hires%grid%nx,i+n)
+                IF (basin_ID_dp_hires( ii,jj) > -1._dp) THEN
+                  basin_ID_dp_hires_ext( i,j) = basin_ID_dp_hires( ii,jj)
+                  foundit = .TRUE.
+                  EXIT
+                END IF
+              END DO
+              IF (foundit) EXIT
+              END DO
 
-          ! Take the value of the nearest non-boundary cell
-          DO jj = MAX(1,j-n), MIN(hires%grid%ny,j+n)
-          DO ii = MAX(1,i-n), MIN(hires%grid%nx,i+n)
-            IF (basin_ID_dp_hires( ii,jj) > -1._dp) THEN
-              basin_ID_dp_hires_ext( i,j) = basin_ID_dp_hires( ii,jj)
-              foundit = .TRUE.
-              EXIT
-            END IF
-          END DO
-          IF (foundit) EXIT
-          END DO
+              ! Safety
+              IF (n > MAX(hires%grid%nx, hires%grid%ny)) THEN
+                WRITE(0,*) 'map_and_extrapolate_ocean_data - ERROR: basin ID downscaling got stuck!'
+                CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+              END IF
 
-          ! Safety
-          IF (n > MAX(hires%grid%nx, hires%grid%ny)) THEN
-            WRITE(0,*) 'map_and_extrapolate_ocean_data - ERROR: basin ID downscaling got stuck!'
-            CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-          END IF
+            END DO ! DO WHILE (.NOT. foundit)
 
-        END DO ! DO WHILE (.NOT. foundit)
+          END IF ! IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
+        END DO
+        END DO
+      CALL sync
 
-      END IF ! IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
-    END DO
-    END DO
-    CALL sync
+      ! Convert hi-resolution basin ID field back to integer precision
+      DO j = 1, hires%grid%ny
+      DO i = hires%grid%i1, hires%grid%i2
+        hires%basin_ID( i,j) = NINT( basin_ID_dp_hires_ext( i,j))
+      END DO
+      END DO
+      CALL sync
 
-    ! Convert hi-resolution basin ID field back to integer precision
-    DO j = 1, hires%grid%ny
-    DO i = hires%grid%i1, hires%grid%i2
-      hires%basin_ID( i,j) = NINT( basin_ID_dp_hires_ext( i,j))
-    END DO
-    END DO
-    CALL sync
+    ELSE
+      CALL crash('unknown choice_basin_scheme "' // TRIM(choice_basin_scheme) // '"!')
+    END IF
 
     ! Clean up after yourself
     CALL deallocate_shared( wbasin_ID_dp_lores)
@@ -1885,7 +1935,7 @@ CONTAINS
     CALL deallocate_shared( hires%wnbasins )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=20)
 
   END SUBROUTINE map_and_extrapolate_hires_ocean_data
   SUBROUTINE extend_regional_ocean_data_to_cover_domain( hires)
@@ -2506,6 +2556,7 @@ CONTAINS
     CALL calc_remapping_operator_grid2mesh( hires%grid, mesh_new)
     CALL map_grid2mesh_3D( hires%grid, mesh_new, hires%T_ocean, ocean_reg%T_ocean_ext)
     CALL map_grid2mesh_3D( hires%grid, mesh_new, hires%S_ocean, ocean_reg%S_ocean_ext)
+    CALL deallocate_remapping_operators_mesh2grid( hires%grid)
 
     ! Clean up after yourself
     CALL deallocate_shared( hires%grid%wnx             )

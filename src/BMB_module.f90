@@ -85,16 +85,14 @@ CONTAINS
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not implemented in run_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
 
     ! Run the selected sheet BMB model
     IF     (C%choice_BMB_sheet_model == 'uniform') THEN
       BMB%BMB_sheet( mesh%vi1:mesh%vi2) = C%BMB_sheet_uniform
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_sheet_model "', TRIM(C%choice_BMB_sheet_model), '" not implemented in run_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_sheet_model "' // TRIM(C%choice_BMB_sheet_model) // '"!')
     END IF
 
     ! Extrapolate melt field from the regular (FCMP) mask to the (extended) PMP mask
@@ -116,8 +114,7 @@ CONTAINS
           amplification_factor = 1._dp
         END IF
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_amplification "', TRIM(C%choice_BMB_shelf_amplification), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_BMB_shelf_amplification "' // TRIM(C%choice_BMB_shelf_amplification) // '"!')
       END IF
 
       BMB%BMB_shelf( vi) = amplification_factor * BMB%BMB_shelf( vi)
@@ -141,10 +138,15 @@ CONTAINS
       ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
         IF (ice%f_grnd_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_subgrid "', TRIM(C%choice_BMB_subgrid), '" not implemented in run_BMB_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_BMB_subgrid "' // TRIM(C%choice_BMB_subgrid) // '"!')
       END IF
 
+    END DO
+    CALL sync
+
+    ! Limit basal melt
+    DO vi = mesh%vi1, mesh%vi2
+      BMB%BMB( vi) = MAX( BMB%BMB( vi), -C%BMB_max)
     END DO
     CALL sync
 

@@ -243,8 +243,7 @@ CONTAINS
       CALL run_BMB_model_MISMIPplus( mesh, ice, BMB, time)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'run_BMB_model_idealised - ERROR: unknown choice_idealised_BMB_shelf "', TRIM(C%choice_idealised_BMB_shelf), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_idealised_BMB_shelf "' // TRIM(C%choice_idealised_BMB_shelf) // '"!')
     END IF
 
     ! Finalise routine path
@@ -403,8 +402,7 @@ CONTAINS
       END IF ! IF (time < 0._dp) THEN
 
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: MISMIPplus_scenario "', TRIM(C%MISMIPplus_scenario), '" not implemented in BMB_MISMIPplus!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown MISMIPplus_scenario "' // TRIM(C%MISMIPplus_scenario) // '"!')
     END IF
 
     ! Finalise routine path
@@ -538,8 +536,7 @@ CONTAINS
       w_PD   = 1._dp
 
     ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
-      WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model_ANICE_legacy!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
     END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
 
     T_ocean_mean      = w_PD * BMB%T_ocean_mean_PD      + w_warm * BMB%T_ocean_mean_warm      + w_cold * BMB%T_ocean_mean_cold

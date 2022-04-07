@@ -297,16 +297,14 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
 
-    ! Open the file for writing
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    if (par%master) then
+      ! Open the file for writing
+      CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
-    ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+      ! Time
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    endif
 
     ! Write data
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -360,8 +358,10 @@ CONTAINS
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_49, C%help_field_49)
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_50, C%help_field_50)
 
-    ! Close the file
-    CALL close_netcdf_file(netcdf%ncid)
+    if (par%master) then
+      ! Close the file
+      CALL close_netcdf_file(netcdf%ncid)
+    endif
 
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
@@ -370,6 +370,47 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_help_fields_file_mesh
+  subroutine gather_and_put_var(ncid, id_var, partial_array,total_size, start)
+    use mpi_f08
+    implicit none
+    real(dp),              dimension(:), intent(in)    :: partial_array
+    integer                            , intent(in)    :: ncid, id_var, total_size
+    integer, optional,     dimension(:), intent(in)    :: start
+
+    integer                                            :: i1,i2, err, n
+    integer, dimension(1:par%n)                        :: counts, displs
+    real(dp), allocatable, dimension(:)                :: output
+
+    if (par%master) then
+      allocate(output(total_size))
+    else
+      allocate(output(0)) ! not used but needs allocation
+    endif
+
+    ! Gather sizes that will be sent
+    call partition_list(total_size, par%i, par%n, i1, i2)
+    call mpi_gather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the sizes
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+      
+    ! Send everything to master
+    call mpi_gatherv( partial_array, i2-i1+1, MPI_REAL8 &
+                    , output, counts, displs, MPI_REAL8, 0, MPI_COMM_WORLD, err)
+
+    if (.not.par%master) return
+
+    ! Write the gathered input only on master
+    if (present(start)) then
+      CALL handle_error( nf90_put_var( ncid, id_var, output, start=start ))
+    else
+      CALL handle_error( nf90_put_var( ncid, id_var, output ))
+    end if
+
+  end subroutine gather_and_put_var
   SUBROUTINE write_help_field_mesh( region, netcdf, id_var, field_name)
     ! Write the current model state to the existing output file
 
@@ -397,12 +438,12 @@ CONTAINS
 
     ! Lat/lon
     IF     (field_name == 'lat') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lat, start=(/1 /) ))
+      call gather_and_put_var(netcdf%ncid, id_var, region%mesh%lat, region%mesh%nV )
     ELSEIF (field_name == 'lon') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lon, start=(/1 /) ))
+      call gather_and_put_var(netcdf%ncid, id_var, region%mesh%lon, region%mesh%nV )
 
     ! Geothermal heat flux
-    ELSEIF (field_name == 'GHF') THEN
+    ELSEIF (field_name == 'GHF' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF_a, start=(/1 /) ))
 
     ! Fields with a time dimension
@@ -413,159 +454,159 @@ CONTAINS
       ! Not needed, this is already part of regular mesh data
 
     ! Geometry
-    ELSEIF (field_name == 'Hi') THEN
+    ELSEIF (field_name == 'Hi' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hi_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Hb') THEN
+    ELSEIF (field_name == 'Hb' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Hs') THEN
+    ELSEIF (field_name == 'Hs' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'SL') THEN
+    ELSEIF (field_name == 'SL' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
 
     ! Thermal properties
-    ELSEIF (field_name == 'Ti') THEN
+    ELSEIF (field_name == 'Ti' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Cpi') THEN
+    ELSEIF (field_name == 'Cpi' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Cpi_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Ki') THEN
+    ELSEIF (field_name == 'Ki' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ki_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Ti_basal') THEN
+    ELSEIF (field_name == 'Ti_basal' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a(:,C%nZ), start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Ti_pmp') THEN
+    ELSEIF (field_name == 'Ti_pmp' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_pmp_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'A_flow_3D') THEN
+    ELSEIF (field_name == 'A_flow_3D' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_3D_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'A_flow_vav') THEN
+    ELSEIF (field_name == 'A_flow_vav' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_vav_a, start=(/1, netcdf%ti /) ))
 
     ! Velocity fields
-    ELSEIF (field_name == 'u_3D') THEN
+    ELSEIF (field_name == 'u_3D' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_3D') THEN
+    ELSEIF (field_name == 'v_3D' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_3D_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_3D_b') THEN
+    ELSEIF (field_name == 'u_3D_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_b, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_3D_b') THEN
+    ELSEIF (field_name == 'v_3D_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_3D_b, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'w_3D') THEN
+    ELSEIF (field_name == 'w_3D' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%w_3D_a, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_vav') THEN
+    ELSEIF (field_name == 'u_vav' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_vav_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_vav') THEN
+    ELSEIF (field_name == 'v_vav' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_vav_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_vav_b') THEN
+    ELSEIF (field_name == 'u_vav_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_vav_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_vav_b') THEN
+    ELSEIF (field_name == 'v_vav_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_vav_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_vav') THEN
+    ELSEIF (field_name == 'uabs_vav' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_vav_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_vav_b') THEN
+    ELSEIF (field_name == 'uabs_vav_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_vav_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_surf') THEN
+    ELSEIF (field_name == 'u_surf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_surf_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_surf') THEN
+    ELSEIF (field_name == 'v_surf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_surf_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_surf_b') THEN
+    ELSEIF (field_name == 'u_surf_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_surf_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_surf_b') THEN
+    ELSEIF (field_name == 'v_surf_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_surf_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_surf') THEN
+    ELSEIF (field_name == 'uabs_surf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_surf_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_surf_b') THEN
+    ELSEIF (field_name == 'uabs_surf_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_surf_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_base') THEN
+    ELSEIF (field_name == 'u_base' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_base_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_base') THEN
+    ELSEIF (field_name == 'v_base' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_base_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'u_base_b') THEN
+    ELSEIF (field_name == 'u_base_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_base_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'v_base_b') THEN
+    ELSEIF (field_name == 'v_base_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%v_base_b, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_base') THEN
+    ELSEIF (field_name == 'uabs_base' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'uabs_base_b') THEN
+    ELSEIF (field_name == 'uabs_base_b' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_b, start=(/1, netcdf%ti /) ))
 
     ! Climate
-    ELSEIF (field_name == 'T2m') THEN
+    ELSEIF (field_name == 'T2m' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%T2m, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'T2m_year') THEN
+    ELSEIF (field_name == 'T2m_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%T2m,2)/12._dp, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Precip') THEN
+    ELSEIF (field_name == 'Precip' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Precip, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Precip_year') THEN
+    ELSEIF (field_name == 'Precip_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2)/12._dp, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Wind_WE') THEN
+    ELSEIF (field_name == 'Wind_WE' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_WE, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Wind_WE_year') THEN
+    ELSEIF (field_name == 'Wind_WE_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Wind_WE,2)/12._dp, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Wind_SN') THEN
+    ELSEIF (field_name == 'Wind_SN' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_SN, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Wind_SN_year') THEN
+    ELSEIF (field_name == 'Wind_SN_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Wind_SN,2)/12._dp, start=(/1, netcdf%ti /) ))
 
     ! Mass balance
-    ELSEIF (field_name == 'SMB') THEN
+    ELSEIF (field_name == 'SMB' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%SMB, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'SMB_year') THEN
+    ELSEIF (field_name == 'SMB_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%SMB_year, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'BMB_sheet') THEN
+    ELSEIF (field_name == 'BMB_sheet' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%BMB_sheet, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'BMB_shelf') THEN
+    ELSEIF (field_name == 'BMB_shelf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%BMB_shelf, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'BMB') THEN
+    ELSEIF (field_name == 'BMB' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%BMB, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'Snowfall') THEN
+    ELSEIF (field_name == 'Snowfall' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Snowfall, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Snowfall_year') THEN
+    ELSEIF (field_name == 'Snowfall_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Snowfall,2), start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'Rainfall') THEN
+    ELSEIF (field_name == 'Rainfall' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Rainfall, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Rainfall_year') THEN
+    ELSEIF (field_name == 'Rainfall_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Rainfall,2), start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'AddedFirn') THEN
+    ELSEIF (field_name == 'AddedFirn' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%AddedFirn, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'AddedFirn_year') THEN
+    ELSEIF (field_name == 'AddedFirn_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%AddedFirn,2), start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'Refreezing') THEN
+    ELSEIF (field_name == 'Refreezing' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Refreezing_year') THEN
+    ELSEIF (field_name == 'Refreezing_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing_year, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'Runoff') THEN
+    ELSEIF (field_name == 'Runoff' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Runoff, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Runoff_year') THEN
+    ELSEIF (field_name == 'Runoff_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%AddedFirn,2), start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'Albedo') THEN
+    ELSEIF (field_name == 'Albedo' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Albedo, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'Albedo_year') THEN
+    ELSEIF (field_name == 'Albedo_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Albedo,2)/12._dp, start=(/1,  netcdf%ti /) ))
-    ELSEIF (field_name == 'FirnDepth') THEN
+    ELSEIF (field_name == 'FirnDepth' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%FirnDepth, start=(/1, 1, netcdf%ti /) ))
-    ELSEIF (field_name == 'FirnDepth_year') THEN
+    ELSEIF (field_name == 'FirnDepth_year' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%FirnDepth,2)/12._dp, start=(/1,  netcdf%ti /) ))
 
     ! Masks
-    ELSEIF (field_name == 'mask') THEN
+    ELSEIF (field_name == 'mask' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_land') THEN
+    ELSEIF (field_name == 'mask_land' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_land_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_ocean') THEN
+    ELSEIF (field_name == 'mask_ocean' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ocean_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_lake') THEN
+    ELSEIF (field_name == 'mask_lake' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_lake_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_ice') THEN
+    ELSEIF (field_name == 'mask_ice' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_ice_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_sheet') THEN
+    ELSEIF (field_name == 'mask_sheet' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_sheet_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_shelf') THEN
+    ELSEIF (field_name == 'mask_shelf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_shelf_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_coast') THEN
+    ELSEIF (field_name == 'mask_coast' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_coast_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_margin') THEN
+    ELSEIF (field_name == 'mask_margin' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_margin_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_gl') THEN
+    ELSEIF (field_name == 'mask_gl' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_gl_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'mask_cf') THEN
+    ELSEIF (field_name == 'mask_cf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf_a, start=(/1, netcdf%ti /) ))
 
 !    ! Basal conditions
@@ -575,16 +616,16 @@ CONTAINS
 !      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tau_c_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
 
     ! Isotopes
-    ELSEIF (field_name == 'iso_ice') THEN
+    ELSEIF (field_name == 'iso_ice' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%IsoIce, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'iso_surf') THEN
+    ELSEIF (field_name == 'iso_surf' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%IsoSurf, start=(/1, netcdf%ti /) ))
 
     ! GIA
-    ELSEIF (field_name == 'dHb') THEN
+    ELSEIF (field_name == 'dHb' .and. par%master) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
 
-    ELSE
+    ELSEIF (par%master) then
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
 
@@ -1348,7 +1389,7 @@ CONTAINS
 
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
-      CALL map_and_write_to_grid_netcdf_partial_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%mesh%R, id_var, netcdf%ti, region%mesh%nV)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%mesh%R, id_var, netcdf%ti)
 
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
@@ -2019,53 +2060,6 @@ CONTAINS
   END SUBROUTINE create_help_field_grid
 
   ! Map a model data field from the model mesh to the output grid, and write it to a NetCDF file.
-  SUBROUTINE map_and_write_to_grid_netcdf_partial_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti, original_size)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    INTEGER,                    INTENT(IN)        :: ncid
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    TYPE(type_grid),            INTENT(IN)        :: grid
-    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
-    INTEGER,                    INTENT(IN)        :: id_var
-    INTEGER,                    INTENT(IN)        :: ti
-    INTEGER,                    INTENT(IN)        :: original_size
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D'
-    REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
-    REAL(dp), DIMENSION(:    ), POINTER           :: xx
-    INTEGER                                       :: wd_grid, wxx, i1, i2, n
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
-
-    call allocate_shared_dp_1D( original_size, xx, wxx)
-      
-    call partition_list(original_size, par%i, par%n, i1,i2)
-    do n=i1,i2
-      xx(n) = d_mesh(n-i1+1)
-    end do
-    call sync()
-
-    ! Map data from the model mesh to the square grid
-    CALL map_mesh2grid_2D( mesh, grid, xx, d_grid)
-
-    ! Write grid data to NetCDF
-    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
-
-    ! Deallocate shared memory
-    CALL deallocate_shared( wd_grid)
-    call deallocate_shared( wxx)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE map_and_write_to_grid_netcdf_partial_dp_2D
   SUBROUTINE map_and_write_to_grid_netcdf_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti)
 
     IMPLICIT NONE

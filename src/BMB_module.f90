@@ -2358,8 +2358,9 @@ CONTAINS
     ! All the BMB parameterisations are implicitly run using the FCMP sub-grid scheme
     ! (i.e. they are only applied to grid cells whose centre is floating).
     ! Calculating melt rates for partially-floating-but-grounded-at-the-centre cells (which
-    ! is needed in the PMP scheme) is not straightforward; instead, just extrapolate values into
-    ! the grid cells where this is the case.
+    ! is needed in the PMP scheme) is not straightforward and extrapolating values into
+    ! the grid cells ala IMAU-ICE requires some light puzzle solving. For now, just take
+    ! a weighed average of the surrounding FCMP vertices to get something simple going.
 
     IMPLICIT NONE
 
@@ -2370,140 +2371,75 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extrapolate_melt_from_FCMP_to_PMP'
-    INTEGER                                            :: vi,i1,i2,j1,j2,ii,jj,n,n_ext
+    INTEGER                                            :: vi, vc, ci
     INTEGER,  DIMENSION(:    ), POINTER                :: mask_FCMP, mask_PMP
     REAL(dp), DIMENSION(:    ), POINTER                :: BMB_shelf_extra
-    REAL(dp), DIMENSION(:    ), POINTER                :: dBMBdx, dBMBdy
-    INTEGER                                            :: wmask_FCMP, wmask_PMP, wBMB_shelf_extra, wdBMBdx, wdBMBdy
-    REAL(dp)                                           :: BMB_av
+    INTEGER                                            :: wmask_FCMP, wmask_PMP, wBMB_shelf_extra
+    REAL(dp)                                           :: BMB_av, sum_dist
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) '  ERROR: extrapolate_melt_from_FCMP_to_PMP not yet implemented for a triangular mesh!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! Allocate shared memory
+    CALL allocate_shared_int_1D( mesh%nV, mask_FCMP,       wmask_FCMP      )
+    CALL allocate_shared_int_1D( mesh%nV, mask_PMP,        wmask_PMP       )
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB_shelf_extra, wBMB_shelf_extra)
 
-    ! ! Allocate shared memory
-    ! CALL allocate_shared_int_1D( mesh%nV, mask_FCMP,       wmask_FCMP      )
-    ! CALL allocate_shared_int_1D( mesh%nV, mask_PMP,        wmask_PMP       )
-    ! CALL allocate_shared_dp_1D(  mesh%nV, BMB_shelf_extra, wBMB_shelf_extra)
-    ! CALL allocate_shared_dp_1D(  mesh%nV, dBMBdx,          wdBMBdx         )
-    ! CALL allocate_shared_dp_1D(  mesh%nV, dBMBdy,          wdBMBdy         )
+    ! Define the two masks
+    DO vi = mesh%vi1, mesh%vi2
+      mask_FCMP( vi) = 0
+      mask_PMP(  vi) = 0
+      IF (ice%mask_shelf_a( vi) == 1) mask_FCMP( vi) = 1
+      IF (ice%f_grnd_a( vi) < 1._dp .AND. ice%mask_ice_a( vi) == 1) mask_PMP(  vi) = 1
+    END DO
+    CALL sync
 
-    ! ! Define the two masks
-    ! DO vi = mesh%vi1, mesh%vi2
-    !   mask_FCMP( vi) = 0
-    !   mask_PMP(  vi) = 0
-    !   IF (ice%mask_shelf_a( vi) == 1) mask_FCMP( vi) = 1
-    !   IF (ice%f_grnd_a( vi) < 1._dp .AND. ice%mask_ice_a( vi) == 1) mask_PMP(  vi) = 1
-    ! END DO
-    ! CALL sync
+    ! Extrapolate melt from the FCMP to the PMP mask by taking the average over all FCMP neighbours
+    DO vi = mesh%vi1, mesh%vi2
 
-    ! ! Calculate spatial derivatives of the melt field, accounting for masked grid cells
-    ! DO i = MAX(2,grid%i2), MIN(grid%nx-1,grid%i2)
-    ! DO j = 2, grid%ny-1
+      ! Initialise
+      BMB_shelf_extra( vi) = 0._dp
 
-    !   ! d/dx
-    !   IF (mask_FCMP( j,i) == 0) THEN
-    !     dBMBdx( j,i) = 0._dp
-    !   ELSE
-    !     IF     (mask_FCMP( j,i-1) == 1 .AND. mask_FCMP( j,i+1) == 1) THEN
-    !       ! Central differencing
-    !       dBMBdx( j,i) = (BMB%BMB_shelf( j,i+1) - BMB%BMB_shelf( j,i-1)) / (2._dp * grid%dx)
-    !     ELSEIF (mask_FCMP( j,i-1) == 0 .AND. mask_FCMP( j,i+1) == 1) THEN
-    !       ! One-sided differencing
-    !       dBMBdx( j,i) = (BMB%BMB_shelf( j,i+1) - BMB%BMB_shelf( j,i  )) / grid%dx
-    !     ELSEIF (mask_FCMP( j,i-1) == 1 .AND. mask_FCMP( j,i+1) == 0) THEN
-    !       ! One-sided differencing
-    !       dBMBdx( j,i) = (BMB%BMB_shelf( j,i  ) - BMB%BMB_shelf( j,i-1)) / grid%dx
-    !     ELSE
-    !       dBMBdx( j,i) = 0._dp
-    !     END IF
-    !   END IF
+      IF (mask_PMP( vi) == 1) THEN
+        IF (mask_FCMP( vi) == 1) THEN
+          ! Simply copy the FCMP value
 
-    !   ! d/dy
-    !   IF (mask_FCMP( j,i) == 0) THEN
-    !     dBMBdy( j,i) = 0._dp
-    !   ELSE
-    !     IF     (mask_FCMP( j-1,i) == 1 .AND. mask_FCMP( j+1,i) == 1) THEN
-    !       ! Central differencing
-    !       dBMBdy( j,i) = (BMB%BMB_shelf( j+1,i) - BMB%BMB_shelf( j-1,i)) / (2._dp * grid%dx)
-    !     ELSEIF (mask_FCMP( j-1,i) == 0 .AND. mask_FCMP( j+1,i) == 1) THEN
-    !       ! One-sided differencing
-    !       dBMBdy( j,i) = (BMB%BMB_shelf( j+1,i) - BMB%BMB_shelf( j  ,i)) / grid%dx
-    !     ELSEIF (mask_FCMP( j-1,i) == 1 .AND. mask_FCMP( j+1,i) == 0) THEN
-    !       ! One-sided differencing
-    !       dBMBdy( j,i) = (BMB%BMB_shelf( j  ,i) - BMB%BMB_shelf( j-1,i)) / grid%dx
-    !     ELSE
-    !       dBMBdy( j,i) = 0._dp
-    !     END IF
-    !   END IF
+          BMB_shelf_extra( vi) = BMB%BMB_shelf( vi)
 
-    ! END DO
-    ! END DO
-    ! CALL sync
+        ELSE
+          ! Calculate distance-based weighed-average melt rate over all FCMP neighbours
 
-    ! ! Extrapolate melt from the FCMP to the PMP mask by taking the average over all FCMP neighbours
-    ! n_ext = 1
-    ! DO i = grid%i1, grid%i2
-    ! DO j = 1, grid%ny
+          sum_dist = 0._dp
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (mask_FCMP( vc) == 1) THEN
+              sum_dist = sum_dist + NORM2( mesh%V( vi,:) - mesh%V( vc,:))
+            END IF
+          END DO
 
-    !   ! Initialise
-    !   BMB_shelf_extra( j,i) = 0._dp
+          BMB_av = 0._dp
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (mask_FCMP( vc) == 1 .AND. sum_dist > 0._dp) THEN
+              BMB_av = BMB_av + BMB%BMB_shelf( vc) * NORM2( mesh%V( vi,:) - mesh%V( vc,:)) / sum_dist
+            END IF
+          END DO
 
-    !   IF (mask_PMP( j,i) == 1) THEN
-    !     IF (mask_FCMP( j,i) == 1) THEN
-    !       ! Simply copy the FCMP value
+          BMB_shelf_extra( vi) = BMB_av
 
-    !       BMB_shelf_extra( j,i) = BMB%BMB_shelf( j,i)
+        END IF ! IF (mask_FCMP( vi) == 1) THEN
+      END IF ! IF (mask_PMP( vi) == 1) THEN
 
-    !     ELSE
-    !       ! Calculate average melt rate over all FCMP neighbours
+    END DO
+    CALL sync
 
-    !       n      = 0
-    !       BMB_av = 0._dp
-    !       n_ext  = 0
+    ! Copy results back to original array
+    BMB%BMB_shelf( mesh%vi1:mesh%vi2) = BMB_shelf_extra( mesh%vi1:mesh%vi2)
 
-    !       DO WHILE (n == 0)
-
-    !         n_ext = n_ext + 1
-
-    !         i1 = MAX( 1      , i - n_ext)
-    !         i2 = MIN( grid%nx, i + n_ext)
-    !         j1 = MAX( 1      , j - n_ext)
-    !         j2 = MIN( grid%ny, j + n_ext)
-
-    !         DO ii = i1, i2
-    !         DO jj = j1, j2
-    !           IF (mask_FCMP( jj,ii) == 1) THEN
-    !             n = n + 1
-    !             BMB_av = BMB_av + BMB%BMB_shelf( jj,ii) + REAL(ii-i,dp) * grid%dx * dBMBdx( j,i) &
-    !                                                     + REAL(jj-j,dp) * grid%dx * dBMBdy( j,i)
-    !           END IF
-    !         END DO
-    !         END DO
-
-    !       END DO ! DO WHILE (n == 0)
-
-    !       BMB_av = BMB_av / REAL(n,dp)
-    !       BMB_shelf_extra( j,i) = BMB_av
-
-    !     END IF ! IF (mask_FCMP( j,i) == 1) THEN
-    !   END IF ! IF (mask_PMP( j,i) == 1) THEN
-
-    ! END DO
-    ! END DO
-    ! CALL sync
-
-    ! ! Copy results back to original array
-    ! BMB%BMB_shelf( :,grid%i1:grid%i2) = BMB_shelf_extra( :,grid%i1:grid%i2)
-
-    ! ! Clean up after yourself
-    ! CALL deallocate_shared( wmask_FCMP      )
-    ! CALL deallocate_shared( wmask_PMP       )
-    ! CALL deallocate_shared( wBMB_shelf_extra)
-    ! CALL deallocate_shared( wdBMBdx         )
-    ! CALL deallocate_shared( wdBMBdy         )
+    ! Clean up after yourself
+    CALL deallocate_shared( wmask_FCMP      )
+    CALL deallocate_shared( wmask_PMP       )
+    CALL deallocate_shared( wBMB_shelf_extra)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

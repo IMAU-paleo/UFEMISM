@@ -521,11 +521,10 @@ MODULE data_types_module
     ! A regular square grid covering a model region
     
     ! Basic grid data
-    INTEGER,                    POINTER     :: nx, ny, n
-    REAL(dp),                   POINTER     :: dx
-    REAL(dp), DIMENSION(:    ), POINTER     :: x, y
-    REAL(dp),                   POINTER     :: xmin, xmax, ymin, ymax
-    INTEGER :: wnx, wny, wn, wdx, wx, wy, wxmin, wxmax, wymin, wymax
+    INTEGER                                 :: nx, ny, n
+    REAL(dp),                   allocatable :: dx
+    REAL(dp), DIMENSION(:    ), allocatable :: x, y
+    REAL(dp)                                :: xmin, xmax, ymin, ymax
     
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
@@ -533,22 +532,18 @@ MODULE data_types_module
     ! Sparse matrices representing the remapping operations between a mesh and a grid
     TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
     TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
-    REAL(dp),                   POINTER     :: tol_dist
-    INTEGER :: wtol_dist
+    REAL(dp)                                :: tol_dist
     
     ! Conversion tables for grid-form vs. vector-form data
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
-    INTEGER :: wij2n, wn2ij
+    INTEGER,  DIMENSION(:,:  ), allocatable :: ij2n, n2ij
     
     ! Lat-lon coordinates
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: lat, lon
-    INTEGER :: wlat, wlon
+    REAL(dp), DIMENSION(:,:  ), allocatable :: lat, lon
 
     ! Projection parameters for the grid
-    REAL(dp),                   POINTER     :: lambda_M
-    REAL(dp),                   POINTER     :: phi_M
-    REAL(dp),                   POINTER     :: alpha_stereo
-    INTEGER :: wlambda_M, wphi_M, walpha_stereo
+    REAL(dp)                                :: lambda_M
+    REAL(dp)                                :: phi_M
+    REAL(dp)                                :: alpha_stereo
   
   END TYPE type_grid
   
@@ -702,29 +697,26 @@ MODULE data_types_module
     
     ! Raw data as read from a NetCDF file
     TYPE(type_grid)                         :: grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs_grid
-    INTEGER :: wHi_grid, wHb_grid, wHs_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Hi_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Hb_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Hs_grid
     
-    ! Derived data on the grid (surface curvature and masks, needed for mesh creation)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: surf_curv
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_land
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_ocean
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_ice
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_sheet
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_shelf
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_margin
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_gl
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_cf
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_coast
-    INTEGER :: wsurf_curv, wmask_land, wmask_ocean, wmask_ice, wmask_sheet, wmask_shelf, wmask_margin, wmask_gl, wmask_cf, wmask_coast
+    ! Derived data on the grid (allocatablevature and masks, needed for mesh creation)
+    REAL(dp), DIMENSION(:,:  ), allocatable :: surf_curv
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_land
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_ocean
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_ice
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_sheet
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_shelf
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_margin
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_gl
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_cf
+    INTEGER,  DIMENSION(:,:  ), allocatable :: mask_coast
     
     ! Data on the model mesh
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hb
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hs
-    INTEGER :: wHi, wHb, wHs
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi
+    REAL(dp), DIMENSION(:    ), allocatable :: Hb
+    REAL(dp), DIMENSION(:    ), allocatable :: Hs
               
   END TYPE type_reference_geometry
   

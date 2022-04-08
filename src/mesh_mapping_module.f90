@@ -92,6 +92,77 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_grid2mesh_2D
+  SUBROUTINE map_grid2mesh_2D_partial( grid, mesh, d_grid, d_mesh)
+    ! Map a 2-D data field from the grid to the mesh using 2nd-order conservative remapping.
+    
+    IMPLICIT NONE
+        
+    ! In/output variables
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2),          INTENT(OUT)   :: d_mesh
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_2D'
+    INTEGER                                            :: n1,n2,n,i,j, err
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
+    REAL(dp), DIMENSION(:    ), POINTER                ::  d_mesh_vec
+    integer, dimension(1:par%n)                        :: counts, displs
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Safety
+    !IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
+    !  CALL crash('data fields are the wrong size!')
+    !END IF
+    
+    ! Reshape data from vector form to grid form
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
+
+    ! Allocate shared memory
+    allocate (d_grid_vec(1:grid%n))
+    allocate (d_mesh_vec(1:mesh%nV))
+
+    DO n = n1, n2
+      i = grid%n2ij( n,1)
+      j = grid%n2ij( n,2)
+      d_grid_vec( n) = d_grid( i,j)
+    END DO
+    
+    ! Perform the mapping operation as a matrix multiplication
+    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh_vec)
+
+    !TODO this should be done with a neighbour list but this will work for now:
+    ! Gather sizes that will be sent
+    call mpi_allgather( mesh%vi2-mesh%vi1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the counts
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+      
+    ! Send everything 
+    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
+                       , d_mesh_vec, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+    
+    ! Fix border elements because the remapping often is inaccurate there
+    CALL apply_Neumann_BC_direct_a_2D( mesh, d_mesh_vec)
+
+    do n = mesh%vi1,mesh%vi2
+      d_mesh(n) = d_mesh_vec(n)
+    end do
+    
+    ! Clean up after yourself
+    deallocate( d_grid_vec)
+    deallocate( d_mesh_vec)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE map_grid2mesh_2D_partial
   SUBROUTINE map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
     ! Map a 3-D data field from the grid to the mesh using 2nd-order conservative remapping.
     

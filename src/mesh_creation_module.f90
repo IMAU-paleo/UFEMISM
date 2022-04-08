@@ -1749,8 +1749,8 @@ MODULE mesh_creation_module
     CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows
     CALL calc_matrix_operators_mesh(          mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
     CALL determine_mesh_resolution(           mesh)
-    IF (par%master) CALL find_POI_xy_coordinates( mesh)
-    CALL sync
+    CALL find_POI_xy_coordinates(             mesh)
+
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
     CALL create_transect(                     mesh)

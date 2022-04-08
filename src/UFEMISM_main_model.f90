@@ -33,6 +33,7 @@ MODULE UFEMISM_main_model
   USE netcdf_module,                   ONLY: initialise_debug_fields, create_output_files, associate_debug_fields, &
                                              write_to_output_files, create_debug_file, reallocate_debug_fields
   USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, determine_timesteps_and_actions
+  use reallocate_mod,                  only: reallocate
 
   IMPLICIT NONE
 
@@ -189,30 +190,32 @@ CONTAINS
     CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
 
     ! Reallocate memory for reference geometries
-    CALL deallocate_shared( region%refgeo_init%wHi )
-    CALL deallocate_shared( region%refgeo_init%wHb )
-    CALL deallocate_shared( region%refgeo_init%wHs )
+    if (allocated(region%refgeo_init%Hi)) then
+      deallocate( region%refgeo_init%Hi )
+      deallocate( region%refgeo_init%Hb )
+      deallocate( region%refgeo_init%Hs )
 
-    CALL deallocate_shared( region%refgeo_PD%wHi   )
-    CALL deallocate_shared( region%refgeo_PD%wHb   )
-    CALL deallocate_shared( region%refgeo_PD%wHs   )
+      deallocate( region%refgeo_PD%Hi   )
+      deallocate( region%refgeo_PD%Hb   )
+      deallocate( region%refgeo_PD%Hs   )
 
-    CALL deallocate_shared( region%refgeo_GIAeq%wHi)
-    CALL deallocate_shared( region%refgeo_GIAeq%wHb)
-    CALL deallocate_shared( region%refgeo_GIAeq%wHs)
+      deallocate( region%refgeo_GIAeq%Hi)
+      deallocate( region%refgeo_GIAeq%Hb)
+      deallocate( region%refgeo_GIAeq%Hs)
+    end if
 
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hi , region%refgeo_init%wHi )
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
-
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
-
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
-    CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
-
+    allocate( region%refgeo_init%Hi (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_init%Hb (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_init%Hs (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+                                                                                             
+    allocate( region%refgeo_PD%Hi   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_PD%Hb   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_PD%Hs   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+                                                                                             
+    allocate( region%refgeo_GIAeq%Hi(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_GIAeq%Hb(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+    allocate( region%refgeo_GIAeq%Hs(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
+   
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
@@ -303,17 +306,17 @@ CONTAINS
     ! ================================================
 
     ! Allocate memory for reference data on the mesh
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hi , region%refgeo_init%wHi )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
-
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
-
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
+    allocate( region%refgeo_init%Hi (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_init%Hb (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_init%Hs (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+                                                                    
+    allocate( region%refgeo_PD%Hi   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_PD%Hb   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_PD%Hs   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+                                                                    
+    allocate( region%refgeo_GIAeq%Hi(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_GIAeq%Hb(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
+    allocate( region%refgeo_GIAeq%Hs(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
 
     ! Map data from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh)
@@ -444,97 +447,71 @@ CONTAINS
     nsx = 0
     nsy = 0
 
-    CALL allocate_shared_int_0D(                   grid%nx          , grid%wnx          )
-    CALL allocate_shared_int_0D(                   grid%ny          , grid%wny          )
-    CALL allocate_shared_dp_0D(                    grid%dx          , grid%wdx          )
-    CALL allocate_shared_dp_0D(                    grid%xmin        , grid%wxmin        )
-    CALL allocate_shared_dp_0D(                    grid%xmax        , grid%wxmax        )
-    CALL allocate_shared_dp_0D(                    grid%ymin        , grid%wymin        )
-    CALL allocate_shared_dp_0D(                    grid%ymax        , grid%wymax        )
+    ! Resolution
+    grid%dx = dx
 
-    IF (par%master) THEN
+    ! Determine the center of the model domain
+    xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
+    ymid = (region%mesh%ymin + region%mesh%ymax) / 2._dp
 
-      ! Resolution
-      grid%dx = dx
+    nsx = CEILING((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
+    nsy = CEILING((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
 
-      ! Determine the center of the model domain
-      xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
-      ymid = (region%mesh%ymin + region%mesh%ymax) / 2._dp
+    grid%nx = 2*nsx + 1
+    grid%ny = 2*nsy + 1
 
-      nsx = CEILING((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
-      nsy = CEILING((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
+    allocate( grid%x ( grid%nx ))
+    allocate( grid%y ( grid%ny ))
 
-      grid%nx = 2*nsx + 1
-      grid%ny = 2*nsy + 1
+    DO i = 1, grid%nx
+      grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
+    END DO
+    DO j = 1, grid%ny
+      grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
+    END DO
 
-    END IF ! IF (par%master) THEN
-    CALL sync
-
-    CALL allocate_shared_dp_1D( grid%nx, grid%x, grid%wx)
-    CALL allocate_shared_dp_1D( grid%ny, grid%y, grid%wy)
-
-    IF (par%master) THEN
-
-      DO i = 1, grid%nx
-        grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
-      END DO
-      DO j = 1, grid%ny
-        grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
-      END DO
-
-      grid%xmin = grid%x(1      )
-      grid%xmax = grid%x(grid%nx)
-      grid%ymin = grid%y(1      )
-      grid%ymax = grid%y(grid%ny)
-
-    END IF ! IF (par%master) THEN
-    CALL sync
+    grid%xmin = grid%x(1      )
+    grid%xmax = grid%x(grid%nx)
+    grid%ymin = grid%y(1      )
+    grid%ymax = grid%y(grid%ny)
 
     ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( grid%tol_dist, grid%wtol_dist)
-    IF (par%master) grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
-    CALL sync
+    grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
 
     ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                   grid%n           , grid%wn           )
-    IF (par%master) grid%n  = grid%nx * grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n        , grid%wij2n        )
-    CALL allocate_shared_int_2D( grid%n , 2      , grid%n2ij        , grid%wn2ij        )
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, grid%ny
-            n = n+1
-            grid%ij2n( i,j) = n
-            grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = grid%ny, 1, -1
-            n = n+1
-            grid%ij2n( i,j) = n
-            grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
+    grid%n  = grid%nx * grid%ny
+    allocate ( grid%ij2n( grid%nx, grid%ny ))
+    allocate ( grid%n2ij( grid%n , 2       ))
+    n = 0
+    DO i = 1, grid%nx
+      IF (MOD(i,2) == 1) THEN
+        DO j = 1, grid%ny
+          n = n+1
+          grid%ij2n( i,j) = n
+          grid%n2ij( n,:) = [i,j]
+        END DO
+      ELSE
+        DO j = grid%ny, 1, -1
+          n = n+1
+          grid%ij2n( i,j) = n
+          grid%n2ij( n,:) = [i,j]
+        END DO
+      END IF
+    END DO
 
     ! Assign range to each processor
     CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
     CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
 
     ! Calculate lat-lon coordinates
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lat, grid%wlat)
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lon, grid%wlon)
+    allocate( grid%lat(grid%nx, grid%ny))
+    allocate( grid%lon(grid%nx, grid%ny))
 
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
       CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
     END DO
     END DO
-    CALL sync
 
     ! Calculate mapping arrays between the mesh and the grid
     CALL calc_remapping_operator_mesh2grid( region%mesh, grid)

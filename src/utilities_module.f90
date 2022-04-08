@@ -995,36 +995,32 @@ CONTAINS
     REAL(dp), PARAMETER                           :: lake_Vostok_ymax = -220750.0
     INTEGER                                       :: il,iu,jl,ju
 
-    IF (par%master) THEN
 
-      nx = SIZE( Hi,1)
-      ny = SIZE( Hi,2)
+    nx = SIZE( Hi,1)
+    ny = SIZE( Hi,2)
 
-      il = 1
-      DO WHILE (x( il) < lake_Vostok_xmin)
-        il = il+1
-      END DO
-      iu = nx
-      DO WHILE (x( iu) > lake_Vostok_xmax)
-        iu = iu-1
-      END DO
-      jl = 1
-      DO WHILE (y( jl) < lake_Vostok_ymin)
-        jl = jl+1
-      END DO
-      ju = ny
-      DO WHILE (y( ju) > lake_Vostok_ymax)
-        ju = ju-1
-      END DO
+    il = 1
+    DO WHILE (x( il) < lake_Vostok_xmin)
+      il = il+1
+    END DO
+    iu = nx
+    DO WHILE (x( iu) > lake_Vostok_xmax)
+      iu = iu-1
+    END DO
+    jl = 1
+    DO WHILE (y( jl) < lake_Vostok_ymin)
+      jl = jl+1
+    END DO
+    ju = ny
+    DO WHILE (y( ju) > lake_Vostok_ymax)
+      ju = ju-1
+    END DO
 
-      DO i = il, iu
-      DO j = jl, ju
-        Hi( i,j) = Hs( i,j) - Hb( i,j)
-      END DO
-      END DO
-
-    END IF ! IF (par%master) THEN
-    CALL sync
+    DO i = il, iu
+    DO j = jl, ju
+      Hi( i,j) = Hs( i,j) - Hb( i,j)
+    END DO
+    END DO
 
   END SUBROUTINE remove_Lake_Vostok
 

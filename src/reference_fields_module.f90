@@ -30,7 +30,7 @@ MODULE reference_fields_module
   USE data_types_module,               ONLY: type_reference_geometry, type_grid, &
                                              type_model_region, type_mesh
   USE netcdf_module,                   ONLY: inquire_reference_geometry_file, read_reference_geometry_file
-  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, deallocate_remapping_operators_grid2mesh
+  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, map_grid2mesh_2D_partial, deallocate_remapping_operators_grid2mesh
   USE utilities_module,                ONLY: remove_Lake_Vostok, is_floating, surface_elevation
 
   IMPLICIT NONE
@@ -163,74 +163,54 @@ CONTAINS
 
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
-    CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
-    CALL allocate_shared_int_0D( refgeo%grid%ny, refgeo%grid%wny)
-    IF (par%master) THEN
-      refgeo%netcdf%filename = filename_refgeo
-      CALL inquire_reference_geometry_file( refgeo)
-    END IF
-    CALL sync
+    refgeo%netcdf%filename = filename_refgeo
+    CALL inquire_reference_geometry_file( refgeo)
 
     ! Assign range to each processor
     CALL partition_list( refgeo%grid%nx, par%i, par%n, refgeo%grid%i1, refgeo%grid%i2)
     CALL partition_list( refgeo%grid%ny, par%i, par%n, refgeo%grid%j1, refgeo%grid%j2)
 
     ! Allocate memory for raw data
-    CALL allocate_shared_dp_1D( refgeo%grid%nx,                 refgeo%grid%x,  refgeo%grid%wx )
-    CALL allocate_shared_dp_1D(                 refgeo%grid%ny, refgeo%grid%y,  refgeo%grid%wy )
-
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hi_grid, refgeo%wHi_grid)
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hb_grid, refgeo%wHb_grid)
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hs_grid, refgeo%wHs_grid)
+    allocate( refgeo%grid%x (  refgeo%grid%nx ))
+    allocate( refgeo%grid%y (  refgeo%grid%ny ))
+                             
+    allocate( refgeo%Hi_grid( refgeo%grid%nx, refgeo%grid%ny ))
+    allocate( refgeo%Hb_grid( refgeo%grid%nx, refgeo%grid%ny ))
+    allocate( refgeo%Hs_grid( refgeo%grid%nx, refgeo%grid%ny ))
 
     ! Read data from input file
-    IF (par%master) CALL read_reference_geometry_file( refgeo)
-    CALL sync
+    CALL read_reference_geometry_file( refgeo)
 
     ! Fill in secondary grid parameters
-    CALL allocate_shared_dp_0D( refgeo%grid%dx,   refgeo%grid%wdx  )
-    CALL allocate_shared_dp_0D( refgeo%grid%xmin, refgeo%grid%wxmin)
-    CALL allocate_shared_dp_0D( refgeo%grid%xmax, refgeo%grid%wxmax)
-    CALL allocate_shared_dp_0D( refgeo%grid%ymin, refgeo%grid%wymin)
-    CALL allocate_shared_dp_0D( refgeo%grid%ymax, refgeo%grid%wymax)
-    IF (par%master) THEN
-      refgeo%grid%dx = refgeo%grid%x( 2) - refgeo%grid%x( 1)
-      refgeo%grid%xmin = refgeo%grid%x( 1             )
-      refgeo%grid%xmax = refgeo%grid%x( refgeo%grid%nx)
-      refgeo%grid%ymin = refgeo%grid%y( 1             )
-      refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
-    END IF
-    CALL sync
+    refgeo%grid%dx = refgeo%grid%x( 2) - refgeo%grid%x( 1)
+    refgeo%grid%xmin = refgeo%grid%x( 1             )
+    refgeo%grid%xmax = refgeo%grid%x( refgeo%grid%nx)
+    refgeo%grid%ymin = refgeo%grid%y( 1             )
+    refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
 
     ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( refgeo%grid%tol_dist, refgeo%grid%wtol_dist)
-    IF (par%master) refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
+    refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
     
     ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                   refgeo%grid%n           , refgeo%grid%wn           )
-    IF (par%master) refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n        , refgeo%grid%wij2n        )
-    CALL allocate_shared_int_2D( refgeo%grid%n , 2      , refgeo%grid%n2ij        , refgeo%grid%wn2ij        )
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, refgeo%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, refgeo%grid%ny
-            n = n+1
-            refgeo%grid%ij2n( i,j) = n
-            refgeo%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = refgeo%grid%ny, 1, -1
-            n = n+1
-            refgeo%grid%ij2n( i,j) = n
-            refgeo%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
+    refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
+    allocate( refgeo%grid%ij2n (refgeo%grid%nx, refgeo%grid%ny))
+    allocate( refgeo%grid%n2ij (refgeo%grid%n , 2 ))
+    n = 0
+    DO i = 1, refgeo%grid%nx
+      IF (MOD(i,2) == 1) THEN
+        DO j = 1, refgeo%grid%ny
+          n = n+1
+          refgeo%grid%ij2n( i,j) = n
+          refgeo%grid%n2ij( n,:) = [i,j]
+        END DO
+      ELSE
+        DO j = refgeo%grid%ny, 1, -1
+          n = n+1
+          refgeo%grid%ij2n( i,j) = n
+          refgeo%grid%n2ij( n,:) = [i,j]
+        END DO
+      END IF
+    END DO
     
     ! Safety
     CALL check_for_NaN_dp_2D( refgeo%Hi_grid, 'refgeo%Hi_grid')
@@ -870,19 +850,19 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D(  grid%nx, grid%ny, refgeo%surf_curv  , refgeo%wsurf_curv  )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_land  , refgeo%wmask_land  )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ocean , refgeo%wmask_ocean )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_ice   , refgeo%wmask_ice   )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_sheet , refgeo%wmask_sheet )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_shelf , refgeo%wmask_shelf )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_margin, refgeo%wmask_margin)
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_gl    , refgeo%wmask_gl    )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_cf    , refgeo%wmask_cf    )
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, refgeo%mask_coast , refgeo%wmask_coast )
+    allocate( refgeo%surf_curv  ( grid%nx, grid%ny), source=0.0_dp)
+    allocate( refgeo%mask_land  ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_ocean ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_ice   ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_sheet ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_shelf ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_margin( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_gl    ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_cf    ( grid%nx, grid%ny), source=0)
+    allocate( refgeo%mask_coast ( grid%nx, grid%ny), source=0)
     
     ! Calculate surface curvature
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
       
       IF (i == 1 .OR. i == grid%nx .OR. j == 1 .OR. j == grid%ny) THEN
@@ -899,12 +879,11 @@ CONTAINS
       
     END DO
     END DO
-    CALL sync
     
     ! Fill in masks
     
     ! Land/ocean
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
       
       IF (is_floating( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)) THEN
@@ -915,10 +894,9 @@ CONTAINS
       
     END DO
     END DO
-    CALL sync
     
     ! Ice/sheet/shelf
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
       
       IF (refgeo%Hi_grid( i,j) > 0._dp) THEN
@@ -935,10 +913,9 @@ CONTAINS
       
     END DO
     END DO
-    CALL sync
     
     ! Transitions (margin, grounding line, calving front, coastline)
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
       
       ! Ice next to non-ice equals ice margin
@@ -987,7 +964,6 @@ CONTAINS
       
     END DO
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 10)
@@ -1630,13 +1606,12 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Map PD data to the mesh
-    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
-    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
+    CALL map_grid2mesh_2D_partial( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
+    CALL map_grid2mesh_2D_partial( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
     
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

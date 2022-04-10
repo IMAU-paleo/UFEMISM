@@ -252,7 +252,7 @@ MODULE data_types_module
     INTEGER                                 :: nV                            ! Number of vertices
     INTEGER                                 :: nTri                          ! Number of triangles
     INTEGER                                 :: perturb_dir                   ! Perturbation direction (0 = anticlockwise, 1 = clockwise)
-    REAL(dp)                                :: alpha_min                     ! Sharpest inner angle allowed by Rupperts algorithm
+    REAL(dp)                                :: alpha_min = 0                 ! Sharpest inner angle allowed by Rupperts algorithm (default because it was assumed by shared alloc)
     REAL(dp)                                :: dz_max_ice                    ! Maximum allowed vertical error in Rupperts algorithm over ice
     REAL(dp)                                :: res_max                       ! Maximum resolution anywhere
     REAL(dp)                                :: res_max_margin                ! Maximum resolution over the ice margin

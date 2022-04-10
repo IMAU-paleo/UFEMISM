@@ -3465,26 +3465,22 @@ CONTAINS
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
     
     ! Then the corners - average over all adjacent vertices
-    IF (par%master) THEN
-      DO vi = 1, 4
-        
-        sumd = 0._dp
-        sumw = 0._dp
-        
-        DO vvi = 1, mesh%nC( vi)
-          vj = mesh%C( vi,vvi)
-          sumd = sumd + d_a( vj)
-          sumw = sumw + 1._dp
-        END DO
-        
-        d_a( vi) = sumd / sumw
-        
-      END DO ! DO vi = mesh%vi1, mesh%vi2
-    END IF ! IF (par%master) THEN
-    CALL sync
+    DO vi = 1, 4
+      
+      sumd = 0._dp
+      sumw = 0._dp
+      
+      DO vvi = 1, mesh%nC( vi)
+        vj = mesh%C( vi,vvi)
+        sumd = sumd + d_a( vj)
+        sumw = sumw + 1._dp
+      END DO
+      
+      d_a( vi) = sumd / sumw
+      
+    END DO 
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -228,9 +228,9 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_2D'
-    INTEGER                                            :: n1,n2,n,i,j
-    REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    INTEGER                                            :: n1,n2,n,i,j, err
+    integer, dimension(1:par%n)                        :: counts, displs
+    REAL(dp), DIMENSION(:    ), allocatable            ::  d_grid_vec
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -241,22 +241,36 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
+    allocate( d_grid_vec(grid%n))
     
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_mesh2grid, d_mesh, d_grid_vec)
     
     ! Reshape data from vector form to grid form
     CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
+
+    !TODO this should be done with a neighbour list but this will work for now:
+    ! Gather sizes that will be sent
+    call mpi_allgather( n2-n1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the counts
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+      
+    ! Send everything 
+    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
+                       , d_grid_vec, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+
+    DO n = 1, grid%n
       i = grid%n2ij( n,1)
       j = grid%n2ij( n,2)
       d_grid( i,j) = d_grid_vec( n)
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    deallocate( d_grid_vec)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -636,8 +650,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_2D'
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_grid
-    INTEGER                                            :: wd_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable            :: d_grid
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -648,7 +661,7 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
+    allocate(d_grid(grid%nx, grid%ny))
     
     ! Map data to the grid
     CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
@@ -660,7 +673,7 @@ CONTAINS
     CALL map_grid2mesh_2D( grid, mesh, d_grid, d_mesh)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_grid)
+    deallocate( d_grid)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1104,8 +1117,8 @@ CONTAINS
   
     !IF (par%master) WRITE(0,*) 'calc_remapping_operator_mesh2grid - finding all grid cells overlapping with small/big triangles...'
     
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, overlaps_with_small_triangle, woverlaps_with_small_triangle)
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, containing_triangle         , wcontaining_triangle         )
+    allocate(overlaps_with_small_triangle( grid%nx, grid%ny ), source=0)
+    allocate(containing_triangle ( grid%nx, grid%ny), source=0)
     
     DO ti = mesh%ti1, mesh%ti2
         
@@ -1161,10 +1174,9 @@ CONTAINS
       END IF ! IF (mesh%TriA( ti) < 4._dp * grid%dx**2) THEN
       
     END DO
-    CALL sync
     
     ! Treat grid cells that possibly were not yet marked before
-    DO i = grid%i1, grid%i2
+    DO i = 1, grid%nx
     DO j = 1, grid%ny
     
       IF (containing_triangle( i,j) == 0 .AND. overlaps_with_small_triangle( i,j) == 0) THEN
@@ -1204,7 +1216,6 @@ CONTAINS
       
     END DO
     END DO
-    CALL sync
     
   ! == Integrate around all grid cells that overlap with small triangles
   ! ====================================================================
@@ -1344,8 +1355,8 @@ CONTAINS
     END DO ! DO n = n1, n2
     
     ! Clean up after yourself
-    CALL deallocate_shared( woverlaps_with_small_triangle)
-    CALL deallocate_shared( wcontaining_triangle         )
+    deallocate( overlaps_with_small_triangle)
+    deallocate( containing_triangle         )
     
     DEALLOCATE( single_row_grid%index_left )
     DEALLOCATE( single_row_grid%LI_xdy     )

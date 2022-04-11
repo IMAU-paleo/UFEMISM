@@ -748,78 +748,60 @@ CONTAINS
     f = f / SUM(f)
 
     ! Allocate temporary shared memory for the extended and smoothed data fields
-    CALL allocate_shared_dp_2D( grid%nx + 2*n, grid%ny + 2*n, d_ext,        wd_ext       )
-    CALL allocate_shared_dp_2D( grid%nx + 2*n, grid%ny + 2*n, d_ext_smooth, wd_ext_smooth)
+    allocate(d_ext(        grid%nx + 2*n, grid%ny + 2*n ))
+    allocate(d_ext_smooth( grid%nx + 2*n, grid%ny + 2*n ))
 
     ! Copy data to the extended array and fill in the margins
-    DO j = 1, grid%ny
-    DO i = grid%i1, grid%i2
-      d_ext( i+n,j+n) = d( i,j)
-    END DO
-    END DO
-    IF (par%master) THEN
-      ! West
-      d_ext( n+1:n+grid%nx, 1            ) = d( :      ,1      )
-      ! East
-      d_ext( n+1:n+grid%nx, grid%ny+2*n  ) = d( :      ,grid%ny)
-      ! South
-      d_ext( 1            , n+1:n+grid%ny) = d( 1      ,:      )
-      ! North
-      d_ext( grid%nx+2*n  , n+1:n+grid%ny) = d( grid%nx,:      )
-      ! Corners
-      d_ext( 1:n,                     1:n                    ) = d( 1      ,1      )
-      d_ext( 1:n,                     grid%ny+n+1:grid%ny+2*n) = d( 1      ,grid%ny)
-      d_ext( grid%nx+n+1:grid%nx+2*n, 1:n                    ) = d( grid%nx,1      )
-      d_ext( grid%nx+n+1:grid%nx+2*n, grid%ny+n+1:grid%ny+2*n) = d( grid%nx,grid%ny)
-    END IF
-    CALL sync
+    d(1+n:grid%nx+n,1+n:grid%ny+n) = d
+    ! West
+    d_ext( n+1:n+grid%nx, 1            ) = d( :      ,1      )
+    ! East
+    d_ext( n+1:n+grid%nx, grid%ny+2*n  ) = d( :      ,grid%ny)
+    ! South
+    d_ext( 1            , n+1:n+grid%ny) = d( 1      ,:      )
+    ! North
+    d_ext( grid%nx+2*n  , n+1:n+grid%ny) = d( grid%nx,:      )
+    ! Corners
+    d_ext( 1:n,                     1:n                    ) = d( 1      ,1      )
+    d_ext( 1:n,                     grid%ny+n+1:grid%ny+2*n) = d( 1      ,grid%ny)
+    d_ext( grid%nx+n+1:grid%nx+2*n, 1:n                    ) = d( grid%nx,1      )
+    d_ext( grid%nx+n+1:grid%nx+2*n, grid%ny+n+1:grid%ny+2*n) = d( grid%nx,grid%ny)
 
     ! Convolute extended data with the smoothing filter
-    d_ext_smooth( grid%i1+n:grid%i2+n,:) = 0._dp
-    CALL sync
+    d_ext_smooth( 1+n:grid%nx+n,:) = 0._dp
 
-    DO j = 1,       grid%ny
-    DO i = grid%i1, grid%i2
+    DO j = 1, grid%ny
+    DO i = 1, grid%nx
       DO ii = -n, n
         d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n+ii,j+n) * f(ii)
       END DO
     END DO
     END DO
-    CALL sync
 
-    d_ext( grid%i1+n:grid%i2+n,:) = d_ext_smooth( grid%i1+n:grid%i2+n,:)
-    CALL sync
+    d_ext( 1+n:grid%nx+n,:) = d_ext_smooth( 1+n:grid%nx+n,:)
 
-    DO j = grid%j1, grid%j2
+    DO j = 1, grid%ny
       d_ext(           1:          n,j) = d( 1      ,j)
       d_ext( grid%nx+n+1:grid%nx+2*n,j) = d( grid%nx,j)
     END DO
-    CALL sync
 
-    d_ext_smooth( grid%i1+n:grid%i2+n,:) = 0._dp
-    CALL sync
+    d_ext_smooth( 1+n:grid%nx+n,:) = 0._dp
 
-    DO j = grid%j1, grid%j2
-    DO i = 1,       grid%nx
+    DO j = 1, grid%ny
+    DO i = 1, grid%nx
       DO jj = -n, n
         d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n,j+n+jj) * f(jj)
       END DO
     END DO
     END DO
-    CALL sync
 
     ! Copy data back
-    DO j = 1, grid%ny
-    DO i = grid%i1, grid%i2
-      d( i,j) = d_ext_smooth( i+n, j+n)
-    END DO
-    END DO
-    CALL sync
+    d = d_ext_smooth( 1+n:grid%nx+n, 1+n:grid%ny+n)
 
     ! Clean up after yourself
     DEALLOCATE( f)
-    CALL deallocate_shared( wd_ext)
-    CALL deallocate_shared( wd_ext_smooth)
+    deallocate( d_ext)
+    deallocate( d_ext_smooth)
 
   END SUBROUTINE smooth_Gaussian_2D_grid
   SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r)
@@ -836,19 +818,18 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_3D_grid'
     INTEGER                                            :: k
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_2D
-    INTEGER                                            :: wd_2D
 
     ! Allocate temporary shared memory for the extended and smoothed data fields
-    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_2D, wd_2D)
+    allocate(d_2D( grid%nx, grid%ny))
 
     DO k = 1, SIZE( d,3)
-      d_2D( grid%i1:grid%i2,:) = d( grid%i1:grid%i2,:,k)
+      d_2D = d( :,:,k)
       CALL smooth_Gaussian_2D_grid( grid, d_2D, r)
-      d( grid%i1:grid%i2,:,k) = d_2D( grid%i1:grid%i2,:)
+      d( :,:,k) = d_2D
     END DO
 
     ! Clean up after yourself
-    CALL deallocate_shared( wd_2D)
+    deallocate( d_2D)
 
   END SUBROUTINE smooth_Gaussian_3D_grid
 !   SUBROUTINE smooth_Shepard_2D_grid( grid, d, r)

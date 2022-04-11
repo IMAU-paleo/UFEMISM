@@ -8,8 +8,7 @@ MODULE mesh_creation_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D, allocate_shared_int_2D, allocate_shared_dp_2D
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
 
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_reference_geometry
   USE mesh_help_functions_module,      ONLY: partition_domain_regular, find_POI_xy_coordinates, update_triangle_circumcenter, &

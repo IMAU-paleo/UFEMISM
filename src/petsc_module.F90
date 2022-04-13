@@ -8,12 +8,7 @@ MODULE petsc_module
   USE petscksp
   USE mpi
   use mpi_module,                      only: allgather_array
-  USE parallel_module,                 ONLY: par, sync, cerr, ierr, partition_list, &
-                                             allocate_shared_int_0D, allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D, allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D, allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, cerr, ierr, partition_list
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE data_types_module,               ONLY: type_sparse_matrix_CSR_dp
 

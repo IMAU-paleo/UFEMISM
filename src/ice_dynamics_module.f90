@@ -27,7 +27,7 @@ MODULE ice_dynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_model_region
   USE utilities_module,                ONLY: surface_elevation
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   ! USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
   ! USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &

@@ -1236,9 +1236,12 @@ CONTAINS
     ! Map and write data
 
     ! Geometry
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a,             netcdf%id_var_Hi,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a,             netcdf%id_var_Hb,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a,             netcdf%id_var_Hs,               netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_partial_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a, &
+                                                     netcdf%id_var_Hi, netcdf%ti, region%mesh%nV )
+    CALL map_and_write_to_grid_netcdf_partial_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a, &
+                                                     netcdf%id_var_Hb, netcdf%ti, region%mesh%nV )
+    CALL map_and_write_to_grid_netcdf_partial_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, &
+                                                     netcdf%id_var_Hs, netcdf%ti, region%mesh%nV )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,             netcdf%id_var_SL,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a,            netcdf%id_var_dHb,              netcdf%ti      )
 
@@ -2060,6 +2063,52 @@ CONTAINS
   END SUBROUTINE create_help_field_grid
 
   ! Map a model data field from the model mesh to the output grid, and write it to a NetCDF file.
+  SUBROUTINE map_and_write_to_grid_netcdf_partial_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti, original_size)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)        :: ncid
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
+    TYPE(type_grid),            INTENT(IN)        :: grid
+    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
+    INTEGER,                    INTENT(IN)        :: id_var
+    INTEGER,                    INTENT(IN)        :: ti
+    INTEGER,                    INTENT(IN)        :: original_size
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D'
+    REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
+    REAL(dp), DIMENSION(:    ), POINTER           :: xx
+    INTEGER                                       :: wd_grid, wxx, i1, i2, n
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    allocate( d_grid ( grid%nx, grid%ny ))
+
+    allocate(xx ( original_size ))
+      
+    call partition_list(original_size, par%i, par%n, i1,i2)
+    do n=i1,i2
+      xx(n) = d_mesh(n-i1+1)
+    end do
+
+    ! Map data from the model mesh to the square grid
+    CALL map_mesh2grid_2D( mesh, grid, xx, d_grid)
+
+    ! Write grid data to NetCDF
+    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
+
+    ! Deallocate shared memory
+    deallocate( d_grid)
+    deallocate( xx)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_and_write_to_grid_netcdf_partial_dp_2D
   SUBROUTINE map_and_write_to_grid_netcdf_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti)
 
     IMPLICIT NONE

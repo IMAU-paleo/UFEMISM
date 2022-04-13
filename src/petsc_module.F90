@@ -207,6 +207,8 @@ CONTAINS
       xx( i) = v(1)
     END DO
     CALL sync
+
+    call allgather_array(xx,istart+1,iend)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -457,8 +459,8 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( n, xx_1D, wxx_1D)
-    CALL allocate_shared_dp_1D( m, yy_1D, wyy_1D)
+    allocate(xx_1D( n ))
+    allocate(yy_1D( m ))
     
     CALL partition_list( n, par%i, par%n, i1, i2)
     CALL partition_list( m, par%i, par%n, j1, j2)
@@ -467,21 +469,19 @@ CONTAINS
     DO k = 1, SIZE( xx,2)
       
       ! Copy this column of x
-      xx_1D( i1:i2) = xx( i1:i2,k)
-      CALL sync
+      xx_1D = xx( :,k)
       
       ! Compute the matrix-vector product
       CALL multiply_PETSc_matrix_with_vector_1D( A, xx_1D, yy_1D)
       
       ! Copy the result back
-      yy( j1:j2,k) = yy_1D( j1:j2)
-      CALL sync
+      yy( :,k) = yy_1D
       
     END DO
     
     ! Clean up after yourself
-    CALL deallocate_shared( wxx_1D)
-    CALL deallocate_shared( wyy_1D)
+    deallocate( xx_1D)
+    deallocate( yy_1D)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -10,17 +10,7 @@ MODULE mesh_mapping_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr, MatDestroy
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
@@ -69,7 +59,7 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( grid%n, d_grid_vec, wd_grid_vec)
+    allocate(d_grid_vec( grid%n))
     
     ! Reshape data from vector form to grid form
     CALL partition_list( grid%n, par%i, par%n, n1, n2)
@@ -78,7 +68,6 @@ CONTAINS
       j = grid%n2ij( n,2)
       d_grid_vec( n) = d_grid( i,j)
     END DO
-    CALL sync
     
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
@@ -87,7 +76,7 @@ CONTAINS
     CALL apply_Neumann_BC_direct_a_2D( mesh, d_mesh)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    deallocate( d_grid_vec)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -152,6 +141,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_grid2mesh_2D_partial
+#if 0
   SUBROUTINE map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
     ! Map a 3-D data field from the grid to the mesh using 2nd-order conservative remapping.
     
@@ -204,6 +194,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_grid2mesh_3D
+#endif
   SUBROUTINE map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
     ! Map a 2-D data field from the mesh to the grid using 2nd-order conservative remapping.
     
@@ -281,22 +272,21 @@ CONTAINS
     nz = SIZE( d_grid,3)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%n, nz, d_grid_vec, wd_grid_vec)
+    allocate( d_grid_vec( grid%n, nz ))
     
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_mesh2grid, d_mesh, d_grid_vec)
     
     ! Reshape data from vector form to grid form
     CALL partition_list( grid%n, par%i, par%n, n1, n2)
-    DO n = n1, n2
+    DO n = 1, grid%n
       i = grid%n2ij( n,1)
       j = grid%n2ij( n,2)
       d_grid( i,j,:) = d_grid_vec( n,:)
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    deallocate( d_grid_vec)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -325,16 +315,16 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate shared memory for the mapping arrays
-    CALL allocate_shared_int_1D( mesh%nV, map%ilat1, map%wilat1)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilat2, map%wilat2)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilon1, map%wilon1)
-    CALL allocate_shared_int_1D( mesh%nV, map%ilon2, map%wilon2)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat1, map%wwlat1)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlat2, map%wwlat2)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon1, map%wwlon1)
-    CALL allocate_shared_dp_1D(  mesh%nV, map%wlon2, map%wwlon2)
+    allocate( map%ilat1( mesh%nV))
+    allocate( map%ilat2( mesh%nV))
+    allocate( map%ilon1( mesh%nV))
+    allocate( map%ilon2( mesh%nV))
+    allocate( map%wlat1( mesh%nV))
+    allocate( map%wlat2( mesh%nV))
+    allocate( map%wlon1( mesh%nV))
+    allocate( map%wlon2( mesh%nV))
 
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = 1, mesh%nV
       
       ! Find enveloping lat-lon indices
       il  = MAX(1, MIN( grid%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid%lon)) / (grid%lon(2) - grid%lon(1)))))
@@ -371,7 +361,6 @@ CONTAINS
       map%wlat2( vi) = wju
 
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -476,14 +465,14 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    CALL deallocate_shared( map%wilat1)
-    CALL deallocate_shared( map%wilat2)
-    CALL deallocate_shared( map%wilon1)
-    CALL deallocate_shared( map%wilon2)
-    CALL deallocate_shared( map%wwlat1)
-    CALL deallocate_shared( map%wwlat2)
-    CALL deallocate_shared( map%wwlon1)
-    CALL deallocate_shared( map%wwlon2)
+    deallocate( map%ilat1)
+    deallocate( map%ilat2)
+    deallocate( map%ilon1)
+    deallocate( map%ilon2)
+    deallocate( map%wlat1)
+    deallocate( map%wlat2)
+    deallocate( map%wlon1)
+    deallocate( map%wlon2)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -518,16 +507,13 @@ CONTAINS
     END IF
     
     ! Allocate temporary memory
-    CALL allocate_shared_dp_1D( mesh_src%nV, d_temp, w_temp)
+    allocate( d_temp( mesh_src%nV))
     
     ! Copy data to temporary memory
     d_temp( mesh_src%vi1: mesh_src%vi2) = d( mesh_src%vi1: mesh_src%vi2)
     
-    ! Deallocate memory
-    CALL deallocate_shared( w)
-    
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh_dst%nV, d, w)
+    allocate(d( mesh_dst%nV ))
     
     ! Map data field from source mesh to new mesh
     IF     (method == 'trilin') THEN
@@ -543,12 +529,13 @@ CONTAINS
     END IF
     
     ! Deallocate temporary memory
-    CALL deallocate_shared( w_temp)
+    deallocate( d_temp)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_2D
+#if 0
   SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, map, d, w, method)
     ! Remap a 3-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
     
@@ -609,6 +596,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_3D
+#endif
   
 ! == Smoothing operations on the mesh
   SUBROUTINE smooth_Gaussian_2D( mesh, grid, d_mesh, r)
@@ -656,6 +644,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE smooth_Gaussian_2D
+#if 0
   SUBROUTINE smooth_Gaussian_3D( mesh, grid, d_mesh, r)
     ! Use 2nd-order conservative remapping to map the 3-D data from the mesh
     ! to the square grid. Apply the smoothing on the gridded data, then map
@@ -704,7 +693,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE smooth_Gaussian_3D
-  
+#endif  
 ! == Calculating the remapping matrices
   SUBROUTINE calc_remapping_operator_grid2mesh( grid, mesh)
     ! Calculate the remapping operators from the square grid to the mesh using 2nd-order conservative remapping

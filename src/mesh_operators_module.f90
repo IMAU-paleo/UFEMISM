@@ -3439,7 +3439,7 @@ CONTAINS
     END IF
     
     ! First the borders - average over adjacent non-boundary vertices
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = 1, mesh%nV
     
       IF (mesh%edge_index( vi) == 0 .OR. &
           mesh%edge_index( vi) == 2 .OR. &

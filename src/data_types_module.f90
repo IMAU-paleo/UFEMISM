@@ -549,25 +549,12 @@ MODULE data_types_module
   TYPE type_remapping_latlon2mesh
     ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
     
-    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
-    INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: ilat1, ilat2, ilon1, ilon2
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: wlat1, wlat2, wlon1, wlon2
     
   END TYPE type_remapping_latlon2mesh
   
   TYPE type_latlongrid
-    ! A global lat-lon grid
-    
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat, lon
-    REAL(dp),                   POINTER     :: dlat, dlon
-    INTEGER :: wnlat, wnlon, wlat, wlon, wdlat, wdlon
-    
-    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
-    
-  END TYPE type_latlongrid
-
-  TYPE type_latlongrid_new
     ! A global lat-lon grid
     
     INTEGER                                 :: nlat, nlon
@@ -576,7 +563,7 @@ MODULE data_types_module
     
     INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
     
-  END TYPE type_latlongrid_new
+  END TYPE type_latlongrid
 
   TYPE type_SMB_model
     ! The different SMB components, calculated from the prescribed climate
@@ -763,7 +750,7 @@ MODULE data_types_module
     
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_latlongrid_new)               :: grid_ghf
+    TYPE(type_latlongrid)                   :: grid_ghf
     REAL(dp), DIMENSION(:,:  ), allocatable :: ghf_ghf
     
   END TYPE type_forcing_data

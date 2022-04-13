@@ -22,13 +22,12 @@ MODULE data_types_module
   TYPE type_sparse_matrix_CSR_dp
     ! Compressed Sparse Row (CSR) format matrix
     
-    INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
-    INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
-    INTEGER,                    POINTER     :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
-    INTEGER,  DIMENSION(:    ), POINTER     :: ptr
-    INTEGER,  DIMENSION(:    ), POINTER     :: index
-    REAL(dp), DIMENSION(:    ), POINTER     :: val
-    INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
+    INTEGER                                 :: m,n                         ! A = [m-by-n]
+    INTEGER                                 :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
+    INTEGER                                 :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
+    INTEGER,  DIMENSION(:    ), allocatable :: ptr
+    INTEGER,  DIMENSION(:    ), allocatable :: index
+    REAL(dp), DIMENSION(:    ), allocatable :: val
     
   END TYPE type_sparse_matrix_CSR_dp
   

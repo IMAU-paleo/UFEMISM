@@ -5,6 +5,7 @@ MODULE mesh_mapping_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
+  USE mpi_module,                      only: allgather_array
   USE petscksp
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -105,10 +106,9 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_2D'
-    INTEGER                                            :: n1,n2,n,i,j, err
+    INTEGER                                            :: n1,n2,n,i,j
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_grid_vec
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_mesh_vec
-    integer, dimension(1:par%n)                        :: counts, displs
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -134,19 +134,8 @@ CONTAINS
     ! Perform the mapping operation as a matrix multiplication
     CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh_vec)
 
-    !TODO this should be done with a neighbour list but this will work for now:
-    ! Gather sizes that will be sent
-    call mpi_allgather( mesh%vi2-mesh%vi1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
-
-    ! Calculate offsets through the counts
-    displs(1) = 0
-    do n=2,size(displs)
-      displs(n) = displs(n-1) + counts(n-1)
-    end do
-      
-    ! Send everything 
-    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
-                       , d_mesh_vec, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+    ! Make accessible on all cores
+    call allgather_array(d_mesh_vec)
     
     ! Fix border elements because the remapping often is inaccurate there
     CALL apply_Neumann_BC_direct_a_2D( mesh, d_mesh_vec)
@@ -249,19 +238,7 @@ CONTAINS
     ! Reshape data from vector form to grid form
     CALL partition_list( grid%n, par%i, par%n, n1, n2)
 
-    !TODO this should be done with a neighbour list but this will work for now:
-    ! Gather sizes that will be sent
-    call mpi_allgather( n2-n1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
-
-    ! Calculate offsets through the counts
-    displs(1) = 0
-    do n=2,size(displs)
-      displs(n) = displs(n-1) + counts(n-1)
-    end do
-      
-    ! Send everything 
-    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
-                       , d_grid_vec, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+    call allgather_array(d_grid_vec)
 
     DO n = 1, grid%n
       i = grid%n2ij( n,1)

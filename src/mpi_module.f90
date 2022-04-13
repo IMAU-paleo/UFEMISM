@@ -4,7 +4,8 @@
 ! A lot of thing are copied from the parallel_module.f90 file which uses shared memory paradigm
 module mpi_module
   use mpi_f08
-  use parallel_module, only: par ! port it here finally
+  use configuration_module, only: dp
+  use parallel_module, only: par, partition_list ! port it here finally
   
   implicit none
 
@@ -18,36 +19,66 @@ module mpi_module
 
 !  type(parallel_info), save :: par
 
+interface allgather_array
+  procedure :: allgather_array_dp
+  procedure :: allgather_array_int
+end interface
+
 contains
-  ! Initialise the MPI parallelisation
-  SUBROUTINE initialise_parallelisation
+  subroutine allgather_array_dp(array, i1_, i2_)
     implicit none
-    
-    ! MPI Initialisation
-    ! ==================
-    
-    ! Use MPI to create copies of the program on all the processors, so the model can run in parallel.
-    CALL MPI_INIT(ierr)
-    
-    ! Get rank of current process and total number of processes
-    CALL MPI_COMM_RANK(       MPI_COMM_WORLD, par%i, ierr)
-    CALL MPI_COMM_SIZE(       MPI_COMM_WORLD, par%n, ierr)
-    par%master = (par%i == 0)
-    
-    CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
+    real(dp),              dimension(:), intent(inout) :: array
+    integer, optional,                   intent(in)    :: i1_,i2_
 
-    ! Memory use tracker !TODO REMOVE!
-    IF (par%master) THEN
-      par%mem%n = 0
-      ALLOCATE( par%mem%h( 500000))
-    END IF
-  END SUBROUTINE initialise_parallelisation
+    integer                                            :: i1,i2, err, n
+    integer, dimension(1:par%n)                        :: counts, displs
 
-  ! shortcut for global barrier
-  SUBROUTINE SYNC
+    ! Gather sizes that will be sent
+    if (present(i1_) .and. present(i2_)) then
+      i1 = i1_
+      i2 = i2_
+    else
+      call partition_list(size(array), par%i, par%n, i1, i2)
+    endif
+    call mpi_allgather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the sizes
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+      
+    ! Send everything to master
+    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
+                       , array, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+  end subroutine allgather_array_dp
+  subroutine allgather_array_int(array,i1_,i2_)
     implicit none
-    call MPI_BARRIER(MPI_COMM_WORLD, ierr)    
-  END SUBROUTINE SYNC
+    integer,               dimension(:), intent(inout) :: array
+    integer, optional,                   intent(in)    :: i1_,i2_
+
+    integer                                            :: i1,i2, err, n
+    integer, dimension(1:par%n)                        :: counts, displs
+
+    ! Gather sizes that will be sent
+    if (present(i1_) .and. present(i2_)) then
+      i1 = i1_
+      i2 = i2_
+    else
+      call partition_list(size(array), par%i, par%n, i1, i2)
+    endif
+    call mpi_allgather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the sizes
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+      
+    ! Send everything to master
+    call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
+                       , array, counts, displs, MPI_INTEGER, MPI_COMM_WORLD, err)
+  end subroutine allgather_array_int
 
 
 end module

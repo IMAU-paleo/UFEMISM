@@ -35,6 +35,7 @@ all_programs += UFEMISM_program
 # List of object files
 UFEMISM_program_objects = \
         configuration_module.o \
+        mpi_module.o \
         reallocate.o \
         data_types_netcdf_module.o \
         data_types_module.o \

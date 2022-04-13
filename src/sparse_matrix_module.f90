@@ -3,7 +3,8 @@ MODULE sparse_matrix_module
   ! Operations on sparse matrices in CSR format
 
   ! Import basic functionality
-  USE mpi
+  USE mpi_f08
+  USE mpi_module,                      only: allgather_array
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
@@ -32,6 +33,8 @@ MODULE sparse_matrix_module
                                              adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid, type_sparse_matrix_CSR_dp
   USE petsc_module,                    ONLY: solve_matrix_equation_CSR_PETSc
+  use reallocate_mod,                  only: reallocate
+
 
 CONTAINS
   
@@ -72,8 +75,8 @@ CONTAINS
     
     IF (choice_matrix_solver == 'SOR') THEN
       ! Use the old simple SOR solver
-      
-      CALL solve_matrix_equation_CSR_SOR( AA, b, x, SOR_nit, SOR_tol, SOR_omega, colour_v1, colour_v2, colour_vi)
+     call crash("404 SOR not found" )
+      !CALL solve_matrix_equation_CSR_SOR( AA, b, x, SOR_nit, SOR_tol, SOR_omega, colour_v1, colour_v2, colour_vi)
       
     ELSEIF (choice_matrix_solver == 'PETSc') THEN
       ! Use the PETSc solver (much preferred, this is way faster and more stable!)
@@ -88,6 +91,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR
+#if 0
   SUBROUTINE solve_matrix_equation_CSR_SOR( AA, b, x, nit, tol, omega, colour_v1, colour_v2, colour_vi)
     ! Solve the matrix equation Ax = b using successive over-relaxation (SOR)
     ! The matrix A is provided in Compressed Sparse Row (CSR) format
@@ -333,7 +337,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_matrix_equation_CSR_SOR_coloured
-  
 ! == Mathematical operations on sparse matrices in CSR format
 
   ! Multiplication: C = A*B
@@ -995,6 +998,7 @@ CONTAINS
     
   END SUBROUTINE transpose_matrix_CSR
   
+#endif
   ! Sort the column entries in a CSR matrix in ascending order
   SUBROUTINE sort_columns_in_CSR( AA)
     ! Sort the columns in each row of CSR-formatted matrix A in ascending order
@@ -1015,7 +1019,7 @@ CONTAINS
     ! Partition rows over the processors
     CALL partition_list( AA%m, par%i, par%n, i1, i2)
     
-    DO i = i1, i2
+    DO i = 1, AA%m !TODO if done before allgather, can be partitioned
       
       k1 = AA%ptr( i)
       k2 = AA%ptr( i+1) - 1
@@ -1040,12 +1044,12 @@ CONTAINS
       END DO ! DO k = 1, nnz_row
       
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE sort_columns_in_CSR
+#if 0
   
 ! == Basic memory operations on sparse matrices in CSR format
   SUBROUTINE allocate_matrix_CSR_shared( AA, m, n, nnz_max)
@@ -1127,6 +1131,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE initialise_matrix_CSR_from_nz_template
+#endif
   SUBROUTINE deallocate_matrix_CSR( AA)
     ! Deallocate the memory used by the CSR-format sparse m-by-n matrix A
       
@@ -1141,21 +1146,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    CALL deallocate_shared( AA%wm)
-    CALL deallocate_shared( AA%wn)
-    CALL deallocate_shared( AA%wnnz_max)
-    CALL deallocate_shared( AA%wnnz)
-    CALL deallocate_shared( AA%wptr)
-    CALL deallocate_shared( AA%windex)
-    CALL deallocate_shared( AA%wval)
-    
-    NULLIFY( AA%m      )
-    NULLIFY( AA%n      )
-    NULLIFY( AA%nnz_max)
-    NULLIFY( AA%nnz    )
-    NULLIFY( AA%ptr    )
-    NULLIFY( AA%index  )
-    NULLIFY( AA%val    )
+    deallocate( AA%ptr)
+    deallocate( AA%index)
+    deallocate( AA%val)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1180,20 +1173,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Matrix dimensions should be the same everywhere, so use the shared version for that.
-    CALL allocate_shared_int_0D( AA%m, AA%wm)
-    CALL allocate_shared_int_0D( AA%n, AA%wn)
-    
-    IF (par%master) THEN
-      AA%m       = m
-      AA%n       = n
-    END IF
-    CALL sync
+    AA%m       = m
+    AA%n       = n
 
     ! Allocate local memory
-    ALLOCATE( AA%nnz_max)
-    ALLOCATE( AA%nnz    )
-    
     AA%nnz_max = nnz_max_proc
     AA%nnz     = 0
     
@@ -1257,32 +1240,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Allocate temporary memory
-    ALLOCATE( index_temp( AA%nnz))
-    ALLOCATE( val_temp(   AA%nnz))
-    
-    ! Copy data to temporary memory
-    index_temp = AA%index( 1:AA%nnz)
-    val_temp   = AA%val(   1:AA%nnz)
-    
-    ! Deallocate memory
-    DEALLOCATE( AA%index)
-    DEALLOCATE( AA%val  )
-    
-    ! Allocate new, extended memory
     AA%nnz_max = AA%nnz_max + nnz_extra
-    ALLOCATE( AA%index( AA%nnz_max))
-    ALLOCATE( AA%val(   AA%nnz_max))
-    AA%index = 0
-    AA%val   = 0._dp
-    
-    ! Copy data back from temporary memory
-    AA%index( 1:AA%nnz) = index_temp
-    AA%val(   1:AA%nnz) = val_temp
-    
-    ! Deallocate temporary memory
-    DEALLOCATE( index_temp)
-    DEALLOCATE( val_temp  )
+
+    call reallocate(AA%index,AA%nnz_max)
+    call reallocate(AA%val  ,AA%nnz_max)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1305,13 +1266,14 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'finalise_matrix_CSR_dist'
     INTEGER                                            :: status(MPI_STATUS_SIZE)
     INTEGER                                            :: nnz_tot
-    INTEGER,  DIMENSION(:    ), POINTER                :: ptr, index
-    REAL(dp), DIMENSION(:    ), POINTER                :: val
-    INTEGER                                            :: wptr, windex, wval
-    INTEGER                                            :: p, k1, k2, k_loc, k_sum
+    INTEGER,  DIMENSION(:    ), allocatable            :: ptr, index
+    REAL(dp), DIMENSION(:    ), allocatable            :: val
+    INTEGER                                            :: p, k1, k2, k_loc, k_sum, err, n
     INTEGER(KIND=MPI_ADDRESS_KIND)                     :: windowsize
     INTEGER                                            :: disp_unit
     TYPE(C_PTR)                                        :: baseptr
+    integer, dimension(1:par%n)                        :: counts, displs
+
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1320,73 +1282,40 @@ CONTAINS
     CALL MPI_ALLREDUCE( AA%nnz, nnz_tot, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
     
     ! Allocate shared memory
-    CALL allocate_shared_int_1D( AA%m+1,  ptr,   wptr  )
-    CALL allocate_shared_int_1D( nnz_tot, index, windex)
-    CALL allocate_shared_dp_1D(  nnz_tot, val,   wval  )
-    
+    allocate( ptr  ( AA%m+1))
+    allocate( index(nnz_tot))
+    allocate( val(  nnz_tot))
+
     ! Determine range of indices for each process
-    k1 = 0
-    k2 = 0
-    IF (par%master) THEN
-      k1    = 1
-      k2    = AA%nnz
-      k_sum = AA%nnz
-    END IF
-    DO p = 1, par%n-1
-      IF (par%master) THEN
-        CALL MPI_SEND( k_sum, 1, MPI_INTEGER, p, 0, MPI_COMM_WORLD, ierr)
-        CALL MPI_RECV( k_loc, 1, MPI_INTEGER, p, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
-        k_sum = k_sum + k_loc
-      ELSEIF (p == par%i) THEN
-        CALL MPI_RECV( k_sum, 1, MPI_INTEGER, 0, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
-        CALL MPI_SEND( AA%nnz, 1, MPI_INTEGER, 0, 0, MPI_COMM_WORLD, ierr)
-        k1 = k_sum + 1
-        k2 = k_sum + AA%nnz
-        AA%ptr = AA%ptr + k_sum
-      END IF
-      CALL sync
-    END DO
+    call mpi_allgather( AA%nnz, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
+    ! Calculate offsets through the sizes
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+
+    ! Copy data to buffers
+    ptr(   i1:i2) = AA%ptr(   i1:i2  ) + displs( par%i+1 )
+    call allgather_array(ptr,i1,i2)
+    ptr( AA%m+1) = nnz_tot+1
     
-    ! Copy data from process-local memory to shared memory
-    ptr(   i1:i2) = AA%ptr(   i1:i2  )
-    IF (par%master) ptr( AA%m+1) = nnz_tot+1
-    index( k1:k2) = AA%index( 1:AA%nnz)
-    val(   k1:k2) = AA%val(   1:AA%nnz)
-    CALL sync
-    
-    ! Deallocate the process-local memory
-    DEALLOCATE( AA%nnz_max)
-    DEALLOCATE( AA%nnz    )
-    DEALLOCATE( AA%ptr    )
-    DEALLOCATE( AA%index  )
-    DEALLOCATE( AA%val    )
-    
-    ! Allocate shared memory for the sparse matrix size
-    CALL allocate_shared_int_0D( AA%nnz_max, AA%wnnz_max)
-    CALL allocate_shared_int_0D( AA%nnz    , AA%wnnz    )
-    
-    IF (par%master) THEN
-      AA%nnz_max = nnz_tot
-      AA%nnz     = nnz_tot
-    END IF
-    CALL sync
-    
-    ! Associate the pointers in A with the newly allocated shared memory
-    
-    ! ptr
-    AA%wptr = wptr
-    CALL MPI_WIN_SHARED_QUERY( AA%wptr,   0, windowsize, disp_unit, baseptr, ierr)
-    CALL C_F_POINTER( baseptr, AA%ptr,   [AA%m+1])
-    ! index
-    AA%windex = windex
-    CALL MPI_WIN_SHARED_QUERY( AA%windex, 0, windowsize, disp_unit, baseptr, ierr)
-    CALL C_F_POINTER( baseptr, AA%index, [AA%nnz])
-    ! val
-    AA%wval = wval
-    CALL MPI_WIN_SHARED_QUERY( AA%wval,   0, windowsize, disp_unit, baseptr, ierr)
-    CALL C_F_POINTER( baseptr, AA%val,   [AA%nnz])
+
+    ! Send everything to all
+    call mpi_allgatherv( AA%index, AA%nnz, MPI_INTEGER &
+                       , index, counts, displs, MPI_INTEGER, MPI_COMM_WORLD, err)
+
+    call mpi_allgatherv( AA%val, AA%nnz, MPI_REAL8 &
+                       , val, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+
+    call move_alloc(val, AA%val) 
+    call move_alloc(index, AA%index) 
+    call move_alloc(ptr, AA%ptr) 
+
+    AA%nnz_max = nnz_tot
+    AA%nnz     = nnz_tot
     
     ! Sort the column entries in the assembled matrix
+    !TODO if called before allgather, can be distributed
     CALL sort_columns_in_CSR( AA)
     
     ! Finalise routine path
@@ -1394,6 +1323,7 @@ CONTAINS
   
   END SUBROUTINE finalise_matrix_CSR_dist
   
+#if 0
 ! == Safety checks
   SUBROUTINE check_CSR( AA, matname)
     ! Check a CSR matrix for consistency
@@ -1578,4 +1508,5 @@ CONTAINS
     
   END SUBROUTINE are_identical_matrices_CSR
 
+#endif
 END MODULE sparse_matrix_module

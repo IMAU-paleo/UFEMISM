@@ -7,6 +7,7 @@ MODULE petsc_module
 #include <petsc/finclude/petscksp.h>
   USE petscksp
   USE mpi
+  use mpi_module,                      only: allgather_array
   USE parallel_module,                 ONLY: par, sync, cerr, ierr, partition_list, &
                                              allocate_shared_int_0D, allocate_shared_dp_0D, &
                                              allocate_shared_int_1D, allocate_shared_dp_1D, &
@@ -226,7 +227,7 @@ CONTAINS
     INTEGER                                            :: ncols, nnz
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals
-    INTEGER,  DIMENSION(:    ), POINTER                ::  nnz_rows
+    INTEGER,  DIMENSION(:    ), allocatable            ::  nnz_rows
     INTEGER                                            :: wnnz_rows
     INTEGER                                            :: k1, k2
     
@@ -237,7 +238,7 @@ CONTAINS
     CALL MatGetSize( A, m, n, perr)
     
     ! Find number of non-zeros per row
-    CALL allocate_shared_int_1D( m, nnz_rows, wnnz_rows)
+    allocate( nnz_rows( m))
     
     CALL MatGetOwnershipRange( A, istart, iend, perr)
     
@@ -249,37 +250,26 @@ CONTAINS
       nnz_rows( i) = ncols
       CALL MatRestoreRow( A, i-1, ncols, cols, vals, perr)
     END DO
-    CALL sync
-    
+   
+    call allgather_array(nnz_rows) 
     ! Find the number of non-zeros
     nnz = SUM( nnz_rows)
     
     ! Allocate memory for the CSR matrix
-    CALL allocate_shared_int_0D( A_CSR%m      , A_CSR%wm      )
-    CALL allocate_shared_int_0D( A_CSR%n      , A_CSR%wn      )
-    CALL allocate_shared_int_0D( A_CSR%nnz_max, A_CSR%wnnz_max)
-    CALL allocate_shared_int_0D( A_CSR%nnz    , A_CSR%wnnz    )
+    A_CSR%m       = m
+    A_CSR%n       = n
+    A_CSR%nnz_max = nnz
+    A_CSR%nnz     = nnz
     
-    IF (par%master) THEN
-      A_CSR%m       = m
-      A_CSR%n       = n
-      A_CSR%nnz_max = nnz
-      A_CSR%nnz     = nnz
-    END IF
-    CALL sync
-    
-    CALL allocate_shared_int_1D( A_CSR%m+1, A_CSR%ptr  , A_CSR%wptr  )
-    CALL allocate_shared_int_1D( A_CSR%nnz, A_CSR%index, A_CSR%windex)
-    CALL allocate_shared_dp_1D(  A_CSR%nnz, A_CSR%val  , A_CSR%wval  )
+    allocate( A_CSR%ptr( A_CSR%m+1 ) )
+    allocate( A_CSR%index (A_CSR%nnz))
+    allocate( A_CSR%val(   A_CSR%nnz))
     
     ! Fill in the ptr array
-    IF (par%master) THEN
-      A_CSR%ptr( 1) = 1
-      DO i = 2, m+1
-        A_CSR%ptr( i) = A_CSR%ptr( i-1) + nnz_rows( i-1)
-      END DO
-    END IF
-    CALL sync
+    A_CSR%ptr( 1) = 1
+    DO i = 2, m+1
+      A_CSR%ptr( i) = A_CSR%ptr( i-1) + nnz_rows( i-1)
+    END DO
     
     ! Copy data from the PETSc matrix to the CSR arrays
     DO i = istart+1, iend ! +1 because PETSc indexes from 0
@@ -290,10 +280,13 @@ CONTAINS
       A_CSR%val(   k1:k2) = vals( 1:ncols)
       CALL MatRestoreRow( A, i-1, ncols, cols, vals, perr)
     END DO
-    CALL sync
     
+    !Make matrix available on all cores
+    call allgather_array(A_CSR%index,A_CSR%ptr(istart+1),A_CSR%ptr(iend+1) -1) 
+    call allgather_array(A_CSR%val  ,A_CSR%ptr(istart+1),A_CSR%ptr(iend+1) -1) 
+
     ! Clean up after yourself
-    CALL deallocate_shared( wnnz_rows)
+    deallocate( nnz_rows)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
@@ -368,7 +361,6 @@ CONTAINS
     END DO
     ! Last row
     ptr_proc( nrows_proc) = A_CSR%ptr( i2+1) - A_CSR%ptr( i1)
-    CALL sync
     
     ! Create PETSc matrix
     CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, PETSC_DECIDE, PETSC_DETERMINE, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)

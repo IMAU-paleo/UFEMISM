@@ -480,7 +480,7 @@ CONTAINS
   END SUBROUTINE deallocate_remapping_arrays_glob_mesh
   
 ! == Medium-level remapping routines, where the memory containing the data is reallocated
-  SUBROUTINE remap_field_dp_2D( mesh_src, mesh_dst, map, d, w, method)
+  SUBROUTINE remap_field_dp_2D( mesh_src, mesh_dst, map, d, method)
     ! Remap a 2-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
     
     IMPLICIT NONE
@@ -489,31 +489,27 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map          ! Remapping matrices
-    REAL(dp), DIMENSION(:    ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
-    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    REAL(dp), DIMENSION(:), allocatable, INTENT(INOUT) :: d            ! Pointer to the data
     CHARACTER(LEN=*),                    INTENT(IN)    :: method
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_2D'
-    REAL(dp), DIMENSION(:    ), POINTER                :: d_temp
+    REAL(dp), DIMENSION(:    ), allocatable            :: d_temp
     INTEGER                                            :: w_temp
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d,1) /= mesh_src%nV) THEN
+    IF (SIZE( d,1) /= mesh_src%vi2-mesh_src%vi2+1) THEN
       CALL crash('data field is the wrong size!')
     END IF
     
-    ! Allocate temporary memory
-    allocate( d_temp( mesh_src%nV))
+    ! move to temporary memory
+    call move_alloc(d, d_temp)
     
-    ! Copy data to temporary memory
-    d_temp( mesh_src%vi1: mesh_src%vi2) = d( mesh_src%vi1: mesh_src%vi2)
-    
-    ! Allocate shared memory
-    allocate(d( mesh_dst%nV ))
+    ! Allocate fresh memory
+    allocate(d( mesh_dst%vi1:mesh_dst%vi2 ))
     
     ! Map data field from source mesh to new mesh
     IF     (method == 'trilin') THEN

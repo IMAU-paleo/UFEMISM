@@ -8,22 +8,13 @@ MODULE basal_conditions_and_sliding_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   ! USE utilities_module,                ONLY: check_for_NaN_dp_1D
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh
   ! USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
+  use reallocate_mod,                  only: reallocate_bounds
 
   IMPLICIT NONE
     
@@ -143,13 +134,13 @@ CONTAINS
     
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
-      CALL allocate_shared_dp_1D( mesh%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%Neff_a               , ice%wNeff_a               )
+      allocate( ice%pore_water_pressure_a(mesh%vi1:mesh%vi2))
+      allocate( ice%overburden_pressure_a(mesh%vi1:mesh%vi2))
+      allocate( ice%Neff_a               (mesh%vi1:mesh%vi2))
     ELSEIF (C%choice_basal_hydrology == 'Martin2011') THEN
-      CALL allocate_shared_dp_1D( mesh%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%Neff_a               , ice%wNeff_a               )
+      allocate( ice%pore_water_pressure_a(mesh%vi1:mesh%vi2))
+      allocate( ice%overburden_pressure_a(mesh%vi1:mesh%vi2))
+      allocate( ice%Neff_a               (mesh%vi1:mesh%vi2))
     ELSE
       CALL crash('unknown choice_basal_hydrology "' // TRIM( C%choice_basal_hydrology) // '"!')
     END IF
@@ -324,24 +315,24 @@ CONTAINS
       ! Sliding laws for some idealised experiments
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      allocate( ice%beta_sq_a (mesh%vi1:mesh%vi2) )
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
+      allocate( ice%phi_fric_a (mesh%vi1:mesh%vi2))
+      allocate( ice%tauc_a(mesh%vi1:mesh%vi2))
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      allocate( ice%alpha_sq_a (mesh%vi1:mesh%vi2))
+      allocate( ice%beta_sq_a  (mesh%vi1:mesh%vi2))
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      allocate( ice%alpha_sq_a (mesh%vi1:mesh%vi2))
+      allocate( ice%beta_sq_a  (mesh%vi1:mesh%vi2))
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
+      allocate( ice%phi_fric_a (mesh%vi1:mesh%vi2))
+      allocate( ice%tauc_a(mesh%vi1:mesh%vi2))
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       IF (par%master) WRITE(0,*) 'initialise_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
@@ -1401,13 +1392,13 @@ CONTAINS
     
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
+      CALL reallocate_bounds( ice%pore_water_pressure_a, mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%overburden_pressure_a, mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%Neff_a               , mesh_new%vi1, mesh_new%vi2 )
     ELSEIF (C%choice_basal_hydrology == 'Martin2011') THEN
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%pore_water_pressure_a, ice%wpore_water_pressure_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%overburden_pressure_a, ice%woverburden_pressure_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%Neff_a               , ice%wNeff_a               )
+      CALL reallocate_bounds( ice%pore_water_pressure_a, mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%overburden_pressure_a, mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%Neff_a               , mesh_new%vi1, mesh_new%vi2 )
     ELSE
       CALL crash('unknown choice_basal_hydrology "' // TRIM( C%choice_basal_hydrology) // '"!')
     END IF
@@ -1446,24 +1437,24 @@ CONTAINS
       ! Sliding laws for some idealised experiments
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      CALL reallocate_bounds( ice%beta_sq_a , mesh_new%vi1, mesh_new%vi2 )
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      CALL reallocate_bounds( ice%phi_fric_a , mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%tauc_a , mesh_new%vi1, mesh_new%vi2 )
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      CALL reallocate_bounds( ice%alpha_sq_a , mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%beta_sq_a , mesh_new%vi1, mesh_new%vi2 )
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      CALL reallocate_bounds( ice%alpha_sq_a , mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%beta_sq_a , mesh_new%vi1, mesh_new%vi2 )
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      CALL reallocate_bounds( ice%phi_fric_a , mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( ice%tauc_a , mesh_new%vi1, mesh_new%vi2 )
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF

@@ -27,6 +27,7 @@ MODULE ice_dynamics_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_reference_geometry, &
                                              type_remapping_mesh_mesh, type_model_region
   USE utilities_module,                ONLY: surface_elevation
+  use reallocate_mod,                  only: reallocate_bounds
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
   ! USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
@@ -796,107 +797,100 @@ CONTAINS
     ! ===============
     
     ! Basic data - ice thickness, bedrock height, surface height, mask, 3D ice velocities and temperature
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_a                  , ice%wHi_a                 )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hb_a                  , ice%wHb_a                 )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hs_a                  , ice%wHs_a                 )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%SL_a                  , ice%wSL_a                 )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%TAF_a                 , ice%wTAF_a                )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Ti_a                  , ice%wTi_a                 )
-
-    ! Ice velocities
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%u_3D_a                , ice%wu_3D_a               )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%v_3D_a                , ice%wv_3D_a               )
-    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%u_3D_b                , ice%wu_3D_b               )
-    CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%v_3D_b                , ice%wv_3D_b               )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%w_3D_a                , ice%ww_3D_a               )
-    
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%u_vav_a               , ice%wu_vav_a              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_vav_a               , ice%wv_vav_a              )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_vav_b               , ice%wu_vav_b              )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_vav_b               , ice%wv_vav_b              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_vav_a            , ice%wuabs_vav_a           )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_vav_b            , ice%wuabs_vav_b           )
-    
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%u_surf_a              , ice%wu_surf_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_surf_a              , ice%wv_surf_a             )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_surf_b              , ice%wu_surf_b             )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_surf_b              , ice%wv_surf_b             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_surf_a           , ice%wuabs_surf_a          )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_surf_b           , ice%wuabs_surf_b          )
-    
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%u_base_a              , ice%wu_base_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_base_a              , ice%wv_base_a             )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_b              , ice%wu_base_b             )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_b              , ice%wv_base_b             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_base_a           , ice%wuabs_base_a          )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_base_b           , ice%wuabs_base_b          )
-    
-    ! Different masks
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_land_a           , ice%wmask_land_a          )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_ocean_a          , ice%wmask_ocean_a         )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_lake_a           , ice%wmask_lake_a          )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_ice_a            , ice%wmask_ice_a           )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_sheet_a          , ice%wmask_sheet_a         )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_shelf_a          , ice%wmask_shelf_a         )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_coast_a          , ice%wmask_coast_a         )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_margin_a         , ice%wmask_margin_a        )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_gl_a             , ice%wmask_gl_a            )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_cf_a             , ice%wmask_cf_a            )
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_a                , ice%wmask_a               )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grnd_a              , ice%wf_grnd_a             )
-    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grnd_b              , ice%wf_grnd_b             )
-    
-    ! Ice physical properties
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%A_flow_vav_a          , ice%wA_flow_vav_a         )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Ti_pmp_a              , ice%wTi_pmp_a             )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Cpi_a                 , ice%wCpi_a                )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%Ki_a                  , ice%wKi_a                 )
-    
-    ! Zeta derivatives
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dt_a            , ice%wdzeta_dt_a           )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
+    allocate(  ice%Hi_a                (mesh%vi1:mesh%vi2               ))   
+    allocate(  ice%Hb_a                (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Hs_a                (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%SL_a                (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%TAF_a               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Ti_a                (mesh%vi1:mesh%vi2 , C%nz        ))
+                                                                        
+    ! Ice velocities                                                    
+    allocate(  ice%u_3D_a              (mesh%vi1:mesh%vi2 , C%nz        )) 
+    allocate(  ice%v_3D_a              (mesh%vi1:mesh%vi2 , C%nz        )) 
+    allocate(  ice%u_3D_b              (mesh%ti1:mesh%ti2 , C%nz        )) 
+    allocate(  ice%v_3D_b              (mesh%ti1:mesh%ti2 , C%nz        )) 
+    allocate(  ice%w_3D_a              (mesh%vi1:mesh%vi2 , C%nz        )) 
+                                       
+    allocate(  ice%u_vav_a             (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%v_vav_a             (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%u_vav_b             (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%v_vav_b             (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%uabs_vav_a          (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%uabs_vav_b          (mesh%ti1:mesh%ti2               )) 
+                                                                        
+    allocate(  ice%u_surf_a            (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%v_surf_a            (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%u_surf_b            (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%v_surf_b            (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%uabs_surf_a         (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%uabs_surf_b         (mesh%ti1:mesh%ti2               )) 
+                                                                        
+    allocate(  ice%u_base_a            (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%v_base_a            (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%u_base_b            (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%v_base_b            (mesh%ti1:mesh%ti2               )) 
+    allocate(  ice%uabs_base_a         (mesh%vi1:mesh%vi2               )) 
+    allocate(  ice%uabs_base_b         (mesh%ti1:mesh%ti2               )) 
+                                                                        
+    ! Different masks                                                   
+    allocate(  ice%mask_land_a         (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_ocean_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_lake_a         (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_ice_a          (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_sheet_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_shelf_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_coast_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_margin_a       (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_gl_a           (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_cf_a           (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_a              (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%f_grnd_a            (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%f_grnd_b            (mesh%ti1:mesh%ti2               ))
+                                                                        
+    ! Ice physical properties                                           
+    allocate(  ice%A_flow_3D_a         (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%A_flow_vav_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Ti_pmp_a            (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%Cpi_a               (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%Ki_a                (mesh%vi1:mesh%vi2 , C%nz        ))
+                                                                        
+    ! Zeta derivatives                                                  
+    allocate(  ice%dzeta_dt_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%dzeta_dx_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%dzeta_dy_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%dzeta_dz_a          (mesh%vi1:mesh%vi2               ))
     
     ! Ice dynamics - ice thickness calculation
-    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_in                , ice%wdVi_in               )
-    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_out               , ice%wdVi_out              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHi_dt_a              , ice%wdHi_dt_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
+    allocate(  ice%dVi_in              (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
+    allocate(  ice%dVi_out             (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
+    allocate(  ice%dHi_dt_a            (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Hi_tplusdt_a        (mesh%vi1:mesh%vi2               ))
     
     ! Ice dynamics - predictor/corrector ice thickness update
-    CALL allocate_shared_dp_0D(                           ice%pc_zeta               , ice%wpc_zeta              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_tau                , ice%wpc_tau               )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_fcb                , ice%wpc_fcb               )
-    CALL allocate_shared_dp_0D(                           ice%pc_eta                , ice%wpc_eta               )
-    CALL allocate_shared_dp_0D(                           ice%pc_eta_prev           , ice%wpc_eta_prev          )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta1              , ice%wpc_beta1             )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta2              , ice%wpc_beta2             )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta3              , ice%wpc_beta3             )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta4              , ice%wpc_beta4             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_f1                 , ice%wpc_f1                )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_f2                 , ice%wpc_f2                )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_f3                 , ice%wpc_f3                )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_f4                 , ice%wpc_f4                )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_old                , ice%wHi_old               )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_pred               , ice%wHi_pred              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_corr               , ice%wHi_corr              )
+    allocate(  ice%pc_tau              (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%pc_fcb              (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%pc_f1               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%pc_f2               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%pc_f3               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%pc_f4               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Hi_old              (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Hi_pred             (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%Hi_corr             (mesh%vi1:mesh%vi2               ))
     
     ! Thermodynamics
-    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
-    CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%internal_heating_a    , ice%winternal_heating_a   )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%frictional_heating_a  , ice%wfrictional_heating_a )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%GHF_a                 , ice%wGHF_a                )
+    allocate(  ice%mask_ice_a_prev     (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%internal_heating_a  (mesh%vi1:mesh%vi2 , C%nz        ))
+    allocate(  ice%frictional_heating_a(mesh%vi1:mesh%vi2               ))
+    allocate(  ice%GHF_a               (mesh%vi1:mesh%vi2               ))
     
     ! Mesh adaptation data
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%surf_curv             , ice%wsurf_curv            )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%log_velocity          , ice%wlog_velocity         )
+    allocate(  ice%surf_curv           (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%log_velocity        (mesh%vi1:mesh%vi2               ))
     
     ! GIA
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHb_a                 , ice%wdHb_a                )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHb_dt_a              , ice%wdHb_dt_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dSL_dt_a              , ice%wdSL_dt_a             )
+    allocate(  ice%dHb_a               (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%dHb_dt_a            (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%dSL_dt_a            (mesh%vi1:mesh%vi2               ))
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -921,10 +915,10 @@ CONTAINS
     CALL init_routine( routine_name)
         
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_2nd_order')
-   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a, 'cons_2nd_order')
+   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , 'cons_2nd_order')
     
     ! Remove very thin ice resulting from remapping errors
     DO vi = mesh_new%vi1, mesh_new%vi2
@@ -938,14 +932,14 @@ CONTAINS
     ! CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
     
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
-    CALL reallocate_shared_dp_1D(    mesh_new%nV,  ice%Hb_a,                   ice%wHb_a                     )
-    ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,        'cons_2nd_order')
+    call reallocate_bounds( ice%Hb_a, mesh_new%vi1, mesh_new%vi2 )
+    ice%Hb_a = refgeo_PD%Hb + ice%dHb_a
     
     ! Geothermal heat flux
-    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%GHF_a, ice%wGHF_a)
+    CALL reallocate_bounds( ice%GHF_a, mesh_new%vi1, mesh_new%vi2 )
     IF     (C%choice_geothermal_heat_flux == 'constant') THEN
-      ice%GHF_a( mesh_new%vi1:mesh_new%vi2) = C%constant_geothermal_heat_flux
+      ice%GHF_a = C%constant_geothermal_heat_flux
     ! ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
     !   CALL map_geothermal_heat_flux_to_mesh( mesh_new, ice)
     ELSE
@@ -961,9 +955,9 @@ CONTAINS
     ! Basic data - ice thickness, bedrock height, surface height, mask, 3D ice velocities and temperature
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_a                  , ice%wHi_a                 )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hb_a                  , ice%wHb_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hs_a                  , ice%wHs_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%SL_a                  , ice%wSL_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%TAF_a                 , ice%wTAF_a                )
+    CALL reallocate_bounds ( ice%Hs_a  , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%SL_a  , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%TAF_a , mesh_new%vi1, mesh_new%vi2 )
    !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_a                  , ice%wTi_a                 )
 
     ! Ice velocities (these are remapped/reallocated in remap_velocities)
@@ -995,71 +989,71 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     
     ! Different masks
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_land_a           , ice%wmask_land_a          )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ocean_a          , ice%wmask_ocean_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_lake_a           , ice%wmask_lake_a          )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a            , ice%wmask_ice_a           )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_sheet_a          , ice%wmask_sheet_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_shelf_a          , ice%wmask_shelf_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_coast_a          , ice%wmask_coast_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_margin_a         , ice%wmask_margin_a        )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_gl_a             , ice%wmask_gl_a            )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_cf_a             , ice%wmask_cf_a            )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_a                , ice%wmask_a               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%f_grnd_a              , ice%wf_grnd_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%f_grnd_b              , ice%wf_grnd_b             )
+    CALL reallocate_bounds ( ice%mask_land_a  , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_ocean_a , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_lake_a  , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_ice_a   , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_sheet_a , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_shelf_a , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_coast_a , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_margin_a, mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_gl_a    , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_cf_a    , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_a       , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%f_grnd_a     , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%f_grnd_b     , mesh_new%ti1, mesh_new%ti2 )
     
     ! Ice physical properties
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%A_flow_vav_a          , ice%wA_flow_vav_a         )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_pmp_a              , ice%wTi_pmp_a             )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Cpi_a                 , ice%wCpi_a                )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ki_a                  , ice%wKi_a                 )
+    CALL reallocate_bounds ( ice%A_flow_3D_a  , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%A_flow_vav_a , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%Ti_pmp_a     , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%Cpi_a        , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%Ki_a         , mesh_new%vi1, mesh_new%vi2, C%nz )
     
     ! Zeta derivatives
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dt_a            , ice%wdzeta_dt_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
+    CALL reallocate_bounds ( ice%dzeta_dt_a   , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%dzeta_dx_a   , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%dzeta_dy_a   , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%dzeta_dz_a   , mesh_new%vi1, mesh_new%vi2       )
     
     ! Ice dynamics - ice thickness calculation
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_in                , ice%wdVi_in               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_out               , ice%wdVi_out              )
+    CALL reallocate_bounds ( ice%dVi_in       , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
+    CALL reallocate_bounds ( ice%dVi_out      , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHi_dt_a              , ice%wdHi_dt_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
     
     ! Ice dynamics - predictor/corrector ice thickness update
    !CALL reallocate_shared_dp_0D(                                   ice%pc_zeta               , ice%wpc_zeta              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_tau                , ice%wpc_tau               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_fcb                , ice%wpc_fcb               )
+    CALL reallocate_bounds ( ice%pc_tau       , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%pc_fcb       , mesh_new%vi1, mesh_new%vi2       )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_eta                , ice%wpc_eta               )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_eta_prev           , ice%wpc_eta_prev          )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta1              , ice%wpc_beta1             )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta2              , ice%wpc_beta2             )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta3              , ice%wpc_beta3             )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta4              , ice%wpc_beta4             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f1                 , ice%wpc_f1                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f2                 , ice%wpc_f2                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f3                 , ice%wpc_f3                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f4                 , ice%wpc_f4                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_old                , ice%wHi_old               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_pred               , ice%wHi_pred              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_corr               , ice%wHi_corr              )
+    CALL reallocate_bounds ( ice%pc_f1        , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%pc_f2        , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%pc_f3        , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%pc_f4        , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%Hi_old       , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%Hi_pred      , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%Hi_corr      , mesh_new%vi1, mesh_new%vi2       )
     
     ! Thermodynamics
    !CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%internal_heating_a    , ice%winternal_heating_a   )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%frictional_heating_a  , ice%wfrictional_heating_a )
+    CALL reallocate_bounds ( ice%internal_heating_a  , mesh_new%vi1, mesh_new%vi2, C%nz )
+    CALL reallocate_bounds ( ice%frictional_heating_a, mesh_new%vi1, mesh_new%vi2       )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%GHF_a                 , ice%wGHF_a                )
     
     ! Mesh adaptation data
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%surf_curv             , ice%wsurf_curv            )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%log_velocity          , ice%wlog_velocity         )
+    CALL reallocate_bounds ( ice%surf_curv       , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%log_velocity    , mesh_new%vi1, mesh_new%vi2       )
     
     ! GIA
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHb_a                 , ice%wdHb_a                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHb_dt_a              , ice%wdHb_dt_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dSL_dt_a              , ice%wdSL_dt_a             )
+    CALL reallocate_bounds ( ice%dHb_a           , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%dHb_dt_a        , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%dSL_dt_a        , mesh_new%vi1, mesh_new%vi2       )
     
     ! End of memory reallocation
     ! ==========================

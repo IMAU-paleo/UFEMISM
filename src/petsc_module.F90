@@ -16,6 +16,11 @@ MODULE petsc_module
 
   INTEGER :: perr    ! Error flag for PETSc routines
 
+  interface vec_double2petsc
+    procedure :: vec_double2petsc
+    procedure :: vec_double2petsc_old
+  end interface
+
 CONTAINS
   
 ! == Solve a square CSR matrix equation with PETSc
@@ -126,7 +131,50 @@ CONTAINS
   END SUBROUTINE solve_matrix_equation_PETSc
   
 ! == Conversion between 1-D Fortran double-precision arrays and PETSc parallel vectors
-  SUBROUTINE vec_double2petsc( xx, x)
+  SUBROUTINE vec_double2petsc( xx, x, n)
+    ! Convert a regular 1-D Fortran double-precision array to a PETSc parallel vector
+      
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
+    TYPE(tVec),                          INTENT(INOUT) :: x
+    integer,                             intent(in)    :: n
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'vec_double2petsc'
+    TYPE(PetscInt)                                     :: istart,iend,i
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Create parallel vector
+    CALL VecCreate( PETSC_COMM_WORLD, x, perr)
+    CALL VecSetSizes( x, PETSC_DECIDE, n, perr)
+    CALL VecSetFromOptions( x, perr)
+    
+    ! Get parallelisation domains ("ownership ranges")
+    CALL VecGetOwnershipRange( x, istart, iend, perr)
+    
+    ! Fill in vector values
+    DO i = istart+1,iend ! +1 because PETSc indexes from 0
+      CALL VecSetValues( x, 1, i-1, xx( i-istart ), INSERT_VALUES, perr)
+    END DO
+    CALL sync
+    
+    ! Assemble vectors, using the 2-step process:
+    !   VecAssemblyBegin(), VecAssemblyEnd()
+    ! Computations can be done while messages are in transition
+    ! by placing code between these two statements.
+    
+    CALL VecAssemblyBegin( x, perr)
+    CALL VecAssemblyEnd(   x, perr)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE vec_double2petsc
+  SUBROUTINE vec_double2petsc_old( xx, x)
     ! Convert a regular 1-D Fortran double-precision array to a PETSc parallel vector
       
     IMPLICIT NONE
@@ -167,7 +215,7 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
-  END SUBROUTINE vec_double2petsc
+  END SUBROUTINE vec_double2petsc_old
   SUBROUTINE vec_petsc2double( x, xx)
     ! Convert a PETSc parallel vector to a regular 1-D Fortran double-precision array
       
@@ -388,25 +436,33 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(tMat),                          INTENT(IN)    :: A
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: yy
+    REAL(dp), DIMENSION(:    ), target,  INTENT(IN)    :: xx
+    REAL(dp), DIMENSION(:    ), target,  INTENT(OUT)   :: yy
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_PETSc_matrix_with_vector_1D'
     TYPE(PetscInt)                                     :: m, n
     TYPE(tVec)                                         :: x, y
+    integer                                            :: m1, m2, n1, n2
+    real(dp), dimension(:    ), pointer                :: xxp, yyp
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
-    IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1)) THEN
-      CALL crash('matrix and vector sizes dont match!')
+    call partition_list(m, par%i, par%n, m1, m2)
+    call partition_list(n, par%i, par%n, n1, n2)
+    
+    IF (n2-n1+1 /= SIZE( xx,1) .OR. m2-m1+1 /= SIZE( yy,1)) THEN
+      CALL crash('matrix and vector sub-sizes dont match!')
     END IF
 
+    xxp(n1:n2) => xx
+    yyp(m1:m2) => yy
+
     ! Convert Fortran array xx to PETSc vector x
-    CALL vec_double2petsc( xx, x)
+    CALL vec_double2petsc( xxp, x, n)
     
     ! Set up PETSc vector y for the answer
     CALL VecCreate( PETSC_COMM_WORLD, y, perr)

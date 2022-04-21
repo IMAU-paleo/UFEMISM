@@ -35,198 +35,170 @@ MODULE data_types_module
     ! The ice dynamics sub-model data structure.
     
     ! Basic data - ice thickness, bedrock & surface elevation, sea level (geoid elevation), englacial temperature, and ice velocities
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_a                        ! Ice thickness [m]
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hb_a                        ! Bedrock elevation [m w.r.t. PD sea level]
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hs_a                        ! Surface elevation [m w.r.t. PD sea level]
-    REAL(dp), DIMENSION(:    ), POINTER     :: SL_a                        ! Sea level (geoid elevation) [m w.r.t. PD sea level]
-    REAL(dp), DIMENSION(:    ), POINTER     :: TAF_a                       ! Thickness above flotation [m]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti_a                        ! Englacial temperature [K]
-    INTEGER :: wHi_a, wHb_a, wHs_a, wSL_a, wTAF_a, wTi_a
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_a                        ! Ice thickness [m]
+    REAL(dp), DIMENSION(:    ), allocatable :: Hb_a                        ! Bedrock elevation [m w.r.t. PD sea level]
+    REAL(dp), DIMENSION(:    ), allocatable :: Hs_a                        ! Surface elevation [m w.r.t. PD sea level]
+    REAL(dp), DIMENSION(:    ), allocatable :: SL_a                        ! Sea level (geoid elevation) [m w.r.t. PD sea level]
+    REAL(dp), DIMENSION(:    ), allocatable :: TAF_a                       ! Thickness above flotation [m]
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Ti_a                        ! Englacial temperature [K]
     
     ! Ice velocities
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_b
-    INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a, ww_3D_b
+    REAL(dp), DIMENSION(:,:  ), allocatable :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: u_3D_b
+    REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_b
+    REAL(dp), DIMENSION(:,:  ), allocatable :: w_3D_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: w_3D_b
     
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_b
-    INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wuabs_vav_a, wuabs_vav_b
+    REAL(dp), DIMENSION(:    ), allocatable :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
+    REAL(dp), DIMENSION(:    ), allocatable :: v_vav_a
+    REAL(dp), DIMENSION(:    ), allocatable :: u_vav_b
+    REAL(dp), DIMENSION(:    ), allocatable :: v_vav_b
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_vav_a
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_vav_b
     
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_b
-    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, wuabs_surf_a, wuabs_surf_b
+    REAL(dp), DIMENSION(:    ), allocatable :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
+    REAL(dp), DIMENSION(:    ), allocatable :: v_surf_a
+    REAL(dp), DIMENSION(:    ), allocatable :: u_surf_b
+    REAL(dp), DIMENSION(:    ), allocatable :: v_surf_b
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_surf_a
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_surf_b
     
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
-    INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, wuabs_base_a, wuabs_base_b
+    REAL(dp), DIMENSION(:    ), allocatable :: u_base_a                    ! Ice velocity at the base [m yr^-1]
+    REAL(dp), DIMENSION(:    ), allocatable :: v_base_a
+    REAL(dp), DIMENSION(:    ), allocatable :: u_base_b
+    REAL(dp), DIMENSION(:    ), allocatable :: v_base_b
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_base_a
+    REAL(dp), DIMENSION(:    ), allocatable :: uabs_base_b
     
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_base_SSA_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_base_SSA_b
-    INTEGER :: wu_3D_SIA_b, wv_3D_SIA_b, wu_base_SSA_b, wv_base_SSA_b
+    REAL(dp), DIMENSION(:,:  ), allocatable :: u_3D_SIA_b
+    REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_SIA_b
+    REAL(dp), DIMENSION(:    ), allocatable :: u_base_SSA_b
+    REAL(dp), DIMENSION(:    ), allocatable :: v_base_SSA_b
     
     ! Different masks
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_ocean_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_lake_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_ice_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_sheet_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_shelf_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_coast_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_margin_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_gl_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_cf_a
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_b
-    INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
-    INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
-    INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
-    INTEGER :: wbasin_ID, wnbasins
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_land_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_ocean_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_lake_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_ice_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_sheet_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_shelf_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_coast_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_margin_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_gl_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_cf_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_a
+    REAL(dp), DIMENSION(:    ), allocatable :: f_grnd_a
+    REAL(dp), DIMENSION(:    ), allocatable :: f_grnd_b
+    INTEGER,  DIMENSION(:    ), allocatable :: basin_ID                    ! The drainage basin to which each grid cell belongs
+    INTEGER                                 :: nbasins                     ! Total number of basins defined for this region
     
     ! Ice physical properties
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
-    REAL(dp), DIMENSION(:    ), POINTER     :: A_flow_vav_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti_pmp_a                    ! The pressure melting point temperature [K]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Cpi_a                       ! Specific heat capacity of ice [J kg^-1 K^-1].
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
-    INTEGER :: wA_flow_3D_a, wA_flow_vav_a, wTi_pmp_a, wCpi_a, wKi_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
+    REAL(dp), DIMENSION(:    ), allocatable :: A_flow_vav_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Ti_pmp_a                    ! The pressure melting point temperature [K]
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Cpi_a                       ! Specific heat capacity of ice [J kg^-1 K^-1].
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
     
     ! Zeta derivatives
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dt_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_a
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dzeta_dz_a
-    INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dt_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dx_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dy_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dzeta_dz_a
     
-    ! Ice dynamics - basal hydrology
-    REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
-    REAL(dp), DIMENSION(:    ), POINTER     :: pore_water_pressure_a       ! Pore water pressure (determined by basal hydrology model) [Pa]
-    REAL(dp), DIMENSION(:    ), POINTER     :: Neff_a                      ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
-    INTEGER :: woverburden_pressure_a, wpore_water_pressure_a, wNeff_a
+    ! Ice dynamics - basal hydroallocatable
+    REAL(dp), DIMENSION(:    ), allocatable :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
+    REAL(dp), DIMENSION(:    ), allocatable :: pore_water_pressure_a       ! Pore water pressure (determined by basal hydrology model) [Pa]
+    REAL(dp), DIMENSION(:    ), allocatable :: Neff_a                      ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
     
     ! Ice dynamics - basal roughness / friction
-    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
-    REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
-    INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
+    REAL(dp), DIMENSION(:    ), allocatable :: phi_fric_a                  ! Till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), allocatable :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
+    REAL(dp), DIMENSION(:    ), allocatable :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
+    REAL(dp), DIMENSION(:    ), allocatable :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     
     ! Ice dynamics - physical terms in the SSA/DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b                     ! x-component of the driving stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dx_a                     ! Vertically averaged   xx strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: du_dy_a                     ! Vertically averaged   xy strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dx_a                     ! Vertically averaged   yy strain rate
-    REAL(dp), DIMENSION(:    ), POINTER     :: dv_dy_a                     ! Vertically averaged   yy strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: du_dz_3D_b                  ! 3-D                   xz strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dv_dz_3D_b                  ! 3-D                   yz strain rate
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: visc_eff_3D_a               ! 3-D                   effective viscosity
-    REAL(dp), DIMENSION(:    ), POINTER     :: visc_eff_int_a              ! Vertically integrated effective viscosity
-    REAL(dp), DIMENSION(:    ), POINTER     :: N_a                         ! Product term N = eta * H
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_a                      ! Sliding term beta (as in, [basal shear stress] = [beta] * [basal velocity])
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_a                  ! Beta_eff, appearing in the DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: beta_eff_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: taubx_b                     ! x-component of the basal shear stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: tauby_b                     ! y-component of the basal shear stress
-    REAL(dp), DIMENSION(:    ), POINTER     :: F2_a                        ! F2, appearing in the DIVA
-    REAL(dp), DIMENSION(:    ), POINTER     :: u_prev_b
-    REAL(dp), DIMENSION(:    ), POINTER     :: v_prev_b
-    INTEGER :: wtaudx_b, wtaudy_b
-    INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, wdu_dz_3D_b, wdv_dz_3D_b, wvisc_eff_3D_a, wvisc_eff_int_a, wN_a
-    INTEGER :: wbeta_a, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wF2_a
-    INTEGER :: wu_prev_b, wv_prev_b
+    REAL(dp), DIMENSION(:    ), allocatable :: taudx_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), allocatable :: taudy_b                     ! x-component of the driving stress
+    REAL(dp), DIMENSION(:    ), allocatable :: du_dx_a                     ! Vertically averaged   xx strain rate
+    REAL(dp), DIMENSION(:    ), allocatable :: du_dy_a                     ! Vertically averaged   xy strain rate
+    REAL(dp), DIMENSION(:    ), allocatable :: dv_dx_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:    ), allocatable :: dv_dy_a                     ! Vertically averaged   yy strain rate
+    REAL(dp), DIMENSION(:,:  ), allocatable :: du_dz_3D_b                  ! 3-D                   xz strain rate
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dv_dz_3D_b                  ! 3-D                   yz strain rate
+    REAL(dp), DIMENSION(:,:  ), allocatable :: visc_eff_3D_a               ! 3-D                   effective viscosity
+    REAL(dp), DIMENSION(:    ), allocatable :: visc_eff_int_a              ! Vertically integrated effective viscosity
+    REAL(dp), DIMENSION(:    ), allocatable :: N_a                         ! Product term N = eta * H
+    REAL(dp), DIMENSION(:    ), allocatable :: beta_a                      ! Sliding term beta (as in, [basal shear stress] = [beta] * [basal velocity])
+    REAL(dp), DIMENSION(:    ), allocatable :: beta_eff_a                  ! Beta_eff, appearing in the DIVA
+    REAL(dp), DIMENSION(:    ), allocatable :: beta_eff_b
+    REAL(dp), DIMENSION(:    ), allocatable :: taubx_b                     ! x-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), allocatable :: tauby_b                     ! y-component of the basal shear stress
+    REAL(dp), DIMENSION(:    ), allocatable :: F2_a                        ! F2, appearing in the DIVA
+    REAL(dp), DIMENSION(:    ), allocatable :: u_prev_b
+    REAL(dp), DIMENSION(:    ), allocatable :: v_prev_b
     
     ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
-    INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
+    INTEGER,  DIMENSION(:    ), allocatable :: ti2n_u, ti2n_v
+    INTEGER,  DIMENSION(:,:  ), allocatable :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
-    INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
     
     ! Ice dynamics - ice thickness calculation
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wHi_tplusdt_a
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_in
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_out
+    REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
     
     ! Ice dynamics - predictor/corrector ice thickness update
-    REAL(dp),                   POINTER     :: pc_zeta
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_tau
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_fcb
-    REAL(dp),                   POINTER     :: pc_eta
-    REAL(dp),                   POINTER     :: pc_eta_prev
-    REAL(dp),                   POINTER     :: pc_beta1
-    REAL(dp),                   POINTER     :: pc_beta2
-    REAL(dp),                   POINTER     :: pc_beta3
-    REAL(dp),                   POINTER     :: pc_beta4
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_f1
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_f2
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_f3
-    REAL(dp), DIMENSION(:    ), POINTER     :: pc_f4
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_old
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_pred
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_corr
-    INTEGER :: wpc_zeta, wpc_tau, wpc_fcb, wpc_eta, wpc_eta_prev, wpc_beta1, wpc_beta2, wpc_beta3, wpc_beta4
-    INTEGER :: wpc_f1, wpc_f2, wpc_f3, wpc_f4, wHi_old, wHi_pred, wHi_corr
+    REAL(dp)                                :: pc_zeta
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_tau
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_fcb
+    REAL(dp)                                :: pc_eta
+    REAL(dp)                                :: pc_eta_prev
+    REAL(dp)                                :: pc_beta1
+    REAL(dp)                                :: pc_beta2
+    REAL(dp)                                :: pc_beta3
+    REAL(dp)                                :: pc_beta4
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_f1
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_f2
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_f3
+    REAL(dp), DIMENSION(:    ), allocatable :: pc_f4
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_old
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_pred
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_corr
     
     ! Thermodynamics
-    INTEGER,  DIMENSION(:    ), POINTER     :: mask_ice_a_prev        ! Ice mask from previous time step
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: internal_heating_a     ! Internal heating due to deformation
-    REAL(dp), DIMENSION(:    ), POINTER     :: frictional_heating_a   ! Friction heating due to basal sliding
-    REAL(dp), DIMENSION(:    ), POINTER     :: GHF_a                  ! Geothermal heat flux
-    INTEGER :: wmask_ice_a_prev, winternal_heating_a, wfrictional_heating_a, wGHF_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_ice_a_prev        ! Ice mask from previous time step
+    REAL(dp), DIMENSION(:,:  ), allocatable :: internal_heating_a     ! Internal heating due to deformation
+    REAL(dp), DIMENSION(:    ), allocatable :: frictional_heating_a   ! Friction heating due to basal sliding
+    REAL(dp), DIMENSION(:    ), allocatable :: GHF_a                  ! Geothermal heat flux
     
     ! Isotope content
-    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_a_prev
-    REAL(dp), DIMENSION(:    ), POINTER     :: IsoRef
-    REAL(dp), DIMENSION(:    ), POINTER     :: IsoSurf
-    REAL(dp), DIMENSION(:    ), POINTER     :: MB_iso
-    REAL(dp), DIMENSION(:    ), POINTER     :: IsoIce
-    REAL(dp), DIMENSION(:    ), POINTER     :: IsoIce_new
-    INTEGER :: wHi_a_prev, wIsoRef, wIsoSurf, wMB_iso, wIsoIce, wIsoIce_new
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_a_prev
+    REAL(dp), DIMENSION(:    ), allocatable :: IsoRef
+    REAL(dp), DIMENSION(:    ), allocatable :: IsoSurf
+    REAL(dp), DIMENSION(:    ), allocatable :: MB_iso
+    REAL(dp), DIMENSION(:    ), allocatable :: IsoIce
+    REAL(dp), DIMENSION(:    ), allocatable :: IsoIce_new
     
     ! ELRA GIA model
-    INTEGER,                    POINTER     :: flex_prof_rad
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: flex_prof_grid
-    REAL(dp), DIMENSION(:    ), POINTER     :: surface_load_PD_mesh
-    REAL(dp), DIMENSION(:    ), POINTER     :: surface_load_mesh
-    REAL(dp), DIMENSION(:    ), POINTER     :: surface_load_rel_mesh
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: surface_load_rel_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: surface_load_rel_ext_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_eq_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_grid
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb_dt_grid
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dSL_dt_a
-    INTEGER :: wflex_prof_rad, wflex_prof_grid
-    INTEGER :: wsurface_load_PD_mesh, wsurface_load_mesh, wsurface_load_rel_mesh, wsurface_load_rel_grid, wsurface_load_rel_ext_grid
-    INTEGER :: wdHb_eq_grid, wdHb_grid, wdHb_dt_grid
-    INTEGER :: wdHb_a, wdHb_dt_a, wdSL_dt_a
+    INTEGER                                 :: flex_prof_rad
+    REAL(dp), DIMENSION(:,:  ), allocatable :: flex_prof_grid
+    REAL(dp), DIMENSION(:    ), allocatable :: surface_load_PD_mesh
+    REAL(dp), DIMENSION(:    ), allocatable :: surface_load_mesh
+    REAL(dp), DIMENSION(:    ), allocatable :: surface_load_rel_mesh
+    REAL(dp), DIMENSION(:,:  ), allocatable :: surface_load_rel_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: surface_load_rel_ext_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dHb_eq_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dHb_grid
+    REAL(dp), DIMENSION(:,:  ), allocatable :: dHb_dt_grid
+    REAL(dp), DIMENSION(:    ), allocatable :: dHb_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dHb_dt_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dSL_dt_a
     
     ! Mesh adaptation data
-    REAL(dp), DIMENSION(:    ), POINTER     :: surf_curv
-    REAL(dp), DIMENSION(:    ), POINTER     :: log_velocity
-    INTEGER :: wsurf_curv, wlog_velocity
+    REAL(dp), DIMENSION(:    ), allocatable :: surf_curv
+    REAL(dp), DIMENSION(:    ), allocatable :: log_velocity
           
   END TYPE type_ice_model
 

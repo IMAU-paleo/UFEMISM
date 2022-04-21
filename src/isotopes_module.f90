@@ -60,31 +60,31 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        CALL finalise_routine( routine_name)
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    ! ! Not needed for benchmark experiments
+    ! IF (C%do_benchmark_experiment) THEN
+    !   IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
+    !       C%choice_benchmark_experiment == 'Halfar'     .OR. &
+    !       C%choice_benchmark_experiment == 'Bueler'     .OR. &
+    !       C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !       C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+    !       C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+    !     CALL finalise_routine( routine_name)
+    !     RETURN
+    !   ELSE
+    !     CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+    !   END IF
+    ! END IF ! IF (C%do_benchmark_experiment) THEN
     
     
     
@@ -286,30 +286,30 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
     
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    ! ! Not needed for benchmark experiments
+    ! IF (C%do_benchmark_experiment) THEN
+    !   IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
+    !       C%choice_benchmark_experiment == 'Halfar'     .OR. &
+    !       C%choice_benchmark_experiment == 'Bueler'     .OR. &
+    !       C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !       C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+    !       C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+    !       C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+    !     RETURN
+    !   ELSE
+    !     CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+    !   END IF
+    ! END IF ! IF (C%do_benchmark_experiment) THEN
     
     
     
@@ -404,24 +404,24 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_reference_isotopes'
     INTEGER                                            :: vi
     
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    ! ! Not needed for benchmark experiments
+    ! IF (C%do_benchmark_experiment) THEN
+    !   IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
+    !       C%choice_benchmark_experiment == 'Halfar'     .OR. &
+    !       C%choice_benchmark_experiment == 'Bueler'     .OR. &
+    !       C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !       C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+    !       C%choice_benchmark_experiment == 'SSA_icestream') THEN
+    !     RETURN
+    !   ELSE
+    !     CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+    !   END IF
+    ! END IF ! IF (C%do_benchmark_experiment) THEN
     
     
     
@@ -458,24 +458,24 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_isotopes_model'
     
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
+    ! ! Not needed for benchmark experiments
+    ! IF (C%do_benchmark_experiment) THEN
+    !   IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
+    !       C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
+    !       C%choice_benchmark_experiment == 'Halfar'     .OR. &
+    !       C%choice_benchmark_experiment == 'Bueler'     .OR. &
+    !       C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !       C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
+    !       C%choice_benchmark_experiment == 'SSA_icestream') THEN
+    !     RETURN
+    !   ELSE
+    !     CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+    !   END IF
+    ! END IF ! IF (C%do_benchmark_experiment) THEN
     
     
     

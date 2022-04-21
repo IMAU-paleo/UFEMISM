@@ -5,8 +5,8 @@
 
 # For compiling setting, Makefile will point to the uncommented file below:
 #include Makefile_include_local.txt
-#include Makefile_include_mac.txt
-include Makefile_include_snellius.txt
+include Makefile_include_mac.txt
+#include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files

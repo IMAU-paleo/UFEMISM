@@ -67,12 +67,10 @@ MODULE configuration_module
   LOGICAL             :: do_EAS_config                               = .TRUE.                          ! Eurasia
   LOGICAL             :: do_GRL_config                               = .TRUE.                          ! Greenland
   LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica  
-  
+
   ! Benchmark experiments
   ! =====================
-  
-  LOGICAL             :: do_benchmark_experiment_config              = .TRUE.
-  CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_I'
+
   REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
   REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
   CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
@@ -752,12 +750,10 @@ MODULE configuration_module
     LOGICAL                             :: do_EAS
     LOGICAL                             :: do_GRL
     LOGICAL                             :: do_ANT 
-    
+
     ! Benchmark experiments
     ! =====================
-    
-    LOGICAL                             :: do_benchmark_experiment
-    CHARACTER(LEN=256)                  :: choice_benchmark_experiment
+
     REAL(dp)                            :: SSA_icestream_m
     REAL(dp)                            :: ISMIP_HOM_L
     CHARACTER(LEN=256)                  :: ISMIP_HOM_E_Arolla_filename
@@ -766,7 +762,7 @@ MODULE configuration_module
     REAL(dp)                            :: MISMIPplus_A_flow_initial
     CHARACTER(LEN=256)                  :: MISMIPplus_scenario
     CHARACTER(LEN=256)                  :: MISOMIP1_scenario
-    
+
     ! Whether or not to let UFEMISM dynamically create its own output folder
     ! =======================================================================
     
@@ -1621,20 +1617,20 @@ CONTAINS
     mem_use_tot_max = 0._dp
     
   END SUBROUTINE initialise_model_configuration
-  
+
   SUBROUTINE read_config_file( config_filename)
     ! Use a NAMELIST containing all the "_config" variables to read
     ! an external config file, and overwrite the default values of
     ! the specified variables with the values from the file.
-    
+
     IMPLICIT NONE
 
     ! Local variables:
     CHARACTER(LEN=256),INTENT(IN) :: config_filename
-    
+
     INTEGER, PARAMETER :: config_unit = 28 ! Unit number which is used for the configuration file.
     INTEGER            :: ios
-    
+
     ! The NAMELIST that's used to read the external config file.
     NAMELIST /CONFIG/start_time_of_run_config,                        &
                      end_time_of_run_config,                          &
@@ -1652,8 +1648,6 @@ CONTAINS
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
                      do_ANT_config,                                   & 
-                     do_benchmark_experiment_config,                  &
-                     choice_benchmark_experiment_config,              &
                      SSA_icestream_m_config,                          &
                      ISMIP_HOM_L_config,                              &
                      ISMIP_HOM_E_Arolla_filename_config,              &
@@ -2100,9 +2094,9 @@ CONTAINS
                      help_field_48_config,                            &
                      help_field_49_config,                            &
                      help_field_50_config
-                      
+
      IF (config_filename == '') RETURN
-      
+
      OPEN(UNIT=config_unit, FILE=TRIM(config_filename), STATUS='OLD', ACTION='READ', iostat=ios)
      IF(ios /= 0) THEN
        WRITE(UNIT=*, FMT='(/3A/)') ' ERROR: Could not open the configuration file: ', TRIM(config_filename)
@@ -2116,7 +2110,7 @@ CONTAINS
      IF(ios /= 0) THEN
        WRITE(UNIT=*, FMT='(/3A)') ' ERROR while reading configuration file: ', TRIM(config_filename)
        STOP
-     END IF     
+     END IF
 
   END SUBROUTINE read_config_file
 
@@ -2150,12 +2144,10 @@ CONTAINS
     C%do_EAS                                   = do_EAS_config
     C%do_GRL                                   = do_GRL_config
     C%do_ANT                                   = do_ANT_config
-    
+
     ! Benchmark experiments
     ! =====================
-    
-    C%do_benchmark_experiment                  = do_benchmark_experiment_config
-    C%choice_benchmark_experiment              = choice_benchmark_experiment_config
+
     C%SSA_icestream_m                          = SSA_icestream_m_config
     C%ISMIP_HOM_L                              = ISMIP_HOM_L_config
     C%ISMIP_HOM_E_Arolla_filename              = ISMIP_HOM_E_Arolla_filename_config
@@ -2164,7 +2156,7 @@ CONTAINS
     C%MISMIPplus_A_flow_initial                = MISMIPplus_A_flow_initial_config
     C%MISMIPplus_scenario                      = MISMIPplus_scenario_config
     C%MISOMIP1_scenario                        = MISOMIP1_scenario_config
-    
+
     ! Whether or not to let UFEMISM dynamically create its own output folder
     ! =======================================================================
     

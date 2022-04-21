@@ -323,16 +323,16 @@ MODULE mesh_creation_module
     END IF
     
   END SUBROUTINE is_good_triangle_geo_only
-    
+
   ! == Mesh creation routines ==
   SUBROUTINE create_mesh_from_cart_data( region)
     ! Create the first mesh, using the data from the initial file to force the resolution.
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_model_region),    INTENT(INOUT)     :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_mesh_from_cart_data'
     INTEGER                                       :: orientation
@@ -340,19 +340,19 @@ MODULE mesh_creation_module
     REAL(dp)                                      :: xmin, xmax, ymin, ymax
     REAL(dp)                                      :: res_min_inc
     CHARACTER(LEN=2)                              :: str_processid
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (par%master) WRITE(0,*) '  Creating the first mesh...'
-    
+
     ! Orientation of domain partitioning: east-west for GRL, north-south everywhere else
     IF (region%name == 'GRL') THEN
       orientation = 1
     ELSE
       orientation = 0
     END IF
-        
+
     ! Determine the domain of this process' submesh.
     IF (orientation == 0) THEN
       CALL partition_domain_regular( MINVAL(region%refgeo_init%grid%x), MAXVAL(region%refgeo_init%grid%x), par%i, par%n, xmin, xmax)
@@ -363,51 +363,45 @@ MODULE mesh_creation_module
       xmin = MINVAL(region%refgeo_init%grid%x)
       xmax = MAXVAL(region%refgeo_init%grid%x)
     END IF
-    
+
     ! Allocate memory and initialise a dummy mesh
     CALL allocate_submesh_primary( submesh, region%name, 10, 20, C%nconmax)    
     CALL initialise_dummy_mesh(    submesh, xmin, xmax, ymin, ymax)
     CALL perturb_dummy_mesh(       submesh, 0)
-    
+
     ! Exception for the EISMINT schematic tests, which start with a flat bedrock and no ice, leading to a very coarse mesh.
     ! After the first time step, a thin ice sheet forms in the area with positive SMB, so that the margin lies in an area
     ! with very coarse resolution. This triggers a mesh update, which results in a mesh with a very wide high-resolution band.
     ! Prevent this by making the very first mesh slightly finer than strictly needed.
-    IF (C%do_benchmark_experiment) THEN
-      IF     (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-              C%choice_benchmark_experiment == 'EISMINT_6' ) THEN
+    IF (C%choice_refgeo_init_idealised == 'flatearth') THEN
+      IF (C%choice_idealised_climate   == 'EISMINT1_A' .OR. &
+          C%choice_idealised_climate   == 'EISMINT1_B' .OR. &
+          C%choice_idealised_climate   == 'EISMINT1_C' .OR. &
+          C%choice_idealised_climate   == 'EISMINT1_D' .OR. &
+          C%choice_idealised_climate   == 'EISMINT1_E' .OR. &
+          C%choice_idealised_climate   == 'EISMINT1_F' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_A' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_B' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_C' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_D' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_E' .OR. &
+          C%choice_idealised_SMB       == 'EISMINT1_F') THEN
+
         submesh%res_max = MAX(C%res_min * 2._dp, 16._dp)
-      ELSEIF (C%choice_benchmark_experiment == 'Bueler'.OR. &
-              C%choice_benchmark_experiment == 'Halfar' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        ! No need for an exception here, as this one starts with a (small) ice sheet
-      ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-              C%choice_benchmark_experiment == 'mesh_generation_test') THEN
-        ! No need for an exception here either, as the initial state has a coastline.
-      ELSE
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+
       END IF
     END IF
-        
+
     ! Refine the process submesh with incrementally increasing resolution, aligning with neighbouring
     ! submeshes after every step, until we reach the final desired resolution
-    
+
     res_min_inc = C%res_max * 2._dp
-    
+
     DO WHILE (res_min_inc > C%res_min)
-      
+
       ! Increase resolution
       res_min_inc = res_min_inc / 2._dp
-   
+
       ! Determine resolutions
       submesh%res_min          = MAX( C%res_min,          res_min_inc)
       submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
@@ -415,36 +409,36 @@ MODULE mesh_creation_module
       submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
       submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
       submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
-      
+
       IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
-      
+
       ! Refine the process submesh
       CALL refine_mesh( submesh, region%refgeo_init)
-      
+
       ! Align with neighbouring submeshes
       CALL align_all_submeshes( submesh, orientation)
-      
+
       ! Split any new triangles (added during alignment) that are too sharp
       CALL refine_submesh_geo_only( submesh)
-      
+
       ! Smooth the submesh using Lloyd' algorithm
       CALL Lloyds_algorithm_single_iteration_submesh( submesh)
-      
+
       ! After the last refinement step, apply Lloyds algorithm two more times, because we can.
       IF (res_min_inc <= C%res_min) THEN
       CALL Lloyds_algorithm_single_iteration_submesh( submesh)
       CALL Lloyds_algorithm_single_iteration_submesh( submesh)
       END IF
-      
+
       ! Write submesh to text file for debugging
       WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
       IF (debug_mesh_creation) CALL write_mesh_to_text_file( submesh, 'submesh_proc_' // TRIM(str_processid) // '.txt')
-      
+
       ! Check if everything went correctly
       CALL check_mesh( submesh)
-    
+
     END DO
-    
+
     ! Merge the process submeshes, create the final shared-memory mesh
     IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Merging submeshes...'
     CALL merge_all_submeshes( submesh, orientation)
@@ -457,12 +451,12 @@ MODULE mesh_creation_module
       WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh%nTri
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
-    
+
   END SUBROUTINE create_mesh_from_cart_data
-  
+
   ! == Extended and basic Ruppert's algorithm
   SUBROUTINE refine_mesh( mesh, refgeo_init)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.

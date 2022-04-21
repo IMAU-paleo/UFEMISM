@@ -602,6 +602,12 @@ MODULE configuration_module
   REAL(dp)            :: deep_ocean_threshold_depth_GRL_config       = 800._dp                          ! Different depths for different regions is a bit ad hoc, but in reality
   REAL(dp)            :: deep_ocean_threshold_depth_ANT_config       = 1800._dp                         ! the different surface ocean temperatures probably result in the same effect...
 
+  ! Englacial isotope tracing
+  ! =========================
+
+  CHARACTER(LEN=256)  :: choice_ice_isotopes_model_config             = 'ANICE_legacy'                  ! Choice of englacial isotopes model: "none", "uniform", "ANICE_legacy"
+  REAL(dp)            :: uniform_ice_d18O_config                      = 0._dp                           ! Uniform englacial d18O-value (used when choice_ice_isotope_model_config = "uniform")
+
   ! Sea level and GIA
   ! =================
 
@@ -1264,6 +1270,12 @@ MODULE configuration_module
     REAL(dp)                            :: deep_ocean_threshold_depth_EAS
     REAL(dp)                            :: deep_ocean_threshold_depth_GRL
     REAL(dp)                            :: deep_ocean_threshold_depth_ANT
+
+    ! Englacial isotope tracing
+    ! ========================
+
+    CHARACTER(LEN=256)                  :: choice_ice_isotopes_model
+    REAL(dp)                            :: uniform_ice_d18O
 
     ! Sea level and GIA
     ! =================
@@ -2008,6 +2020,8 @@ CONTAINS
                      deep_ocean_threshold_depth_EAS_config,           &
                      deep_ocean_threshold_depth_GRL_config,           &
                      deep_ocean_threshold_depth_ANT_config,           &
+                     choice_ice_isotopes_model_config,                &
+                     uniform_ice_d18O_config,                         &
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
@@ -2660,6 +2674,12 @@ CONTAINS
     C%deep_ocean_threshold_depth_EAS           = deep_ocean_threshold_depth_EAS_config
     C%deep_ocean_threshold_depth_GRL           = deep_ocean_threshold_depth_GRL_config
     C%deep_ocean_threshold_depth_ANT           = deep_ocean_threshold_depth_ANT_config
+
+    ! Englacial isotope tracing
+    ! ========================
+
+    C%choice_ice_isotopes_model                = choice_ice_isotopes_model_config
+    C%uniform_ice_d18O                         = uniform_ice_d18O_config
 
     ! Sea level and GIA
     ! =================

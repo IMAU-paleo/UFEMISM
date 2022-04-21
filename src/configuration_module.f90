@@ -71,13 +71,20 @@ MODULE configuration_module
   ! Benchmark experiments
   ! =====================
 
+  ! SSA_icestream (see Schoof 2006, and also Bueler and Brown 2009)
   REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
+
+  ! ISMIP-HOM (see Pattyn et al. 2008)
   REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
   CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file
+
+  ! MISMIP+ (see Asay-Davis et al., 2016)
   LOGICAL             :: MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
   REAL(dp)            :: MISMIPplus_xGL_target_config                = 450000._dp                       ! Mid-channel GL position to tune the flow factor A for
   REAL(dp)            :: MISMIPplus_A_flow_initial_config            = 2.0E-17_dp                       ! Initial flow factor before tuning (or throughout the run when tuning is not used)
   CHARACTER(LEN=256)  :: MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
+
+  ! MISOMIP1 (see Asay-Davis et al., 2016)
   CHARACTER(LEN=256)  :: MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
@@ -412,10 +419,15 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_direct_regional_climate_GRL_config = ''
   CHARACTER(LEN=256)  :: filename_direct_regional_climate_ANT_config = ''
 
+  ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+  CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
+
   ! GCM snapshots in the matrix_warm_cold option
   CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
   CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
   CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+
+  REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
   ! Scaling factor for CO2 vs ice weights
   REAL(dp)            :: climate_matrix_CO2vsice_NAM_config          = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on temperature
@@ -450,6 +462,11 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
   CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_warm_config     = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
   CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_cold_config     = 'data/COSMOS_ocean_examples/COSMOS_LGM_oceanTS_prep.nc'
+
+  ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+  REAL(dp)            :: ocean_temperature_PD_config                 = 271.46_dp                        ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
+  REAL(dp)            :: ocean_temperature_cold_config               = 268.16_dp                        ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
+  REAL(dp)            :: ocean_temperature_warm_config               = 275.16_dp                        ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
 
   ! Parameters used when choice_ocean_model = "matrix_warm_cold"
   CHARACTER(LEN=256)  :: choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
@@ -616,61 +633,15 @@ MODULE configuration_module
   REAL(dp)            :: fixed_sealevel_config                       = 0._dp
   CHARACTER(LEN=256)  :: filename_sealevel_record_config             = 'name_of_file.dat'
   INTEGER             :: sealevel_record_length_config               = 1
-  
+
   CHARACTER(LEN=256)  :: choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"
   REAL(dp)            :: ELRA_lithosphere_flex_rigidity_config       = 1.0E+25_dp                       ! Lithospheric flexural rigidity [kg m^2 s^-2]
   REAL(dp)            :: ELRA_bedrock_relaxation_time_config         = 3000.0_dp                        ! Relaxation time for bedrock adjustment [yr]
   REAL(dp)            :: ELRA_mantle_density_config                  = 3300.0_dp                        ! Mantle density [kg m^-3]
-  
-  ! Climate matrix
-  ! ==============
-  
-  ! Present-day observed climate (ERA40) (NetCDF)
-  CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
-  
-  ! GCM snapshots
-  CHARACTER(LEN=256)  :: choice_climate_matrix_config                = 'PI_LGM'                         ! 'PI_LGM' uses 2 snapshots
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_PI_config             = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_LGM_config            = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
-  
-  ! Ice5G ice-sheet geometry
-  CHARACTER(LEN=256)  :: filename_ICE5G_PD_config                    = 'data/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  CHARACTER(LEN=256)  :: filename_ICE5G_LGM_config                   = 'data/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
-  
-  REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
-  ! SMB tuning
-  ! ==========
-  
-  REAL(dp)            :: C_abl_constant_NAM_config                   = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
-  REAL(dp)            :: C_abl_constant_EAS_config                   = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
-  REAL(dp)            :: C_abl_constant_GRL_config                   = -49._dp                          !            they used to in ANICE.)
-  REAL(dp)            :: C_abl_constant_ANT_config                   = -49._dp
-  REAL(dp)            :: C_abl_Ts_NAM_config                         = 10._dp                           ! 10._dp
-  REAL(dp)            :: C_abl_Ts_EAS_config                         = 10._dp
-  REAL(dp)            :: C_abl_Ts_GRL_config                         = 10._dp
-  REAL(dp)            :: C_abl_Ts_ANT_config                         = 10._dp
-  REAL(dp)            :: C_abl_Q_NAM_config                          = 0.0227_dp                        ! 0.513_dp
-  REAL(dp)            :: C_abl_Q_EAS_config                          = 0.0227_dp
-  REAL(dp)            :: C_abl_Q_GRL_config                          = 0.0227_dp
-  REAL(dp)            :: C_abl_Q_ANT_config                          = 0.0227_dp
-  REAL(dp)            :: C_refr_NAM_config                           = 0.051_dp                         ! 0.012_dp
-  REAL(dp)            :: C_refr_EAS_config                           = 0.051_dp 
-  REAL(dp)            :: C_refr_GRL_config                           = 0.051_dp 
-  REAL(dp)            :: C_refr_ANT_config                           = 0.051_dp
-  
-  ! Sub-shelf melt parameterisation
-  ! ===============================
-  
-  ! Ocean temperature (used for both thermodynamics and basal melt)
-  CHARACTER(LEN=256)  :: choice_ocean_temperature_model_config       = 'scaled'                         ! Can be "fixed" (use PD value) or "scaled" (scale between "PD", "warm", and "cold" values based on forcing (prescribed or inverse-modelled))
-  REAL(dp)            :: ocean_temperature_PD_config                 = 271.46_dp                        ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
-  REAL(dp)            :: ocean_temperature_cold_config               = 268.16_dp                        ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
-  REAL(dp)            :: ocean_temperature_warm_config               = 275.16_dp                        ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
-  
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
-  
+
   CHARACTER(LEN=256)  :: help_field_01_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_02_config                        = 'none'
   CHARACTER(LEN=256)  :: help_field_03_config                        = 'none'
@@ -1082,10 +1053,15 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_direct_regional_climate_GRL
     CHARACTER(LEN=256)                  :: filename_direct_regional_climate_ANT
 
+    ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+    CHARACTER(LEN=256)                  :: filename_PD_obs_climate
+
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_PI
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_warm
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_cold
+
+    REAL(dp)                            :: constant_lapserate
 
     ! Scaling factor for CO2 vs ice weights
     REAL(dp)                            :: climate_matrix_CO2vsice_NAM
@@ -1120,6 +1096,11 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_PI
     CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_warm
     CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_cold
+
+    ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+    REAL(dp)                            :: ocean_temperature_PD
+    REAL(dp)                            :: ocean_temperature_cold
+    REAL(dp)                            :: ocean_temperature_warm
 
     ! Parameters used when choice_ocean_model = "matrix_warm_cold"
     CHARACTER(LEN=256)                  :: choice_ocean_vertical_grid
@@ -1285,52 +1266,15 @@ MODULE configuration_module
     REAL(dp)                            :: fixed_sealevel
     CHARACTER(LEN=256)                  :: filename_sealevel_record
     INTEGER                             :: sealevel_record_length
-  
+
     CHARACTER(LEN=256)                  :: choice_GIA_model
     REAL(dp)                            :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
 
-    ! Climate matrix
-    ! ==============
-
-    CHARACTER(LEN=256)                  :: filename_PD_obs_climate
-    CHARACTER(LEN=256)                  :: choice_climate_matrix
-    CHARACTER(LEN=256)                  :: filename_GCM_snapshot_PI
-    CHARACTER(LEN=256)                  :: filename_GCM_snapshot_LGM
-    CHARACTER(LEN=256)                  :: filename_ICE5G_PD
-    CHARACTER(LEN=256)                  :: filename_ICE5G_LGM
-
-    CHARACTER(LEN=256)                  :: choice_ocean_temperature_model
-    REAL(dp)                            :: ocean_temperature_PD
-    REAL(dp)                            :: ocean_temperature_cold
-    REAL(dp)                            :: ocean_temperature_warm
-
-    REAL(dp)                            :: constant_lapserate
-
-    ! SMB melt tuning
-    ! ===============
-
-    REAL(dp)                            :: C_abl_constant_NAM
-    REAL(dp)                            :: C_abl_constant_EAS
-    REAL(dp)                            :: C_abl_constant_GRL
-    REAL(dp)                            :: C_abl_constant_ANT
-    REAL(dp)                            :: C_abl_Ts_NAM
-    REAL(dp)                            :: C_abl_Ts_EAS
-    REAL(dp)                            :: C_abl_Ts_GRL
-    REAL(dp)                            :: C_abl_Ts_ANT
-    REAL(dp)                            :: C_abl_Q_NAM
-    REAL(dp)                            :: C_abl_Q_EAS
-    REAL(dp)                            :: C_abl_Q_GRL
-    REAL(dp)                            :: C_abl_Q_ANT
-    REAL(dp)                            :: C_refr_NAM
-    REAL(dp)                            :: C_refr_EAS
-    REAL(dp)                            :: C_refr_GRL
-    REAL(dp)                            :: C_refr_ANT
-  
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
-    
+
     CHARACTER(LEN=256)                  :: help_field_01  
     CHARACTER(LEN=256)                  :: help_field_02  
     CHARACTER(LEN=256)                  :: help_field_03  
@@ -1880,9 +1824,11 @@ CONTAINS
                      filename_direct_regional_climate_EAS_config,     &
                      filename_direct_regional_climate_GRL_config,     &
                      filename_direct_regional_climate_ANT_config,     &
+                     filename_PD_obs_climate_config,                  &
                      filename_climate_snapshot_PI_config,             &
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
+                     constant_lapserate_config,                       &
                      climate_matrix_CO2vsice_NAM_config,              &
                      climate_matrix_CO2vsice_EAS_config,              &
                      climate_matrix_CO2vsice_GRL_config,              &
@@ -1902,6 +1848,9 @@ CONTAINS
                      filename_GCM_ocean_snapshot_PI_config,           &
                      filename_GCM_ocean_snapshot_warm_config,         &
                      filename_GCM_ocean_snapshot_cold_config,         &
+                     ocean_temperature_PD_config,                     &
+                     ocean_temperature_cold_config,                   &
+                     ocean_temperature_warm_config,                   &
                      choice_ocean_vertical_grid_config,               &
                      ocean_vertical_grid_max_depth_config,            &
                      ocean_regular_grid_dz_config,                    &
@@ -2031,33 +1980,6 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
-                     filename_PD_obs_climate_config,                  &
-                     choice_climate_matrix_config,                    &
-                     filename_GCM_snapshot_PI_config,                 &
-                     filename_GCM_snapshot_LGM_config,                &
-                     filename_ICE5G_PD_config,                        &
-                     filename_ICE5G_LGM_config,                       &
-                     choice_ocean_temperature_model_config,           &
-                     ocean_temperature_PD_config,                     &
-                     ocean_temperature_cold_config,                   &
-                     ocean_temperature_warm_config,                   &
-                     constant_lapserate_config,                       &
-                     C_abl_constant_NAM_config,                       &
-                     C_abl_constant_EAS_config,                       &
-                     C_abl_constant_GRL_config,                       &
-                     C_abl_constant_ANT_config,                       &
-                     C_abl_Ts_NAM_config,                             &
-                     C_abl_Ts_EAS_config,                             &
-                     C_abl_Ts_GRL_config,                             &
-                     C_abl_Ts_ANT_config,                             &
-                     C_abl_Q_NAM_config,                              &
-                     C_abl_Q_EAS_config,                              &
-                     C_abl_Q_GRL_config,                              &
-                     C_abl_Q_ANT_config,                              &
-                     C_refr_NAM_config,                               &
-                     C_refr_EAS_config,                               &
-                     C_refr_GRL_config,                               &
-                     C_refr_ANT_config,                               &
                      help_field_01_config,                            &
                      help_field_02_config,                            &
                      help_field_03_config,                            &
@@ -2486,10 +2408,15 @@ CONTAINS
     C%filename_direct_regional_climate_GRL     = filename_direct_regional_climate_GRL_config
     C%filename_direct_regional_climate_ANT     = filename_direct_regional_climate_ANT_config
 
+    ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+    C%filename_PD_obs_climate                  = filename_PD_obs_climate_config
+
     ! GCM snapshots in the matrix_warm_cold option
     C%filename_climate_snapshot_PI             = filename_climate_snapshot_PI_config
     C%filename_climate_snapshot_warm           = filename_climate_snapshot_warm_config
     C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
+
+    C%constant_lapserate                       = constant_lapserate_config
 
     ! Scaling factor for CO2 vs ice weights
     C%climate_matrix_CO2vsice_NAM              = climate_matrix_CO2vsice_NAM_config
@@ -2524,6 +2451,11 @@ CONTAINS
     C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config
     C%filename_GCM_ocean_snapshot_warm         = filename_GCM_ocean_snapshot_warm_config
     C%filename_GCM_ocean_snapshot_cold         = filename_GCM_ocean_snapshot_cold_config
+
+    ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+    C%ocean_temperature_PD                     = ocean_temperature_PD_config
+    C%ocean_temperature_cold                   = ocean_temperature_cold_config
+    C%ocean_temperature_warm                   = ocean_temperature_warm_config
 
     ! Parameters used when choice_ocean_model = "matrix_warm_cold"
     C%choice_ocean_vertical_grid               = choice_ocean_vertical_grid_config
@@ -2683,58 +2615,22 @@ CONTAINS
 
     ! Sea level and GIA
     ! =================
-    
+
     C%do_ocean_floodfill                       = do_ocean_floodfill_config
     C%choice_sealevel_model                    = choice_sealevel_model_config
     C%fixed_sealevel                           = fixed_sealevel_config
     C%filename_sealevel_record                 = filename_sealevel_record_config
     C%sealevel_record_length                   = sealevel_record_length_config
-  
+
     C%choice_GIA_model                         = choice_GIA_model_config
     C%ELRA_lithosphere_flex_rigidity           = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
 
-    ! Climate matrix
-    ! ==============
-
-    C%filename_PD_obs_climate                  = filename_PD_obs_climate_config
-    C%choice_climate_matrix                    = choice_climate_matrix_config
-    C%filename_GCM_snapshot_PI                 = filename_GCM_snapshot_PI_config
-    C%filename_GCM_snapshot_LGM                = filename_GCM_snapshot_LGM_config
-    C%filename_ICE5G_PD                        = filename_ICE5G_PD_config
-    C%filename_ICE5G_LGM                       = filename_ICE5G_LGM_config
-
-    C%choice_ocean_temperature_model           = choice_ocean_temperature_model_config
-    C%ocean_temperature_PD                     = ocean_temperature_PD_config
-    C%ocean_temperature_cold                   = ocean_temperature_cold_config
-    C%ocean_temperature_warm                   = ocean_temperature_warm_config
-
-    C%constant_lapserate                       = constant_lapserate_config
-
-    ! SMB melt tuning
-    ! ===============
-
-    C%C_abl_constant_NAM                       = C_abl_constant_NAM_config
-    C%C_abl_constant_EAS                       = C_abl_constant_EAS_config
-    C%C_abl_constant_GRL                       = C_abl_constant_GRL_config
-    C%C_abl_constant_ANT                       = C_abl_constant_ANT_config
-    C%C_abl_Ts_NAM                             = C_abl_Ts_NAM_config
-    C%C_abl_Ts_EAS                             = C_abl_Ts_EAS_config
-    C%C_abl_Ts_GRL                             = C_abl_Ts_GRL_config
-    C%C_abl_Ts_ANT                             = C_abl_Ts_ANT_config
-    C%C_abl_Q_NAM                              = C_abl_Q_NAM_config
-    C%C_abl_Q_EAS                              = C_abl_Q_EAS_config
-    C%C_abl_Q_GRL                              = C_abl_Q_GRL_config
-    C%C_abl_Q_ANT                              = C_abl_Q_ANT_config
-    C%C_refr_NAM                               = C_refr_NAM_config
-    C%C_refr_EAS                               = C_refr_EAS_config
-    C%C_refr_GRL                               = C_refr_GRL_config
-    C%C_refr_ANT                               = C_refr_ANT_config
 
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
-    
+
     C%help_field_01                            = help_field_01_config
     C%help_field_02                            = help_field_02_config
     C%help_field_03                            = help_field_03_config

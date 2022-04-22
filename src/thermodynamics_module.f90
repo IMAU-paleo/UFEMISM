@@ -193,7 +193,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, v_times_dT_dy_upwind_a, wv_times_dT_dy_upwind_a)
     CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable           , wis_unstable           )
     CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new                , wTi_new                )
-    CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base , wT_ocean_at_shelf_base )
+    CALL allocate_shared_dp_1D(  mesh%nV,         T_ocean_at_shelf_base , wT_ocean_at_shelf_base )
 
     ! Calculate upwind heat flux
     CALL calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
@@ -212,21 +212,33 @@ CONTAINS
     CALL sync
 
     ! Find ocean temperature at the shelf base
-    DO vi = mesh%vi1, mesh%vi2
+
+    IF (C%choice_ocean_model == 'none') THEN
+      ! No ocean data available; use constant PD value
+
+      T_ocean_at_shelf_base( mesh%vi1:mesh%vi2) = T0 + C%T_ocean_mean_PD_ANT
+      CALL sync
+
+    ELSE
+      ! Calculate shelf base temperature from ocean data
+
+      DO vi = mesh%vi1, mesh%vi2
 
 
-     IF (ice%mask_shelf_a( vi) == 1) THEN
-       depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-       CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base( vi))
-     ELSE
-       T_ocean_at_shelf_base( vi) = 0._dp
-     END IF
+       IF (ice%mask_shelf_a( vi) == 1) THEN
+         depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+         CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base( vi))
+       ELSE
+         T_ocean_at_shelf_base( vi) = 0._dp
+       END IF
 
-     ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
-     T_ocean_at_shelf_base( vi) = T_ocean_at_shelf_base( vi) + T0
+       ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
+       T_ocean_at_shelf_base( vi) = T_ocean_at_shelf_base( vi) + T0
 
-    END DO
-    CALL sync
+      END DO
+      CALL sync
+
+    END IF ! IF (C%choice_ocean_model == 'none') THEN
 
     ! Solve the heat equation for all vertices
     is_unstable( mesh%vi1:mesh%vi2) = 0
@@ -235,6 +247,12 @@ CONTAINS
 
       ! Skip ice-free vertices
       IF (ice%mask_ice_a( vi) == 0) CYCLE
+
+      ! For very thin ice, just let the profile equal the surface temperature
+      IF (ice%Hi_a( vi) < 1._dp) THEN
+        Ti_new( vi,:) = MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
+        CYCLE
+      END IF
 
       ! Ice surface boundary condition
       beta(  1) = 1._dp
@@ -533,10 +551,21 @@ CONTAINS
       END IF
 
     ELSEIF( ice%mask_shelf_a(vi) == 1) THEN
-
       ! Use a linear profile between Ts and seawater temperature:
-      depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-      CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
+
+      IF (C%choice_ocean_model == 'none') THEN
+        ! No ocean data available; use constant PD value
+
+        T_ocean_at_shelf_base = T0 + C%T_ocean_mean_PD_ANT
+
+      ELSE
+        ! Calculate shelf base temperature from ocean data
+
+        depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
+
+      END IF
+
       Ti( vi,:) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
 
     ELSE

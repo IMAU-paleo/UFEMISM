@@ -64,27 +64,15 @@ CONTAINS
 
       CALL run_ocean_model_idealised( mesh, ice, ocean_matrix%applied, region_name, time)
 
-      IF (par%master) WRITE(0,*) 'This subroutine (run_ocean_model) is not ready for this choice of ocean model...'
-      IF (par%master) WRITE(0,*) 'Feel free to fill it before running the model :)'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
     ELSEIF (C%choice_ocean_model == 'uniform_warm_cold') THEN
       ! Uniform warm/cold ocean model (the old ANICE way)
 
       CALL run_ocean_model_uniform_warm_cold( mesh, ocean_matrix, time)
 
-      IF (par%master) WRITE(0,*) 'This subroutine (run_ocean_model) is not ready for this choice of ocean model...'
-      IF (par%master) WRITE(0,*) 'Feel free to fill it before running the model :)'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
     ELSEIF (C%choice_ocean_model == 'PD_obs') THEN
       ! Keep the ocean fixed to present-day observed conditions
 
       CALL run_ocean_model_PD_obs( mesh, ocean_matrix)
-
-      IF (par%master) WRITE(0,*) 'This subroutine (run_ocean_model) is not ready for this choice of ocean model...'
-      IF (par%master) WRITE(0,*) 'Feel free to fill it before running the model :)'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
     ELSEIF (C%choice_ocean_model == 'matrix_warm_cold') THEN
       ! Run the warm/cold ocean matrix
@@ -92,15 +80,13 @@ CONTAINS
       CALL run_ocean_model_matrix_warm_cold( mesh, grid, ocean_matrix, climate_matrix, region_name, time)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'run_ocean_model - ERROR: unknown choice_ocean_model "', TRIM(C%choice_ocean_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model
-
   SUBROUTINE initialise_ocean_model_regional( region, ocean_matrix_global)
     ! Initialise the regional ocean model
 
@@ -143,15 +129,13 @@ CONTAINS
       CALL initialise_ocean_matrix_regional( region, ocean_matrix_global)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_ocean_model_regional - ERROR: unknown choice_ocean_model "', TRIM(C%choice_ocean_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=37)
 
   END SUBROUTINE initialise_ocean_model_regional
-
   SUBROUTINE initialise_ocean_model_global( ocean_matrix)
     ! Initialise the global ocean model
 
@@ -188,8 +172,7 @@ CONTAINS
       CALL initialise_ocean_matrix_global( ocean_matrix)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_ocean_model_global - ERROR: unknown choice_ocean_model "', TRIM(C%choice_ocean_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
     END IF
 
     ! Finalise routine path
@@ -222,8 +205,7 @@ CONTAINS
 
     ! Safety
     IF (.NOT. C%choice_ocean_model == 'idealised') THEN
-      IF (par%master) WRITE(0,*) 'run_ocean_model_idealised - ERROR: choice_ocean_model should be set to "idealised"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('choice_ocean_model should be set to "idealised"!')
     END IF
 
     ! Choose an idealised ocean profile
@@ -236,8 +218,7 @@ CONTAINS
     ELSEIF (C%choice_idealised_ocean == 'Reese2018_ANT') THEN
       CALL run_ocean_model_idealised_Reese2018_ANT( mesh, ice, ocean, region_name)
     ELSE
-      IF (par%master) WRITE(0,*) 'run_ocean_model_idealised - ERROR: unknown choice_idealised_ocean "', TRIM(C%choice_idealised_ocean), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_idealised_ocean "' // TRIM( C%choice_idealised_ocean) // '"!')
     END IF
 
     ! Finalise routine path
@@ -365,7 +346,8 @@ CONTAINS
 
       CALL run_ocean_model_idealised_MISMIPplus_COLD( mesh, ocean)
 
-    ELSEIF (C%MISOMIP1_scenario == 'IceOcean1ra' .OR. &
+    ELSEIF (C%MISOMIP1_scenario == 'IceOcean1r' .OR. &
+            C%MISOMIP1_scenario == 'IceOcean1ra' .OR. &
             C%MISOMIP1_scenario == 'IceOcean2ra') THEN
       ! Cold ocean during spin-up; warm ocean for 100 years, then cold ocean again
 
@@ -388,8 +370,7 @@ CONTAINS
       END IF
 
     ELSE
-      IF (par%master) WRITE(0,*) 'run_ocean_model_idealised_MISOMIP1 - ERROR: unknown MISOMIP1_scenario "', TRIM(C%MISOMIP1_scenario), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown MISOMIP1_scenario "' // TRIM( C%MISOMIP1_scenario) // '"!')
     END IF
 
     ! Finalise routine path
@@ -420,20 +401,12 @@ CONTAINS
 
     ! Safety
     IF (.NOT. region_name == 'ANT') THEN
-      IF (par%master) WRITE(0,*) 'run_ocean_model_idealised_Reese2018_ANT - ERROR: only applicable to Antarctica!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('only applicable to Antarctica!')
     END IF
     IF (.NOT. (C%choice_basin_scheme_ANT == 'file' .AND. C%do_merge_basins_ANT)) THEN
-      IF (par%master) THEN
-        WRITE(0,*) ''
-        WRITE(0,*) ' ===== '
-        WRITE(0,*) 'run_ocean_model_idealised_Reese2018_ANT - WARNING: This really only works when using the external'
-        WRITE(0,*) '  Antarctic ice basins file "ant_full_drainagesystem_polygons.txt". This can be downloaded from:'
-        WRITE(0,*) '  https://earth.gsfc.nasa.gov/cryo/data/polar-altimetry/antarctic-and-greenland-drainage-systems'
-        WRITE(0,*) '  ...and you will also need to set do_merge_basins_ANT_config = .TRUE.'
-        WRITE(0,*) ' ===== '
-        WRITE(0,*) ''
-      END IF
+      CALL warning('This really only works when using the external Antarctic ice basins file "ant_full_drainagesystem_polygons.txt". ' // &
+                     'This can be downloaded from: https://earth.gsfc.nasa.gov/cryo/data/polar-altimetry/antarctic-and-greenland-drainage-systems. ' // &
+                     '...and you will also need to set do_merge_basins_ANT_config = .TRUE.')
     END IF
 
     ! Fill in the temperature and salinity values
@@ -534,8 +507,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) 'run_ocean_model_uniform_warm_cold - ERROR: need to port this stuff from the ANICE_legacy BMB routine!'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    CALL crash('need to port this stuff from the ANICE_legacy BMB routine!')
 
     dummy_dp = mesh%nV
     dummy_dp = ocean_matrix%applied%T_ocean_mean
@@ -664,16 +636,17 @@ CONTAINS
     INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot, ww_tot_final
     REAL(dp)                                           :: w_ins_av
     REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+    REAL(dp)                                           :: ocean_matrix_CO2vsice
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV, w_ins,        ww_ins                  )
-    CALL allocate_shared_dp_1D( mesh%nV, w_ins_smooth, ww_ins_smooth           )
-    CALL allocate_shared_dp_1D( mesh%nV, w_ice,        ww_ice                  )
-    CALL allocate_shared_dp_1D( mesh%nV, w_tot,        ww_tot                  )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, w_tot_final,  ww_tot_final)
+    CALL allocate_shared_dp_1D( mesh%nV,             w_ins,        ww_ins       )
+    CALL allocate_shared_dp_1D( mesh%nV,             w_ins_smooth, ww_ins_smooth)
+    CALL allocate_shared_dp_1D( mesh%nV,             w_ice,        ww_ice       )
+    CALL allocate_shared_dp_1D( mesh%nV,             w_tot,        ww_tot       )
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, w_tot_final,  ww_tot_final )
 
     ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
     ! =====================================================================
@@ -686,12 +659,10 @@ CONTAINS
       CO2 = forcing%CO2_mod
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       CO2 = 0._dp
-      WRITE(0,*) '  ERROR - run_ocean_model_matrix_warm_cold must only be called with the correct forcing method, check your code!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('must only be called with the correct forcing method, check your code!')
     ELSE
       CO2 = 0._dp
-      WRITE(0,*) '  ERROR - choice_forcing_method "', C%choice_forcing_method, '" not implemented in run_ocean_model_matrix_warm_cold!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
 
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
@@ -699,47 +670,60 @@ CONTAINS
     ! Find ice interpolation weight
     ! =============================
 
-    ! Calculate weighting field
-    DO vi = mesh%vi1, mesh%vi2
-      w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff,  (   climate_matrix%applied%I_abs(  vi) -     climate_matrix%GCM_cold%I_abs( vi)) / &  ! Berends et al., 2018 - Eq. 3
-                                                           (   climate_matrix%GCM_warm%I_abs( vi) -     climate_matrix%GCM_cold%I_abs( vi)) ))
-    END DO
-    CALL sync
-    w_ins_av     = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (SUM(climate_matrix%applied%I_abs )     - SUM(climate_matrix%GCM_cold%I_abs)     ) / &
-                                                          (SUM(climate_matrix%GCM_warm%I_abs)     - SUM(climate_matrix%GCM_cold%I_abs)     ) ))
+    IF         (region_name == 'NAM') THEN
+      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_NAM
+    ELSEIF     (region_name == 'EAS') THEN
+      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_EAS
+    ELSEIF     (region_name == 'GRL') THEN
+      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_GRL
+    ELSEIF     (region_name == 'ANT') THEN
+      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_ANT
+    ELSE
+      ocean_matrix_CO2vsice = 0._dp
+      CALL crash('unkown region_name "' // TRIM( region_name) // '"!')
+    END IF
 
-    ! Smooth the weighting field
-    w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
-    CALL smooth_Gaussian_2D( mesh, grid, w_ins_smooth, 200000._dp)
+    IF (ocean_matrix_CO2vsice == 1._dp) THEN
+      w_ice( mesh%vi1:mesh%vi2) = w_CO2 ! Dummy value, not actually used
+    ELSE
+      ! Calculate weighting field
+      DO vi = mesh%vi1, mesh%vi2
+        w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, ( climate_matrix%applied%I_abs(  vi) - climate_matrix%GCM_cold%I_abs( vi)) / &  ! Berends et al., 2018 - Eq. 3
+                                                            ( climate_matrix%GCM_warm%I_abs( vi) - climate_matrix%GCM_cold%I_abs( vi)) ))
+      END DO
+      CALL sync
+      w_ins_av     = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, ( SUM(climate_matrix%applied%I_abs ) - SUM(climate_matrix%GCM_cold%I_abs)) / &
+                                                            ( SUM(climate_matrix%GCM_warm%I_abs) - SUM(climate_matrix%GCM_cold%I_abs)) ))
 
-    ! Combine unsmoothed, smoothed, and regional average weighting fields (Berends et al., 2018, Eq. 4)
-    w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + 6._dp * w_ins_av) / 7._dp
+      ! Smooth the weighting field
+      w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
+      CALL smooth_Gaussian_2D( mesh, grid, w_ins_smooth, 200000._dp)
+
+      ! Combine unsmoothed, smoothed, and regional average weighting fields (Berends et al., 2018, Eq. 4)
+      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + 6._dp * w_ins_av) / 7._dp
+    END IF
 
     ! Combine weigths CO2 and ice
     ! ===========================
 
-    IF         (region_name == 'NAM') THEN
-      w_tot( mesh%vi1:mesh%vi2) = (C%ocean_matrix_CO2vsice_NAM * w_CO2) + ((1._dp - C%ocean_matrix_CO2vsice_NAM) * w_ice( mesh%vi1:mesh%vi2))
-    ELSEIF     (region_name == 'EAS') THEN
-      w_tot( mesh%vi1:mesh%vi2) = (C%ocean_matrix_CO2vsice_EAS * w_CO2) + ((1._dp - C%ocean_matrix_CO2vsice_EAS) * w_ice( mesh%vi1:mesh%vi2))
-    ELSEIF     (region_name == 'GRL') THEN
-      w_tot( mesh%vi1:mesh%vi2) = (C%ocean_matrix_CO2vsice_GRL * w_CO2) + ((1._dp - C%ocean_matrix_CO2vsice_GRL) * w_ice( mesh%vi1:mesh%vi2))
-    ELSEIF     (region_name == 'ANT') THEN
-      w_tot( mesh%vi1:mesh%vi2) = (C%ocean_matrix_CO2vsice_ANT * w_CO2) + ((1._dp - C%ocean_matrix_CO2vsice_ANT) * w_ice( mesh%vi1:mesh%vi2))
-    END IF
+    w_tot( mesh%vi1:mesh%vi2) = (ocean_matrix_CO2vsice * w_CO2) + ((1._dp - ocean_matrix_CO2vsice) * w_ice( mesh%vi1:mesh%vi2))
 
     ! Update the history of the weighing fields
     ! =========================================
 
-    ! 1st entry is the current value, 2nd is 1*dt_ocean ago, 3d is 2*dt_ocean ago, etc.
-    ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 2:ocean_matrix%applied%nw_tot_history) = ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1:ocean_matrix%applied%nw_tot_history-1)
-    ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1                                    ) =                      w_tot(         mesh%vi1:mesh%vi2                                         )
+    IF (ocean_matrix%applied%nw_tot_history > 1) THEN
+      ! 1st entry is the current value, 2nd is 1*dt_ocean ago, 3d is 2*dt_ocean ago, etc.
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 2:ocean_matrix%applied%nw_tot_history) = ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1:ocean_matrix%applied%nw_tot_history-1)
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1                                    ) =                      w_tot(         mesh%vi1:mesh%vi2                                         )
+    ELSE
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1                                    ) =                      w_tot(         mesh%vi1:mesh%vi2                                         )
+    END IF
 
     ! Interpolate the GCM ocean snapshots
-    ! =============================
+    ! ===================================
 
     DO k = 1, C%nz_ocean
-    DO vi = grid%i1, grid%i2
+    DO vi = mesh%vi1, mesh%vi2
       a = ( ( C%z_ocean (k) / C%z_ocean (C%nz_ocean) ) * (ocean_matrix%applied%nw_tot_history-1) ) + 1
 
       w_tot_final (vi,k) = ( SUM(ocean_matrix%applied%w_tot_history(vi,1:FLOOR(a))) + ( (a - FLOOR(a)) * ocean_matrix%applied%w_tot_history(vi,CEILING(a)) ) ) * (1._dp / a)
@@ -1159,7 +1143,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_vertical_grid_regular'
-    INTEGER                                       :: k
+    INTEGER                                            :: k
 
     ! Add routine to path
     CALL init_routine( routine_name)

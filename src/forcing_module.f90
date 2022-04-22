@@ -75,6 +75,8 @@ CONTAINS
           CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
           CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
         END IF
+      ELSE
+        CALL crash('the switch input argument should be either "pre" or "post"!')
       END IF
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
@@ -89,6 +91,8 @@ CONTAINS
           CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
         END IF
         CALL inverse_routine_global_temperature_offset
+      ELSE
+        CALL crash('the switch input argument should be either "pre" or "post"!')
       END IF
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
@@ -104,18 +108,18 @@ CONTAINS
           CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
         END IF
         CALL inverse_routine_CO2
+      ELSE
+        CALL crash('the switch input argument should be either "pre" or "post"!')
       END IF
 
     ELSE
-      IF (par%master) WRITE(0,*) 'update_global_forcing - ERROR: unknown choice_forcing_method "', TRIM(C%choice_forcing_method), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
     END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_global_forcing
-
   SUBROUTINE initialise_global_forcing
     ! Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux)
 
@@ -159,8 +163,7 @@ CONTAINS
       CALL initialise_inverse_routine_data
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_global_forcing - ERROR: unknown choice_forcing_method "', TRIM(C%choice_forcing_method), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
     END IF
 
     ! Insolation
@@ -190,13 +193,11 @@ CONTAINS
 
     ! Safety
     IF (.NOT. C%do_calculate_benthic_d18O) THEN
-      IF (par%master) WRITE(0,*) 'calculate_modelled_d18O - ERROR: this routine should only be called when do_calculate_benthic_d18O = .TRUE.!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when do_calculate_benthic_d18O = .TRUE.!')
     END IF
-    ! IF (C%choice_ice_isotopes_model == 'none') THEN
-    !   IF (par%master) WRITE(0,*) 'calculate_modelled_d18O - ERROR: choice_ice_isotopes_model = none; cannot calculate d18O contribution of ice sheets when no englacial isotope calculation is being done!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
+    IF (C%choice_ice_isotopes_model == 'none') THEN
+      CALL crash('choice_ice_isotopes_model = none; cannot calculate d18O contribution of ice sheets when no englacial isotope calculation is being done!')
+    END IF
 
     IF (par%master) THEN
 
@@ -239,7 +240,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_global_mean_temperature_change_history'
-    REAL(dp),                 POINTER                  :: dT_NAM, dT_EAS, dT_GRL, dT_ANT
+    REAL(dp),                 POINTER                  ::  dT_NAM,  dT_EAS,  dT_GRL,  dT_ANT
     INTEGER                                            :: wdT_NAM, wdT_EAS, wdT_GRL, wdT_ANT
     REAL(dp)                                           :: dT_glob_average_over_window
     REAL(dp)                                           :: A_reg, A_glob
@@ -334,7 +335,7 @@ CONTAINS
     A_reg = (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin)
 
     DO vi = region%mesh%vi1, region%mesh%vi2
-      dT_lapse_mod = region%ice%Hs_a(              vi) * C%constant_lapserate
+      dT_lapse_mod = region%ice%Hs_a( vi) * C%constant_lapserate
       dT_lapse_PD  = region%climate_matrix%PD_obs%Hs( vi) * C%constant_lapserate
       DO m = 1, 12
         T_pot_mod = region%climate_matrix%applied%T2m( vi,m) - dT_lapse_mod
@@ -587,16 +588,15 @@ CONTAINS
     IF     (C%choice_forcing_method == 'CO2_direct') THEN
       ! Observed CO2 is needed for these forcing methods.
     ELSE
-      WRITE(0,*) '  ERROR: update_CO2_at_model_time should only be called when choice_forcing_method = "CO2_direct"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
     END IF
 
     IF (par%master) THEN
       IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
-        IF (par%master) WRITE(0,*) '  WARNING: model time before start of CO2 record, using constant extrapolation!'
+        CALL warning('model time before start of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( 1)
       ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
-        IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of CO2 record, using constant extrapolation!'
+        CALL warning('model time beyond end of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
       ELSE
         iu = 1

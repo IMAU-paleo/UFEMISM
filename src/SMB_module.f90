@@ -103,8 +103,7 @@ CONTAINS
       CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'run_SMB_model - ERROR: unknown choice_SMB_model "', TRIM(C%choice_SMB_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_SMB_model "' // TRIM( C%choice_SMB_model) // '"!')
     END IF
 
     ! Finalise routine path
@@ -146,8 +145,7 @@ CONTAINS
       CALL initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_SMB_model - ERROR: unknown choice_SMB_model "', TRIM(C%choice_SMB_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_SMB_model "' // TRIM( C%choice_SMB_model) // '"!')
     END IF
 
     ! Finalise routine path

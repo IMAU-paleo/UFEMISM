@@ -61,10 +61,10 @@ CONTAINS
     REAL(dp),                          INTENT(IN)        :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256)                            :: routine_name
-    INTEGER                                       :: it
-    REAL(dp)                                      :: meshfitness
-    REAL(dp)                                      :: t1, t2
+    CHARACTER(LEN=256)                                   :: routine_name
+    INTEGER                                              :: it
+    REAL(dp)                                             :: meshfitness
+    REAL(dp)                                             :: t1, t2
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
@@ -105,8 +105,7 @@ CONTAINS
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
       ELSE
-        IF (par%master) WRITE(0,*) '  ERROR - choice_GIA_model "', C%choice_GIA_model, '" not implemented in run_model!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_GIA = region%tcomp_GIA + t2 - t1
@@ -387,8 +386,8 @@ CONTAINS
     ! ================================
 
     ! Region name
-    region%name      = name
-    IF (region%name == 'NAM') THEN
+    region%name        = name
+    IF (region%name      == 'NAM') THEN
       region%long_name = 'North America'
     ELSE IF (region%name == 'EAS') THEN
       region%long_name = 'Eurasia'
@@ -508,8 +507,7 @@ CONTAINS
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
     ELSE
-      WRITE(0,*) '  ERROR - choice_GIA_model "', C%choice_GIA_model, '" not implemented in initialise_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
     END IF
 
     ! ===== The isotopes model =====
@@ -521,7 +519,7 @@ CONTAINS
     ! ================================
 
     ! This (init regional GHF) is currently done in the ice dynamics module (initialise_ice_model).
-    ! Might be good to move it to the forcing module later.
+    ! Might be good to move it to the forcing module later, a la IMAU-ICE.
 
     ! ===== Initialise the ice temperature profile =====
     ! ==================================================

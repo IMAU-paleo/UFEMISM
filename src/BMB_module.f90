@@ -200,16 +200,14 @@ CONTAINS
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL initialise_BMB_model_PICOP( mesh, ice, BMB)
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not yet implemented in initialise_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
 
     ! Sheet
     IF     (C%choice_BMB_sheet_model == 'uniform') THEN
       ! Nothing else needs to be done
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_sheet_model "', TRIM(C%choice_BMB_sheet_model), '" not yet implemented in initialise_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_sheet_model "' // TRIM(C%choice_BMB_sheet_model) // '"!')
     END IF
 
     ! Finalise routine path

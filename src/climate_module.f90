@@ -240,8 +240,7 @@ CONTAINS
       CALL initialise_climate_model_direct_climate_regional( region%mesh, region%climate_matrix, region%name)
 
     ELSE
-      IF (par%master) WRITE(0,*) 'initialise_climate_model_regional - ERROR: unknown choice_climate_model "', TRIM(C%choice_climate_model), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
     END IF
 
     ! Finalise routine path

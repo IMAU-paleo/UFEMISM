@@ -31,7 +31,7 @@ MODULE isotopes_module
     
 CONTAINS
 
-  ! Run the isotopes model
+  ! == Run the isotopes model
   SUBROUTINE run_isotopes_model( region)
     ! Run the isotopes model (the main routine called from run_model_region)
 
@@ -202,37 +202,38 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_isotopes_model_ANICE_legacy
+
+  ! == Calculate the mean isotope content and benthic d18O contribution of this region's glacial ice
   SUBROUTINE calculate_isotope_content( mesh, Hi, IsoIce, mean_isotope_content, d18O_contribution)
     ! Calculate mean isotope content of the whole ice sheet
-    
-    USE parameters_module, ONLY: ice_density, seawater_density, ocean_area, mean_ocean_depth
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hi
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: IsoIce
     REAL(dp),                            INTENT(OUT)   :: mean_isotope_content
     REAL(dp),                            INTENT(OUT)   :: d18O_contribution
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_isotope_content'
     INTEGER                                            :: vi
     REAL(dp)                                           :: Hi_msle
     REAL(dp)                                           :: total_isotope_content
     REAL(dp)                                           :: total_ice_volume_msle
-    
-    
-    
-    
+
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
-    
+
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
 !
@@ -274,7 +275,7 @@ CONTAINS
     
   END SUBROUTINE calculate_isotope_content
   
-  ! Initialise the isotopes model (allocating shared memory)
+  ! == Initialise the isotopes model (allocating shared memory)
   SUBROUTINE initialise_isotopes_model( region)
     ! Allocate memory for the data fields of the isotopes model.
 
@@ -410,76 +411,79 @@ CONTAINS
   END SUBROUTINE initialise_isotopes_model_ANICE_legacy
   SUBROUTINE calculate_reference_isotopes( region)
     ! Allocate memory for the data fields of the isotopes model.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_reference_isotopes'
     INTEGER                                            :: vi
-    
-    
-    
-    
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
-!    
+!
 !    ! Calculate reference field of d18O of precipitation
 !    ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
 !    DO vi = region%mesh%vi1, region%mesh%vi2
 !      region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
 !    END DO
 !    CALL sync
-!    
+!
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calculate_reference_isotopes
 
   ! Remap isotope model data after a mesh update
   SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, map, region)
     ! Remap or reallocate all the data fields
-  
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_isotopes_model'
-    
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
-    
+
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
-!    
+
 !    ! Reallocate memory
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
-!    
+
 !    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
-!    
+
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE remap_isotopes_model
 
 END MODULE isotopes_module

@@ -16,11 +16,6 @@ MODULE petsc_module
 
   INTEGER :: perr    ! Error flag for PETSc routines
 
-  interface vec_double2petsc
-    procedure :: vec_double2petsc
-    procedure :: vec_double2petsc_old
-  end interface
-
 CONTAINS
   
 ! == Solve a square CSR matrix equation with PETSc
@@ -67,7 +62,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_PETSc'
-    INTEGER                                            :: m, n
+    INTEGER                                            :: m, n, n1, n2, m1, m2
     TYPE(tVec)                                         :: b
     TYPE(tVec)                                         :: x
     TYPE(tKSP)                                         :: KSP_solver
@@ -78,15 +73,18 @@ CONTAINS
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
-    IF (m /= n .OR. m /= SIZE( xx,1) .OR. m /= SIZE( bb,1)) THEN
-      CALL crash('matrix and vector sizes dont match!')
+    call partition_list(m, par%i, par%n, m1, m2)
+    call partition_list(n, par%i, par%n, n1, n2)
+    
+    IF (n2-n1+1 /= SIZE( xx,1) .OR. m2-m1+1 /= SIZE( bb,1)) THEN
+      CALL crash('matrix and vector sub-sizes dont match!')
     END IF
     
   ! == Set up right-hand side and solution vectors as PETSc data structures
   ! =======================================================================
     
-    CALL vec_double2petsc( xx, x)
-    CALL vec_double2petsc( bb, b)
+    CALL vec_double2petsc( xx, x, n)
+    CALL vec_double2petsc( bb, b, m)
     
   ! Set up the solver
   ! =================
@@ -174,48 +172,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE vec_double2petsc
-  SUBROUTINE vec_double2petsc_old( xx, x)
-    ! Convert a regular 1-D Fortran double-precision array to a PETSc parallel vector
-      
-    IMPLICIT NONE
-    
-    ! In- and output variables:
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
-    TYPE(tVec),                          INTENT(INOUT) :: x
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'vec_double2petsc'
-    TYPE(PetscInt)                                     :: istart,iend,i
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Create parallel vector
-    CALL VecCreate( PETSC_COMM_WORLD, x, perr)
-    CALL VecSetSizes( x, PETSC_DECIDE, SIZE( xx,1), perr)
-    CALL VecSetFromOptions( x, perr)
-    
-    ! Get parallelisation domains ("ownership ranges")
-    CALL VecGetOwnershipRange( x, istart, iend, perr)
-    
-    ! Fill in vector values
-    DO i = istart+1,iend ! +1 because PETSc indexes from 0
-      CALL VecSetValues( x, 1, i-1, xx( i), INSERT_VALUES, perr)
-    END DO
-    CALL sync
-    
-    ! Assemble vectors, using the 2-step process:
-    !   VecAssemblyBegin(), VecAssemblyEnd()
-    ! Computations can be done while messages are in transition
-    ! by placing code between these two statements.
-    
-    CALL VecAssemblyBegin( x, perr)
-    CALL VecAssemblyEnd(   x, perr)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE vec_double2petsc_old
   SUBROUTINE vec_petsc2double( x, xx)
     ! Convert a PETSc parallel vector to a regular 1-D Fortran double-precision array
       
@@ -236,23 +192,23 @@ CONTAINS
     
     ! Safety
     CALL VecGetSize( x, n, perr)
-    IF (n /= SIZE( xx,1)) THEN
+
+    ! Get parallelisation domains ("ownership ranges")
+    CALL VecGetOwnershipRange( x, istart, iend, perr)
+
+    IF (iend-istart /= size(xx,1)) THEN
       CALL crash('Fortran and PETSc vector sizes dont match!')
     END IF
     
-    ! Get parallelisation domains ("ownership ranges")
-    CALL VecGetOwnershipRange( x, istart, iend, perr)
     
     ! Get values
     DO i = istart+1,iend
       ix(1) = i-1
       CALL VecGetValues( x, 1, ix, v, perr)
-      xx( i) = v(1)
+      xx( i-istart) = v(1)
     END DO
     CALL sync
 
-    call allgather_array(xx,istart+1,iend)
-    
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
@@ -495,7 +451,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_PETSc_matrix_with_vector_2D'
-    INTEGER                                            :: m, n, i1, i2, j1, j2, k
+    INTEGER                                            :: m, n, n1, n2, m1, m2, k
     REAL(dp), DIMENSION(:    ), POINTER                ::  xx_1D,  yy_1D
     INTEGER                                            :: wxx_1D, wyy_1D
     
@@ -505,16 +461,17 @@ CONTAINS
     ! Safety
     CALL MatGetSize( A, m, n, perr)
     
-    IF (n /= SIZE( xx,1) .OR. m /= SIZE( yy,1) .OR. SIZE( xx,2) /= SIZE( yy,2)) THEN
-      CALL crash('vector sizes dont match!')
+    call partition_list(m, par%i, par%n, m1, m2)
+    call partition_list(n, par%i, par%n, n1, n2)
+    
+    IF (n2-n1+1 /= SIZE( xx,1) .OR. m2-m1+1 /= SIZE( yy,1) .OR. SIZE( xx,2) /= SIZE( yy,2)) THEN
+      CALL crash('matrix and vector sub-sizes dont match!')
     END IF
     
     ! Allocate shared memory
-    allocate(xx_1D( n ))
-    allocate(yy_1D( m ))
+    allocate(xx_1D( n1:n2 ))
+    allocate(yy_1D( m1:m2 ))
     
-    CALL partition_list( n, par%i, par%n, i1, i2)
-    CALL partition_list( m, par%i, par%n, j1, j2)
     
     ! Compute each column separately
     DO k = 1, SIZE( xx,2)

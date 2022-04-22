@@ -111,7 +111,7 @@ CONTAINS
     CALL partition_list( grid%n, par%i, par%n, n1, n2)
 
     ! Allocate shared memory
-    allocate (d_grid_vec(1:grid%n))
+    allocate (d_grid_vec(n1:n2))
     allocate (d_mesh_vec(1:mesh%nV))
 
     DO n = n1, n2
@@ -121,7 +121,8 @@ CONTAINS
     END DO
     
     ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec, d_mesh_vec)
+    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_grid2mesh, d_grid_vec &
+        , d_mesh_vec(mesh%vi1:mesh%vi2))
 
     ! Make accessible on all cores
     call allgather_array(d_mesh_vec)
@@ -129,9 +130,7 @@ CONTAINS
     ! Fix border elements because the remapping often is inaccurate there
     CALL apply_Neumann_BC_direct_a_2D( mesh, d_mesh_vec)
 
-    do n = mesh%vi1,mesh%vi2
-      d_mesh(n) = d_mesh_vec(n)
-    end do
+    d_mesh = d_mesh_vec(mesh%vi1:mesh%vi2)
     
     ! Clean up after yourself
     deallocate( d_grid_vec)
@@ -208,33 +207,36 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_mesh2grid_2D'
-    INTEGER                                            :: n1,n2,n,i,j, err
+    INTEGER                                            :: n1,n2,m1,m2,x1,x2,n,i,j, err
     integer, dimension(1:par%n)                        :: counts, displs
     REAL(dp), DIMENSION(:    ), allocatable            ::  d_grid_vec
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
+    CALL partition_list( grid%nx, par%i, par%n, x1, x2)
+    CALL partition_list( mesh%nV,par%i,par%n, m1, m2)
+
     ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny) THEN
+    IF (SIZE( d_mesh,1) /= m2-m1+1 .OR. SIZE( d_grid,1) /= x2-x1+1 .OR. SIZE( d_grid,2) /= grid%ny) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
     ! Allocate shared memory
     allocate( d_grid_vec(grid%n))
     
     ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_mesh2grid, d_mesh, d_grid_vec)
+    CALL multiply_PETSc_matrix_with_vector_1D( grid%M_map_mesh2grid, d_mesh, d_grid_vec(n1:n2))
     
-    ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
-
     call allgather_array(d_grid_vec)
 
     DO n = 1, grid%n
       i = grid%n2ij( n,1)
       j = grid%n2ij( n,2)
-      d_grid( i,j) = d_grid_vec( n)
+      if (x1 <= i .and. i <= x2) then
+        d_grid( i-x1+1,j) = d_grid_vec( n)
+      endif
     END DO
     
     ! Clean up after yourself
@@ -501,7 +503,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d,1) /= mesh_src%vi2-mesh_src%vi2+1) THEN
+    IF (SIZE( d,1) /= mesh_src%vi2-mesh_src%vi1+1) THEN
       CALL crash('data field is the wrong size!')
     END IF
     

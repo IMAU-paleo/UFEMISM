@@ -72,52 +72,56 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_masks'
     INTEGER                                            :: vi, ci, vc
+    integer, dimension(:), allocatable                 :: mask_ocean_a
+    integer, dimension(:), allocatable                 :: mask_ice_a
+    integer, dimension(:), allocatable                 :: mask_shelf_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Start out with land everywhere, fill in the rest based on input.
     ice%mask_land_a(   mesh%vi1:mesh%vi2) = 1
-    ice%mask_ocean_a(  mesh%vi1:mesh%vi2) = 0
     ice%mask_lake_a(   mesh%vi1:mesh%vi2) = 0
-    ice%mask_ice_a(    mesh%vi1:mesh%vi2) = 0
     ice%mask_sheet_a(  mesh%vi1:mesh%vi2) = 0
-    ice%mask_shelf_a(  mesh%vi1:mesh%vi2) = 0
     ice%mask_coast_a(  mesh%vi1:mesh%vi2) = 0
     ice%mask_margin_a( mesh%vi1:mesh%vi2) = 0
     ice%mask_gl_a(     mesh%vi1:mesh%vi2) = 0
     ice%mask_cf_a(     mesh%vi1:mesh%vi2) = 0
     ice%mask_a(        mesh%vi1:mesh%vi2) = C%type_land
-    CALL sync
+    allocate(mask_ocean_a(1:mesh%nV))
+    allocate(mask_ice_a(1:mesh%nV))
+    allocate(mask_shelf_a(1:mesh%nV))
+    mask_ocean_a = 0
+    mask_ice_a = 0
+    mask_shelf_a = 0
   
     DO vi = mesh%vi1, mesh%vi2
       
       ! Determine ocean (both open and shelf-covered)
       IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
-        ice%mask_ocean_a( vi) = 1
+        mask_ocean_a( vi) = 1
         ice%mask_land_a(  vi) = 0
         ice%mask_a(       vi) = C%type_ocean
       END IF
     
       ! Determine ice
       IF (ice%Hi_a( vi) > 0._dp) THEN
-        ice%mask_ice_a( vi)  = 1
+        mask_ice_a( vi)  = 1
       END IF
       
       ! Determine sheet
-      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
+      IF (mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
         ice%mask_sheet_a( vi) = 1
         ice%mask_a(       vi) = C%type_sheet
       END IF
     
       ! Determine shelf
-      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ocean_a( vi) == 1) THEN
-        ice%mask_shelf_a( vi) = 1
+      IF (mask_ice_a( vi) == 1 .AND. mask_ocean_a( vi) == 1) THEN
+        mask_shelf_a( vi) = 1
         ice%mask_a(       vi) = C%type_shelf
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
   
     ! Determine coast, grounding line and calving front
     DO vi = mesh%vi1, mesh%vi2
@@ -127,19 +131,19 @@ CONTAINS
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean_a( vc) == 1) THEN
+          IF (mask_ocean_a( vc) == 1) THEN
             ice%mask_a( vi) = C%type_coast
             ice%mask_coast_a( vi) =  1
           END IF
         END DO
       END IF
     
-      IF (ice%mask_ice_a( vi) == 1) THEN  
+      IF (mask_ice_a( vi) == 1) THEN  
         ! Ice bordering non-ice equals margin
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 0) THEN
+          IF (mask_ice_a( vc) == 0) THEN
             ice%mask_a( vi) = C%type_margin
             ice%mask_margin_a( vi) =  1
           END IF
@@ -151,19 +155,19 @@ CONTAINS
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_shelf_a( vc) == 1) THEN
+          IF (mask_shelf_a( vc) == 1) THEN
             ice%mask_a( vi) = C%type_groundingline
             ice%mask_gl_a( vi) = 1
           END IF
         END DO
       END IF
   
-      IF (ice%mask_ice_a( vi) == 1) THEN  
+      IF (mask_ice_a( vi) == 1) THEN  
         ! Ice (sheet or shelf) bordering open ocean equals calvingfront
         
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean_a( vc) == 1 .AND. ice%mask_ice_a( vc) == 0) THEN
+          IF (mask_ocean_a( vc) == 1 .AND. mask_ice_a( vc) == 0) THEN
             ice%mask_a( vi) = C%type_calvingfront
             ice%mask_cf_a( vi) = 1
           END IF
@@ -171,7 +175,14 @@ CONTAINS
         
       END IF
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
+
+    ice%mask_ocean_a = mask_ocean_a(mesh%vi1:mesh%vi2)
+    ice%mask_ice_a   = mask_ice_a  (mesh%vi1:mesh%vi2)
+    ice%mask_shelf_a = mask_shelf_a(mesh%vi1:mesh%vi2)
+
+    deallocate(mask_ocean_a)
+    deallocate(mask_ice_a)
+    deallocate(mask_shelf_a)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

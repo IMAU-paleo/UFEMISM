@@ -21,6 +21,7 @@ module mpi_module
 
 interface allgather_array
   procedure :: allgather_array_dp
+  procedure :: allgather_array_dp_2d
   procedure :: allgather_array_int
 end interface
 
@@ -52,6 +53,18 @@ contains
     call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
                        , array, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
   end subroutine allgather_array_dp
+  subroutine allgather_array_dp_2d(array, i1_, i2_)
+    implicit none
+    real(dp),            dimension(:,:), intent(inout) :: array
+    integer, optional,                   intent(in)    :: i1_,i2_
+
+    integer                                            :: i1,i2, err, n
+    integer, dimension(1:par%n)                        :: counts, displs
+
+    do n = 1, size(array,2)
+      call allgather_array_dp ( array(:,n) )
+    end do
+  end subroutine allgather_array_dp_2d
   subroutine allgather_array_int(array,i1_,i2_)
     implicit none
     integer,               dimension(:), intent(inout) :: array

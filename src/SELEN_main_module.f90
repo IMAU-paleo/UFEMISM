@@ -98,9 +98,9 @@ CONTAINS
     IF (par%master) WRITE(0,*) '  Initialising ALF and LONG_TABLE...'
     CALL initialise_ALF_and_LONG_TABLE( SELEN)
 
-    ! ! Initialise ice loading history
-    ! IF (par%master) WRITE(0,*) '  Initialising ice loading history...'
-    ! CALL initialise_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
+    ! Initialise ice loading history
+    IF (par%master) WRITE(0,*) '  Initialising ice loading history...'
+    CALL initialise_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
 
     ! ! Calculating Green's functions (from load Love numbers)
     ! IF (par%master) WRITE(0,*) '  Calling TABOO and calculate Green functions...'
@@ -167,6 +167,75 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE read_Love_numbers
+
+  ! == Initialise ice loading history
+  SUBROUTINE initialise_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
+    ! Allocate memory for the global and regional ice loading histories
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_SELEN_global),             INTENT(INOUT) :: SELEN
+    TYPE(type_model_region),             INTENT(INOUT) :: NAM, EAS, GRL, ANT
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_loading_history'
+    INTEGER                                            :: ki
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory:
+    CALL allocate_shared_dp_1D( SELEN%mesh%nV * (C%SELEN_irreg_time_n+1), SELEN%dice_loading_history_irreg_glob, SELEN%wdice_loading_history_irreg_glob)
+    SELEN%ice_loading_history_irreg_glob( 1:SELEN%mesh%nV,0:C%SELEN_irreg_time_n) => SELEN%dice_loading_history_irreg_glob
+
+    ! Assume the world is in a steady state
+    DO ki = 0, C%SELEN_irreg_time_n
+      SELEN%ice_loading_history_irreg_glob( C%SELEN_i1:C%SELEN_i2,ki) = SELEN%load_ref( C%SELEN_i1:C%SELEN_i2)
+    END DO
+    CALL sync
+
+    ! Initialise for the ice model regions
+    IF (C%do_NAM) CALL initialise_ice_loading_history_region( NAM)
+    IF (C%do_EAS) CALL initialise_ice_loading_history_region( EAS)
+    IF (C%do_GRL) CALL initialise_ice_loading_history_region( GRL)
+    IF (C%do_ANT) CALL initialise_ice_loading_history_region( ANT)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
+
+  END SUBROUTINE initialise_ice_loading_history
+  SUBROUTINE initialise_ice_loading_history_region( region)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_loading_history_region'
+    INTEGER                                            :: k, ki
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory:
+    CALL allocate_shared_dp_3D( region%grid_GIA%nx, region%grid_GIA%ny, C%SELEN_reg_time_n, region%SELEN%ice_loading_history_reg_sq,   region%SELEN%wice_loading_history_reg_sq  )
+    CALL allocate_shared_dp_3D( region%grid_GIA%nx, region%grid_GIA%ny, C%SELEN_irreg_time_n, region%SELEN%ice_loading_history_irreg_sq, region%SELEN%wice_loading_history_irreg_sq)
+
+    ! Assume the world is in a steady state
+    DO k = 1, C%SELEN_reg_time_n
+      region%SELEN%ice_loading_history_reg_sq(   region%grid_GIA%i1:region%grid_GIA%i2,:,k ) = region%SELEN%load_ref( region%grid_GIA%i1:region%grid_GIA%i2,:)
+    END DO
+    DO ki = 1, C%SELEN_irreg_time_n
+      region%SELEN%ice_loading_history_irreg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,ki) = region%SELEN%load_ref( region%grid_GIA%i1:region%grid_GIA%i2,:)
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
+
+  END SUBROUTINE initialise_ice_loading_history_region
 
   ! == Initialise ALF and LONG_TABLE
   SUBROUTINE initialise_ALF_and_LONG_TABLE( SELEN)

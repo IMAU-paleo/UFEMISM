@@ -59,6 +59,7 @@ MODULE configuration_module
   REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
   REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
   REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
+  REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
   
   ! Which ice sheets do we simulate?
   ! ================================
@@ -639,6 +640,38 @@ MODULE configuration_module
   REAL(dp)            :: ELRA_bedrock_relaxation_time_config         = 3000.0_dp                        ! Relaxation time for bedrock adjustment [yr]
   REAL(dp)            :: ELRA_mantle_density_config                  = 3300.0_dp                        ! Mantle density [kg m^-3]
 
+  ! SELEN
+  ! =====
+
+  LOGICAL             :: SELEN_run_at_t_start_config                  = .FALSE.                         ! Whether or not to run SELEN in the first coupling loop (needed for some benchmark experiments)
+  INTEGER             :: SELEN_n_TDOF_iterations_config               = 1                               ! Number of Time-Dependent Ocean Function iterations
+  INTEGER             :: SELEN_n_recursion_iterations_config          = 1                               ! Number of recursion iterations
+  LOGICAL             :: SELEN_use_rotational_feedback_config         = .FALSE.                         ! If TRUE, rotational feedback is included
+  INTEGER             :: SELEN_n_harmonics_config                     = 128                             ! Maximum number of harmonic degrees
+  LOGICAL             :: SELEN_display_progress_config                = .FALSE.                         ! Whether or not to display the progress of the big loops to the screen (doesn't work on Cartesius!)
+
+  CHARACTER(LEN=256)  :: SELEN_dir_config                             = 'data/SELEN'                    ! Directory where SELEN initial files and spherical harmonics are stored
+  CHARACTER(LEN=256)  :: SELEN_global_topo_filename_config            = 'SELEN_global_topography.nc'    ! Filename for the SELEN global topography file (located in SELEN_dir)
+  CHARACTER(LEN=256)  :: SELEN_TABOO_init_filename_config             = 'SELEN_TABOO_initial_file.dat'  ! Filename for the TABOO initial file           (idem                )
+  CHARACTER(LEN=256)  :: SELEN_LMJ_VALUES_filename_config             = 'SELEN_lmj_values.bin'          ! Filename for the LJ and MJ values file        (idem                )
+
+  INTEGER                  :: SELEN_irreg_time_n_config               = 15                              ! Number of entries in the irregular moving time window
+  REAL(dp), DIMENSION(50)  :: SELEN_irreg_time_window_config          = &                               ! Values of entries in the irregular moving time window
+   (/20._dp, 20._dp, 20._dp, 5._dp, 5._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, &
+      0._dp,  0._dp,  0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, &
+      0._dp,  0._dp,  0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, 0._dp, &
+      0._dp,  0._dp,  0._dp, 0._dp, 0._dp  /)
+
+  REAL(dp)            :: SELEN_lith_thickness_config                  = 100._dp                         ! Thickness of the elastic lithosphere [km]
+  INTEGER             :: SELEN_visc_n_config                          = 3                               ! Number      of viscous asthenosphere layers
+  REAL(dp), DIMENSION(3) :: SELEN_visc_prof_config                    = (/ 3._dp, 0.6_dp, 0.3_dp /)     ! Viscosities of viscous asthenosphere layers [?]
+
+  ! Settings for the TABOO Earth deformation model
+  INTEGER             :: SELEN_TABOO_CDE_config                       = 0                               ! code of the model (see taboo for explanation)
+  INTEGER             :: SELEN_TABOO_TLOVE_config                     = 1                               ! Tidal love numbers yes/no
+  INTEGER             :: SELEN_TABOO_DEG1_config                      = 1                               ! Tidal love numbers degree
+  REAL(dp)            :: SELEN_TABOO_RCMB_config                      = 3480._dp                        ! Radius of CMB (km)
+
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
 
@@ -719,6 +752,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_output
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
+    REAL(dp)                            :: dt_SELEN
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -1272,6 +1306,40 @@ MODULE configuration_module
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
 
+    ! SELEN
+    ! =====
+
+    LOGICAL                             :: SELEN_run_at_t_start
+    INTEGER                             :: SELEN_n_TDOF_iterations
+    INTEGER                             :: SELEN_n_recursion_iterations
+    LOGICAL                             :: SELEN_use_rotational_feedback
+    INTEGER                             :: SELEN_n_harmonics
+    LOGICAL                             :: SELEN_display_progress
+
+    CHARACTER(LEN=256)                  :: SELEN_dir
+    CHARACTER(LEN=256)                  :: SELEN_global_topo_filename
+    CHARACTER(LEN=256)                  :: SELEN_TABOO_init_filename
+    CHARACTER(LEN=256)                  :: SELEN_LMJ_VALUES_filename
+
+    INTEGER                             :: SELEN_irreg_time_n
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: SELEN_irreg_time_window
+
+    REAL(dp)                            :: SELEN_lith_thickness
+    INTEGER                             :: SELEN_visc_n
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: SELEN_visc_prof
+
+    INTEGER                             :: SELEN_TABOO_CDE
+    INTEGER                             :: SELEN_TABOO_TLOVE
+    INTEGER                             :: SELEN_TABOO_DEG1
+    REAL(dp)                            :: SELEN_TABOO_RCMB
+
+    ! Some derived values
+    INTEGER                             :: SELEN_i1, SELEN_i2           ! Parallelisation of loops over global grid pixels
+    INTEGER                             :: SELEN_j1, SELEN_j2           ! Parallelisation of loops over harmonic degrees
+    REAL(dp)                            :: SELEN_alfa
+    INTEGER                             :: SELEN_jmax
+    INTEGER                             :: SELEN_reg_time_n
+
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
 
@@ -1363,13 +1431,28 @@ MODULE configuration_module
 
   END TYPE constants_type
 
+  ! Since some of the TABOO routines have variables named C (thanks, Giorgio...),
+  ! we cannot use the regular config structure there. Collect the required config
+  ! parameters into a smaller separate structure called C_TABOO
+  TYPE constants_type_TABOO
+
+    INTEGER                             :: IMODE            ! SELEN integration mode
+    INTEGER                             :: NV               ! Number of viscoelastic layers
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: VSC              ! Viscosity profile
+    INTEGER                             :: CDE              ! Code of the model (see taboo for explanation)
+    INTEGER                             :: TLOVE            ! Tidal love numbers yes/no
+    INTEGER                             :: DEG1             ! Tidal love numbers degree
+    REAL(dp)                            :: LTH              ! Lithospheric thickness [km]
+    REAL(dp)                            :: RCMB             ! Radius of CMB (km)
+
+  END TYPE constants_type_TABOO
 
   ! ===============================================
   ! "C" is an instance of the "constants_type" type
   ! ===============================================
   
   TYPE(constants_type), SAVE :: C
-
+  TYPE(constants_type_TABOO), SAVE :: C_TABOO
 
 CONTAINS
 
@@ -1600,6 +1683,7 @@ CONTAINS
                      dt_output_config,                                &
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
+                     dt_SELEN_config,                                 &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
@@ -1980,6 +2064,25 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
+                     SELEN_run_at_t_start_config,                     &
+                     SELEN_n_TDOF_iterations_config,                  &
+                     SELEN_n_recursion_iterations_config,             &
+                     SELEN_use_rotational_feedback_config,            &
+                     SELEN_n_harmonics_config,                        &
+                     SELEN_display_progress_config,                   &
+                     SELEN_dir_config,                                &
+                     SELEN_global_topo_filename_config,               &
+                     SELEN_TABOO_init_filename_config,                &
+                     SELEN_LMJ_VALUES_filename_config,                &
+                     SELEN_irreg_time_n_config,                       &
+                     SELEN_irreg_time_window_config,                  &
+                     SELEN_lith_thickness_config,                     &
+                     SELEN_visc_n_config,                             &
+                     SELEN_visc_prof_config,                          &
+                     SELEN_TABOO_CDE_config,                          &
+                     SELEN_TABOO_TLOVE_config,                        &
+                     SELEN_TABOO_DEG1_config,                         &
+                     SELEN_TABOO_RCMB_config,                         &
                      help_field_01_config,                            &
                      help_field_02_config,                            &
                      help_field_03_config,                            &
@@ -2072,6 +2175,7 @@ CONTAINS
     C%dt_output                                = dt_output_config
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
+    C%dt_SELEN                                 = dt_SELEN_config
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -2627,6 +2731,40 @@ CONTAINS
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
 
+    ! SELEN
+    ! =====
+
+    C%SELEN_run_at_t_start                     = SELEN_run_at_t_start_config
+    C%SELEN_n_TDOF_iterations                  = SELEN_n_TDOF_iterations_config
+    C%SELEN_n_recursion_iterations             = SELEN_n_recursion_iterations_config
+    C%SELEN_use_rotational_feedback            = SELEN_use_rotational_feedback_config
+    C%SELEN_n_harmonics                        = SELEN_n_harmonics_config
+    C%SELEN_display_progress                   = SELEN_display_progress_config
+
+    C%SELEN_dir                                = SELEN_dir_config
+    C%SELEN_global_topo_filename               = SELEN_global_topo_filename_config
+    C%SELEN_TABOO_init_filename                = SELEN_TABOO_init_filename_config
+    C%SELEN_LMJ_VALUES_filename                = SELEN_LMJ_VALUES_filename_config
+
+    C%SELEN_irreg_time_n                       = SELEN_irreg_time_n_config
+    ALLOCATE( C%SELEN_irreg_time_window( C%SELEN_irreg_time_n))
+    C%SELEN_irreg_time_window                  = SELEN_irreg_time_window_config( 1:C%SELEN_irreg_time_n)
+
+    C%SELEN_lith_thickness                     = SELEN_lith_thickness_config
+    C%SELEN_visc_n                             = SELEN_visc_n_config
+    ALLOCATE( C%SELEN_visc_prof( C%SELEN_visc_n))
+    C%SELEN_visc_prof      = SELEN_visc_prof_config( 1:C%SELEN_visc_n)
+
+    C%SELEN_TABOO_CDE                          = SELEN_TABOO_CDE_config
+    C%SELEN_TABOO_TLOVE                        = SELEN_TABOO_TLOVE_config
+    C%SELEN_TABOO_DEG1                         = SELEN_TABOO_DEG1_config
+    C%SELEN_TABOO_RCMB                         = SELEN_TABOO_RCMB_config
+
+    ! Fill in some derived values
+    C%SELEN_jmax       = (C%SELEN_n_harmonics + 1) * (C%SELEN_n_harmonics + 2) / 2
+    C%SELEN_reg_time_n = MAX(1, INT(SUM(C%SELEN_irreg_time_window( 1:C%SELEN_irreg_time_n)))) * INT(1000. / C%dt_SELEN)
+
+    CALL initialize_TABOO_config
 
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
@@ -2713,6 +2851,21 @@ CONTAINS
     C%alpha_stereo_ANT                         = 165.0263_dp
 
   END SUBROUTINE copy_variables_to_struct
+
+  SUBROUTINE initialize_TABOO_config
+
+    ! Taboo settings
+    C_TABOO%IMODE            = 1
+    C_TABOO%NV               = C%SELEN_visc_n
+    ALLOCATE( C_TABOO%VSC( C%SELEN_visc_n))
+    C_TABOO%VSC              = C%SELEN_visc_prof
+    C_TABOO%CDE              = C%SELEN_TABOO_CDE
+    C_TABOO%TLOVE            = C%SELEN_TABOO_TLOVE
+    C_TABOO%DEG1             = C%SELEN_TABOO_DEG1
+    C_TABOO%LTH              = C%SELEN_lith_thickness
+    C_TABOO%RCMB             = C%SELEN_TABOO_RCMB
+
+  END SUBROUTINE initialize_TABOO_config
 
   SUBROUTINE get_procedural_output_dir_name( output_dir)
     ! Generate a procedural output directory for the current date (e.g. results_20210721_001)

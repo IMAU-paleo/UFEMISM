@@ -312,7 +312,7 @@ CONTAINS
     CALL sync
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=8)
     
   END SUBROUTINE create_remapping_arrays_glob_mesh
   SUBROUTINE map_latlon2mesh_2D( mesh, map, d_grid, d_mesh)

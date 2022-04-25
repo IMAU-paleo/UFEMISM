@@ -28,7 +28,7 @@ PROGRAM UFEMISM_program
 !   reallocated when the mesh is updated. Since this concerns data fields that are a property
 !   of the ice-sheet model components, rather than the mesh itself, this is done in the
 !   "remap_COMPONENT" routines contained in the different model component modules.
-  
+
 #include <petsc/finclude/petscksp.h>
   USE mpi
   USE petscksp
@@ -37,91 +37,98 @@ PROGRAM UFEMISM_program
   USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, write_total_model_time_to_screen, &
                                          reset_resource_tracker
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation
-  USE data_types_module,           ONLY: type_model_region, type_climate_matrix, type_netcdf_resource_tracker
-  USE forcing_module,              ONLY: forcing, initialise_insolation_data, update_insolation_data, initialise_CO2_record, update_CO2_at_model_time, &
-                                         initialise_d18O_record, update_d18O_at_model_time, initialise_d18O_data, update_global_mean_temperature_change_history, &
-                                         calculate_modelled_d18O, initialise_inverse_routine_data, inverse_routine_global_temperature_offset, inverse_routine_CO2, &
-                                         initialise_geothermal_heat_flux
-  USE climate_module,              ONLY: initialise_climate_matrix
+  USE data_types_module,           ONLY: type_model_region, type_netcdf_resource_tracker, &
+                                         type_climate_matrix_global, type_ocean_matrix_global
+  USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
+                                         update_global_mean_temperature_change_history, calculate_modelled_d18O
+  USE climate_module,              ONLY: initialise_climate_model_global
+  USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
+
+
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
 
   IMPLICIT NONE
-  
+
   CHARACTER(LEN=256), PARAMETER          :: version_number = '1.2'
-  
+
   ! The four model regions
   TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
-  
+
   ! The global climate matrix
-  TYPE(type_climate_matrix)              :: matrix
-  
+  TYPE(type_climate_matrix_global)       :: climate_matrix_global
+  TYPE(type_ocean_matrix_global)         :: ocean_matrix_global
+
   ! Coupling timer
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
-  
+
   ! Computation time tracking
   TYPE(type_netcdf_resource_tracker)     :: resources
   REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
-  
+
   ! ======================================================================================
-  
+
   routine_path = 'UFEMISM_program'
-  
+
   ! Initialise MPI and PETSc
   CALL initialise_parallelisation
   CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
-  
+
   IF (par%master) WRITE(0,*) ''
   IF (par%master) WRITE(0,*) '=================================================='
   IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', TRIM(version_number), ' on ', par%n, ' cores ====='
   IF (par%master) WRITE(0,*) '=================================================='
   IF (par%master) WRITE(0,*) ''
-  
+
   tstart = MPI_WTIME()
   t1     = MPI_WTIME()
-    
+
   ! Set up the model configuration from the provided config file(s) and create an output directory
   ! ==============================================================================================
-  
+
   CALL initialise_model_configuration( version_number)
-    
+
   ! ===== Initialise parameters for the vertical scaled coordinate transformation =====
   ! (the same for all model regions, so stored in the "C" structure)
   ! ===================================================================================
-  
+
   CALL initialise_zeta_discretisation
-  
-  ! ===== Initialise forcing data =====
-  ! ===================================
-  
-  CALL initialise_d18O_data
-  CALL initialise_insolation_data
-  CALL initialise_CO2_record
-  CALL initialise_d18O_record
-  CALL initialise_inverse_routine_data
-  CALL initialise_geothermal_heat_flux
-  
+
+  ! ===== Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux) =====
+  ! ========================================================================================
+
+  CALL initialise_global_forcing
+
   ! ===== Create the resource tracking output file =====
   ! ====================================================
-  
+
   CALL create_resource_tracking_file( resources)
-  
+
   ! ===== Initialise the climate matrix =====
   ! =========================================
-  
-  CALL initialise_climate_matrix(matrix)  
+
+  CALL initialise_climate_model_global( climate_matrix_global)
+
+  ! ===== Initialise the ocean matrix =====
+  ! =======================================
+
+  CALL initialise_ocean_vertical_grid
+  CALL initialise_ocean_model_global( ocean_matrix_global)
 
   ! ===== Initialise the model regions ======
   ! =========================================
-  
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', matrix)
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', matrix)
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', matrix)
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', matrix)
-    
+
+  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', climate_matrix_global, ocean_matrix_global)
+  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', climate_matrix_global, ocean_matrix_global)
+
+  ! ===== Initial contributions ======
+  ! ==================================
+
   ! Determine GMSL contributions of all simulated ice sheets
   GMSL_NAM = 0._dp
   GMSL_EAS = 0._dp
@@ -131,12 +138,19 @@ PROGRAM UFEMISM_program
   IF (C%do_EAS) GMSL_EAS = EAS%GMSL_contribution
   IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
   IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
-  GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT 
-  
+  GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
+
   ! Determine d18O contributions of all simulated ice sheets
-  !CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-  CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-    
+  IF (.NOT. C%choice_forcing_method == 'none') THEN
+    IF (C%do_calculate_benthic_d18O) THEN
+      CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
+      CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
+    END IF
+  END IF
+
+  ! ===== Initial global output =====
+  ! =================================
+
   ! Write global data at t=0 to output file
   CALL write_text_output( &
     C%start_time_of_run,               &  ! time
@@ -157,22 +171,21 @@ PROGRAM UFEMISM_program
     forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
     forcing%dT_glob,                   &  ! global mean surface temperature anomaly
     forcing%dT_deepwater               )  ! deep-water temperature anomaly
-  
-  ! ===== The big time loop =====
-  ! =============================
-  
+
+! =============================
+! ===== The big time loop =====
+! =============================
+
   t_coupling = C%start_time_of_run
-  
+
   DO WHILE (t_coupling < C%end_time_of_run)
-  
+
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
-  
+
     ! Update global insolation forcing, CO2, and d18O at the current model time
-    CALL update_insolation_data(    t_coupling)
-    CALL update_CO2_at_model_time(  t_coupling)
-    CALL update_d18O_at_model_time( t_coupling)
-    
+    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'pre')
+
     ! Update regional sea level (needs to be moved to separate subroutine at some point!)
     IF (C%choice_sealevel_model == 'fixed') THEN
       IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = C%fixed_sealevel
@@ -188,18 +201,18 @@ PROGRAM UFEMISM_program
       IF (par%master) WRITE(0,*) '  ERROR: choice_sealevel_model "', TRIM(C%choice_sealevel_model), '" not implemented in IMAU_ICE_program!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
-    
+
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
-    
-    IF (C%do_NAM) CALL run_model( NAM, matrix, t_end_models)
-    IF (C%do_EAS) CALL run_model( EAS, matrix, t_end_models)
-    IF (C%do_GRL) CALL run_model( GRL, matrix, t_end_models)
-    IF (C%do_ANT) CALL run_model( ANT, matrix, t_end_models)
-    
+
+    IF (C%do_NAM) CALL run_model( NAM, climate_matrix_global, t_end_models)
+    IF (C%do_EAS) CALL run_model( EAS, climate_matrix_global, t_end_models)
+    IF (C%do_GRL) CALL run_model( GRL, climate_matrix_global, t_end_models)
+    IF (C%do_ANT) CALL run_model( ANT, climate_matrix_global, t_end_models)
+
     ! Advance coupling time
     t_coupling = t_end_models
-    
+
     ! Determine GMSL contributions
     GMSL_NAM = 0._dp
     GMSL_EAS = 0._dp
@@ -210,23 +223,11 @@ PROGRAM UFEMISM_program
     IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
     IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
     GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
-  
-    ! Calculate contributions to benthic d18O from the different ice sheets
-    CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-    CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-    
-    ! If applicable, call the inverse routine to update the climate forcing parameter
-    IF     (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
-      CALL inverse_routine_global_temperature_offset
-    ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
-      CALL inverse_routine_CO2
-    ELSEIF (C%choice_forcing_method == 'CO2_direct') THEN
-      ! No inverse routine is used in these forcing methods
-    ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_forcing_method "', TRIM(C%choice_forcing_method), '" not implemented in IMAU_ICE_program!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-    
+
+    ! Calculate contributions to benthic d18O from the different ice sheets and,
+    ! if applicable, call the inverse routine to update the climate forcing parameter
+    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
+
     ! Write global data to output file
     CALL write_text_output( &
       t_coupling,  &  ! time
@@ -247,26 +248,26 @@ PROGRAM UFEMISM_program
       forcing%d18O_ANT,                  &  ! mean isotope content of Antarctica
       forcing%dT_glob,                   &  ! global mean surface temperature anomaly
       forcing%dT_deepwater               )  ! deep-water temperature anomaly
-  
+
     ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
     CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
     t1 = MPI_WTIME()
     CALL reset_resource_tracker
-      
+
   END DO ! DO WHILE (t_coupling < C%end_time_of_run)
-  
+
 ! ====================================
 ! ===== End of the big time loop =====
-! ==================================== 
-  
+! ====================================
+
   ! Write total elapsed time to screen
   tstop = MPI_WTIME()
   IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
   CALL sync
-  
+
   ! Finalise MPI and PETSc
   CALL PetscFinalize( perr)
   CALL MPI_FINALIZE( ierr)
-    
+
 END PROGRAM UFEMISM_program

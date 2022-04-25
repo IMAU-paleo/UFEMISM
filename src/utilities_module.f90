@@ -32,14 +32,14 @@ MODULE utilities_module
                                              adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid
 
-  implicit none
+  IMPLICIT NONE
   ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
   ! LAPACK source)
   !  *
   !  *  -- LAPACK routine (version 3.1) --
   !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
   !  *     November 2006
-  interface 
+  INTERFACE
     SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
       INTEGER            INFO, LDA, M, N
       INTEGER            IPIV( * )
@@ -50,11 +50,16 @@ MODULE utilities_module
       INTEGER            IPIV( * )
       DOUBLE PRECISION   A( LDA, * ), WORK( * )
     END SUBROUTINE
-    SUBROUTINE dgtsv( N, NRHS, DL, D, DU, B, LDB, INFO )
+    SUBROUTINE DGTSV( N, NRHS, DL, D, DU, B, LDB, INFO )
       INTEGER            INFO, LDB, N, NRHS
       DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * )
     END SUBROUTINE
-  end interface
+    SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+      INTEGER            INFO, LDA, LDB, N, NRHS
+      INTEGER            IPIV( * )
+      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+    END SUBROUTINE
+  END INTERFACE
 
 CONTAINS
 
@@ -1559,5 +1564,898 @@ CONTAINS
     CALL sync
     
   END SUBROUTINE check_for_NaN_int_3D
+
+  ! == Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+  SUBROUTINE transpose_dp_2D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,nx,ny,i1,i2
+    REAL(dp), DIMENSION(:,:  ), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_2D( nx, ny, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+      d_temp( i,j) = d( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_dp_2D( ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+      d( j,i) = d_temp( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_dp_2D
+  SUBROUTINE transpose_dp_3D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
+    REAL(dp), DIMENSION(:,:,:), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    nz = SIZE( d,3)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_dp_3D( nx, ny, nz, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d_temp( i,j,k) = d( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_dp_3D( nz, ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d( k,j,i) = d_temp( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_dp_3D
+  SUBROUTINE transpose_int_2D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,nx,ny,i1,i2
+    INTEGER,  DIMENSION(:,:  ), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_int_2D( nx, ny, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+      d_temp( i,j) = d( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_int_2D( ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+      d( j,i) = d_temp( i,j)
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_int_2D
+  SUBROUTINE transpose_int_3D( d, wd)
+    ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:,:), POINTER, INTENT(INOUT) :: d
+    INTEGER,                             INTENT(INOUT) :: wd
+
+    ! Local variables:
+    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
+    INTEGER,  DIMENSION(:,:,:), POINTER          ::  d_temp
+    INTEGER                                      :: wd_temp
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    nz = SIZE( d,3)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Allocate temporary memory
+    CALL allocate_shared_int_3D( nx, ny, nz, d_temp, wd_temp)
+
+    ! Copy data to temporary memory
+    DO i = i1,i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d_temp( i,j,k) = d( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate memory
+    CALL deallocate_shared( wd)
+
+    ! Reallocate transposed memory
+    CALL allocate_shared_int_3D( nz, ny, nx, d, wd)
+
+    ! Copy and transpose data from temporary memory
+    DO i = i1, i2
+    DO j = 1, ny
+    DO k = 1, nz
+      d( k,j,i) = d_temp( i,j,k)
+    END DO
+    END DO
+    END DO
+    CALL sync
+
+    ! Deallocate temporary memory
+    CALL deallocate_shared( wd_temp)
+
+  END SUBROUTINE transpose_int_3D
+
+  ! == 2nd-order conservative remapping of a 1-D variable
+  SUBROUTINE remap_cons_2nd_order_1D( z_src, mask_src, d_src, z_dst, mask_dst, d_dst)
+    ! 2nd-order conservative remapping of a 1-D variable
+    !
+    ! Used to remap ocean data from the provided vertical grid to the UFEMISM ocean vertical grid
+    !
+    ! Both z_src and z_dst can be irregular.
+    !
+    ! Both the src and dst data have a mask, with 0 indicating grid points where no data is defined.
+    !
+    ! This subroutine is serial, as it will be applied to single grid cells when remapping 3-D data fields,
+    !   with the parallelisation being done by distributing the 2-D grid cells over the processes.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_src
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_src
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_dst
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_dst
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_dst
+
+    ! Local variables:
+    LOGICAL                                            :: all_are_masked
+    INTEGER                                            :: nz_src, nz_dst
+    INTEGER                                            :: k
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: ddz_src
+    INTEGER                                            :: k_src, k_dst
+    REAL(dp)                                           :: zl_src, zu_src, zl_dst, zu_dst, z_lo, z_hi, z, d
+    REAL(dp)                                           :: dz_overlap, dz_overlap_tot, d_int, d_int_tot
+    REAL(dp)                                           :: dist_to_dst, dist_to_dst_min, max_dist
+    INTEGER                                            :: k_src_nearest_to_dst
+
+    ! Initialise
+    d_dst = 0._dp
+
+    ! Sizes
+    nz_src = SIZE( z_src,1)
+    nz_dst = SIZE( z_dst,1)
+
+    ! Maximum distance on combined grids
+    max_dist = MAXVAL([ ABS( z_src( nz_src) - z_src( 1)), &
+                        ABS( z_dst( nz_dst) - z_dst( 1)), &
+                        ABS( z_src( nz_src) - z_dst( 1)), &
+                        ABS( z_dst( nz_dst) - z_src( 1))])
+
+    ! Exception for when the entire src field is masked
+    all_are_masked = .TRUE.
+    DO k = 1, nz_src
+      IF (mask_src( k) == 1) all_are_masked = .FALSE.
+    END DO
+    IF (all_are_masked) RETURN
+
+    ! Exception for when the entire dst field is masked
+    all_are_masked = .TRUE.
+    DO k = 1, nz_dst
+      IF (mask_dst( k) == 1) all_are_masked = .FALSE.
+    END DO
+    IF (all_are_masked) RETURN
+
+    ! Calculate derivative d_src/dz (one-sided differencing at the boundary, central differencing everywhere else)
+    ALLOCATE( ddz_src( nz_src))
+    DO k = 2, nz_src-1
+      ddz_src( k    ) = (d_src( k+1   ) - d_src( k-1     )) / (z_src( k+1   ) - z_src( k-1     ))
+    END DO
+    ddz_src(  1     ) = (d_src( 2     ) - d_src( 1       )) / (z_src( 2     ) - z_src( 1       ))
+    ddz_src(  nz_src) = (d_src( nz_src) - d_src( nz_src-1)) / (z_src( nz_src) - z_src( nz_src-1))
+
+    ! Perform conservative remapping by finding regions of overlap
+    ! between source and destination grid cells
+
+    DO k_dst = 1, nz_dst
+
+      ! Skip masked grid cells
+      IF (mask_dst( k_dst) == 0) THEN
+        d_dst( k_dst) = 0._dp
+        CYCLE
+      END IF
+
+      ! Find z range covered by this dst grid cell
+      IF (k_dst > 1) THEN
+        zl_dst = 0.5_dp * (z_dst( k_dst - 1) + z_dst( k_dst))
+      ELSE
+        zl_dst = z_dst( 1) - 0.5_dp * (z_dst( 2) - z_dst( 1))
+      END IF
+      IF (k_dst < nz_dst) THEN
+        zu_dst = 0.5_dp * (z_dst( k_dst + 1) + z_dst( k_dst))
+      ELSE
+        zu_dst = z_dst( nz_dst) + 0.5_dp * (z_dst( nz_dst) - z_dst( nz_dst-1))
+      END IF
+
+      ! Find all overlapping src grid cells
+      d_int_tot      = 0._dp
+      dz_overlap_tot = 0._dp
+      DO k_src = 1, nz_src
+
+        ! Skip masked grid cells
+        IF (mask_src( k_src) == 0) CYCLE
+
+        ! Find z range covered by this src grid cell
+        IF (k_src > 1) THEN
+          zl_src = 0.5_dp * (z_src( k_src - 1) + z_src( k_src))
+        ELSE
+          zl_src = z_src( 1) - 0.5_dp * (z_src( 2) - z_src( 1))
+        END IF
+        IF (k_src < nz_src) THEN
+          zu_src = 0.5_dp * (z_src( k_src + 1) + z_src( k_src))
+        ELSE
+          zu_src = z_src( nz_src) + 0.5_dp * (z_src( nz_src) - z_src( nz_src-1))
+        END IF
+
+        ! Find region of overlap
+        z_lo = MAX( zl_src, zl_dst)
+        z_hi = MIN( zu_src, zu_dst)
+        dz_overlap = MAX( 0._dp, z_hi - z_lo)
+
+        ! Calculate integral over region of overlap and add to sum
+        IF (dz_overlap > 0._dp) THEN
+          z = 0.5_dp * (z_lo + z_hi)
+          d = d_src( k_src) + ddz_src( k_src) * (z - z_src( k_src))
+          d_int = d * dz_overlap
+
+          d_int_tot      = d_int_tot      + d_int
+          dz_overlap_tot = dz_overlap_tot + dz_overlap
+        END IF
+
+      END DO ! DO k_src = 1, nz_src
+
+      IF (dz_overlap_tot > 0._dp) THEN
+        ! Calculate dst value
+        d_dst( k_dst) = d_int_tot / dz_overlap_tot
+      ELSE
+        ! Exception for when no overlapping src grid cells were found; use nearest-neighbour extrapolation
+
+        k_src_nearest_to_dst = 0._dp
+        dist_to_dst_min      = max_dist
+        DO k_src = 1, nz_src
+          IF (mask_src( k_src) == 1) THEN
+            dist_to_dst = ABS( z_src( k_src) - z_dst( k_dst))
+            IF (dist_to_dst < dist_to_dst_min) THEN
+              dist_to_dst_min      = dist_to_dst
+              k_src_nearest_to_dst = k_src
+            END IF
+          END IF
+        END DO
+
+        ! Safety
+        IF (k_src_nearest_to_dst == 0) THEN
+          WRITE(0,*) '  remap_cons_2nd_order_1D - ERROR: couldnt find nearest neighbour on source grid!'
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        END IF
+
+        d_dst( k_dst) = d_src( k_src_nearest_to_dst)
+
+      END IF ! IF (dz_overlap_tot > 0._dp) THEN
+
+    END DO ! DO k_dst = 1, nz_dst
+
+    ! Clean up after yourself
+    DEALLOCATE( ddz_src)
+
+  END SUBROUTINE remap_cons_2nd_order_1D
+
+  ! == Map data from a global lon/lat-grid to the model y/x-grid
+  SUBROUTINE map_glob_to_grid_2D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
+    ! Map a data field from a global lat-lon grid to the regional square grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,                         INTENT(IN)  :: nlat
+    INTEGER,                         INTENT(IN)  :: nlon
+    REAL(dp), DIMENSION(nlat),       INTENT(IN)  :: lat
+    REAL(dp), DIMENSION(nlon),       INTENT(IN)  :: lon
+    TYPE(type_grid),                 INTENT(IN)  :: grid
+    REAL(dp), DIMENSION(:,:  ),      INTENT(IN)  :: d_glob
+    REAL(dp), DIMENSION(:,:  ),      INTENT(OUT) :: d_grid
+
+    ! Local variables:
+    INTEGER                                                :: i, j, il, iu, jl, ju
+    REAL(dp)                                               :: wil, wiu, wjl, wju
+
+    DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
+
+      ! Find enveloping lat-lon indices
+      il  = MAX(1,MIN(nlon-1, 1 + FLOOR((grid%lon(i,j)-MINVAL(lon)) / (lon(2)-lon(1)))))
+      iu  = il+1
+      wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+      wiu = 1-wil
+
+      ! Exception for pixels near the zero meridian
+      IF (grid%lon(i,j) < MINVAL(lon)) THEN
+        il = nlon
+        iu = 1
+        wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+        wiu = 1-wil
+      ELSEIF (grid%lon(i,j) > MAXVAL(lon)) THEN
+        il = nlon
+        iu = 1
+        wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
+        wil = 1-wiu
+      END IF
+
+      jl  = MAX(1,MIN(nlat-1, 1 + FLOOR((grid%lat(i,j)-MINVAL(lat)) / (lat(2)-lat(1)))))
+      ju  = jl+1
+      wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
+      wju = 1-wjl
+
+      ! Interpolate data
+      d_grid( i,j) = (d_glob( il,jl) * wil * wjl) + &
+                     (d_glob( il,ju) * wil * wju) + &
+                     (d_glob( iu,jl) * wiu * wjl) + &
+                     (d_glob( iu,ju) * wiu * wju)
+
+    END DO
+    END DO
+    CALL sync
+
+  END SUBROUTINE map_glob_to_grid_2D
+  SUBROUTINE map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
+    ! Map a data field from a global lat-lon grid to the regional square grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,                         INTENT(IN)  :: nlat
+    INTEGER,                         INTENT(IN)  :: nlon
+    REAL(dp), DIMENSION(nlat),       INTENT(IN)  :: lat
+    REAL(dp), DIMENSION(nlon),       INTENT(IN)  :: lon
+    TYPE(type_grid),                 INTENT(IN)  :: grid
+    REAL(dp), DIMENSION(:,:,:),      INTENT(IN)  :: d_glob
+    REAL(dp), DIMENSION(:,:,:),      INTENT(OUT) :: d_grid
+
+    ! Local variables:
+    INTEGER                                      :: i, j, il, iu, jl, ju, k, nz
+    REAL(dp)                                     :: wil, wiu, wjl, wju
+
+    nz = SIZE( d_glob,3)
+
+    ! Safety
+    IF (SIZE(d_grid,3) /= nz) THEN
+      WRITE(0,*) 'map_glob_to_grid_3D - ERROR: Z-dimensions of global data (', SIZE(d_glob,3), ') and grid data (', SIZE(d_grid,3), ') fields do not match!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
+
+      ! Find enveloping lat-lon indices
+      il  = MAX(1,MIN(nlon-1, 1 + FLOOR((grid%lon(i,j)-MINVAL(lon)) / (lon(2)-lon(1)))))
+      iu  = il+1
+      wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+      wiu = 1-wil
+
+      ! Exception for pixels near the zero meridian
+      IF (grid%lon(i,j) < MINVAL(lon)) THEN
+        il = nlon
+        iu = 1
+        wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+        wiu = 1-wil
+      ELSEIF (grid%lon(i,j) > MAXVAL(lon)) THEN
+        il = nlon
+        iu = 1
+        wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
+        wil = 1-wiu
+      END IF
+
+      jl  = MAX(1,MIN(nlat-1, 1 + FLOOR((grid%lat(i,j)-MINVAL(lat)) / (lat(2)-lat(1)))))
+      ju  = jl+1
+      wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
+      wju = 1-wjl
+
+      ! Interpolate data
+      DO k = 1, nz
+        d_grid( i,j,k) = (d_glob( il,jl,k) * wil * wjl) + &
+                         (d_glob( il,ju,k) * wil * wju) + &
+                         (d_glob( iu,jl,k) * wiu * wjl) + &
+                         (d_glob( iu,ju,k) * wiu * wju)
+      END DO
+
+    END DO
+    END DO
+    CALL sync
+
+  END SUBROUTINE map_glob_to_grid_3D
+
+  ! == Gaussian extrapolation (used for ocean data)
+  SUBROUTINE extrapolate_Gaussian_floodfill( grid, mask, d, sigma, mask_filled)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! NOTE: not parallelised! This is done instead by dividing vertical
+    !       ocean layers over the processes.
+    !
+    ! Note about the mask:
+    !    2 = data provided
+    !    1 = no data provided, fill allowed
+    !    0 = no fill allowed
+    ! (so basically this routine extrapolates data from the area
+    !  where mask == 2 into the area where mask == 1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    INTEGER,  DIMENSION(:,:  ),          INTENT(IN)    :: mask
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
+    REAL(dp),                            INTENT(IN)    :: sigma
+    INTEGER,  DIMENSION(:,:  ),          INTENT(OUT)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
+
+    ! Local variables:
+    INTEGER                                            :: i,j,k,ii,jj,it
+    INTEGER                                            :: stackN1, stackN2
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: stack1, stack2
+    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: map
+    INTEGER                                            :: n_search
+    LOGICAL                                            :: has_filled_neighbours
+    INTEGER                                            :: n
+    REAL(dp)                                           :: sum_d, w, sum_w
+
+    n_search = 1 + CEILING( 2._dp * sigma / grid%dx)
+
+    ! Allocate map and stacks. Amount for memory is an estimation; if there
+    ! are out-of-bounds errors, increase the memory for the stacks.
+    ALLOCATE( map(       grid%nx,  grid%ny))
+    ALLOCATE( stack1( 8*(grid%nx + grid%ny),2))
+    ALLOCATE( stack2( 8*(grid%nx + grid%ny),2))
+
+    map         = 0
+    stack1      = 0
+    stack2      = 0
+    stackN1     = 0
+    stackN2     = 0
+    mask_filled = 0
+
+    ! Initialise the map from the mask
+    DO j = 1, grid%ny
+    DO i = 1, grid%nx
+      IF (mask( i,j) == 2) THEN
+        map( i,j) = 2
+      END IF
+    END DO
+    END DO
+
+    ! Initialise the stack with all empty-next-to-filled grid cells
+    DO j = 1, grid%ny
+    DO i = 1, grid%nx
+
+      IF (mask( i,j) == 1) THEN
+        ! This grid cell is empty and should be filled
+
+        has_filled_neighbours = .FALSE.
+        DO jj = MAX(1 ,j-1), MIN(grid%ny,j+1)
+        DO ii = MAX(1 ,i-1), MIN(grid%nx,i+1)
+          IF (mask( ii,jj) == 2) THEN
+            has_filled_neighbours = .TRUE.
+            EXIT
+          END IF
+        END DO
+        IF (has_filled_neighbours) EXIT
+        END DO
+
+        IF (has_filled_neighbours) THEN
+          ! Add this empty-with-filled-neighbours grid cell to the stack,
+          ! and mark it as stacked on the map
+          map( i,j) = 1
+          stackN2 = stackN2 + 1
+          stack2( stackN2,:) = [i,j]
+        END IF
+
+      END IF ! IF (map( i,j) == 0) THEN
+
+    END DO
+    END DO
+
+    ! Perform the flood-fill
+    it = 0
+    DO WHILE (stackN2 > 0)
+
+      it = it + 1
+
+      ! Go over all the stacked empty-next-to-filled grid cells, perform the
+      ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
+      DO k = 1, stackN2
+
+        ! Get grid cell indices
+        i = stack2( k,1)
+        j = stack2( k,2)
+
+        ! Find Gaussian-weighted average value over nearby filled pixels within the basin
+        n     = 0
+        sum_d = 0._dp
+        sum_w = 0._dp
+
+        DO jj = MAX( 1 ,j - n_search), MIN( grid%ny,j + n_search)
+        DO ii = MAX( 1 ,i - n_search), MIN( grid%nx,i + n_search)
+
+          IF (map( ii,jj) == 2) THEN
+            n     = n + 1
+            w     = EXP( -0.5_dp * (SQRT(REAL(ii-i,dp)**2 + REAL(jj-j,dp)**2) / sigma)**2)
+            sum_w = sum_w + w
+            sum_d = sum_d + w * d( ii,jj)
+          END IF
+
+        END DO
+        END DO
+
+        ! Fill in averaged value
+        d( i,j) = sum_d / sum_w
+
+        ! Mark grid cell as filled
+        map( i,j) = 2
+        mask_filled( i,j) = 1
+
+      END DO ! DO k = 1, stackN2
+
+      ! Cycle the stacks
+      stack1  = stack2
+      stackN1 = stackN2
+      stack2  = 0
+      stackN2 = 0
+
+      ! List new empty-next-to-filled grid cells
+      DO k = 1, stackN1
+
+        ! Get grid cell indices
+        i = stack1( k,1)
+        j = stack1( k,2)
+
+        ! Find empty neighbours; if unlisted, list them and mark them on the map
+        DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
+        DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+
+          IF (map( ii,jj) == 0 .AND. mask( ii,jj) == 1) THEN
+            map( ii,jj) = 1
+            stackN2 = stackN2 + 1
+            stack2( stackN2,:) = [ii,jj]
+          END IF
+
+        END DO
+        END DO
+
+      END DO ! DO k = 1, stackN1
+
+      ! Safety
+      IF (it > 2 * MAX( grid%ny, grid%nx)) THEN
+        WRITE(0,*) '  extrapolate_Gaussian_floodfill - ERROR: flood-fill got stuck!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+    END DO ! DO WHILE (stackN2 > 0)
+
+    ! Mark grid cells that could not be filled
+    DO j = 1, grid%ny
+    DO i = 1, grid%nx
+      IF (mask_filled( i,j) == 0 .AND. mask( i,j) == 1) THEN
+        mask_filled( i,j) = 2
+      END IF
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE( map   )
+    DEALLOCATE( stack1)
+    DEALLOCATE( stack2)
+
+  END SUBROUTINE extrapolate_Gaussian_floodfill
+
+  ! == Interpolate ocean column data to a queried depth
+  SUBROUTINE interpolate_ocean_depth( nz_ocean, z_ocean, f_ocean, z_query, f_query)
+    ! Interpolate ocean column data to a queried depth using a simple bisection method.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,                             INTENT(IN)    :: nz_ocean    ! Number of vertical layers
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_ocean     ! Depth of layers (assumed to be monotonically increasing, does not need to be regularly spaced)
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: f_ocean     ! Value of whatever function we want to interpolate
+    REAL(dp),                            INTENT(IN)    :: z_query     ! Depth at which we want to know the function
+    REAL(dp),                            INTENT(OUT)   :: f_query     ! Interpolated function value
+
+    ! Local variables:
+    INTEGER                                            :: k_lo,k_hi,k_mid
+    LOGICAL                                            :: foundit
+    REAL(dp)                                           :: w
+
+    ! Safety
+    IF (z_query < 0._dp) THEN
+      WRITE(0,*) '  interpolate_ocean_depth - ERROR: z_query = ', z_query, '< 0; cannot extrapolate above the sea surface, obviously!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (z_query > 12000._dp) THEN
+      WRITE(0,*) '  interpolate_ocean_depth - ERROR: z_query = ', z_query, '> 12 km; the ocean is not that deep!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (SIZE(z_ocean,1) /= nz_ocean) THEN
+      WRITE(0,*) '  interpolate_ocean_depth - ERROR: SIZE(z_ocean,1) = ', SIZE(z_ocean,1), ' /= nz_ocean = ', nz_ocean, '!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (SIZE(f_ocean,1) /= nz_ocean) THEN
+      WRITE(0,*) '  interpolate_ocean_depth - ERROR: SIZE(f_ocean,1) = ', SIZE(f_ocean,1), ' /= nz_ocean = ', nz_ocean, '!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (z_query > MAXVAL(z_ocean)) THEN
+      !WRITE(0,*) '  interpolate_ocean_depth - ERROR: z_query = ', z_query, '> MAXVAL(z_ocean) = ', MAXVAL(z_ocean), '!'
+      !CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+
+      ! Nearest-neighbour extrapolation when querying data beneath the end of the ocean data column
+      f_query = f_ocean( nz_ocean)
+      RETURN
+    END IF
+
+    ! Exception for when z_query = 0 (the World Ocean Atlas depth starts at 1.25...)
+    IF (z_query < MINVAL(z_ocean)) THEN
+      f_query = f_ocean(1)
+      RETURN
+    END IF
+
+    ! Bisection method
+    k_lo  = 1
+    k_hi  = nz_ocean
+    k_mid = INT( REAL(k_lo + k_hi,dp) / 2._dp)
+
+    ! Exceptions
+    IF     (ABS(z_query - z_ocean( k_lo )) < 1E-4_dp) THEN
+      f_query = f_ocean( k_lo)
+      RETURN
+    ELSEIF (ABS(z_query - z_ocean( k_hi )) < 1E-4_dp) THEN
+      f_query = f_ocean( k_hi)
+      RETURN
+    ELSEIF (ABS(z_query - z_ocean( k_mid)) < 1E-4_dp) THEN
+      f_query = f_ocean( k_mid)
+      RETURN
+    END IF
+
+    ! Bisection method
+    foundit = .FALSE.
+    DO WHILE (.NOT. foundit)
+
+      IF (ABS(z_query - z_ocean( k_mid)) < 1E-4_dp) THEN
+        ! Exception for when the queried depth is exactly at the midpoint index depth
+        f_query = f_ocean( k_mid)
+        RETURN
+      ELSEIF (z_query > z_ocean( k_mid)) THEN
+        ! Queried depth lies to the right of the midpoint
+        k_lo = k_mid
+        k_mid = INT( REAL(k_lo + k_hi,dp) / 2._dp)
+      ELSE
+        ! Queried depth lies to the left of the midpoint
+        k_hi = k_mid
+        k_mid = INT( REAL(k_lo + k_hi,dp) / 2._dp)
+      END IF
+
+      ! Stop iterating when endpoints lie next to each other; then just do linear interpolation between those two.
+      IF (k_hi == k_lo+1) foundit = .TRUE.
+
+    END DO ! DO WHILE (.NOT. foundit)
+
+    ! Linear interpolation between nearest layers
+    w = (z_query - z_ocean( k_lo)) / (z_ocean( k_hi) - z_ocean( k_lo))
+    f_query = w * f_ocean( k_hi) + (1._dp - w) * f_ocean( k_lo)
+
+  END SUBROUTINE interpolate_ocean_depth
+
+  ! == Check if a point lies inside a polygon (used in basin definition)
+  FUNCTION is_in_polygon( Vpoly, p) RESULT( isso)
+    ! Use the ray-casting algorithm to check if the point p = [px,py]
+    ! lies inside the polygon spanned by poly = [x1,y1; x2,y2; ...; xn,yn]
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Vpoly
+    REAL(dp), DIMENSION(2),              INTENT(IN)    :: p
+    LOGICAL                                            :: isso
+
+    ! Local variables:
+    REAL(dp), DIMENSION(2)                             :: q,r,s,llis
+    REAL(dp)                                           :: xmin,xmax,ymin,ymax
+    INTEGER                                            :: n_intersects
+    INTEGER                                            :: vi,vj,n_vertices
+    LOGICAL                                            :: do_cross
+    REAL(dp), PARAMETER                                :: tol_dist = 1E-5_dp
+
+    isso = .FALSE.
+
+    xmin = MINVAL( Vpoly(:,1))
+    xmax = MAXVAL( Vpoly(:,1))
+    ymin = MINVAL( Vpoly(:,2))
+    ymax = MAXVAL( Vpoly(:,2))
+
+    ! Quick test
+    IF (p(1) < xmin .OR. p(1) > xmax .OR. &
+        p(2) < ymin .OR. p(2) > ymax) THEN
+      isso = .FALSE.
+      RETURN
+    END IF
+
+    ! Define the endpoint of the east-pointing ray
+    q = [xmax + (xmax - xmin) / 10._dp, p(2)]
+
+    ! Determine how often the ray intersects the polygon
+
+    n_vertices   = SIZE( Vpoly,1)
+    n_intersects = 0
+
+    DO vi = 1, n_vertices
+
+      ! Find vertices spanning a polygon line section
+      IF (vi < n_vertices) THEN
+        vj = vi + 1
+      ELSE
+        vj = 1
+      END IF
+
+      ! Define the line section
+      r = Vpoly( vi,:)
+      s = Vpoly( vj,:)
+
+      ! Determine if the ray intersects the line section
+      IF ((r(2) < p(2) .AND. s(2) < p(2)) .OR. (r(2) > p(2) .AND. s(2) > p(2))) THEN
+        do_cross = .FALSE.
+      ELSE
+        CALL segment_intersection( p, q, r, s, llis, do_cross, tol_dist)
+      END IF
+
+      IF (do_cross) n_intersects = n_intersects + 1
+
+    END DO ! DO vi = 1, n_vertices
+
+    ! If the number of intersections is odd, p lies inside the polygon
+    IF (MOD( n_intersects,2) == 1) THEN
+      isso = .TRUE.
+    ELSE
+      isso = .FALSE.
+    END IF
+
+  END FUNCTION is_in_polygon
+  SUBROUTINE segment_intersection( p, q, r, s, llis, do_cross, tol_dist)
+    ! Find out if the line segments [pq] and [rs] intersect. If so, return
+    ! the coordinates of the point of intersection
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(2),   INTENT(IN)          :: p, q, r, s
+    REAL(dp), DIMENSION(2),   INTENT(OUT)         :: llis
+    LOGICAL,                  INTENT(OUT)         :: do_cross
+    REAL(dp),                 INTENT(IN)          :: tol_dist
+
+    ! Local variables:
+    REAL(dp), DIMENSION(2,2)                      :: A
+    REAL(dp), DIMENSION(2)                        :: x, b
+    INTEGER,  DIMENSION(2)                        :: IPIV
+    INTEGER                                       :: info
+
+    ! If pq and rs are colinear, define them as not intersecting
+    IF ( ABS( cross2( [q(1)-p(1), q(2)-p(2)], [s(1)-r(1), s(2)-r(2)] )) < tol_dist) THEN
+      llis = [0._dp, 0._dp]
+      do_cross = .FALSE.
+      RETURN
+    END IF
+
+    A(1,:) = [(p(1)-q(1)), (r(1)-s(1))]
+    A(2,:) = [(p(2)-q(2)), (r(2)-s(2))]
+    b = [(r(1)-q(1)), (r(2)-q(2))]
+
+    ! The LAPACK solver will overwrite the right-hand side b with the solution x. Therefore we
+    ! first copy the rhs in the solution vector x:
+    x = b
+
+    ! Solve Ax = b using LAPACK routine that solves matrix equation Ax=b for x (in double precision)
+    CALL DGESV( 2, 1, A, 2, IPIV, x, 2, info)
+
+    llis = [q(1) + x(1) * (p(1)-q(1)), q(2) + x(1) * (p(2)-q(2))]
+
+    IF (x(1)>0._dp .AND. x(1)<1._dp .AND. x(2)>0._dp .AND. x(2)<1._dp) THEN
+      do_cross = .TRUE.
+    ELSE
+      do_cross = .FALSE.
+    END IF
+
+  END SUBROUTINE segment_intersection
+  FUNCTION cross2( a,b) RESULT(z)
+    ! Vector product z between 2-dimensional vectors a and b
+
+    IMPLICIT NONE
+
+    REAL(dp), DIMENSION(2),     INTENT(IN)        :: a, b
+    REAL(dp)                                      :: z
+
+    z = (a(1)*b(2)) - (a(2)*b(1))
+
+  END FUNCTION cross2
 
 END MODULE utilities_module

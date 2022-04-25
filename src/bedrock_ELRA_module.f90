@@ -22,7 +22,7 @@ MODULE bedrock_ELRA_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  
+
   ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_ice_model, &
                                              type_reference_geometry, type_remapping_mesh_mesh
@@ -30,68 +30,42 @@ MODULE bedrock_ELRA_module
   USE utilities_module,                ONLY: is_floating
 
   IMPLICIT NONE
-    
+
 CONTAINS
 
   ! The ELRA GIA model
   SUBROUTINE run_ELRA_model( region)
     ! Use the ELRA model to update bedrock elevation. Once every (dt_bedrock_ELRA) years,
     ! update deformation rates. In all other time steps, just incrementally add deformation.
-  
+
     IMPLICIT NONE  
-    
+
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ELRA_model'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    ! Exceptions for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        region%t_last_ELRA = region%time
-        CALL finalise_routine( routine_name)
-        RETURN
-      ELSE
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
+
     ! If needed, update the bedrock deformation rate
     IF (region%do_ELRA) THEN
       CALL calculate_ELRA_bedrock_deformation_rate( region%mesh, region%grid_GIA, region%ice)
       region%t_last_ELRA = region%time
     END IF
-    
+
     ! Update bedrock with last calculated deformation rate
     DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
       region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%refgeo_PD%Hb( vi)
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE run_ELRA_model
   SUBROUTINE calculate_ELRA_bedrock_deformation_rate( mesh, grid, ice)
     ! Use the ELRA model to update bedrock deformation rates.
@@ -194,53 +168,28 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calculate_ELRA_bedrock_deformation_rate
-  
+
   SUBROUTINE initialise_ELRA_model( mesh, grid, ice, refgeo_PD)
     ! Allocate and initialise the ELRA GIA model
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ELRA_model'
     INTEGER                                            :: i,j,n,k,l
     REAL(dp)                                           :: Lr, r
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    ! Exceptions for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        CALL finalise_routine( routine_name)
-        RETURN
-      ELSE
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
+
     IF (par%master) WRITE (0,*) '  Initialising ELRA GIA model...'
-    
+
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV,          ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
     CALL allocate_shared_dp_1D( mesh%nV,          ice%surface_load_mesh,     ice%wsurface_load_mesh    )
@@ -249,23 +198,23 @@ CONTAINS
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, ice%dHb_eq_grid,           ice%wdHb_eq_grid          )
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, ice%dHb_grid,              ice%wdHb_grid             )
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, ice%dHb_dt_grid,           ice%wdHb_dt_grid          )
-    
+
     ! Fill in the 2D flexural profile (= Kelvin function), with which
     ! a surface load is convoluted to find the surface deformation
     ! ============================================================
-    
+
     ! Influence radius of the lithospheric rigidity
     Lr = (C%ELRA_lithosphere_flex_rigidity / (C%ELRA_mantle_density * grav))**0.25_dp
-    
+
     ! Calculate radius (in number of grid cells) of the flexural profile
     CALL allocate_shared_int_0D( ice%flex_prof_rad, ice%wflex_prof_rad)
     IF (par%master) ice%flex_prof_rad = MIN( CEILING(grid%dx/2._dp), MAX(1, INT(6._dp * Lr / grid%dx) - 1))
     CALL sync
-    
+
     n = 2 * ice%flex_prof_rad + 1
     CALL allocate_shared_dp_2D( n,         n,         ice%flex_prof_grid,            ice%wflex_prof_grid           )
     CALL allocate_shared_dp_2D( grid%nx+n, grid%ny+n, ice%surface_load_rel_ext_grid, ice%wsurface_load_rel_ext_grid)
-    
+
     ! Calculate flexural profile
     IF (par%master) THEN
       DO i = -ice%flex_prof_rad, ice%flex_prof_rad
@@ -278,15 +227,15 @@ CONTAINS
       END DO
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Calculate the PD reference load
     ! ===============================
-    
+
     CALL initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
-    
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
-        
+    CALL finalise_routine( routine_name, n_extra_windows_expected=10)
+
   END SUBROUTINE initialise_ELRA_model
   SUBROUTINE initialise_ELRA_PD_reference_load( mesh, grid, ice, refgeo_PD)
       
@@ -321,7 +270,7 @@ CONTAINS
   END SUBROUTINE initialise_ELRA_PD_reference_load
   SUBROUTINE remap_ELRA_model( mesh_old, mesh_new, map, ice, refgeo_PD, grid)
     ! Remap or reallocate all the data fields
-  
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
@@ -329,46 +278,27 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_grid),                     INTENT(IN)    :: grid
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ELRA_model'
     INTEGER                                            :: int_dummy
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    ! Exceptions for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-          C%choice_benchmark_experiment == 'Halfar' .OR. &
-          C%choice_benchmark_experiment == 'Bueler' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod') THEN
-        CALL finalise_routine( routine_name)
-        RETURN
-      ELSE
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
+
     int_dummy = mesh_old%nV
     int_dummy = map%int_dummy
-    
+
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_PD_mesh,  ice%wsurface_load_PD_mesh )
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_mesh,     ice%wsurface_load_mesh    )
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%surface_load_rel_mesh, ice%wsurface_load_rel_mesh)
-    
+
     ! Recalculate the PD reference load on the GIA grid
     CALL initialise_ELRA_PD_reference_load( mesh_new, grid, ice, refgeo_PD)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE remap_ELRA_model
 
   ! The Kelvin function (just a wrapper for the Zhang & Jin "klvna" subroutine)

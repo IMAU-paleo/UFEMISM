@@ -5,8 +5,8 @@
 
 # For compiling setting, Makefile will point to the uncommented file below:
 #include Makefile_include_local.txt
-#include Makefile_include_mac.txt
-include Makefile_include_snellius.txt
+include Makefile_include_mac.txt
+#include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files
@@ -58,6 +58,7 @@ UFEMISM_program_objects = \
         basal_conditions_and_sliding_module.o \
         SMB_module.o \
         BMB_module.o \
+        ocean_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
         ice_velocity_module.o \

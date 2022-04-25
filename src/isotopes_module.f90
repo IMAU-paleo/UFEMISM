@@ -31,86 +31,88 @@ MODULE isotopes_module
     
 CONTAINS
 
-  ! Run the isotopes model
+  ! == Run the isotopes model
   SUBROUTINE run_isotopes_model( region)
-  
+    ! Run the isotopes model (the main routine called from run_model_region)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_isotopes_model'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF     (C%choice_ice_isotopes_model == 'none') THEN
+      ! Do nothing
+    ELSEIF (C%choice_ice_isotopes_model == 'uniform') THEN
+      ! Assign a uniform d18O value to all glacial ice
+      region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = C%uniform_ice_d18O
+      CALL sync
+    ELSEIF (C%choice_ice_isotopes_model == 'ANICE_legacy') THEN
+      ! The ANICE_legacy englacial isotopes model
+      CALL run_isotopes_model_ANICE_legacy( region)
+    ELSE
+      CALL crash('unknown choice_ice_isotopes_model "' // TRIM(C%choice_ice_isotopes_model) // '"!')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_isotopes_model
+  SUBROUTINE run_isotopes_model_ANICE_legacy( region)
+
     ! Based on the ANICE routines by Bas de Boer (November 2010).
     !
-    ! using the implicit ice fluxes (vertical averaged) and applied mass balance fields from the 
+    ! using the implicit ice fluxes (vertical averaged) and applied mass balance fields from the
     ! ice thickness subroutine to calculate the advected isotope flux from all 4 directions.
     !
-    ! Because of the dynamic shelf, we can also calculate IsoIce over the shelf area and threat 
+    ! Because of the dynamic shelf, we can also calculate IsoIce over the shelf area and threat
     ! all ice covered gridpoints the same since we are using vertically averaged velocities
     !
     ! IsoIce_adv should be zero for no ice (or at least have a small value, just like Hi)
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_isotopes_model'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_isotopes_model_ANICE_legacy'
     INTEGER                                            :: vi, ci, vj, aci
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
     REAL(dp)                                           :: IsoMin,IsoMax    ! minimum and maximum value of IsoIce
     REAL(dp)                                           :: Upar, dVIso
     REAL(dp)                                           :: dIso_dt, VIso_old, VIso_new
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        CALL finalise_routine( routine_name)
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    
-    
-    
+
 !    ! Calculate the isotope content of annual mean precipitation
 !    ! ==========================================================
-!    
+!
 !    IsoMax = -1E9_dp
 !    IsoMin =  1E9_dp
-!    
+!
 !    DO vi = region%mesh%vi1, region%mesh%vi2
-!      
+!
 !      Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
 !      Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
 !      Hs     = region%ice%Hs_a( vi)
 !      Hs_ref = region%climate%PD_obs%Hs( vi)
-!      
+!
 !      region%ice%IsoSurf( vi) = region%ice%IsoRef( vi)                 &
 !                              + 0.35_dp              * (Ts - Ts_ref    &
 !                              - C%constant_lapserate * (Hs - Hs_ref))  &
-!                              - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-!        
+!                              - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005
+!
 !      IF (region%ice%mask_ice_a( vi) == 1) THEN
 !        IsoMax = MAX( IsoMax, region%ice%IsoSurf( vi))
 !        IsoMin = MIN( IsoMin, region%ice%IsoSurf( vi))
-!      END IF           
+!      END IF
 !
 !    END DO
 !    CALL MPI_ALLREDUCE( MPI_IN_PLACE, IsoMax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
@@ -118,9 +120,9 @@ CONTAINS
 !
 !    ! Calculate the mass gain/loss of d18O
 !    DO vi = region%mesh%vi1, region%mesh%vi2
-!    
+!
 !      region%ice%MB_iso( vi) = 0._dp
-!    
+!
 !      IF ( region%SMB%SMB_year( vi) > 0._dp ) THEN
 !        ! Surface accumulation has the isotope content of precipitation
 !        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoSurf( vi) * region%mesh%A( vi)    ! (applied MB) mass gain, so d18O from precipitation
@@ -128,11 +130,11 @@ CONTAINS
 !        ! Surface melt has the isotope content of the ice itself
 !        region%ice%MB_iso( vi) = region%ice%MB_iso( vi) + region%SMB%SMB_year( vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)    ! (applied MB) mass loss, so d18O from ice
 !      END IF
-!      
+!
 !      ! Both basal melt and basal freezing have the isotope content of the ice itself (the latter
 !      ! is not really true, but it's the best we can do for now)
 !      region%ice%MB_iso(   vi) = region%ice%MB_iso( vi) + region%BMB%BMB(      vi) * region%ice%IsoIce(  vi) * region%mesh%A( vi)
-!      
+!
 !    END DO
 !    CALL sync
 !
@@ -140,23 +142,23 @@ CONTAINS
 !    ! =======================================================================
 !
 !    DO vi = region%mesh%vi1, region%mesh%vi2
-!    
+!
 !      region%ice%IsoIce_new( vi) = region%ice%IsoIce( vi)
-!    
+!
 !      ! Don't treat boundary vertices
 !      IF (region%mesh%edge_index( vi) > 0) CYCLE
-!    
+!
 !      ! Only treat ice-covered vertices
 !      IF (region%ice%mask_ice_a( vi) == 1) THEN
-!      
+!
 !        dIso_dt = 0._dp
-!      
+!
 !        ! Calculate advective isotope fluxes
 !        DO ci = 1, region%mesh%nC( vi)
-!        
+!
 !          vj  = region%mesh%C(    vi,ci)
 !          aci = region%mesh%iAci( vi,ci)
-!          
+!
 !          IF (region%mesh%Aci( aci,1) == vi) THEN
 !            ! Velocity defined from vi to vj
 !            Upar =  (region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
@@ -164,7 +166,7 @@ CONTAINS
 !            ! Velocity defined from vj to vi
 !            Upar = -(region%ice%Up_SIA_Ac( aci) + region%ice%Up_SSA_Ac( aci))
 !          END IF
-!          
+!
 !          IF (Upar > 0._dp) THEN
 !            ! Ice flows from vi to vj
 !            dVIso = Upar * region%ice%IsoIce( vi) * region%ice%Hi( vi) * region%mesh%Cw( vi,ci)
@@ -172,65 +174,66 @@ CONTAINS
 !            ! Ice flows from vj to vi
 !            dVIso = Upar * region%ice%IsoIce( vj) * region%ice%Hi( vj) * region%mesh%Cw( vi,ci)
 !          END IF
-!          
+!
 !          dIso_dt = dIso_dt + dViso
-!          
+!
 !        END DO ! DO ci = 1, region%mesh%nC( vi)
-!        
+!
 !        ! Add surface + basal mass balance
 !        dIso_dt = dIso_dt + region%ice%MB_iso( vi)
-!        
+!
 !        ! Update vertically averaged ice isotope content
 !        VIso_old = region%ice%IsoIce( vi) * region%ice%Hi_prev( vi) * region%mesh%A( vi)
 !        VIso_new = VIso_old + dIso_dt * region%dt
 !        region%ice%IsoIce_new( vi) = MIN( IsoMax, MAX( IsoMin, VIso_new / (region%mesh%A( vi) * region%ice%Hi( vi)) ))
 !
 !      END IF ! IF (ice%mask_ice( vi) == 1) THEN
-!      
+!
 !    END DO
 !    CALL sync
-!    
+!
 !    ! Update field
 !    region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = region%ice%IsoIce_new( region%mesh%vi1:region%mesh%vi2)
-!    
+!
 !    ! Calculate mean isotope content of the whole ice sheet
 !    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE run_isotopes_model
+
+  END SUBROUTINE run_isotopes_model_ANICE_legacy
+
+  ! == Calculate the mean isotope content and benthic d18O contribution of this region's glacial ice
   SUBROUTINE calculate_isotope_content( mesh, Hi, IsoIce, mean_isotope_content, d18O_contribution)
     ! Calculate mean isotope content of the whole ice sheet
-    
-    USE parameters_module, ONLY: ice_density, seawater_density, ocean_area, mean_ocean_depth
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: Hi
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: IsoIce
     REAL(dp),                            INTENT(OUT)   :: mean_isotope_content
     REAL(dp),                            INTENT(OUT)   :: d18O_contribution
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_isotope_content'
     INTEGER                                            :: vi
     REAL(dp)                                           :: Hi_msle
     REAL(dp)                                           :: total_isotope_content
     REAL(dp)                                           :: total_ice_volume_msle
-    
-    
-    
-    
+
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
-    
+
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
 !
@@ -272,237 +275,215 @@ CONTAINS
     
   END SUBROUTINE calculate_isotope_content
   
-  ! Initialise the isotopes model (allocating shared memory)
+  ! == Initialise the isotopes model (allocating shared memory)
   SUBROUTINE initialise_isotopes_model( region)
-    ! Allocate memory for the data fields of the isotopes model and initialise the reference fields.
-    
+    ! Allocate memory for the data fields of the isotopes model.
+
     IMPLICIT NONE
-    
-    ! In/output variables
+
+    ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_isotopes_model'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF     (C%choice_ice_isotopes_model == 'none') THEN
+      ! Do nothing
+    ELSEIF (C%choice_ice_isotopes_model == 'uniform') THEN
+      ! Assign a uniform d18O value to all glacial ice
+
+      ! Allocate shared memory
+      CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce, region%ice%wIsoIce)
+
+      ! Assign value
+      region%ice%IsoIce( region%mesh%vi1:region%mesh%vi2) = C%uniform_ice_d18O
+      CALL sync
+
+    ELSEIF (C%choice_ice_isotopes_model == 'ANICE_legacy') THEN
+      ! The ANICE_legacy englacial isotopes model
+
+      CALL initialise_isotopes_model_ANICE_legacy( region)
+
+    ELSE
+      CALL crash('unknown choice_ice_isotopes_model "' // TRIM(C%choice_ice_isotopes_model) // '"!')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_isotopes_model
+  SUBROUTINE initialise_isotopes_model_ANICE_legacy( region)
+    ! Allocate memory for the data fields of the isotopes model and initialise the reference fields.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_isotopes_model_ANICE_legacy'
     INTEGER                                            :: vi
     REAL(dp)                                           :: Ts, Ts_ref, Hs, Hs_ref
-    
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-          C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    
-    
-    
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
-    
+
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
-!    
+!
 !    IF (par%master) WRITE (0,*) '  Initialising isotopes model...'
-!    
+!
 !    ! Allocate memory
 !    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoRef    , region%ice%wIsoRef    )
 !    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoSurf   , region%ice%wIsoSurf   )
 !    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%MB_iso    , region%ice%wMB_iso    )
 !    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce    , region%ice%wIsoIce    )
 !    CALL allocate_shared_dp_1D( region%mesh%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
-!    
-!    ! Calculate present-day isotope content of precipitation    
+!
+!    ! Calculate present-day isotope content of precipitation
 !    CALL calculate_reference_isotopes( region)
-!    
+!
 !    ! Initialise ice sheet isotope content with the isotope content of present-day annual mean precipitation,
 !    ! so that we can calculate the total present-day isotope content of the ice-sheet
 !    DO vi = region%mesh%vi1, region%mesh%vi2
-!    
+!
 !      IF (region%refgeo_PD%Hi( vi) > 0._dp) THEN
-!      
+!
 !        Ts     = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
 !        Ts_ref = SUM( region%climate%PD_obs%T2m( vi,:)) / 12._dp
 !        Hs     = region%refgeo_PD%Hs( vi)
 !        Hs_ref = region%climate%PD_obs%Hs( vi)
-!        
+!
 !        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
 !                               + 0.35_dp              * (Ts - Ts_ref    &
 !                               - C%constant_lapserate * (Hs - Hs_ref))  &
-!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-!        
+!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005
+!
 !      ELSE
 !        region%ice%IsoIce( vi) = 0._dp ! = No ice
-!      END IF           
+!      END IF
 !
 !    END DO
 !    CALL sync
-!    
+!
 !    ! Calculate mean isotope content of the whole ice sheet at present-day
 !    CALL calculate_isotope_content( region%mesh, region%refgeo_PD%Hi, region%ice%IsoIce, region%mean_isotope_content_PD, region%d18O_contribution_PD)
-!    
+!
 !    ! Initialise ice sheet isotope content with the isotope content of annual mean precipitation at the start of the simulation
 !    ! (need not be the same as present-day conditions, that's why we need to repeat the calculation)
 !    DO vi = region%mesh%vi1, region%mesh%vi2
-!    
+!
 !      IF (region%ice%mask_ice_a( vi) == 1) THEN
-!      
+!
 !        Ts     = SUM( region%climate%applied%T2m( vi,:)) / 12._dp
 !        Ts_ref = SUM( region%climate%PD_obs%T2m(  vi,:)) / 12._dp
 !        Hs     = region%ice%Hs_a( vi)
 !        Hs_ref = region%climate%PD_obs%Hs( vi)
-!        
+!
 !        region%ice%IsoIce( vi) = region%ice%IsoRef( vi)                 &
 !                               + 0.35_dp              * (Ts - Ts_ref    &
 !                               - C%constant_lapserate * (Hs - Hs_ref))  &
-!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005  
-!        
+!                               - 0.0062_dp            * (Hs - Hs_ref)   ! from Clarke et al., 2005
+!
 !      ELSE
 !        region%ice%IsoIce( vi) = 0._dp ! = No ice
-!      END IF           
+!      END IF
 !
 !    END DO
 !    CALL sync
-!    
+!
 !    ! Calculate mean isotope content of the whole ice sheet at the start of the simulation
 !    CALL calculate_isotope_content( region%mesh, region%ice%Hi_a, region%ice%IsoIce, region%mean_isotope_content, region%d18O_contribution)
-!    
+!
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE initialise_isotopes_model
+
+  END SUBROUTINE initialise_isotopes_model_ANICE_legacy
   SUBROUTINE calculate_reference_isotopes( region)
     ! Allocate memory for the data fields of the isotopes model.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_reference_isotopes'
     INTEGER                                            :: vi
-    
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    
-    
-    
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
-!    
+!
 !    ! Calculate reference field of d18O of precipitation
 !    ! (Zwally, H. J. and Giovinetto, M. B.: Areal distribution of the oxygen-isotope ratio in Greenland, Annals of Glaciology 25, 208-213, 1997)
 !    DO vi = region%mesh%vi1, region%mesh%vi2
 !      region%ice%IsoRef( vi) = 0.691_dp * SUM(region%climate%PD_obs%T2m( vi,:) / 12._dp) - 202.172_dp
 !    END DO
 !    CALL sync
-!    
+!
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calculate_reference_isotopes
+
+  ! Remap isotope model data after a mesh update
   SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, map, region)
     ! Remap or reallocate all the data fields
-  
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_isotopes_model'
-    
-    ! Not needed for benchmark experiments
-    IF (C%do_benchmark_experiment) THEN
-      IF (C%choice_benchmark_experiment == 'EISMINT_1'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_2'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_3'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_4'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_5'  .OR. &
-          C%choice_benchmark_experiment == 'EISMINT_6'  .OR. &
-          C%choice_benchmark_experiment == 'Halfar'     .OR. &
-          C%choice_benchmark_experiment == 'Bueler'     .OR. &
-          C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-          C%choice_benchmark_experiment == 'mesh_generation_test' .OR. &
-          C%choice_benchmark_experiment == 'SSA_icestream') THEN
-        RETURN
-      ELSE 
-        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
-      END IF
-    END IF ! IF (C%do_benchmark_experiment) THEN
-    
-    
-    
-    
+
+
+
+
     ! DENK DROM
     RETURN
-    
-    
-    
-    
-    
+
+
+
+
+
 !    ! Add routine to path
 !    CALL init_routine( routine_name)
-!    
+
 !    ! Reallocate memory
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoRef,     region%ice%wIsoRef    )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoSurf,    region%ice%wIsoSurf   )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%MB_iso,     region%ice%wMB_iso    )
 !    CALL reallocate_shared_dp_1D( mesh_new%nV, region%ice%IsoIce_new, region%ice%wIsoIce_new)
-!    
+
 !    ! Remap the previous-timestep ice thickness and the isotope content of the ice sheet
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%Hi_a_prev, region%ice%wHi_a_prev, 'cons_1st_order')
 !    CALL remap_field_dp( mesh_old, mesh_new, map, region%ice%IsoIce,    region%ice%wIsoIce,    'cons_1st_order')
-!    
+
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE remap_isotopes_model
 
 END MODULE isotopes_module

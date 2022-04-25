@@ -699,26 +699,26 @@ CONTAINS
   SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init)
     ! Allocate shared memory for all the data fields of the ice dynamical module, and
     ! initialise some of them    
-      
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_model'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (par%master) WRITE(0,*) '  Initialising ice dynamics model...'
-    
+
     ! Allocate shared memory
     CALL allocate_ice_model( mesh, ice)
-        
+
     ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
     DO vi = mesh%vi1, mesh%vi2
       ice%Hi_a( vi) = refgeo_init%Hi( vi)
@@ -726,13 +726,13 @@ CONTAINS
       ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), 0._dp)
     END DO
     CALL sync
-    
+
     ! Initialise masks and slopes
     CALL update_general_ice_model_data( mesh, ice)
-    
+
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice)
-    
+
     ! Geothermal heat flux
     IF     (C%choice_geothermal_heat_flux == 'constant') THEN
       ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
@@ -741,13 +741,13 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
     END IF
-    
+
     ! Initialise data and matrices for the velocity solver(s)
     CALL initialise_velocity_solver( mesh, ice)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
-    
+
   END SUBROUTINE initialise_ice_model
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
   

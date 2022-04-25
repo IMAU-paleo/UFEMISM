@@ -1082,6 +1082,123 @@ MODULE data_types_netcdf_module
 
   END TYPE type_netcdf_extrapolated_ocean_data
 
+  ! == SELEN ==
+  ! ===========
+
+  TYPE type_netcdf_SELEN_global_topo
+    ! A NETCDF file containing global topography data for SELEN on an irregular global mesh
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_vi
+    INTEGER :: id_dim_ti
+    INTEGER :: id_dim_ci
+    INTEGER :: id_dim_three
+
+    CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
+    CHARACTER(LEN=256) :: name_dim_ti                    = 'ti                   '
+    CHARACTER(LEN=256) :: name_dim_ci                    = 'ci                   '
+    CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
+
+    INTEGER :: id_var_V
+    INTEGER :: id_var_Tri
+    INTEGER :: id_var_nC
+    INTEGER :: id_var_C
+    INTEGER :: id_var_niTri
+    INTEGER :: id_var_iTri
+
+    CHARACTER(LEN=256) :: name_var_V                     = 'V                    '
+    CHARACTER(LEN=256) :: name_var_Tri                   = 'Tri                  '
+    CHARACTER(LEN=256) :: name_var_nC                    = 'nC                   '
+    CHARACTER(LEN=256) :: name_var_C                     = 'C                    '
+    CHARACTER(LEN=256) :: name_var_niTri                 = 'niTri                '
+    CHARACTER(LEN=256) :: name_var_iTri                  = 'iTri                 '
+
+  ! Variables
+  ! =========
+
+    INTEGER :: id_var_lat
+    INTEGER :: id_var_lon
+    INTEGER :: id_var_Hb
+    INTEGER :: id_var_ianc
+
+    CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
+    CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
+    CHARACTER(LEN=256) :: name_var_ianc                  = 'ianc                 '
+
+  END TYPE type_netcdf_SELEN_global_topo
+
+  TYPE type_netcdf_SELEN_output
+    ! A NETCDF file containing output of SELEN (ice loading, bed topography and geoid perturbation)
+    ! on the global SELEN mesh
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+    ! Index of time frame to be written to
+    INTEGER :: ti
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_vi
+    INTEGER :: id_dim_ti
+    INTEGER :: id_dim_ci
+    INTEGER :: id_dim_three
+    INTEGER :: id_dim_time
+
+    CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
+    CHARACTER(LEN=256) :: name_dim_ti                    = 'ti                   '
+    CHARACTER(LEN=256) :: name_dim_ci                    = 'ci                   '
+    CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
+    CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
+
+    INTEGER :: id_var_V
+    INTEGER :: id_var_Tri
+    INTEGER :: id_var_nC
+    INTEGER :: id_var_C
+    INTEGER :: id_var_niTri
+    INTEGER :: id_var_iTri
+    INTEGER :: id_var_time
+
+    CHARACTER(LEN=256) :: name_var_V                     = 'V                    '
+    CHARACTER(LEN=256) :: name_var_Tri                   = 'Tri                  '
+    CHARACTER(LEN=256) :: name_var_nC                    = 'nC                   '
+    CHARACTER(LEN=256) :: name_var_C                     = 'C                    '
+    CHARACTER(LEN=256) :: name_var_niTri                 = 'niTri                '
+    CHARACTER(LEN=256) :: name_var_iTri                  = 'iTri                 '
+    CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
+
+  ! Variables
+  ! =========
+
+    INTEGER :: id_var_lat
+    INTEGER :: id_var_lon
+    INTEGER :: id_var_Hi
+    INTEGER :: id_var_Hi_rel
+    INTEGER :: id_var_N
+    INTEGER :: id_var_U
+    INTEGER :: id_var_ocean_function
+
+    CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
+    CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
+    CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
+    CHARACTER(LEN=256) :: name_var_Hi_rel                = 'Hi_rel               '
+    CHARACTER(LEN=256) :: name_var_N                     = 'N                    '
+    CHARACTER(LEN=256) :: name_var_U                     = 'U                    '
+    CHARACTER(LEN=256) :: name_var_ocean_function        = 'ocean_function       '
+
+  END TYPE type_netcdf_SELEN_output
+
 CONTAINS
 
 END MODULE data_types_netcdf_module

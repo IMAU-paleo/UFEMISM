@@ -104,6 +104,8 @@ CONTAINS
         ! Nothing to be done
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
+      ELSEIF (C%choice_GIA_model == 'SELEN') THEN
+        CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
       ELSE
         CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
@@ -506,6 +508,8 @@ CONTAINS
       ! Nothing to be done
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
+    ELSEIF (C%choice_GIA_model == 'SELEN') THEN
+        CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
     ELSE
       CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
     END IF
@@ -734,18 +738,40 @@ CONTAINS
     nsx = 0
     nsy = 0
     
-    CALL allocate_shared_int_0D(                   grid%nx          , grid%wnx          )
-    CALL allocate_shared_int_0D(                   grid%ny          , grid%wny          )
-    CALL allocate_shared_dp_0D(                    grid%dx          , grid%wdx          )
-    CALL allocate_shared_dp_0D(                    grid%xmin        , grid%wxmin        )
-    CALL allocate_shared_dp_0D(                    grid%xmax        , grid%wxmax        )
-    CALL allocate_shared_dp_0D(                    grid%ymin        , grid%wymin        )
-    CALL allocate_shared_dp_0D(                    grid%ymax        , grid%wymax        )
+    CALL allocate_shared_int_0D( grid%nx,           grid%wnx          )
+    CALL allocate_shared_int_0D( grid%ny,           grid%wny          )
+    CALL allocate_shared_dp_0D(  grid%dx,           grid%wdx          )
+    CALL allocate_shared_dp_0D(  grid%lambda_M,     grid%wlambda_M    )
+    CALL allocate_shared_dp_0D(  grid%phi_M,        grid%wphi_M       )
+    CALL allocate_shared_dp_0D(  grid%alpha_stereo, grid%walpha_stereo)
+    CALL allocate_shared_dp_0D(  grid%xmin,         grid%wxmin        )
+    CALL allocate_shared_dp_0D(  grid%xmax,         grid%wxmax        )
+    CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
+    CALL allocate_shared_dp_0D(  grid%ymax,         grid%wymax        )
     
     IF (par%master) THEN
     
       ! Resolution
       grid%dx = dx
+
+      ! Projection parameters for this region (determined from the config)
+      IF     (region%name == 'NAM') THEN
+        grid%lambda_M     = C%lambda_M_NAM
+        grid%phi_M        = C%phi_M_NAM
+        grid%alpha_stereo = C%alpha_stereo_NAM
+      ELSEIF (region%name == 'EAS') THEN
+        grid%lambda_M     = C%lambda_M_EAS
+        grid%phi_M        = C%phi_M_EAS
+        grid%alpha_stereo = C%alpha_stereo_EAS
+      ELSEIF (region%name == 'GRL') THEN
+        grid%lambda_M     = C%lambda_M_GRL
+        grid%phi_M        = C%phi_M_GRL
+        grid%alpha_stereo = C%alpha_stereo_GRL
+      ELSEIF (region%name == 'ANT') THEN
+        grid%lambda_M     = C%lambda_M_ANT
+        grid%phi_M        = C%phi_M_ANT
+        grid%alpha_stereo = C%alpha_stereo_ANT
+      END IF
     
       ! Determine the center of the model domain
       xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
@@ -831,7 +857,7 @@ CONTAINS
     CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 15)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 18)
     
   END SUBROUTINE initialise_model_square_grid
   

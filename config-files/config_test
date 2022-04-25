@@ -3,7 +3,7 @@
   ! Time steps and range
   ! ====================
 
-  start_time_of_run_config                    = -1000.0                          ! Start time (in years) of the simulations
+  start_time_of_run_config                    = -1.0                          ! Start time (in years) of the simulations
   end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
@@ -97,12 +97,12 @@
   ! =================
 
   do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
-  choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
+  choice_sealevel_model_config                = 'SELEN'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
   filename_sealevel_record_config             = 'name_of_file.dat'
   sealevel_record_length_config               = 1
 
-  choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"
+  choice_GIA_model_config                     = 'SELEN'                          ! Can be "none", "ELRA", or "SELEN"
   ELRA_lithosphere_flex_rigidity_config       = 1.0E+25                          ! Lithospheric flexural rigidity [kg m^2 s^-2]
   ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
   ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]

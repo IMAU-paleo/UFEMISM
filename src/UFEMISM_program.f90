@@ -38,12 +38,14 @@ PROGRAM UFEMISM_program
                                          reset_resource_tracker
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation
   USE data_types_module,           ONLY: type_model_region, type_netcdf_resource_tracker, &
-                                         type_climate_matrix_global, type_ocean_matrix_global
+                                         type_climate_matrix_global, type_ocean_matrix_global, &
+                                         type_SELEN_global
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
 
+  USE SELEN_main_module,           ONLY: initialise_SELEN
 
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
@@ -57,9 +59,12 @@ PROGRAM UFEMISM_program
   ! The four model regions
   TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
 
-  ! The global climate matrix
+  ! The global climate and ocean matrices
   TYPE(type_climate_matrix_global)       :: climate_matrix_global
   TYPE(type_ocean_matrix_global)         :: ocean_matrix_global
+
+  ! SELEN
+  TYPE(type_SELEN_global)                :: SELEN
 
   ! Coupling timer
   REAL(dp)                               :: t_coupling, t_end_models
@@ -148,6 +153,13 @@ PROGRAM UFEMISM_program
     END IF
   END IF
 
+  ! ===== Initialise SELEN =====
+  ! ============================
+
+  IF (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN') THEN
+    CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
+  END IF
+
   ! ===== Initial global output =====
   ! =================================
 
@@ -197,9 +209,10 @@ PROGRAM UFEMISM_program
       IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = GMSL_glob
       IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = GMSL_glob
       IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
+    ELSEIF (C%choice_sealevel_model == 'SELEN') THEN
+      CALL warning('choice_sealevel_model "SELEN" doing nothing here so far')
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_sealevel_model "', TRIM(C%choice_sealevel_model), '" not implemented in IMAU_ICE_program!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
     END IF
 
     ! Run all four model regions for 100 years

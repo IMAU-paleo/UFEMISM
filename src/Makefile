@@ -67,6 +67,9 @@ UFEMISM_program_objects = \
         ice_dynamics_module.o \
         isotopes_module.o \
         bedrock_ELRA_module.o \
+        SELEN_mapping_module.o \
+        SELEN_harmonics_module.o \
+        SELEN_main_module.o \
         tests_and_checks_module.o \
         UFEMISM_main_model.o \
         global_text_output_module.o \

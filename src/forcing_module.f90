@@ -802,20 +802,19 @@ CONTAINS
     time_applied = 0._dp
 
     IF     (C%choice_insolation_forcing == 'none') THEN
-      IF (par%master) WRITE(0,*) 'get_insolation_at_time - ERROR: choice_insolation_forcing = "none"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('insolation should not be used when choice_insolation_forcing = "none"!')
     ELSEIF (C%choice_insolation_forcing == 'static') THEN
       time_applied = C%static_insolation_time
     ELSEIF (C%choice_insolation_forcing == 'realistic') THEN
       time_applied = time
     ELSE
-      IF (par%master) WRITE(0,*) 'get_insolation_at_time - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_insolation_forcing "' // TRIM( C%choice_insolation_forcing) // '"!')
     END IF
 
     ! Check if the requested time is enveloped by the two timeframes;
     ! if not, read the two relevant timeframes from the NetCDF file
     IF (time_applied < forcing%ins_t0 .OR. time_applied > forcing%ins_t1) THEN
+      CALL sync
       CALL update_insolation_timeframes_from_file( time_applied)
     END IF
 
@@ -892,6 +891,7 @@ CONTAINS
     ! Check if the requested time is enveloped by the two timeframes;
     ! if not, read the two relevant timeframes from the NetCDF file
     IF (time_applied < forcing%ins_t0 .AND. time_applied > forcing%ins_t1) THEN
+      CALL sync
       CALL update_insolation_timeframes_from_file( time_applied)
     END IF
 

@@ -1069,7 +1069,7 @@ CONTAINS
       ! Compile list of ice-front pixels and their basin ID's
       IF (par%master) THEN
         n_front = 0
-        DO vi = mesh%vi1, mesh%vi2
+        DO vi = 1, mesh%nV
           IF (basin_ID_loc( vi) > 0) THEN
             ! Check if any connected vertex doesn't have a basin ID yet
             ! (trimming triling 0s in mesh%C)
@@ -1085,7 +1085,7 @@ CONTAINS
 
       IF (par%master) THEN
         k = 0
-        DO vi = mesh%vi1, mesh%vi2
+        DO vi = 1, mesh%nV
           IF (basin_ID_loc( vi) > 0) THEN
             IF (MINVAL( basin_ID_loc( mesh%C(vi,1:mesh%nC(vi)))) == 0) THEN
               k = k + 1

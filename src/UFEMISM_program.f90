@@ -160,6 +160,15 @@ PROGRAM UFEMISM_program
     CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
   END IF
 
+  ! Timers and run-at-start switch
+  IF (C%SELEN_run_at_t_start) THEN
+    SELEN%t0_SLE = C%start_time_of_run - C%dt_SELEN
+    SELEN%t1_SLE = C%start_time_of_run
+  ELSE
+    SELEN%t0_SLE = C%start_time_of_run
+    SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
+  END IF
+
   ! ===== Initial global output =====
   ! =================================
 

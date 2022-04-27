@@ -41,7 +41,7 @@ CONTAINS
     REAL(dp)                              :: resh,imsh
     REAL(dp)                              :: RHOI_O_RHOE_X3, RHOW_O_RHOE_X3, RHOI_O_RHOW, NP_INV
     
-    INTEGER,    DIMENSION(:    ), POINTER :: DM                  ! INTEGER,    DIMENSION( C%SELEN_jmax                ) :: DM
+    INTEGER,    DIMENSION(:    ), POINTER :: Dm                  ! INTEGER,    DIMENSION( C%SELEN_jmax                ) :: DM
     REAL(dp),   DIMENSION(:,:  ), POINTER :: X                   ! REAL(dp),   DIMENSION( SELEN%mesh%nV,  0:C%SELEN_irreg_time_n  ) :: X
     REAL(dp),   DIMENSION(            0:C%SELEN_irreg_time_n  ) :: AAVV
     REAL(dp),   DIMENSION(            0:C%SELEN_irreg_time_n  ) :: BBVV
@@ -129,7 +129,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate memory and bind pointers
-    CALL allocate_memory_and_bind_pointers( SELEN, DM, X, ZE, SE, AAAA, AAAA_MOD, BBBB, BBBB_MOD, HHHH, KKKK, TTTT, IIII, &
+    CALL allocate_memory_and_bind_pointers( SELEN, Dm, X, ZE, SE, AAAA, AAAA_MOD, BBBB, BBBB_MOD, HHHH, KKKK, TTTT, IIII, &
       load_ice_and_water, ZROT, ZROT_MOD, SROT, SROT_MOD, ZROTVV, SROTVV, S, U, Z, newalf, slc, WET, newtopo, fj, xcf, &
       newet2, newtopo2, S_global, U_global, MSint, MUint, MSread, int_time, sp1, spn, preSint, up1, upn, preUint, s2,u2, &
       varpreoc, varoc, varoc_inv, MEM_S, MEM_U, icethick, MJ_VAL, LJ_VAL, SELEN_anc, INIT_TOPO, ALF, LONG_TABLE, INIT_ICE)
@@ -1127,7 +1127,7 @@ CONTAINS
     
   END SUBROUTINE inverse_sh_transform_single_region_2D
   
-  SUBROUTINE allocate_memory_and_bind_pointers( SELEN, DM, X, ZE, SE, AAAA, AAAA_MOD, BBBB, BBBB_MOD, HHHH, KKKK, TTTT, IIII, &
+  SUBROUTINE allocate_memory_and_bind_pointers( SELEN, Dm, X, ZE, SE, AAAA, AAAA_MOD, BBBB, BBBB_MOD, HHHH, KKKK, TTTT, IIII, &
     load_ice_and_water, ZROT, ZROT_MOD, SROT, SROT_MOD, ZROTVV, SROTVV, S, U, Z, newalf, slc, WET, newtopo, fj, xcf, &
     newet2, newtopo2, S_global, U_global, MSint, MUint, MSread, int_time, sp1, spn, preSint, up1, upn, preUint, s2,u2, &
     varpreoc, varoc, varoc_inv, MEM_S, MEM_U, icethick, MJ_VAL, LJ_VAL, SELEN_anc, INIT_TOPO, ALF, LONG_TABLE, INIT_ICE)
@@ -1138,7 +1138,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_memory_and_bind_pointers'
     TYPE(type_SELEN_global),             INTENT(INOUT) :: SELEN
-    INTEGER,    DIMENSION(:    ), POINTER, INTENT(OUT) :: DM                  ! INTEGER,    DIMENSION( C%SELEN_jmax                ) :: DM
+    INTEGER,    DIMENSION(:    ), POINTER, INTENT(OUT) :: Dm                  ! INTEGER,    DIMENSION( C%SELEN_jmax                ) :: DM
     REAL(dp),   DIMENSION(:,:  ), POINTER, INTENT(OUT) :: X                   ! REAL(dp),   DIMENSION( SELEN%mesh%nV,  0:C%SELEN_irreg_time_n  ) :: X
     COMPLEX*16, DIMENSION(:,:  ), POINTER, INTENT(OUT) :: ZE                  ! COMPLEX*16, DIMENSION( C%SELEN_jmax,0:C%SELEN_irreg_time_n  ) :: ZE                  ! Eustatic Z array for water loading
     COMPLEX*16, DIMENSION(:,:  ), POINTER, INTENT(OUT) :: SE                  ! COMPLEX*16, DIMENSION( C%SELEN_jmax,0:C%SELEN_irreg_time_n  ) :: SE                  ! Eustatic S array for ice loading
@@ -1200,10 +1200,10 @@ CONTAINS
     ! For reasons unknown, this only works when the shared memory with which the pointer is
     ! associated is 1-D.
     
-    CALL allocate_shared_int_1D(     C%SELEN_jmax                  , SELEN%DM,                 SELEN%wDM                )
+    CALL allocate_shared_int_1D(     C%SELEN_jmax                  , SELEN%Dm,                 SELEN%wDm                )
     CALL allocate_shared_dp_1D(      SELEN%mesh%nV   * (C%SELEN_irreg_time_n+1), SELEN%X,                  SELEN%wX                 )
     
-    DM(                 1:C%SELEN_jmax                 ) => SELEN%DM
+    Dm(                 1:C%SELEN_jmax                 ) => SELEN%Dm
     X(                  1:SELEN%mesh%nV,   0:C%SELEN_irreg_time_n  ) => SELEN%X
     
     CALL allocate_shared_complex_1D( C%SELEN_jmax * (C%SELEN_irreg_time_n+1), SELEN%ZE,                 SELEN%wZE                )
@@ -1341,7 +1341,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    CALL deallocate_shared( SELEN%wDM)
+    CALL deallocate_shared( SELEN%wDm)
     CALL deallocate_shared( SELEN%wX)
     CALL deallocate_shared( SELEN%wZE)
     CALL deallocate_shared( SELEN%wSE)

@@ -310,6 +310,36 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_SELEN_results_to_region_GIA_grid
+  SUBROUTINE apply_SELEN_bed_geoid_deformation_rates( region)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_SELEN_bed_geoid_deformation_rates'
+    INTEGER                                            :: vi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = region%mesh%vi1, region%mesh%vi2
+
+      ! Bedrock
+      region%ice%Hb_a(  vi) = region%ice%Hb_a( vi) + region%ice%dHb_dt_a( vi) * region%dt
+      region%ice%dHb_a( vi) = region%ice%Hb_a( vi) - region%refgeo_PD%Hb( vi)
+
+      ! Geoid
+      region%ice%SL_a(  vi) = region%ice%SL_a( vi) + region%ice%dSL_dt_a( vi) * region%dt
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_SELEN_bed_geoid_deformation_rates
 
 ! == Initialisation ==
 ! ====================

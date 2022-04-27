@@ -44,6 +44,7 @@ MODULE UFEMISM_main_model
   USE BMB_module,                      ONLY: initialise_BMB_model,              remap_BMB_model,      run_BMB_model
   USE isotopes_module,                 ONLY: initialise_isotopes_model,         remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,             remap_ELRA_model,     run_ELRA_model
+  USE SELEN_main_module,               ONLY: apply_SELEN_bed_geoid_deformation_rates
   USE tests_and_checks_module,         ONLY: run_all_matrix_tests
 
   IMPLICIT NONE
@@ -105,7 +106,7 @@ CONTAINS
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
       ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-        IF (it == 1 .AND. par%master) CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
+        CALL apply_SELEN_bed_geoid_deformation_rates( region)
       ELSE
         CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
@@ -509,7 +510,7 @@ CONTAINS
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
     ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-        IF (par%master)  CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
+      ! Nothing to be done; SELEN is initialised globally by UFEMISM_program.
     ELSE
       CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
     END IF

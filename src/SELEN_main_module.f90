@@ -21,11 +21,13 @@ MODULE SELEN_main_module
                                                allocate_shared_int_3D, allocate_shared_dp_3D, &
                                                allocate_shared_complex_1D, deallocate_shared
   USE data_types_module,                 ONLY: type_model_region, type_SELEN_global
-  USE netcdf_module,                     ONLY: inquire_SELEN_global_topo_file, read_SELEN_global_topo_file
+  USE netcdf_module,                     ONLY: inquire_SELEN_global_topo_file, read_SELEN_global_topo_file, &
+                                               create_SELEN_output_file
   USE mesh_mapping_module,               ONLY: calc_remapping_operator_mesh2grid, map_mesh2grid_2D
   USE general_ice_model_data_module,     ONLY: is_floating
   USE SELEN_mapping_module,              ONLY: create_GIA_grid_to_SELEN_maps, map_GIA_grid_to_SELEN
   USE SELEN_harmonics_module,            ONLY: DOM, PLEG, HARMO, PLMBAR_MOD
+  USE SELEN_taboo_hp_module,             ONLY: taboo_hp_model
 
   IMPLICIT NONE
 
@@ -102,21 +104,21 @@ CONTAINS
     IF (par%master) WRITE(0,*) '  Initialising ice loading history...'
     CALL initialise_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
 
-    ! ! Calculating Green's functions (from load Love numbers)
-    ! IF (par%master) WRITE(0,*) '  Calling TABOO and calculate Green functions...'
-    ! IF (par%master) CALL taboo_hp_model
+    ! Calculating Green's functions (from load Love numbers)
+    IF (par%master) WRITE(0,*) '  Calling TABOO and calculate Green functions...'
+    IF (par%master) CALL taboo_hp_model
 
-    ! ! Allocate memory for SELEN end results
-    ! CALL allocate_shared_complex_1D( C%SELEN_jmax * (C%SELEN_irreg_time_n+1), SELEN%MEM_S,       SELEN%wMEM_S      )
-    ! CALL allocate_shared_complex_1D( C%SELEN_jmax * (C%SELEN_irreg_time_n+1), SELEN%MEM_U,       SELEN%wMEM_U      )
-    ! CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%Hi_glob,     SELEN%wHi_glob    )
-    ! CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%Hi_rel_glob, SELEN%wHi_rel_glob)
-    ! CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%U_glob,      SELEN%wU_glob     )
-    ! CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%N_glob,      SELEN%wN_glob     )
-    ! CALL allocate_shared_int_1D(     SELEN%mesh%nV,                           SELEN%of_glob,     SELEN%wof_glob    )
+    ! Allocate memory for SELEN end results
+    CALL allocate_shared_complex_1D( C%SELEN_jmax * (C%SELEN_irreg_time_n+1), SELEN%MEM_S,       SELEN%wMEM_S      )
+    CALL allocate_shared_complex_1D( C%SELEN_jmax * (C%SELEN_irreg_time_n+1), SELEN%MEM_U,       SELEN%wMEM_U      )
+    CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%Hi_glob,     SELEN%wHi_glob    )
+    CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%Hi_rel_glob, SELEN%wHi_rel_glob)
+    CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%U_glob,      SELEN%wU_glob     )
+    CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%N_glob,      SELEN%wN_glob     )
+    CALL allocate_shared_int_1D(     SELEN%mesh%nV,                           SELEN%of_glob,     SELEN%wof_glob    )
 
     ! ! Create NetCDF output file
-    ! CALL create_SELEN_output_file( SELEN)
+    CALL create_SELEN_output_file( SELEN)
 
     IF (par%master) WRITE(0,*) ' Finished initialising SELEN.'
     CALL sync

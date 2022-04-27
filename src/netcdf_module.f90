@@ -5752,4 +5752,110 @@ CONTAINS
 
   END SUBROUTINE read_SELEN_global_topo_file
 
+  ! SELEN output file
+  SUBROUTINE create_SELEN_output_file( SELEN)
+    ! Create a new NetCDF output file for SELEN (on the irregular global mesh)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_SELEN_output_file'
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: vi, ti, ci, three, time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Set time frame index to 1
+    SELEN%output%ti = 1
+
+    ! Set output filename
+    SELEN%output%filename = TRIM(C%output_dir) // 'SELEN_output.nc'
+
+    ! Create a new restart file if none exists and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+    INQUIRE(EXIST=file_exists, FILE = TRIM(SELEN%output%filename))
+    IF(file_exists) THEN
+      CALL crash('file "' // TRIM( SELEN%output%filename) // '" already exists!')
+    END IF
+
+    ! Create netCDF file
+    CALL handle_error(nf90_create(SELEN%output%filename,IOR(nf90_clobber,nf90_share),SELEN%output%ncid))
+
+    ! Mesh data
+    ! =========
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_vi,           SELEN%mesh%nV,           SELEN%output%id_dim_vi          ) ! Vertex indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ti,           SELEN%mesh%nTri,         SELEN%output%id_dim_ti          ) ! Triangle indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ci,           SELEN%mesh%nC_mem,       SELEN%output%id_dim_ci          ) ! Connection indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_three,        3,                       SELEN%output%id_dim_three       ) ! 3 (each vertex has three coordinates, each triangle has three vertices)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    vi        = SELEN%output%id_dim_vi
+    ti        = SELEN%output%id_dim_ti
+    ci        = SELEN%output%id_dim_ci
+    three     = SELEN%output%id_dim_three
+
+    ! Define variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_V,                [vi,  three], SELEN%output%id_var_V,                long_name='Vertex coordinates', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_Tri,              [ti,  three], SELEN%output%id_var_Tri,              long_name='Vertex indices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_nC,               [vi        ], SELEN%output%id_var_nC,               long_name='Number of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_C,                [vi,  ci   ], SELEN%output%id_var_C,                long_name='Indices of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_niTri,            [vi        ], SELEN%output%id_var_niTri,            long_name='Number of inverse triangles')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_iTri,             [vi,  ci   ], SELEN%output%id_var_iTri,             long_name='Indices of inverse triangles')
+
+    ! Model output
+    ! ============
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited, SELEN%output%id_dim_time ) ! Time frames
+
+    ! Placeholders for the dimension ID's, for shorter code
+    time  = SELEN%output%id_dim_time
+
+    ! Define dimension variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_time,  [time  ], SELEN%output%id_var_time,  long_name='Time', units='years')
+
+    ! Define model data variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lat,              [vi             ], SELEN%output%id_var_lat,              long_name='Latitude', units='degrees north')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lon,              [vi             ], SELEN%output%id_var_lon,              long_name='Longtitude', units='degrees east')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi,               [vi,        time], SELEN%output%id_var_Hi,               long_name='Surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi_rel,           [vi,        time], SELEN%output%id_var_Hi_rel,           long_name='Relative surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_U,                [vi,        time], SELEN%output%id_var_U,                long_name='Land surface change', units='m')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_N,                [vi,        time], SELEN%output%id_var_N,                long_name='Sea surface change', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_ocean_function,   [vi,        time], SELEN%output%id_var_ocean_function,   long_name='Ocean function (1 = ocean)')
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( SELEN%output%ncid))
+
+    ! Write mesh data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_V,               SELEN%mesh%V             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Tri,             SELEN%mesh%Tri           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_nC,              SELEN%mesh%nC            ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_C,               SELEN%mesh%C             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_niTri,           SELEN%mesh%niTri         ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_iTri,            SELEN%mesh%iTri          ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lat,             SELEN%mesh%lat           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lon,             SELEN%mesh%lon           ))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( SELEN%output%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_SELEN_output_file
+
 END MODULE netcdf_module

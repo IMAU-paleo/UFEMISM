@@ -69,6 +69,11 @@ UFEMISM_program_objects = \
         bedrock_ELRA_module.o \
         SELEN_mapping_module.o \
         SELEN_harmonics_module.o \
+        SELEN_fmvals_module.o \
+        SELEN_fmzm90.o \
+        SELEN_fm.o \
+        SELEN_common_hp_module.o \
+        SELEN_taboo_hp_module.o \
         SELEN_main_module.o \
         tests_and_checks_module.o \
         UFEMISM_main_model.o \

@@ -1326,7 +1326,7 @@ CONTAINS
     INIT_ICE(           1:SELEN%mesh%nV                         ) => SELEN%load_ref
     
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=47)
     
   END SUBROUTINE allocate_memory_and_bind_pointers
   SUBROUTINE deallocate_memory_SELEN( SELEN)
@@ -1351,6 +1351,7 @@ CONTAINS
     CALL deallocate_shared( SELEN%wBBBB_MOD)
     CALL deallocate_shared( SELEN%wHHHH)
     CALL deallocate_shared( SELEN%wKKKK)
+    CALL deallocate_shared( SELEN%wTTTT)
     CALL deallocate_shared( SELEN%wIIII)
     CALL deallocate_shared( SELEN%wload_ice_and_water)
     CALL deallocate_shared( SELEN%wZROT)

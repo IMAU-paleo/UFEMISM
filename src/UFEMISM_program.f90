@@ -210,7 +210,7 @@ PROGRAM UFEMISM_program
       IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = GMSL_glob
       IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
     ELSEIF (C%choice_sealevel_model == 'SELEN') THEN
-      CALL warning('choice_sealevel_model "SELEN" doing nothing here so far')
+      ! Sea level fields are filled in the SELEN routines
     ELSE
       CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
     END IF

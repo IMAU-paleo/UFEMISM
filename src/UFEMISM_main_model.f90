@@ -105,7 +105,7 @@ CONTAINS
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
       ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-        CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
+        IF (it == 1 .AND. par%master) CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
       ELSE
         CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
@@ -509,7 +509,7 @@ CONTAINS
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL initialise_ELRA_model( region%mesh, region%grid_GIA, region%ice, region%refgeo_PD)
     ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-        CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
+        IF (par%master)  CALL warning('choice_GIA_model "SELEN" doing nothing here so far.')
     ELSE
       CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
     END IF

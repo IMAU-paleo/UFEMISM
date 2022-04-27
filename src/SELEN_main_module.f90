@@ -22,16 +22,294 @@ MODULE SELEN_main_module
                                                allocate_shared_complex_1D, deallocate_shared
   USE data_types_module,                 ONLY: type_model_region, type_SELEN_global
   USE netcdf_module,                     ONLY: inquire_SELEN_global_topo_file, read_SELEN_global_topo_file, &
-                                               create_SELEN_output_file
-  USE mesh_mapping_module,               ONLY: calc_remapping_operator_mesh2grid, map_mesh2grid_2D
+                                               create_SELEN_output_file, write_to_SELEN_output_file
+  USE mesh_mapping_module,               ONLY: map_mesh2grid_2D, map_grid2mesh_2D
   USE general_ice_model_data_module,     ONLY: is_floating
   USE SELEN_mapping_module,              ONLY: create_GIA_grid_to_SELEN_maps, map_GIA_grid_to_SELEN
   USE SELEN_harmonics_module,            ONLY: DOM, PLEG, HARMO, PLMBAR_MOD
   USE SELEN_taboo_hp_module,             ONLY: taboo_hp_model
+  USE SELEN_sealevel_equation_module,    ONLY: solve_SLE, inverse_sh_transform_single_region_2D
 
   IMPLICIT NONE
 
 CONTAINS
+
+! == Execution ==
+! ===============
+
+! == Run SELEN
+  SUBROUTINE run_SELEN( SELEN, NAM, EAS, GRL, ANT, time, ocean_area, ocean_depth)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_SELEN_global),             INTENT(INOUT) :: SELEN
+    TYPE(type_model_region),             INTENT(INOUT) :: NAM, EAS, GRL, ANT
+    REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp),                            INTENT(OUT)   :: ocean_area            ! Area           of the world's oceans (m^2)
+    REAL(dp),                            INTENT(OUT)   :: ocean_depth           ! Averaged depth of the worlds ocean's (m)
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SELEN'
+    REAL(dp)                                           :: t1,t2
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (par%master) WRITE (0,'(A)') ''
+    IF (par%master) WRITE (0,'(A)') '  Running SELEN to solve the sea-level equation...'
+
+    t1 = MPI_WTIME()
+
+    ! Update ice loading history
+    CALL update_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
+
+    ! Solve the SLE for the new ice loading history
+    CALL solve_SLE( SELEN, NAM, EAS, GRL, ANT, time, ocean_area, ocean_depth)
+
+    ! Write to output
+    CALL write_to_SELEN_output_file( SELEN, time)
+
+    t2 = MPI_WTIME()
+
+    IF (par%master) WRITE (0,'(A,F7.2,A)') '  Finished solving the sea-level equation in ', t2-t1, ' seconds!'
+    IF (par%master) WRITE (0,'(A)') '  Mapping SELEN bedrock and geoid deformation rates onto regional GIA grids...'
+
+    t1 = MPI_WTIME()
+
+    ! Get bedrock and geoid deformation (rates) on regional GIA grids
+    IF (C%do_NAM) CALL map_SELEN_results_to_region_GIA_grid( SELEN, NAM)
+    IF (C%do_EAS) CALL map_SELEN_results_to_region_GIA_grid( SELEN, EAS)
+    IF (C%do_GRL) CALL map_SELEN_results_to_region_GIA_grid( SELEN, GRL)
+    IF (C%do_ANT) CALL map_SELEN_results_to_region_GIA_grid( SELEN, ANT)
+
+    t2 = MPI_WTIME()
+
+    IF (par%master) WRITE (0,'(A,F7.2,A)') '  Finished mapping the deformation rates in ', t2-t1, ' seconds!'
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_SELEN
+  SUBROUTINE update_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
+    ! Update ice loading histories for the different UFEMISM regions,
+    ! map the loading history on the irregular moving time window to the
+    ! SELEN global grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_SELEN_global),             INTENT(INOUT) :: SELEN
+    TYPE(type_model_region),             INTENT(INOUT) :: NAM, EAS, GRL, ANT
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_ice_loading_history'
+    INTEGER                                            :: ki
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: load_region_ki_NAM
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: load_region_ki_EAS
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: load_region_ki_GRL
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: load_region_ki_ANT
+    INTEGER                                            :: wload_region_ki_NAM, wload_region_ki_EAS, wload_region_ki_GRL, wload_region_ki_ANT
+    REAL(dp), DIMENSION(:    ), POINTER                :: load_glob_ki_NAM
+    REAL(dp), DIMENSION(:    ), POINTER                :: load_glob_ki_EAS
+    REAL(dp), DIMENSION(:    ), POINTER                :: load_glob_ki_GRL
+    REAL(dp), DIMENSION(:    ), POINTER                :: load_glob_ki_ANT
+    INTEGER                                            :: wload_glob_ki_NAM, wload_glob_ki_EAS, wload_glob_ki_GRL, wload_glob_ki_ANT
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    IF (C%do_NAM) CALL allocate_shared_dp_2D( NAM%grid_GIA%nx, NAM%grid_GIA%ny, load_region_ki_NAM,  wload_region_ki_NAM)
+    IF (C%do_EAS) CALL allocate_shared_dp_2D( EAS%grid_GIA%nx, EAS%grid_GIA%ny, load_region_ki_EAS,  wload_region_ki_EAS)
+    IF (C%do_GRL) CALL allocate_shared_dp_2D( GRL%grid_GIA%nx, GRL%grid_GIA%ny, load_region_ki_GRL,  wload_region_ki_GRL)
+    IF (C%do_ANT) CALL allocate_shared_dp_2D( ANT%grid_GIA%nx, ANT%grid_GIA%ny, load_region_ki_ANT,  wload_region_ki_ANT)
+                  CALL allocate_shared_dp_1D( SELEN%mesh%nV,                    load_glob_ki_NAM,    wload_glob_ki_NAM  )
+                  CALL allocate_shared_dp_1D( SELEN%mesh%nV,                    load_glob_ki_EAS,    wload_glob_ki_EAS  )
+                  CALL allocate_shared_dp_1D( SELEN%mesh%nV,                    load_glob_ki_GRL,    wload_glob_ki_GRL  )
+                  CALL allocate_shared_dp_1D( SELEN%mesh%nV,                    load_glob_ki_ANT,    wload_glob_ki_ANT  )
+
+    ! Update regional ice loading histories on both the regular and irregular moving time windows
+    IF (C%do_NAM) CALL update_ice_loading_history_region( NAM)
+    IF (C%do_EAS) CALL update_ice_loading_history_region( EAS)
+    IF (C%do_GRL) CALL update_ice_loading_history_region( GRL)
+    IF (C%do_ANT) CALL update_ice_loading_history_region( ANT)
+
+    ! Map regional ice loading at each irregular moving time window frame to the SELEN global grid
+    DO ki = 1, C%SELEN_irreg_time_n
+
+      ! Copy single timeframe to temporary memory
+      IF (C%do_NAM) load_region_ki_NAM( NAM%grid_GIA%i1:NAM%grid_GIA%i2,:) = NAM%SELEN%ice_loading_history_irreg_sq( NAM%grid_GIA%i1:NAM%grid_GIA%i2,:,ki)
+      IF (C%do_EAS) load_region_ki_EAS( EAS%grid_GIA%i1:EAS%grid_GIA%i2,:) = EAS%SELEN%ice_loading_history_irreg_sq( EAS%grid_GIA%i1:EAS%grid_GIA%i2,:,ki)
+      IF (C%do_GRL) load_region_ki_GRL( GRL%grid_GIA%i1:GRL%grid_GIA%i2,:) = GRL%SELEN%ice_loading_history_irreg_sq( GRL%grid_GIA%i1:GRL%grid_GIA%i2,:,ki)
+      IF (C%do_ANT) load_region_ki_ANT( ANT%grid_GIA%i1:ANT%grid_GIA%i2,:) = ANT%SELEN%ice_loading_history_irreg_sq( ANT%grid_GIA%i1:ANT%grid_GIA%i2,:,ki)
+      CALL sync
+
+      ! Map single timeframe to SELEN global grid
+      IF (C%do_NAM) CALL map_GIA_grid_to_SELEN( SELEN, NAM, load_region_ki_NAM, load_glob_ki_NAM, .TRUE.)
+      IF (C%do_EAS) CALL map_GIA_grid_to_SELEN( SELEN, EAS, load_region_ki_EAS, load_glob_ki_EAS, .TRUE.)
+      IF (C%do_GRL) CALL map_GIA_grid_to_SELEN( SELEN, GRL, load_region_ki_GRL, load_glob_ki_GRL, .TRUE.)
+      IF (C%do_ANT) CALL map_GIA_grid_to_SELEN( SELEN, ANT, load_region_ki_ANT, load_glob_ki_ANT, .TRUE.)
+
+      ! Add contributions from all four ice sheets together
+      SELEN%ice_loading_history_irreg_glob( C%SELEN_i1:C%SELEN_i2,ki) = &
+        load_glob_ki_NAM( C%SELEN_i1:C%SELEN_i2) + &
+        load_glob_ki_EAS( C%SELEN_i1:C%SELEN_i2) + &
+        load_glob_ki_GRL( C%SELEN_i1:C%SELEN_i2) + &
+        load_glob_ki_ANT( C%SELEN_i1:C%SELEN_i2)
+      CALL sync
+
+    END DO
+
+    ! Clean up after yourself
+    IF (C%do_NAM) CALL deallocate_shared( wload_region_ki_NAM)
+    IF (C%do_EAS) CALL deallocate_shared( wload_region_ki_EAS)
+    IF (C%do_GRL) CALL deallocate_shared( wload_region_ki_GRL)
+    IF (C%do_ANT) CALL deallocate_shared( wload_region_ki_ANT)
+                  CALL deallocate_shared( wload_glob_ki_NAM  )
+                  CALL deallocate_shared( wload_glob_ki_EAS  )
+                  CALL deallocate_shared( wload_glob_ki_GRL  )
+                  CALL deallocate_shared( wload_glob_ki_ANT  )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+ END SUBROUTINE update_ice_loading_history
+  SUBROUTINE update_ice_loading_history_region( region)
+    ! Update the ice loading history of a UFEMISM region (square grid, both time windows)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_ice_loading_history_region'
+    INTEGER                                            :: vi,k,ki
+    REAL(dp), DIMENSION(:    ), POINTER                ::  load_icemodel_mesh
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  load_GIA_grid
+    INTEGER                                            :: wload_icemodel_mesh, wload_GIA_grid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+  ! Map ice loading at current time step from the ice model grid to the GIA grid
+  ! =============================================================================
+
+    ! Allocate temporary shared memory for the data on the square mesh and on the 2D grid
+    CALL allocate_shared_dp_1D( region%mesh%nV,                         load_icemodel_mesh, wload_icemodel_mesh)
+    CALL allocate_shared_dp_2D( region%grid_GIA%nx, region%grid_GIA%ny, load_GIA_grid,      wload_GIA_grid     )
+
+    ! Load = grounded ice thickness
+    DO vi = region%mesh%vi1, region%mesh%vi2
+      IF (region%ice%mask_sheet_a( vi) == 1) load_icemodel_mesh( vi) = region%ice%Hi_a( vi)
+    END DO
+    CALL sync
+
+    ! Map the data from the ice model mesh to the GIA grid
+    CALL map_mesh2grid_2D( region%mesh, region%grid_GIA, load_icemodel_mesh, load_GIA_grid)
+
+  ! Update ice loading history on the square grid
+  ! =============================================
+
+    ! Move past loading timeframes one step down
+    DO k = 1, C%SELEN_reg_time_n-1
+      region%SELEN%ice_loading_history_reg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,k) = &
+      region%SELEN%ice_loading_history_reg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,k+1)
+    END DO
+
+    ! Fill ice loading at current time step into the history
+    region%SELEN%ice_loading_history_reg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,C%SELEN_reg_time_n) = load_GIA_grid( region%grid_GIA%i1:region%grid_GIA%i2,:)
+
+    ! Get values on irregular moving time window
+    DO ki = 1, C%SELEN_irreg_time_n
+      k = INT(C%SELEN_reg_time_n) + 1 - INT(SUM(C%SELEN_irreg_time_window(ki:C%SELEN_irreg_time_n)) * 1000._dp / C%dt_SELEN)
+      region%SELEN%ice_loading_history_irreg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,ki) = &
+      region%SELEN%ice_loading_history_reg_sq(   region%grid_GIA%i1:region%grid_GIA%i2,:,k )
+    END DO
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wload_icemodel_mesh)
+    CALL deallocate_shared( wload_GIA_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE update_ice_loading_history_region
+  SUBROUTINE map_SELEN_results_to_region_GIA_grid( SELEN, region)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_SELEN_global),             INTENT(IN)    :: SELEN
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_SELEN_results_to_region_GIA_grid'
+    INTEGER                                            :: j,vi
+    COMPLEX*16, DIMENSION(:,:  ), POINTER              :: MEM_S
+    COMPLEX*16, DIMENSION(:,:  ), POINTER              :: MEM_U
+    COMPLEX*16, DIMENSION(:    ), POINTER              ::  dHb_t_sh,  dHb_tplusdt_sh,  SL_t_sh,  SL_tplusdt_sh
+    INTEGER                                            :: wdHb_t_sh, wdHb_tplusdt_sh, wSL_t_sh, wSL_tplusdt_sh
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Bind local pointers
+    MEM_S( 1:C%SELEN_jmax, 0:C%SELEN_irreg_time_n) => SELEN%MEM_S
+    MEM_U( 1:C%SELEN_jmax, 0:C%SELEN_irreg_time_n) => SELEN%MEM_U
+
+    ! Allocate shared memory
+    CALL allocate_shared_complex_1D( C%SELEN_jmax, dHb_t_sh,       wdHb_t_sh      )
+    CALL allocate_shared_complex_1D( C%SELEN_jmax, dHb_tplusdt_sh, wdHb_tplusdt_sh)
+    CALL allocate_shared_complex_1D( C%SELEN_jmax, SL_t_sh,        wSL_t_sh       )
+    CALL allocate_shared_complex_1D( C%SELEN_jmax, SL_tplusdt_sh,  wSL_tplusdt_sh )
+
+    ! Get spherical harmonics data
+    DO j = C%SELEN_j1, C%SELEN_j2
+
+      dHb_t_sh(       j) =  MEM_U( j, C%SELEN_irreg_time_n-1)
+      dHb_tplusdt_sh( j) =  MEM_U( j, C%SELEN_irreg_time_n  )
+      SL_t_sh(        j) =  MEM_S( j, C%SELEN_irreg_time_n-1) + MEM_U( j, C%SELEN_irreg_time_n-1)
+      SL_tplusdt_sh(  j) =  MEM_S( j, C%SELEN_irreg_time_n  ) + MEM_U( j, C%SELEN_irreg_time_n  )
+
+    END DO
+    CALL sync
+
+    ! Map data from spherical harmonics to regional GIA grid
+    CALL inverse_sh_transform_single_region_2D( region, dHb_t_sh,       region%SELEN%dHb_t_grid_GIA      )
+    CALL inverse_sh_transform_single_region_2D( region, dHb_tplusdt_sh, region%SELEN%dHb_tplusdt_grid_GIA)
+    CALL inverse_sh_transform_single_region_2D( region, SL_t_sh,        region%SELEN%SL_t_grid_GIA       )
+    CALL inverse_sh_transform_single_region_2D( region, SL_tplusdt_sh,  region%SELEN%SL_tplusdt_grid_GIA )
+
+    ! Map data from the regional GIA grid to the regional ice model mesh
+    CALL map_grid2mesh_2D(region%grid_GIA, region%mesh, region%SELEN%dHb_t_grid_GIA,       region%SELEN%dHb_t      )
+    CALL map_grid2mesh_2D(region%grid_GIA, region%mesh, region%SELEN%dHb_tplusdt_grid_GIA, region%SELEN%dHb_tplusdt)
+    CALL map_grid2mesh_2D(region%grid_GIA, region%mesh, region%SELEN%SL_t_grid_GIA,        region%SELEN%SL_t       )
+    CALL map_grid2mesh_2D(region%grid_GIA, region%mesh, region%SELEN%SL_tplusdt_grid_GIA,  region%SELEN%SL_tplusdt )
+
+    ! Determine bedrock and geoid deformation rates on the new UFEMISM mesh
+    ! NOTE: for the bedrock deformation rate, we choose it so that at t+dt_SELEN, modelled bedrock deformation is equal to
+    !       dHb_tplusdt. This makes sure the errors in the SELEN predictions don't accumulate
+    DO vi = region%mesh%vi1, region%mesh%vi2
+      ! Bedrock deformation rate
+      region%ice%dHb_dt_a( vi) = (region%SELEN%dHb_tplusdt( vi) - region%ice%dHb_a( vi)) / C%dt_SELEN
+
+      ! Geoid deformation rate
+      region%ice%dSL_dt_a( vi) = (region%SELEN%SL_tplusdt(  vi) - region%ice%SL_a(  vi)) / C%dt_SELEN
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wdHb_t_sh      )
+    CALL deallocate_shared( wdHb_tplusdt_sh)
+    CALL deallocate_shared( wSL_t_sh       )
+    CALL deallocate_shared( wSL_tplusdt_sh )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_SELEN_results_to_region_GIA_grid
 
 ! == Initialisation ==
 ! ====================

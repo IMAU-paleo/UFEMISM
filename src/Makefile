@@ -74,6 +74,9 @@ UFEMISM_program_objects = \
         SELEN_fm.o \
         SELEN_common_hp_module.o \
         SELEN_taboo_hp_module.o \
+        SELEN_pmtf_routines.o \
+        SELEN_spline_interpolation_module.o \
+        SELEN_sealevel_equation_module.o \
         SELEN_main_module.o \
         tests_and_checks_module.o \
         UFEMISM_main_model.o \

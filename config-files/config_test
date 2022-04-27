@@ -20,9 +20,9 @@
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .FALSE.                          ! North America
+  do_NAM_config                               = .TRUE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_GRL_config                               = .FALSE.                           ! Greenland
   do_ANT_config                               = .FALSE.                          ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
@@ -134,6 +134,9 @@
   help_field_13_config                        = 'Refreezing_year'
   help_field_14_config                        = 'Runoff_year'
   help_field_15_config                        = 'Albedo_year'
-  help_field_16_config                        = 'none'
+  help_field_16_config                        = 'dHb'
+  help_field_17_config                        = 'dHb_dt_a'
+  help_field_18_config                        = 'dSL_dt_a'
+  help_field_19_config                        = 'none'
 
 /

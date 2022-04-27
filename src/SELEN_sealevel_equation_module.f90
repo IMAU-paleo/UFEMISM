@@ -23,7 +23,7 @@ MODULE SELEN_sealevel_equation_module
  
 CONTAINS
 
-  SUBROUTINE solve_SLE( SELEN, NAM, EAS, GRl, ANT, time, ocean_area, ocean_depth)
+  SUBROUTINE solve_SLE( SELEN, NAM, EAS, GRL, ANT, time, ocean_area, ocean_depth)
     ! Solve the sea-level equation for the current ice loading history 
     
     IMPLICIT NONE
@@ -1075,7 +1075,7 @@ CONTAINS
     REAL(dp),   DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inverse_sh_transform_single_region_2D'
+    CHARACTER(LEN=256), PARAMETER                        :: routine_name = 'inverse_sh_transform_single_region_2D'
     INTEGER                                              :: i,j
     CHARACTER(LEN=256)                                   :: sh_filename
     COMPLEX*16, DIMENSION( C%SELEN_jmax)                 :: Ypx
@@ -1109,9 +1109,9 @@ CONTAINS
         READ( UNIT = 1337+par%i) Ypx
       
         ! Compute inverse transform
-        d( j,i) = 0._dp
+        d( i,j) = 0._dp
         DO li = 1, C%SELEN_jmax
-          d( j,i) = d( j,i) + dble( sh( li) * Ypx( li)) 
+          d( i,j) = d( i,j) + dble( sh( li) * Ypx( li))
         END DO ! DO li = 1, C%SELEN_jmax
         
       END DO ! DO j = 1, region%grid_GIA%ny

@@ -45,7 +45,7 @@ PROGRAM UFEMISM_program
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
 
-  USE SELEN_main_module,           ONLY: initialise_SELEN
+  USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
 
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
@@ -65,6 +65,8 @@ PROGRAM UFEMISM_program
 
   ! SELEN
   TYPE(type_SELEN_global)                :: SELEN
+  REAL(dp)                               :: ocean_area
+  REAL(dp)                               :: ocean_depth
 
   ! Coupling timer
   REAL(dp)                               :: t_coupling, t_end_models
@@ -74,7 +76,9 @@ PROGRAM UFEMISM_program
   TYPE(type_netcdf_resource_tracker)     :: resources
   REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
 
-  ! ======================================================================================
+! =============================================================================
+! =================================== START ===================================
+! =============================================================================
 
   routine_path = 'UFEMISM_program'
 
@@ -204,8 +208,24 @@ PROGRAM UFEMISM_program
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
 
+    ! == Global forcing update (pre-regional-model-runs)
+    ! ==================================================
+
     ! Update global insolation forcing, CO2, and d18O at the current model time
     CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'pre')
+
+    ! == SELEN
+    ! ========
+
+    ! Solve the SLE
+    IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
+      CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
+      SELEN%t0_SLE = t_coupling
+      SELEN%t1_SLE = t_coupling + C%dt_SELEN
+    END IF
+
+    ! == Regional sea level update
+    ! ============================
 
     ! Update regional sea level (needs to be moved to separate subroutine at some point!)
     IF (C%choice_sealevel_model == 'fixed') THEN
@@ -224,6 +244,9 @@ PROGRAM UFEMISM_program
       CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
     END IF
 
+    ! == Regional model runs
+    ! ======================
+
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
 
@@ -234,6 +257,9 @@ PROGRAM UFEMISM_program
 
     ! Advance coupling time
     t_coupling = t_end_models
+
+    ! == Global sea level update
+    ! ==========================
 
     ! Determine GMSL contributions
     GMSL_NAM = 0._dp
@@ -246,9 +272,15 @@ PROGRAM UFEMISM_program
     IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
     GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
 
+    ! == Global forcing update (post-regional-model-runs)
+    ! ===================================================
+
     ! Calculate contributions to benthic d18O from the different ice sheets and,
     ! if applicable, call the inverse routine to update the climate forcing parameter
     CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
+
+    ! == Global output
+    ! ================
 
     ! Write global data to output file
     CALL write_text_output( &
@@ -271,6 +303,9 @@ PROGRAM UFEMISM_program
       forcing%dT_glob,                   &  ! global mean surface temperature anomaly
       forcing%dT_deepwater               )  ! deep-water temperature anomaly
 
+    ! == Resource tracking output
+    ! ===========================
+
     ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
     CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
@@ -291,5 +326,9 @@ PROGRAM UFEMISM_program
   ! Finalise MPI and PETSc
   CALL PetscFinalize( perr)
   CALL MPI_FINALIZE( ierr)
+
+! =============================================================================
+! ==================================== END ====================================
+! =============================================================================
 
 END PROGRAM UFEMISM_program

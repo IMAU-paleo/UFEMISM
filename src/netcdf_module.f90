@@ -387,7 +387,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_help_field_mesh'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -588,7 +588,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
-    
+    ELSEIF (field_name == 'dHb_dt_a') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHb_dt_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dSL_dt_a') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dSL_dt_a, start=(/1, netcdf%ti /) ))
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -947,7 +950,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_mesh'
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
     
     ! Add routine to path
@@ -1164,7 +1167,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [vi,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-      
+    ELSEIF (field_name == 'dHb_dt_a') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt_a',                 [vi,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt_a') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt_a',                 [vi,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1319,10 +1325,10 @@ CONTAINS
     CHARACTER(LEN=*),              INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_grid'
-    INTEGER                                       :: vi
-    REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
-    INTEGER                                       :: wdp_2D_a
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'write_help_field_grid'
+    INTEGER                                      :: vi
+    REAL(dp), DIMENSION(:    ), POINTER          ::  dp_2D_a
+    INTEGER                                      :: wdp_2D_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1554,7 +1560,10 @@ CONTAINS
     ELSEIF (field_name == 'dHb') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-    
+    ELSEIF (field_name == 'dHb_dt_a') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dSL_dt_a') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dSL_dt_a, id_var, netcdf%ti)
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1802,7 +1811,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_grid'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_grid'
     INTEGER                                       :: x, y, t, z, m
     
     ! Add routine to path
@@ -2013,7 +2022,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [x, y,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-      
+    ELSEIF (field_name == 'dHb_dt_a') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt_a',                 [x, y,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt_a') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt_a',                 [x, y,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -5857,5 +5869,46 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_SELEN_output_file
+  SUBROUTINE write_to_SELEN_output_file( SELEN, time)
+    ! Write the current model state to the existing output file
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_to_SELEN_output_file'
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+    REAL(dp),                       INTENT(IN)    :: time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the file for writing
+    CALL open_netcdf_file( SELEN%output%filename, SELEN%output%ncid)
+
+    ! Time
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_time, time, start = (/ SELEN%output%ti /)))
+
+    ! Model data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,     start = (/ 1, SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob, start = (/ 1, SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,      start = (/ 1, SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,      start = (/ 1, SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,     start = (/ 1, SELEN%output%ti/) ))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Increase time frame counter
+    SELEN%output%ti = SELEN%output%ti + 1
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_SELEN_output_file
 
 END MODULE netcdf_module

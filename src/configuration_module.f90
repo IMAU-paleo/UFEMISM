@@ -643,7 +643,7 @@ MODULE configuration_module
   ! SELEN
   ! =====
 
-  LOGICAL             :: SELEN_run_at_t_start_config                  = .TRUE.                         ! Whether or not to run SELEN in the first coupling loop (needed for some benchmark experiments)
+  LOGICAL             :: SELEN_run_at_t_start_config                  = .TRUE.                          ! Whether or not to run SELEN in the first coupling loop (needed for some benchmark experiments)
   INTEGER             :: SELEN_n_TDOF_iterations_config               = 1                               ! Number of Time-Dependent Ocean Function iterations
   INTEGER             :: SELEN_n_recursion_iterations_config          = 1                               ! Number of recursion iterations
   LOGICAL             :: SELEN_use_rotational_feedback_config         = .FALSE.                         ! If TRUE, rotational feedback is included

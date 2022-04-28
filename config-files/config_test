@@ -20,10 +20,10 @@
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .FALSE.                          ! North America
-  do_EAS_config                               = .FALSE.                          ! Eurasia
+  do_NAM_config                               = .TRUE.                           ! North America
+  do_EAS_config                               = .TRUE.                           ! Eurasia
   do_GRL_config                               = .TRUE.                           ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================

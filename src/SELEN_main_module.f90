@@ -356,6 +356,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SELEN'
+    INTEGER                                            :: n_wins
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -366,6 +367,7 @@ CONTAINS
     ! Initialise the global irregular mesh and reference topography, ice loading & ocean function
     IF (par%master) WRITE(0,*) '  Initialising SELEN global mesh and topography...'
     CALL initialise_SELEN_global_data( SELEN)
+    ! 19 extra MPI windows
 
     ! Initialise the reference load and topography for the four ice-model regions
     IF (par%master) WRITE(0,*) '  Initialising SELEN regional reference fields...'
@@ -373,6 +375,7 @@ CONTAINS
     IF (C%do_EAS) CALL initialise_reference_fields_regional( EAS)
     IF (C%do_GRL) CALL initialise_reference_fields_regional( GRL)
     IF (C%do_ANT) CALL initialise_reference_fields_regional( ANT)
+    ! 10 extra MPI windows EACH
 
     ! Link ice-model regional GIA grid points to SELEN global grid points.
     ! Mind the sequence! GRL first, then EAS, then NAM.
@@ -380,22 +383,27 @@ CONTAINS
     IF (C%do_EAS) CALL create_GIA_grid_to_SELEN_maps( SELEN, EAS, 2)
     IF (C%do_NAM) CALL create_GIA_grid_to_SELEN_maps( SELEN, NAM, 1)
     IF (C%do_ANT) CALL create_GIA_grid_to_SELEN_maps( SELEN, ANT, 4)
+    ! 4 extra MPI windows EACH
 
     ! Create regional pixel lists
     IF (C%do_NAM) CALL create_icemodel_regional_pixel_list( SELEN, NAM, 1)
     IF (C%do_EAS) CALL create_icemodel_regional_pixel_list( SELEN, EAS, 2)
     IF (C%do_GRL) CALL create_icemodel_regional_pixel_list( SELEN, GRL, 3)
     IF (C%do_ANT) CALL create_icemodel_regional_pixel_list( SELEN, ANT, 4)
+    ! 2 extra MPI windows EACH
 
     ! Create list of SELEN global pixels that belong to ice model regions
     CALL create_icemodel_pixel_list( SELEN)
+    ! 2 extra MPI windows
 
     ! Map present-day topography and ice loading from the regional GIA grids to the SELEN global mesh
     CALL adapt_SELEN_global_data_to_ice_model( SELEN, NAM, EAS, GRL, ANT)
+    ! 0 extra MPI windows
 
     ! Read Love numbers from the provided external file
     IF (par%master) WRITE(0,*) '  Reading Love numbers...'
     CALL read_Love_numbers( SELEN)
+    ! 2 extra MPI windows
 
     ! Initialise the spherical harmonics files (either read from files, or create from scratch)
     IF (par%master) WRITE(0,*) '  Initialising spherical harmonics...'
@@ -407,10 +415,12 @@ CONTAINS
     ! Initialise ALF and LONG_TABLE
     IF (par%master) WRITE(0,*) '  Initialising ALF and LONG_TABLE...'
     CALL initialise_ALF_and_LONG_TABLE( SELEN)
+    ! 2 extra MPI windows
 
     ! Initialise ice loading history
     IF (par%master) WRITE(0,*) '  Initialising ice loading history...'
     CALL initialise_ice_loading_history( SELEN, NAM, EAS, GRL, ANT)
+    ! 2 extra MPI windows per region, + 1
 
     ! Calculating Green's functions (from load Love numbers)
     IF (par%master) WRITE(0,*) '  Calling TABOO and calculate Green functions...'
@@ -424,6 +434,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%U_glob,      SELEN%wU_glob     )
     CALL allocate_shared_dp_1D(      SELEN%mesh%nV,                           SELEN%N_glob,      SELEN%wN_glob     )
     CALL allocate_shared_int_1D(     SELEN%mesh%nV,                           SELEN%of_glob,     SELEN%wof_glob    )
+    ! 7 extra MPI windows
 
     ! ! Create NetCDF output file
     CALL create_SELEN_output_file( SELEN)
@@ -431,8 +442,15 @@ CONTAINS
     IF (par%master) WRITE(0,*) ' Finished initialising SELEN.'
     CALL sync
 
+    ! Total number of MPI windows opened during initialisation
+    n_wins = 33
+    IF (C%do_NAM) n_wins =  n_wins + 18
+    IF (C%do_EAS) n_wins =  n_wins + 18
+    IF (C%do_GRL) n_wins =  n_wins + 18
+    IF (C%do_ANT) n_wins =  n_wins + 18
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=19)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=n_wins)
 
   END SUBROUTINE initialise_SELEN
   SUBROUTINE read_Love_numbers( SELEN)
@@ -491,6 +509,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_loading_history'
     INTEGER                                            :: ki
+    INTEGER                                            :: n_wins
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -511,8 +530,15 @@ CONTAINS
     IF (C%do_GRL) CALL initialise_ice_loading_history_region( GRL)
     IF (C%do_ANT) CALL initialise_ice_loading_history_region( ANT)
 
+    ! Total number of MPI windows opened
+    n_wins = 1
+    IF (C%do_NAM) n_wins = n_wins + 2
+    IF (C%do_EAS) n_wins = n_wins + 2
+    IF (C%do_GRL) n_wins = n_wins + 2
+    IF (C%do_ANT) n_wins = n_wins + 2
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=n_wins)
 
   END SUBROUTINE initialise_ice_loading_history
   SUBROUTINE initialise_ice_loading_history_region( region)

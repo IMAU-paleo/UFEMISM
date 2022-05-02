@@ -824,17 +824,17 @@ CONTAINS
     allocate(  ice%uabs_base_b         (mesh%ti1:mesh%ti2               )) 
                                                                         
     ! Different masks                                                   
-    allocate(  ice%mask_land_a         (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_ocean_a        (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_lake_a         (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_ice_a          (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_sheet_a        (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_shelf_a        (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_coast_a        (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_margin_a       (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_gl_a           (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_cf_a           (mesh%vi1:mesh%vi2               ))
-    allocate(  ice%mask_a              (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_land_a         (       1:mesh%nV                ))
+    allocate(  ice%mask_ocean_a        (       1:mesh%nV                ))
+    allocate(  ice%mask_lake_a         (       1:mesh%nV                ))
+    allocate(  ice%mask_ice_a          (       1:mesh%nV                ))
+    allocate(  ice%mask_sheet_a        (       1:mesh%nV                ))
+    allocate(  ice%mask_shelf_a        (       1:mesh%nV                ))
+    allocate(  ice%mask_coast_a        (       1:mesh%nV                ))
+    allocate(  ice%mask_margin_a       (       1:mesh%nV                ))
+    allocate(  ice%mask_gl_a           (       1:mesh%nV                ))
+    allocate(  ice%mask_cf_a           (       1:mesh%nV                ))
+    allocate(  ice%mask_a              (       1:mesh%nV                ))
     allocate(  ice%f_grnd_a            (mesh%vi1:mesh%vi2               ))
     allocate(  ice%f_grnd_b            (mesh%ti1:mesh%ti2               ))
                                                                         
@@ -875,7 +875,7 @@ CONTAINS
     allocate(  ice%GHF_a               (mesh%vi1:mesh%vi2               ))
     
     ! Mesh adaptation data
-    allocate(  ice%surf_curv           (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%surf_curv           (       1:mesh%nV                ))
     allocate(  ice%log_velocity        (mesh%vi1:mesh%vi2               ))
     
     ! GIA
@@ -981,17 +981,17 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     
     ! Different masks
-    CALL reallocate_bounds ( ice%mask_land_a  , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_ocean_a , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_lake_a  , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_ice_a   , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_sheet_a , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_shelf_a , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_coast_a , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_margin_a, mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_gl_a    , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_cf_a    , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%mask_a       , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%mask_land_a  ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_ocean_a ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_lake_a  ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_ice_a   ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_sheet_a ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_shelf_a ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_coast_a ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_margin_a,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_gl_a    ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_cf_a    ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%mask_a       ,            1, mesh_new%nV  )
     CALL reallocate_bounds ( ice%f_grnd_a     , mesh_new%vi1, mesh_new%vi2 )
     CALL reallocate_bounds ( ice%f_grnd_b     , mesh_new%ti1, mesh_new%ti2 )
     
@@ -1039,7 +1039,7 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%GHF_a                 , ice%wGHF_a                )
     
     ! Mesh adaptation data
-    CALL reallocate_bounds ( ice%surf_curv       , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%surf_curv       ,            1, mesh_new%nV        )
     CALL reallocate_bounds ( ice%log_velocity    , mesh_new%vi1, mesh_new%vi2       )
     
     ! GIA

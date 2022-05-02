@@ -13,6 +13,7 @@ MODULE general_ice_model_data_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model!, type_model_region
   USE utilities_module,                ONLY: is_floating, surface_elevation, thickness_above_floatation
+  use mpi_module,                      only: allgather_array
   ! USE mesh_help_functions_module,      ONLY: find_triangle_area
   ! USE mesh_operators_module,           ONLY: map_a_to_b_2D
 
@@ -61,78 +62,86 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_masks'
     INTEGER                                            :: vi, ci, vc
-    integer, dimension(:), allocatable                 :: mask_ocean_a
-    integer, dimension(:), allocatable                 :: mask_ice_a
-    integer, dimension(:), allocatable                 :: mask_shelf_a
+    real(dp), dimension(:), allocatable                :: Hi_a, Hb_a, SL_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
     
+    ! Get necessary information
+    allocate(Hi_a(1:mesh%nV))
+    allocate(Hb_a(1:mesh%nV))
+    allocate(SL_a(1:mesh%nV))
+    Hi_a(mesh%vi1:mesh%vi2) = ice%Hi_a
+    Hb_a(mesh%vi1:mesh%vi2) = ice%Hb_a
+    SL_a(mesh%vi1:mesh%vi2) = ice%SL_a
+    call allgather_array(Hi_a)
+    call allgather_array(Hb_a)
+    call allgather_array(SL_a)
+    
+
     ! Start out with land everywhere, fill in the rest based on input.
-    ice%mask_land_a(   mesh%vi1:mesh%vi2) = 1
-    ice%mask_lake_a(   mesh%vi1:mesh%vi2) = 0
-    ice%mask_sheet_a(  mesh%vi1:mesh%vi2) = 0
-    ice%mask_coast_a(  mesh%vi1:mesh%vi2) = 0
-    ice%mask_margin_a( mesh%vi1:mesh%vi2) = 0
-    ice%mask_gl_a(     mesh%vi1:mesh%vi2) = 0
-    ice%mask_cf_a(     mesh%vi1:mesh%vi2) = 0
-    ice%mask_a(        mesh%vi1:mesh%vi2) = C%type_land
-    allocate(mask_ocean_a(1:mesh%nV))
-    allocate(mask_ice_a(1:mesh%nV))
-    allocate(mask_shelf_a(1:mesh%nV))
-    mask_ocean_a = 0
-    mask_ice_a = 0
-    mask_shelf_a = 0
+    ice%mask_land_a(   1:mesh%nV) = 1
+    ice%mask_lake_a(   1:mesh%nV) = 0
+    ice%mask_ocean_a(  1:mesh%nV) = 0
+    ice%mask_ice_a(    1:mesh%nV) = 0
+    ice%mask_shelf_a(  1:mesh%nV) = 0
+    ice%mask_sheet_a(  1:mesh%nV) = 0
+    ice%mask_coast_a(  1:mesh%nV) = 0
+    ice%mask_margin_a( 1:mesh%nV) = 0
+    ice%mask_gl_a(     1:mesh%nV) = 0
+    ice%mask_cf_a(     1:mesh%nV) = 0
+    ice%mask_a(        1:mesh%nV) = C%type_land
   
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = 1, mesh%nV
       
       ! Determine ocean (both open and shelf-covered)
-      IF (is_floating( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
-        mask_ocean_a( vi) = 1
+      IF (is_floating( Hi_a( vi), Hb_a( vi), SL_a( vi))) THEN
+        ice%mask_ocean_a( vi) = 1
         ice%mask_land_a(  vi) = 0
         ice%mask_a(       vi) = C%type_ocean
       END IF
     
       ! Determine ice
-      IF (ice%Hi_a( vi) > 0._dp) THEN
-        mask_ice_a( vi)  = 1
+      IF (Hi_a( vi) > 0._dp) THEN
+        ice%mask_ice_a( vi)  = 1
       END IF
       
       ! Determine sheet
-      IF (mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
+      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
         ice%mask_sheet_a( vi) = 1
         ice%mask_a(       vi) = C%type_sheet
       END IF
     
       ! Determine shelf
-      IF (mask_ice_a( vi) == 1 .AND. mask_ocean_a( vi) == 1) THEN
-        mask_shelf_a( vi) = 1
+      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ocean_a( vi) == 1) THEN
+        ice%mask_shelf_a( vi) = 1
         ice%mask_a(       vi) = C%type_shelf
       END IF
       
-    END DO ! DO vi = mesh%vi1, mesh%vi2
+    END DO ! DO vi = 1, mesh%nV
   
     ! Determine coast, grounding line and calving front
-    DO vi = mesh%vi1, mesh%vi2
+    DO vi = 1, mesh%nV
     
       IF (ice%mask_land_a( vi) == 1) THEN  
         ! Land bordering ocean equals coastline
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (mask_ocean_a( vc) == 1) THEN
+          IF (ice%mask_ocean_a( vc) == 1) THEN
             ice%mask_a( vi) = C%type_coast
             ice%mask_coast_a( vi) =  1
           END IF
         END DO
       END IF
     
-      IF (mask_ice_a( vi) == 1) THEN  
+      IF (ice%mask_ice_a( vi) == 1) THEN  
         ! Ice bordering non-ice equals margin
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (mask_ice_a( vc) == 0) THEN
+          IF (ice%mask_ice_a( vc) == 0) THEN
             ice%mask_a( vi) = C%type_margin
             ice%mask_margin_a( vi) =  1
           END IF
@@ -144,35 +153,31 @@ CONTAINS
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (mask_shelf_a( vc) == 1) THEN
+          IF (ice%mask_shelf_a( vc) == 1) THEN
             ice%mask_a( vi) = C%type_groundingline
             ice%mask_gl_a( vi) = 1
           END IF
         END DO
       END IF
   
-      IF (mask_ice_a( vi) == 1) THEN  
+      IF (ice%mask_ice_a( vi) == 1) THEN  
         ! Ice (sheet or shelf) bordering open ocean equals calvingfront
         
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C( vi,ci)
-          IF (mask_ocean_a( vc) == 1 .AND. mask_ice_a( vc) == 0) THEN
+          IF (ice%mask_ocean_a( vc) == 1 .AND. ice%mask_ice_a( vc) == 0) THEN
             ice%mask_a( vi) = C%type_calvingfront
             ice%mask_cf_a( vi) = 1
           END IF
         END DO
         
       END IF
-    END DO ! DO vi = mesh%vi1, mesh%vi2
+    END DO ! DO vi = 1, mesh%nV
 
-    ice%mask_ocean_a = mask_ocean_a(mesh%vi1:mesh%vi2)
-    ice%mask_ice_a   = mask_ice_a  (mesh%vi1:mesh%vi2)
-    ice%mask_shelf_a = mask_shelf_a(mesh%vi1:mesh%vi2)
+    deallocate(Hi_a)
+    deallocate(Hb_a)
+    deallocate(SL_a)
 
-    deallocate(mask_ocean_a)
-    deallocate(mask_ice_a)
-    deallocate(mask_shelf_a)
-    
     ! Finalise routine path
     CALL finalise_routine( routine_name)
   

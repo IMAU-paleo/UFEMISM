@@ -2639,6 +2639,7 @@ MODULE mesh_help_functions_module
     TYPE(type_mesh),          INTENT(INOUT)       :: mesh
     REAL(dp), DIMENSION(2),   INTENT(IN)          :: pa, pb, pc
     INTEGER,  DIMENSION(:),   INTENT(IN)          :: mask
+
     INTEGER,                  INTENT(INOUT)       :: vi_closest_to_gc
     LOGICAL,                  INTENT(OUT)         :: isso
 

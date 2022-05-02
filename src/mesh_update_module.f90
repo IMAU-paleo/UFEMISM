@@ -285,6 +285,7 @@ MODULE mesh_update_module
     DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%surf_curv( vi) = MAX(-1E-6, MIN(1E-6, SQRT(d2dx2( vi)**2 + d2dy2( vi)**2 + d2dxdy( vi)**2)))
     END DO
+    call allgather_array(region%ice%surf_curv)
     deallocate( d2dx2)
     deallocate( d2dxdy)
     deallocate( d2dy2)
@@ -583,21 +584,7 @@ MODULE mesh_update_module
     INTEGER                                       :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
     REAL(dp)                                      :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
     REAL(dp)                                      :: fcoast, fmargin, fgl, fcf
-    real(dp), dimension(:), allocatable           :: mask_coast_a, mask_margin_a, mask_cf_a, mask_gl_a
 
-    allocate(mask_coast_a(1:mesh%nV))
-    allocate(mask_cf_a(1:mesh%nV))
-    allocate(mask_gl_a(1:mesh%nV))
-    allocate(mask_margin_a(1:mesh%nV))
-    mask_coast_a(mesh%vi1:mesh%vi2) = ice%mask_coast_a
-    mask_cf_a(mesh%vi1:mesh%vi2) = ice%mask_cf_a
-    mask_gl_a(mesh%vi1:mesh%vi2) = ice%mask_gl_a
-    mask_margin_a(mesh%vi1:mesh%vi2) = ice%mask_margin_a
-    call allgather_array(mask_coast_a)
-    call allgather_array(mask_cf_a)
-    call allgather_array(mask_gl_a)
-    call allgather_array(mask_margin_a)
-    
     ! Add routine to path
     CALL init_routine( routine_name)
         
@@ -643,7 +630,7 @@ MODULE mesh_update_module
       ! Longest triangle leg
       dmax = MAXVAL([SQRT(pq(1)**2+pq(2)**2), SQRT(qr(1)**2+qr(2)**2), SQRT(rp(1)**2+rp(2)**2)])
       
-      IF (mask_coast_a( v1)==1 .OR. mask_coast_a( v2)==1 .OR. mask_coast_a( v3)==1) THEN
+      IF (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) THEN
         ncoast = ncoast + 1
         lcoast = lcoast + dmax
         IF (dmax > C%res_max_coast*2.0_dp*1000._dp*res_tol) THEN
@@ -652,7 +639,7 @@ MODULE mesh_update_module
         END IF
       END IF
       
-      IF (mask_margin_a( v1)==1 .OR. mask_margin_a( v2)==1 .OR. mask_margin_a( v3)==1) THEN
+      IF (ice%mask_margin_a( v1)==1 .OR. ice%mask_margin_a( v2)==1 .OR. ice%mask_margin_a( v3)==1) THEN
         nmargin = nmargin + 1
         lmargin = lmargin + dmax
         IF (dmax > C%res_max_margin*2.0_dp*1000._dp*res_tol) THEN
@@ -660,7 +647,7 @@ MODULE mesh_update_module
           lumargin = lumargin + dmax
         END IF
       END IF
-      IF (mask_gl_a( v1)==1 .OR. mask_gl_a( v2)==1 .OR. mask_gl_a( v3)==1) THEN
+      IF (ice%mask_gl_a( v1)==1 .OR. ice%mask_gl_a( v2)==1 .OR. ice%mask_gl_a( v3)==1) THEN
         ngl = ngl + 1
         lgl = lgl + dmax
         IF (dmax > C%res_max_gl*2.0_dp*1000._dp*res_tol) THEN
@@ -668,7 +655,7 @@ MODULE mesh_update_module
           lugl = lugl + dmax
         END IF
       END IF
-      IF (mask_cf_a( v1)==1 .OR. mask_cf_a( v2)==1 .OR. mask_cf_a( v3)==1) THEN
+      IF (ice%mask_cf_a( v1)==1 .OR. ice%mask_cf_a( v2)==1 .OR. ice%mask_cf_a( v3)==1) THEN
         ncf = ncf + 1
         lcf = lcf + dmax
         IF (dmax > C%res_max_cf*2.0_dp*1000._dp*res_tol) THEN
@@ -694,11 +681,6 @@ MODULE mesh_update_module
     
     !IF (par%master) WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(meshfitness * 100._dp), ' %'
     
-    deallocate(mask_coast_a)
-    deallocate(mask_cf_a)
-    deallocate(mask_gl_a)
-    deallocate(mask_margin_a)
-
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     

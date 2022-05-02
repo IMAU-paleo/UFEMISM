@@ -1140,7 +1140,7 @@ CONTAINS
     CALL initialise_snapshot_absorbed_insolation( region%mesh, region%climate_matrix%GCM_cold, region%name, region%mask_noice)
 
     ! Initialise applied climate with present-day observations
-    DO vi = region%mesh%vi2, region%mesh%vi2
+    DO vi = region%mesh%vi1, region%mesh%vi2
     DO m = 1, 12
       region%climate_matrix%applied%T2m(     vi,m) = region%climate_matrix%PD_obs%T2m(     vi,m)
       region%climate_matrix%applied%Precip(  vi,m) = region%climate_matrix%PD_obs%Precip(  vi,m)

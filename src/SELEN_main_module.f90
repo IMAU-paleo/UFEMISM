@@ -75,17 +75,13 @@ CONTAINS
     IF (par%master) WRITE (0,'(A,F7.2,A)') '  Finished solving the sea-level equation in ', t2-t1, ' seconds!'
     IF (par%master) WRITE (0,'(A)') '  Mapping SELEN bedrock and geoid deformation rates onto regional GIA grids...'
 
-    t1 = MPI_WTIME()
-
     ! Get bedrock and geoid deformation (rates) on regional GIA grids
     IF (C%do_NAM) CALL map_SELEN_results_to_region_GIA_grid( SELEN, NAM)
     IF (C%do_EAS) CALL map_SELEN_results_to_region_GIA_grid( SELEN, EAS)
     IF (C%do_GRL) CALL map_SELEN_results_to_region_GIA_grid( SELEN, GRL)
     IF (C%do_ANT) CALL map_SELEN_results_to_region_GIA_grid( SELEN, ANT)
 
-    t2 = MPI_WTIME()
-
-    IF (par%master) WRITE (0,'(A,F7.2,A)') '  Finished mapping the deformation rates in ', t2-t1, ' seconds!'
+    IF (par%master) WRITE (0,'(A)') '  SELEN done. Good luck UFEMISM!'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

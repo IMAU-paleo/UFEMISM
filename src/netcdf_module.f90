@@ -588,9 +588,9 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'dHb_dt_a') THEN
+    ELSEIF (field_name == 'dHb_dt') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHb_dt_a, start=(/1, netcdf%ti /) ))
-    ELSEIF (field_name == 'dSL_dt_a') THEN
+    ELSEIF (field_name == 'dSL_dt') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dSL_dt_a, start=(/1, netcdf%ti /) ))
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
@@ -1167,10 +1167,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [vi,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-    ELSEIF (field_name == 'dHb_dt_a') THEN
-      CALL create_double_var( netcdf%ncid, 'dHb_dt_a',                 [vi,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
-    ELSEIF (field_name == 'dSL_dt_a') THEN
-      CALL create_double_var( netcdf%ncid, 'dSL_dt_a',                 [vi,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [vi,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [vi,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1560,9 +1560,9 @@ CONTAINS
     ELSEIF (field_name == 'dHb') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-    ELSEIF (field_name == 'dHb_dt_a') THEN
+    ELSEIF (field_name == 'dHb_dt') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, id_var, netcdf%ti)
-    ELSEIF (field_name == 'dSL_dt_a') THEN
+    ELSEIF (field_name == 'dSL_dt') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dSL_dt_a, id_var, netcdf%ti)
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
@@ -2022,10 +2022,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [x, y,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-    ELSEIF (field_name == 'dHb_dt_a') THEN
-      CALL create_double_var( netcdf%ncid, 'dHb_dt_a',                 [x, y,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
-    ELSEIF (field_name == 'dSL_dt_a') THEN
-      CALL create_double_var( netcdf%ncid, 'dSL_dt_a',                 [x, y,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [x, y,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [x, y,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF

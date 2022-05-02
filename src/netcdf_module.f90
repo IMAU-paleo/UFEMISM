@@ -242,25 +242,21 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
+    if (par%master) then
+      ! Open the file for writing
+      CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
-    ! Open the file for writing
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-
-    ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
-
+      ! Time
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
+    endif
     ! Write data
 
     ! Geometry
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,               region%ice%SL_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb,              region%ice%dHb_a,               start = (/ 1,     netcdf%ti/)))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hi, region%ice%Hi_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hb, region%ice%Hb_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hs, region%ice%Hs_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_SL, region%ice%SL_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_dHb,region%ice%dHb_a,region%mesh%nV, start = (/ 1,     netcdf%ti/))
 
     ! ! Temperature
     ! CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
@@ -270,7 +266,9 @@ CONTAINS
     ! CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start = (/ 1,     netcdf%ti/)))
 
     ! Close the file
-    CALL close_netcdf_file(netcdf%ncid)
+    if (par%master) then
+      CALL close_netcdf_file(netcdf%ncid)
+    endif
 
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1

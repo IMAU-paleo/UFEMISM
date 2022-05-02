@@ -32,6 +32,7 @@ MODULE mesh_update_module
   USE mesh_creation_module,            ONLY: initialise_dummy_mesh, perturb_dummy_mesh, align_all_submeshes, refine_submesh_geo_only, debug_mesh_creation, &
                                              merge_all_submeshes, create_final_mesh_from_merged_submesh, Lloyds_algorithm_single_iteration_submesh
   USE mesh_operators_module,           ONLY: d2dx2_a_to_a_2D, d2dxdy_a_to_a_2D, d2dy2_a_to_a_2D
+  use mpi_module,                      only: allgather_array
 
   IMPLICIT NONE
 
@@ -593,6 +594,20 @@ MODULE mesh_update_module
     INTEGER                                       :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
     REAL(dp)                                      :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
     REAL(dp)                                      :: fcoast, fmargin, fgl, fcf
+    real(dp), dimension(:), allocatable           :: mask_coast_a, mask_margin_a, mask_cf_a, mask_gl_a
+
+    allocate(mask_coast_a(1:mesh%nV))
+    allocate(mask_cf_a(1:mesh%nV))
+    allocate(mask_gl_a(1:mesh%nV))
+    allocate(mask_margin_a(1:mesh%nV))
+    mask_coast_a(mesh%vi1:mesh%vi2) = ice%mask_coast_a
+    mask_cf_a(mesh%vi1:mesh%vi2) = ice%mask_cf_a
+    mask_gl_a(mesh%vi1:mesh%vi2) = ice%mask_gl_a
+    mask_margin_a(mesh%vi1:mesh%vi2) = ice%mask_margin_a
+    call allgather_array(mask_coast_a)
+    call allgather_array(mask_cf_a)
+    call allgather_array(mask_gl_a)
+    call allgather_array(mask_margin_a)
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -619,7 +634,7 @@ MODULE mesh_update_module
     lugl     = 0._dp
     lucf     = 0._dp
     
-    DO ti = mesh%ti1, mesh%ti2
+    DO ti = 1, mesh%nTri
      
       ! Triangle vertex indices
       v1 = mesh%Tri( ti,1)
@@ -639,7 +654,7 @@ MODULE mesh_update_module
       ! Longest triangle leg
       dmax = MAXVAL([SQRT(pq(1)**2+pq(2)**2), SQRT(qr(1)**2+qr(2)**2), SQRT(rp(1)**2+rp(2)**2)])
       
-      IF (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) THEN
+      IF (mask_coast_a( v1)==1 .OR. mask_coast_a( v2)==1 .OR. mask_coast_a( v3)==1) THEN
         ncoast = ncoast + 1
         lcoast = lcoast + dmax
         IF (dmax > C%res_max_coast*2.0_dp*1000._dp*res_tol) THEN
@@ -648,7 +663,7 @@ MODULE mesh_update_module
         END IF
       END IF
       
-      IF (ice%mask_margin_a( v1)==1 .OR. ice%mask_margin_a( v2)==1 .OR. ice%mask_margin_a( v3)==1) THEN
+      IF (mask_margin_a( v1)==1 .OR. mask_margin_a( v2)==1 .OR. mask_margin_a( v3)==1) THEN
         nmargin = nmargin + 1
         lmargin = lmargin + dmax
         IF (dmax > C%res_max_margin*2.0_dp*1000._dp*res_tol) THEN
@@ -656,7 +671,7 @@ MODULE mesh_update_module
           lumargin = lumargin + dmax
         END IF
       END IF
-      IF (ice%mask_gl_a( v1)==1 .OR. ice%mask_gl_a( v2)==1 .OR. ice%mask_gl_a( v3)==1) THEN
+      IF (mask_gl_a( v1)==1 .OR. mask_gl_a( v2)==1 .OR. mask_gl_a( v3)==1) THEN
         ngl = ngl + 1
         lgl = lgl + dmax
         IF (dmax > C%res_max_gl*2.0_dp*1000._dp*res_tol) THEN
@@ -664,7 +679,7 @@ MODULE mesh_update_module
           lugl = lugl + dmax
         END IF
       END IF
-      IF (ice%mask_cf_a( v1)==1 .OR. ice%mask_cf_a( v2)==1 .OR. ice%mask_cf_a( v3)==1) THEN
+      IF (mask_cf_a( v1)==1 .OR. mask_cf_a( v2)==1 .OR. mask_cf_a( v3)==1) THEN
         ncf = ncf + 1
         lcf = lcf + dmax
         IF (dmax > C%res_max_cf*2.0_dp*1000._dp*res_tol) THEN
@@ -673,26 +688,7 @@ MODULE mesh_update_module
         END IF
       END IF
       
-    END DO ! DO ti = mesh%t1, mesh%t2
-    CALL sync
-    
-    ! Gather mesh fitness data from all processes
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, ncoast,   1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nmargin,  1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, ngl,      1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, ncf,      1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nucoast,  1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, numargin, 1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nugl,     1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nucf,     1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lcoast,   1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lmargin,  1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lgl,      1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lcf,      1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lucoast,  1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lumargin, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lugl,     1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, lucf,     1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    END DO ! DO ti = 1, mesh%nT
     
     ! Calculate mesh fitness    
     fcoast  = 1._dp - lucoast  / lcoast
@@ -707,17 +703,13 @@ MODULE mesh_update_module
     
     fitness = MIN( MIN( MIN( fcoast, fmargin), fgl), fcf)
     
-    IF (par%master) THEN
-      DO i = 1, par%n-1
-        CALL MPI_SEND( fitness, 1, MPI_DOUBLE_PRECISION, i, 0, MPI_COMM_WORLD, ierr)
-      END DO      
-    ELSE
-      CALL MPI_RECV( fitness, 1, MPI_DOUBLE_PRECISION, 0, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
-    END IF
-    CALL sync
-      
     !IF (par%master) WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(meshfitness * 100._dp), ' %'
     
+    deallocate(mask_coast_a)
+    deallocate(mask_cf_a)
+    deallocate(mask_gl_a)
+    deallocate(mask_margin_a)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     

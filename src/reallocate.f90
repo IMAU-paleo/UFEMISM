@@ -71,6 +71,7 @@ subroutine reallocate_bounds_dp_1d(array,start,stop)
 
   ! allocate, move, swap pointer(bonus implicit deallocate)
   allocate(newarray(start:stop))
+  newarray = 0d0
   !No assignment, that would be disastorous without shared array
   call move_alloc(newarray, array)
 end subroutine
@@ -81,6 +82,7 @@ subroutine reallocate_bounds_dp_2d(array,start,stop,d2)
   real(dp), allocatable, dimension(:,:)                :: newarray
 
   allocate(newarray(start:stop,d2))
+  newarray = 0d0
   call move_alloc(newarray, array)
 end subroutine
 subroutine reallocate_bounds_int_1d(array,start,stop)
@@ -90,6 +92,7 @@ subroutine reallocate_bounds_int_1d(array,start,stop)
   integer , allocatable, dimension(:)                  :: newarray
 
   allocate(newarray(start:stop))
+  newarray = 0
   call move_alloc(newarray, array)
 end subroutine
 subroutine reallocate_bounds_int_2d(array,start,stop,d2)
@@ -99,6 +102,7 @@ subroutine reallocate_bounds_int_2d(array,start,stop,d2)
   integer , allocatable, dimension(:,:)                :: newarray
 
   allocate(newarray(start:stop,d2))
+  newarray = 0
   call move_alloc(newarray, array)
 end subroutine
 end module

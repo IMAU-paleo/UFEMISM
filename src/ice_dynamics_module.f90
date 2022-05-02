@@ -791,6 +791,7 @@ CONTAINS
     allocate(  ice%Hb_a                (mesh%vi1:mesh%vi2               ))
     allocate(  ice%Hs_a                (mesh%vi1:mesh%vi2               ))
     allocate(  ice%SL_a                (mesh%vi1:mesh%vi2               ))
+    ice%SL_a = 0d0
     allocate(  ice%TAF_a               (mesh%vi1:mesh%vi2               ))
     allocate(  ice%Ti_a                (mesh%vi1:mesh%vi2 , C%nz        ))
                                                                         
@@ -879,6 +880,7 @@ CONTAINS
     
     ! GIA
     allocate(  ice%dHb_a               (mesh%vi1:mesh%vi2               ))
+    ice%dHb_a = 0d0
     allocate(  ice%dHb_dt_a            (mesh%vi1:mesh%vi2               ))
     allocate(  ice%dSL_dt_a            (mesh%vi1:mesh%vi2               ))
     

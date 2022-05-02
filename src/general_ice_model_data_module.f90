@@ -51,7 +51,6 @@ CONTAINS
       ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
       ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
     END DO
-    CALL sync
     
     ! Determine masks
     CALL determine_masks( mesh, ice)

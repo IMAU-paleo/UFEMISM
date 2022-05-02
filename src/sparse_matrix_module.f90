@@ -7,30 +7,11 @@ MODULE sparse_matrix_module
   USE mpi_module,                      only: allgather_array
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
   ! Import specific functionality
-  USE parallel_module,                 ONLY: allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
-                                             allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
-                                             allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
-                                             allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
-                                             allocate_shared_dist_bool_1D, &
-                                             adapt_shared_dist_int_1D,    adapt_shared_dist_dp_1D, &
-                                             adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
-                                             adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
-                                             adapt_shared_dist_bool_1D
   USE data_types_module,               ONLY: type_mesh, type_grid, type_sparse_matrix_CSR_dp
   USE petsc_module,                    ONLY: solve_matrix_equation_CSR_PETSc
   use reallocate_mod,                  only: reallocate

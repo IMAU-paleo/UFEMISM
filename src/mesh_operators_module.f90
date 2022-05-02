@@ -9,17 +9,7 @@ MODULE mesh_operators_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
 
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_grid
@@ -30,6 +20,7 @@ MODULE mesh_operators_module
 
 CONTAINS
   
+#if 0
 ! == Mapping
 
   ! 2-D
@@ -1391,7 +1382,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_c_3D
-  
+#endif  
 ! == d2/dx2, d2/dxdy, d2/dy2 on the a-grid
 
   SUBROUTINE d2dx2_a_to_a_2D(  mesh, d_a, d2dx2_a)
@@ -1407,18 +1398,12 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dx2_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddx_b
-    INTEGER                                            :: wddx_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dx2_a,1) /= mesh%nV) THEN
-      CALL crash('data fields are the wrong size!')
-    END IF
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b, wddx_b)
+    ! Allocate memory
+    allocate( ddx_b (mesh%ti1:mesh%ti2))
     
     ! ddx_b = M_ddx_a_b * d_a
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
@@ -1427,7 +1412,7 @@ CONTAINS
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_b_a, ddx_b, d2dx2_a)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wddx_b)
+    deallocate( ddx_b)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1446,18 +1431,12 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dxdy_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddx_b
-    INTEGER                                            :: wddx_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dxdy_a,1) /= mesh%nV) THEN
-      CALL crash('data fields are the wrong size!')
-    END IF
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, ddx_b, wddx_b)
+    ! Allocate memory
+    allocate( ddx_b (mesh%ti1:mesh%ti2))
     
     ! ddx_b = M_ddx_a_b * d_a
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddx_a_b, d_a, ddx_b)
@@ -1466,7 +1445,7 @@ CONTAINS
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, ddx_b, d2dxdy_a)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wddx_b)
+    deallocate( ddx_b)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1485,18 +1464,12 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'd2dy2_a_to_a_2D'
     REAL(dp), DIMENSION(:    ), POINTER                ::  ddy_b
-    INTEGER                                            :: wddy_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d2dy2_a,1) /= mesh%nV) THEN
-      CALL crash('data fields are the wrong size!')
-    END IF
-    
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, ddy_b, wddy_b)
+    ! Allocate memory
+    allocate( ddy_b (mesh%ti1:mesh%ti2))
     
     ! ddy_b = M_ddy_a_b * d_a
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_a_b, d_a, ddy_b)
@@ -1505,13 +1478,14 @@ CONTAINS
     CALL multiply_PETSc_matrix_with_vector_1D( mesh%M_ddy_b_a, ddy_b, d2dy2_a)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wddy_b)
+    deallocate( ddy_b)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE d2dy2_a_to_a_2D
 
+#if 0
   SUBROUTINE d2dx2_a_to_a_3D(  mesh, d_a, d2dx2_a)
     ! d2/dx2 a 3-D data field from the a (vertex) to the a (vertex) grid
       
@@ -1664,7 +1638,8 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_buv_2D
-  
+#endif  
+
 ! == Calculate the matrix operators for mapping and gradients
 
   SUBROUTINE calc_matrix_operators_mesh( mesh)
@@ -3092,7 +3067,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_matrix_operator_Neumann_BC_b
-  
+
   SUBROUTINE calc_matrix_operators_grid( grid, M_ddx, M_ddy)
     ! Calculate matrix operators for partial derivatives on a regular grid (needed for conservative remapping)
       
@@ -3205,7 +3180,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_matrix_operators_grid
-  
+
 ! == Routines for calculating neighbour functions for regular and staggered vertices
   SUBROUTINE calc_neighbour_functions_ls_reg( x, y, n, x_c, y_c, Nfxi, Nfyi, Nfxc, Nfyc)
     ! Calculate neighbour functions for regular vertex V at [x,y],
@@ -3414,7 +3389,7 @@ CONTAINS
     Nfyyi = -SUM( Nfyyc)
     
   END SUBROUTINE calc_neighbour_functions_ls_reg_2nd_order
-  
+
 ! == Directly apply a Neumann boundary condition to a data field
   SUBROUTINE apply_Neumann_BC_direct_a_2D( mesh, d_a)
     ! Directly apply a Neumann boundary condition to a data field
@@ -3565,6 +3540,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE apply_Neumann_BC_direct_a_3D
+#if 0
   SUBROUTINE apply_Neumann_BC_direct_b_2D( mesh, d_b)
     ! Directly apply a Neumann boundary condition to a data field
       
@@ -3672,5 +3648,5 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE apply_Neumann_BC_direct_b_3D
-
+#endif
 END MODULE mesh_operators_module

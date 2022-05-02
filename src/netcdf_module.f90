@@ -8,17 +8,7 @@ MODULE netcdf_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
 
   ! Import specific functionality
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
@@ -2133,7 +2123,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz, d_grid, wd_grid)
+    allocate( d_grid(grid%nx, grid%ny, nz))
 
     ! Map data from the model mesh to the square grid
     CALL map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
@@ -2142,7 +2132,7 @@ CONTAINS
     IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, 1, ti/) ))
 
     ! Deallocate shared memory
-    CALL deallocate_shared( wd_grid)
+    deallocate( d_grid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

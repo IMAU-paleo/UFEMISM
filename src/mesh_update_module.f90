@@ -8,17 +8,7 @@ MODULE mesh_update_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   
@@ -286,19 +276,18 @@ MODULE mesh_update_module
     CALL widen_high_res_zones( region%ice, region%mesh, region%time)
     
     ! Calculate surface curvature
-    CALL allocate_shared_dp_1D( region%mesh%nV, d2dx2,  wd2dx2)
-    CALL allocate_shared_dp_1D( region%mesh%nV, d2dxdy, wd2dxdy)
-    CALL allocate_shared_dp_1D( region%mesh%nV, d2dy2,  wd2dy2)
+    allocate( d2dx2 (region%mesh%vi1:region%mesh%vi2))
+    allocate( d2dxdy(region%mesh%vi1:region%mesh%vi2))
+    allocate( d2dy2 (region%mesh%vi1:region%mesh%vi2))
     CALL d2dx2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dx2 )
     CALL d2dxdy_a_to_a_2D( region%mesh, region%ice%Hs_a, d2dxdy)
     CALL d2dy2_a_to_a_2D(  region%mesh, region%ice%Hs_a, d2dy2 )
     DO vi = region%mesh%vi1, region%mesh%vi2
       region%ice%surf_curv( vi) = MAX(-1E-6, MIN(1E-6, SQRT(d2dx2( vi)**2 + d2dy2( vi)**2 + d2dxdy( vi)**2)))
     END DO
-    CALL sync
-    CALL deallocate_shared( wd2dx2)
-    CALL deallocate_shared( wd2dxdy)
-    CALL deallocate_shared( wd2dy2)
+    deallocate( d2dx2)
+    deallocate( d2dxdy)
+    deallocate( d2dy2)
     
     ! Determine the domain of this process' submesh (based on distribution of vertices in
     ! the previous mesh, which works very well for workload balancing)

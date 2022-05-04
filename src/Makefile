@@ -35,11 +35,11 @@ all_programs += UFEMISM_program
 # List of object files
 UFEMISM_program_objects = \
         configuration_module.o \
-        mpi_module.o \
         reallocate.o \
         data_types_netcdf_module.o \
         data_types_module.o \
         parallel_module.o \
+        mpi_module.o \
         petsc_module.o \
         parameters_module.o \
         utilities_module.o \
@@ -74,7 +74,7 @@ UFEMISM_program : $(UFEMISM_program_objects:%=$(OBJ_PATH)/%)
 .PHONY : clean
 
 clean :
-	rm -fv $(all_programs) $(OBJ_PATH)/*.o $(MOD_PATH)/*.mod *.mod *.lst
+	rm -fv $(all_programs) $(OBJ_PATH)/*.o $(MOD_PATH)/*.mod *.mod *.lst .depend
 
 
 
@@ -88,5 +88,11 @@ all : $(all_programs)
 
 include .depend
 
-.depend: Makefile *.f90
-	makedepf90 -b object-files *.f90 *.F90 > .depend
+ifeq ($(shell command -v makedepf90 2>&1 > /dev/null; echo $$?), 0)
+.depend:
+	  makedepf90 -b object-files *.f90 *.F90 > .depend;
+else
+.depend:
+	  $(warning makedepf90 not present, multithreaded compilation make -jX will not work!)
+	  touch .depend;
+endif

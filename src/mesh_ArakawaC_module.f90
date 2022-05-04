@@ -40,6 +40,7 @@ MODULE mesh_ArakawaC_module
                 
     ! Allocate memory for the mapping arrays. Aci is stored in temporary memory on the master process first,
     ! once we know how much is needed, we will allocate shared memory and transfer the data there.
+    if (allocated (mesh%iAci)) deallocate(mesh%iAci)
     allocate( mesh%iAci( mesh%nV, mesh%nC_mem))
     
     ! Go through all vertex connections, determine the location of the Ac vertex (on the connection midpoint),
@@ -139,6 +140,8 @@ MODULE mesh_ArakawaC_module
     END DO ! DO vi = 1, mesh%nV
   
     ! Allocate shared memory, move data there
+    if (allocated(mesh%VAc)) deallocate(mesh%VAc)
+    if (allocated(mesh%Aci)) deallocate(mesh%Aci)
     allocate(mesh%VAc( mesh%nAc, 2))
     allocate(mesh%Aci( mesh%nAc, 6))
     
@@ -175,6 +178,7 @@ MODULE mesh_ArakawaC_module
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
+    if (allocated(mesh%edge_index_Ac)) deallocate(mesh%edge_index_Ac)
     allocate(mesh%edge_index_Ac(1:mesh%nAc))
     
     DO aci = 1, mesh%nAc ! TODO parallel?

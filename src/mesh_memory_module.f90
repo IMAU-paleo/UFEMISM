@@ -58,6 +58,34 @@ CONTAINS
       mesh%nTri_mem = nTri_mem
       mesh%nC_mem   = nC_mem
 
+    ! Something goes wrong and allocated stuff is passed here, so deallocate it
+    ! TODO: can be fixed by making the mesh intent out and fixing the bugs leading to this behaviour
+    if ( allocated(mesh%V             )) deallocate( mesh%V             )
+    if ( allocated(mesh%nC            )) deallocate( mesh%nC            )
+    if ( allocated(mesh%C             )) deallocate( mesh%C             )
+    if ( allocated(mesh%niTri         )) deallocate( mesh%niTri         )
+    if ( allocated(mesh%iTri          )) deallocate( mesh%iTri          )
+    if ( allocated(mesh%edge_index    )) deallocate( mesh%edge_index    )
+    if ( allocated(mesh%mesh_old_ti_in)) deallocate( mesh%mesh_old_ti_in)
+    if ( allocated(mesh%Tri           )) deallocate( mesh%Tri           )
+    if ( allocated(mesh%Tricc         )) deallocate( mesh%Tricc         )
+    if ( allocated(mesh%TriC          )) deallocate( mesh%TriC          )
+    if ( allocated(mesh%Tri_edge_index)) deallocate( mesh%Tri_edge_index)
+    if ( allocated(mesh%Triflip       )) deallocate( mesh%Triflip       )
+    if ( allocated(mesh%RefMap        )) deallocate( mesh%RefMap        )
+    if ( allocated(mesh%RefStack      )) deallocate( mesh%RefStack      )
+    if ( allocated(mesh%VMap          )) deallocate( mesh%VMap          )
+    if ( allocated(mesh%VStack1       )) deallocate( mesh%VStack1       )
+    if ( allocated(mesh%VStack2       )) deallocate( mesh%VStack2       )
+    if ( allocated(mesh%TriMap        )) deallocate( mesh%TriMap        )
+    if ( allocated(mesh%TriStack1     )) deallocate( mesh%TriStack1     )
+    if ( allocated(mesh%TriStack2     )) deallocate( mesh%TriStack2     )
+    if ( allocated(mesh%POI_coordinates   )) deallocate(mesh%POI_coordinates   )
+    if ( allocated(mesh%POI_XY_coordinates)) deallocate(mesh%POI_XY_coordinates)
+    if ( allocated(mesh%POI_resolutions   )) deallocate(mesh%POI_resolutions   )
+    if ( allocated(mesh%POI_vi            )) deallocate(mesh%POI_vi            )
+    if ( allocated(mesh%POI_w             )) deallocate(mesh%POI_w             )
+    
     allocate( mesh%V              (nV_mem,   2     ), source=0._dp)
     allocate( mesh%nC             (nV_mem          ), source=0)
     allocate( mesh%C              (nV_mem,   nC_mem), source=0)
@@ -216,6 +244,15 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
+    if (allocated(mesh% A    )) deallocate(mesh% A    ) 
+    if (allocated(mesh% VorGC)) deallocate(mesh% VorGC) 
+    if (allocated(mesh% R    )) deallocate(mesh% R    ) 
+    if (allocated(mesh% Cw   )) deallocate(mesh% Cw   ) 
+    if (allocated(mesh% TriA )) deallocate(mesh% TriA ) 
+    if (allocated(mesh% TriGC)) deallocate(mesh% TriGC) 
+    if (allocated(mesh% lat  )) deallocate(mesh% lat  ) 
+    if (allocated(mesh% lon  )) deallocate(mesh% lon  ) 
+
     allocate(mesh% A    ( 1       :mesh%nV    )) ! Globally used kinda
     allocate(mesh% VorGC( mesh%vi1:mesh%vi2,2 ))
     allocate(mesh% R    ( 1       :mesh%nV    )) ! Globally used kinda

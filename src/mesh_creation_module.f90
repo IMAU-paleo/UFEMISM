@@ -1899,6 +1899,8 @@ MODULE mesh_creation_module
     
     ! Allocate shared memory, copy list of transect vertex pairs
     mesh%nV_transect = nV_transect
+    if (allocated(mesh%vi_transect)) deallocate(mesh%vi_transect)
+    if (allocated(mesh%w_transect))  deallocate(mesh%w_transect)
     allocate(mesh%vi_transect(mesh%nV_transect,2))
     allocate(mesh%w_transect(mesh%nV_transect,2))
     mesh%vi_transect = vi_transect( 1:mesh%nV_transect,:)

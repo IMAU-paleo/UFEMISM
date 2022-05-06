@@ -20,4 +20,4 @@
   LDFLAGS                 = -L/usr/local/lib ${NCLIB} \
                             -Wl,-rpath=${PETSC_DIR}/${PETSC_ARCH}/lib \
                             ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so \
-                            -lmkl_rt -g -fbacktrace
+                            -lmkl_rt -g

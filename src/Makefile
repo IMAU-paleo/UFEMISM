@@ -89,7 +89,7 @@ all : $(all_programs)
 include .depend
 
 ifeq ($(shell command -v makedepf90 2>&1 > /dev/null; echo $$?), 0)
-.depend:
+.depend: Makefile *.f90 *.F90
 	  makedepf90 -b object-files *.f90 *.F90 > .depend;
 else
 .depend:

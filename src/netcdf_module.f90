@@ -76,8 +76,8 @@ CONTAINS
     CALL get_output_filenames( region)
     
     ! Create the files
-    CALL create_restart_file_mesh(     region, region%restart_mesh)
-    CALL create_restart_file_grid(     region, region%restart_grid)
+    ! CALL create_restart_file_mesh(     region, region%restart_mesh)
+    ! CALL create_restart_file_grid(     region, region%restart_grid)
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
@@ -102,8 +102,8 @@ CONTAINS
 
     IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
     
-    CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    CALL write_to_restart_file_grid(     region, region%restart_grid)
+    ! CALL write_to_restart_file_mesh(     region, region%restart_mesh)
+    ! CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
     
@@ -5776,7 +5776,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_SELEN_output_file'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, three, time
+    INTEGER                                       :: vi, ti, ci, three, time, ki
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5829,13 +5829,16 @@ CONTAINS
     ! ============
 
     ! Define dimensions
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited, SELEN%output%id_dim_time ) ! Time frames
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited,         SELEN%output%id_dim_time ) ! Time frames
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ki,    C%SELEN_irreg_time_n+1, SELEN%output%id_dim_ki   ) ! Window frames
 
     ! Placeholders for the dimension ID's, for shorter code
     time  = SELEN%output%id_dim_time
+    ki    = SELEN%output%id_dim_ki
 
     ! Define dimension variables
     CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_time,  [time  ], SELEN%output%id_var_time,  long_name='Time', units='years')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_ki,    [ki    ], SELEN%output%id_var_ki,    long_name='Window frames', units='years')
 
     ! Define model data variables
     CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lat,              [vi             ], SELEN%output%id_var_lat,              long_name='Latitude', units='degrees north')
@@ -5845,6 +5848,8 @@ CONTAINS
     CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_U,                [vi,        time], SELEN%output%id_var_U,                long_name='Land surface change', units='m')
     CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_N,                [vi,        time], SELEN%output%id_var_N,                long_name='Sea surface change', units='m')
     CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_ocean_function,   [vi,        time], SELEN%output%id_var_ocean_function,   long_name='Ocean function (1 = ocean)')
+
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_load_history,     [vi,   ki,  time], SELEN%output%id_var_load_history,     long_name='Load history', units='mie')
 
     ! Leave definition mode:
     CALL handle_error(nf90_enddef( SELEN%output%ncid))
@@ -5858,6 +5863,9 @@ CONTAINS
     CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_iTri,            SELEN%mesh%iTri          ))
     CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lat,             SELEN%mesh%lat           ))
     CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lon,             SELEN%mesh%lon           ))
+
+    ! Window frames
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ki, (/0._dp, C%SELEN_irreg_time_window/)))
 
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( SELEN%output%ncid))
@@ -5894,11 +5902,12 @@ CONTAINS
     CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_time, time, start = (/ SELEN%output%ti /)))
 
     ! Model data
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,     start = (/ 1, SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob, start = (/ 1, SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,      start = (/ 1, SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,      start = (/ 1, SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,     start = (/ 1, SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob,                    start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_load_history,   SELEN%ice_loading_history_irreg_glob, start = (/ 1, 1, SELEN%output%ti/) ))
 
     ! Close the file
     CALL close_netcdf_file(SELEN%output%ncid)

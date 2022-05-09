@@ -19,8 +19,9 @@ MODULE SELEN_main_module
                                                allocate_shared_int_1D, allocate_shared_dp_1D, &
                                                allocate_shared_int_2D, allocate_shared_dp_2D, &
                                                allocate_shared_int_3D, allocate_shared_dp_3D, &
-                                               allocate_shared_complex_1D, deallocate_shared
-  USE data_types_module,                 ONLY: type_model_region, type_SELEN_global
+                                               allocate_shared_complex_1D, deallocate_shared, &
+                                               reallocate_shared_dp_1D
+  USE data_types_module,                 ONLY: type_mesh, type_model_region, type_SELEN_global, type_SELEN_regional
   USE netcdf_module,                     ONLY: inquire_SELEN_global_topo_file, read_SELEN_global_topo_file, &
                                                create_SELEN_output_file, write_to_SELEN_output_file
   USE mesh_mapping_module,               ONLY: map_mesh2grid_2D, map_grid2mesh_2D
@@ -247,6 +248,7 @@ CONTAINS
     COMPLEX*16, DIMENSION(:,:  ), POINTER              :: MEM_U
     COMPLEX*16, DIMENSION(:    ), POINTER              ::  dHb_t_sh,  dHb_tplusdt_sh,  SL_t_sh,  SL_tplusdt_sh
     INTEGER                                            :: wdHb_t_sh, wdHb_tplusdt_sh, wSL_t_sh, wSL_tplusdt_sh
+    LOGICAL                                            :: selen_warn
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -287,14 +289,26 @@ CONTAINS
     ! Determine bedrock and geoid deformation rates on the new UFEMISM mesh
     ! NOTE: for the bedrock deformation rate, we choose it so that at t+dt_SELEN, modelled bedrock deformation is equal to
     !       dHb_tplusdt. This makes sure the errors in the SELEN predictions don't accumulate
+
+    selen_warn = .FALSE.
+
     DO vi = region%mesh%vi1, region%mesh%vi2
       ! Bedrock deformation rate
       region%ice%dHb_dt_a( vi) = (region%SELEN%dHb_tplusdt( vi) - region%ice%dHb_a( vi)) / C%dt_SELEN
+      IF (ABS(region%ice%dHb_dt_a( vi)) > 2.0_dp) THEN
+        selen_warn = .TRUE.
+      END IF
 
       ! Geoid deformation rate
       region%ice%dSL_dt_a( vi) = (region%SELEN%SL_tplusdt(  vi) - region%ice%SL_a(  vi)) / C%dt_SELEN
+      IF (ABS(region%ice%dSL_dt_a( vi)) > 1.0_dp) THEN
+        selen_warn = .TRUE.
+        ! region%ice%dSL_dt_a( vi) = 0.05_dp * ABS(region%ice%dSL_dt_a( vi)) / region%ice%dSL_dt_a( vi)
+      END IF
     END DO
     CALL sync
+
+    IF (selen_warn .AND. par%master) CALL warning('SELEN reached some quite big deformation rates. Better check for issues there...')
 
     ! Clean up after yourself
     CALL deallocate_shared( wdHb_t_sh      )
@@ -949,6 +963,8 @@ CONTAINS
       END IF
     END DO
 
+    !!! ==> Here we are missing a CALL sync, likely <== !!!
+
     ! Clean up after yourself
     CALL deallocate_shared( wHi_NAM)
     CALL deallocate_shared( wHi_EAS)
@@ -1360,5 +1376,26 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_new_sh_files
+
+    ! == Remappings after UFEMISM mesh updates
+  SUBROUTINE remap_SELEN_model( mesh_new, SELEN)
+    ! Reallocate SELEN results on the model mesh. No need
+    ! to remap them, as they are filled after a SELEN run.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_SELEN_regional),           INTENT(INOUT) :: SELEN      ! i.e. region%SELEN
+
+    IF (par%master) WRITE (0,*) '   Reallocating SELEN fields for the new model mesh...'
+
+    ! Reallocate memory for SELEN results (on new UFEMISM mesh)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, SELEN%dHb_t,       SELEN%wdHb_t)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, SELEN%dHb_tplusdt, SELEN%wdHb_tplusdt)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, SELEN%SL_t,        SELEN%wSL_t)
+    CALL reallocate_shared_dp_1D( mesh_new%nV, SELEN%SL_tplusdt,  SELEN%wSL_tplusdt)
+
+  END SUBROUTINE remap_SELEN_model
 
 END MODULE SELEN_main_module

@@ -609,19 +609,15 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       IF (climate_matrix%applied%T2m( vi,m) < 150._dp) THEN
-        WRITE(0,*) ' WARNING - run_climate_model_matrix_warm_cold: excessively low temperatures (<150K) detected!'
+        CALL warning('excessively low temperatures (<150K) detected!')
       ELSEIF (climate_matrix%applied%T2m( vi,m) < 0._dp) THEN
-        WRITE(0,*) ' ERROR - run_climate_model_matrix_warm_cold: negative temperatures (<0K) detected!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('negative temperatures (<0K) detected!')
       ELSEIF (climate_matrix%applied%T2m( vi,m) /= climate_matrix%applied%T2m( vi,m)) THEN
-        WRITE(0,*) ' ERROR - run_climate_model_matrix_warm_cold: NaN temperatures  detected!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('NaN temperatures  detected!')
       ELSEIF (climate_matrix%applied%Precip( vi,m) <= 0._dp) THEN
-        WRITE(0,*) ' ERROR - run_climate_model_matrix_warm_cold: zero/negative precipitation detected!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('zero/negative precipitation detected!')
       ELSEIF (climate_matrix%applied%Precip( vi,m) /= climate_matrix%applied%Precip( vi,m)) THEN
-        WRITE(0,*) ' ERROR - run_climate_model_matrix_warm_cold: NaN precipitation  detected!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        CALL crash('NaN precipitation detected!')
       END IF
     END DO
     END DO

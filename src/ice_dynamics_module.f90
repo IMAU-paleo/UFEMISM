@@ -941,6 +941,14 @@ CONTAINS
       END IF
     END DO
     CALL sync
+
+    ! Remove artificial ice at domain border (messes up with thermodynamics)
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      IF ( .NOT. mesh_new%edge_index( vi) == 0) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
     
     ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)

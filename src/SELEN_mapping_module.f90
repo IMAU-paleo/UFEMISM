@@ -64,6 +64,10 @@ CONTAINS
     CALL allocate_shared_int_3D( region%grid_GIA%nx, region%grid_GIA%ny, nmax, region%SELEN%map_isl,  region%SELEN%wmap_isl )
     CALL allocate_shared_dp_3D(  region%grid_GIA%nx, region%grid_GIA%ny, nmax, region%SELEN%map_w,    region%SELEN%wmap_w   )
 
+    region%SELEN%map_nisl( region%grid_GIA%i1:region%grid_GIA%i2,:  ) = 0
+    region%SELEN%map_isl(  region%grid_GIA%i1:region%grid_GIA%i2,:,:) = 0
+    region%SELEN%map_w(    region%grid_GIA%i1:region%grid_GIA%i2,:,:) = 0._dp
+
     ! Go over all ice model square grid points
     DO j = 1, region%grid_GIA%ny
     DO i = region%grid_GIA%i1, region%grid_GIA%i2

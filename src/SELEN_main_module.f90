@@ -225,6 +225,15 @@ CONTAINS
       region%SELEN%ice_loading_history_reg_sq(   region%grid_GIA%i1:region%grid_GIA%i2,:,k )
     END DO
 
+    ! ! DROM DENK
+    ! !==========
+    ! ! For dt_SELEN smaller than the last irregular window frame span, make
+    ! ! sure to set that last window frame to the most current ice load. The
+    ! ! idea is to get SELEN output as fast as possible for debugging
+    ! region%SELEN%ice_loading_history_irreg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,C%SELEN_irreg_time_n) = &
+    ! region%SELEN%ice_loading_history_reg_sq(   region%grid_GIA%i1:region%grid_GIA%i2,:,C%SELEN_reg_time_n )
+    ! !==========
+
     ! Clean up after yourself
     CALL deallocate_shared( wload_icemodel_mesh)
     CALL deallocate_shared( wload_GIA_grid)
@@ -924,6 +933,7 @@ CONTAINS
     IF (C%do_EAS) CALL map_GIA_grid_to_SELEN( SELEN, EAS, EAS%SELEN%load_ref, Hi_EAS, .TRUE.)
     IF (C%do_GRL) CALL map_GIA_grid_to_SELEN( SELEN, GRL, GRL%SELEN%load_ref, Hi_GRL, .TRUE.)
     IF (C%do_ANT) CALL map_GIA_grid_to_SELEN( SELEN, ANT, ANT%SELEN%load_ref, Hi_ANT, .TRUE.)
+    CALL sync
 
     SELEN%load_ref( C%SELEN_i1:C%SELEN_i2) = Hi_NAM( C%SELEN_i1:C%SELEN_i2) + &
                                              Hi_EAS( C%SELEN_i1:C%SELEN_i2) + &
@@ -939,6 +949,7 @@ CONTAINS
     IF (C%do_EAS) CALL map_GIA_grid_to_SELEN( SELEN, EAS, EAS%SELEN%topo_ref, Hb_EAS, .FALSE.)
     IF (C%do_GRL) CALL map_GIA_grid_to_SELEN( SELEN, GRL, GRL%SELEN%topo_ref, Hb_GRL, .FALSE.)
     IF (C%do_ANT) CALL map_GIA_grid_to_SELEN( SELEN, ANT, ANT%SELEN%topo_ref, Hb_ANT, .FALSE.)
+    CALL sync
 
     DO i = C%SELEN_i1, C%SELEN_i2
       IF     (SELEN%icemodel_region( i,1) == 1) THEN
@@ -951,6 +962,7 @@ CONTAINS
         SELEN%topo_ref( i) = Hb_ANT( i)
       END IF
     END DO
+    CALL sync
 
   ! Recalculate reference ocean function on the SELEN global grid
   ! =============================================================
@@ -962,6 +974,7 @@ CONTAINS
         SELEN%of_ref( i) = 0
       END IF
     END DO
+    CALL sync
 
     !!! ==> Here we are missing a CALL sync, likely <== !!!
 

@@ -12,7 +12,7 @@
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
   dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
-  dt_output_config                            = 500.0                            ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
   dt_mesh_min_config                          = 100.0                            ! Minimum amount of time (in years) between mesh updates
   dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
@@ -20,16 +20,16 @@
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .FALSE.                          ! North America
+  do_NAM_config                               = .TRUE.                           ! North America
   do_EAS_config                               = .TRUE.                           ! Eurasia
-  do_GRL_config                               = .FALSE.                          ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_EAS_SELEN_40km_fix1'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ALL_SELEN_80km_n064_del'! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -44,12 +44,12 @@
   nconmax_config                              = 16                               ! Maximum number of vertex connections
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
-  res_max_config                              = 100.0                            ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 40.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 40.0                             !                                 grounding line        [km]
-  res_max_cf_config                           = 40.0                             !                                 calving front         [km]
-  res_max_mountain_config                     = 40.0                             !                                 mountains             [km]
-  res_max_coast_config                        = 40.0                             !                                 coastline             [km]
+  res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
+  res_max_margin_config                       = 80.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 80.0                             !                                 grounding line        [km]
+  res_max_cf_config                           = 80.0                             !                                 calving front         [km]
+  res_max_mountain_config                     = 80.0                             !                                 mountains             [km]
+  res_max_coast_config                        = 80.0                             !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.95                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
 
   ! Resolutions of the different square grids
@@ -132,7 +132,6 @@
 
   switch_glacial_index_precip_config          = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
 
-
   ! Ocean
   ! =====
 
@@ -210,7 +209,7 @@
   SELEN_n_TDOF_iterations_config               = 1                               ! Number of Time-Dependent Ocean Function iterations
   SELEN_n_recursion_iterations_config          = 1                               ! Number of recursion iterations
   SELEN_use_rotational_feedback_config         = .FALSE.                         ! If TRUE, rotational feedback is included
-  SELEN_n_harmonics_config                     = 64                              ! Maximum number of harmonic degrees
+  SELEN_n_harmonics_config                     = 128                             ! Maximum number of harmonic degrees
   SELEN_display_progress_config                = .FALSE.                         ! Whether or not to display the progress of the big loops to the screen
 
   SELEN_dir_config                            = 'data/SELEN'                     ! Directory where SELEN initial files and spherical harmonics are stored

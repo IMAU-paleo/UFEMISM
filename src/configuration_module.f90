@@ -2762,7 +2762,7 @@ CONTAINS
 
     ! Fill in some derived values
     C%SELEN_jmax       = (C%SELEN_n_harmonics + 1) * (C%SELEN_n_harmonics + 2) / 2
-    C%SELEN_reg_time_n = MAX(1, INT(SUM(C%SELEN_irreg_time_window( 1:C%SELEN_irreg_time_n)))) * INT(1000. / C%dt_SELEN)
+    C%SELEN_reg_time_n = CEILING(MAX(1._dp, SUM(C%SELEN_irreg_time_window( 1:C%SELEN_irreg_time_n))) * 1000._dp / C%dt_SELEN)
 
     CALL initialize_TABOO_config
 

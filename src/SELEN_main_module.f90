@@ -220,7 +220,7 @@ CONTAINS
 
     ! Get values on irregular moving time window
     DO ki = 1, C%SELEN_irreg_time_n
-      k = INT(C%SELEN_reg_time_n) + 1 - INT(SUM(C%SELEN_irreg_time_window(ki:C%SELEN_irreg_time_n)) * 1000._dp / C%dt_SELEN)
+      k = C%SELEN_reg_time_n + 1 - CEILING(SUM(C%SELEN_irreg_time_window(ki:C%SELEN_irreg_time_n)) * 1000._dp / C%dt_SELEN)
       region%SELEN%ice_loading_history_irreg_sq( region%grid_GIA%i1:region%grid_GIA%i2,:,ki) = &
       region%SELEN%ice_loading_history_reg_sq(   region%grid_GIA%i1:region%grid_GIA%i2,:,k )
     END DO

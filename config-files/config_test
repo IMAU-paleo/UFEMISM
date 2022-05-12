@@ -29,7 +29,7 @@
   ! =======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_ALL_SELEN_80km_n064_del'! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ALL_SELEN_80km'         ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -226,9 +226,9 @@
   help_field_04_config                        = 'Hi'
   help_field_05_config                        = 'Hs'
   help_field_06_config                        = 'Hb'
-  !help_field_07_config                        = 'T2m_year'
-  !help_field_08_config                        = 'Precip_year'
-  !help_field_09_config                        = 'SMB_year'
+  help_field_07_config                        = 'T2m_year'
+  help_field_08_config                        = 'Precip_year'
+  help_field_09_config                        = 'SMB_year'
   !help_field_10_config                        = 'BMB'
   !help_field_11_config                        = 'Snowfall_year'
   !help_field_12_config                        = 'Rainfall_year'

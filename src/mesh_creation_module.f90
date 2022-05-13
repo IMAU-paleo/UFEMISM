@@ -1896,7 +1896,18 @@ MODULE mesh_creation_module
         
         ! Check if we managed to find the crossing
         IF (ti_next == 0) THEN
-          CALL crash('couldnt find next triangle along transect!')
+
+          CALL write_mesh_to_text_file( mesh, 'mesh_during_transect_comp.txt')
+
+          IF (C%choice_refgeo_init_NAM == 'realistic' .OR. &
+              C%choice_refgeo_init_EAS == 'realistic' .OR. &
+              C%choice_refgeo_init_GRL == 'realistic' .OR. &
+              C%choice_refgeo_init_ANT == 'realistic')
+            CALL warning('couldnt find next triangle along transect. Check out output mesh .txt file!')
+          ELSE
+            CALL crash('couldnt find next triangle along transect. Check out output mesh .txt file!')
+          END IF
+
         END IF
         
         ! Add this new vertex pair to the list

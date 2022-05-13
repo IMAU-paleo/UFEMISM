@@ -1902,7 +1902,7 @@ MODULE mesh_creation_module
           IF (C%choice_refgeo_init_NAM == 'realistic' .OR. &
               C%choice_refgeo_init_EAS == 'realistic' .OR. &
               C%choice_refgeo_init_GRL == 'realistic' .OR. &
-              C%choice_refgeo_init_ANT == 'realistic')
+              C%choice_refgeo_init_ANT == 'realistic') THEN
             CALL warning('couldnt find next triangle along transect. Check out output mesh .txt file!')
           ELSE
             CALL crash('couldnt find next triangle along transect. Check out output mesh .txt file!')

@@ -464,7 +464,7 @@ CONTAINS
         
         ! Safety
         IF (ti_upwind == 0) THEN
-          CALL crash('couldnt find upwind triangle!')
+          CALL crash('could not find upwind triangle!')
         END IF
         
         ! Calculate u * dT/dx, v * dT/dy

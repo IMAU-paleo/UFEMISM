@@ -249,8 +249,24 @@ CONTAINS
       IF (par%master) WRITE (0,'(A)') '    Computing the A array...'
       progprev = -1
       
-      ! I(p) - I(p-1), should we take into account the time step length here?? Compute A relative to the previous time step, but..
+      ! SOMEBODY IN THE PAST: I(p) - I(p-1), should we take into account the time step length here?? Compute A relative to the previous time step, but..
       ! time step lenght is that an issue here... Ok, is taken into account with BetaS..
+      !
+      ! BERNALES: Accounting for time step length using BetaS only
+      ! worked when the time step was equal or smaller than 1000
+      ! (the smallest moving window frame by default), as long as the
+      ! new time step was a natural factor of 1000 (e.g. 500, 250,
+      ! 200, 100, etc.; due to the former use of the INT function).
+      ! In that case, the regular time window had the same or more
+      ! elements than the full irregular window span (80 kyr by
+      ! default; e.g. 80 elements for a time step of 1000). When the
+      ! time step was set to a number greater than 1000, the regular
+      ! window (and thus BetaS/U) had less elements than the irregular
+      ! window span (e.g. 40 elements for a time step of 2000), thus
+      ! causing an out-of-bounds error in the code below, which didn't
+      ! explicitly took the time step into account. This issue is now
+      ! solved by means of the CEILING function and the multiplication
+      ! by 1000._dp / C%dt_SELEN. Same for some code blocks further down.
       AAAA( C%SELEN_j1:C%SELEN_j2,:) = (0.,0.)
       DO k = 0, C%SELEN_irreg_time_n   ! only use TCONV, the last time step including all history for AAAA
           
@@ -269,9 +285,9 @@ CONTAINS
             IF     (p == 0 .AND. k == 0) THEN
               AAAA( j,k) = AAAA( j,k) - (IIII( j,p)               ) * BETAS( LJ_VAL( j),0)
             ELSEIF (p == 0 .AND. k /= 0) THEN
-              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)               ) * BETAS( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)               ) * BETAS( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
             ELSEIF (p >  0 .AND. p <  k) THEN
-              AAAA( j,k) = AAAA( j,k) - (IIII( j,p) - IIII( j,p-1)) * BETAS( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+              AAAA( j,k) = AAAA( j,k) - (IIII( j,p) - IIII( j,p-1)) * BETAS( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
             ELSE ! p==k
               AAAA( j,k) = AAAA( j,k) - (IIII( j,p) - IIII( j,p-1)) * BETAS( LJ_VAL( j),0)
             END IF
@@ -429,9 +445,9 @@ CONTAINS
                 IF     (p == 0 .AND. k == 0) THEN
                   BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - 0.              ) * BETAS( LJ_VAL( j),0)
                 ELSEIF (p == 0 .AND. k /= 0) THEN
-                  BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - 0.              ) * BETAS( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+                  BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - 0.              ) * BETAS( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
                 ELSEIF (p >  0 .AND. p <  k) THEN
-                  BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - Z(j,p-1,iters-1)) * BETAS( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+                  BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - Z(j,p-1,iters-1)) * BETAS( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
                 ELSE ! p==k
                   BBBB( j,k) = BBBB( j,k) -(Z( j,p,iters-1) - Z(j,p-1,iters-1)) * BETAS( LJ_VAL( j),0) 
                 END IF
@@ -587,11 +603,11 @@ CONTAINS
               BBBB( j,k) = BBBB( j,k) - (Z  (  j,p,C%SELEN_n_recursion_iterations)                                              ) * BETAU( LJ_VAL( j),0)
               AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                                                             ) * BETAU( LJ_VAL( j),0)
             ELSEIF (p == 0 .AND. k /= 0) THEN
-              BBBB( j,k) = BBBB( j,k) - (Z(    j,p,C%SELEN_n_recursion_iterations)                                              ) * BETAU( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
-              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                                                             ) * BETAU( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+              BBBB( j,k) = BBBB( j,k) - (Z(    j,p,C%SELEN_n_recursion_iterations)                                              ) * BETAU( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
+              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                                                             ) * BETAU( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
             ELSEIF (p >  0 .AND. p <  k) THEN
-              BBBB( j,k) = BBBB( j,k) - (Z(    j,p,C%SELEN_n_recursion_iterations) - Z(    j,p-1,C%SELEN_n_recursion_iterations)) * BETAU( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
-              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                - IIII( j,p-1)                               ) * BETAU( LJ_VAL( j),INT(SUM(C%SELEN_irreg_time_window(p+1:k))))
+              BBBB( j,k) = BBBB( j,k) - (Z(    j,p,C%SELEN_n_recursion_iterations) - Z(    j,p-1,C%SELEN_n_recursion_iterations)) * BETAU( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
+              AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                - IIII( j,p-1)                               ) * BETAU( LJ_VAL( j),CEILING(SUM(C%SELEN_irreg_time_window(p+1:k))*1000._dp/C%dt_SELEN))
             ELSE ! p==k
               BBBB( j,k) = BBBB( j,k) - (Z(    j,p,C%SELEN_n_recursion_iterations) - Z(    j,p-1,C%SELEN_n_recursion_iterations)) * BETAU( LJ_VAL( j),0) 
               AAAA( j,k) = AAAA( j,k) - (IIII( j,p)                                - IIII( j,p-1)                               ) * BETAU( LJ_VAL( j),0)

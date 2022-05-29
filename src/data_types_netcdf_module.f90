@@ -1155,12 +1155,14 @@ MODULE data_types_netcdf_module
     INTEGER :: id_dim_ci
     INTEGER :: id_dim_three
     INTEGER :: id_dim_time
+    INTEGER :: id_dim_ki
 
     CHARACTER(LEN=256) :: name_dim_vi                    = 'vi                   '
     CHARACTER(LEN=256) :: name_dim_ti                    = 'ti                   '
     CHARACTER(LEN=256) :: name_dim_ci                    = 'ci                   '
     CHARACTER(LEN=256) :: name_dim_three                 = 'three                '
     CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_dim_ki                    = 'ki                   '
 
     INTEGER :: id_var_V
     INTEGER :: id_var_Tri
@@ -1169,6 +1171,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_niTri
     INTEGER :: id_var_iTri
     INTEGER :: id_var_time
+    INTEGER :: id_var_ki
 
     CHARACTER(LEN=256) :: name_var_V                     = 'V                    '
     CHARACTER(LEN=256) :: name_var_Tri                   = 'Tri                  '
@@ -1177,6 +1180,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_niTri                 = 'niTri                '
     CHARACTER(LEN=256) :: name_var_iTri                  = 'iTri                 '
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
+    CHARACTER(LEN=256) :: name_var_ki                    = 'ki                   '
 
   ! Variables
   ! =========
@@ -1188,6 +1192,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_N
     INTEGER :: id_var_U
     INTEGER :: id_var_ocean_function
+    INTEGER :: id_var_load_history
 
     CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
     CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
@@ -1196,6 +1201,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_N                     = 'N                    '
     CHARACTER(LEN=256) :: name_var_U                     = 'U                    '
     CHARACTER(LEN=256) :: name_var_ocean_function        = 'ocean_function       '
+
+    CHARACTER(LEN=256) :: name_var_load_history          = 'load_history         '
 
   END TYPE type_netcdf_SELEN_output
 

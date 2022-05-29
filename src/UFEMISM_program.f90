@@ -176,6 +176,9 @@ PROGRAM UFEMISM_program
   ! ===== Initial global output =====
   ! =================================
 
+  ! Create file and header
+  CALL create_text_output_files
+
   ! Write global data at t=0 to output file
   CALL write_text_output( &
     C%start_time_of_run,               &  ! time

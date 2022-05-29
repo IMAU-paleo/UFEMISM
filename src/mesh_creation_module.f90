@@ -804,6 +804,7 @@ MODULE mesh_creation_module
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_all_submeshes'
     INTEGER, DIMENSION(:,:  ), ALLOCATABLE        :: alignlist
     INTEGER                                       :: nalign, i_left, i_right, i, nVl_east, nVr_west
+    INTEGER :: n_aux, i_aux
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -813,11 +814,15 @@ MODULE mesh_creation_module
       CALL finalise_routine( routine_name)
       RETURN
     END IF
+
+    n_aux = MIN(3,par%n)
+    i_aux = n_aux-1
     
     ! Since each submesh can only be aligned with one neighbour at a time, and each one has
     ! at most two neighbours, we need two passes.
     
-    ALLOCATE( alignlist( par%n, 2))
+    ! ALLOCATE( alignlist( par%n, 2))
+    ALLOCATE( alignlist( n_aux, 2))
     
     ! == Pass one: even
     ! =================
@@ -825,7 +830,8 @@ MODULE mesh_creation_module
     alignlist = 0
     nalign    = 0
     
-    DO i = 0, par%n-2, 2
+    ! DO i = 0, par%n-2, 2
+    DO i = 0, n_aux-2, 2
         
       nalign = nalign + 1
       alignlist( nalign,:) = [i, i+1]
@@ -853,7 +859,8 @@ MODULE mesh_creation_module
     alignlist = 0
     nalign    = 0
     
-    DO i = 1, par%n-2, 2
+    ! DO i = 1, par%n-2, 2
+    DO i = 1, n_aux-2, 2
       
       nalign = nalign + 1
       alignlist(nalign,:) = [i, i+1]
@@ -914,12 +921,14 @@ MODULE mesh_creation_module
     ! Add routine to path
     CALL init_routine( routine_name)
     
-!    IF (par%i == p_left .OR. par%i == p_right) THEN
-!      WRITE(0,'(A,I2,A,I2,A,I2)') '  align_submeshes - process ', par%i, ': aligning mesh ', p_left, ' with mesh ', p_right
-!    ELSE
-!      WRITE(0,'(A,I2,A)')         '  align_submeshes - process ', par%i, ': passively running align_submeshes'
-!    END IF
-!    CALL sync
+   IF (debug_mesh_creation) THEN
+     IF (par%i == p_left .OR. par% i == p_right) THEN
+       WRITE(0,'(A,I2,A,I2,A,I2)') '  align_submeshes - process ', par%i, ': aligning mesh ', p_left, ' with mesh ', p_right
+     ELSE
+       WRITE(0,'(A,I2,A)')         '  align_submeshes - process ', par%i, ': passively running align_submeshes'
+     END IF
+     CALL sync
+   END IF
         
 ! Create the list of boundary vertices
 ! ====================================
@@ -1324,6 +1333,7 @@ MODULE mesh_creation_module
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_all_submeshes'
     INTEGER, DIMENSION(:,:), ALLOCATABLE          :: mergelist
     INTEGER                                       :: nmerge, merge_it, n_merge_it, i
+    INTEGER :: n_aux, i_aux
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1333,12 +1343,17 @@ MODULE mesh_creation_module
       CALL finalise_routine( routine_name)
       RETURN
     END IF
+
+    n_aux = MIN(3,par%n)
+    i_aux = n_aux-1
     
-    ALLOCATE( mergelist( par%n, 2))
+    ! ALLOCATE( mergelist( par%n, 2))
+    ALLOCATE( mergelist( n_aux, 2))
     
     ! Determine number of required merging iterations
     n_merge_it = 1
-    DO WHILE (2**n_merge_it < par%n)
+    ! DO WHILE (2**n_merge_it < par%n)
+    DO WHILE (2**n_merge_it < n_aux)
       n_merge_it = n_merge_it + 1
     END DO
     
@@ -1350,8 +1365,10 @@ MODULE mesh_creation_module
       mergelist = 0
       nmerge    = 0
       
-      DO i = 0, par%n-2, 2**merge_it
-        IF (i + (2**(merge_it-1)) < par%n) THEN
+      ! DO i = 0, par%n-2, 2**merge_it
+      DO i = 0, n_aux-2, 2**merge_it
+        ! IF (i + (2**(merge_it-1)) < par%n) THEN
+        IF (i + (2**(merge_it-1)) < n_aux) THEN
           nmerge = nmerge + 1
           mergelist(nmerge,:) = [i, i + (2**(merge_it-1))]
         END IF
@@ -1896,7 +1913,18 @@ MODULE mesh_creation_module
         
         ! Check if we managed to find the crossing
         IF (ti_next == 0) THEN
-          CALL crash('couldnt find next triangle along transect!')
+
+          CALL write_mesh_to_text_file( mesh, 'mesh_during_transect_comp.txt')
+
+          IF (C%choice_refgeo_init_NAM == 'realistic' .OR. &
+              C%choice_refgeo_init_EAS == 'realistic' .OR. &
+              C%choice_refgeo_init_GRL == 'realistic' .OR. &
+              C%choice_refgeo_init_ANT == 'realistic') THEN
+            CALL warning('couldnt find next triangle along transect. Check out output mesh .txt file!')
+          ELSE
+            CALL crash('couldnt find next triangle along transect. Check out output mesh .txt file!')
+          END IF
+
         END IF
         
         ! Add this new vertex pair to the list

@@ -669,12 +669,14 @@ CONTAINS
 !      END IF
       
       region%do_ELRA    = .FALSE.
-      IF (region%time == region%t_next_ELRA) THEN
-        region%do_ELRA        = .TRUE.
-        region%t_last_ELRA    = region%time
-        region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
+      IF (C%choice_GIA_model == 'ELRA') THEN
+        IF (region%time == region%t_next_ELRA) THEN
+          region%do_ELRA        = .TRUE.
+          region%t_last_ELRA    = region%time
+          region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
+        END IF
+        t_next = MIN( t_next, region%t_next_ELRA)
       END IF
-      t_next = MIN( t_next, region%t_next_ELRA)
       
       region%do_output  = .FALSE.
       IF (region%time == region%t_next_output) THEN
@@ -939,6 +941,14 @@ CONTAINS
       END IF
     END DO
     CALL sync
+
+    ! Remove artificial ice at domain border (messes up with thermodynamics)
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      IF ( .NOT. mesh_new%edge_index( vi) == 0) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
     
     ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
@@ -960,6 +970,22 @@ CONTAINS
     
     ! Basal conditions
     CALL remap_basal_conditions( mesh_old, mesh_new, map, ice)
+
+    ! GIA and sea level
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_a, ice%wdHb_a) ! Remapped above only to compute Hb_a. Recomputed later when needed.
+    CALL remap_field_dp_2D(   mesh_old, mesh_new, map, ice%SL_a,     ice%wSL_a,     'cons_2nd_order') ! If not remapped, gets reset to 0 -> not good.
+    IF (C%choice_GIA_model == 'SELEN') THEN
+      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
+      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dSL_dt_a, ice%wdSL_dt_a, 'cons_2nd_order') ! until next call to SELEN -> not good.
+    ELSEIF (C%choice_GIA_model == 'ELRA') THEN
+      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dSL_dt_a, ice%wdSL_dt_a)                         ! until next call to ELRA -> not good.
+    ELSEIF (C%choice_GIA_model == 'none') THEN
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_dt_a, ice%wdHb_dt_a)
+      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dSL_dt_a, ice%wdSL_dt_a)
+    ELSE
+      CALL crash('unknown choice_GIA_model "' // TRIM( C%choice_GIA_model) // '"!')
+    END IF
     
     ! Simple memory reallocation for all the rest
     ! ===========================================
@@ -968,7 +994,7 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_a                  , ice%wHi_a                 )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hb_a                  , ice%wHb_a                 )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hs_a                  , ice%wHs_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%SL_a                  , ice%wSL_a                 )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%SL_a                  , ice%wSL_a                 )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%TAF_a                 , ice%wTAF_a                )
    !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_a                  , ice%wTi_a                 ) 
     
@@ -1061,11 +1087,7 @@ CONTAINS
     ! Mesh adaptation data
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%surf_curv             , ice%wsurf_curv            )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%log_velocity          , ice%wlog_velocity         )
-    
-    ! GIA
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHb_a                 , ice%wdHb_a                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHb_dt_a              , ice%wdHb_dt_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dSL_dt_a              , ice%wdSL_dt_a             )
+
     
     ! End of memory reallocation
     ! ==========================

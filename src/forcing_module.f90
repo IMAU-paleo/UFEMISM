@@ -596,7 +596,7 @@ CONTAINS
         CALL warning('model time before start of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( 1)
       ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
-        CALL warning('model time beyond end of CO2 record; using constant extrapolation!')
+        ! CALL warning('model time beyond end of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
       ELSE
         iu = 1
@@ -958,7 +958,7 @@ CONTAINS
           forcing%ins_t0 = forcing%ins_time(ti0)
           forcing%ins_t1 = forcing%ins_time(ti1)
         ELSE
-          IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+          ! IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
           ti0 = forcing%ins_nyears
           ti1 = forcing%ins_nyears
 

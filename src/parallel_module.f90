@@ -1774,5 +1774,151 @@ CONTAINS
     END IF ! IF (par%i == p_left) THEN 
     
   END SUBROUTINE share_memory_access_dp_3D
+
+  ! == SELEN ==
+  ! ===========
+
+  ! Allocate shared memory for SELEN complex arrays
+  ! ===============================================
+
+  SUBROUTINE allocate_shared_complex_1D( n1,         p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.
+
+    IMPLICIT NONE
+
+    INTEGER,                               INTENT(IN)    :: n1         ! Dimension(s) of memory to be allocated
+    COMPLEX*16, DIMENSION(:    ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                               INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+
+    INTEGER                                              :: ierr
+    INTEGER(KIND=MPI_ADDRESS_KIND)                       :: windowsize
+    INTEGER                                              :: disp_unit
+    TYPE(C_PTR)                                          :: baseptr
+
+    ! ==========
+    ! Allocate MPI-shared memory for data array, with an associated window object
+    ! (Needs to be called in Master and Slaves, but only Master actually allocates any space)
+
+    IF (par%master) THEN
+      windowsize  = n1*16_MPI_ADDRESS_KIND
+      disp_unit   = 16
+    ELSE
+      windowsize  = 0_MPI_ADDRESS_KIND
+      disp_unit   = 1
+    END IF
+
+    CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
+
+    IF (.NOT. par%master) THEN
+      ! Get the baseptr, size and disp_unit values of the master's memory space.
+      CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
+    END IF
+
+    ! Associate a pointer with this memory space.
+    CALL C_F_POINTER(baseptr, p, [n1])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = (0.,0.)
+    CALL sync
+
+    ! Update the max_window memory leak tracker
+    n_MPI_windows = n_MPI_windows + 1
+
+  END SUBROUTINE allocate_shared_complex_1D
+  SUBROUTINE allocate_shared_complex_2D( n1, n2,     p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.
+
+    IMPLICIT NONE
+
+    INTEGER,                               INTENT(IN)    :: n1, n2     ! Dimension(s) of memory to be allocated
+    COMPLEX*16, DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                               INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+
+    INTEGER                                              :: ierr
+    INTEGER(KIND=MPI_ADDRESS_KIND)                       :: windowsize
+    INTEGER                                              :: disp_unit
+    TYPE(C_PTR)                                          :: baseptr
+
+    ! ==========
+    ! Allocate MPI-shared memory for data array, with an associated window object
+    ! (Needs to be called in Master and Slaves, but only Master actually allocates any space)
+
+    IF (par%master) THEN
+      windowsize  = n1*n2*16_MPI_ADDRESS_KIND
+      disp_unit   = n1*16
+    ELSE
+      windowsize  = 0_MPI_ADDRESS_KIND
+      disp_unit   = 1
+    END IF
+
+    CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
+
+    IF (.NOT. par%master) THEN
+      ! Get the baseptr, size and disp_unit values of the master's memory space.
+      CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
+    END IF
+
+    ! Associate a pointer with this memory space.
+    CALL C_F_POINTER(baseptr, p, [n1, n2])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = (0.,0.)
+    CALL sync
+
+    ! Update the max_window memory leak tracker
+    n_MPI_windows = n_MPI_windows + 1
+
+  END SUBROUTINE allocate_shared_complex_2D
+  SUBROUTINE allocate_shared_complex_3D( n1, n2, n3, p, win)
+    ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
+    ! Return a pointer associated with that memory space. Makes it so that all processes
+    ! can access the same memory directly.
+
+    IMPLICIT NONE
+
+    INTEGER,                               INTENT(IN)    :: n1, n2, n3 ! Dimension(s) of memory to be allocated
+    COMPLEX*16, DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: p          ! Pointer to memory space
+    INTEGER,                               INTENT(OUT)   :: win        ! MPI window to the allocated memory space
+
+    INTEGER                                              :: ierr
+    INTEGER(KIND=MPI_ADDRESS_KIND)                       :: windowsize
+    INTEGER                                              :: disp_unit
+    TYPE(C_PTR)                                          :: baseptr
+
+    ! ==========
+    ! Allocate MPI-shared memory for data array, with an associated window object
+    ! (Needs to be called in Master and Slaves, but only Master actually allocates any space)
+
+    IF (par%master) THEN
+      windowsize  = n1*n2*n3*16_MPI_ADDRESS_KIND
+      disp_unit   = n1*n2*16
+    ELSE
+      windowsize  = 0_MPI_ADDRESS_KIND
+      disp_unit   = 1
+    END IF
+
+    CALL MPI_WIN_ALLOCATE_SHARED(windowsize, disp_unit, MPI_INFO_NULL, MPI_COMM_WORLD, baseptr, win, ierr)
+
+    IF (.NOT. par%master) THEN
+      ! Get the baseptr, size and disp_unit values of the master's memory space.
+      CALL MPI_WIN_SHARED_QUERY( win, 0, windowsize, disp_unit, baseptr, ierr)
+    END IF
+
+    ! Associate a pointer with this memory space.
+    CALL C_F_POINTER(baseptr, p, [n1, n2, n3])
+
+    ! Initialise memory with zeros
+    IF (par%master) p = (0.,0.)
+    CALL sync
+
+    ! Update the max_window memory leak tracker
+    n_MPI_windows = n_MPI_windows + 1
+
+  END SUBROUTINE allocate_shared_complex_3D
+
   
 END MODULE parallel_module

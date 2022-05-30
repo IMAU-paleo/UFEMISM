@@ -30,7 +30,8 @@ MODULE netcdf_module
                                            type_ocean_snapshot_global, type_highres_ocean_data, &
                                            type_restart_data, type_netcdf_resource_tracker, &
                                            type_direct_SMB_forcing_global, type_direct_climate_forcing_global, &
-                                           type_direct_SMB_forcing_regional, type_direct_climate_forcing_regional
+                                           type_direct_SMB_forcing_regional, type_direct_climate_forcing_regional, &
+                                           type_SELEN_global
   USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -75,8 +76,8 @@ CONTAINS
     CALL get_output_filenames( region)
     
     ! Create the files
-    CALL create_restart_file_mesh(     region, region%restart_mesh)
-    CALL create_restart_file_grid(     region, region%restart_grid)
+    ! CALL create_restart_file_mesh(     region, region%restart_mesh)
+    ! CALL create_restart_file_grid(     region, region%restart_grid)
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
@@ -101,8 +102,8 @@ CONTAINS
 
     IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
     
-    CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    CALL write_to_restart_file_grid(     region, region%restart_grid)
+    ! CALL write_to_restart_file_mesh(     region, region%restart_mesh)
+    ! CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
     
@@ -386,7 +387,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_help_field_mesh'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -587,7 +588,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
-    
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHb_dt_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dSL_dt_a, start=(/1, netcdf%ti /) ))
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -946,7 +950,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_mesh'
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
     
     ! Add routine to path
@@ -1163,7 +1167,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [vi,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-      
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [vi,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [vi,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1318,10 +1325,10 @@ CONTAINS
     CHARACTER(LEN=*),              INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_help_field_grid'
-    INTEGER                                       :: vi
-    REAL(dp), DIMENSION(:    ), POINTER           ::  dp_2D_a
-    INTEGER                                       :: wdp_2D_a
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'write_help_field_grid'
+    INTEGER                                      :: vi
+    REAL(dp), DIMENSION(:    ), POINTER          ::  dp_2D_a
+    INTEGER                                      :: wdp_2D_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1553,7 +1560,10 @@ CONTAINS
     ELSEIF (field_name == 'dHb') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-    
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dSL_dt_a, id_var, netcdf%ti)
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -1801,7 +1811,7 @@ CONTAINS
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
     
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_field_grid'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_grid'
     INTEGER                                       :: x, y, t, z, m
     
     ! Add routine to path
@@ -2012,7 +2022,10 @@ CONTAINS
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [x, y,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
-      
+    ELSEIF (field_name == 'dHb_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHb_dt',                 [x, y,    t], id_var, long_name='Bedrock deformation rates', units='m/yr')
+    ELSEIF (field_name == 'dSL_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dSL_dt',                 [x, y,    t], id_var, long_name='Geoid deformation rates', units='m/yr')
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
@@ -5650,5 +5663,261 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_direct_regional_climate_file_time_xy
+
+  ! == SELEN ==
+  ! ===========
+
+  ! Global topography for SELEN
+  SUBROUTINE inquire_SELEN_global_topo_file( SELEN)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_SELEN_global_topo_file'
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    INQUIRE(EXIST=file_exists, FILE = TRIM( SELEN%netcdf_topo%filename))
+    IF (.NOT. file_exists) THEN
+      CALL crash('file "' // TRIM( SELEN%netcdf_topo%filename) // '" does not exist!')
+    ELSE
+      CALL open_netcdf_file( SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
+    END IF
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_vi,    SELEN%mesh%nV,     SELEN%netcdf_topo%id_dim_vi)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ti,    SELEN%mesh%nTri,   SELEN%netcdf_topo%id_dim_ti)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ci,    SELEN%mesh%nC_mem, SELEN%netcdf_topo%id_dim_ci)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_three, int_dummy,         SELEN%netcdf_topo%id_dim_three)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_V,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_V       )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Tri,   (/ SELEN%netcdf_topo%id_dim_ti, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_Tri     )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_nC,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_nC      )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_C,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_C       )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_niTri, (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_niTri   )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_iTri,  (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_iTri    )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lat,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lat     )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lon,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lon     )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Hb,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_Hb      )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_ianc,  (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_ianc    )
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_SELEN_global_topo_file
+  SUBROUTINE read_SELEN_global_topo_file( SELEN)
+    ! Read the init netcdf file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_SELEN_global_topo_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_V,     SELEN%mesh%V,     start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Tri,   SELEN%mesh%Tri,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_nC,    SELEN%mesh%nC,    start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_C,     SELEN%mesh%C,     start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_niTri, SELEN%mesh%niTri, start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_iTri,  SELEN%mesh%iTri,  start = (/ 1, 1 /) ))
+
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lat,   SELEN%mesh%lat,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lon,   SELEN%mesh%lon,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Hb,    SELEN%topo_ref,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_ianc,  SELEN%mesh%ianc,  start = (/ 1    /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_SELEN_global_topo_file
+
+  ! SELEN output file
+  SUBROUTINE create_SELEN_output_file( SELEN)
+    ! Create a new NetCDF output file for SELEN (on the irregular global mesh)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_SELEN_output_file'
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: vi, ti, ci, three, time, ki
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Set time frame index to 1
+    SELEN%output%ti = 1
+
+    ! Set output filename
+    SELEN%output%filename = TRIM(C%output_dir) // 'SELEN_output.nc'
+
+    ! Create a new restart file if none exists and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+    INQUIRE(EXIST=file_exists, FILE = TRIM(SELEN%output%filename))
+    IF(file_exists) THEN
+      CALL crash('file "' // TRIM( SELEN%output%filename) // '" already exists!')
+    END IF
+
+    ! Create netCDF file
+    CALL handle_error(nf90_create(SELEN%output%filename,IOR(nf90_clobber,nf90_share),SELEN%output%ncid))
+
+    ! Mesh data
+    ! =========
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_vi,           SELEN%mesh%nV,           SELEN%output%id_dim_vi          ) ! Vertex indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ti,           SELEN%mesh%nTri,         SELEN%output%id_dim_ti          ) ! Triangle indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ci,           SELEN%mesh%nC_mem,       SELEN%output%id_dim_ci          ) ! Connection indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_three,        3,                       SELEN%output%id_dim_three       ) ! 3 (each vertex has three coordinates, each triangle has three vertices)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    vi        = SELEN%output%id_dim_vi
+    ti        = SELEN%output%id_dim_ti
+    ci        = SELEN%output%id_dim_ci
+    three     = SELEN%output%id_dim_three
+
+    ! Define variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_V,                [vi,  three], SELEN%output%id_var_V,                long_name='Vertex coordinates', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_Tri,              [ti,  three], SELEN%output%id_var_Tri,              long_name='Vertex indices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_nC,               [vi        ], SELEN%output%id_var_nC,               long_name='Number of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_C,                [vi,  ci   ], SELEN%output%id_var_C,                long_name='Indices of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_niTri,            [vi        ], SELEN%output%id_var_niTri,            long_name='Number of inverse triangles')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_iTri,             [vi,  ci   ], SELEN%output%id_var_iTri,             long_name='Indices of inverse triangles')
+
+    ! Model output
+    ! ============
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited,         SELEN%output%id_dim_time ) ! Time frames
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ki,    C%SELEN_irreg_time_n+1, SELEN%output%id_dim_ki   ) ! Window frames
+
+    ! Placeholders for the dimension ID's, for shorter code
+    time  = SELEN%output%id_dim_time
+    ki    = SELEN%output%id_dim_ki
+
+    ! Define dimension variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_time,  [time  ], SELEN%output%id_var_time,  long_name='Time', units='years')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_ki,    [ki    ], SELEN%output%id_var_ki,    long_name='Window frames', units='years')
+
+    ! Define model data variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lat,              [vi             ], SELEN%output%id_var_lat,              long_name='Latitude', units='degrees north')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lon,              [vi             ], SELEN%output%id_var_lon,              long_name='Longtitude', units='degrees east')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi,               [vi,        time], SELEN%output%id_var_Hi,               long_name='Surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi_rel,           [vi,        time], SELEN%output%id_var_Hi_rel,           long_name='Relative surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_U,                [vi,        time], SELEN%output%id_var_U,                long_name='Land surface change', units='m')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_N,                [vi,        time], SELEN%output%id_var_N,                long_name='Sea surface change', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_ocean_function,   [vi,        time], SELEN%output%id_var_ocean_function,   long_name='Ocean function (1 = ocean)')
+
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_load_history,     [vi,   ki,  time], SELEN%output%id_var_load_history,     long_name='Load history', units='mie')
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( SELEN%output%ncid))
+
+    ! Write mesh data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_V,               SELEN%mesh%V             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Tri,             SELEN%mesh%Tri           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_nC,              SELEN%mesh%nC            ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_C,               SELEN%mesh%C             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_niTri,           SELEN%mesh%niTri         ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_iTri,            SELEN%mesh%iTri          ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lat,             SELEN%mesh%lat           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lon,             SELEN%mesh%lon           ))
+
+    ! Window frames
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ki, (/0._dp, C%SELEN_irreg_time_window/)))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( SELEN%output%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_SELEN_output_file
+  SUBROUTINE write_to_SELEN_output_file( SELEN, time)
+    ! Write the current model state to the existing output file
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_to_SELEN_output_file'
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+    REAL(dp),                       INTENT(IN)    :: time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the file for writing
+    CALL open_netcdf_file( SELEN%output%filename, SELEN%output%ncid)
+
+    ! Time
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_time, time, start = (/ SELEN%output%ti /)))
+
+    ! Model data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob,                    start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_load_history,   SELEN%ice_loading_history_irreg_glob, start = (/ 1, 1, SELEN%output%ti/) ))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Increase time frame counter
+    SELEN%output%ti = SELEN%output%ti + 1
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_SELEN_output_file
 
 END MODULE netcdf_module

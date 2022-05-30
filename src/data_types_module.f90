@@ -15,7 +15,8 @@ MODULE data_types_module
                                          type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
                                          type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
                                          type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data, &
-                                         type_netcdf_resource_tracker
+                                         type_netcdf_resource_tracker, &
+                                         type_netcdf_SELEN_output, type_netcdf_SELEN_global_topo
 
   IMPLICIT NONE
   
@@ -1161,6 +1162,204 @@ MODULE data_types_module
 
   END TYPE type_highres_ocean_data
 
+  ! == SELEN ==
+  ! ===========
+
+  TYPE type_SELEN_mesh
+    ! The global SELEN mesh, in UFEMISM mesh format
+
+    INTEGER,                    POINTER     :: nV                            ! Number of vertices
+    INTEGER,                    POINTER     :: nTri                          ! Number of triangles
+    INTEGER,                    POINTER     :: nC_mem                        ! Maximum allowed number of connections per vertex
+    INTEGER :: wnV, wnTri, wnC_mem
+
+    ! Actual mesh data
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: V                             ! The X and Y coordinates of all the vertices
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: Tri                           ! The triangle array: Tri(ti) = [vi1, vi2, vi3] (vertices ordered counter-clockwise)
+    INTEGER,  DIMENSION(:    ), POINTER     :: nC                            ! The number of other vertices this vertex is connected to
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: C                             ! The list   of other vertices this vertex is connected to (ordered counter-clockwise, from edge to edge for edge vertices)
+    INTEGER,  DIMENSION(:    ), POINTER     :: niTri                         ! The number of triangles this vertex is a part of
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: iTri                          ! The list   of triangles this vertex is a part of (ordered counter-clockwise)
+    INTEGER :: wV, wTri, wnC, wC, wniTri, wiTri
+
+    ! Lat/lon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat                           ! Latitude  (degrees north)
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon                           ! Longitude (degrees east)
+    INTEGER :: wlat, wlon
+
+    ! "anchor points" (used in some places to reduce spherical harmonics calculations)
+    INTEGER,                    POINTER     :: nanc                          ! Number of anchor points
+    REAL(dp), DIMENSION(:    ), POINTER     :: ancplist_lat                  ! Latitude of each anchor point
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ancplist_isl                  ! Range of global grid pixels for each anchor point
+    INTEGER,  DIMENSION(:    ), POINTER     :: ianc                          ! Anchor point index of each global grid pixel
+    INTEGER :: wnanc, wancplist_lat, wancplist_isl, wianc
+
+  END TYPE type_SELEN_mesh
+
+  TYPE type_SELEN_global
+    ! Global SELEN data fields, spherical harmonics, etc.
+
+    ! Timers to trigger solving the SLE in the main program
+    REAL(dp)                                :: t0_SLE, t1_SLE
+
+    ! NetCDF global topography input
+    TYPE(type_netcdf_SELEN_global_topo)     :: netcdf_topo
+
+    ! NetCDF output
+    TYPE(type_netcdf_SELEN_output)          :: output
+
+    ! The irregular global mesh
+    TYPE( type_SELEN_mesh)                  :: mesh
+
+    ! Global reference fields
+    REAL(dp), DIMENSION(:    ), POINTER     :: topo_ref                      ! Reference topography
+    REAL(dp), DIMENSION(:    ), POINTER     :: load_ref                      ! Reference load
+    INTEGER,  DIMENSION(:    ), POINTER     :: of_ref                        ! Reference ocean function
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: icemodel_region               ! To which ice model region a SELEN pixel belongs (if any), and their ice model subgrid index
+    INTEGER,                    POINTER     :: nel_icemodel                  ! Number of pixels that belong to ice model regions
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: isl_icemodel                  ! List   of pixels that belong to ice model regions
+    INTEGER :: wtopo_ref, wload_ref, wof_ref, wicemodel_region, wnel_icemodel, wisl_icemodel
+
+    ! Global end results (ice loading, geoid, bed deformation, geoid rate, bed deformation rate)
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_glob
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_rel_glob
+    REAL(dp), DIMENSION(:    ), POINTER     :: N_glob
+    REAL(dp), DIMENSION(:    ), POINTER     :: U_glob
+    INTEGER,  DIMENSION(:    ), POINTER     :: of_glob
+    INTEGER :: wHi_glob, wHi_rel_glob, wN_glob, wU_glob, wof_glob
+
+    ! MJ and LJ values
+    INTEGER,  DIMENSION(:    ), POINTER     ::  MJ_VAL,  LJ_VAL
+    INTEGER                                 :: wMJ_VAL, wLJ_VAL
+
+    ! Reference data for SELEN in SH
+    REAL(dp),   DIMENSION(:,:), POINTER     :: ALF
+    COMPLEX*16, DIMENSION(:  ), POINTER     :: dLONG_TABLE
+    COMPLEX*16, DIMENSION(:,:), POINTER     :: LONG_TABLE
+    INTEGER :: wALF, wdLONG_TABLE, wLONG_TABLE
+
+    ! Ice loading history on the global grid on the irregular moving time window
+    REAL(dp),   DIMENSION(:    ), POINTER   :: dice_loading_history_irreg_glob
+    REAL(dp),   DIMENSION(:,:  ), POINTER   :: ice_loading_history_irreg_glob
+    INTEGER :: wdice_loading_history_irreg_glob, wice_loading_history_irreg_glob
+
+    ! Memory of SELEN
+    COMPLEX*16, DIMENSION(:    ), POINTER   :: MEM_S
+    COMPLEX*16, DIMENSION(:    ), POINTER   :: MEM_U
+    INTEGER                                 :: wMEM_S, wMEM_U
+
+    ! SELEN internal data
+    INTEGER,    DIMENSION(:    ), POINTER   :: Dm                  ! INTEGER,    DIMENSION( C_SLE%JMAX                )     :: DM
+    REAL(dp),   DIMENSION(:    ), POINTER   :: X                   ! REAL(dp),   DIMENSION( C_SLE%NP,  0:C_SLE%TCONV  )     :: X
+    INTEGER :: wDm, wX
+
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: ZE                  ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: ZE                  ! Eustatic Z array for water loading
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: SE                  ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: SE                  ! Eustatic S array for ice loading
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: AAAA                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: AAAA
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: AAAA_MOD            ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: AAAA_MOD
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: BBBB                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: BBBB
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: BBBB_MOD            ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: BBBB_MOD
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: HHHH                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: HHHH
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: KKKK                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: KKKK
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: TTTT                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: IIII                ! Ice loading in SH
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: IIII                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: TTTT                ! Relative ice loading in SH
+    INTEGER :: wZE, wSE, wAAAA, wAAAA_MOD, wBBBB, wBBBB_MOD, wHHHH, wKKKK, wTTTT, wIIII
+
+    ! New arrays for the rotational feedback
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: load_ice_and_water  ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: load_ice_and_water  ! Ice and water loading in SH for rotational feedback
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: ZROT                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: ZROT
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: ZROT_MOD            ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: ZROT_MOD
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: SROT                ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: SROT
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: SROT_MOD            ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: SROT_MOD
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: ZROTVV              ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: ZROTVV
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: SROTVV              ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: SROTVV
+    INTEGER :: wload_ice_and_water, wZROT, wZROT_MOD, wSROT, wSROT_MOD, wZROTVV, wSROTVV
+
+    ! Results
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: S                   ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: S                   ! relative sea level
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: U                   ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: U                   ! Solid Earth deformation (N = S+U)
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: Z                   ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV,0:C%selen_max_iteration)     :: Z
+    INTEGER :: wS, wU, wZ
+
+    ! New arrays for tdof
+    REAL(dp),   DIMENSION(:    ), POINTER     :: newalf              ! REAL(dp),   DIMENSION( C_SLE%JMAX,  C_SLE%NANCH  )     :: newalf              ! New values of alf
+    REAL(dp),   DIMENSION(:    ), POINTER     :: slc                 ! REAL(dp),   DIMENSION( C_SLE%NP,  0:C_SLE%TCONV  )     :: slc                 ! sea level forward in time for all elements
+    INTEGER,    DIMENSION(:    ), POINTER     :: WET                 ! INTEGER,    DIMENSION( C_SLE%NP,  0:C_SLE%TCONV  )     :: WET                 ! new ocean function (0 or 1) forward in time
+    REAL(dp),   DIMENSION(:    ), POINTER     :: newtopo             ! REAL(dp),   DIMENSION( C_SLE%NP,  0:C_SLE%TCONV  )     :: newtopo             ! new topograhpy forward in time
+    INTEGER :: wnewalf, wslc, wWET, wnewtopo
+
+    INTEGER,    DIMENSION(:    ), POINTER     :: fj                  ! INTEGER,    DIMENSION( C_SLE%NP,  0:C_SLE%TCONV  )     :: fj                  ! floating function for ice thickness (float or not)
+    INTEGER,    DIMENSION(:    ), POINTER     :: xcf                 ! INTEGER,    DIMENSION( C_SLE%NP,  0:C_SLE%TCONV+1)     :: xcf
+    INTEGER :: wfj, wxcf
+
+    INTEGER,    DIMENSION(:    ), POINTER     :: newet2              ! INTEGER,    DIMENSION( C_SLE%NP                  )     :: newet2              ! new ocean function after iteration
+    REAL(dp),   DIMENSION(:    ), POINTER     :: newtopo2            ! REAL(dp),   DIMENSION( C_SLE%NP                  )     :: newtopo2            ! new topograhpy after iteration
+    INTEGER :: wnewet2, wnewtopo2
+
+    REAL(dp),   DIMENSION(:    ), POINTER     :: S_global, U_global  ! REAL(dp),   DIMENSION( C_SLE%NP                  )     :: S_global, U_global  ! Global fields of S and U for output
+    INTEGER :: wS_global, wU_global
+
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: MSint               ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: MSint               ! Interpolated memory of relative sea level
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: MUint               ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: MUint               ! Interpolationd memory of solid earth deformation (N is geoid)
+    INTEGER :: wMSint, wMUint
+
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: MSread              ! COMPLEX*16, DIMENSION( C_SLE%JMAX                )     :: MSread              ! Initial memory of relative sea level
+    INTEGER :: wMSread
+
+    ! New variables for spline interpolation
+    REAL(dp),   DIMENSION(:    ), POINTER     :: int_time            ! REAL(dp),   DIMENSION(            0:C_SLE%TCONV  )     :: int_time            ! time points (depending on DELTA) for interpolation
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: sp1, spn, preSint   ! COMPLEX*16, DIMENSION( C_SLE%JMAX)                     :: sp1, spn, preSint   ! spline in- and output for S
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: up1, upn, preUint   ! COMPLEX*16, DIMENSION( C_SLE%JMAX)                     :: up1, upn, preUint   ! spline in- and output for U
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: s2,u2               ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: s2,u2               ! spline output
+    INTEGER :: wint_time, wsp1, wspn, wpreSint, wup1, wupn, wpreUint, ws2, wu2
+
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: varpreoc            ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: varpreoc            ! pre determined SH coefficients ocean function
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: varoc               ! COMPLEX*16, DIMENSION( C_SLE%JMAX,0:C_SLE%TCONV  )     :: varoc               ! variable SH coefficient of ocean function
+    COMPLEX*16, DIMENSION(:    ), POINTER     :: varoc_inv           ! COMPLEX*16, DIMENSION(            0:C_SLE%TCONV  )     :: varoc_inv           ! 1 / varoc(1,:) - the first degree
+    INTEGER :: wvarpreoc, wvaroc, wvaroc_inv
+
+  END TYPE type_SELEN_global
+
+  TYPE type_SELEN_regional
+    ! SELEN data for this model region
+
+    ! Mapping between the icemodel square grid and the SELEN global grid
+    REAL(dp),                   POINTER :: rad                    ! Radius of the circular disc describing a square grid element (used for mapping)
+    INTEGER,  DIMENSION(:,:  ), POINTER :: map_nisl               ! For each ice model square grid cell, the number of SELEN global grid cells to which it contributes
+    INTEGER,  DIMENSION(:,:,:), POINTER :: map_isl                ! For each ice model square grid cell, the list   of SELEN global grid cells to which it contributes
+    REAL(dp), DIMENSION(:,:,:), POINTER :: map_w                  ! The weights of those contributions
+    INTEGER,                    POINTER :: nr                     ! The number of SELEN global grid pixels that lie inside this ice model region (accounting for region overlap)
+    INTEGER                             :: ir1, ir2               ! Parallelisation process domains
+    INTEGER,  DIMENSION(:    ), POINTER :: map_isl_region2glob    ! For each SELEN global grid pixel inside this ice model region, the corresponding global grid pixel index
+    INTEGER :: wrad, wmap_nisl, wmap_isl, wmap_w, wnslr, wmap_isl_region2glob
+
+    ! Reference fields
+    REAL(dp), DIMENSION(:,:  ), POINTER :: load_ref               ! Reference loading field    (on the regional square grid)
+    REAL(dp), DIMENSION(:,:  ), POINTER :: topo_ref               ! Reference topography field (on the regional square grid)
+    INTEGER :: wload_ref, wtopo_ref
+
+    ! Path to directory containing spherical harmonics binary files for this region
+    CHARACTER(LEN=256)                  :: sh_foldername
+
+    ! Ice loading history (on the regional square grid, both on the regular and irregular moving time window)
+    REAL(dp), DIMENSION(:,:,:), POINTER :: ice_loading_history_reg_sq
+    REAL(dp), DIMENSION(:,:,:), POINTER :: ice_loading_history_irreg_sq
+    INTEGER :: wice_loading_history_reg_sq, wice_loading_history_irreg_sq
+
+    ! SELEN results
+    REAL(dp), DIMENSION(:,:  ), POINTER :: dHb_t_grid_GIA
+    REAL(dp), DIMENSION(:,:  ), POINTER :: dHb_tplusdt_grid_GIA
+    REAL(dp), DIMENSION(:,:  ), POINTER :: SL_t_grid_GIA
+    REAL(dp), DIMENSION(:,:  ), POINTER :: SL_tplusdt_grid_GIA
+    REAL(dp), DIMENSION(:    ), POINTER :: dHb_t
+    REAL(dp), DIMENSION(:    ), POINTER :: dHb_tplusdt
+    REAL(dp), DIMENSION(:    ), POINTER :: SL_t
+    REAL(dp), DIMENSION(:    ), POINTER :: SL_tplusdt
+    INTEGER :: wdHb_t_grid_GIA, wdHb_tplusdt_grid_GIA, wSL_t_grid_GIA, wSL_tplusdt_grid_GIA
+    INTEGER :: wdHb_t,          wdHb_tplusdt,          wSL_t,          wSL_tplusdt
+
+  END TYPE type_SELEN_regional
+
   ! Updated model region type including new climate matrix version (move it up at the end of the climate port)
   ! ==========================================================================================================
 
@@ -1253,6 +1452,7 @@ MODULE data_types_module
     TYPE(type_ocean_matrix_regional)        :: ocean_matrix                              ! All the ocean data for this model region
     TYPE(type_SMB_model)                    :: SMB                                       ! The different SMB components for this model region
     TYPE(type_BMB_model)                    :: BMB                                       ! The different BMB components for this model region
+    TYPE(type_SELEN_regional)               :: SELEN            ! SELEN input and output data for this model region
 
     ! Output netcdf files
     LOGICAL                                 :: output_file_exists

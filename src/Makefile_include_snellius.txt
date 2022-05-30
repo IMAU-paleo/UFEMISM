@@ -7,7 +7,7 @@
 
 # Compiler flags:
   COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
-                            -Werror=implicit-interface -fimplicit-none -g
+                            -fimplicit-none -g # -Werror=implicit-interface
   COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace
 
   F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \

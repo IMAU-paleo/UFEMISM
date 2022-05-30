@@ -329,6 +329,7 @@ MODULE mesh_update_module
    
       ! Determine resolutions
       submesh%res_min          = MAX( C%res_min,          res_min_inc)
+      submesh%res_max          = MAX( C%res_max,          res_min_inc)
       submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
       submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
       submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)

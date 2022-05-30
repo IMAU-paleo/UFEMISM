@@ -1514,19 +1514,8 @@ MODULE mesh_help_functions_module
     INTEGER,                    INTENT(IN)        :: i, n
     REAL(dp),                   INTENT(OUT)       :: xl, xr
 
-    ! Local variables
-    INTEGER :: n_aux, i_aux
-
-    n_aux = MIN(3,n)
-    i_aux = n_aux-1
-
-    IF (i < n_aux) THEN
-      xl = xmin + REAL(i  ) * (xmax - xmin) / REAL(n_aux)
-      xr = xmin + REAL(i+1) * (xmax - xmin) / REAL(n_aux)
-    ELSE
-      xl = xmin + REAL(i_aux  ) * (xmax - xmin) / REAL(n_aux)
-      xr = xmin + REAL(i_aux+1) * (xmax - xmin) / REAL(n_aux)
-    END IF
+    xl = xmin + REAL(i  ) * (xmax - xmin) / REAL(n)
+    xr = xmin + REAL(i+1) * (xmax - xmin) / REAL(n)
 
   END SUBROUTINE partition_domain_regular
   SUBROUTINE partition_domain_x_balanced( mesh, ymin, ymax, i, n, xmin, xmax)
@@ -1546,32 +1535,27 @@ MODULE mesh_help_functions_module
     REAL(dp), DIMENSION(:  ), ALLOCATABLE         :: xvals, xvals_opt
     INTEGER                                       :: bi, vi, p
     REAL(dp)                                      :: xrange, sumv
-    INTEGER :: n_aux, i_aux
 
-    n_aux = MIN(3,n)
-    i_aux = n_aux-1
-      
     ! Determine x ranges of bins
     xrange = mesh%xmax - mesh%xmin
     ALLOCATE( xvals( nbins))
     DO bi = 1, nbins
       xvals(bi) = mesh%xmin + (xrange * REAL(bi-1)/REAL(nbins-1))
     END DO
-    
+
     ! Fill histogram
     ALLOCATE( vbins( nbins))
     vbins = 0
-    ! vbins = CEILING( REAL(mesh%nV) * 0.01_dp/ REAL(n))
-    vbins = CEILING( REAL(mesh%nV) * 0.01_dp/ REAL(n_aux))
+    vbins = CEILING( REAL(mesh%nV) * 0.01_dp/ REAL(n))
     DO vi = 1, mesh%nV
       IF (mesh%V(vi,2) >= ymin .AND. mesh%V(vi,2) <= ymax) THEN
         bi = 1 + NINT( REAL(nbins-1) * (mesh%V(vi,1) - mesh%xmin) / xrange)
         vbins(bi) = vbins(bi) + 1
       END IF
     END DO
-    
+
     nV_sub = SUM(vbins)
-    
+
     ! Integrate histogram
     ALLOCATE( intvbins( nbins))
     intvbins = 0
@@ -1579,49 +1563,40 @@ MODULE mesh_help_functions_module
     DO bi = 2, nbins
       intvbins(bi) = intvbins(bi-1) + vbins(bi)
     END DO
-    
+
     ! Determine domain range
-    ! ALLOCATE( xvals_opt( n+1))
-    ALLOCATE( xvals_opt( n_aux+1))
+    ALLOCATE( xvals_opt( n+1))
     xvals_opt(1)   = mesh%xmin
-    ! xvals_opt(n+1) = mesh%xmax
-    xvals_opt(n_aux+1) = mesh%xmax
+    xvals_opt(n+1) = mesh%xmax
 
     bi = 1
-    ! DO p = 1, n-1
-    DO p = 1, n_aux-1
-      ! sumv = REAL(p * nV_sub) / REAL(n)
-      sumv = REAL(p * nV_sub) / REAL(n_aux)
+    DO p = 1, n-1
+      sumv = REAL(p * nV_sub) / REAL(n)
       DO WHILE ( REAL(intvbins(bi)) < sumv .AND. bi < nbins)
         bi = bi + 1
       END DO
       xvals_opt(p+1) = xvals(bi)
     END DO
 
-    IF (i < n_aux) THEN
-      xmin = xvals_opt(i+1)
-      xmax = xvals_opt(i+2)
-    ELSE
-      xmin = xvals_opt(i_aux+1)
-      xmax = xvals_opt(i_aux+2)
-    END IF
-    
+    xmin = xvals_opt(i+1)
+    xmax = xvals_opt(i+2)
+
     DEALLOCATE( vbins)
     DEALLOCATE( xvals)
     DEALLOCATE( intvbins)
     DEALLOCATE( xvals_opt)
-    
+
   END SUBROUTINE partition_domain_x_balanced
   SUBROUTINE partition_domain_y_balanced( mesh, xmin, xmax, i, n, ymin, ymax)
     ! Given a mesh, divide the region between xmin and xmax into n parts with
     ! (approximately) equal numbers of vertices. Return the [ymin,ymax] limits of the i-th part.
-  
+
     ! In/output variables:
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     REAL(dp),                   INTENT(IN)        :: xmin, xmax
     INTEGER,                    INTENT(IN)        :: i, n
     REAL(dp),                   INTENT(OUT)       :: ymin, ymax
-    
+
     ! Local variables:
     INTEGER,  PARAMETER                           :: nbins = 1000
     INTEGER                                       :: nV_sub
@@ -1629,31 +1604,27 @@ MODULE mesh_help_functions_module
     REAL(dp), DIMENSION(:  ), ALLOCATABLE         :: yvals, yvals_opt
     INTEGER                                       :: bi, vi, p
     REAL(dp)                                      :: yrange, sumv
-    INTEGER :: n_aux, i_aux
 
-    n_aux = MIN(3,n)
-    i_aux = n_aux-1
-      
     ! Determine y ranges of bins
     yrange = mesh%ymax - mesh%ymin
     ALLOCATE( yvals( nbins))
     DO bi = 1, nbins
       yvals(bi) = mesh%ymin + (yrange * REAL(bi-1)/REAL(nbins-1))
     END DO
-    
+
     ! Fill histogram
     ALLOCATE( vbins( nbins))
     vbins = 0
-    vbins = CEILING( REAL(mesh%nV) * 0.01_dp/ REAL(n_aux))
+    vbins = CEILING( REAL(mesh%nV) * 0.01_dp/ REAL(n))
     DO vi = 1, mesh%nV
       IF (mesh%V(vi,1) >= xmin .AND. mesh%V(vi,1) <= xmax) THEN
         bi = 1 + NINT( REAL(nbins-1) * (mesh%V(vi,2) - mesh%ymin) / yrange)
         vbins(bi) = vbins(bi) + 1
       END IF
     END DO
-    
+
     nV_sub = SUM(vbins)
-    
+
     ! Integrate histogram
     ALLOCATE( intvbins( nbins))
     intvbins = 0
@@ -1661,28 +1632,23 @@ MODULE mesh_help_functions_module
     DO bi = 2, nbins
       intvbins(bi) = intvbins(bi-1) + vbins(bi)
     END DO
-    
+
     ! Determine domain range
-    ALLOCATE( yvals_opt( n_aux+1))
+    ALLOCATE( yvals_opt( n+1))
     yvals_opt(1)   = mesh%ymin
-    yvals_opt(n_aux+1) = mesh%ymax
+    yvals_opt(n+1) = mesh%ymax
 
     bi = 1
-    DO p = 1, n_aux-1
-      sumv = REAL(p * nV_sub) / REAL(n_aux)
+    DO p = 1, n-1
+      sumv = REAL(p * nV_sub) / REAL(n)
       DO WHILE ( REAL(intvbins(bi)) < sumv .AND. bi < nbins)
         bi = bi + 1
       END DO
       yvals_opt(p+1) = yvals(bi)
     END DO
 
-    IF (i < n_aux) THEN
-      ymin = yvals_opt(i+1)
-      ymax = yvals_opt(i+2)
-    ELSE
-      ymin = yvals_opt(i_aux+1)
-      ymax = yvals_opt(i_aux+2)
-    END IF
+    ymin = yvals_opt(i+1)
+    ymax = yvals_opt(i+2)
     
     DEALLOCATE( vbins)
     DEALLOCATE( yvals)

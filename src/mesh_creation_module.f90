@@ -804,42 +804,36 @@ MODULE mesh_creation_module
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_all_submeshes'
     INTEGER, DIMENSION(:,:  ), ALLOCATABLE        :: alignlist
     INTEGER                                       :: nalign, i_left, i_right, i, nVl_east, nVr_west
-    INTEGER :: n_aux, i_aux
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! No need for this if we're running on a single core
     IF (par%n == 1) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
 
-    n_aux = MIN(3,par%n)
-    i_aux = n_aux-1
-    
     ! Since each submesh can only be aligned with one neighbour at a time, and each one has
     ! at most two neighbours, we need two passes.
-    
-    ! ALLOCATE( alignlist( par%n, 2))
-    ALLOCATE( alignlist( n_aux, 2))
-    
+
+    ALLOCATE( alignlist( par%n, 2))
+
     ! == Pass one: even
     ! =================
-  
+
     alignlist = 0
     nalign    = 0
-    
-    ! DO i = 0, par%n-2, 2
-    DO i = 0, n_aux-2, 2
-        
+
+    DO i = 0, par%n-2, 2
+
       nalign = nalign + 1
       alignlist( nalign,:) = [i, i+1]
-      
+
     END DO
-        
+
     ! Determine if we're participating as Left, Right or Passive
-    ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)    
+    ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)
     i_left  = -1
     i_right = -1
     DO i = 1, nalign
@@ -848,19 +842,18 @@ MODULE mesh_creation_module
         i_right = alignlist(i,2)
       END IF
     END DO
-    
+
     IF (nalign > 0) THEN
       CALL align_submeshes( submesh, orientation, i_left, i_right, nVl_east, nVr_west)
     END IF
-    
+
   ! == Pass two: odd
   ! ================
-  
+
     alignlist = 0
     nalign    = 0
-    
-    ! DO i = 1, par%n-2, 2
-    DO i = 1, n_aux-2, 2
+
+    DO i = 1, par%n-2, 2
       
       nalign = nalign + 1
       alignlist(nalign,:) = [i, i+1]
@@ -1333,42 +1326,34 @@ MODULE mesh_creation_module
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_all_submeshes'
     INTEGER, DIMENSION(:,:), ALLOCATABLE          :: mergelist
     INTEGER                                       :: nmerge, merge_it, n_merge_it, i
-    INTEGER :: n_aux, i_aux
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! No need for this if we're running on a single core
     IF (par%n == 1) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
 
-    n_aux = MIN(3,par%n)
-    i_aux = n_aux-1
-    
-    ! ALLOCATE( mergelist( par%n, 2))
-    ALLOCATE( mergelist( n_aux, 2))
-    
+    ALLOCATE( mergelist( par%n, 2))
+
     ! Determine number of required merging iterations
     n_merge_it = 1
-    ! DO WHILE (2**n_merge_it < par%n)
-    DO WHILE (2**n_merge_it < n_aux)
+    DO WHILE (2**n_merge_it < par%n)
       n_merge_it = n_merge_it + 1
     END DO
-    
+
     ! Iteratively merge meshes
     DO merge_it = 1, n_merge_it
-      
+
       IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Merging submeshes: iteration ', merge_it
-    
+
       mergelist = 0
       nmerge    = 0
-      
-      ! DO i = 0, par%n-2, 2**merge_it
-      DO i = 0, n_aux-2, 2**merge_it
-        ! IF (i + (2**(merge_it-1)) < par%n) THEN
-        IF (i + (2**(merge_it-1)) < n_aux) THEN
+
+      DO i = 0, par%n-2, 2**merge_it
+        IF (i + (2**(merge_it-1)) < par%n) THEN
           nmerge = nmerge + 1
           mergelist(nmerge,:) = [i, i + (2**(merge_it-1))]
         END IF

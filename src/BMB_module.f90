@@ -27,8 +27,9 @@ MODULE BMB_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
-                                             type_remapping_mesh_mesh
+                                             type_remapping_mesh_mesh, type_reference_geometry
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
   IMPLICIT NONE
 
@@ -37,7 +38,7 @@ CONTAINS
 ! == The main routines that should be called from the main ice model/program
 ! ==========================================================================
 
-  SUBROUTINE run_BMB_model( mesh, ice, ocean, BMB, region_name, time)
+  SUBROUTINE run_BMB_model( mesh, ice, ocean, BMB, region_name, time, refgeo)
     ! Run the selected BMB model
 
     IMPLICIT NONE
@@ -49,6 +50,7 @@ CONTAINS
     TYPE(type_BMB_model),                 INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
     REAL(dp),                             INTENT(IN)    :: time
+    TYPE(type_reference_geometry),        INTENT(IN)    :: refgeo
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model'
@@ -61,7 +63,17 @@ CONTAINS
     ! Initialise at zero
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
-    BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+
+    ! Initialise at zero only if not iteratively inverting
+    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+      DO vi = mesh%vi1, mesh%vi2
+        IF (ice%mask_sheet_a( vi) == 1._dp) THEN
+           BMB%BMB_shelf = 0._dp
+        END IF
+      END DO
+    ELSE
+      BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+    END IF
     CALL sync
 
     ! Run the selected shelf BMB model
@@ -84,6 +96,8 @@ CONTAINS
       CALL run_BMB_model_PICO(                 mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
+    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+      CALL run_BMB_model_melt_inv(              mesh, ice, ocean, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -147,6 +161,7 @@ CONTAINS
     ! Limit basal melt
     DO vi = mesh%vi1, mesh%vi2
       BMB%BMB( vi) = MAX( BMB%BMB( vi), -C%BMB_max)
+      BMB%BMB( vi) = MIN( BMB%BMB( vi),  20.0_dp)
     END DO
     CALL sync
 
@@ -185,7 +200,8 @@ CONTAINS
 
     ! Shelf
     IF     (C%choice_BMB_shelf_model == 'uniform' .OR. &
-            C%choice_BMB_shelf_model == 'idealised') THEN
+            C%choice_BMB_shelf_model == 'idealised' .OR. &
+            C%choice_BMB_shelf_model == 'melt_inv') THEN
       ! Nothing else needs to be done
     ELSEIF (C%choice_BMB_shelf_model == 'ANICE_legacy') THEN
       CALL initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
@@ -2202,6 +2218,55 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_PICOP
 
+! == Inversion of ice shelf basal melt rates
+! ==========================================
+
+  SUBROUTINE run_BMB_model_melt_inv( mesh, ice, ocean, BMB, refgeo)
+    ! Invert basal melt using the reference topography
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_PICOP'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: h_scale, h_delta
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    h_scale = 1.0_dp/500.0_dp
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+      IF ( (ice%mask_shelf_a( vi) == 1) .AND. &
+           ! (ABS(zb(j,i) - zl(j,i)) > 1.0_dp) .AND. &
+           (((h_delta > 0.0_dp) .AND. (ice%dHi_dt_a( vi) >= 0.0_dp)) .OR. &
+            ((h_delta < 0.0_dp) .AND. (ice%dHi_dt_a( vi) <= 0.0_dp)) &
+           ) &
+         ) THEN
+
+         BMB%BMB_shelf( vi) = BMB%BMB_shelf( vi) - 1.72476_dp * TAN(h_delta)
+
+      END IF ! else BMB%BMB_shelf does not change from previous time step
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_BMB_model_melt_inv
+
 ! == Some generally useful tools
 ! ==============================
 
@@ -2468,10 +2533,16 @@ CONTAINS
     int_dummy = mesh_new%nV
     int_dummy = map%int_dummy
 
-    ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
+    ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway.
     CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB,       BMB%wBMB      )
     CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
-    CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
+
+    ! Exception for iterative inversion of ice shelf basal melt rates, to avoid resetting it.
+    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+      CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%BMB_shelf, BMB%wBMB_shelf, 'cons_2nd_order')
+    ELSE
+      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
+    END IF
 
     ! Sheet
     ! =====
@@ -2479,8 +2550,7 @@ CONTAINS
     IF     (C%choice_BMB_sheet_model == 'uniform') THEN
       ! Nothing else needs to be done
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_sheet_model "', TRIM(C%choice_BMB_sheet_model), '" not implemented in remap_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_sheet_model "' // TRIM(C%choice_BMB_sheet_model) // '"!')
     END IF
 
     ! Shelf
@@ -2546,9 +2616,12 @@ CONTAINS
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_p,                 BMB%wPICO_p )
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_m,                 BMB%wPICO_m )
 
+    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+
+      ! Nothing else needs to be done for now
+
     ELSE
-      IF (par%master) WRITE(0,*) '  ERROR: choice_BMB_shelf_model "', TRIM(C%choice_BMB_shelf_model), '" not implemented in remap_BMB_model!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
 
     ! Finalise routine path

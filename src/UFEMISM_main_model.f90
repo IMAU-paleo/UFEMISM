@@ -166,7 +166,7 @@ CONTAINS
 
       ! Run the BMB model
       IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time)
+        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
       END IF
 
       t2 = MPI_WTIME()

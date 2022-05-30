@@ -2239,7 +2239,7 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_PICOP'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_melt_inv'
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_scale, h_delta
 
@@ -2252,7 +2252,6 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
       h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
-
 
       ! Invert only where the reference/model is shelf or ocean
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN

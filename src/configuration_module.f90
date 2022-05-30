@@ -535,7 +535,10 @@ MODULE configuration_module
   REAL(dp)            :: BMB_sheet_uniform_config                    = 0._dp                            ! Uniform sheet BMB, applied when choice_BMB_sheet_model = "uniform" [mie/yr]
   CHARACTER(LEN=256)  :: choice_BMB_subgrid_config                   = 'FCMP'                           ! Choice of sub-grid BMB scheme: "FCMP", "PMP", "NMP" (following Leguy et al., 2021)
   LOGICAL             :: do_asynchronous_BMB_config                  = .FALSE.                          ! Whether or not to run the BMB asynchronously from the ice dynamics (if so, run it at dt_BMB; if not, run it in every ice dynamics time step)
-  REAL(dp)            :: BMB_max_config                              = 50._dp                           ! Maximum amount of allowed basal melt [mie/yr]
+  REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
+  REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
+
+  REAL(dp)            :: BMB_inv_scale_config                        = 200._dp                          ! Scaling constant for inversion procedure [m]
 
   CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
@@ -1205,6 +1208,9 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_BMB_subgrid
     LOGICAL                             :: do_asynchronous_BMB
     REAL(dp)                            :: BMB_max
+    REAL(dp)                            :: BMB_min
+
+    REAL(dp)                            :: BMB_inv_scale
 
     CHARACTER(LEN=256)                  :: choice_basin_scheme_NAM
     CHARACTER(LEN=256)                  :: choice_basin_scheme_EAS
@@ -1987,6 +1993,8 @@ CONTAINS
                      choice_BMB_subgrid_config,                       &
                      do_asynchronous_BMB_config,                      &
                      BMB_max_config,                                  &
+                     BMB_min_config,                                  &
+                     BMB_inv_scale_config,                            &
                      choice_basin_scheme_NAM_config,                  &
                      choice_basin_scheme_EAS_config,                  &
                      choice_basin_scheme_GRL_config,                  &
@@ -2628,6 +2636,9 @@ CONTAINS
     C%choice_BMB_subgrid                       = choice_BMB_subgrid_config
     C%do_asynchronous_BMB                      = do_asynchronous_BMB_config
     C%BMB_max                                  = BMB_max_config
+    C%BMB_min                                  = BMB_min_config
+
+    C%BMB_inv_scale                            = BMB_inv_scale_config
 
     C%choice_basin_scheme_NAM                  = choice_basin_scheme_NAM_config
     C%choice_basin_scheme_EAS                  = choice_basin_scheme_EAS_config

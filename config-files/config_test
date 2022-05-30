@@ -175,7 +175,10 @@
   BMB_sheet_uniform_config                    = 0.0                              ! Uniform sheet BMB, applied when choice_BMB_sheet_model = "uniform" [mie/yr]
   choice_BMB_subgrid_config                   = 'FCMP'                           ! Choice of sub-grid BMB scheme: "FCMP", "PMP", "NMP" (following Leguy et al., 2021)
   do_asynchronous_BMB_config                  = .FALSE.                          ! Whether or not to run the BMB asynchronously from the ice dynamics (if so, run it at dt_BMB; if not, run it in every ice dynamics time step)
-  BMB_max_config                              = 200.0                            ! Maximum amount of allowed basal melt [mie/yr]
+  BMB_max_config                              = 20.0                             ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
+  BMB_min_config                              = -200.0                           ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
+
+  BMB_inv_scale_config                        = 200.0                            ! Scaling constant for inversion procedure [m]
 
   choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   choice_basin_scheme_EAS_config              = 'none'

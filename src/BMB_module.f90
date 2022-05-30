@@ -165,8 +165,8 @@ CONTAINS
 
     ! Limit basal melt
     DO vi = mesh%vi1, mesh%vi2
-      BMB%BMB( vi) = MAX( BMB%BMB( vi), -C%BMB_max)
-      BMB%BMB( vi) = MIN( BMB%BMB( vi),  20.0_dp)
+      BMB%BMB( vi) = MAX( BMB%BMB( vi), C%BMB_min)
+      BMB%BMB( vi) = MIN( BMB%BMB( vi), C%BMB_max)
     END DO
     CALL sync
 
@@ -2246,7 +2246,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    h_scale = 1.0_dp/200.0_dp
+    h_scale = 1.0_dp/C%BMB_inv_scale
 
     DO vi = mesh%vi1, mesh%vi2
 

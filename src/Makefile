@@ -72,6 +72,21 @@ UFEMISM_program_objects = \
         global_text_output_module.o \
         UFEMISM_program.o
 
+# Bring these back when not on Mac M1.
+# Put them after bedrock_ELRA_module.f90
+#
+#         SELEN_mapping_module.o \
+#         SELEN_harmonics_module.o \
+#         SELEN_fmvals_module.o \
+#         SELEN_fmzm90.o \
+#         SELEN_fm.o \
+#         SELEN_common_hp_module.o \
+#         SELEN_taboo_hp_module.o \
+#         SELEN_pmtf_routines.o \
+#         SELEN_spline_interpolation_module.o \
+#         SELEN_sealevel_equation_module.o \
+#         SELEN_main_module.o \
+
 # The executable (the target) depends on the object files:
 UFEMISM_program : $(UFEMISM_program_objects:%=$(OBJ_PATH)/%)
 

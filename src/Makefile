@@ -5,8 +5,8 @@
 
 # For compiling setting, Makefile will point to the uncommented file below:
 #include Makefile_include_local.txt
-# include Makefile_include_mac.txt
-include Makefile_include_snellius.txt
+include Makefile_include_mac.txt
+#include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
 OBJ_PATH = object-files
@@ -67,17 +67,6 @@ UFEMISM_program_objects = \
         ice_dynamics_module.o \
         isotopes_module.o \
         bedrock_ELRA_module.o \
-        SELEN_mapping_module.o \
-        SELEN_harmonics_module.o \
-        SELEN_fmvals_module.o \
-        SELEN_fmzm90.o \
-        SELEN_fm.o \
-        SELEN_common_hp_module.o \
-        SELEN_taboo_hp_module.o \
-        SELEN_pmtf_routines.o \
-        SELEN_spline_interpolation_module.o \
-        SELEN_sealevel_equation_module.o \
-        SELEN_main_module.o \
         tests_and_checks_module.o \
         UFEMISM_main_model.o \
         global_text_output_module.o \

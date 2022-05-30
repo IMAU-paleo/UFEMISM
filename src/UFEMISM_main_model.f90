@@ -44,7 +44,7 @@ MODULE UFEMISM_main_model
   USE BMB_module,                      ONLY: initialise_BMB_model,              remap_BMB_model,      run_BMB_model
   USE isotopes_module,                 ONLY: initialise_isotopes_model,         remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,             remap_ELRA_model,     run_ELRA_model
-  USE SELEN_main_module,               ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
+  ! USE SELEN_main_module,               ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
   USE tests_and_checks_module,         ONLY: run_all_matrix_tests
 
   IMPLICIT NONE
@@ -105,8 +105,8 @@ CONTAINS
         ! Nothing to be done
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
-      ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-        CALL apply_SELEN_bed_geoid_deformation_rates( region)
+      ! ELSEIF (C%choice_GIA_model == 'SELEN') THEN
+      !   CALL apply_SELEN_bed_geoid_deformation_rates( region)
       ELSE
         CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
@@ -316,7 +316,7 @@ CONTAINS
 
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'SELEN') THEN
-      CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
+      ! CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL remap_ELRA_model(   region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
     ELSEIF (C%choice_GIA_model == 'none') THEN

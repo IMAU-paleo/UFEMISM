@@ -45,7 +45,7 @@ PROGRAM UFEMISM_program
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
 
-  USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
+  ! USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
 
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
@@ -160,18 +160,18 @@ PROGRAM UFEMISM_program
   ! ===== Initialise SELEN =====
   ! ============================
 
-  IF (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN') THEN
-    CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
-  END IF
+  ! IF (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN') THEN
+  !   CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
+  ! END IF
 
-  ! Timers and run-at-start switch
-  IF (C%SELEN_run_at_t_start) THEN
-    SELEN%t0_SLE = C%start_time_of_run - C%dt_SELEN
-    SELEN%t1_SLE = C%start_time_of_run
-  ELSE
-    SELEN%t0_SLE = C%start_time_of_run
-    SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
-  END IF
+  ! ! Timers and run-at-start switch
+  ! IF (C%SELEN_run_at_t_start) THEN
+  !   SELEN%t0_SLE = C%start_time_of_run - C%dt_SELEN
+  !   SELEN%t1_SLE = C%start_time_of_run
+  ! ELSE
+  !   SELEN%t0_SLE = C%start_time_of_run
+  !   SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
+  ! END IF
 
   ! ===== Initial global output =====
   ! =================================
@@ -220,12 +220,12 @@ PROGRAM UFEMISM_program
     ! == SELEN
     ! ========
 
-    ! Solve the SLE
-    IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
-      CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
-      SELEN%t0_SLE = t_coupling
-      SELEN%t1_SLE = t_coupling + C%dt_SELEN
-    END IF
+    ! ! Solve the SLE
+    ! IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
+    !   CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
+    !   SELEN%t0_SLE = t_coupling
+    !   SELEN%t1_SLE = t_coupling + C%dt_SELEN
+    ! END IF
 
     ! == Regional sea level update
     ! ============================

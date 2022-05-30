@@ -90,54 +90,54 @@
 \contentsline {subsubsection}{\numberline {6.3.3}Thermal conductivity}{31}
 \contentsline {subsubsection}{\numberline {6.3.4}Pressure melting point}{32}
 \contentsline {section}{\numberline {7}Climate}{33}
-\contentsline {subsection}{\numberline {7.1}Matrix method}{33}
-\contentsline {subsubsection}{\numberline {7.1.1}Temperature}{33}
-\contentsline {subsubsection}{\numberline {7.1.2}Precipitation}{33}
-\contentsline {subsection}{\numberline {7.2}Idealised options}{33}
-\contentsline {section}{\numberline {8}Ocean}{34}
-\contentsline {subsection}{\numberline {8.1}Matrix method}{34}
-\contentsline {subsection}{\numberline {8.2}Shelf cavity extrapolation}{34}
-\contentsline {subsection}{\numberline {8.3}Idealised options}{34}
-\contentsline {section}{\numberline {9}Surface mass balance}{35}
-\contentsline {subsection}{\numberline {9.1}IMAU-ITM}{35}
-\contentsline {subsection}{\numberline {9.2}Idealised options}{35}
-\contentsline {section}{\numberline {10}Basal mass balance}{36}
-\contentsline {subsection}{\numberline {10.1}Local parameterisations}{36}
-\contentsline {subsection}{\numberline {10.2}PICO}{36}
-\contentsline {subsection}{\numberline {10.3}Plume model}{36}
-\contentsline {subsection}{\numberline {10.4}PICOP}{36}
-\contentsline {subsection}{\numberline {10.5}Idealised options}{36}
-\contentsline {section}{\numberline {11}GIA}{37}
-\contentsline {subsection}{\numberline {11.1}ELRA}{37}
-\contentsline {subsection}{\numberline {11.2}SELEN}{37}
-\contentsline {section}{\numberline {12}Isotopes}{38}
-\contentsline {section}{\numberline {13}Forcing}{39}
-\contentsline {subsection}{\numberline {13.1}Direct CO2}{39}
-\contentsline {subsection}{\numberline {13.2}Inverse method}{39}
-\contentsline {subsubsection}{\numberline {13.2.1}Global temperature offset}{39}
-\contentsline {subsubsection}{\numberline {13.2.2}Atmospheric CO2}{39}
-\contentsline {part}{III\hspace {1em}Discretisation}{40}
-\contentsline {section}{\numberline {14}IMAU-ICE}{40}
-\contentsline {subsection}{\numberline {14.1}Arakawa grids}{40}
-\contentsline {subsection}{\numberline {14.2}Discretising the DIVA}{40}
-\contentsline {section}{\numberline {15}UFEMISM}{42}
-\contentsline {subsection}{\numberline {15.1}Mesh}{42}
-\contentsline {subsubsection}{\numberline {15.1.1}Nomenclature}{42}
-\contentsline {subsubsection}{\numberline {15.1.2}Voronoi cells and Delaunay triangulation}{42}
-\contentsline {subsubsection}{\numberline {15.1.3}Data structure}{43}
-\contentsline {subsubsection}{\numberline {15.1.4}Arakawa C-mesh}{45}
-\contentsline {subsection}{\numberline {15.2}Discretisation}{48}
-\contentsline {subsubsection}{\numberline {15.2.1}First-order, regular grid}{48}
-\contentsline {subsubsection}{\numberline {15.2.2}First-order, staggered grid}{49}
-\contentsline {subsubsection}{\numberline {15.2.3}Second-order, regular grid}{50}
-\contentsline {subsubsection}{\numberline {15.2.4}Discretising the DIVA}{51}
-\contentsline {subsection}{\numberline {15.3}Mesh refinement}{52}
-\contentsline {subsection}{\numberline {15.4}Parallelised mesh generation}{55}
-\contentsline {subsection}{\numberline {15.5}Remapping}{57}
-\contentsline {subsubsection}{\numberline {15.5.1}Theory}{57}
-\contentsline {subsubsection}{\numberline {15.5.2}Implementation}{58}
-\contentsline {part}{IV\hspace {1em}References}{60}
-\contentsline {section}{\numberline {16}Publications using IMAU-ICE}{60}
-\contentsline {section}{\numberline {17}Publications using UFEMISM}{60}
-\contentsline {section}{\numberline {18}Publications using earlier versions (ANICE)}{60}
-\contentsline {section}{\numberline {19}Other}{61}
+\contentsline {subsection}{\numberline {7.1}Temperature}{33}
+\contentsline {subsection}{\numberline {7.2}Precipitation}{34}
+\contentsline {subsection}{\numberline {7.3}Data structure}{36}
+\contentsline {section}{\numberline {8}Ocean}{38}
+\contentsline {subsection}{\numberline {8.1}Matrix method}{38}
+\contentsline {subsection}{\numberline {8.2}Shelf cavity extrapolation}{38}
+\contentsline {subsection}{\numberline {8.3}Idealised options}{38}
+\contentsline {section}{\numberline {9}Surface mass balance}{39}
+\contentsline {subsection}{\numberline {9.1}IMAU-ITM}{39}
+\contentsline {subsection}{\numberline {9.2}Direct SMB forcing}{39}
+\contentsline {subsection}{\numberline {9.3}Idealised options}{39}
+\contentsline {section}{\numberline {10}Basal mass balance}{40}
+\contentsline {subsection}{\numberline {10.1}Local parameterisations}{40}
+\contentsline {subsection}{\numberline {10.2}PICO}{40}
+\contentsline {subsection}{\numberline {10.3}Plume model}{40}
+\contentsline {subsection}{\numberline {10.4}PICOP}{40}
+\contentsline {subsection}{\numberline {10.5}Idealised options}{40}
+\contentsline {section}{\numberline {11}GIA}{41}
+\contentsline {subsection}{\numberline {11.1}ELRA}{41}
+\contentsline {subsection}{\numberline {11.2}SELEN}{41}
+\contentsline {section}{\numberline {12}Isotopes}{42}
+\contentsline {section}{\numberline {13}Forcing}{43}
+\contentsline {subsection}{\numberline {13.1}Direct CO2}{43}
+\contentsline {subsection}{\numberline {13.2}Inverse method}{43}
+\contentsline {subsubsection}{\numberline {13.2.1}Global temperature offset}{43}
+\contentsline {subsubsection}{\numberline {13.2.2}Atmospheric CO2}{43}
+\contentsline {part}{III\hspace {1em}Discretisation}{44}
+\contentsline {section}{\numberline {14}IMAU-ICE}{44}
+\contentsline {subsection}{\numberline {14.1}Arakawa grids}{44}
+\contentsline {subsection}{\numberline {14.2}Discretising the DIVA}{44}
+\contentsline {section}{\numberline {15}UFEMISM}{46}
+\contentsline {subsection}{\numberline {15.1}Mesh}{46}
+\contentsline {subsubsection}{\numberline {15.1.1}Nomenclature}{46}
+\contentsline {subsubsection}{\numberline {15.1.2}Voronoi cells and Delaunay triangulation}{46}
+\contentsline {subsubsection}{\numberline {15.1.3}Data structure}{47}
+\contentsline {subsubsection}{\numberline {15.1.4}Arakawa C-mesh}{49}
+\contentsline {subsection}{\numberline {15.2}Discretisation}{52}
+\contentsline {subsubsection}{\numberline {15.2.1}First-order, regular grid}{52}
+\contentsline {subsubsection}{\numberline {15.2.2}First-order, staggered grid}{53}
+\contentsline {subsubsection}{\numberline {15.2.3}Second-order, regular grid}{54}
+\contentsline {subsubsection}{\numberline {15.2.4}Discretising the DIVA}{55}
+\contentsline {subsection}{\numberline {15.3}Mesh refinement}{56}
+\contentsline {subsection}{\numberline {15.4}Parallelised mesh generation}{59}
+\contentsline {subsection}{\numberline {15.5}Remapping}{61}
+\contentsline {subsubsection}{\numberline {15.5.1}Theory}{61}
+\contentsline {subsubsection}{\numberline {15.5.2}Implementation}{62}
+\contentsline {part}{IV\hspace {1em}References}{64}
+\contentsline {section}{\numberline {16}Publications using IMAU-ICE}{64}
+\contentsline {section}{\numberline {17}Publications using UFEMISM}{64}
+\contentsline {section}{\numberline {18}Publications using earlier versions (ANICE)}{64}
+\contentsline {section}{\numberline {19}Other}{65}

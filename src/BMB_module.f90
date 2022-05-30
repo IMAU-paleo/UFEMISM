@@ -21,7 +21,7 @@ MODULE BMB_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             interpolate_ocean_depth
+                                             interpolate_ocean_depth, is_floating
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
@@ -66,11 +66,11 @@ CONTAINS
 
     ! Initialise at zero only if not iteratively inverting
     IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (ice%mask_sheet_a( vi) == 1._dp) THEN
-           BMB%BMB_shelf = 0._dp
-        END IF
-      END DO
+      ! DO vi = mesh%vi1, mesh%vi2
+      !   IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
+      !      BMB%BMB_shelf = 0._dp
+      !   END IF
+      ! END DO
     ELSE
       BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
     END IF
@@ -142,17 +142,22 @@ CONTAINS
 
       ! No sub-grid scaling for sub-sheet melt yet
       BMB%BMB( vi) = 0._dp
-      IF (ice%mask_sheet_a( vi) == 1._dp) BMB%BMB( vi) = BMB%BMB_sheet( vi)
+      IF (ice%mask_sheet_a( vi) == 1) BMB%BMB( vi) = BMB%BMB_sheet( vi)
 
-      ! Different sub-grid schemes for sub-shelf melt
-      IF     (C%choice_BMB_subgrid == 'FCMP') THEN
-        IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
-      ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
-        BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grnd_a( vi)) * BMB%BMB_shelf( vi)
-      ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
-        IF (ice%f_grnd_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
+      ! For the inversion of melt rates, add inverted rates everywhere (i.e. shelf and ocean)
+      IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+        BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
-        CALL crash('unknown choice_BMB_subgrid "' // TRIM(C%choice_BMB_subgrid) // '"!')
+        ! Different sub-grid schemes for sub-shelf melt
+        IF     (C%choice_BMB_subgrid == 'FCMP') THEN
+          IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
+        ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
+          BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grnd_a( vi)) * BMB%BMB_shelf( vi)
+        ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
+          IF (ice%f_grnd_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
+        ELSE
+          CALL crash('unknown choice_BMB_subgrid "' // TRIM(C%choice_BMB_subgrid) // '"!')
+        END IF
       END IF
 
     END DO
@@ -2241,23 +2246,26 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    h_scale = 1.0_dp/500.0_dp
+    h_scale = 1.0_dp/200.0_dp
 
     DO vi = mesh%vi1, mesh%vi2
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
       h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
-      IF ( (ice%mask_shelf_a( vi) == 1) .AND. &
-           ! (ABS(zb(j,i) - zl(j,i)) > 1.0_dp) .AND. &
-           (((h_delta > 0.0_dp) .AND. (ice%dHi_dt_a( vi) >= 0.0_dp)) .OR. &
-            ((h_delta < 0.0_dp) .AND. (ice%dHi_dt_a( vi) <= 0.0_dp)) &
-           ) &
-         ) THEN
 
-         BMB%BMB_shelf( vi) = BMB%BMB_shelf( vi) - 1.72476_dp * TAN(h_delta)
+      ! Invert only where the reference/model is shelf or ocean
+      IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN
 
-      END IF ! else BMB%BMB_shelf does not change from previous time step
+        ! Further adjust only where the previous value is not improving the result
+        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+
+          BMB%BMB_shelf( vi) = BMB%BMB_shelf( vi) - 1.72476_dp * TAN(h_delta)
+
+       END IF ! else BMB_shelf does not change from previous time step
+
+      END IF ! else the reference is grounded ice sheet, so leave it alone
 
     END DO
     CALL sync

@@ -596,7 +596,7 @@ CONTAINS
         CALL warning('model time before start of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( 1)
       ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
-        ! CALL warning('model time beyond end of CO2 record; using constant extrapolation!')
+        CALL warning('model time beyond end of CO2 record; using constant extrapolation!')
         forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
       ELSE
         iu = 1
@@ -692,10 +692,10 @@ CONTAINS
     IF (par%master) THEN
 
       IF     (time < MINVAL( forcing%d18O_time)) THEN ! times 1000 because forcing%d18O_time is in kyr
-        IF (par%master) WRITE(0,*) '  WARNING: model time before start of d18O record, using constant extrapolation!'
+        CALL warning('model time before start of d18O record, using constant extrapolation!')
         forcing%d18O_obs = forcing%d18O_record( 1)
       ELSEIF (time > MAXVAL( forcing%d18O_time)) THEN
-        IF (par%master) WRITE(0,*) '  WARNING: model time beyond end of d18O record, using constant extrapolation!'
+        CALL warning('model time beyond end of d18O record, using constant extrapolation!')
         forcing%d18O_obs = forcing%d18O_record( C%d18O_record_length)
       ELSE
         iu = 1
@@ -958,7 +958,7 @@ CONTAINS
           forcing%ins_t0 = forcing%ins_time(ti0)
           forcing%ins_t1 = forcing%ins_time(ti1)
         ELSE
-          ! IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+          CALL warning('using constant PD insolation for future projections!')
           ti0 = forcing%ins_nyears
           ti1 = forcing%ins_nyears
 

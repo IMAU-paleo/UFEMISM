@@ -2631,7 +2631,7 @@ CONTAINS
 
     ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
 
-      ! Nothing else needs to be done for now
+      ! Nothing else needs to be done for now. Main stuff was done at the start of this routine.
 
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')

@@ -386,6 +386,7 @@ MODULE configuration_module
   
   ! Basal sliding inversion
   LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+  LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
   REAL(dp)            :: basal_sliding_inv_scale_config              = 5000._dp                         ! Scaling constant for inversion procedure [m]
   REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
 
@@ -1062,6 +1063,7 @@ MODULE configuration_module
 
     ! Basal roughness inversion
     LOGICAL                             :: do_basal_sliding_inversion
+    LOGICAL                             :: do_basal_sliding_smoothing
     REAL(dp)                            :: basal_sliding_inv_scale
     REAL(dp)                            :: basal_sliding_inv_rsmooth
     
@@ -1880,6 +1882,7 @@ CONTAINS
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
                      do_basal_sliding_inversion_config,               &
+                     do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_scale_config,                  &
                      basal_sliding_inv_rsmooth_config,                &
                      choice_calving_law_config,                       &
@@ -2502,6 +2505,7 @@ CONTAINS
 
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
+    C%do_basal_sliding_inversion               = do_basal_sliding_smoothing_config
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
     C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
   

@@ -1603,30 +1603,33 @@ CONTAINS
     ! Smooth the resulting field
     ! ==========================
 
-    ! TBD, need a time step for the inversion to do it less frequently
+    ! WIP, need a time step for the inversion to do it less frequently
 
-    IF (C%choice_sliding_law == 'Weertman' .OR. &
-        C%choice_sliding_law == 'Tsai2015' .OR. &
-        C%choice_sliding_law == 'Schoof2005') THEN
+    IF (C%do_basal_sliding_smoothing) THEN
 
-      CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
 
-    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-            C%choice_sliding_law == 'Zoet-Iverson') THEN
+        CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
 
-      CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-    ELSE
-      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+        CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
+
     END IF
-
     CALL sync
 
     ! Extrapolate the resulting field
     ! ===============================
 
-    ! TBD
+    ! WIP
     ! CALL sync
 
     ! Finalise routine path

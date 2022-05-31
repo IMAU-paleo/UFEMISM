@@ -97,7 +97,7 @@ CONTAINS
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      CALL run_BMB_model_melt_inv(              mesh, ice, ocean, BMB, refgeo)
+      CALL run_BMB_model_melt_inv(              mesh, ice, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -2226,7 +2226,7 @@ CONTAINS
 ! == Inversion of ice shelf basal melt rates
 ! ==========================================
 
-  SUBROUTINE run_BMB_model_melt_inv( mesh, ice, ocean, BMB, refgeo)
+  SUBROUTINE run_BMB_model_melt_inv( mesh, ice, BMB, refgeo)
     ! Invert basal melt using the reference topography
 
     IMPLICIT NONE
@@ -2234,7 +2234,6 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
@@ -2268,7 +2267,7 @@ CONTAINS
           BMB%BMB_shelf( vi) = BMB%BMB_shelf( vi) - 1.72476_dp * TAN(h_delta)
                                                   ! The hardcoded jorjonian constant yeah baby.
 
-       END IF ! else BMB_shelf does not change from previous time step
+        END IF ! else BMB_shelf does not change from previous time step
 
       END IF ! else the reference is grounded ice sheet, so leave it alone
 

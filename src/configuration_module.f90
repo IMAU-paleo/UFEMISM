@@ -538,7 +538,8 @@ MODULE configuration_module
   REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
   REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
-  REAL(dp)            :: BMB_inv_scale_config                        = 200._dp                          ! Scaling constant for inversion procedure [m]
+  REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
+  REAL(dp)            :: BMB_inv_scale_ocean_config                  = 100._dp                          ! Scaling constant for inversion procedure over open ocean [m]
 
   CHARACTER(LEN=256)  :: choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   CHARACTER(LEN=256)  :: choice_basin_scheme_EAS_config              = 'none'
@@ -1210,7 +1211,8 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
 
-    REAL(dp)                            :: BMB_inv_scale
+    REAL(dp)                            :: BMB_inv_scale_shelf
+    REAL(dp)                            :: BMB_inv_scale_ocean
 
     CHARACTER(LEN=256)                  :: choice_basin_scheme_NAM
     CHARACTER(LEN=256)                  :: choice_basin_scheme_EAS
@@ -1994,7 +1996,8 @@ CONTAINS
                      do_asynchronous_BMB_config,                      &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
-                     BMB_inv_scale_config,                            &
+                     BMB_inv_scale_shelf_config,                      &
+                     BMB_inv_scale_ocean_config,                      &
                      choice_basin_scheme_NAM_config,                  &
                      choice_basin_scheme_EAS_config,                  &
                      choice_basin_scheme_GRL_config,                  &
@@ -2638,7 +2641,8 @@ CONTAINS
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
 
-    C%BMB_inv_scale                            = BMB_inv_scale_config
+    C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config
+    C%BMB_inv_scale_ocean                      = BMB_inv_scale_ocean_config
 
     C%choice_basin_scheme_NAM                  = choice_basin_scheme_NAM_config
     C%choice_basin_scheme_EAS                  = choice_basin_scheme_EAS_config

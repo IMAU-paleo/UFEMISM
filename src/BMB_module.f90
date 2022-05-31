@@ -2241,26 +2241,32 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_melt_inv'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_scale, h_delta
+    REAL(dp)                                           :: h_delta, h_scale
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    h_scale = 1.0_dp/C%BMB_inv_scale
-
     DO vi = mesh%vi1, mesh%vi2
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-      h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
       ! Invert only where the reference/model is shelf or ocean
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN
+
+        IF (refgeo%Hi( vi) > 0._dp) THEN
+          h_scale = 1.0_dp/C%BMB_inv_scale_shelf
+        ELSE
+          h_scale = 1.0_dp/C%BMB_inv_scale_ocean
+        END IF
+
+        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
         ! Further adjust only where the previous value is not improving the result
         IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
              (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
           BMB%BMB_shelf( vi) = BMB%BMB_shelf( vi) - 1.72476_dp * TAN(h_delta)
+                                                  ! The hardcoded jorjonian constant yeah baby.
 
        END IF ! else BMB_shelf does not change from previous time step
 

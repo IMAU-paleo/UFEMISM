@@ -22,8 +22,8 @@
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_GRL_config                               = .FALSE.                          ! Greenland
+  do_ANT_config                               = .TRUE.                          ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
@@ -178,7 +178,8 @@
   BMB_max_config                              = 20.0                             ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
   BMB_min_config                              = -200.0                           ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
-  BMB_inv_scale_config                        = 200.0                            ! Scaling constant for inversion procedure [m]
+  BMB_inv_scale_shelf_config                  = 200.0                            ! Scaling constant for inversion procedure over shelves [m]
+  BMB_inv_scale_ocean_config                  = 100.0                            ! Scaling constant for inversion procedure over open ocean [m]
 
   choice_basin_scheme_NAM_config              = 'none'                           ! Choice of basin ID scheme; can be 'none' or 'file'
   choice_basin_scheme_EAS_config              = 'none'

@@ -327,6 +327,7 @@ CONTAINS
       IF (par%master) WRITE(0,*) 'initialise_bed_roughness - ERROR: unknown choice_sliding_law "', TRIM(C%choice_sliding_law), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+    CALL sync
 
     ! Initialise values
     IF (C%choice_basal_roughness == 'uniform') THEN
@@ -367,6 +368,7 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
     END IF
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -1560,6 +1562,8 @@ CONTAINS
           IF (C%choice_sliding_law == 'Weertman') THEN
 
             ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
+            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
 
           ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
                   C%choice_sliding_law == 'Coulomb_regularised') THEN
@@ -1571,10 +1575,14 @@ CONTAINS
           ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
 
             ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
+            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
 
           ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
 
             ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
+            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
 
           ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
             ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
@@ -1597,7 +1605,22 @@ CONTAINS
 
     ! TBD, need a time step for the inversion to do it less frequently
 
-    CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+    IF (C%choice_sliding_law == 'Weertman' .OR. &
+        C%choice_sliding_law == 'Tsai2015' .OR. &
+        C%choice_sliding_law == 'Schoof2005') THEN
+
+      CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
+
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+            C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+      CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+
+    ELSE
+      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+    END IF
+
     CALL sync
 
     ! Extrapolate the resulting field

@@ -22,8 +22,8 @@
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_GRL_config                               = .FALSE.                          ! Greenland
+  do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
@@ -57,7 +57,7 @@
 
   dx_grid_output_config                       = 40000.0                          ! Resolution of the square grid used for writing output                       [m]
   dx_grid_GIA_config                          = 100000.0                         ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
-  dx_grid_smooth_config                       = 50000.0                          ! Resolution of the square grid used for data smoothing in the climate matrix [m]
+  dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing in the climate matrix [m]
 
   ! Reference geometries (initial, present-day, and GIA equilibrium)
   ! ================================================================
@@ -118,7 +118,7 @@
   Martin2011_hydro_Hb_max_config              = 1000.0                           ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
 
   ! Basal roughness / friction
-  choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
+  choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed"
   slid_Weertman_beta_sq_uniform_config        = 1.0E4                            ! Uniform value for beta_sq  in Weertman sliding law
   slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
@@ -132,6 +132,11 @@
   Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
   Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
   basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+
+  ! Basal sliding inversion
+  do_basal_sliding_inversion_config           = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+  basal_sliding_inv_scale_config              = 5000.0                           ! Scaling constant for inversion procedure [m]
+  basal_sliding_inv_rsmooth_config            = 500.0                            ! Smoothing radius for inversion procedure [m]
 
   ! Climate
   ! =======

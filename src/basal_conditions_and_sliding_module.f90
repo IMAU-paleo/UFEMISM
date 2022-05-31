@@ -24,8 +24,10 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, type_reference_geometry
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
+                                             type_reference_geometry, type_grid
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D
 
   IMPLICIT NONE
 
@@ -243,34 +245,13 @@ CONTAINS
 
     ! In case of no sliding or "idealised" sliding (e.g. ISMIP-HOM experiments), no bed roughness is required
     IF (C%choice_sliding_law == 'no_sliding' .OR. &
-        C%choice_sliding_law == 'idealised') RETURN
+        C%choice_sliding_law == 'idealised') THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     IF (C%choice_basal_roughness == 'uniform') THEN
-      ! Apply a uniform bed roughness
-
-      IF     (C%choice_sliding_law == 'Weertman') THEN
-        ! Weertman sliding law; bed roughness is described by beta_sq
-        ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
-      ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
-        ! Coulomb sliding law; bed roughness is described by phi_fric
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
-      ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
-        ! Regularised Coulomb sliding law; bed roughness is described by phi_fric
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
-      ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
-        ! Tsai2015 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
-        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
-        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Tsai2015_beta_sq_uniform
-      ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
-        ! Schoof2005 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
-        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
-        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Schoof2005_beta_sq_uniform
-      ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
-        ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
-      ELSE
-        CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
-      END IF
+      ! Basal roughness values are constant and were already initialised; no need to do anything
 
     ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
       ! Apply the chosen parameterisation of bed roughness
@@ -292,9 +273,6 @@ CONTAINS
 
     ELSEIF (C%choice_basal_roughness == 'prescribed') THEN
       ! Basal roughness has been initialised from an external file; no need to do anything
-
-    ELSEIF (C%choice_basal_roughness == 'inversion') THEN
-      ! Basal roughness is updated by the inversion routines; no need to do anything
 
     ELSE
       CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
@@ -350,9 +328,44 @@ CONTAINS
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
-    ! If bed roughness is prescribed, read it from the provided NetCDF file
-    IF (C%choice_basal_roughness == 'prescribed') THEN
+    ! Initialise values
+    IF (C%choice_basal_roughness == 'uniform') THEN
+      ! Apply a uniform bed roughness
+
+      IF     (C%choice_sliding_law == 'Weertman') THEN
+        ! Weertman sliding law; bed roughness is described by beta_sq
+        ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
+        ! Coulomb sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+      ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
+        ! Regularised Coulomb sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+      ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+        ! Tsai2015 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
+        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
+        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Tsai2015_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+        ! Schoof2005 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
+        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
+        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Schoof2005_beta_sq_uniform
+      ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+        ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
+      ELSE
+        CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+      END IF
+
+    ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
+      ! Apply the chosen parameterisation of bed roughness
+      CALL calc_bed_roughness( mesh, ice)
+
+    ELSEIF (C%choice_basal_roughness == 'prescribed') THEN
+      ! If bed roughness is prescribed, read it from the provided NetCDF file
       CALL initialise_bed_roughness_from_file( mesh, ice)
+
+    ELSE
+      CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
     END IF
 
     ! Finalise routine path
@@ -1448,30 +1461,55 @@ CONTAINS
       ! Sliding laws for some idealised experiments
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      END IF
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      END IF
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      END IF
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+      END IF
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
+        CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
+      END IF
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
 
-    ! If bed roughness is prescribed, read it from the provided NetCDF file
-    IF (C%choice_basal_roughness == 'prescribed') THEN
+    ! If bed roughness is prescribed (and we are not doing
+    ! an inversion), read it from the provided NetCDF file
+    IF (C%choice_basal_roughness == 'prescribed' .AND. (.NOT. C%do_basal_sliding_inversion)) THEN
       CALL initialise_bed_roughness_from_file( mesh_new, ice)
     END IF
 
@@ -1483,13 +1521,14 @@ CONTAINS
 ! == Inversion
 ! ============
 
-  SUBROUTINE basal_sliding_inversion( mesh, ice, refgeo)
+  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
@@ -1501,9 +1540,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    h_scale = 1.0_dp/5000._dp
-    vhb_max =        3000._dp
-    vhb_min =         0.01_dp
+    h_scale = 1.0_dp/C%basal_sliding_inv_scale
+    vhb_max = 3000._dp
+    vhb_min =  0.01_dp
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -1518,17 +1557,54 @@ CONTAINS
         IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
              (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
-          ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
+          IF (C%choice_sliding_law == 'Weertman') THEN
+
+            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+
+          ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+                  C%choice_sliding_law == 'Coulomb_regularised') THEN
+
+            ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
+            ice%phi_fric_a( vi) = MAX(ice%phi_fric_a( vi), 0.01_dp)
+            ice%phi_fric_a( vi) = MIN(ice%phi_fric_a( vi),  45._dp)
+
+          ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+
+            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+
+          ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+
+            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
+
+          ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+            ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
+            ice%phi_fric_a( vi) = MAX(ice%phi_fric_a( vi), 0.01_dp)
+            ice%phi_fric_a( vi) = MIN(ice%phi_fric_a( vi),  45._dp)
+
+          ELSE
+            CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+          END IF
 
         END IF ! else phi_fric_a does not change from previous time step
 
       END IF ! else the reference is not grounded ice sheet, so leave it alone
 
-      ice%phi_fric_a( vi) = MAX(ice%phi_fric_a( vi), 0.01_dp)
-      ice%phi_fric_a( vi) = MIN(ice%phi_fric_a( vi),  70._dp)
-
     END DO
     CALL sync
+
+    ! Smooth the resulting field
+    ! ==========================
+
+    ! TBD, need a time step for the inversion to do it less frequently
+
+    CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+    CALL sync
+
+    ! Extrapolate the resulting field
+    ! ===============================
+
+    ! TBD
+    ! CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

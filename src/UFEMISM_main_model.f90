@@ -189,7 +189,9 @@ CONTAINS
     ! Basal sliding inversion
     ! =======================
 
-      CALL basal_sliding_inversion( region%mesh, region%ice, region%refgeo_init)
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_init)
+      END IF
 
     ! Time step and output
     ! ====================

@@ -384,6 +384,11 @@ MODULE configuration_module
   REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
   CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
   
+  ! Basal sliding inversion
+  LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+  REAL(dp)            :: basal_sliding_inv_scale_config              = 5000._dp                         ! Scaling constant for inversion procedure [m]
+  REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
+
   ! Ice dynamics - calving
   ! ======================
   
@@ -1054,6 +1059,11 @@ MODULE configuration_module
     REAL(dp)                            :: Martin2011till_phi_min
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
+
+    ! Basal roughness inversion
+    LOGICAL                             :: do_basal_sliding_inversion
+    REAL(dp)                            :: basal_sliding_inv_scale
+    REAL(dp)                            :: basal_sliding_inv_rsmooth
     
     ! Ice dynamics - calving
     ! ======================
@@ -1869,6 +1879,9 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
+                     do_basal_sliding_inversion_config,               &
+                     basal_sliding_inv_scale_config,                  &
+                     basal_sliding_inv_rsmooth_config,                &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
                      do_remove_shelves_config,                        &
@@ -2486,6 +2499,11 @@ CONTAINS
     C%Martin2011till_phi_min                   = Martin2011till_phi_min_config
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
+
+    ! Basal roughness inversion
+    C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
+    C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
+    C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
   
     ! Ice dynamics - calving
     ! ======================

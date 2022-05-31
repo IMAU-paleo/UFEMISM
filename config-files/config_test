@@ -4,7 +4,7 @@
   ! ====================
 
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
+  end_time_of_run_config                      = 10000.0                          ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
   dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
@@ -22,8 +22,8 @@
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .FALSE.                          ! Greenland
-  do_ANT_config                               = .TRUE.                          ! Antarctica
+  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_ANT_config                               = .FALSE.                          ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
@@ -98,6 +98,40 @@
   ! =======================
 
   choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+
+  ! Ice dynamics - basal conditions and sliding
+  ! ===========================================
+
+  ! Sliding laws
+  choice_sliding_law_config                   = 'Coulomb_regularised'            ! Choice of sliding law: "no_sliding", "idealised", "Coulomb", "Coulomb_regularised", "Weertman", "Tsai2015", "Schoof2005", "Zoet-Iverson"
+  choice_idealised_sliding_law_config         = ''                               ! "ISMIP_HOM_C", "ISMIP_HOM_D", "ISMIP_HOM_E", "ISMIP_HOM_F"
+  slid_delta_v_config                         = 1.0E-3                           ! Normalisation parameter to prevent errors when velocity is zero
+  slid_Weertman_m_config                      = 3.0                              ! Exponent in Weertman sliding law
+  slid_Coulomb_reg_q_plastic_config           = 0.3                              ! Scaling exponent   in regularised Coulomb sliding law
+  slid_Coulomb_reg_u_threshold_config         = 100.0                            ! Threshold velocity in regularised Coulomb sliding law
+  slid_ZI_ut_config                           = 200.0                            ! (uniform) transition velocity used in the Zoet-Iverson sliding law [m/yr]
+  slid_ZI_p_config                            = 5.0                              ! Velocity exponent             used in the Zoet-Iverson sliding law
+
+  ! Basal hydrology
+  choice_basal_hydrology_config               = 'Martin2011'                     ! Choice of basal conditions: "saturated", "Martin2011"
+  Martin2011_hydro_Hb_min_config              = 0.0                              ! Martin et al. (2011) basal hydrology model: low-end  Hb  value of bedrock-dependent pore-water pressure
+  Martin2011_hydro_Hb_max_config              = 1000.0                           ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
+
+  ! Basal roughness / friction
+  choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
+  slid_Weertman_beta_sq_uniform_config        = 1.0E4                            ! Uniform value for beta_sq  in Weertman sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
+  slid_Tsai2015_beta_sq_uniform_config        = 1.0E4                            ! Uniform value for beta_sq  in the Tsai2015 sliding law
+  slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
+  slid_Schoof2005_beta_sq_uniform_config      = 1.0E4                            ! Uniform value for beta_sq  in the Schoof2005 sliding law
+  slid_ZI_phi_fric_uniform_config             = 15.0                             ! Uniform value for phi_fric in the Zoet-Iverson sliding law
+  choice_param_basal_roughness_config         = 'Martin2011'                     ! "Martin2011", "SSA_icestream", "MISMIP+", "BIVMIP_A", "BIVMIP_B", "BIVMIP_C"
+  Martin2011till_phi_Hb_min_config            = -1000.0                          ! Martin et al. (2011) bed roughness model: low-end  Hb  value of bedrock-dependent till friction angle
+  Martin2011till_phi_Hb_max_config            = 0.0                              ! Martin et al. (2011) bed roughness model: high-end Hb  value of bedrock-dependent till friction angle
+  Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
+  Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
+  basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
 
   ! Climate
   ! =======
@@ -243,6 +277,7 @@
   !help_field_17_config                        = 'dHb_dt'
   !help_field_18_config                        = 'SL'
   !help_field_19_config                        = 'dSL_dt'
-  help_field_20_config                        = 'none'
+  help_field_20_config                        = 'phi_fric'
+  help_field_21_config                        = 'none'
 
 /

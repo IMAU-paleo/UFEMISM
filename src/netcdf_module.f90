@@ -573,11 +573,11 @@ CONTAINS
     ELSEIF (field_name == 'mask_cf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf_a, start=(/1, netcdf%ti /) ))
       
-!    ! Basal conditions
-!    ELSEIF (field_name == 'phi_fric') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%phi_fric_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
-!    ELSEIF (field_name == 'tau_yield') THEN
-!      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tau_c_AaAc(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
+    ! Basal conditions
+    ELSEIF (field_name == 'phi_fric') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%phi_fric_a(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'tau_yield') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tauc_a(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -1152,11 +1152,11 @@ CONTAINS
     ELSEIF (field_name == 'mask_cf') THEN
       CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='calving-front mask')
       
-!    ! Basal conditions
-!    ELSEIF (field_name == 'phi_fric') THEN
-!      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
-!    ELSEIF (field_name == 'tau_yield') THEN
-!      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
+    ! Basal conditions
+    ELSEIF (field_name == 'phi_fric') THEN
+      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
+    ELSEIF (field_name == 'tau_yield') THEN
+      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
@@ -1542,13 +1542,13 @@ CONTAINS
     ELSEIF (field_name == 'mask_gl') THEN
     ELSEIF (field_name == 'mask_cf') THEN
       
-!    ! Basal conditions
-!    ELSEIF (field_name == 'phi_fric') THEN
-!      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_AaAc( region%mesh%vi1:region%mesh%vi2)
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-!    ELSEIF (field_name == 'tau_yield') THEN
-!      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%tau_c_AaAc( region%mesh%vi1:region%mesh%vi2)
-!      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
+    ! Basal conditions
+    ELSEIF (field_name == 'phi_fric') THEN
+      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_a( region%mesh%vi1:region%mesh%vi2)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'tau_yield') THEN
+      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%tauc_a( region%mesh%vi1:region%mesh%vi2)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
       
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN

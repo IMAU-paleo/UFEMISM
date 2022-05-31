@@ -5,47 +5,48 @@ MODULE UFEMISM_main_model
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE configuration_module,                ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE petsc_module,                        ONLY: perr
+  USE parallel_module,                     ONLY: par, sync, ierr, cerr, partition_list, &
+                                                 allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                                 allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                                 allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                                 allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                                 allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                                 reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                                 reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                                 reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                                 reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                                 deallocate_shared
+  USE netcdf_module,                       ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
-                                             type_climate_matrix_global, type_ocean_matrix_global
-  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
-  USE mesh_memory_module,              ONLY: deallocate_mesh_all
-  USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
-  USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
-  USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                             calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
-                                             calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
-  USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
-  USE netcdf_module,                   ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
-                                             associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
-  USE general_ice_model_data_module,   ONLY: initialise_mask_noice, initialise_basins
+  USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
+                                                 type_climate_matrix_global, type_ocean_matrix_global
+  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
+  USE mesh_memory_module,                  ONLY: deallocate_mesh_all
+  USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
+  USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
+  USE mesh_mapping_module,                 ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+                                                 calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                                 calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
+  USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
+  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files, initialise_debug_fields, &
+                                                 associate_debug_fields, reallocate_debug_fields, create_debug_file, write_PETSc_matrix_to_NetCDF
+  USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
 
-  USE ice_dynamics_module,             ONLY: initialise_ice_model,              remap_ice_model,      run_ice_model,      update_ice_thickness
-  USE thermodynamics_module,           ONLY: initialise_ice_temperature,                              run_thermo_model,   calc_ice_rheology
-  USE climate_module,                  ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
-  USE ocean_module,                    ONLY: initialise_ocean_model_regional,   remap_ocean_model,    run_ocean_model
-  USE SMB_module,                      ONLY: initialise_SMB_model,              remap_SMB_model,      run_SMB_model
-  USE BMB_module,                      ONLY: initialise_BMB_model,              remap_BMB_model,      run_BMB_model
-  USE isotopes_module,                 ONLY: initialise_isotopes_model,         remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
-  USE bedrock_ELRA_module,             ONLY: initialise_ELRA_model,             remap_ELRA_model,     run_ELRA_model
-  ! USE SELEN_main_module,               ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
-  USE tests_and_checks_module,         ONLY: run_all_matrix_tests
+  USE ice_dynamics_module,                 ONLY: initialise_ice_model,              remap_ice_model,      run_ice_model,      update_ice_thickness
+  USE thermodynamics_module,               ONLY: initialise_ice_temperature,                              run_thermo_model,   calc_ice_rheology
+  USE climate_module,                      ONLY: initialise_climate_model_regional, remap_climate_model,  run_climate_model
+  USE ocean_module,                        ONLY: initialise_ocean_model_regional,   remap_ocean_model,    run_ocean_model
+  USE SMB_module,                          ONLY: initialise_SMB_model,              remap_SMB_model,      run_SMB_model
+  USE BMB_module,                          ONLY: initialise_BMB_model,              remap_BMB_model,      run_BMB_model
+  USE isotopes_module,                     ONLY: initialise_isotopes_model,         remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
+  USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,             remap_ELRA_model,     run_ELRA_model
+  ! USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
+  USE tests_and_checks_module,             ONLY: run_all_matrix_tests
+  USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
 
   IMPLICIT NONE
 
@@ -72,7 +73,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), & 
+    IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
                                                           ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
@@ -166,7 +167,7 @@ CONTAINS
 
       ! Run the BMB model
       IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
+        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_init)
       END IF
 
       t2 = MPI_WTIME()
@@ -184,6 +185,11 @@ CONTAINS
     ! ========
 
       CALL run_isotopes_model( region)
+
+    ! Basal sliding inversion
+    ! =======================
+
+      CALL basal_sliding_inversion( region%mesh, region%ice, region%refgeo_init)
 
     ! Time step and output
     ! ====================

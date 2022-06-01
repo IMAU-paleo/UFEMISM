@@ -582,29 +582,29 @@ CONTAINS
   SUBROUTINE determine_timesteps_and_actions( region, t_end)
     ! Determine how long we can run just ice dynamics before another "action" (thermodynamics,
     ! GIA, output writing, inverse routine, etc.) has to be performed, and adjust the time step accordingly.
-    
+
     IMPLICIT NONE
 
     ! Input variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
     REAL(dp),                            INTENT(IN)    :: t_end
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_timesteps_and_actions'
     REAL(dp)                                           :: t_next
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (par%master) THEN
-      
+
       ! Determine when each model components should be updated
-      
+
       t_next = MIN(t_end, region%time + C%dt_max)
-      
+
       ! First the ice dynamics
       ! ======================
-      
+
       IF     (C%choice_ice_dynamics == 'none') THEN
         ! Just stick to the maximum time step
       ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
@@ -619,10 +619,10 @@ CONTAINS
       ELSE
         CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
       END IF ! IF (C%choice_ice_dynamics == 'SIA') THEN
-      
+
       ! Then the other model components
       ! ===============================
-      
+
       region%do_thermo  = .FALSE.
       IF (region%time == region%t_next_thermo) THEN
         region%do_thermo      = .TRUE.
@@ -630,7 +630,7 @@ CONTAINS
         region%t_next_thermo  = region%t_last_thermo + C%dt_thermo
       END IF
       t_next = MIN( t_next, region%t_next_thermo)
-      
+
       region%do_climate = .FALSE.
       IF (region%time == region%t_next_climate) THEN
         region%do_climate     = .TRUE.
@@ -638,7 +638,7 @@ CONTAINS
         region%t_next_climate = region%t_last_climate + C%dt_climate
       END IF
       t_next = MIN( t_next, region%t_next_climate)
-      
+
       region%do_ocean   = .FALSE.
       IF (region%time == region%t_next_ocean) THEN
         region%do_ocean       = .TRUE.
@@ -646,7 +646,7 @@ CONTAINS
         region%t_next_ocean   = region%t_last_ocean + C%dt_ocean
       END IF
       t_next = MIN( t_next, region%t_next_ocean)
-      
+
       region%do_SMB     = .FALSE.
       IF (region%time == region%t_next_SMB) THEN
         region%do_SMB         = .TRUE.
@@ -654,30 +654,33 @@ CONTAINS
         region%t_next_SMB     = region%t_last_SMB + C%dt_SMB
       END IF
       t_next = MIN( t_next, region%t_next_SMB)
-      
+
       region%do_BMB     = .FALSE.
-!      IF (C%do_asynchronous_BMB) THEN
-        IF (region%time == region%t_next_BMB) THEN
-          region%do_BMB         = .TRUE.
-          region%t_last_BMB     = region%time
-          region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
-        END IF
-        t_next = MIN( t_next, region%t_next_BMB)
-!      ELSE
-!        ! Don't use separate timestepping for the BMB; just run it in every ice dynamics time step
-!        region%do_BMB = .TRUE.
-!      END IF
-      
+      IF (region%time == region%t_next_BMB) THEN
+        region%do_BMB         = .TRUE.
+        region%t_last_BMB     = region%time
+        region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
+      END IF
+      t_next = MIN( t_next, region%t_next_BMB)
+
       region%do_ELRA    = .FALSE.
       IF (C%choice_GIA_model == 'ELRA') THEN
         IF (region%time == region%t_next_ELRA) THEN
-          region%do_ELRA        = .TRUE.
-          region%t_last_ELRA    = region%time
-          region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
+          region%do_ELRA      = .TRUE.
+          region%t_last_ELRA  = region%time
+          region%t_next_ELRA  = region%t_last_ELRA + C%dt_bedrock_ELRA
         END IF
         t_next = MIN( t_next, region%t_next_ELRA)
       END IF
-      
+
+      region%do_basal    = .FALSE.
+      IF (region%time == region%t_next_basal) THEN
+        region%do_basal       = .TRUE.
+        region%t_last_basal   = region%time
+        region%t_next_basal   = region%t_last_basal + C%dt_basal
+      END IF
+      t_next = MIN( t_next, region%t_next_ELRA)
+
       region%do_output  = .FALSE.
       IF (region%time == region%t_next_output) THEN
         region%do_output      = .TRUE.
@@ -685,16 +688,16 @@ CONTAINS
         region%t_next_output  = region%t_last_output + C%dt_output
       END IF
       t_next = MIN( t_next, region%t_next_output)
-      
+
       ! Set time step so that we move forward to the next action
       region%dt = t_next - region%time
-    
+
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE determine_timesteps_and_actions
   
 ! == Administration: allocation, initialisation, and remapping

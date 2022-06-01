@@ -60,6 +60,7 @@ MODULE configuration_module
   REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
   REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
+  REAL(dp)            :: dt_basal_config                             = 1._dp                            ! Time step (in years) for calling the iterative inversion of basal roughness
   
   ! Which ice sheets do we simulate?
   ! ================================
@@ -389,6 +390,7 @@ MODULE configuration_module
   LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
   REAL(dp)            :: basal_sliding_inv_scale_config              = 5000._dp                         ! Scaling constant for inversion procedure [m]
   REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
+  REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
 
   ! Ice dynamics - calving
   ! ======================
@@ -763,6 +765,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
+    REAL(dp)                            :: dt_basal
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -1066,6 +1069,7 @@ MODULE configuration_module
     LOGICAL                             :: do_basal_sliding_smoothing
     REAL(dp)                            :: basal_sliding_inv_scale
     REAL(dp)                            :: basal_sliding_inv_rsmooth
+    REAL(dp)                            :: basal_sliding_inv_wsmooth
     
     ! Ice dynamics - calving
     ! ======================
@@ -1704,6 +1708,7 @@ CONTAINS
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
                      dt_SELEN_config,                                 &
+                     dt_basal_config,                                 &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
@@ -1885,6 +1890,7 @@ CONTAINS
                      do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_scale_config,                  &
                      basal_sliding_inv_rsmooth_config,                &
+                     basal_sliding_inv_wsmooth_config,                &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
                      do_remove_shelves_config,                        &
@@ -2203,6 +2209,7 @@ CONTAINS
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
+    C%dt_basal                                 = dt_basal_config
     
     ! Which ice sheets do we simulate?
     ! ================================
@@ -2505,9 +2512,10 @@ CONTAINS
 
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
-    C%do_basal_sliding_inversion               = do_basal_sliding_smoothing_config
+    C%do_basal_sliding_smoothing               = do_basal_sliding_smoothing_config
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
     C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
+    C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
   
     ! Ice dynamics - calving
     ! ======================

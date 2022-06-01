@@ -539,7 +539,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
     DO k = 1, C%nz_ocean
       ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
       ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)

@@ -388,7 +388,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     DO m = 1, 12
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
       climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
@@ -454,7 +454,7 @@ CONTAINS
     ! Initialise applied climate with present-day observations
 
     DO m = 1, 12
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
       climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
@@ -465,7 +465,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE initialise_climate_model_regional_PD_obs
 

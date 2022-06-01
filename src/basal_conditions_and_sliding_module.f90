@@ -1537,14 +1537,13 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_scale, h_delta, vhb_max, vhb_min
+    REAL(dp)                                           :: h_scale, h_delta, new_val, w_smooth
+    REAL(dp),           DIMENSION(SIZE(ice%Hi_a))      :: rough_smoothed
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     h_scale = 1.0_dp/C%basal_sliding_inv_scale
-    vhb_max = 3000._dp
-    vhb_min =  0.01_dp
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -1559,35 +1558,25 @@ CONTAINS
         IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
              (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
-          IF (C%choice_sliding_law == 'Weertman') THEN
+          IF (C%choice_sliding_law == 'Weertman' .OR. &
+              C%choice_sliding_law == 'Tsai2015' .OR. &
+              C%choice_sliding_law == 'Schoof2005') THEN
 
-            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
-            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
-            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
+            new_val = ice%beta_sq_a( vi)
+            new_val = new_val * (10._dp ** h_delta)
+            new_val = MIN(MAX(new_val, 1._dp), 10._dp)
+
+            ice%beta_sq_a( vi) = new_val
 
           ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-                  C%choice_sliding_law == 'Coulomb_regularised') THEN
+                  C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+                  C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-            ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
-            ice%phi_fric_a( vi) = MAX(ice%phi_fric_a( vi), 0.01_dp)
-            ice%phi_fric_a( vi) = MIN(ice%phi_fric_a( vi),  45._dp)
+            new_val = ice%phi_fric_a( vi)
+            new_val = new_val * (10._dp ** (-h_delta))
+            new_val = MIN(MAX(new_val, 0.01_dp), 45._dp)
 
-          ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
-
-            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
-            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
-            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
-
-          ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
-
-            ice%beta_sq_a( vi) = ice%beta_sq_a( vi) * (10._dp ** h_delta)
-            ice%beta_sq_a( vi) = MAX(ice%beta_sq_a( vi),     1._dp)
-            ice%beta_sq_a( vi) = MIN(ice%beta_sq_a( vi),    10._dp)
-
-          ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
-            ice%phi_fric_a( vi) = ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
-            ice%phi_fric_a( vi) = MAX(ice%phi_fric_a( vi), 0.01_dp)
-            ice%phi_fric_a( vi) = MIN(ice%phi_fric_a( vi),  45._dp)
+            ice%phi_fric_a( vi) = new_val
 
           ELSE
             CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
@@ -1603,21 +1592,27 @@ CONTAINS
     ! Smooth the resulting field
     ! ==========================
 
-    ! WIP, need a time step for the inversion to do it less frequently
-
     IF (C%do_basal_sliding_smoothing) THEN
 
       IF (C%choice_sliding_law == 'Weertman' .OR. &
           C%choice_sliding_law == 'Tsai2015' .OR. &
           C%choice_sliding_law == 'Schoof2005') THEN
 
-        CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
+        ! CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
 
       ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
               C%choice_sliding_law == 'Coulomb_regularised' .OR. &
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-        CALL smooth_Gaussian_2D( mesh, grid, ice%phi_fric_a, C%basal_sliding_inv_rsmooth)
+        rough_smoothed( 1:mesh%nV) = ice%phi_fric_a( 1:mesh%nV)
+        CALL sync
+
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%basal_sliding_inv_rsmooth)
+
+        DO vi = mesh%vi1, mesh%vi2
+            ice%phi_fric_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%phi_fric_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+        END DO
+        CALL sync
 
       ELSE
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
@@ -1629,7 +1624,7 @@ CONTAINS
     ! Extrapolate the resulting field
     ! ===============================
 
-    ! WIP
+    ! WIP. Not needed yet really, as the smoothing leaks over the entire domain. Kinda extrapolating.
     ! CALL sync
 
     ! Finalise routine path

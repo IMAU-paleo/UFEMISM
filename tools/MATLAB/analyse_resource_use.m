@@ -1,6 +1,4 @@
-function analyse_computation_time( filename)
-  
-filename = '../../results_20220315_001/resource_tracking.nc';
+function analyse_resource_use( filename)
 
 % Set up GUI
 wa = 1000;

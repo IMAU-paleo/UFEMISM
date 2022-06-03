@@ -167,7 +167,7 @@ CONTAINS
 
       ! Run the BMB model
       IF (region%do_BMB) THEN
-        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_init)
+        CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
       END IF
 
       t2 = MPI_WTIME()
@@ -191,7 +191,7 @@ CONTAINS
 
       IF (C%do_basal_sliding_inversion) THEN
         IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_init)
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
         END IF
       END IF
 
@@ -411,7 +411,7 @@ CONTAINS
 
     ! Region name
     region%name        = name
-    IF (region%name      == 'NAM') THEN
+    IF      (region%name == 'NAM') THEN
       region%long_name = 'North America'
     ELSE IF (region%name == 'EAS') THEN
       region%long_name = 'Eurasia'

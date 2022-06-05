@@ -26,7 +26,7 @@ MODULE thermodynamics_module
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
-                                             type_SMB_model
+                                             type_SMB_model, type_restart_data
   USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average, interpolate_ocean_depth
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
@@ -885,9 +885,9 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_ice_rheology
-  
+
 ! == Initialise the englacial ice temperature at the start of a simulation
-  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, ocean, SMB, region_name)
+  SUBROUTINE initialise_ice_temperature( mesh, ice, climate, ocean, SMB, region_name, restart)
     ! Initialise the englacial ice temperature at the start of a simulation
 
     IMPLICIT NONE
@@ -899,6 +899,7 @@ CONTAINS
     TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
     CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
+    TYPE(type_restart_data),              INTENT(IN)    :: restart
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_temperature'
@@ -919,11 +920,11 @@ CONTAINS
       CALL initialise_ice_temperature_Robin( mesh, ice, climate, ocean, SMB)
     ELSEIF (C%choice_initial_ice_temperature == 'restart') THEN
       ! Initialise with the temperature field from the provided restart file
-      CALL initialise_ice_temperature_restart( mesh, ice, region_name)
+      CALL initialise_ice_temperature_restart( mesh, ice, restart)
     ELSE
       CALL crash('unknown choice_initial_ice_temperature "' // TRIM( C%choice_initial_ice_temperature) // '"!')
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1032,94 +1033,33 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ice_temperature_Robin
-  SUBROUTINE initialise_ice_temperature_restart( mesh, ice, region_name)
+  SUBROUTINE initialise_ice_temperature_restart( mesh, ice, restart)
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Initialise with the temperature field from the provided restart file
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-    
+    TYPE(type_mesh),                      INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                 INTENT(INOUT) :: ice
+    TYPE(type_restart_data),              INTENT(IN)    :: restart
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_temperature_restart'
+    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'initialise_ice_temperature_restart'
+    INTEGER                                             :: vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! DENK DROM
-    CALL crash('FIXME!')
-    
-!    ! Local variables
-!    CHARACTER(LEN=256)                                 :: filename_restart
-!    REAL(dp)                                           :: time_to_restart_from
-!    TYPE(type_restart_data)                            :: restart
-!    
-!    ! Assume that temperature and geometry are read from the same restart file
-!    IF     (region_name == 'NAM') THEN
-!      filename_restart     = C%filename_refgeo_init_NAM
-!      time_to_restart_from = C%time_to_restart_from_NAM
-!    ELSEIF (region_name == 'EAS') THEN
-!      filename_restart     = C%filename_refgeo_init_EAS
-!      time_to_restart_from = C%time_to_restart_from_EAS
-!    ELSEIF (region_name == 'GRL') THEN
-!      filename_restart     = C%filename_refgeo_init_GRL
-!      time_to_restart_from = C%time_to_restart_from_GRL
-!    ELSEIF (region_name == 'ANT') THEN
-!      filename_restart     = C%filename_refgeo_init_ANT
-!      time_to_restart_from = C%time_to_restart_from_ANT
-!    END IF
-!    
-!    ! Inquire if all the required fields are present in the specified NetCDF file,
-!    ! and determine the dimensions of the memory to be allocated.
-!    CALL allocate_shared_int_0D( restart%nx, restart%wnx)
-!    CALL allocate_shared_int_0D( restart%ny, restart%wny)
-!    CALL allocate_shared_int_0D( restart%nz, restart%wnz)
-!    CALL allocate_shared_int_0D( restart%nt, restart%wnt)
-!    IF (par%master) THEN
-!      restart%netcdf%filename = filename_restart
-!      CALL inquire_restart_file_temperature( restart)
-!    END IF
-!    CALL sync
-!    
-!    ! Allocate memory for raw data
-!    CALL allocate_shared_dp_1D( restart%nx, restart%x,    restart%wx   )
-!    CALL allocate_shared_dp_1D( restart%ny, restart%y,    restart%wy   )
-!    CALL allocate_shared_dp_1D( restart%nz, restart%zeta, restart%wzeta)
-!    CALL allocate_shared_dp_1D( restart%nt, restart%time, restart%wtime)
-!    
-!    CALL allocate_shared_dp_3D( restart%nx, restart%ny, restart%nz, restart%Ti,               restart%wTi              )
-!  
-!    ! Read data from input file
-!    IF (par%master) CALL read_restart_file_temperature( restart, time_to_restart_from)
-!    CALL sync
-!    
-!    ! Safety
-!    CALL check_for_NaN_dp_3D( restart%Ti, 'restart%Ti')
-!    
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_3D( restart%Ti, restart%wTi)
-!    
-!    ! Map (transposed) raw data to the model grid
-!    CALL map_square_to_square_cons_2nd_order_3D( restart%nx, restart%ny, restart%x, restart%y, grid%nx, grid%ny, grid%x, grid%y, restart%Ti, ice%Ti_a)
-!    
-!    ! Deallocate raw data
-!    CALL deallocate_shared( restart%wnx              )
-!    CALL deallocate_shared( restart%wny              )
-!    CALL deallocate_shared( restart%wnz              )
-!    CALL deallocate_shared( restart%wnt              )
-!    CALL deallocate_shared( restart%wx               )
-!    CALL deallocate_shared( restart%wy               )
-!    CALL deallocate_shared( restart%wzeta            )
-!    CALL deallocate_shared( restart%wtime            )
-!    CALL deallocate_shared( restart%wTi              )
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
+    DO vi = mesh%vi1, mesh%vi2
+      ice%Ti_a( vi,:) = restart%Ti( vi,:)
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE initialise_ice_temperature_restart
   
 ! == Remap englacial temperature

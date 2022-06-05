@@ -76,8 +76,8 @@ CONTAINS
     CALL get_output_filenames( region)
     
     ! Create the files
-    ! CALL create_restart_file_mesh(     region, region%restart_mesh)
-    ! CALL create_restart_file_grid(     region, region%restart_grid)
+    CALL create_restart_file_mesh(     region, region%restart_mesh)
+    CALL create_restart_file_grid(     region, region%restart_grid)
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
@@ -102,8 +102,8 @@ CONTAINS
 
     IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
     
-    ! CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    ! CALL write_to_restart_file_grid(     region, region%restart_grid)
+    CALL write_to_restart_file_mesh(     region, region%restart_mesh)
+    CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
     

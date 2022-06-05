@@ -217,9 +217,6 @@ CONTAINS
       ! DENK DROM
       !region%time = t_end
 
-      ! WRITE(0,*) 'All good until here (end of run_model). [Next: adapt updated/new submodels to remeshing]'
-      ! CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
     END DO ! DO WHILE (region%time < t_end)
 
   ! ===========================================

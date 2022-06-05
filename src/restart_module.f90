@@ -81,17 +81,18 @@ CONTAINS
    CALL MPI_BCAST( nTri,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
    CALL MPI_BCAST( nC_mem, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
-   stop '1'
 
-!    ! Allocate memory for primary mesh data
-!    CALL allocate_mesh_primary( region%mesh, region%name, nV, nTri, nC_mem)
-!    
-!    IF (par%master) region%mesh%nV   = nV
-!    IF (par%master) region%mesh%nTri = nTri
-!    
-!    ! Read primary mesh data
-!    IF (par%master) CALL read_restart_file_mesh( region%mesh, region%init%netcdf_restart)
-!    CALL sync
+   ! Allocate memory for primary mesh data
+   CALL allocate_mesh_primary( region%mesh, region%name, nV, nTri, nC_mem)
+
+   IF (par%master) region%mesh%nV   = nV
+   IF (par%master) region%mesh%nTri = nTri
+
+   ! Read primary mesh data
+   IF (par%master) CALL read_restart_file_mesh( region%mesh, region%restart%netcdf)
+   CALL sync
+
+   stop '5'
 !    
 !    ! Determine vertex and triangle domains
 !    CALL partition_list( region%mesh%nV,   par%i, par%n, region%mesh%vi1, region%mesh%vi2)

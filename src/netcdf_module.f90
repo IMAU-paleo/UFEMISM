@@ -3765,42 +3765,42 @@ CONTAINS
   END SUBROUTINE inquire_restart_file_init
   SUBROUTINE read_restart_file_mesh( mesh, netcdf)
     ! Read mesh data from a restart file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),           INTENT(INOUT) :: mesh
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_mesh'
+    CHARACTER(LEN=256), PARAMETER            :: routine_name = 'read_restart_file_mesh'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL crash('FIXME!')
-    
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Read the data
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
+    ! CALL crash('FIXME!')
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE read_restart_file_mesh
   SUBROUTINE read_restart_file_init( refgeo_init, netcdf)
     ! Read mesh data from a restart file

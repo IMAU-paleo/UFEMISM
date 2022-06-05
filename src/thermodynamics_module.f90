@@ -1052,6 +1052,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    IF (par%master) WRITE (0,*) '   Initialising ice temperatures using data read from restart file...'
+
     DO vi = mesh%vi1, mesh%vi2
       ice%Ti_a( vi,:) = restart%Ti( vi,:)
     END DO

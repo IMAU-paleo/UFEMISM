@@ -521,7 +521,7 @@ CONTAINS
     ! ===== The SMB model =====
     ! =========================
 
-    CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
+    CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name, region%restart)
 
     ! ===== The BMB model =====
     ! =========================

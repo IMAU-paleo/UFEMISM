@@ -613,7 +613,7 @@ CONTAINS
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_restart_file_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_restart_file_mesh'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
     
@@ -778,7 +778,7 @@ CONTAINS
     ! Set time frame index to 1
     netcdf%ti = 1
 
-    ! Create a new restart file if none exists and, to prevent loss of data, 
+    ! Create a new help file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
@@ -4632,114 +4632,6 @@ CONTAINS
 
   END SUBROUTINE read_insolation_file_time_lat
 
-  SUBROUTINE inquire_restart_file_SMB( restart)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_restart_data), INTENT(INOUT) :: restart
-
-    ! Local variables:
-    INTEGER                                :: x, y, m, t, int_dummy
-
-    ! WIP wall
-    IF (par%master) WRITE(0,*) 'This subroutine (inquire_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
-    ! IF (.NOT. par%master) RETURN
-
-    ! ! Open the netcdf file
-    ! CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
-
-    ! ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
-    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_x,     restart%grid%nx, restart%netcdf%id_dim_x    )
-    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_y,     restart%grid%ny, restart%netcdf%id_dim_y    )
-    ! ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_time,  restart%nt, restart%netcdf%id_dim_time )
-    ! ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_month, int_dummy,  restart%netcdf%id_dim_month)
-
-    ! ! Abbreviations for shorter code
-    ! x = restart%netcdf%id_dim_x
-    ! y = restart%netcdf%id_dim_y
-    ! ! m = restart%netcdf%id_dim_month
-    ! ! t = restart%netcdf%id_dim_time
-
-    ! ! Inquire variable ID's; make sure that each variable has the correct dimensions.
-
-    ! ! Dimensions
-    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_x,                (/ x             /), restart%netcdf%id_var_x   )
-    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_y,                (/    y          /), restart%netcdf%id_var_y   )
-    ! ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_time,             (/             t /), restart%netcdf%id_var_time)
-
-    ! ! Data
-    ! ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_FirnDepth,        (/ x, y,    m, t /), restart%netcdf%id_var_FirnDepth)
-    ! ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_MeltPreviousYear, (/ x, y,       t /), restart%netcdf%id_var_MeltPreviousYear)
-
-    ! ! Close the netcdf file
-    ! CALL close_netcdf_file( restart%netcdf%ncid)
-
-  END SUBROUTINE inquire_restart_file_SMB
-  SUBROUTINE read_restart_file_SMB( restart, time_to_restart_from)
-    ! Read the restart netcdf file
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_restart_data),        INTENT(INOUT) :: restart
-    REAL(dp),                       INTENT(IN)    :: time_to_restart_from
-
-    ! Local variables:
-    INTEGER                                       :: ti, ti_min
-    REAL(dp)                                      :: dt, dt_min
-
-    ! WIP wall
-    IF (par%master) WRITE(0,*) 'This subroutine (read_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
-    ! IF (.NOT. par%master) RETURN
-
-    ! ! Open the netcdf file
-    ! CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
-
-    ! ! Read x,y
-    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_x, restart%grid%x, start=(/1/) ))
-    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_y, restart%grid%y, start=(/1/) ))
-
-    ! ! ! Read time, determine which time frame to read
-    ! ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_time, restart%time, start=(/1/) ))
-
-    ! ! IF (time_to_restart_from < MINVAL(restart%time) .OR. time_to_restart_from > MAXVAL(restart%time)) THEN
-    ! !   WRITE(0,*) 'read_restart_file_SMB - ERROR: time_to_restart_from ', time_to_restart_from, ' outside range of restart file!'
-    ! !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! ! END IF
-
-    ! ! ti_min = 0
-    ! ! dt_min = 1E8_dp
-    ! ! DO ti = 1, restart%nt
-    ! !   dt = ABS(restart%time( ti) - time_to_restart_from)
-    ! !   IF (dt < dt_min) THEN
-    ! !     ti_min = ti
-    ! !     dt_min = dt
-    ! !   END IF
-    ! ! END DO
-    ! ! ti = ti_min
-
-    ! ! IF (dt_min > 0._dp) THEN
-    ! !   WRITE(0,*) 'read_restart_file_SMB - WARNING: no exact match for time_to_restart_from ', time_to_restart_from, ' in restart file! Reading closest match ', restart%time( ti), ' instead.'
-    ! ! END IF
-    ! ! IF (time_to_restart_from /= C%start_time_of_run) THEN
-    ! !   WRITE(0,*) 'read_restart_file_SMB - WARNING: starting run at t = ', C%start_time_of_run, ' with restart data at t = ', time_to_restart_from
-    ! ! END IF
-
-    ! ! ! Read the data
-    ! ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, 1, ti /), count = (/ restart%grid%nx, restart%grid%ny, 12,         1 /) ))
-    ! ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1, 1,    ti /), count = (/ restart%grid%nx, restart%grid%ny,             1 /) ))
-
-    ! ! Close the netcdf file
-    ! CALL close_netcdf_file( restart%netcdf%ncid)
-
-  END SUBROUTINE read_restart_file_SMB
-
   ! Present-day observed global ocean (e.g. WOA18)
   SUBROUTINE inquire_PD_obs_global_ocean_file( ocn)
     ! Check if the right dimensions and variables are present in the file.
@@ -5804,7 +5696,7 @@ CONTAINS
     ! Set output filename
     SELEN%output%filename = TRIM(C%output_dir) // 'SELEN_output.nc'
 
-    ! Create a new restart file if none exists and, to prevent loss of data,
+    ! Create a new output file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(SELEN%output%filename))
     IF(file_exists) THEN

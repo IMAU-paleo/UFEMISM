@@ -206,10 +206,10 @@
   SMB_uniform_config                          = 0.0                              ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
 
   ! Tuning parameters for the IMAU-ITM SMB model
-  SMB_IMAUITM_choice_init_firn_NAM_config     = 'uniform'                        ! How to initialise the firn layer in the IMAU-ITM SMB model: "uniform", "restart"
-  SMB_IMAUITM_choice_init_firn_EAS_config     = 'uniform'
-  SMB_IMAUITM_choice_init_firn_GRL_config     = 'uniform'
-  SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
+  SMB_IMAUITM_choice_init_firn_NAM_config     = 'restart'                        ! How to initialise the firn layer in the IMAU-ITM SMB model: "uniform", "restart"
+  SMB_IMAUITM_choice_init_firn_EAS_config     = 'restart'
+  SMB_IMAUITM_choice_init_firn_GRL_config     = 'restart'
+  SMB_IMAUITM_choice_init_firn_ANT_config     = 'restart'
   SMB_IMAUITM_initial_firn_thickness_config   = 1.0                              ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
   SMB_IMAUITM_C_abl_constant_NAM_config       = 0.0                              ! 34.0      (commented values are old ANICE defaults, but since refreezing
   SMB_IMAUITM_C_abl_constant_EAS_config       = 0.0                              !           was not calculated right and this has since been fixed, these

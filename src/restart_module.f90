@@ -60,9 +60,6 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! DENK DROM
-    ! CALL crash('FIXME!')
-
    ! Set the filename
    IF     (region%name == 'NAM') THEN
      region%restart%netcdf%filename = C%filename_restart_NAM
@@ -139,44 +136,39 @@ CONTAINS
   END SUBROUTINE read_mesh_from_restart_file
   SUBROUTINE read_init_data_from_restart_file( region)
     ! Read initial model data from the restart file of a previous run
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_init_data_from_restart_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    ! DENK DROM
-    CALL crash('FIXME!')
-    
-!    IF (par%master) WRITE(0,*) '  Reading initial data from restart file "', TRIM(region%init%netcdf_restart%filename), '"...'
-!    
-!    ! Check if all the data is there
-!    IF (par%master) CALL inquire_restart_file_init( region%init%netcdf_restart)
-!    CALL sync
-!    
-!    ! Allocate memory
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%Hi,               region%init%wHi              )
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%Hb,               region%init%wHb              )
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%Hs,               region%init%wHs              )
-!    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%init%Ti,               region%init%wTi              )
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%U_SSA,            region%init%wU_SSA           )
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%V_SSA,            region%init%wV_SSA           )
-!    CALL allocate_shared_dp_1D( region%mesh%nV,       region%init%MeltPreviousYear, region%init%wMeltPreviousYear)
-!    CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%init%FirnDepth,        region%init%wFirnDepth       )
-!    
-!    ! Read data from the restart file
-!    IF (par%master) CALL read_restart_file_init( region%init, region%init%netcdf_restart)
-!    CALL sync
-!    
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
+
+    IF (par%master) WRITE(0,*) '  Reading initial data from restart file "', TRIM(region%restart%netcdf%filename), '"...'
+
+    ! Check if all the data is there
+    IF (par%master) CALL inquire_restart_file_init( region%restart%netcdf)
+    CALL sync
+
+    ! Allocate memory
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,               region%restart%wHi              )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hb,               region%restart%wHb              )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,               region%restart%wHs              )
+    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,               region%restart%wTi              )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear, region%restart%wMeltPreviousYear)
+    CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,        region%restart%wFirnDepth       )
+
+    ! Read data from the restart file
+    IF (par%master) CALL read_restart_file_init( region%restart, region%restart%netcdf)
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 6)
+
   END SUBROUTINE read_init_data_from_restart_file
-  
+
 END MODULE restart_module

@@ -1375,23 +1375,21 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
     INTEGER :: wnz, wnt, wzeta, wtime
 
-    ! Data
-
     ! Ice dynamics
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: Ti
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hb
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hs
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
     INTEGER :: wHi, wHb, wHs, wTi
 
     ! GIA
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: SL
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHb
+    REAL(dp), DIMENSION(:    ), POINTER     :: SL
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHb
     INTEGER :: wSL, wdHb
 
     ! SMB
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: FirnDepth
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: MeltPreviousYear
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth
+    REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear
     INTEGER :: wFirnDepth, wMeltPreviousYear
 
     ! Isotopes

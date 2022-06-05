@@ -3665,8 +3665,6 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! CALL crash('FIXME!')
-
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
@@ -3689,79 +3687,76 @@ CONTAINS
     CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_TriC,           (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_TriC          )
     CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index, (/ netcdf%id_dim_ti                     /), netcdf%id_var_Tri_edge_index)
 
-   ! Close the netcdf file
-   CALL close_netcdf_file( netcdf%ncid)
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
 
-   ! Finalise routine path
-   CALL finalise_routine( routine_name)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE inquire_restart_file_mesh
   SUBROUTINE inquire_restart_file_init( netcdf)
     ! Check if the right dimensions and variables are present in the file.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_restart_file_init'
-!    INTEGER                                  :: nZ, nt, nm, k
-!    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
-    
+    CHARACTER(LEN=256), PARAMETER            :: routine_name = 'inquire_restart_file_init'
+    INTEGER                                  :: nZ, nt, nm, k
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL crash('FIXME!')
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
-!    
-!    IF (nZ /= C%nZ) THEN
-!      WRITE(0,*) '   ERROR: nZ in restart file doesnt match nZ in config!'
-!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!    END IF
-!
-!    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
-!    
-!    ! Read zeta, check if it matches the config zeta
-!    ALLOCATE( zeta( nZ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
-!    DO k = 1, C%nz
-!      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
-!        WRITE(0,*) '  WARNING - vertical coordinate zeta in restart file doesnt match zeta in config!'
-!      END IF
-!      END DO
-!    DEALLOCATE( zeta)
-!    
-!    ! Inquire model data
-!    
-!    ! Geometry
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
-!    
-!    ! Temperature
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
-!    
-!    ! SMB
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
+
+    IF (nZ /= C%nZ) THEN
+      CALL crash('nZ in restart file doesnt match nZ in config!')
+    END IF
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
+
+    ! Read zeta, check if it matches the config zeta levels
+    ALLOCATE( zeta( nZ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
+    DO k = 1, C%nz
+      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
+        CALL warning('Vertical coordinate zeta in restart file doesnt match zeta in config!')
+      END IF
+      END DO
+    DEALLOCATE( zeta)
+
+    ! Inquire model data
+
+    ! Geometry
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
+
+    ! Temperature
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
+
+    ! SMB
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE inquire_restart_file_init
   SUBROUTINE read_restart_file_mesh( mesh, netcdf)
     ! Read mesh data from a restart file
@@ -3777,8 +3772,6 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! CALL crash('FIXME!')
 
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -3802,74 +3795,73 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_restart_file_mesh
-  SUBROUTINE read_restart_file_init( refgeo_init, netcdf)
+  SUBROUTINE read_restart_file_init( restart, netcdf)
     ! Read mesh data from a restart file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo_init
-    TYPE(type_netcdf_restart),   INTENT(INOUT) :: netcdf
-    
+    TYPE(type_restart_data),       INTENT(INOUT) :: restart
+    TYPE(type_netcdf_restart),     INTENT(INOUT) :: netcdf
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_init'
-!    INTEGER                                    :: nt, ti, ti_min
-!    REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
-!    REAL(dp)                                   :: dt_min, dt
-    
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'read_restart_file_init'
+    INTEGER                                      :: nt, ti, ti_min
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE      :: time
+    REAL(dp)                                     :: dt_min, dt
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL crash('FIXME!')
-    
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Read time, determine which time frame to read
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-!    ALLOCATE( time( nt))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
-!    
-!    IF (C%time_to_restart_from < MINVAL(time) .OR. C%time_to_restart_from > MAXVAL(time)) THEN
-!      WRITE(0,*) '  ERROR - time_to_restart_from ', C%time_to_restart_from, ' outside range of restart file! (range = [', MINVAL( time), ' - ', MAXVAL(time), '])'
-!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!    END IF    
-!    
-!    ti_min = 0
-!    dt_min = 1E8_dp
-!    DO ti = 1, nt
-!      dt = ABS(time( ti) - C%time_to_restart_from)
-!      IF (dt < dt_min) THEN
-!        ti_min = ti
-!        dt_min = dt
-!      END IF
-!    END DO
-!    ti = ti_min
-!    
-!    DEALLOCATE( time)
-!    
-!    ! Read the data
-!    
-!    ! Geometry
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               init%Hi,               start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               init%Hb,               start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               init%Hs,               start = (/ 1,    ti /) ))
-!    
-!    ! Temperature
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               init%Ti,               start = (/ 1, 1, ti /) ))
-!    
-!    ! SMB
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, init%MeltPreviousYear, start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        init%FirnDepth,        start = (/ 1, 1, ti /) ))
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE read_restart_file_init 
-  
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read time, determine which time frame to read
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+
+    ALLOCATE( time( nt))
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
+
+    IF (C%time_to_restart_from < MINVAL(time) .OR. C%time_to_restart_from > MAXVAL(time)) THEN
+      CALL crash('time_to_restart_from outside range of restart file!')
+    END IF
+
+    ti_min = 0
+    dt_min = 1E8_dp
+    DO ti = 1, nt
+      dt = ABS(time( ti) - C%time_to_restart_from)
+      IF (dt < dt_min) THEN
+        ti_min = ti
+        dt_min = dt
+      END IF
+    END DO
+    ti = ti_min
+
+    DEALLOCATE( time)
+
+    ! Read the data
+
+    ! Geometry
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               restart%Hi,               start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               restart%Hb,               start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               restart%Hs,               start = (/ 1,    ti /) ))
+
+    ! Temperature
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               restart%Ti,               start = (/ 1, 1, ti /) ))
+
+    ! SMB
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, ti /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_restart_file_init
+
   ! Reference ice-sheet geometry (ice thickness, bed topography, and surface elevation)
   SUBROUTINE inquire_reference_geometry_file( refgeo)
     ! Check if the right dimensions and variables are present in the file.

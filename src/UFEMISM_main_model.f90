@@ -47,7 +47,7 @@ MODULE UFEMISM_main_model
   ! USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
-  USE restart_module,                      ONLY: read_mesh_from_restart_file
+  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
 
   IMPLICIT NONE
 
@@ -456,6 +456,10 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
+
+    IF (C%is_restart) THEN
+      CALL read_init_data_from_restart_file( region)
+    END IF
 
     ! Map data from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh)

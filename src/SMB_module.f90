@@ -729,120 +729,120 @@ CONTAINS
     IF (par%master) WRITE(0,*) 'This subroutine (initialise_IMAU_ITM_firn_restart) needs testing. Feel free to do it before running the model :)'
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-    ! Assume that SMB and geometry are read from the same restart file
-    IF     (region_name == 'NAM') THEN
-      filename_restart     = C%filename_refgeo_init_NAM
-      time_to_restart_from = C%time_to_restart_from_NAM
-    ELSEIF (region_name == 'EAS') THEN
-      filename_restart     = C%filename_refgeo_init_EAS
-      time_to_restart_from = C%time_to_restart_from_EAS
-    ELSEIF (region_name == 'GRL') THEN
-      filename_restart     = C%filename_refgeo_init_GRL
-      time_to_restart_from = C%time_to_restart_from_GRL
-    ELSEIF (region_name == 'ANT') THEN
-      filename_restart     = C%filename_refgeo_init_ANT
-      time_to_restart_from = C%time_to_restart_from_ANT
-    END IF
+    ! ! Assume that SMB and geometry are read from the same restart file
+    ! IF     (region_name == 'NAM') THEN
+    !   filename_restart     = C%filename_refgeo_init_NAM
+    !   time_to_restart_from = C%time_to_restart_from_NAM
+    ! ELSEIF (region_name == 'EAS') THEN
+    !   filename_restart     = C%filename_refgeo_init_EAS
+    !   time_to_restart_from = C%time_to_restart_from_EAS
+    ! ELSEIF (region_name == 'GRL') THEN
+    !   filename_restart     = C%filename_refgeo_init_GRL
+    !   time_to_restart_from = C%time_to_restart_from_GRL
+    ! ELSEIF (region_name == 'ANT') THEN
+    !   filename_restart     = C%filename_refgeo_init_ANT
+    !   time_to_restart_from = C%time_to_restart_from_ANT
+    ! END IF
 
-    ! Inquire if all the required fields are present in the specified NetCDF file,
-    ! and determine the dimensions of the memory to be allocated.
-    CALL allocate_shared_int_0D( restart%grid%nx, restart%grid%wnx)
-    CALL allocate_shared_int_0D( restart%grid%ny, restart%grid%wny)
-    CALL allocate_shared_int_0D( restart%nt,      restart%wnt)
-    IF (par%master) THEN
-      restart%netcdf%filename = filename_restart
-      CALL inquire_restart_file_SMB( restart)
-    END IF
-    CALL sync
+    ! ! Inquire if all the required fields are present in the specified NetCDF file,
+    ! ! and determine the dimensions of the memory to be allocated.
+    ! CALL allocate_shared_int_0D( restart%grid%nx, restart%grid%wnx)
+    ! CALL allocate_shared_int_0D( restart%grid%ny, restart%grid%wny)
+    ! CALL allocate_shared_int_0D( restart%nt,      restart%wnt)
+    ! IF (par%master) THEN
+    !   restart%netcdf%filename = filename_restart
+    !   CALL inquire_restart_file_SMB( restart)
+    ! END IF
+    ! CALL sync
 
-    ! Assign range to each processor
-    CALL partition_list( restart%grid%nx, par%i, par%n, restart%grid%i1, restart%grid%i2)
-    CALL partition_list( restart%grid%ny, par%i, par%n, restart%grid%j1, restart%grid%j2)
+    ! ! Assign range to each processor
+    ! CALL partition_list( restart%grid%nx, par%i, par%n, restart%grid%i1, restart%grid%i2)
+    ! CALL partition_list( restart%grid%ny, par%i, par%n, restart%grid%j1, restart%grid%j2)
 
-    ! Allocate memory for raw data
-    CALL allocate_shared_dp_1D( restart%grid%nx, restart%grid%x,    restart%grid%wx)
-    CALL allocate_shared_dp_1D( restart%grid%ny, restart%grid%y,    restart%grid%wy)
-    CALL allocate_shared_dp_1D( restart%nt,      restart%time,      restart%wtime  )
+    ! ! Allocate memory for raw data
+    ! CALL allocate_shared_dp_1D( restart%grid%nx, restart%grid%x,    restart%grid%wx)
+    ! CALL allocate_shared_dp_1D( restart%grid%ny, restart%grid%y,    restart%grid%wy)
+    ! CALL allocate_shared_dp_1D( restart%nt,      restart%time,      restart%wtime  )
 
-    CALL allocate_shared_dp_3D( restart%grid%nx, restart%grid%ny, 12, restart%FirnDepth,        restart%wFirnDepth       )
-    CALL allocate_shared_dp_2D( restart%grid%nx, restart%grid%ny,     restart%MeltPreviousYear, restart%wMeltPreviousYear)
+    ! CALL allocate_shared_dp_3D( restart%grid%nx, restart%grid%ny, 12, restart%FirnDepth,        restart%wFirnDepth       )
+    ! CALL allocate_shared_dp_2D( restart%grid%nx, restart%grid%ny,     restart%MeltPreviousYear, restart%wMeltPreviousYear)
 
-    ! Read data from input file
-    IF (par%master) CALL read_restart_file_SMB( restart, time_to_restart_from)
-    CALL sync
+    ! ! Read data from input file
+    ! IF (par%master) CALL read_restart_file_SMB( restart, time_to_restart_from)
+    ! CALL sync
 
-    ! Safety
-    ! CALL check_for_NaN_dp_3D( restart%FirnDepth,        'restart%FirnDepth',        'initialise_IMAU_ITM_firn_restart')
-    ! CALL check_for_NaN_dp_2D( restart%MeltPreviousYear, 'restart%MeltPreviousYear', 'initialise_IMAU_ITM_firn_restart')
+    ! ! Safety
+    ! ! CALL check_for_NaN_dp_3D( restart%FirnDepth,        'restart%FirnDepth',        'initialise_IMAU_ITM_firn_restart')
+    ! ! CALL check_for_NaN_dp_2D( restart%MeltPreviousYear, 'restart%MeltPreviousYear', 'initialise_IMAU_ITM_firn_restart')
 
-    ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
-    ! CALL transpose_dp_3D( restart%FirnDepth,        restart%wFirnDepth       )
-    ! CALL transpose_dp_2D( restart%MeltPreviousYear, restart%wMeltPreviousYear)
+    ! ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+    ! ! CALL transpose_dp_3D( restart%FirnDepth,        restart%wFirnDepth       )
+    ! ! CALL transpose_dp_2D( restart%MeltPreviousYear, restart%wMeltPreviousYear)
 
-    ! Fill in secondary grid parameters
-    CALL allocate_shared_dp_0D( restart%grid%dx,   restart%grid%wdx  )
-    CALL allocate_shared_dp_0D( restart%grid%xmin, restart%grid%wxmin)
-    CALL allocate_shared_dp_0D( restart%grid%xmax, restart%grid%wxmax)
-    CALL allocate_shared_dp_0D( restart%grid%ymin, restart%grid%wymin)
-    CALL allocate_shared_dp_0D( restart%grid%ymax, restart%grid%wymax)
-    IF (par%master) THEN
-      restart%grid%dx   = restart%grid%x( 2) - restart%grid%x( 1)
-      restart%grid%xmin = restart%grid%x( 1)
-      restart%grid%xmax = restart%grid%x( restart%grid%nx)
-      restart%grid%ymin = restart%grid%y( 1)
-      restart%grid%ymax = restart%grid%y( restart%grid%ny)
-    END IF
-    CALL sync
+    ! ! Fill in secondary grid parameters
+    ! CALL allocate_shared_dp_0D( restart%grid%dx,   restart%grid%wdx  )
+    ! CALL allocate_shared_dp_0D( restart%grid%xmin, restart%grid%wxmin)
+    ! CALL allocate_shared_dp_0D( restart%grid%xmax, restart%grid%wxmax)
+    ! CALL allocate_shared_dp_0D( restart%grid%ymin, restart%grid%wymin)
+    ! CALL allocate_shared_dp_0D( restart%grid%ymax, restart%grid%wymax)
+    ! IF (par%master) THEN
+    !   restart%grid%dx   = restart%grid%x( 2) - restart%grid%x( 1)
+    !   restart%grid%xmin = restart%grid%x( 1)
+    !   restart%grid%xmax = restart%grid%x( restart%grid%nx)
+    !   restart%grid%ymin = restart%grid%y( 1)
+    !   restart%grid%ymax = restart%grid%y( restart%grid%ny)
+    ! END IF
+    ! CALL sync
 
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D( restart%grid%n, restart%grid%wn)
-    IF (par%master) restart%grid%n  = restart%grid%nx * restart%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( restart%grid%nx, restart%grid%ny, restart%grid%ij2n, restart%grid%wij2n)
-    CALL allocate_shared_int_2D( restart%grid%n , 2              , restart%grid%n2ij, restart%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, restart%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, restart%grid%ny
-            n = n+1
-            restart%grid%ij2n( i,j) = n
-            restart%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = restart%grid%ny, 1, -1
-            n = n+1
-            restart%grid%ij2n( i,j) = n
-            restart%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
+    ! ! Set up grid-to-vector translation tables
+    ! CALL allocate_shared_int_0D( restart%grid%n, restart%grid%wn)
+    ! IF (par%master) restart%grid%n  = restart%grid%nx * restart%grid%ny
+    ! CALL sync
+    ! CALL allocate_shared_int_2D( restart%grid%nx, restart%grid%ny, restart%grid%ij2n, restart%grid%wij2n)
+    ! CALL allocate_shared_int_2D( restart%grid%n , 2              , restart%grid%n2ij, restart%grid%wn2ij)
+    ! IF (par%master) THEN
+    !   n = 0
+    !   DO i = 1, restart%grid%nx
+    !     IF (MOD(i,2) == 1) THEN
+    !       DO j = 1, restart%grid%ny
+    !         n = n+1
+    !         restart%grid%ij2n( i,j) = n
+    !         restart%grid%n2ij( n,:) = [i,j]
+    !       END DO
+    !     ELSE
+    !       DO j = restart%grid%ny, 1, -1
+    !         n = n+1
+    !         restart%grid%ij2n( i,j) = n
+    !         restart%grid%n2ij( n,:) = [i,j]
+    !       END DO
+    !     END IF
+    !   END DO
+    ! END IF
+    ! CALL sync
 
-    ! Map (transposed) raw data to the model mesh
-    CALL calc_remapping_operator_grid2mesh( restart%grid, mesh)
-    CALL map_grid2mesh_3D(restart%grid, mesh, restart%FirnDepth,        SMB%FirnDepth)
-    CALL map_grid2mesh_2D(restart%grid, mesh, restart%MeltPreviousYear, SMB%MeltPreviousYear)
-    CALL deallocate_remapping_operators_grid2mesh( restart%grid)
+    ! ! Map (transposed) raw data to the model mesh
+    ! CALL calc_remapping_operator_grid2mesh( restart%grid, mesh)
+    ! CALL map_grid2mesh_3D(restart%grid, mesh, restart%FirnDepth,        SMB%FirnDepth)
+    ! CALL map_grid2mesh_2D(restart%grid, mesh, restart%MeltPreviousYear, SMB%MeltPreviousYear)
+    ! CALL deallocate_remapping_operators_grid2mesh( restart%grid)
 
-    ! Deallocate raw data
-    CALL deallocate_shared( restart%grid%wnx         )
-    CALL deallocate_shared( restart%grid%wny         )
-    CALL deallocate_shared( restart%grid%wx          )
-    CALL deallocate_shared( restart%grid%wy          )
-    CALL deallocate_shared( restart%grid%wdx         )
-    CALL deallocate_shared( restart%grid%wxmin       )
-    CALL deallocate_shared( restart%grid%wxmax       )
-    CALL deallocate_shared( restart%grid%wymin       )
-    CALL deallocate_shared( restart%grid%wymax       )
-    CALL deallocate_shared( restart%grid%wn          )
-    CALL deallocate_shared( restart%grid%wij2n       )
-    CALL deallocate_shared( restart%grid%wn2ij       )
-    CALL deallocate_shared( restart%wnt              )
-    CALL deallocate_shared( restart%wtime            )
-    CALL deallocate_shared( restart%wFirnDepth       )
-    CALL deallocate_shared( restart%wMeltPreviousYear)
+    ! ! Deallocate raw data
+    ! CALL deallocate_shared( restart%grid%wnx         )
+    ! CALL deallocate_shared( restart%grid%wny         )
+    ! CALL deallocate_shared( restart%grid%wx          )
+    ! CALL deallocate_shared( restart%grid%wy          )
+    ! CALL deallocate_shared( restart%grid%wdx         )
+    ! CALL deallocate_shared( restart%grid%wxmin       )
+    ! CALL deallocate_shared( restart%grid%wxmax       )
+    ! CALL deallocate_shared( restart%grid%wymin       )
+    ! CALL deallocate_shared( restart%grid%wymax       )
+    ! CALL deallocate_shared( restart%grid%wn          )
+    ! CALL deallocate_shared( restart%grid%wij2n       )
+    ! CALL deallocate_shared( restart%grid%wn2ij       )
+    ! CALL deallocate_shared( restart%wnt              )
+    ! CALL deallocate_shared( restart%wtime            )
+    ! CALL deallocate_shared( restart%wFirnDepth       )
+    ! CALL deallocate_shared( restart%wMeltPreviousYear)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

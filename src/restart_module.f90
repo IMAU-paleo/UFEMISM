@@ -51,35 +51,38 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_mesh_from_restart_file'
-!    INTEGER                                            :: nV, nTri, nC_mem
+
+    INTEGER                                            :: nV, nTri, nC_mem
 !    REAL(dp)                                           :: xmin, xmax, ymin, ymax
 !    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! DENK DROM
-    CALL crash('FIXME!')
+    ! ! DENK DROM
+    ! CALL crash('FIXME!')
     
-!    ! Set the filename
-!    IF     (region%name == 'NAM') THEN
-!      region%init%netcdf_restart%filename = C%filename_restart_NAM
-!    ELSEIF (region%name == 'EAS') THEN
-!      region%init%netcdf_restart%filename = C%filename_restart_EAS
-!    ELSEIF (region%name == 'GRL') THEN
-!      region%init%netcdf_restart%filename = C%filename_restart_GRL
-!    ELSEIF (region%name == 'ANT') THEN
-!      region%init%netcdf_restart%filename = C%filename_restart_ANT
-!    END IF
-!    
-!    IF (par%master) WRITE(0,*) '  Reading mesh from restart file "', TRIM(region%init%netcdf_restart%filename), '"...'
-!    
-!    ! Get the mesh size from the restart file
-!    IF (par%master) CALL inquire_restart_file_mesh( region%init%netcdf_restart, nV, nTri, nC_mem)
-!    CALL MPI_BCAST( nV,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-!    CALL MPI_BCAST( nTri,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-!    CALL MPI_BCAST( nC_mem, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-!    
+   ! Set the filename
+   IF     (region%name == 'NAM') THEN
+     region%restart%netcdf%filename = C%filename_restart_NAM
+   ELSEIF (region%name == 'EAS') THEN
+     region%restart%netcdf%filename = C%filename_restart_EAS
+   ELSEIF (region%name == 'GRL') THEN
+     region%restart%netcdf%filename = C%filename_restart_GRL
+   ELSEIF (region%name == 'ANT') THEN
+     region%restart%netcdf%filename = C%filename_restart_ANT
+   END IF
+
+   IF (par%master) WRITE(0,*) '  Reading mesh from restart file "', TRIM(region%restart%netcdf%filename), '"...'
+
+   ! Get the mesh size from the restart file
+   IF (par%master) CALL inquire_restart_file_mesh( region%restart%netcdf, nV, nTri, nC_mem)
+   CALL MPI_BCAST( nV,     1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+   CALL MPI_BCAST( nTri,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+   CALL MPI_BCAST( nC_mem, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+   stop '1'
+
 !    ! Allocate memory for primary mesh data
 !    CALL allocate_mesh_primary( region%mesh, region%name, nV, nTri, nC_mem)
 !    

@@ -95,6 +95,18 @@
 
   remove_Lake_Vostok_config                   = .TRUE.
 
+  ! Whether or not the simulation is a restart of a previous simulation
+  ! ===================================================================
+
+  is_restart_config                           = .FALSE.
+  time_to_restart_from_config                 = 100.0                            ! Can be different from C%start_time_of_run, though this will issue a warning
+
+  ! Initial model state when restarting from a previous run
+  filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
+  filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
+  filename_restart_GRL_config                 = 'restart_run/restart_GRL_00002.nc'
+  filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+
   ! Ice dynamics - velocity
   ! =======================
 

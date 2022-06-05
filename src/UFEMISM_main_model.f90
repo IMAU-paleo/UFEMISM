@@ -47,6 +47,7 @@ MODULE UFEMISM_main_model
   ! USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
+  USE restart_module,                      ONLY: read_mesh_from_restart_file
 
   IMPLICIT NONE
 
@@ -434,7 +435,12 @@ CONTAINS
     ! ===== The mesh =====
     ! ====================
 
-    CALL create_mesh_from_cart_data( region)
+    ! IF (C%is_restart) THEN
+    IF (.TRUE.) THEN
+      CALL read_mesh_from_restart_file( region)
+    ELSE
+      CALL create_mesh_from_cart_data( region)
+    END IF
 
     ! ===== Map reference geometries to the mesh =====
     ! ================================================

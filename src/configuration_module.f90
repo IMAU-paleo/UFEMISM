@@ -205,10 +205,10 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_refgeo_init_ANT_config             = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
   
   ! Present-day geometry
-  CHARACTER(LEN=256)  :: choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_PD_EAS_config                 = 'realistic'                      ! Choice of present-day geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_PD_GRL_config                 = 'realistic'                      ! Choice of present-day geometry for Greenland    ; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_NAM_config                 = 'realistic'                      ! Choice of present-day geometry for North America; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_EAS_config                 = 'realistic'                      ! Choice of present-day geometry for Eurasia      ; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_GRL_config                 = 'realistic'                      ! Choice of present-day geometry for Greenland    ; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", or "realistic"
   CHARACTER(LEN=256)  :: choice_refgeo_PD_idealised_config           = 'flatearth'                      ! Choice of idealised present-day geometry; see "generate_idealised_geometry" in reference_fields_module for options
   REAL(dp)            :: dx_refgeo_PD_idealised_config               = 5000._dp                         ! Resolution of square grid used for idealised present-day geometry
   CHARACTER(LEN=256)  :: filename_refgeo_PD_NAM_config               = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
@@ -217,10 +217,10 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_refgeo_PD_ANT_config               = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
   
   ! GIA equilibrium geometry
-  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_NAM_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for North America; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_EAS_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_GRL_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Greenland    ; can be "idealised", "realistic", or "restart"
-  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_NAM_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for North America; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_EAS_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Eurasia      ; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_GRL_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Greenland    ; can be "idealised", or "realistic"
+  CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", or "realistic"
   CHARACTER(LEN=256)  :: choice_refgeo_GIAeq_idealised_config        = 'flatearth'                      ! Choice of idealised GIA equilibrium geometry; see "generate_idealised_geometry" in reference_fields_module for options
   REAL(dp)            :: dx_refgeo_GIAeq_idealised_config            = 5000._dp                         ! Resolution of square grid used for idealised GIA equilibrium geometry
   CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_NAM_config            = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
@@ -229,13 +229,12 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
-  
+
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
-  
+
   LOGICAL             :: is_restart_config                           = .FALSE.
-  REAL(dp)            :: time_to_restart_from_config                 = 0._dp                            ! Can be different from C%start_time_of_run, though this will issue a warning
-  
+
   ! Initial model state when restarting from a previous run
   CHARACTER(LEN=256)  :: filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   CHARACTER(LEN=256)  :: filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
@@ -912,15 +911,14 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_EAS
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_GRL
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_ANT
-    
+
     LOGICAL                             :: remove_Lake_Vostok
-  
+
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
-    
+
     LOGICAL                             :: is_restart
-    REAL(dp)                            :: time_to_restart_from
-    
+
     ! Initial model state when restarting from a previous run
     CHARACTER(LEN=256)                  :: filename_restart_NAM
     CHARACTER(LEN=256)                  :: filename_restart_EAS
@@ -1783,7 +1781,6 @@ CONTAINS
                      filename_refgeo_GIAeq_ANT_config,                &
                      remove_Lake_Vostok_config,                       &
                      is_restart_config,                               &
-                     time_to_restart_from_config,                     &
                      filename_restart_NAM_config,                     &
                      filename_restart_EAS_config,                     &
                      filename_restart_GRL_config,                     &
@@ -2359,15 +2356,14 @@ CONTAINS
     C%filename_refgeo_GIAeq_EAS                = filename_refgeo_GIAeq_EAS_config
     C%filename_refgeo_GIAeq_GRL                = filename_refgeo_GIAeq_GRL_config
     C%filename_refgeo_GIAeq_ANT                = filename_refgeo_GIAeq_ANT_config
-    
+
     C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
-  
+
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
-    
+
     C%is_restart                               = is_restart_config
-    C%time_to_restart_from                     = time_to_restart_from_config
-    
+
     C%filename_restart_NAM                     = filename_restart_NAM_config
     C%filename_restart_EAS                     = filename_restart_EAS_config
     C%filename_restart_GRL                     = filename_restart_GRL_config

@@ -1369,8 +1369,7 @@ MODULE data_types_module
     ! NetCDF file
     TYPE(type_netcdf_restart)               :: netcdf
 
-    ! Grid
-    TYPE(type_grid)                         :: grid       ! Needed for the mapping from grid to mesh
+    ! Dimensions
     INTEGER,                    POINTER     :: nz, nt
     REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
     INTEGER :: wnz, wnt, wzeta, wtime

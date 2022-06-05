@@ -40,24 +40,24 @@ CONTAINS
   ! Initialise all three reference geometries
   SUBROUTINE initialise_reference_geometries( refgeo_init, refgeo_PD, refgeo_GIAeq, region_name)
     ! Initialise all three reference geometries
-     
+
     IMPLICIT NONE
-      
+
     ! In/output variables:
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_init
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_PD
     TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_GIAeq
     CHARACTER(LEN=3),               INTENT(IN)    :: region_name
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometries'
     CHARACTER(LEN=256)                            :: choice_refgeo_init, choice_refgeo_PD, choice_refgeo_GIAeq
     CHARACTER(LEN=256)                            :: filename_refgeo_init, filename_refgeo_PD, filename_refgeo_GIAeq
     REAL(dp)                                      :: time_to_restart_from
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Determine parameters for this region
     IF     (region_name == 'NAM') THEN
       choice_refgeo_init    = C%choice_refgeo_init_NAM
@@ -92,23 +92,25 @@ CONTAINS
       filename_refgeo_GIAeq = C%filename_refgeo_GIAeq_ANT
       time_to_restart_from  = C%time_to_restart_from_ANT
     END IF
-    
+
     ! Initial ice-sheet geometry
     ! ==========================
-    
+
     IF     (choice_refgeo_init == 'idealised') THEN
       IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from idealised case "', TRIM(C%choice_refgeo_init_idealised), '"...'
       CALL initialise_reference_geometry_idealised_grid( refgeo_init, C%choice_refgeo_init_idealised, region_name, C%dx_refgeo_init_idealised)
     ELSEIF (choice_refgeo_init == 'realistic') THEN
       IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from file ', TRIM( filename_refgeo_init), '...'
       CALL initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
+    ELSEIF (choice_refgeo_init == 'restart') THEN
+      ! Initial reference geometry will be later read from a restart file.
     ELSE
       CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
-    
+
     ! Present-day ice-sheet geometry
     ! ==============================
-    
+
     IF     (choice_refgeo_PD == 'idealised') THEN
       IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from idealised case "', TRIM(C%choice_refgeo_PD_idealised), '"...'
       CALL initialise_reference_geometry_idealised_grid( refgeo_PD, C%choice_refgeo_PD_idealised, region_name, C%dx_refgeo_PD_idealised)
@@ -118,10 +120,10 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
-    
+
     ! GIA equilibrium ice-sheet geometry
     ! ==================================
-    
+
     IF     (choice_refgeo_GIAeq == 'idealised') THEN
       IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from idealised case "', TRIM(C%choice_refgeo_GIAeq_idealised), '"...'
       CALL initialise_reference_geometry_idealised_grid( refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised, region_name, C%dx_refgeo_GIAeq_idealised)
@@ -131,17 +133,21 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
-    
-    ! Fill in secondary data for the reference geometry (used to force mesh creation)
-    CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
+
+    ! Fill in secondary data for the reference initial geometry (used to force mesh creation)
+    IF (.NOT. choice_refgeo_init == 'restart') THEN
+      CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
+    END IF
+
+    ! Fill in secondary data for the reference PD and equilibrium GIA geometries
     CALL calc_reference_geometry_secondary_data( refgeo_PD%grid   , refgeo_PD   )
     CALL calc_reference_geometry_secondary_data( refgeo_GIAeq%grid, refgeo_GIAeq)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 78)
-    
+
   END SUBROUTINE initialise_reference_geometries
-  
+
   ! Initialise a reference geometry with data from a (timeless) NetCDF file (e.g. BedMachine)
   SUBROUTINE initialise_reference_geometry_from_file( refgeo, filename_refgeo, region_name)
     ! Initialise a reference geometry with data from a NetCDF file
@@ -1451,21 +1457,22 @@ CONTAINS
     ! Since calculating remapping operators can take some time, and since the three
     ! square grids are often identical, some time can be saved by calculating the
     ! operators only once.
-    
+
     IMPLICIT NONE
-  
+
     ! Input and output variables
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_mesh),                INTENT(INOUT) :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'map_reference_geometries_to_mesh'
     CHARACTER(LEN=256)                            :: choice_refgeo_init, choice_refgeo_PD, choice_refgeo_GIAeq
     LOGICAL                                       :: did_remap_init, did_remap_PD, did_remap_GIAeq, do_reuse_init_map, do_reuse_PD_map
-    
+    INTEGER                                       :: vi
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Determine parameters for this region
     IF     (region%name == 'NAM') THEN
       choice_refgeo_init    = C%choice_refgeo_init_NAM
@@ -1484,45 +1491,54 @@ CONTAINS
       choice_refgeo_PD      = C%choice_refgeo_PD_ANT
       choice_refgeo_GIAeq   = C%choice_refgeo_GIAeq_ANT
     END IF
-    
+
     ! Initial ice-sheet geometry
     ! ==========================
-    
-    IF (par%master) WRITE(0,*) '  Mapping initial reference geometry to the mesh...'
-    
+
     did_remap_init = .FALSE.
-    
+
     IF     (choice_refgeo_init == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
-      
+
       CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
-      
+
     ELSEIF (choice_refgeo_init == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
-      
+
+      IF (par%master) WRITE(0,*) '  Mapping initial reference geometry to the mesh...'
       CALL calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_init)
       did_remap_init = .TRUE.
-      
+
+    ELSEIF (choice_refgeo_init == 'restart') THEN
+      ! For initial geometries from a restart file, just assing to them the already read data
+
+      DO vi = mesh%vi1, mesh%vi2
+        region%refgeo_init%Hi( vi) = region%restart%Hi( vi)
+        region%refgeo_init%Hb( vi) = region%restart%Hb( vi)
+        region%refgeo_init%Hs( vi) = region%restart%Hs( vi)
+      END DO
+      CALL sync
+
     ELSE
       CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
-    
+
     ! Present-day ice-sheet geometry
     ! ==============================
-    
+
     IF (par%master) WRITE(0,*) '  Mapping present-day reference geometry to the mesh...'
-    
+
     did_remap_PD = .FALSE.
-    
+
     IF     (choice_refgeo_PD == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
-      
+
       CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
-      
+
     ELSEIF (choice_refgeo_PD == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
-      
+
       ! Check if we can re-use the remapping arrays from the initial geometry
       do_reuse_init_map = .FALSE.
       IF (did_remap_init) THEN
@@ -1541,29 +1557,29 @@ CONTAINS
       ELSE
         CALL calc_remapping_operator_grid2mesh( region%refgeo_PD%grid, mesh)
       END IF
-      
+
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_PD)
       did_remap_PD = .TRUE.
-      
+
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
-    
+
     ! GIA equilibrium ice-sheet geometry
     ! ==================================
-    
+
     IF (par%master) WRITE(0,*) '  Mapping GIA equilibrium reference geometry to the mesh...'
-    
+
     did_remap_GIAeq = .FALSE.
-    
+
     IF     (choice_refgeo_GIAeq == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
-      
+
       CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
-      
+
     ELSEIF (choice_refgeo_GIAeq == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
-      
+
       ! Check if we can re-use the remapping arrays from the initial/PD geometry
       do_reuse_init_map = .FALSE.
       IF (did_remap_init) THEN
@@ -1596,22 +1612,22 @@ CONTAINS
       ELSE
         CALL calc_remapping_operator_grid2mesh( region%refgeo_GIAeq%grid, mesh)
       END IF
-      
+
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
       did_remap_GIAeq = .TRUE.
-      
+
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
-    
+
     ! Clean up after yourself
     IF (did_remap_init ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_init%grid )
     IF (did_remap_PD   ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_PD%grid   )
     IF (did_remap_GIAeq) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_GIAeq%grid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
-    
+
   END SUBROUTINE map_reference_geometries_to_mesh
   SUBROUTINE map_reference_geometry_to_mesh( mesh, refgeo)
     ! Map data for a single reference geometry from its original square grid to the model mesh.

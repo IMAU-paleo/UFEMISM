@@ -427,8 +427,8 @@ CONTAINS
 
     CALL allocate_region_timers_and_scalars( region)
 
-    ! ===== PD and init reference data fields =====
-    ! =============================================
+    ! ===== PD, GIAeq, and init reference data fields =====
+    ! =====================================================
 
     CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
 
@@ -436,8 +436,11 @@ CONTAINS
     ! ====================
 
     IF (C%is_restart) THEN
+      ! Read mesh and initial data (on the mesh) from a restart file
       CALL read_mesh_from_restart_file( region)
+      CALL read_init_data_from_restart_file( region)
     ELSE
+      ! Create a new mesh from the reference initial geometry
       CALL create_mesh_from_cart_data( region)
     END IF
 
@@ -456,10 +459,6 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
-
-    IF (C%is_restart) THEN
-      CALL read_init_data_from_restart_file( region)
-    END IF
 
     ! Map data from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh)

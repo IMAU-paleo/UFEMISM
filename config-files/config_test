@@ -64,10 +64,14 @@
   ! ================================================================
 
   ! Initial geometry
-  choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
-  choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
-  choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
-  choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_NAM_config               = 'restart'                        ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_EAS_config               = 'restart'                        ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_GRL_config               = 'restart'                        ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
+  choice_refgeo_init_ANT_config               = 'restart'                        ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
+  time_to_restart_from_NAM_config             = 100.0                            ! Can be different from C%start_time_of_run, though this will issue a warning
+  time_to_restart_from_EAS_config             = 100.0
+  time_to_restart_from_GRL_config             = 100.0
+  time_to_restart_from_ANT_config             = 100.0
   filename_refgeo_init_NAM_config             = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_init_GRL_config             = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
@@ -99,7 +103,6 @@
   ! ===================================================================
 
   is_restart_config                           = .TRUE.
-  time_to_restart_from_config                 = 100.0                            ! Can be different from C%start_time_of_run, though this will issue a warning
 
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'

@@ -163,7 +163,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,        region%restart%wFirnDepth       )
 
     ! Read data from the restart file
-    IF (par%master) CALL read_restart_file_init( region%restart, region%restart%netcdf)
+    IF (par%master) CALL read_restart_file_init( region%name, region%restart, region%restart%netcdf)
     CALL sync
 
     ! Finalise routine path

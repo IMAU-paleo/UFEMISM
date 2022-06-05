@@ -32,7 +32,8 @@ MODULE restart_module
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
   USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
                                              find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
-                                             find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh
+                                             find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh, &
+                                             calc_triangle_geometric_centres
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
@@ -43,25 +44,25 @@ CONTAINS
 
   SUBROUTINE read_mesh_from_restart_file( region)
     ! Read primary mesh data from the restart file of a previous run, calculate secondary mesh data.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_mesh_from_restart_file'
 
     INTEGER                                            :: nV, nTri, nC_mem
-!    REAL(dp)                                           :: xmin, xmax, ymin, ymax
-!    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
-    
+    REAL(dp)                                           :: xmin, xmax, ymin, ymax
+    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! ! DENK DROM
     ! CALL crash('FIXME!')
-    
+
    ! Set the filename
    IF     (region%name == 'NAM') THEN
      region%restart%netcdf%filename = C%filename_restart_NAM
@@ -92,51 +93,49 @@ CONTAINS
    IF (par%master) CALL read_restart_file_mesh( region%mesh, region%restart%netcdf)
    CALL sync
 
-   stop '5'
-!    
-!    ! Determine vertex and triangle domains
-!    CALL partition_list( region%mesh%nV,   par%i, par%n, region%mesh%vi1, region%mesh%vi2)
-!    CALL partition_list( region%mesh%nTri, par%i, par%n, region%mesh%ti1, region%mesh%ti2)
-!    
-!    ! Calculate some mesh metadata
-!    xmin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
-!    xmax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
-!    ymin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
-!    ymax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
-!    CALL MPI_REDUCE( xmin, region%mesh%xmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)
-!    CALL MPI_REDUCE( xmax, region%mesh%xmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
-!    CALL MPI_REDUCE( ymin, region%mesh%ymin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)
-!    CALL MPI_REDUCE( ymax, region%mesh%ymax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
-!    IF (par%master) region%mesh%tol_dist = ((region%mesh%xmax - region%mesh%xmin) + (region%mesh%ymax - region%mesh%ymin)) * tol / 2._dp
-!    
-!    ! Calculate extra mesh data
-!    CALL allocate_mesh_secondary(                 region%mesh)
-!    CALL find_Voronoi_cell_areas(                 region%mesh)
-!    CALL get_lat_lon_coordinates(                 region%mesh)
-!    CALL find_triangle_areas(                     region%mesh)
-!    CALL find_connection_widths(                  region%mesh)
-!    CALL make_Ac_mesh(                            region%mesh)
-!    CALL calc_matrix_operators_mesh(              region%mesh)
-!    CALL determine_mesh_resolution(               region%mesh)
-!    IF (par%master) CALL find_POI_xy_coordinates( region%mesh)
-!    CALL sync
-!    CALL find_POI_vertices_and_weights(           region%mesh)
-!    CALL find_Voronoi_cell_geometric_centres(     region%mesh)
-!    CALL create_transect(                         region%mesh)
-!    CALL calculate_five_colouring_AaAc(           region%mesh)
-!    
-!    CALL check_mesh( region%mesh)
-!
-!    IF (par%master) THEN
-!      WRITE(0,'(A)')                '   Finished creating final mesh.'
-!      WRITE(0,'(A,I6)')             '    Vertices  : ', region%mesh%nV
-!      WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh%nTri
-!      WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
-!    END IF
-!    
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
+   ! Determine vertex and triangle domains
+   CALL partition_list( region%mesh%nV,   par%i, par%n, region%mesh%vi1, region%mesh%vi2)
+   CALL partition_list( region%mesh%nTri, par%i, par%n, region%mesh%ti1, region%mesh%ti2)
+
+   ! Calculate some mesh metadata
+   xmin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
+   xmax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,1) )
+   ymin = MINVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
+   ymax = MAXVAL( region%mesh%V( region%mesh%vi1:region%mesh%vi2,2) )
+   CALL MPI_REDUCE( xmin, region%mesh%xmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)
+   CALL MPI_REDUCE( xmax, region%mesh%xmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
+   CALL MPI_REDUCE( ymin, region%mesh%ymin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, 0, MPI_COMM_WORLD, ierr)
+   CALL MPI_REDUCE( ymax, region%mesh%ymax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
+   IF (par%master) region%mesh%tol_dist = ((region%mesh%xmax - region%mesh%xmin) + (region%mesh%ymax - region%mesh%ymin)) * tol / 2._dp
+
+   ! Calculate extra mesh data
+    CALL allocate_mesh_secondary(                 region%mesh)    ! Adds  9 MPI windows
+    CALL calc_triangle_geometric_centres(         region%mesh)
+    CALL find_Voronoi_cell_areas(                 region%mesh)
+    CALL get_lat_lon_coordinates(                 region%mesh)
+    CALL find_triangle_areas(                     region%mesh)
+    CALL find_connection_widths(                  region%mesh)
+    CALL make_Ac_mesh(                            region%mesh)    ! Adds  5 MPI windows
+    CALL calc_matrix_operators_mesh(              region%mesh)    ! Adds 42 MPI windows (6 CSR matrices, 7 windows each)
+    CALL determine_mesh_resolution(               region%mesh)
+    IF (par%master) CALL find_POI_xy_coordinates( region%mesh)
+    CALL sync
+    CALL find_POI_vertices_and_weights(           region%mesh)
+    CALL find_Voronoi_cell_geometric_centres(     region%mesh)
+    CALL create_transect(                         region%mesh)
+
+    CALL check_mesh( region%mesh)
+
+    IF (par%master) THEN
+      WRITE(0,'(A)')                '    Finished restarting mesh.'
+      WRITE(0,'(A,I6)')             '     Vertices  : ', region%mesh%nV
+      WRITE(0,'(A,I6)')             '     Triangles : ', region%mesh%nTri
+      WRITE(0,'(A,F7.1,A,F7.1,A)')  '     Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
+
   END SUBROUTINE read_mesh_from_restart_file
   SUBROUTINE read_init_data_from_restart_file( region)
     ! Read initial model data from the restart file of a previous run

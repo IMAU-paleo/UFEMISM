@@ -435,8 +435,7 @@ CONTAINS
     ! ===== The mesh =====
     ! ====================
 
-    ! IF (C%is_restart) THEN
-    IF (.TRUE.) THEN
+    IF (C%is_restart) THEN
       CALL read_mesh_from_restart_file( region)
     ELSE
       CALL create_mesh_from_cart_data( region)

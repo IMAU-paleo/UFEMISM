@@ -134,7 +134,7 @@
   Martin2011_hydro_Hb_max_config              = 1000.0                           ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
 
   ! Basal roughness / friction
-  choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed"
+  choice_basal_roughness_config               = 'restart'                        ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
   slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law

@@ -191,15 +191,6 @@ CONTAINS
 
       CALL run_isotopes_model( region)
 
-      ! == Basal sliding inversion
-      ! ==========================
-
-      IF (C%do_basal_sliding_inversion) THEN
-        IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
-        END IF
-      END IF
-
       ! == Time step and output
       ! =======================
 
@@ -214,7 +205,18 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
-      ! Update ice geometry and advance region time
+      ! == Basal sliding inversion
+      ! ==========================
+
+      IF (C%do_basal_sliding_inversion) THEN
+        IF (region%do_basal) THEN
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
+        END IF
+      END IF
+
+      ! == Update ice geometry and advance region time
+      ! ==============================================
+
       CALL update_ice_thickness( region%mesh, region%ice)
       IF (par%master) region%time = region%time + region%dt
       CALL sync
@@ -501,7 +503,7 @@ CONTAINS
     ! ===== The ice dynamics model =====
     ! ==================================
 
-    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
+    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%restart)
 
     ! ===== Define ice basins =====
     ! =============================
@@ -598,7 +600,7 @@ CONTAINS
     ! ice dynamics and the secondary model components), and for the scalars (integrated ice volume and
     ! area, SMB components, computation times, etc.)
 
-    IMPLICIT NONE  
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
@@ -622,7 +624,7 @@ CONTAINS
 
     CALL allocate_shared_dp_0D(   region%t_last_mesh,      region%wt_last_mesh     )
     CALL allocate_shared_dp_0D(   region%t_next_mesh,      region%wt_next_mesh     )
-    CALL allocate_shared_bool_0D( region%do_mesh,          region%wdo_mesh         ) 
+    CALL allocate_shared_bool_0D( region%do_mesh,          region%wdo_mesh         )
 
     CALL allocate_shared_dp_0D(   region%t_last_SIA,       region%wt_last_SIA      )
     CALL allocate_shared_dp_0D(   region%t_next_SIA,       region%wt_next_SIA      )
@@ -771,7 +773,7 @@ CONTAINS
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
     ! Initialise a regular square grid enveloping this model region
 
-    IMPLICIT NONE  
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),    INTENT(INOUT)     :: region
@@ -917,7 +919,7 @@ CONTAINS
   SUBROUTINE calculate_icesheet_volume_and_area( region)
     ! Calculate this region's ice sheet's volume and area
 
-    IMPLICIT NONE  
+    IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),    INTENT(INOUT)     :: region
@@ -965,6 +967,10 @@ CONTAINS
 
 ! ===== Extras =====
 ! ==================
+
+END MODULE UFEMISM_main_model
+
+
 
   ! Commented out stuff
 
@@ -1221,5 +1227,3 @@ CONTAINS
     !  END SUBROUTINE write_text_output
 
   ! END Commented out stuff
-
-END MODULE UFEMISM_main_model

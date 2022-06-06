@@ -45,7 +45,7 @@ MODULE data_types_module
 
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
-    
+
     ! Basic data - ice thickness, bedrock & surface elevation, sea level (geoid elevation), englacial temperature, and ice velocities
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_a                        ! Ice thickness [m]
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb_a                        ! Bedrock elevation [m w.r.t. PD sea level]
@@ -54,7 +54,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: TAF_a                       ! Thickness above flotation [m]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti_a                        ! Englacial temperature [K]
     INTEGER :: wHi_a, wHb_a, wHs_a, wSL_a, wTAF_a, wTi_a
-    
+
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_a
@@ -63,7 +63,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_3D_b
     INTEGER :: wu_3D_a, wv_3D_a, wu_3D_b, wv_3D_b, ww_3D_a, ww_3D_b
-    
+
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_vav_b
@@ -71,7 +71,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_vav_b
     INTEGER :: wu_vav_a, wv_vav_a, wu_vav_b, wv_vav_b, wuabs_vav_a, wuabs_vav_b
-    
+
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_b
@@ -79,7 +79,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_b
     INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, wuabs_surf_a, wuabs_surf_b
-    
+
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b
@@ -87,13 +87,13 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
     INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, wuabs_base_a, wuabs_base_b
-    
+
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_SSA_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_SSA_b
     INTEGER :: wu_3D_SIA_b, wv_3D_SIA_b, wu_base_SSA_b, wv_base_SSA_b
-    
+
     ! Different masks
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_land_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_ocean_a
@@ -113,7 +113,7 @@ MODULE data_types_module
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
     INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
     INTEGER :: wbasin_ID, wnbasins
-    
+
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: A_flow_vav_a
@@ -121,27 +121,27 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Cpi_a                       ! Specific heat capacity of ice [J kg^-1 K^-1].
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
     INTEGER :: wA_flow_3D_a, wA_flow_vav_a, wTi_pmp_a, wCpi_a, wKi_a
-    
+
     ! Zeta derivatives
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dt_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dx_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dzeta_dy_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dzeta_dz_a
     INTEGER :: wdzeta_dt_a, wdzeta_dx_a, wdzeta_dy_a, wdzeta_dz_a
-    
+
     ! Ice dynamics - basal hydrology
     REAL(dp), DIMENSION(:    ), POINTER     :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
     REAL(dp), DIMENSION(:    ), POINTER     :: pore_water_pressure_a       ! Pore water pressure (determined by basal hydrology model) [Pa]
     REAL(dp), DIMENSION(:    ), POINTER     :: Neff_a                      ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
     INTEGER :: woverburden_pressure_a, wpore_water_pressure_a, wNeff_a
-    
+
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
-    
+
     ! Ice dynamics - physical terms in the SSA/DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
     REAL(dp), DIMENSION(:    ), POINTER     :: taudy_b                     ! x-component of the driving stress
@@ -166,20 +166,20 @@ MODULE data_types_module
     INTEGER :: wdu_dx_a, wdu_dy_a, wdv_dx_a, wdv_dy_a, wdu_dz_3D_b, wdv_dz_3D_b, wvisc_eff_3D_a, wvisc_eff_int_a, wN_a
     INTEGER :: wbeta_a, wbeta_eff_a, wbeta_eff_b, wtaubx_b, wtauby_b, wF2_a
     INTEGER :: wu_prev_b, wv_prev_b
-    
+
     ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
-    
+
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
     INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wHi_tplusdt_a
-    
+
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp),                   POINTER     :: pc_zeta
     REAL(dp), DIMENSION(:    ), POINTER     :: pc_tau
@@ -199,14 +199,14 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_corr
     INTEGER :: wpc_zeta, wpc_tau, wpc_fcb, wpc_eta, wpc_eta_prev, wpc_beta1, wpc_beta2, wpc_beta3, wpc_beta4
     INTEGER :: wpc_f1, wpc_f2, wpc_f3, wpc_f4, wHi_old, wHi_pred, wHi_corr
-    
+
     ! Thermodynamics
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_ice_a_prev        ! Ice mask from previous time step
     REAL(dp), DIMENSION(:,:  ), POINTER     :: internal_heating_a     ! Internal heating due to deformation
     REAL(dp), DIMENSION(:    ), POINTER     :: frictional_heating_a   ! Friction heating due to basal sliding
     REAL(dp), DIMENSION(:    ), POINTER     :: GHF_a                  ! Geothermal heat flux
     INTEGER :: wmask_ice_a_prev, winternal_heating_a, wfrictional_heating_a, wGHF_a
-    
+
     ! Isotope content
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_a_prev
     REAL(dp), DIMENSION(:    ), POINTER     :: IsoRef
@@ -215,7 +215,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: IsoIce
     REAL(dp), DIMENSION(:    ), POINTER     :: IsoIce_new
     INTEGER :: wHi_a_prev, wIsoRef, wIsoSurf, wMB_iso, wIsoIce, wIsoIce_new
-    
+
     ! ELRA GIA model
     INTEGER,                    POINTER     :: flex_prof_rad
     REAL(dp), DIMENSION(:,:  ), POINTER     :: flex_prof_grid
@@ -234,7 +234,7 @@ MODULE data_types_module
     INTEGER :: wsurface_load_PD_mesh, wsurface_load_mesh, wsurface_load_rel_mesh, wsurface_load_rel_grid, wsurface_load_rel_ext_grid
     INTEGER :: wdHb_eq_grid, wdHb_grid, wdHb_dt_grid
     INTEGER :: wdHb_a, wdHb_dt_a, wdSL_dt_a
-    
+
     ! Mesh adaptation data
     REAL(dp), DIMENSION(:    ), POINTER     :: surf_curv
     REAL(dp), DIMENSION(:    ), POINTER     :: log_velocity
@@ -250,7 +250,7 @@ MODULE data_types_module
 
     ! Basic meta properties
     ! =====================
-    
+
     CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
     REAL(dp),                   POINTER     :: lambda_M                      ! Oblique stereographic projection parameters
     REAL(dp),                   POINTER     :: phi_M
@@ -282,7 +282,7 @@ MODULE data_types_module
 
     ! Primary mesh data (needed for mesh creation & refinement)
     ! =========================================================
-    
+
     ! Vertex data
     REAL(dp), DIMENSION(:,:  ), POINTER     :: V                             ! The X and Y coordinates of all the vertices
     INTEGER,  DIMENSION(:    ), POINTER     :: nC                            ! The number of other vertices this vertex is connected to
@@ -298,7 +298,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: TriCC                         ! The X,Y-coordinates of each triangle's circumcenter
     INTEGER,  DIMENSION(:,:  ), POINTER     :: TriC                          ! The (up to) three neighbour triangles (order across from 1st, 2nd and 3d vertex, respectively)
     INTEGER :: wTri, wTriCC, wTriC
-    
+
     ! Refinement lists
     INTEGER,  DIMENSION(:,:  ), POINTER     :: Triflip                       ! List of triangles to flip, used in updating Delaunay triangulation
     INTEGER,  DIMENSION(:    ), POINTER     :: RefMap                        ! Map   of which triangles      have been marked for refining
@@ -312,7 +312,7 @@ MODULE data_types_module
     INTEGER :: wVMap, wVStack1, wVStack2, wTriMap, wTriStack1, wTriStack2
     INTEGER :: VStackN1, VStackN2
     INTEGER :: TriStackN1, TriStackN2
-    
+
     ! Points-of-Interest
     INTEGER,                    POINTER     :: nPOI                          ! Number of Points of Interest (POI) in this mesh
     REAL(dp), DIMENSION(:,:  ), POINTER     :: POI_coordinates               ! Lat-lon coordinates of a POI
@@ -321,10 +321,10 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), POINTER     :: POI_vi                        ! The three vertices surrounding a POI
     REAL(dp), DIMENSION(:,:  ), POINTER     :: POI_w                         ! Their relative weights in trilinear interpolation
     INTEGER :: wnPOI, wPOI_coordinates, wPOI_XY_coordinates, wPOI_resolutions, wPOI_vi, wPOI_w
-    
+
     ! Secondary mesh data
     ! ===================
-    
+
     ! Derived geometry data
     REAL(dp), DIMENSION(:    ), POINTER     :: A                             ! The area             of each vertex's Voronoi cell
     REAL(dp), DIMENSION(:,:  ), POINTER     :: VorGC                         ! The geometric centre of each vertex's Voronoi cell
@@ -334,7 +334,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: Tri_edge_index                ! Same as for vertices, only NE, SE, etc. aren't used
     REAL(dp), DIMENSION(:    ), POINTER     :: TriA                          ! The area of each triangle
     INTEGER :: wA, wVorGC, wR, wCw, wTriGC, wTri_edge_index, wTriA
-    
+
     ! Staggered (Arakawa C) mesh
     INTEGER,                    POINTER     :: nAc                           ! The number of Ac vertices
     REAL(dp), DIMENSION(:,:  ), POINTER     :: VAc                           ! x,y coordinates of the Ac vertices
@@ -342,7 +342,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), POINTER     :: iAci                          ! Mapping array from the Ac to the Aa mesh
     INTEGER,  DIMENSION(:    ), POINTER     :: edge_index_Ac
     INTEGER :: wnAc, wVAc, wAci, wiAci, wedge_index_Ac
-    
+
     ! Matrix operators: mapping
     TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
     TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
@@ -350,7 +350,7 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
     TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
     TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
-   
+
     ! Matrix operators: d/dx
     TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
@@ -361,7 +361,7 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
-   
+
     ! Matrix operators: d/dy
     TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
@@ -372,35 +372,35 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    
+
     ! 2nd-order accurate matrix operators on the b-grid
     TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
-    
+
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
-    
+
     ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
     TYPE(tMat)                              :: M_Neumann_BC_b
     TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
-    
+
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), POINTER     :: lat
     REAL(dp), DIMENSION(:    ), POINTER     :: lon
     INTEGER :: wlat, wlon
-    
+
     ! Transect
     INTEGER,                    POINTER     :: nV_transect                   ! Number of vertex pairs for the transect
     INTEGER,  DIMENSION(:,:  ), POINTER     :: vi_transect                   ! List   of vertex pairs for the transect
     REAL(dp), DIMENSION(:,:  ), POINTER     :: w_transect                    ! Interpolation weights for the vertex pairs
     INTEGER :: wnV_transect, wvi_transect, ww_transect
-    
+
     ! Parallelisation
     INTEGER                                 :: vi1, vi2                      ! Vertices
     INTEGER                                 :: ti1, ti2                      ! Triangles
@@ -533,20 +533,20 @@ MODULE data_types_module
 
   TYPE type_forcing_data
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
-    
+
     ! Data for the inverse routine
     REAL(dp),                   POINTER     :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
     REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
     INTEGER,                    POINTER     :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
     REAL(dp),                   POINTER     :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
     INTEGER :: wdT_glob, wdT_glob_history, wndT_glob_history, wdT_deepwater
-    
+
     REAL(dp),                   POINTER     :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
     REAL(dp),                   POINTER     :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
     REAL(dp),                   POINTER     :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
     REAL(dp),                   POINTER     :: d18O_mod                                  ! Modelled benthic d18O
     INTEGER :: wd18O_NAM, wd18O_EAS, wd18O_GRL, wd18O_ANT, wd18O_from_ice_volume_mod, wd18O_from_temperature_mod, wd18O_mod
-    
+
     REAL(dp),                   POINTER     :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
     REAL(dp), DIMENSION(:    ), POINTER     :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
     INTEGER,                    POINTER     :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
@@ -555,20 +555,20 @@ MODULE data_types_module
     INTEGER,                    POINTER     :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
     REAL(dp),                   POINTER     :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
     INTEGER :: wdT_glob_inverse, wdT_glob_inverse_history, wndT_glob_inverse_history, wCO2_inverse, wCO2_inverse_history, wnCO2_inverse_history, wCO2_mod
-    
+
     ! External forcing: CO2 record
     REAL(dp), DIMENSION(:    ), POINTER     :: CO2_time
     REAL(dp), DIMENSION(:    ), POINTER     :: CO2_record
     REAL(dp),                   POINTER     :: CO2_obs
     INTEGER :: wCO2_time, wCO2_record, wCO2_obs
-    
+
     ! External forcing: d18O record
     REAL(dp), DIMENSION(:    ), POINTER     :: d18O_time
     REAL(dp), DIMENSION(:    ), POINTER     :: d18O_record
     REAL(dp),                   POINTER     :: d18O_obs
     REAL(dp),                   POINTER     :: d18O_obs_PD
     INTEGER :: wd18O_time, wd18O_record, wd18O_obs, wd18O_obs_PD
-    
+
     ! External forcing: insolation
     TYPE(type_netcdf_insolation)            :: netcdf_ins
     INTEGER,                    POINTER     :: ins_nyears
@@ -578,7 +578,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: ins_t0, ins_t1
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
     INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
-    
+
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
     TYPE(type_latlongrid)                   :: grid_ghf
@@ -1283,6 +1283,11 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
     INTEGER :: wHi, wHb, wHs, wTi
+
+    ! Bed roughness
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric
+    INTEGER :: wbeta_sq, wphi_fric
 
     ! GIA
     REAL(dp), DIMENSION(:    ), POINTER     :: SL

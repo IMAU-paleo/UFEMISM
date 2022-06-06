@@ -158,6 +158,8 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,               region%restart%wHi              )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hb,               region%restart%wHb              )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,               region%restart%wHs              )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%beta_sq,          region%restart%wbeta_sq         )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%phi_fric,         region%restart%wphi_fric        )
     CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,               region%restart%wTi              )
     CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear, region%restart%wMeltPreviousYear)
     CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,        region%restart%wFirnDepth       )
@@ -167,7 +169,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 6)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 8)
 
   END SUBROUTINE read_init_data_from_restart_file
 

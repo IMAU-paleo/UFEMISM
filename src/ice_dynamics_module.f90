@@ -5,39 +5,35 @@ MODULE ice_dynamics_module
   ! NOTE: routines for calculating ice velocities             have been moved to the ice_velocity_module;
   !       routines for integrating the ice thickness equation have been moved to the ice_thickness_module.
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  
-  ! Import specific functionality                     
-  USE data_types_module,               ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
-                                             type_remapping_mesh_mesh
-  USE utilities_module,                ONLY: vertical_average, surface_elevation                 
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
-  USE general_ice_model_data_module,   ONLY: update_general_ice_model_data
-  USE mesh_operators_module,           ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  USE ice_velocity_module,             ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
-                                             map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
-  USE ice_thickness_module,            ONLY: calc_dHi_dt
-  USE basal_conditions_and_sliding_module, ONLY: initialise_basal_conditions, remap_basal_conditions
-  USE thermodynamics_module,           ONLY: calc_ice_rheology, remap_ice_temperature
+  USE configuration_module,                  ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE petsc_module,                          ONLY: perr
+  USE parallel_module,                       ONLY: par, sync, ierr, cerr, partition_list, &
+                                                   allocate_shared_int_0D,   allocate_shared_dp_0D, &
+                                                   allocate_shared_int_1D,   allocate_shared_dp_1D, &
+                                                   allocate_shared_int_2D,   allocate_shared_dp_2D, &
+                                                   allocate_shared_int_3D,   allocate_shared_dp_3D, &
+                                                   allocate_shared_bool_0D,  allocate_shared_bool_1D, &
+                                                   reallocate_shared_int_0D, reallocate_shared_dp_0D, &
+                                                   reallocate_shared_int_1D, reallocate_shared_dp_1D, &
+                                                   reallocate_shared_int_2D, reallocate_shared_dp_2D, &
+                                                   reallocate_shared_int_3D, reallocate_shared_dp_3D, &
+                                                   deallocate_shared
+  USE utilities_module,                      ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                                   check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                                   vertical_average, surface_elevation
+  USE netcdf_module,                         ONLY: debug, write_to_debug_file
+  USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
+                                                   type_remapping_mesh_mesh, type_restart_data
+  USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
+  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data
+  USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
+  USE ice_velocity_module,                   ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
+                                                   map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
+  USE ice_thickness_module,                  ONLY: calc_dHi_dt
+  USE basal_conditions_and_sliding_module,   ONLY: initialise_basal_conditions, remap_basal_conditions
+  USE thermodynamics_module,                 ONLY: calc_ice_rheology, remap_ice_temperature
 
   IMPLICIT NONE
   
@@ -701,7 +697,7 @@ CONTAINS
   END SUBROUTINE determine_timesteps_and_actions
   
 ! == Administration: allocation, initialisation, and remapping
-  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init)
+  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init, restart)
     ! Allocate shared memory for all the data fields of the ice dynamical module, and
     ! initialise some of them    
 
@@ -711,6 +707,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
+    TYPE(type_restart_data),             INTENT(IN)    :: restart
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_model'
@@ -736,7 +733,7 @@ CONTAINS
     CALL update_general_ice_model_data( mesh, ice)
 
     ! Allocate and initialise basal conditions
-    CALL initialise_basal_conditions( mesh, ice)
+    CALL initialise_basal_conditions( mesh, ice, restart)
 
     ! Geothermal heat flux
     IF     (C%choice_geothermal_heat_flux == 'constant') THEN

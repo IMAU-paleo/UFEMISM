@@ -373,7 +373,7 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011_hydro_Hb_max_config              = 1000._dp                         ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
 
     ! Basal roughness / friction
-    CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
+    CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed", or "restart"
     REAL(dp)            :: slid_Weertman_beta_sq_uniform_config        = 1.0E4_dp                         ! Uniform value for beta_sq  in Weertman sliding law
     REAL(dp)            :: slid_Coulomb_phi_fric_uniform_config        = 15._dp                           ! Uniform value for phi_fric in (regularised) Coulomb sliding law
     REAL(dp)            :: slid_Tsai2015_alpha_sq_uniform_config       = 0.5_dp                           ! Uniform value for alpha_sq in the Tsai2015 sliding law
@@ -767,14 +767,14 @@ MODULE configuration_module
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
     REAL(dp)                            :: dt_basal
-    
+
     ! Which ice sheets do we simulate?
     ! ================================
-    
+
     LOGICAL                             :: do_NAM
     LOGICAL                             :: do_EAS
     LOGICAL                             :: do_GRL
-    LOGICAL                             :: do_ANT 
+    LOGICAL                             :: do_ANT
 
     ! Benchmark experiments
     ! =====================
@@ -790,19 +790,19 @@ MODULE configuration_module
 
     ! Whether or not to let UFEMISM dynamically create its own output folder
     ! =======================================================================
-    
+
     LOGICAL                             :: create_procedural_output_dir
     CHARACTER(LEN=256)                  :: fixed_output_dir
     CHARACTER(LEN=256)                  :: fixed_output_dir_suffix
     LOGICAL                             :: do_write_regional_scalar_output
     LOGICAL                             :: do_write_global_scalar_output
-  
+
     ! Debugging
     ! =========
-    
+
     LOGICAL                             :: do_write_debug_data
     LOGICAL                             :: do_check_for_NaN
-    LOGICAL                             :: do_write_memory_tracker 
+    LOGICAL                             :: do_write_memory_tracker
 
     ! Domain size for the four regions
     ! ================================
@@ -826,7 +826,7 @@ MODULE configuration_module
     REAL(dp)                            :: xmax_ANT
     REAL(dp)                            :: ymin_ANT
     REAL(dp)                            :: ymax_ANT
-    
+
     ! Mesh generation parameters
     ! ==========================
 
@@ -841,17 +841,17 @@ MODULE configuration_module
     REAL(dp)                            :: res_max_mountain
     REAL(dp)                            :: res_max_coast
     REAL(dp)                            :: mesh_fitness_threshold
-  
+
     ! Resolutions of the different square grids
     ! =========================================
-    
+
     REAL(dp)                            :: dx_grid_output
     REAL(dp)                            :: dx_grid_GIA
     REAL(dp)                            :: dx_grid_smooth
-    
+
     ! High-resolution Points Of Interest (POIs) and transects
     ! =======================================================
-    
+
     INTEGER                             :: nPOI_NAM
     INTEGER                             :: nPOI_EAS
     INTEGER                             :: nPOI_GRL
@@ -865,15 +865,15 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)            :: POI_GRL_resolutions
     REAL(dp), DIMENSION(100)            :: POI_ANT_resolutions
 
-    ! Scaled vertical coordinate zeta  
+    ! Scaled vertical coordinate zeta
     ! ===============================
-     
+
     INTEGER                             :: nz       ! Number of grid points in vertical direction for thermodynamics in ice sheet
     REAL(dp), DIMENSION(:), ALLOCATABLE :: zeta
 
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
-    
+
     ! Initial geometry
     CHARACTER(LEN=256)                  :: choice_refgeo_init_NAM
     CHARACTER(LEN=256)                  :: choice_refgeo_init_EAS
@@ -965,7 +965,7 @@ MODULE configuration_module
 
     ! Ice dynamics - velocity
     ! =======================
-    
+
     CHARACTER(LEN=256)                  :: choice_ice_dynamics
     REAL(dp)                            :: n_flow
     REAL(dp)                            :: m_enh_sheet
@@ -975,7 +975,7 @@ MODULE configuration_module
     LOGICAL                             :: do_GL_subgrid_friction
     LOGICAL                             :: do_smooth_geometry
     REAL(dp)                            :: r_smooth_geometry
-    
+
     ! Some parameters for numerically solving the SSA/DIVA
     REAL(dp)                            :: DIVA_visc_it_norm_dUV_tol
     INTEGER                             :: DIVA_visc_it_nit
@@ -998,10 +998,10 @@ MODULE configuration_module
     REAL(dp)                            :: DIVA_SOR_omega
     REAL(dp)                            :: DIVA_PETSc_rtol
     REAL(dp)                            :: DIVA_PETSc_abstol
-  
+
     ! Ice dynamics - time integration
     ! ===============================
-    
+
     CHARACTER(LEN=256)                  :: choice_timestepping
     CHARACTER(LEN=256)                  :: choice_ice_integration_method
     CHARACTER(LEN=256)                  :: dHi_choice_matrix_solver
@@ -1010,7 +1010,7 @@ MODULE configuration_module
     REAL(dp)                            :: dHi_SOR_omega
     REAL(dp)                            :: dHi_PETSc_rtol
     REAL(dp)                            :: dHi_PETSc_abstol
-    
+
     ! Predictor-corrector ice-thickness update
     REAL(dp)                            :: pc_epsilon
     REAL(dp)                            :: pc_k_I
@@ -1019,7 +1019,7 @@ MODULE configuration_module
     INTEGER                             :: pc_max_timestep_iterations
     REAL(dp)                            :: pc_redo_tol
     REAL(dp)                            :: dt_min
-  
+
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)                  :: ice_thickness_west_BC
     CHARACTER(LEN=256)                  :: ice_thickness_east_BC
@@ -1029,7 +1029,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_mask_noice_EAS
     CHARACTER(LEN=256)                  :: choice_mask_noice_GRL
     CHARACTER(LEN=256)                  :: choice_mask_noice_ANT
-    
+
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
 
@@ -1070,10 +1070,10 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_scale
     REAL(dp)                            :: basal_sliding_inv_rsmooth
     REAL(dp)                            :: basal_sliding_inv_wsmooth
-    
+
     ! Ice dynamics - calving
     ! ======================
-    
+
     CHARACTER(LEN=256)                  :: choice_calving_law
     REAL(dp)                            :: calving_threshold_thickness
     LOGICAL                             :: do_remove_shelves
@@ -1083,7 +1083,7 @@ MODULE configuration_module
 
     ! Thermodynamics and rheology
     ! ===========================
-    
+
     CHARACTER(LEN=256)                  :: choice_initial_ice_temperature
     REAL(dp)                            :: uniform_ice_temperature
     CHARACTER(LEN=256)                  :: choice_thermo_model
@@ -1367,60 +1367,60 @@ MODULE configuration_module
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
 
-    CHARACTER(LEN=256)                  :: help_field_01  
-    CHARACTER(LEN=256)                  :: help_field_02  
-    CHARACTER(LEN=256)                  :: help_field_03  
-    CHARACTER(LEN=256)                  :: help_field_04  
-    CHARACTER(LEN=256)                  :: help_field_05  
-    CHARACTER(LEN=256)                  :: help_field_06  
-    CHARACTER(LEN=256)                  :: help_field_07  
-    CHARACTER(LEN=256)                  :: help_field_08  
+    CHARACTER(LEN=256)                  :: help_field_01
+    CHARACTER(LEN=256)                  :: help_field_02
+    CHARACTER(LEN=256)                  :: help_field_03
+    CHARACTER(LEN=256)                  :: help_field_04
+    CHARACTER(LEN=256)                  :: help_field_05
+    CHARACTER(LEN=256)                  :: help_field_06
+    CHARACTER(LEN=256)                  :: help_field_07
+    CHARACTER(LEN=256)                  :: help_field_08
     CHARACTER(LEN=256)                  :: help_field_09
-    CHARACTER(LEN=256)                  :: help_field_10  
-    CHARACTER(LEN=256)                  :: help_field_11  
-    CHARACTER(LEN=256)                  :: help_field_12  
-    CHARACTER(LEN=256)                  :: help_field_13  
-    CHARACTER(LEN=256)                  :: help_field_14  
-    CHARACTER(LEN=256)                  :: help_field_15  
-    CHARACTER(LEN=256)                  :: help_field_16  
-    CHARACTER(LEN=256)                  :: help_field_17  
-    CHARACTER(LEN=256)                  :: help_field_18  
+    CHARACTER(LEN=256)                  :: help_field_10
+    CHARACTER(LEN=256)                  :: help_field_11
+    CHARACTER(LEN=256)                  :: help_field_12
+    CHARACTER(LEN=256)                  :: help_field_13
+    CHARACTER(LEN=256)                  :: help_field_14
+    CHARACTER(LEN=256)                  :: help_field_15
+    CHARACTER(LEN=256)                  :: help_field_16
+    CHARACTER(LEN=256)                  :: help_field_17
+    CHARACTER(LEN=256)                  :: help_field_18
     CHARACTER(LEN=256)                  :: help_field_19
-    CHARACTER(LEN=256)                  :: help_field_20  
-    CHARACTER(LEN=256)                  :: help_field_21  
-    CHARACTER(LEN=256)                  :: help_field_22  
-    CHARACTER(LEN=256)                  :: help_field_23  
-    CHARACTER(LEN=256)                  :: help_field_24  
-    CHARACTER(LEN=256)                  :: help_field_25  
-    CHARACTER(LEN=256)                  :: help_field_26  
-    CHARACTER(LEN=256)                  :: help_field_27  
-    CHARACTER(LEN=256)                  :: help_field_28  
+    CHARACTER(LEN=256)                  :: help_field_20
+    CHARACTER(LEN=256)                  :: help_field_21
+    CHARACTER(LEN=256)                  :: help_field_22
+    CHARACTER(LEN=256)                  :: help_field_23
+    CHARACTER(LEN=256)                  :: help_field_24
+    CHARACTER(LEN=256)                  :: help_field_25
+    CHARACTER(LEN=256)                  :: help_field_26
+    CHARACTER(LEN=256)                  :: help_field_27
+    CHARACTER(LEN=256)                  :: help_field_28
     CHARACTER(LEN=256)                  :: help_field_29
-    CHARACTER(LEN=256)                  :: help_field_30  
-    CHARACTER(LEN=256)                  :: help_field_31  
-    CHARACTER(LEN=256)                  :: help_field_32  
-    CHARACTER(LEN=256)                  :: help_field_33  
-    CHARACTER(LEN=256)                  :: help_field_34  
-    CHARACTER(LEN=256)                  :: help_field_35  
-    CHARACTER(LEN=256)                  :: help_field_36  
-    CHARACTER(LEN=256)                  :: help_field_37  
-    CHARACTER(LEN=256)                  :: help_field_38  
+    CHARACTER(LEN=256)                  :: help_field_30
+    CHARACTER(LEN=256)                  :: help_field_31
+    CHARACTER(LEN=256)                  :: help_field_32
+    CHARACTER(LEN=256)                  :: help_field_33
+    CHARACTER(LEN=256)                  :: help_field_34
+    CHARACTER(LEN=256)                  :: help_field_35
+    CHARACTER(LEN=256)                  :: help_field_36
+    CHARACTER(LEN=256)                  :: help_field_37
+    CHARACTER(LEN=256)                  :: help_field_38
     CHARACTER(LEN=256)                  :: help_field_39
-    CHARACTER(LEN=256)                  :: help_field_40  
-    CHARACTER(LEN=256)                  :: help_field_41  
-    CHARACTER(LEN=256)                  :: help_field_42  
-    CHARACTER(LEN=256)                  :: help_field_43  
-    CHARACTER(LEN=256)                  :: help_field_44  
-    CHARACTER(LEN=256)                  :: help_field_45  
-    CHARACTER(LEN=256)                  :: help_field_46  
-    CHARACTER(LEN=256)                  :: help_field_47  
-    CHARACTER(LEN=256)                  :: help_field_48  
+    CHARACTER(LEN=256)                  :: help_field_40
+    CHARACTER(LEN=256)                  :: help_field_41
+    CHARACTER(LEN=256)                  :: help_field_42
+    CHARACTER(LEN=256)                  :: help_field_43
+    CHARACTER(LEN=256)                  :: help_field_44
+    CHARACTER(LEN=256)                  :: help_field_45
+    CHARACTER(LEN=256)                  :: help_field_46
+    CHARACTER(LEN=256)                  :: help_field_47
+    CHARACTER(LEN=256)                  :: help_field_48
     CHARACTER(LEN=256)                  :: help_field_49
     CHARACTER(LEN=256)                  :: help_field_50
-    
+
     ! Values to be filled into the total mask (used only for diagnostic output)
     ! ==========================================================================
-    
+
     INTEGER                             :: type_land
     INTEGER                             :: type_ocean
     INTEGER                             :: type_lake
@@ -1430,14 +1430,14 @@ MODULE configuration_module
     INTEGER                             :: type_margin
     INTEGER                             :: type_groundingline
     INTEGER                             :: type_calvingfront
-    
+
    ! Parameters of the polar stereographic projections of the four model regions
    ! (These have to match the values used to create the input files!)
-   ! ===========================================================================     
-                          
-    REAL(dp)                            :: lambda_M_NAM                           
-    REAL(dp)                            :: lambda_M_EAS                           
-    REAL(dp)                            :: lambda_M_GRL                           
+   ! ===========================================================================
+
+    REAL(dp)                            :: lambda_M_NAM
+    REAL(dp)                            :: lambda_M_EAS
+    REAL(dp)                            :: lambda_M_GRL
     REAL(dp)                            :: lambda_M_ANT
     REAL(dp)                            :: phi_M_NAM
     REAL(dp)                            :: phi_M_EAS
@@ -1447,10 +1447,10 @@ MODULE configuration_module
     REAL(dp)                            :: alpha_stereo_EAS
     REAL(dp)                            :: alpha_stereo_GRL
     REAL(dp)                            :: alpha_stereo_ANT
-    
+
     ! The output directory
     ! ====================
-    
+
     CHARACTER(LEN=256)                  :: output_dir
 
   END TYPE constants_type
@@ -1495,10 +1495,10 @@ CONTAINS
     ! Initialise the C (configuration) structure from one or two external config text files,
     ! set up the output directory (either procedurally from the current date, or directly
     ! from the config-specified folder name), and copy the config file(s) there.
-    
+
     ! In/output variables:
     CHARACTER(LEN=256),                  INTENT(IN)    :: version_number
-    
+
     ! Local variables:
     INTEGER                                            :: ierr, cerr, process_rank, number_of_processes, p
     LOGICAL                                            :: master
@@ -1506,34 +1506,34 @@ CONTAINS
     INTEGER                                            :: i,n
     CHARACTER(LEN=20)                                  :: output_dir_procedural
     LOGICAL                                            :: ex
-  
+
     ! Get rank of current process and total number of processes
     ! (needed because the configuration_module cannot access the par structure)
     CALL MPI_COMM_RANK( MPI_COMM_WORLD, process_rank, ierr)
     CALL MPI_COMM_SIZE( MPI_COMM_WORLD, number_of_processes, ierr)
     master = (process_rank == 0)
-    
+
     ! ===== Set up the config structure =====
     ! =======================================
-    
+
     ! The name(s) of the config file(s) are provided as input arguments when calling the UFEMISM_program
     ! executable. After calling MPI_INIT, only the master process "sees" these arguments, so they need to be
     ! broadcast to the other processes.
-    
+
     IF (master) THEN
-    
+
       config_filename       = ''
       template_filename     = ''
       variation_filename    = ''
       config_mode           = ''
-      
+
       IF     (iargc() == 0) THEN
-      
+
         WRITE(0,*) ' ERROR: IMAU-ICE v', TRIM(version_number), ' needs at least one config file to run!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
+
       ELSEIF (iargc() == 1) THEN
-      
+
         ! Run the model with a single config file
         CALL getarg( 1, config_filename)
         config_mode = 'single_config'
@@ -1541,9 +1541,9 @@ CONTAINS
         WRITE(0,*) ''
         WRITE(0,*) ' Simulation settings from configuration file: ', TRIM(config_filename)
         WRITE(0,*) ''
-        
+
       ELSEIF (iargc() == 2) THEN
-      
+
         ! Run the model with two config files (template+variation)
         CALL getarg( 1, template_filename )
         CALL getarg( 2, variation_filename)
@@ -1552,97 +1552,97 @@ CONTAINS
         WRITE(0,*) ''
         WRITE(0,*) ' Simulation settings from configuration files: ', TRIM(template_filename), ' & ', TRIM(variation_filename)
         WRITE(0,*) ''
-        
+
       ELSE
-      
+
         WRITE(0,*) ' ERROR: IMAU-ICE v', TRIM(version_number), ' can take either one or two config files to run!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
+
       END IF
-      
+
     END IF ! IF (master) THEN
-    
+
     CALL MPI_BCAST( config_filename,    256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_BCAST( template_filename,  256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_BCAST( variation_filename, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_BCAST( config_mode,        256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
-    
+
     ! Let each of the processors read the config file in turns so there's no access conflicts
     IF (config_mode == 'single_config') THEN
       ! Read only a single config file
-      
+
       DO p = 0, number_of_processes-1
         IF (p == process_rank) THEN
-        
+
           ! Read the external file, use a Fortran NAMELIST to overwrite the default
           ! values of the XXX_config variables
           CALL read_config_file( config_filename)
-          
+
           ! Copy values from the XXX_config variables to the C structure
           CALL copy_variables_to_struct
-          
+
         END IF
         CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
       END DO
-      
+
     ELSEIF (config_mode == 'template+variation') THEN
       ! Read two config file consecutively: one "template" and one "variation"
-      
+
       DO p = 0, number_of_processes-1
         IF (p == process_rank) THEN
-        
+
           ! Read the external file, use a Fortran NAMELIST to overwrite the default
           ! values of the XXX_config variables
-          
+
           ! First the template, then the variation
           CALL read_config_file( template_filename)
           CALL read_config_file( variation_filename)
-          
+
           ! Copy values from the XXX_config variables to the C structure
           CALL copy_variables_to_struct
-          
+
         END IF
         CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
       END DO
-      
+
     ELSE ! IF (config_mode == 'single_config') THEN
-      
+
       IF (master) WRITE(0,*) 'initialise_model_configuration - ERROR: unknown config_mode "', TRIM(config_mode), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-        
+
     END IF ! IF (config_mode == 'single_config') THEN
-    
+
     ! ===== Set up the output directory =====
     ! =======================================
-    
+
     ! First get the name of the output directory (either procedural, or provided in the config file)
-    
+
     DO n = 1, 256
       C%output_dir(n:n) = ' '
     END DO
-    
+
     IF (C%create_procedural_output_dir) THEN
       ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-      
-      IF (master) THEN  
+
+      IF (master) THEN
         CALL get_procedural_output_dir_name( output_dir_procedural)
         C%output_dir(1:21) = TRIM(output_dir_procedural) // '/'
       END IF
       CALL MPI_BCAST( C%output_dir, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
-      
+
     ELSE
       ! Use the provided name (return an error if this directory already exists)
 
       C%output_dir = TRIM(C%fixed_output_dir) // TRIM(C%fixed_output_dir_suffix) // '/'
-      
+
       INQUIRE( FILE = TRIM(C%output_dir)//'/.', EXIST=ex)
       IF (ex) THEN
         WRITE(0,*) ' ERROR: fixed_output_dir_config ', TRIM(C%output_dir), ' already exists!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
-      
+
     END IF
-    
+
     ! Create the directory
     IF (master) THEN
       CALL system('mkdir ' // TRIM(C%output_dir))
@@ -1651,7 +1651,7 @@ CONTAINS
       WRITE(0,*) ''
     END IF
     CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
-    
+
     ! Copy the config file to the output directory
     IF (master) THEN
       IF     (config_mode == 'single_config') THEN
@@ -1665,10 +1665,10 @@ CONTAINS
       END IF ! IF (config_mode == 'single_config') THEN
     END IF ! IF (master) THEN
     CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
-    
+
     ! Set up the resource tracker
     ! ===========================
-    
+
     ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
     n = 0
     IF (C%do_NAM) n = n + 1000
@@ -1676,7 +1676,7 @@ CONTAINS
     IF (C%do_GRL) n = n + 1000
     IF (C%do_ANT) n = n + 1000
     ALLOCATE( resource_tracker( n))
-    
+
     ! Initialise values
     DO i = 1, n
       resource_tracker( i)%routine_path = 'subroutine_placeholder'
@@ -1685,7 +1685,7 @@ CONTAINS
       resource_tracker( i)%mem_use      = 0._dp
       resource_tracker( i)%mem_use_max  = 0._dp
     END DO
-    
+
     ! Initialise the total model memory use tracker
     mem_use_tot     = 0._dp
     mem_use_tot_max = 0._dp
@@ -1723,7 +1723,7 @@ CONTAINS
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
-                     do_ANT_config,                                   & 
+                     do_ANT_config,                                   &
                      SSA_icestream_m_config,                          &
                      ISMIP_HOM_L_config,                              &
                      ISMIP_HOM_E_Arolla_filename_config,              &
@@ -2200,12 +2200,12 @@ CONTAINS
     ! Overwrite the values in the fields of the "C" type with the values
     ! of the "_config" variables, some which by now have had their default
     ! values overwritten by the values specified in the external config file.
-    
+
     IMPLICIT NONE
-    
+
     ! Time steps and range
     ! ====================
-   
+
     C%start_time_of_run                        = start_time_of_run_config
     C%end_time_of_run                          = end_time_of_run_config
     C%dt_coupling                              = dt_coupling_config
@@ -2220,10 +2220,10 @@ CONTAINS
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
     C%dt_basal                                 = dt_basal_config
-    
+
     ! Which ice sheets do we simulate?
     ! ================================
-    
+
     C%do_NAM                                   = do_NAM_config
     C%do_EAS                                   = do_EAS_config
     C%do_GRL                                   = do_GRL_config
@@ -2243,16 +2243,16 @@ CONTAINS
 
     ! Whether or not to let UFEMISM dynamically create its own output folder
     ! =======================================================================
-    
+
     C%create_procedural_output_dir             = create_procedural_output_dir_config
     C%fixed_output_dir                         = fixed_output_dir_config
     C%fixed_output_dir_suffix                  = fixed_output_dir_suffix_config
     C%do_write_regional_scalar_output          = do_write_regional_scalar_output_config
     C%do_write_global_scalar_output            = do_write_global_scalar_output_config
-  
+
     ! Debugging
     ! =========
-    
+
     C%do_write_debug_data                      = do_write_debug_data_config
     C%do_check_for_NaN                         = do_check_for_NaN_config
     C%do_write_memory_tracker                  = do_write_memory_tracker_config
@@ -2282,7 +2282,7 @@ CONTAINS
 
     ! Mesh generation parameters
     ! ==========================
-    
+
     C%nconmax                                  = nconmax_config
     C%alpha_min                                = alpha_min_config
     C%dz_max_ice                               = dz_max_ice_config
@@ -2293,23 +2293,23 @@ CONTAINS
     C%res_max_mountain                         = res_max_mountain_config
     C%res_max_coast                            = res_max_coast_config
     C%mesh_fitness_threshold                   = mesh_fitness_threshold_config
-    
+
     ! The smallest allowed resolution
     C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast)
-  
+
     ! Resolutions of the different square grids
     ! =========================================
-    
+
     C%dx_grid_output                           = dx_grid_output_config
     C%dx_grid_GIA                              = dx_grid_GIA_config
     C%dx_grid_smooth                           = dx_grid_smooth_config
-    
+
     ! High-resolution Points Of Interest (POIs)
     ! =========================================
-    
-    C%nPOI_NAM                                 = nPOI_NAM_config    
-    C%nPOI_EAS                                 = nPOI_EAS_config    
-    C%nPOI_GRL                                 = nPOI_GRL_config    
+
+    C%nPOI_NAM                                 = nPOI_NAM_config
+    C%nPOI_EAS                                 = nPOI_EAS_config
+    C%nPOI_GRL                                 = nPOI_GRL_config
     C%nPOI_ANT                                 = nPOI_ANT_config
     C%POI_NAM_coordinates                      = POI_NAM_coordinates_config
     C%POI_EAS_coordinates                      = POI_EAS_coordinates_config
@@ -2320,16 +2320,16 @@ CONTAINS
     C%POI_GRL_resolutions                      = POI_GRL_resolutions_config
     C%POI_ANT_resolutions                      = POI_ANT_resolutions_config
 
-    ! Scaled vertical coordinate zeta  
+    ! Scaled vertical coordinate zeta
     ! ===============================
-    
+
     C%nz     = nz_config
     ALLOCATE( C%zeta( C%nz))
     C%zeta   = zeta_config( 1:C%nz)
 
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
-    
+
     ! Initial geometry
     C%choice_refgeo_init_NAM                   = choice_refgeo_init_NAM_config
     C%choice_refgeo_init_EAS                   = choice_refgeo_init_EAS_config
@@ -2420,7 +2420,7 @@ CONTAINS
 
     ! Ice dynamics - velocity
     ! =======================
-    
+
     C%choice_ice_dynamics                      = choice_ice_dynamics_config
     C%n_flow                                   = n_flow_config
     C%m_enh_sheet                              = m_enh_sheet_config
@@ -2430,7 +2430,7 @@ CONTAINS
     C%do_GL_subgrid_friction                   = do_GL_subgrid_friction_config
     C%do_smooth_geometry                       = do_smooth_geometry_config
     C%r_smooth_geometry                        = r_smooth_geometry_config
-    
+
     ! Some parameters for numerically solving the SSA/DIVA
     C%DIVA_visc_it_norm_dUV_tol                = DIVA_visc_it_norm_dUV_tol_config
     C%DIVA_visc_it_nit                         = DIVA_visc_it_nit_config
@@ -2453,10 +2453,10 @@ CONTAINS
     C%DIVA_SOR_omega                           = DIVA_SOR_omega_config
     C%DIVA_PETSc_rtol                          = DIVA_PETSc_rtol_config
     C%DIVA_PETSc_abstol                        = DIVA_PETSc_abstol_config
-  
+
     ! Ice dynamics - time integration
     ! ===============================
-    
+
     C%choice_timestepping                      = choice_timestepping_config
     C%choice_ice_integration_method            = choice_ice_integration_method_config
     C%dHi_choice_matrix_solver                 = dHi_choice_matrix_solver_config
@@ -2465,7 +2465,7 @@ CONTAINS
     C%dHi_SOR_omega                            = dHi_SOR_omega_config
     C%dHi_PETSc_rtol                           = dHi_PETSc_rtol_config
     C%dHi_PETSc_abstol                         = dHi_PETSc_abstol_config
-    
+
     ! Predictor-corrector ice-thickness update
     C%pc_epsilon                               = pc_epsilon_config
     C%pc_k_I                                   = pc_k_I_config
@@ -2474,7 +2474,7 @@ CONTAINS
     C%pc_max_timestep_iterations               = pc_max_timestep_iterations_config
     C%pc_redo_tol                              = pc_redo_tol_config
     C%dt_min                                   = dt_min_config
-  
+
     ! Ice thickness boundary conditions
     C%ice_thickness_west_BC                    = ice_thickness_west_BC_config
     C%ice_thickness_east_BC                    = ice_thickness_east_BC_config
@@ -2525,20 +2525,20 @@ CONTAINS
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
     C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
     C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
-  
+
     ! Ice dynamics - calving
     ! ======================
-    
+
     C%choice_calving_law                       = choice_calving_law_config
     C%calving_threshold_thickness              = calving_threshold_thickness_config
     C%do_remove_shelves                        = do_remove_shelves_config
     C%remove_shelves_larger_than_PD            = remove_shelves_larger_than_PD_config
     C%continental_shelf_calving                = continental_shelf_calving_config
     C%continental_shelf_min_height             = continental_shelf_min_height_config
-  
+
     ! Thermodynamics and rheology
     ! ===========================
-    
+
     C%choice_initial_ice_temperature           = choice_initial_ice_temperature_config
     C%uniform_ice_temperature                  = uniform_ice_temperature_config
     C%choice_thermo_model                      = choice_thermo_model_config
@@ -2873,7 +2873,7 @@ CONTAINS
     C%help_field_48                            = help_field_48_config
     C%help_field_49                            = help_field_49_config
     C%help_field_50                            = help_field_50_config
-    
+
     ! Values to be filled into the total mask (used only for diagnostic output)
     ! ==========================================================================
 
@@ -2886,11 +2886,11 @@ CONTAINS
     C%type_margin                              = 6
     C%type_groundingline                       = 7
     C%type_calvingfront                        = 8
-    
+
    ! Parameters of the polar stereographic projections of the four model regions
    ! (These have to match the values used to create the input files!)
-   ! ===========================================================================  
-  
+   ! ===========================================================================
+
     C%lambda_M_NAM                             = 265._dp
     C%lambda_M_EAS                             = 40._dp
     C%lambda_M_GRL                             = 320._dp
@@ -2926,7 +2926,7 @@ CONTAINS
     ! Keep increasing the counter at the end until a directory is available.
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(20),                       INTENT(INOUT) :: output_dir
 
@@ -3102,7 +3102,7 @@ CONTAINS
          output_dir(19:19) = '9'
        ELSE IF (output_dir(19:19) == '9') THEN
          output_dir(19:19) = '0'
- 
+
          IF      (output_dir(18:18) == '0') THEN
            output_dir(18:18) = '1'
          ELSE IF (output_dir(18:18) == '1') THEN
@@ -3124,7 +3124,7 @@ CONTAINS
          ELSE IF (output_dir(18:18) == '9') THEN
            output_dir(18:18) = '0'
          END IF
- 
+
        END IF
 
      END IF
@@ -3138,30 +3138,30 @@ CONTAINS
   SUBROUTINE write_total_model_time_to_screen( tstart, tstop)
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp),                            INTENT(IN)    :: tstart, tstop
-    
+
     ! Local variables
     REAL(dp)                                           :: dt
     INTEGER                                            :: nr, ns, nm, nh, nd
-      
+
     dt = tstop - tstart
-    
+
     ns = CEILING(dt)
-    
+
     nr = MOD(ns, 60*60*24)
     nd = (ns - nr) / (60*60*24)
     ns = ns - (nd*60*60*24)
-    
+
     nr = MOD(ns, 60*60)
     nh = (ns - nr) / (60*60)
     ns = ns - (nh*60*60)
-    
+
     nr = MOD(ns, 60)
     nm = (ns - nr) / (60)
-    ns = ns - (nm*60) 
-    
+    ns = ns - (nm*60)
+
     WRITE(0,'(A)') ''
     WRITE(0,'(A)') ' ================================================================================'
     WRITE(0,'(A,I2,A,I2,A,I2,A,I2,A)') ' ===== Simulation finished in ', nd, ' days, ', nh, ' hours, ', nm, ' minutes and ', ns, ' seconds! ====='
@@ -3177,32 +3177,32 @@ CONTAINS
     ! Initialise an IMAU-ICE subroutine; update the routine path
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=256),                  INTENT(IN)    :: routine_name
-    
+
     ! Local variables:
     INTEGER                                            :: len_path_tot, len_path_used, len_name
     INTEGER                                            :: ierr, cerr
     INTEGER                                            :: i
-    
+
     ! Check if routine_name has enough memory
     len_path_tot  = LEN(      routine_path)
     len_path_used = LEN_TRIM( routine_path)
     len_name      = LEN_TRIM( routine_name)
-    
+
     IF (len_path_used + 1 + len_name > len_path_tot) THEN
       WRITE(0,*) 'init_routine - ERROR: routine_path = "', TRIM( routine_path), '", no more space to append routine_name = "', TRIM( routine_name), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
-    
+
     ! Append this routine to the routine path
     routine_path = TRIM( routine_path) // '/' // TRIM( routine_name)
-    
+
     ! Initialise the computation time tracker
     CALL find_subroutine_in_resource_tracker( i)
     resource_tracker( i)%tstart = MPI_WTIME()
-    
+
     ! Check maximum MPI window at the start of the routine
     resource_tracker( i)%n_MPI_windows_init = n_MPI_windows
 
@@ -3212,40 +3212,40 @@ CONTAINS
     ! Finalise; remove the current routine name from the routine path
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=256),                  INTENT(IN)    :: routine_name
     INTEGER,  INTENT(IN), OPTIONAL                     :: n_extra_windows_expected
-    
+
     ! Local variables:
     INTEGER                                            :: len_path_tot, i, ii
     INTEGER                                            :: ierr, cerr
     REAL(dp)                                           :: dt
     INTEGER                                            :: n_extra_windows_expected_loc, n_extra_windows_found
-    
+
     ! Add computation time to the resource tracker
     CALL find_subroutine_in_resource_tracker( i)
     dt = MPI_WTIME() - resource_tracker( i)%tstart
     resource_tracker( i)%tcomp = resource_tracker( i)%tcomp + dt
-    
+
     ! Check maximum MPI window at the end of the routine
     resource_tracker( i)%n_MPI_windows_final = n_MPI_windows
-    
+
     ! If it is larger than expected, warn that there might be a memory leak
     n_extra_windows_expected_loc = 0
     IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
     n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
-    
+
     IF (n_extra_windows_found > n_extra_windows_expected_loc) THEN
       ! This subroutine has more memory allocated at the start than at the beginning.
       CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
         int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)
     END IF
-    
+
     ! Find where in the string exactly the current routine name is located
     len_path_tot = LEN( routine_path)
     i = INDEX( routine_path, routine_name)
-    
+
     IF (i == 0) THEN
       WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
@@ -3260,15 +3260,15 @@ CONTAINS
     ! Find the current subroutine in the resource tracker. If it's not there yet, add it.
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     INTEGER,                             INTENT(OUT)   :: i
-    
+
     ! Local variables:
     INTEGER                                            :: n
-    
+
     n = SIZE( resource_tracker)
-    
+
     DO i = 1, n
       IF     (resource_tracker( i)%routine_path == routine_path) THEN
         ! The current subroutine is listed at this position in the resource tracker
@@ -3279,7 +3279,7 @@ CONTAINS
         RETURN
       END IF
     END DO
-    
+
     ! If we've reached this point, then the resource tracker is overflowing
     CALL crash('Resource tracker overflows! Allocate more memory for it in initialise_model_configuration.')
 
@@ -3289,14 +3289,14 @@ CONTAINS
     ! Reset the computation times and maximum memory use for all subroutines in the resource tracker
 
     IMPLICIT NONE
-    
+
     ! Local variables:
     INTEGER                                            :: i,n
-    
+
     mem_use_tot_max = 0._dp
-    
+
     n = SIZE( resource_tracker)
-    
+
     DO i = 1, n
       resource_tracker( i)%tstart      = 0._dp
       resource_tracker( i)%tcomp       = 0._dp
@@ -3310,26 +3310,26 @@ CONTAINS
     ! Crash the model, write the error message to the screen
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: err_msg
     INTEGER,  INTENT(IN), OPTIONAL                     :: int_01, int_02, int_03, int_04, int_05, int_06, int_07, int_08, int_09, int_10
     REAL(dp), INTENT(IN), OPTIONAL                     ::  dp_01,  dp_02,  dp_03,  dp_04,  dp_05,  dp_06,  dp_07,  dp_08,  dp_09,  dp_10
-    
+
     ! Local variables:
     CHARACTER(LEN=1024)                                :: err_msg_loc
     INTEGER                                            :: ierr, cerr, pari, parn, nc
     CHARACTER(LEN=9)                                   :: fmt
     CHARACTER(LEN=:), ALLOCATABLE                      :: process_str
-    
+
     ! Get local, edit-able copy of error message string
     err_msg_loc = err_msg
-  
+
     ! Get rank of current process and total number of processes
     ! (needed because the configuration_module cannot access the par structure)
     CALL MPI_COMM_RANK( MPI_COMM_WORLD, pari, ierr)
     CALL MPI_COMM_SIZE( MPI_COMM_WORLD, parn, ierr)
-    
+
     ! Set the process string (e.g. "05/16")
     IF     (parn < 10) THEN
       nc = 1
@@ -3342,11 +3342,11 @@ CONTAINS
     ELSE
       nc = 5
     END IF
-    
+
     WRITE( fmt,'(A,I1,A,I1,A)') '(I', nc, ',A,I', nc, ')'
     ALLOCATE(CHARACTER(2*nc+1) :: process_str)
     WRITE( process_str,fmt) pari, '/', parn
-    
+
     ! Insert numbers into string if needed
     IF (PRESENT( int_01)) CALL insert_val_into_string_int( err_msg_loc, '{int_01}', int_01)
     IF (PRESENT( int_02)) CALL insert_val_into_string_int( err_msg_loc, '{int_02}', int_02)
@@ -3358,7 +3358,7 @@ CONTAINS
     IF (PRESENT( int_08)) CALL insert_val_into_string_int( err_msg_loc, '{int_08}', int_08)
     IF (PRESENT( int_09)) CALL insert_val_into_string_int( err_msg_loc, '{int_09}', int_09)
     IF (PRESENT( int_10)) CALL insert_val_into_string_int( err_msg_loc, '{int_10}', int_10)
-    
+
     IF (PRESENT( dp_01 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_01}' , dp_01 )
     IF (PRESENT( dp_02 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_02}' , dp_02 )
     IF (PRESENT( dp_03 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_03}' , dp_03 )
@@ -3369,11 +3369,11 @@ CONTAINS
     IF (PRESENT( dp_08 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_08}' , dp_08 )
     IF (PRESENT( dp_09 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_09}' , dp_09 )
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
-    
+
     ! Write the error to the screen
     WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
-    
+
     ! Stop the program
     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
@@ -3384,26 +3384,26 @@ CONTAINS
     ! Write the warning message to the screen, but don't crash the model
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: err_msg
     INTEGER,  INTENT(IN), OPTIONAL                     :: int_01, int_02, int_03, int_04, int_05, int_06, int_07, int_08, int_09, int_10
     REAL(dp), INTENT(IN), OPTIONAL                     ::  dp_01,  dp_02,  dp_03,  dp_04,  dp_05,  dp_06,  dp_07,  dp_08,  dp_09,  dp_10
-    
+
     ! Local variables:
     CHARACTER(LEN=1024)                                :: err_msg_loc
     INTEGER                                            :: ierr, pari, parn, nc
     CHARACTER(LEN=9)                                   :: fmt
     CHARACTER(LEN=:), ALLOCATABLE                      :: process_str
-    
+
     ! Get local, edit-able copy of error message string
     err_msg_loc = err_msg
-  
+
     ! Get rank of current process and total number of processes
     ! (needed because the configuration_module cannot access the par structure)
     CALL MPI_COMM_RANK( MPI_COMM_WORLD, pari, ierr)
     CALL MPI_COMM_SIZE( MPI_COMM_WORLD, parn, ierr)
-    
+
     ! Set the process string (e.g. "05/16")
     IF     (parn < 10) THEN
       nc = 1
@@ -3416,11 +3416,11 @@ CONTAINS
     ELSE
       nc = 5
     END IF
-    
+
     WRITE( fmt,'(A,I1,A,I1,A)') '(I', nc, ',A,I', nc, ')'
     ALLOCATE(CHARACTER(2*nc+1) :: process_str)
     WRITE( process_str,fmt) pari, '/', parn
-    
+
     ! Insert numbers into string if needed
     IF (PRESENT( int_01)) CALL insert_val_into_string_int( err_msg_loc, '{int_01}', int_01)
     IF (PRESENT( int_02)) CALL insert_val_into_string_int( err_msg_loc, '{int_02}', int_02)
@@ -3432,7 +3432,7 @@ CONTAINS
     IF (PRESENT( int_08)) CALL insert_val_into_string_int( err_msg_loc, '{int_08}', int_08)
     IF (PRESENT( int_09)) CALL insert_val_into_string_int( err_msg_loc, '{int_09}', int_09)
     IF (PRESENT( int_10)) CALL insert_val_into_string_int( err_msg_loc, '{int_10}', int_10)
-    
+
     IF (PRESENT( dp_01 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_01}' , dp_01 )
     IF (PRESENT( dp_02 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_02}' , dp_02 )
     IF (PRESENT( dp_03 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_03}' , dp_03 )
@@ -3443,11 +3443,11 @@ CONTAINS
     IF (PRESENT( dp_08 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_08}' , dp_08 )
     IF (PRESENT( dp_09 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_09}' , dp_09 )
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
-    
+
     ! Write the error to the screen
     WRITE(0,'(A,A,A,A,A,A)') colour_string('WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
-    
+
     ! Clean up after yourself
     DEALLOCATE( process_str)
 
@@ -3455,7 +3455,7 @@ CONTAINS
 
   FUNCTION colour_string( str, col) RESULT( str_col)
     ! Add colour to a string for writing to the terminal
-    
+
     IMPLICIT NONE
 
     ! Input variables:
@@ -3494,29 +3494,29 @@ CONTAINS
     ! Example: str    = 'Johnny has {int_01} apples.'
     !          marker = '{int_01}'
     !          val    = 5
-    ! 
+    !
     ! This returns: str = 'Johnny has 5 apples'
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(INOUT) :: str
     CHARACTER(LEN=*),                    INTENT(IN)    :: marker
     INTEGER,                             INTENT(IN)    :: val
-    
+
     ! Local variables:
     INTEGER                                            :: ci
     INTEGER                                            :: nc
     CHARACTER(LEN=4)                                   :: fmt
     CHARACTER(LEN=:), ALLOCATABLE                      :: val_str
     INTEGER                                            :: len_str, len_marker
-    
+
     ! Find position ci in str where i_str occurs
     ci = INDEX( str, marker)
-    
+
     ! Safety
     IF (ci == 0) CALL crash('insert_val_into_string_int: couldnt find marker "' // TRIM( marker) // '" in string "' // TRIM( str) // '"!')
-    
+
     ! Write val to a string
     IF     (ABS( val) < 10) THEN
       nc = 1
@@ -3539,18 +3539,18 @@ CONTAINS
     END IF
     ! Add room for a minus sign if needed
     IF (val < 0) nc = nc + 1
-    
+
     WRITE( fmt,'(A,I1,A)') '(I', nc, ')'
     ALLOCATE(CHARACTER(nc) :: val_str)
     WRITE( val_str,fmt) val
-    
+
     ! Find total string length right now
     len_str    = LEN( str)
     len_marker = LEN( marker)
-    
+
     ! Insert the integer string into the string
     str = str(1:ci-1) // val_str // str(ci+len_marker:len_str)
-    
+
     ! Clean up after yourself
     DEALLOCATE( val_str)
 
@@ -3562,34 +3562,34 @@ CONTAINS
     ! Example: str    = 'Johnny weighs {dp_01} kg.'
     !          marker = '{dp_01}'
     !          val    = 57.098
-    ! 
+    !
     ! This returns: str = 'Johnny weighs 57.098 kg'
 
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(INOUT) :: str
     CHARACTER(LEN=*),                    INTENT(IN)    :: marker
     REAL(dp),                            INTENT(IN)    :: val
-    
+
     ! Local variables:
     INTEGER                                            :: ci
     CHARACTER(LEN=11)                                  :: val_str
     INTEGER                                            :: len_str, len_marker
-    
+
     ! Find position ci in str where i_str occurs
     ci = INDEX( str, marker)
-    
+
     ! Safety
     IF (ci == 0) CALL crash('insert_val_into_string_dp: couldnt find marker "' // TRIM( marker) // '" in string "' // TRIM( str) // '"!')
-    
+
     ! Write val to a string
     WRITE( val_str,'(E11.5)') val
-    
+
     ! Find total string length right now
     len_str    = LEN( str)
     len_marker = LEN( marker)
-    
+
     ! Insert the integer string into the string
     str = str(1:ci-1) // val_str // str(ci+len_marker:len_str)
 

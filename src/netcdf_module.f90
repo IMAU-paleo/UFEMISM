@@ -48,8 +48,8 @@ MODULE netcdf_module
 
 CONTAINS
 
-! == Basic NetCDF wrapper functions
-! =================================
+! ===== Basic NetCDF wrapper functions =====
+! ==========================================
 
   SUBROUTINE open_netcdf_file( filename, ncid)
     IMPLICIT NONE
@@ -261,8 +261,8 @@ CONTAINS
 
   END SUBROUTINE handle_error
 
-! == Main output functions
-! ========================
+! ===== Main output functions =====
+! =================================
 
   SUBROUTINE create_output_files( region)
     ! Create a new set of output NetCDF files (restart + help_fields + debug)
@@ -447,8 +447,8 @@ CONTAINS
 
   END SUBROUTINE get_output_filenames
 
-! == Create and write to output NetCDF files (mesh versions)
-! ==========================================================
+! ===== Create and write to output NetCDF files (mesh versions) =====
+! ===================================================================
 
   SUBROUTINE write_to_restart_file_mesh( region, netcdf)
     ! Write the current model state to the existing output file
@@ -1424,8 +1424,8 @@ CONTAINS
 
   END SUBROUTINE create_help_field_mesh
 
-! == Create and write to output NetCDF files (grid versions)
-! ==========================================================
+! ===== Create and write to output NetCDF files (grid versions) =====
+! ===================================================================
 
   SUBROUTINE write_to_restart_file_grid( region, netcdf)
 
@@ -2379,8 +2379,8 @@ CONTAINS
 
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_3D
 
-! == Read all kinds of input files
-! ================================
+! ===== Read all kinds of input files =====
+! =========================================
 
   ! A restart file produced by an earlier run
   SUBROUTINE inquire_restart_file_mesh( netcdf, nV, nTri, nC_mem)
@@ -4123,8 +4123,8 @@ CONTAINS
 
   END SUBROUTINE read_direct_regional_climate_file_time_xy
 
-! == SELEN
-! ========
+! ===== SELEN =====
+! =================
 
   ! Global topography for SELEN
   SUBROUTINE inquire_SELEN_global_topo_file( SELEN)
@@ -4381,8 +4381,8 @@ CONTAINS
 
   END SUBROUTINE write_to_SELEN_output_file
 
-! == Create and write to debug NetCDF file
-! ========================================
+! ===== Create and write to debug NetCDF file =====
+! =================================================
 
   SUBROUTINE write_to_debug_file
     ! Write the current set of debug data fields to the debug NetCDF file
@@ -5520,8 +5520,8 @@ CONTAINS
 
   END SUBROUTINE deallocate_debug_fields_region
 
-! == Create and write to resource tracking file
-! =============================================
+! ===== Create and write to resource tracking file =====
+! ======================================================
 
   SUBROUTINE write_to_resource_tracking_file( netcdf, time, tcomp_tot)
     ! Write to the resource tracking output file

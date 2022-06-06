@@ -3,8 +3,11 @@ MODULE restart_module
   ! Read primary mesh data from a NetCDF file, calculate secondary mesh data,
   ! and read ice model data.
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -22,13 +25,11 @@ MODULE restart_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  
-  ! Import specific functionality
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_restart_file_mesh, &
+                                             read_restart_file_mesh, inquire_restart_file_init, &
+                                             read_restart_file_init
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
   USE data_types_module,               ONLY: type_model_region
-  USE netcdf_module,                   ONLY: inquire_restart_file_mesh, read_restart_file_mesh, inquire_restart_file_init, &
-                                             read_restart_file_init
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
   USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
                                              find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
@@ -37,10 +38,13 @@ MODULE restart_module
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
-  
+
   IMPLICIT NONE
 
 CONTAINS
+
+! == Mesh
+! =======
 
   SUBROUTINE read_mesh_from_restart_file( region)
     ! Read primary mesh data from the restart file of a previous run, calculate secondary mesh data.
@@ -134,6 +138,10 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
 
   END SUBROUTINE read_mesh_from_restart_file
+
+! == Data
+! =======
+
   SUBROUTINE read_init_data_from_restart_file( region)
     ! Read initial model data from the restart file of a previous run
 

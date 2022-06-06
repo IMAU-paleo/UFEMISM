@@ -1,9 +1,15 @@
 MODULE data_types_netcdf_module
   ! Contains the TYPES for different NetCDf files read and written by UFEMISM.
 
+! ===== USE modules =====
+! =======================
+
   USE configuration_module,        ONLY: dp, C
 
   IMPLICIT NONE
+
+! ===== Data types =====
+! ======================
 
   ! == Restart
   ! ==========

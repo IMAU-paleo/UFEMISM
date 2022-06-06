@@ -17,12 +17,15 @@ MODULE configuration_module
   !
   ! Some day I'll figure out a more elegant solution for this...
 
-! ===== General =====
-! ===================
+! ===== USE modules =====
+! =======================
 
   USE mpi
 
   IMPLICIT NONE
+
+! ===== Precision =====
+! =====================
 
   INTEGER, PARAMETER  :: dp  = KIND(1.0D0)  ! Kind of double precision numbers. Reals should be declared as: REAL(dp) :: example
 

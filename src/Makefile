@@ -61,6 +61,7 @@ UFEMISM_program_objects = \
         ocean_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
+        general_sea_level_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
         thermodynamics_module.o \

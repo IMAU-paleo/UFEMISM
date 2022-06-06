@@ -3,8 +3,12 @@ MODULE data_types_module
   ! all subroutines can use all types without interdependency conflicts, and also to make the 
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
-  
+
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE petscksp
   USE mpi
   USE petscksp
@@ -19,10 +23,16 @@ MODULE data_types_module
                                          type_netcdf_SELEN_output, type_netcdf_SELEN_global_topo
 
   IMPLICIT NONE
-  
+
+! ===== Data types =====
+! ======================
+
+  ! == Ice model
+  ! ============
+
   TYPE type_sparse_matrix_CSR_dp
     ! Compressed Sparse Row (CSR) format matrix
-    
+
     INTEGER,                    POINTER     :: m,n                         ! A = [m-by-n]
     INTEGER,                    POINTER     :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
     INTEGER,                    POINTER     :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
@@ -30,9 +40,9 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: index
     REAL(dp), DIMENSION(:    ), POINTER     :: val
     INTEGER :: wm, wn, wnnz_max, wnnz, wptr, windex, wval
-    
+
   END TYPE type_sparse_matrix_CSR_dp
-  
+
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
     
@@ -229,8 +239,11 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: surf_curv
     REAL(dp), DIMENSION(:    ), POINTER     :: log_velocity
     INTEGER :: wsurf_curv, wlog_velocity
-          
+
   END TYPE type_ice_model
+
+  ! == Mesh
+  ! =======
 
   TYPE type_mesh
     ! The unstructured triangular mesh.
@@ -394,164 +407,33 @@ MODULE data_types_module
     INTEGER                                 :: ci1, ci2                      ! Edges
 
   END TYPE type_mesh
-  
-  TYPE type_debug_fields
-    ! Dummy variables for debugging
-    
-    ! NetCDF debug file
-    TYPE(type_netcdf_debug)                 :: netcdf
-    
-    ! Data
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_01
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_02
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_03
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_04
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_05
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_06
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_07
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_08
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_09
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_10
-    INTEGER :: wint_2D_a_01, wint_2D_a_02, wint_2D_a_03, wint_2D_a_04, wint_2D_a_05
-    INTEGER :: wint_2D_a_06, wint_2D_a_07, wint_2D_a_08, wint_2D_a_09, wint_2D_a_10
-    
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_01
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_02
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_03
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_04
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_05
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_06
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_07
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_08
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_09
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_10
-    INTEGER :: wint_2D_b_01, wint_2D_b_02, wint_2D_b_03, wint_2D_b_04, wint_2D_b_05
-    INTEGER :: wint_2D_b_06, wint_2D_b_07, wint_2D_b_08, wint_2D_b_09, wint_2D_b_10
-    
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_01
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_02
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_03
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_04
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_05
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_06
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_07
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_08
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_09
-    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_10
-    INTEGER :: wint_2D_c_01, wint_2D_c_02, wint_2D_c_03, wint_2D_c_04, wint_2D_c_05
-    INTEGER :: wint_2D_c_06, wint_2D_c_07, wint_2D_c_08, wint_2D_c_09, wint_2D_c_10
-    
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_01
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_02
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_03
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_04
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_05
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_06
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_07
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_08
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_09
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_10
-    INTEGER :: wdp_2D_a_01, wdp_2D_a_02, wdp_2D_a_03, wdp_2D_a_04, wdp_2D_a_05
-    INTEGER :: wdp_2D_a_06, wdp_2D_a_07, wdp_2D_a_08, wdp_2D_a_09, wdp_2D_a_10
-    
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_01
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_02
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_03
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_04
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_05
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_06
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_07
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_08
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_09
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_10
-    INTEGER :: wdp_2D_b_01, wdp_2D_b_02, wdp_2D_b_03, wdp_2D_b_04, wdp_2D_b_05
-    INTEGER :: wdp_2D_b_06, wdp_2D_b_07, wdp_2D_b_08, wdp_2D_b_09, wdp_2D_b_10
-    
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_01
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_02
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_03
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_04
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_05
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_06
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_07
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_08
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_09
-    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_10
-    INTEGER :: wdp_2D_c_01, wdp_2D_c_02, wdp_2D_c_03, wdp_2D_c_04, wdp_2D_c_05
-    INTEGER :: wdp_2D_c_06, wdp_2D_c_07, wdp_2D_c_08, wdp_2D_c_09, wdp_2D_c_10
-    
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_01
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_02
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_03
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_04
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_05
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_06
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_07
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_08
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_09
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_10
-    INTEGER :: wdp_3D_a_01, wdp_3D_a_02, wdp_3D_a_03, wdp_3D_a_04, wdp_3D_a_05
-    INTEGER :: wdp_3D_a_06, wdp_3D_a_07, wdp_3D_a_08, wdp_3D_a_09, wdp_3D_a_10
-    
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_01
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_02
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_03
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_04
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_05
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_06
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_07
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_08
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_09
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_10
-    INTEGER :: wdp_2D_monthly_a_01, wdp_2D_monthly_a_02, wdp_2D_monthly_a_03, wdp_2D_monthly_a_04, wdp_2D_monthly_a_05
-    INTEGER :: wdp_2D_monthly_a_06, wdp_2D_monthly_a_07, wdp_2D_monthly_a_08, wdp_2D_monthly_a_09, wdp_2D_monthly_a_10
-    
-  END TYPE type_debug_fields
-  
-  TYPE type_single_row_mapping_matrices
-    ! Results from integrating a single set of lines
-    
-    INTEGER                                 :: n_max
-    INTEGER                                 :: n
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_left
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
-    
-  END TYPE type_single_row_mapping_matrices
-  
-  TYPE type_remapping_mesh_mesh
-    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
-    
-    INTEGER                                 :: int_dummy
-    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
-    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
-    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
-    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
-  
-  END TYPE type_remapping_mesh_mesh
-  
+
+  ! == Regular grid
+  ! ===============
+
   TYPE type_grid
     ! A regular square grid covering a model region
-    
+
     ! Basic grid data
     INTEGER,                    POINTER     :: nx, ny, n
     REAL(dp),                   POINTER     :: dx
     REAL(dp), DIMENSION(:    ), POINTER     :: x, y
     REAL(dp),                   POINTER     :: xmin, xmax, ymin, ymax
     INTEGER :: wnx, wny, wn, wdx, wx, wy, wxmin, wxmax, wymin, wymax
-    
+
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
-    
+
     ! Sparse matrices representing the remapping operations between a mesh and a grid
     TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
     TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
     REAL(dp),                   POINTER     :: tol_dist
     INTEGER :: wtol_dist
-    
+
     ! Conversion tables for grid-form vs. vector-form data
     INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
     INTEGER :: wij2n, wn2ij
-    
+
     ! Lat-lon coordinates
     REAL(dp), DIMENSION(:,:  ), POINTER     :: lat, lon
     INTEGER :: wlat, wlon
@@ -561,153 +443,25 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: phi_M
     REAL(dp),                   POINTER     :: alpha_stereo
     INTEGER :: wlambda_M, wphi_M, walpha_stereo
-  
+
   END TYPE type_grid
-  
-  TYPE type_remapping_latlon2mesh
-    ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
-    
-    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
-    INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
-    
-  END TYPE type_remapping_latlon2mesh
-  
-  TYPE type_latlongrid
-    ! A global lat-lon grid
-    
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat, lon
-    REAL(dp),                   POINTER     :: dlat, dlon
-    INTEGER :: wnlat, wnlon, wlat, wlon, wdlat, wdlon
-    
-    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
-    
-  END TYPE type_latlongrid
 
-  TYPE type_SMB_model
-    ! The different SMB components, calculated from the prescribed climate
-    
-    ! Tuning parameters (different for each region, set from config)
-    REAL(dp),                   POINTER     :: C_abl_constant
-    REAL(dp),                   POINTER     :: C_abl_Ts
-    REAL(dp),                   POINTER     :: C_abl_Q
-    REAL(dp),                   POINTER     :: C_refr
-    INTEGER :: wC_abl_constant, wC_abl_Ts, wC_abl_Q, wC_refr
-    
-    ! Data fields
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Q_TOA                         ! The prescribed monthly insolation, from an external forcing file
-    REAL(dp), DIMENSION(:    ), POINTER     :: AlbedoSurf                    ! Surface albedo underneath the snow layer (water, rock or ice)
-    REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear              ! Total melt that occurred during the previous year (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth                     ! Depth of the firn layer (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Rainfall                      ! Monthly rainfall (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Snowfall                      ! Monthly snowfall (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: AddedFirn                     ! Monthly added firn (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Melt                          ! Monthly melt (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Refreezing                    ! Monthly refreezing (m)
-    REAL(dp), DIMENSION(:    ), POINTER     :: Refreezing_year               ! Yearly  refreezing (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Runoff                        ! Monthly runoff (m)
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: Albedo                        ! Monthly albedo
-    REAL(dp), DIMENSION(:    ), POINTER     :: Albedo_year                   ! Yearly albedo
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: SMB                           ! Monthly SMB (m)
-    REAL(dp), DIMENSION(:    ), POINTER     :: SMB_year                      ! Yearly  SMB (m)
-    INTEGER :: wQ_TOA, wAlbedoSurf, wMeltPreviousYear, wFirnDepth, wRainfall, wSnowfall
-    INTEGER :: wAddedFirn, wMelt, wRefreezing, wRefreezing_year, wRunoff, wAlbedo, wAlbedo_year, wSMB, wSMB_year
+  ! == Reference geometries
+  ! =======================
 
-  END TYPE type_SMB_model
-
-  TYPE type_BMB_model
-    ! The different BMB components
-
-    ! General data fields
-    !====================
-
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB                           ! The basal mass balance (same as SMB: negative means ice loss, positive means ice gain!) [m/yr]
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_sheet                     ! The basal mass balance underneath the land-based ice sheet [m/yr]
-    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf                     ! The basal mass balance underneath the floating   ice shelf [m/yr]
-
-    ! The ANICE_legacy BMB model
-    ! ==========================
-
-    ! Tuning parameters (different for each region, set from config)
-    REAL(dp),                   POINTER     :: T_ocean_mean_PD
-    REAL(dp),                   POINTER     :: T_ocean_mean_cold
-    REAL(dp),                   POINTER     :: T_ocean_mean_warm
-    REAL(dp),                   POINTER     :: BMB_deepocean_PD
-    REAL(dp),                   POINTER     :: BMB_deepocean_cold
-    REAL(dp),                   POINTER     :: BMB_deepocean_warm
-    REAL(dp),                   POINTER     :: BMB_shelf_exposed_PD
-    REAL(dp),                   POINTER     :: BMB_shelf_exposed_cold
-    REAL(dp),                   POINTER     :: BMB_shelf_exposed_warm
-    REAL(dp),                   POINTER     :: subshelf_melt_factor
-    REAL(dp),                   POINTER     :: deep_ocean_threshold_depth
-    INTEGER :: wT_ocean_mean_PD, wT_ocean_mean_cold, wT_ocean_mean_warm
-    INTEGER :: wBMB_deepocean_PD, wBMB_deepocean_cold, wBMB_deepocean_warm
-    INTEGER :: wBMB_shelf_exposed_PD, wBMB_shelf_exposed_cold, wBMB_shelf_exposed_warm
-    INTEGER :: wsubshelf_melt_factor, wdeep_ocean_threshold_depth
-
-    ! The linear/quadratic models from Favier et al. (2019)
-    ! =====================================================
-
-    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_base                  ! Ocean temperature    at the ice shelf base
-    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_freeze_base           ! Ocean freezing point at the ice shelf base (depends on pressure and salinity)
-    INTEGER :: wT_ocean_base, wT_ocean_freeze_base
-
-    ! The Lazeroms (2018) plume model
-    ! ===============================
-
-    ! NOTE: also uses T_ocean_base!
-
-    INTEGER,  DIMENSION(:,:  ), POINTER     :: search_directions             ! The 16 search directions
-    REAL(dp), DIMENSION(:    ), POINTER     :: eff_plume_source_depth        ! Effective plume source depth (average source depth over all valid plume paths)
-    REAL(dp), DIMENSION(:    ), POINTER     :: eff_basal_slope               ! Effective basal slope        (average slope        over all valid plume paths)
-    INTEGER :: wsearch_directions, weff_plume_source_depth, weff_basal_slope
-
-    ! The PICO model
-    ! ==============
-
-    ! NOTE: also uses search_directions!
-
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_GL                     ! Distance to grounding line [m]
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_IF                     ! Distance to ice front      [m]
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_r                        ! Relative distance to grounding line [0-1]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_A                        ! Area covered by each ocean box in each basin [n_basins x n_boxes]
-    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_n_D                      ! Number of ocean boxes for each ice basin
-    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_k                        ! PICO ocean box number to which the shelf grid cells belong
-    INTEGER :: wPICO_d_GL, wPICO_d_IF, wPICO_r, wPICO_A, wPICO_n_D, wPICO_k
-
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_T                        ! 2-D     ambient temperature [K]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Tk                       ! Average ambient temperature within each basin-box
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_S                        ! 2-D     ambient salinity    [PSU]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Sk                       ! Average ambient salinity    within each basin-box
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_p                        ! 2-D     basal pressure      [Pa]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_pk                       ! Average basal pressure      within each basin-box
-    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_m                        ! 2-D     melt rate           [m/yr]
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_mk                       ! Average melt rate           within each basin-box
-    INTEGER :: wPICO_T, wPICO_Tk, wPICO_S, wPICO_Sk, wPICO_p, wPICO_pk, wPICO_m, wPICO_mk
-
-    ! Additional data fields
-    !=======================
-
-    REAL(dp), DIMENSION(:    ), POINTER     :: sub_angle                     ! "subtended angle"      for the sub-shelf melt parameterisation
-    REAL(dp), DIMENSION(:    ), POINTER     :: dist_open                     ! distance to open ocean for the sub-shelf melt parameterisation
-    INTEGER :: wBMB, wBMB_sheet, wBMB_shelf, wsub_angle, wdist_open
-
-  END TYPE type_BMB_model
-  
   TYPE type_reference_geometry
     ! Data structure containing a reference ice-sheet geometry (either schematic or read from an external file).
-    
+
     ! NetCDF file containing the data
     TYPE(type_netcdf_reference_geometry)    :: netcdf
-    
+
     ! Raw data as read from a NetCDF file
     TYPE(type_grid)                         :: grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hi_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hb_grid
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Hs_grid
     INTEGER :: wHi_grid, wHb_grid, wHs_grid
-    
+
     ! Derived data on the grid (surface curvature and masks, needed for mesh creation)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: surf_curv
     INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_land
@@ -720,15 +474,63 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_cf
     INTEGER,  DIMENSION(:,:  ), POINTER     :: mask_coast
     INTEGER :: wsurf_curv, wmask_land, wmask_ocean, wmask_ice, wmask_sheet, wmask_shelf, wmask_margin, wmask_gl, wmask_cf, wmask_coast
-    
+
     ! Data on the model mesh
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs
     INTEGER :: wHi, wHb, wHs
-              
+
   END TYPE type_reference_geometry
-  
+
+  ! == Mapping
+  ! ==========
+
+  TYPE type_single_row_mapping_matrices
+    ! Results from integrating a single set of lines
+
+    INTEGER                                 :: n_max
+    INTEGER                                 :: n
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_left
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
+
+  END TYPE type_single_row_mapping_matrices
+
+  TYPE type_remapping_mesh_mesh
+    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
+
+    INTEGER                                 :: int_dummy
+    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
+    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
+    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
+    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
+
+  END TYPE type_remapping_mesh_mesh
+
+  TYPE type_remapping_latlon2mesh
+    ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
+
+    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
+    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
+    INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
+
+  END TYPE type_remapping_latlon2mesh
+
+  TYPE type_latlongrid
+    ! A global lat-lon grid
+
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat, lon
+    REAL(dp),                   POINTER     :: dlat, dlon
+    INTEGER :: wnlat, wnlon, wlat, wlon, wdlat, wdlon
+
+    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
+
+  END TYPE type_latlongrid
+
+  ! == Forcing
+  ! ==========
+
   TYPE type_forcing_data
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
     
@@ -782,23 +584,11 @@ MODULE data_types_module
     TYPE(type_latlongrid)                   :: grid_ghf
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
     INTEGER :: wghf_ghf
-    
+
   END TYPE type_forcing_data
 
-  TYPE type_memory_use_tracker
-  
-    ! Memory use history
-    INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
-    INTEGER                             :: n                         ! Number of entries
-    INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
-
-  END TYPE type_memory_use_tracker
-
-  !===============================
-  !===============================
-
-  ! Global climate types
-  !=====================
+  ! == Global climate
+  !==================
 
   TYPE type_climate_snapshot_global
     ! Global climate snapshot, either from present-day observations (e.g. ERA40) or from a GCM snapshot.
@@ -906,8 +696,61 @@ MODULE data_types_module
 
   END TYPE type_climate_matrix_global
 
-  ! Regional climate types
-  !=======================
+    TYPE type_ocean_snapshot_global
+    ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM ocean snapshot.
+
+    CHARACTER(LEN=256)                      :: name                          ! 'WOA', 'COSMOS_LGM', etc.
+
+    ! NetCDF file containing the data
+    TYPE(type_netcdf_ocean_data)            :: netcdf
+
+    ! Grid
+    INTEGER,                    POINTER     :: nlat, nlon
+    REAL(dp), DIMENSION(:    ), POINTER     :: lat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon
+    INTEGER :: wnlat, wnlon, wlat, wlon
+
+    ! General forcing info (not relevant for PD observations)
+    REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
+    REAL(dp),                   POINTER     :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
+    REAL(dp),                   POINTER     :: orbit_obl
+    REAL(dp),                   POINTER     :: orbit_pre
+    INTEGER :: wCO2, worbit_time, worbit_ecc, worbit_obl, worbit_pre
+
+    ! Global 3-D ocean data on the original vertical grid
+    REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
+    REAL(dp), DIMENSION(:    ), POINTER     :: z_ocean_raw                   ! Vertical coordinate of the 3-D ocean fields [m below sea surface]
+    INTEGER,                    POINTER     :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean_raw                   ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean_raw                   ! 3-D annual mean ocean salinity    [PSU]
+    INTEGER :: wT_ocean_mean, wz_ocean_raw, wnz_ocean_raw, wT_ocean_raw, wS_ocean_raw
+
+    ! Global 3-D ocean data on the ice-model vertical grid
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
+    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
+    INTEGER :: wT_ocean, wS_ocean
+
+    ! Paralelisation
+    INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
+
+  END TYPE type_ocean_snapshot_global
+
+  TYPE type_ocean_matrix_global
+    ! The ocean matrix data structure. Contains the PD observations and all the different global GCM snapshots.
+
+    ! The present-day observed ocean (e.g. WOA18)
+    TYPE(type_ocean_snapshot_global)        :: PD_obs
+
+    ! The GCM ocean snapshots for climate and ocean.
+    TYPE(type_ocean_snapshot_global)        :: GCM_PI
+    TYPE(type_ocean_snapshot_global)        :: GCM_warm
+    TYPE(type_ocean_snapshot_global)        :: GCM_cold
+
+  END TYPE type_ocean_matrix_global
+
+  ! == Regional climate
+  !====================
 
   TYPE type_climate_snapshot_regional
     ! Global climate snapshot, either from present-day observations (e.g. ERA40) or from a GCM snapshot, projected onto the regional model mesh.
@@ -1039,59 +882,6 @@ MODULE data_types_module
 
   END TYPE type_climate_matrix_regional
 
-  TYPE type_ocean_snapshot_global
-    ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM ocean snapshot.
-
-    CHARACTER(LEN=256)                      :: name                          ! 'WOA', 'COSMOS_LGM', etc.
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_ocean_data)            :: netcdf
-
-    ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
-
-    ! General forcing info (not relevant for PD observations)
-    REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
-    REAL(dp),                   POINTER     :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
-    REAL(dp),                   POINTER     :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
-    REAL(dp),                   POINTER     :: orbit_obl
-    REAL(dp),                   POINTER     :: orbit_pre
-    INTEGER :: wCO2, worbit_time, worbit_ecc, worbit_obl, worbit_pre
-
-    ! Global 3-D ocean data on the original vertical grid
-    REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
-    REAL(dp), DIMENSION(:    ), POINTER     :: z_ocean_raw                   ! Vertical coordinate of the 3-D ocean fields [m below sea surface]
-    INTEGER,                    POINTER     :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean_raw                   ! 3-D annual mean ocean temperature [K]
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean_raw                   ! 3-D annual mean ocean salinity    [PSU]
-    INTEGER :: wT_ocean_mean, wz_ocean_raw, wnz_ocean_raw, wT_ocean_raw, wS_ocean_raw
-
-    ! Global 3-D ocean data on the ice-model vertical grid
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]
-    REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
-    INTEGER :: wT_ocean, wS_ocean
-
-    ! Paralelisation
-    INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
-
-  END TYPE type_ocean_snapshot_global
-
-  TYPE type_ocean_matrix_global
-    ! The ocean matrix data structure. Contains the PD observations and all the different global GCM snapshots.
-
-    ! The present-day observed ocean (e.g. WOA18)
-    TYPE(type_ocean_snapshot_global)        :: PD_obs
-
-    ! The GCM ocean snapshots for climate and ocean.
-    TYPE(type_ocean_snapshot_global)        :: GCM_PI
-    TYPE(type_ocean_snapshot_global)        :: GCM_warm
-    TYPE(type_ocean_snapshot_global)        :: GCM_cold
-
-  END TYPE type_ocean_matrix_global
-
   TYPE type_ocean_snapshot_regional
     ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM snapshot, projected onto the regional model mesh.
 
@@ -1162,8 +952,121 @@ MODULE data_types_module
 
   END TYPE type_highres_ocean_data
 
-  ! == SELEN ==
-  ! ===========
+  ! == Mass balance
+  ! ===============
+
+  TYPE type_SMB_model
+    ! The different SMB components, calculated from the prescribed climate
+
+    ! Tuning parameters (different for each region, set from config)
+    REAL(dp),                   POINTER     :: C_abl_constant
+    REAL(dp),                   POINTER     :: C_abl_Ts
+    REAL(dp),                   POINTER     :: C_abl_Q
+    REAL(dp),                   POINTER     :: C_refr
+    INTEGER :: wC_abl_constant, wC_abl_Ts, wC_abl_Q, wC_refr
+
+    ! Data fields
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Q_TOA                         ! The prescribed monthly insolation, from an external forcing file
+    REAL(dp), DIMENSION(:    ), POINTER     :: AlbedoSurf                    ! Surface albedo underneath the snow layer (water, rock or ice)
+    REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear              ! Total melt that occurred during the previous year (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth                     ! Depth of the firn layer (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Rainfall                      ! Monthly rainfall (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Snowfall                      ! Monthly snowfall (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: AddedFirn                     ! Monthly added firn (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Melt                          ! Monthly melt (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Refreezing                    ! Monthly refreezing (m)
+    REAL(dp), DIMENSION(:    ), POINTER     :: Refreezing_year               ! Yearly  refreezing (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Runoff                        ! Monthly runoff (m)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Albedo                        ! Monthly albedo
+    REAL(dp), DIMENSION(:    ), POINTER     :: Albedo_year                   ! Yearly albedo
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: SMB                           ! Monthly SMB (m)
+    REAL(dp), DIMENSION(:    ), POINTER     :: SMB_year                      ! Yearly  SMB (m)
+    INTEGER :: wQ_TOA, wAlbedoSurf, wMeltPreviousYear, wFirnDepth, wRainfall, wSnowfall
+    INTEGER :: wAddedFirn, wMelt, wRefreezing, wRefreezing_year, wRunoff, wAlbedo, wAlbedo_year, wSMB, wSMB_year
+
+  END TYPE type_SMB_model
+
+  TYPE type_BMB_model
+    ! The different BMB components
+
+    ! General data fields
+    !====================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB                           ! The basal mass balance (same as SMB: negative means ice loss, positive means ice gain!) [m/yr]
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_sheet                     ! The basal mass balance underneath the land-based ice sheet [m/yr]
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf                     ! The basal mass balance underneath the floating   ice shelf [m/yr]
+
+    ! The ANICE_legacy BMB model
+    ! ==========================
+
+    ! Tuning parameters (different for each region, set from config)
+    REAL(dp),                   POINTER     :: T_ocean_mean_PD
+    REAL(dp),                   POINTER     :: T_ocean_mean_cold
+    REAL(dp),                   POINTER     :: T_ocean_mean_warm
+    REAL(dp),                   POINTER     :: BMB_deepocean_PD
+    REAL(dp),                   POINTER     :: BMB_deepocean_cold
+    REAL(dp),                   POINTER     :: BMB_deepocean_warm
+    REAL(dp),                   POINTER     :: BMB_shelf_exposed_PD
+    REAL(dp),                   POINTER     :: BMB_shelf_exposed_cold
+    REAL(dp),                   POINTER     :: BMB_shelf_exposed_warm
+    REAL(dp),                   POINTER     :: subshelf_melt_factor
+    REAL(dp),                   POINTER     :: deep_ocean_threshold_depth
+    INTEGER :: wT_ocean_mean_PD, wT_ocean_mean_cold, wT_ocean_mean_warm
+    INTEGER :: wBMB_deepocean_PD, wBMB_deepocean_cold, wBMB_deepocean_warm
+    INTEGER :: wBMB_shelf_exposed_PD, wBMB_shelf_exposed_cold, wBMB_shelf_exposed_warm
+    INTEGER :: wsubshelf_melt_factor, wdeep_ocean_threshold_depth
+
+    ! The linear/quadratic models from Favier et al. (2019)
+    ! =====================================================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_base                  ! Ocean temperature    at the ice shelf base
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_freeze_base           ! Ocean freezing point at the ice shelf base (depends on pressure and salinity)
+    INTEGER :: wT_ocean_base, wT_ocean_freeze_base
+
+    ! The Lazeroms (2018) plume model
+    ! ===============================
+
+    ! NOTE: also uses T_ocean_base!
+
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: search_directions             ! The 16 search directions
+    REAL(dp), DIMENSION(:    ), POINTER     :: eff_plume_source_depth        ! Effective plume source depth (average source depth over all valid plume paths)
+    REAL(dp), DIMENSION(:    ), POINTER     :: eff_basal_slope               ! Effective basal slope        (average slope        over all valid plume paths)
+    INTEGER :: wsearch_directions, weff_plume_source_depth, weff_basal_slope
+
+    ! The PICO model
+    ! ==============
+
+    ! NOTE: also uses search_directions!
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_GL                     ! Distance to grounding line [m]
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_d_IF                     ! Distance to ice front      [m]
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_r                        ! Relative distance to grounding line [0-1]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_A                        ! Area covered by each ocean box in each basin [n_basins x n_boxes]
+    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_n_D                      ! Number of ocean boxes for each ice basin
+    INTEGER,  DIMENSION(:    ), POINTER     :: PICO_k                        ! PICO ocean box number to which the shelf grid cells belong
+    INTEGER :: wPICO_d_GL, wPICO_d_IF, wPICO_r, wPICO_A, wPICO_n_D, wPICO_k
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_T                        ! 2-D     ambient temperature [K]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Tk                       ! Average ambient temperature within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_S                        ! 2-D     ambient salinity    [PSU]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_Sk                       ! Average ambient salinity    within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_p                        ! 2-D     basal pressure      [Pa]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_pk                       ! Average basal pressure      within each basin-box
+    REAL(dp), DIMENSION(:    ), POINTER     :: PICO_m                        ! 2-D     melt rate           [m/yr]
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_mk                       ! Average melt rate           within each basin-box
+    INTEGER :: wPICO_T, wPICO_Tk, wPICO_S, wPICO_Sk, wPICO_p, wPICO_pk, wPICO_m, wPICO_mk
+
+    ! Additional data fields
+    !=======================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: sub_angle                     ! "subtended angle"      for the sub-shelf melt parameterisation
+    REAL(dp), DIMENSION(:    ), POINTER     :: dist_open                     ! distance to open ocean for the sub-shelf melt parameterisation
+    INTEGER :: wBMB, wBMB_sheet, wBMB_shelf, wsub_angle, wdist_open
+
+  END TYPE type_BMB_model
+
+  ! == SELEN
+  ! ========
 
   TYPE type_SELEN_mesh
     ! The global SELEN mesh, in UFEMISM mesh format
@@ -1360,8 +1263,8 @@ MODULE data_types_module
 
   END TYPE type_SELEN_regional
 
-  ! == Restart ==
-  ! =============
+  ! == Restart
+  ! ==========
 
   TYPE type_restart_data
     ! Restart data and NetCDF file
@@ -1397,8 +1300,8 @@ MODULE data_types_module
 
   END TYPE type_restart_data
 
-  ! Updated model region type including new climate matrix version (move it up at the end of the climate port)
-  ! ==========================================================================================================
+  ! == Model region
+  ! ===============
 
   TYPE type_model_region
     ! Contains all the different data structures, organised by sub-model (ice, climate)
@@ -1518,6 +1421,131 @@ MODULE data_types_module
     TYPE(type_restart_data)                 :: restart
 
   END TYPE type_model_region
+
+  ! == Debug
+  ! ========
+
+  TYPE type_debug_fields
+    ! Dummy variables for debugging
+
+    ! NetCDF debug file
+    TYPE(type_netcdf_debug)                 :: netcdf
+
+    ! Data
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_01
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_02
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_03
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_04
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_05
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_06
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_07
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_08
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_09
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_10
+    INTEGER :: wint_2D_a_01, wint_2D_a_02, wint_2D_a_03, wint_2D_a_04, wint_2D_a_05
+    INTEGER :: wint_2D_a_06, wint_2D_a_07, wint_2D_a_08, wint_2D_a_09, wint_2D_a_10
+
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_01
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_02
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_03
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_04
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_05
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_06
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_07
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_08
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_09
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_b_10
+    INTEGER :: wint_2D_b_01, wint_2D_b_02, wint_2D_b_03, wint_2D_b_04, wint_2D_b_05
+    INTEGER :: wint_2D_b_06, wint_2D_b_07, wint_2D_b_08, wint_2D_b_09, wint_2D_b_10
+
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_01
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_02
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_03
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_04
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_05
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_06
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_07
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_08
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_09
+    INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_c_10
+    INTEGER :: wint_2D_c_01, wint_2D_c_02, wint_2D_c_03, wint_2D_c_04, wint_2D_c_05
+    INTEGER :: wint_2D_c_06, wint_2D_c_07, wint_2D_c_08, wint_2D_c_09, wint_2D_c_10
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_01
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_02
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_03
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_04
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_05
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_06
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_07
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_08
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_09
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_a_10
+    INTEGER :: wdp_2D_a_01, wdp_2D_a_02, wdp_2D_a_03, wdp_2D_a_04, wdp_2D_a_05
+    INTEGER :: wdp_2D_a_06, wdp_2D_a_07, wdp_2D_a_08, wdp_2D_a_09, wdp_2D_a_10
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_01
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_02
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_03
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_04
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_05
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_06
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_07
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_08
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_09
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_b_10
+    INTEGER :: wdp_2D_b_01, wdp_2D_b_02, wdp_2D_b_03, wdp_2D_b_04, wdp_2D_b_05
+    INTEGER :: wdp_2D_b_06, wdp_2D_b_07, wdp_2D_b_08, wdp_2D_b_09, wdp_2D_b_10
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_01
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_02
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_03
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_04
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_05
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_06
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_07
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_08
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_09
+    REAL(dp), DIMENSION(:    ), POINTER     :: dp_2D_c_10
+    INTEGER :: wdp_2D_c_01, wdp_2D_c_02, wdp_2D_c_03, wdp_2D_c_04, wdp_2D_c_05
+    INTEGER :: wdp_2D_c_06, wdp_2D_c_07, wdp_2D_c_08, wdp_2D_c_09, wdp_2D_c_10
+
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_01
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_02
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_03
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_04
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_05
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_06
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_07
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_08
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_09
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_3D_a_10
+    INTEGER :: wdp_3D_a_01, wdp_3D_a_02, wdp_3D_a_03, wdp_3D_a_04, wdp_3D_a_05
+    INTEGER :: wdp_3D_a_06, wdp_3D_a_07, wdp_3D_a_08, wdp_3D_a_09, wdp_3D_a_10
+
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_01
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_02
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_03
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_04
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_05
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_06
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_07
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_08
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_09
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dp_2D_monthly_a_10
+    INTEGER :: wdp_2D_monthly_a_01, wdp_2D_monthly_a_02, wdp_2D_monthly_a_03, wdp_2D_monthly_a_04, wdp_2D_monthly_a_05
+    INTEGER :: wdp_2D_monthly_a_06, wdp_2D_monthly_a_07, wdp_2D_monthly_a_08, wdp_2D_monthly_a_09, wdp_2D_monthly_a_10
+
+  END TYPE type_debug_fields
+
+  TYPE type_memory_use_tracker
+
+    ! Memory use history
+    INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
+    INTEGER                             :: n                         ! Number of entries
+    INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
+
+  END TYPE type_memory_use_tracker
 
 CONTAINS
 

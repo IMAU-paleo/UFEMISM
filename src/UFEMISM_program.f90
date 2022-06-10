@@ -207,7 +207,7 @@ PROGRAM UFEMISM_program
     ! == Regional sea level update
     ! ============================
 
-    CALL update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob)
+    CALL update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob, t_coupling)
 
     ! == Regional model runs
     ! ======================

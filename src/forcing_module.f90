@@ -4,8 +4,11 @@ MODULE forcing_module
   ! as well as the "forcing" structure which stores all the results from these routines (so that they
   ! can be accessed from all four ice-sheet models and the coupling routine).
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -23,13 +26,10 @@ MODULE forcing_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
-
-  ! Import specific functionality
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_insolation_file, &
+                                             read_insolation_file_time_lat, read_insolation_file_timeframes, &
+                                             inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
   USE data_types_module,               ONLY: type_forcing_data, type_mesh, type_model_region
-  USE netcdf_module,                   ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
-                                             inquire_insolation_file, read_insolation_file_time_lat, read_insolation_file_timeframes, &
-                                             read_insolation_data_file, inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
 
   IMPLICIT NONE
 
@@ -41,7 +41,9 @@ MODULE forcing_module
 
 CONTAINS
 
-  ! == Main routines that are called from IMAU_ICE_program
+! ===== Main routines (called from IMAU_ICE_program) =====
+! ========================================================
+
   SUBROUTINE update_global_forcing( NAM, EAS, GRL, ANT, time, switch)
     ! Update global forcing data (d18O, CO2, insolation, geothermal heat flux)
 
@@ -120,6 +122,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_global_forcing
+
   SUBROUTINE initialise_global_forcing
     ! Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux)
 
@@ -172,12 +175,20 @@ CONTAINS
     ! Geothermal heat flux
     CALL initialise_geothermal_heat_flux_global
 
+    ! Sea level
+    IF (C%choice_sealevel_model == 'prescribed') THEN
+      ! The global sea level is calculated based on a prescribed sea-level record (e.g. from stacks),
+      CALL initialise_sealevel_record
+    END IF
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=30)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=33)
 
   END SUBROUTINE initialise_global_forcing
 
-  ! == Modelled benthic d18O
+! ===== Modelled benthic d18O =====
+! =================================
+
   SUBROUTINE calculate_modelled_d18O( NAM, EAS, GRL, ANT)
 
     IMPLICIT NONE
@@ -226,6 +237,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calculate_modelled_d18O
+
   SUBROUTINE update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
     ! Calculate the annual mean surface temperature change w.r.t PD for all
     ! model regions, and calculate a weighted average to get a "global" (high-latitude) anomaly.
@@ -311,6 +323,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_global_mean_temperature_change_history
+
   SUBROUTINE calculate_mean_temperature_change_region( region, dT)
     ! Calculate the annual mean surface temperature change w.r.t PD (corrected for elevation changes) over a model region
 
@@ -350,6 +363,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calculate_mean_temperature_change_region
+
   SUBROUTINE initialise_modelled_benthic_d18O_data
     ! Allocate shared memory for the d18O and global temperature variables.
 
@@ -394,7 +408,9 @@ CONTAINS
 
   END SUBROUTINE initialise_modelled_benthic_d18O_data
 
-  ! == Inverse forward routine
+! ===== Inverse forward routine =====
+! ===================================
+
   SUBROUTINE inverse_routine_global_temperature_offset
     ! Use the inverse routine to calculate a global temperature offset
     ! (i.e. the method used in de Boer et al., 2013)
@@ -437,6 +453,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE inverse_routine_global_temperature_offset
+
   SUBROUTINE inverse_routine_CO2
     ! Use the inverse routine to calculate modelled CO2
     ! (i.e. the method used in Berends et al., 2019)
@@ -478,6 +495,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE inverse_routine_CO2
+
   SUBROUTINE initialise_inverse_routine_data
     ! Allocate shared memory for the moving time windows used in the inverse routine
 
@@ -494,66 +512,66 @@ CONTAINS
 
       CALL crash('need to fix the inverse routine stuff to cope with restarting!')
 
-!      CALL allocate_shared_dp_0D( forcing%dT_glob_inverse, forcing%wdT_glob_inverse)
-!      ! Determine number of entries in the history
-!      CALL allocate_shared_int_0D( forcing%ndT_glob_inverse_history, forcing%wndT_glob_inverse_history)
-!      IF (par%master) forcing%ndT_glob_inverse_history = CEILING( C%dT_glob_inverse_averaging_window / C%dt_coupling)
-!      CALL sync
-!      ! Allocate memory for the global mean temperature change history
-!      CALL allocate_shared_dp_1D( forcing%ndT_glob_inverse_history, forcing%dT_glob_inverse_history, forcing%wdT_glob_inverse_history)
-!      IF (par%master) forcing%dT_glob_inverse_history = 0._dp
-!      IF (par%master) forcing%dT_glob_inverse         = 0._dp
-!      IF (par%master) forcing%CO2_mod                 = 0._dp
-!
-!      ! If we're restarting a previous run, read inverse routine history from one of the restart files
-!      IF (C%is_restart) THEN
-!        IF (C%do_NAM) THEN
-!          filename = C%filename_init_NAM
-!        ELSEIF (C%do_EAS) THEN
-!          filename = C%filename_init_EAS
-!        ELSEIF (C%do_GRL) THEN
-!          filename = C%filename_init_GRL
-!        ELSEIF (C%do_ANT) THEN
-!          filename = C%filename_init_ANT
-!        END IF
-!        IF (par%master) CALL read_inverse_routine_history_dT_glob(         forcing, C%filename_init_NAM)
-!        IF (par%master) CALL read_inverse_routine_history_dT_glob_inverse( forcing, C%filename_init_NAM)
-!        IF (par%master) forcing%dT_glob_inverse = forcing%dT_glob_inverse_history(1)
-!        CALL sync
-!      END IF
+      ! CALL allocate_shared_dp_0D( forcing%dT_glob_inverse, forcing%wdT_glob_inverse)
+      ! ! Determine number of entries in the history
+      ! CALL allocate_shared_int_0D( forcing%ndT_glob_inverse_history, forcing%wndT_glob_inverse_history)
+      ! IF (par%master) forcing%ndT_glob_inverse_history = CEILING( C%dT_glob_inverse_averaging_window / C%dt_coupling)
+      ! CALL sync
+      ! ! Allocate memory for the global mean temperature change history
+      ! CALL allocate_shared_dp_1D( forcing%ndT_glob_inverse_history, forcing%dT_glob_inverse_history, forcing%wdT_glob_inverse_history)
+      ! IF (par%master) forcing%dT_glob_inverse_history = 0._dp
+      ! IF (par%master) forcing%dT_glob_inverse         = 0._dp
+      ! IF (par%master) forcing%CO2_mod                 = 0._dp
+
+      ! ! If we're restarting a previous run, read inverse routine history from one of the restart files
+      ! IF (C%is_restart) THEN
+      !   IF (C%do_NAM) THEN
+      !     filename = C%filename_init_NAM
+      !   ELSEIF (C%do_EAS) THEN
+      !     filename = C%filename_init_EAS
+      !   ELSEIF (C%do_GRL) THEN
+      !     filename = C%filename_init_GRL
+      !   ELSEIF (C%do_ANT) THEN
+      !     filename = C%filename_init_ANT
+      !   END IF
+      !   IF (par%master) CALL read_inverse_routine_history_dT_glob(         forcing, C%filename_init_NAM)
+      !   IF (par%master) CALL read_inverse_routine_history_dT_glob_inverse( forcing, C%filename_init_NAM)
+      !   IF (par%master) forcing%dT_glob_inverse = forcing%dT_glob_inverse_history(1)
+      !   CALL sync
+      ! END IF
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
 
       CALL crash('need to fix the inverse routine stuff to cope with restarting!')
 
-!      CALL allocate_shared_dp_0D( forcing%CO2_inverse, forcing%wCO2_inverse)
-!      ! Determine number of entries in the history
-!      CALL allocate_shared_int_0D( forcing%nCO2_inverse_history, forcing%wnCO2_inverse_history)
-!      IF (par%master) forcing%nCO2_inverse_history = CEILING( C%CO2_inverse_averaging_window / C%dt_coupling)
-!      CALL sync
-!      ! Allocate memory for the global mean temperature change history
-!      CALL allocate_shared_dp_1D( forcing%nCO2_inverse_history, forcing%CO2_inverse_history, forcing%wCO2_inverse_history)
-!      IF (par%master) forcing%CO2_inverse_history = C%inverse_d18O_to_CO2_initial_CO2
-!      IF (par%master) forcing%CO2_inverse         = C%inverse_d18O_to_CO2_initial_CO2
-!      IF (par%master) forcing%CO2_mod             = C%inverse_d18O_to_CO2_initial_CO2
-!
-!      ! If we're restarting a previous run, read inverse routine history from one of the restart files
-!      IF (C%is_restart) THEN
-!        IF (C%do_NAM) THEN
-!          filename = C%filename_init_NAM
-!        ELSEIF (C%do_EAS) THEN
-!          filename = C%filename_init_EAS
-!        ELSEIF (C%do_GRL) THEN
-!          filename = C%filename_init_GRL
-!        ELSEIF (C%do_ANT) THEN
-!          filename = C%filename_init_ANT
-!        END IF
-!        IF (par%master) CALL read_inverse_routine_history_dT_glob(     forcing, C%filename_init_NAM)
-!        IF (par%master) CALL read_inverse_routine_history_CO2_inverse( forcing, C%filename_init_NAM)
-!        IF (par%master) forcing%CO2_inverse = forcing%CO2_inverse_history(1)
-!        IF (par%master) forcing%CO2_mod     = forcing%CO2_inverse
-!        CALL sync
-!      END IF
+     ! CALL allocate_shared_dp_0D( forcing%CO2_inverse, forcing%wCO2_inverse)
+     ! ! Determine number of entries in the history
+     ! CALL allocate_shared_int_0D( forcing%nCO2_inverse_history, forcing%wnCO2_inverse_history)
+     ! IF (par%master) forcing%nCO2_inverse_history = CEILING( C%CO2_inverse_averaging_window / C%dt_coupling)
+     ! CALL sync
+     ! ! Allocate memory for the global mean temperature change history
+     ! CALL allocate_shared_dp_1D( forcing%nCO2_inverse_history, forcing%CO2_inverse_history, forcing%wCO2_inverse_history)
+     ! IF (par%master) forcing%CO2_inverse_history = C%inverse_d18O_to_CO2_initial_CO2
+     ! IF (par%master) forcing%CO2_inverse         = C%inverse_d18O_to_CO2_initial_CO2
+     ! IF (par%master) forcing%CO2_mod             = C%inverse_d18O_to_CO2_initial_CO2
+
+     ! ! If we're restarting a previous run, read inverse routine history from one of the restart files
+     ! IF (C%is_restart) THEN
+     !   IF (C%do_NAM) THEN
+     !     filename = C%filename_init_NAM
+     !   ELSEIF (C%do_EAS) THEN
+     !     filename = C%filename_init_EAS
+     !   ELSEIF (C%do_GRL) THEN
+     !     filename = C%filename_init_GRL
+     !   ELSEIF (C%do_ANT) THEN
+     !     filename = C%filename_init_ANT
+     !   END IF
+     !   IF (par%master) CALL read_inverse_routine_history_dT_glob(     forcing, C%filename_init_NAM)
+     !   IF (par%master) CALL read_inverse_routine_history_CO2_inverse( forcing, C%filename_init_NAM)
+     !   IF (par%master) forcing%CO2_inverse = forcing%CO2_inverse_history(1)
+     !   IF (par%master) forcing%CO2_mod     = forcing%CO2_inverse
+     !   CALL sync
+     ! END IF
 
     ELSE
       CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
@@ -564,7 +582,9 @@ CONTAINS
 
   END SUBROUTINE initialise_inverse_routine_data
 
-  ! == Prescribed CO2 record
+! ===== Prescribed CO2 record =====
+! =================================
+
   SUBROUTINE update_CO2_at_model_time( time)
     ! Interpolate the data in forcing%CO2 to find the value at the queried time.
     ! If time lies outside the range of forcing%CO2_time, return the first/last value
@@ -618,6 +638,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_CO2_at_model_time
+
   SUBROUTINE initialise_CO2_record
     ! Read the CO2 record specified in C%filename_CO2_record. Assumes this is an ASCII text file with at least two columns (time in kyr and CO2 in ppmv)
     ! and the number of rows being equal to C%CO2_record_length
@@ -670,7 +691,9 @@ CONTAINS
 
   END SUBROUTINE initialise_CO2_record
 
-  ! == Prescribed d18O record
+! ===== Prescribed d18O record =====
+! ==================================
+
   SUBROUTINE update_d18O_at_model_time( time)
     ! Interpolate the data in forcing%d18O to find the value at the queried time.
     ! If time lies outside the range of forcing%d18O_time, return the first/last value
@@ -718,6 +741,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_d18O_at_model_time
+
   SUBROUTINE initialise_d18O_record
     ! Read the d18O record specified in C%filename_d18O_record. Assumes this is an ASCII text file with at least two columns (time in yr and d18O in per mil)
     ! and the number of rows being equal to C%d18O_record_length
@@ -777,7 +801,9 @@ CONTAINS
 
   END SUBROUTINE initialise_d18O_record
 
-  ! == Insolation
+! ===== Insolation =====
+! ======================
+
   SUBROUTINE get_insolation_at_time( mesh, time, Q_TOA)
     ! Get monthly insolation at time t on the regional grid
 
@@ -854,6 +880,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE get_insolation_at_time
+
   SUBROUTINE get_insolation_at_time_month_and_lat( time, month, lat, Q_TOA)
     ! Get monthly insolation at time t, month m and latitude l on the regional grid
 
@@ -916,6 +943,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE get_insolation_at_time_month_and_lat
+
   SUBROUTINE update_insolation_timeframes_from_file( time)
     ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
     ! coupling timestep to save on memory usage. Only done by master.
@@ -980,6 +1008,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE update_insolation_timeframes_from_file
+
   SUBROUTINE initialise_insolation_data
     ! Allocate shared memory for the forcing data fields
 
@@ -1041,7 +1070,9 @@ CONTAINS
 
   END SUBROUTINE initialise_insolation_data
 
-  ! == Geothermal heat flux
+! ===== Geothermal heat flux =====
+! ================================
+
   SUBROUTINE initialise_geothermal_heat_flux_global
     ! Initialise global geothermal heat flux data
 
@@ -1088,5 +1119,115 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=5)
 
   END SUBROUTINE initialise_geothermal_heat_flux_global
+
+! ===== Sea level records =====
+! =============================
+
+  ! Read in a sea level record from a file
+  SUBROUTINE initialise_sealevel_record
+    ! Read the sea level record specified in C%filename_sealevel_record. Assumes
+    ! this is an ASCII text file with at least two columns (time in kyr and sea level in m)
+    ! and the number of rows being equal to C%sealevel_record_length
+    ! NOTE: assumes time is listed in kyr (so LGM would be -21.0)
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_sealevel_record'
+    INTEGER                                            :: i,ios
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF     (C%choice_sealevel_model == 'prescribed') THEN
+      ! Observed sea level is needed for these methods.
+    ELSE
+      CALL crash('should only be called when choice_sealevel_method == "prescribed"!')
+    END IF
+
+    ! Allocate shared memory to take the data
+    CALL allocate_shared_dp_1D( C%sealevel_record_length, forcing%sealevel_time,   forcing%wsealevel_time  )
+    CALL allocate_shared_dp_1D( C%sealevel_record_length, forcing%sealevel_record, forcing%wsealevel_record)
+    CALL allocate_shared_dp_0D(                           forcing%sealevel_obs,    forcing%wsealevel_obs   )
+
+    ! Read sea level record (time and values) from specified text file
+    IF (par%master) THEN
+
+        IF (par%master) WRITE(0,*) ' Reading sea level record from ', TRIM(C%filename_sealevel_record), '...'
+
+        OPEN(   UNIT = 1337, FILE=C%filename_sealevel_record, ACTION='READ')
+        DO i = 1, C%sealevel_record_length
+          READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%sealevel_time(i), forcing%sealevel_record(i)
+          IF (ios /= 0) THEN
+            CALL crash('length of text file "' // TRIM(C%filename_sealevel_record) // '" does not match C%sealevel_record_length!')
+          END IF
+        END DO
+        CLOSE( UNIT  = 1337)
+
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Set the value for the current (starting) model time
+    CALL update_sealevel_record_at_model_time( C%start_time_of_run)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
+
+  END SUBROUTINE initialise_sealevel_record
+
+  SUBROUTINE update_sealevel_record_at_model_time( time)
+    ! Interpolate the data in forcing%sealevel to find the value at the queried time.
+    ! If time lies outside the range of forcing%sealevel_time, return the first/last value
+    !
+    ! NOTE: assumes time is listed in kyr (so LGM would be -21000.0)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_sealevel_record_at_model_time'
+    INTEGER                                            :: il, iu
+    REAL(dp)                                           :: wl, wu
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF     (C%choice_sealevel_model == 'prescribed') THEN
+      ! Observed sea level is needed for these forcing methods.
+    ELSE
+      CALL crash('should only be called when choice_sealevel_model = "prescribed"!')
+    END IF
+
+    IF (par%master) THEN
+      IF     (time < MINVAL( forcing%sealevel_time)) THEN ! not doing times 1000 because forcing%sealevel_time is NOT in kyr (for now)
+        CALL warning('model time before start of sea level record; using constant extrapolation!')
+        forcing%sealevel_obs = forcing%sealevel_record( 1)
+      ELSEIF (time > MAXVAL( forcing%sealevel_time)) THEN
+        ! CALL warning('model time beyond end of sea level record; using constant extrapolation!')
+        forcing%sealevel_obs = forcing%sealevel_record( C%sealevel_record_length)
+      ELSE
+        iu = 1
+        DO WHILE (forcing%sealevel_time(iu) < time)
+          iu = iu+1
+        END DO
+        il = iu-1
+
+        wl = (forcing%sealevel_time(iu) - time) / ((forcing%sealevel_time(iu)-forcing%sealevel_time(il)))
+        wu = 1._dp - wl
+
+        forcing%sealevel_obs = forcing%sealevel_record(il) * wl + forcing%sealevel_record(iu) * wu
+
+      END IF
+    END IF
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE update_sealevel_record_at_model_time
 
 END MODULE forcing_module

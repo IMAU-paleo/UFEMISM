@@ -6,55 +6,26 @@ MODULE general_sea_level_module
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module,               ONLY: ice_density, ocean_area, seawater_density
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, allocate_shared_dp_0D, allocate_shared_dp_1D
   USE data_types_module,               ONLY: type_model_region
+  USE forcing_module,                  ONLY: forcing, update_sealevel_record_at_model_time
 
   IMPLICIT NONE
 
 CONTAINS
 
-  ! Determine GMSL contributions from all simulated ice sheets
-  SUBROUTINE determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_model_region),    INTENT(IN)        :: NAM, EAS, GRL, ANT
-    REAL(dp),                   INTENT(INOUT)     :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_GMSL_contributions'
-
-    IF (.NOT. par%master) RETURN
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    GMSL_NAM = 0._dp
-    GMSL_EAS = 0._dp
-    GMSL_GRL = 0._dp
-    GMSL_ANT = 0._dp
-
-    IF (C%do_NAM) GMSL_NAM = NAM%GMSL_contribution
-    IF (C%do_EAS) GMSL_EAS = EAS%GMSL_contribution
-    IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
-    IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
-
-    GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE determine_GMSL_contributions
+! ===== Regional sea level =====
+! ==============================
 
   ! Update regional sea level
-  SUBROUTINE update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob)
+  SUBROUTINE update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob, time)
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),    INTENT(INOUT)     :: NAM, EAS, GRL, ANT
     REAL(dp),                   INTENT(IN)        :: GMSL_glob
+    REAL(dp),                   INTENT(IN)        :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'update_regional_sea_level'
@@ -76,6 +47,17 @@ CONTAINS
       IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = GMSL_glob
       IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
 
+    ELSEIF (C%choice_sealevel_model == 'prescribed') THEN
+
+      CALL update_sealevel_record_at_model_time( time)
+
+      print*, time, forcing%sealevel_obs
+
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = forcing%sealevel_obs
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = forcing%sealevel_obs
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = forcing%sealevel_obs
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = forcing%sealevel_obs
+
     ELSEIF (C%choice_sealevel_model == 'SELEN') THEN
 
       ! Sea level fields are filled in the SELEN routines
@@ -86,7 +68,13 @@ CONTAINS
 
     CALL sync
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE update_regional_sea_level
+
+! ===== Sea-level contributions =====
+! ===================================
 
   ! Calculate present-day sea level contribution
   SUBROUTINE calculate_PD_sealevel_contribution( region)
@@ -131,5 +119,39 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calculate_PD_sealevel_contribution
+
+  ! Determine current GMSL contributions from all simulated ice sheets
+  SUBROUTINE determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),    INTENT(IN)        :: NAM, EAS, GRL, ANT
+    REAL(dp),                   INTENT(INOUT)     :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_GMSL_contributions'
+
+    IF (.NOT. par%master) RETURN
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    GMSL_NAM = 0._dp
+    GMSL_EAS = 0._dp
+    GMSL_GRL = 0._dp
+    GMSL_ANT = 0._dp
+
+    IF (C%do_NAM) GMSL_NAM = NAM%GMSL_contribution
+    IF (C%do_EAS) GMSL_EAS = EAS%GMSL_contribution
+    IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
+    IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
+
+    GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE determine_GMSL_contributions
 
 END MODULE general_sea_level_module

@@ -585,6 +585,12 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
     INTEGER :: wghf_ghf
 
+    ! External forcing: sea level record
+    REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_time
+    REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_record
+    REAL(dp),                   POINTER     :: sealevel_obs
+    INTEGER :: wsealevel_time, wsealevel_record, wsealevel_obs
+
   END TYPE type_forcing_data
 
   ! == Global climate

@@ -443,7 +443,7 @@ CONTAINS
     ! ====================
 
     IF (C%is_restart) THEN
-      ! Read mesh and initial data (on the mesh) from a restart file
+      ! Read mesh and data (on the mesh) from a restart file
       CALL read_mesh_from_restart_file( region)
       CALL read_init_data_from_restart_file( region)
     ELSE

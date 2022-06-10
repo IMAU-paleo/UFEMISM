@@ -156,7 +156,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) '  Reading initial data from restart file "', TRIM(region%restart%netcdf%filename), '"...'
+    IF (par%master) WRITE(0,*) '  Reading data from restart file "', TRIM(region%restart%netcdf%filename), '"...'
 
     ! Check if all the data is there
     IF (par%master) CALL inquire_restart_file_init( region%restart%netcdf)

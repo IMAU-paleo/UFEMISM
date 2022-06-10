@@ -199,10 +199,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
     CHARACTER(LEN=256)  :: choice_refgeo_init_GRL_config               = 'realistic'                      ! Choice of initial geometry for Greenland    ; can be "idealised", "realistic", or "restart"
     CHARACTER(LEN=256)  :: choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
-    REAL(dp)            :: time_to_restart_from_NAM_config             = 0._dp                            ! Can be different from C%start_time_of_run, though this will issue a warning
-    REAL(dp)            :: time_to_restart_from_EAS_config             = 0._dp
-    REAL(dp)            :: time_to_restart_from_GRL_config             = 0._dp
-    REAL(dp)            :: time_to_restart_from_ANT_config             = 0._dp
     CHARACTER(LEN=256)  :: choice_refgeo_init_idealised_config         = 'flatearth'                      ! Choice of idealised initial geometry; see "generate_idealised_geometry" in reference_fields_module for options
     REAL(dp)            :: dx_refgeo_init_idealised_config             = 5000._dp                         ! Resolution of square grid used for idealised initial geometry
     CHARACTER(LEN=256)  :: filename_refgeo_init_NAM_config             = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
@@ -240,6 +236,12 @@ MODULE configuration_module
   ! ======================================================================
 
     LOGICAL             :: is_restart_config                           = .FALSE.
+
+    ! Time in the restart file from which the data will be extracted
+    REAL(dp)            :: time_to_restart_from_NAM_config             = 0._dp                            ! Can be different from C%start_time_of_run, be careful though
+    REAL(dp)            :: time_to_restart_from_EAS_config             = 0._dp
+    REAL(dp)            :: time_to_restart_from_GRL_config             = 0._dp
+    REAL(dp)            :: time_to_restart_from_ANT_config             = 0._dp
 
     ! Initial model state when restarting from a previous run
     CHARACTER(LEN=256)  :: filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
@@ -880,10 +882,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_refgeo_init_EAS
     CHARACTER(LEN=256)                  :: choice_refgeo_init_GRL
     CHARACTER(LEN=256)                  :: choice_refgeo_init_ANT
-    REAL(dp)                            :: time_to_restart_from_NAM
-    REAL(dp)                            :: time_to_restart_from_EAS
-    REAL(dp)                            :: time_to_restart_from_GRL
-    REAL(dp)                            :: time_to_restart_from_ANT
     CHARACTER(LEN=256)                  :: choice_refgeo_init_idealised
     REAL(dp)                            :: dx_refgeo_init_idealised
     CHARACTER(LEN=256)                  :: filename_refgeo_init_NAM
@@ -921,6 +919,12 @@ MODULE configuration_module
     ! ===================================================================
 
     LOGICAL                             :: is_restart
+
+    ! Time in the restart file from which the data will be extracted
+    REAL(dp)                            :: time_to_restart_from_NAM
+    REAL(dp)                            :: time_to_restart_from_EAS
+    REAL(dp)                            :: time_to_restart_from_GRL
+    REAL(dp)                            :: time_to_restart_from_ANT
 
     ! Initial model state when restarting from a previous run
     CHARACTER(LEN=256)                  :: filename_restart_NAM
@@ -1762,10 +1766,6 @@ CONTAINS
                      choice_refgeo_init_EAS_config,                   &
                      choice_refgeo_init_GRL_config,                   &
                      choice_refgeo_init_ANT_config,                   &
-                     time_to_restart_from_NAM_config,                 &
-                     time_to_restart_from_EAS_config,                 &
-                     time_to_restart_from_GRL_config,                 &
-                     time_to_restart_from_ANT_config,                 &
                      choice_refgeo_init_idealised_config,             &
                      dx_refgeo_init_idealised_config,                 &
                      filename_refgeo_init_NAM_config,                 &
@@ -1794,6 +1794,10 @@ CONTAINS
                      filename_refgeo_GIAeq_ANT_config,                &
                      remove_Lake_Vostok_config,                       &
                      is_restart_config,                               &
+                     time_to_restart_from_NAM_config,                 &
+                     time_to_restart_from_EAS_config,                 &
+                     time_to_restart_from_GRL_config,                 &
+                     time_to_restart_from_ANT_config,                 &
                      filename_restart_NAM_config,                     &
                      filename_restart_EAS_config,                     &
                      filename_restart_GRL_config,                     &
@@ -2334,10 +2338,6 @@ CONTAINS
     C%choice_refgeo_init_EAS                   = choice_refgeo_init_EAS_config
     C%choice_refgeo_init_GRL                   = choice_refgeo_init_GRL_config
     C%choice_refgeo_init_ANT                   = choice_refgeo_init_ANT_config
-    C%time_to_restart_from_NAM                 = time_to_restart_from_NAM_config
-    C%time_to_restart_from_EAS                 = time_to_restart_from_EAS_config
-    C%time_to_restart_from_GRL                 = time_to_restart_from_GRL_config
-    C%time_to_restart_from_ANT                 = time_to_restart_from_ANT_config
     C%choice_refgeo_init_idealised             = choice_refgeo_init_idealised_config
     C%dx_refgeo_init_idealised                 = dx_refgeo_init_idealised_config
     C%filename_refgeo_init_NAM                 = filename_refgeo_init_NAM_config
@@ -2375,6 +2375,11 @@ CONTAINS
     ! ===================================================================
 
     C%is_restart                               = is_restart_config
+
+    C%time_to_restart_from_NAM                 = time_to_restart_from_NAM_config
+    C%time_to_restart_from_EAS                 = time_to_restart_from_EAS_config
+    C%time_to_restart_from_GRL                 = time_to_restart_from_GRL_config
+    C%time_to_restart_from_ANT                 = time_to_restart_from_ANT_config
 
     C%filename_restart_NAM                     = filename_restart_NAM_config
     C%filename_restart_EAS                     = filename_restart_EAS_config

@@ -110,7 +110,6 @@ MODULE configuration_module
 
     LOGICAL             :: do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
     LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
-    LOGICAL             :: do_write_memory_tracker_config              = .FALSE.                          ! Whether or not the memory use tracker should be used
 
   ! == Domain size for the four regions
   ! ===================================
@@ -805,7 +804,6 @@ MODULE configuration_module
 
     LOGICAL                             :: do_write_debug_data
     LOGICAL                             :: do_check_for_NaN
-    LOGICAL                             :: do_write_memory_tracker
 
     ! Domain size for the four regions
     ! ================================
@@ -1742,7 +1740,6 @@ CONTAINS
                      do_write_global_scalar_output_config,            &
                      do_write_debug_data_config,                      &
                      do_check_for_NaN_config,                         &
-                     do_write_memory_tracker_config,                  &
                      xmin_NAM_config,                                 &
                      xmax_NAM_config,                                 &
                      ymin_NAM_config,                                 &
@@ -2258,7 +2255,6 @@ CONTAINS
 
     C%do_write_debug_data                      = do_write_debug_data_config
     C%do_check_for_NaN                         = do_check_for_NaN_config
-    C%do_write_memory_tracker                  = do_write_memory_tracker_config
 
     ! Domain size for the four regions
     ! ================================

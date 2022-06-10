@@ -1783,21 +1783,19 @@ CONTAINS
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
 
-
-
     ! Masks
-    ! NOTE: not included, as mapping masks between grids is meaningless
-    ELSEIF (field_name == 'mask') THEN
-    ELSEIF (field_name == 'mask_land') THEN
-    ELSEIF (field_name == 'mask_ocean') THEN
-    ELSEIF (field_name == 'mask_lake') THEN
-    ELSEIF (field_name == 'mask_ice') THEN
-    ELSEIF (field_name == 'mask_sheet') THEN
-    ELSEIF (field_name == 'mask_shelf') THEN
-    ELSEIF (field_name == 'mask_coast') THEN
+    ! NOTE: not meant to be included, as mapping masks between grids is meaningless
+    ELSEIF (field_name == 'mask'       ) THEN
+    ELSEIF (field_name == 'mask_land'  ) THEN
+    ELSEIF (field_name == 'mask_ocean' ) THEN
+    ELSEIF (field_name == 'mask_lake'  ) THEN
+    ELSEIF (field_name == 'mask_ice'   ) THEN
+    ELSEIF (field_name == 'mask_sheet' ) THEN
+    ELSEIF (field_name == 'mask_shelf' ) THEN
+    ELSEIF (field_name == 'mask_coast' ) THEN
     ELSEIF (field_name == 'mask_margin') THEN
-    ELSEIF (field_name == 'mask_gl') THEN
-    ELSEIF (field_name == 'mask_cf') THEN
+    ELSEIF (field_name == 'mask_gl'    ) THEN
+    ELSEIF (field_name == 'mask_cf'    ) THEN
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN

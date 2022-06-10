@@ -51,8 +51,6 @@ CONTAINS
 
       CALL update_sealevel_record_at_model_time( time)
 
-      print*, time, forcing%sealevel_obs
-
       IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = forcing%sealevel_obs
       IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = forcing%sealevel_obs
       IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = forcing%sealevel_obs

@@ -26,7 +26,7 @@ MODULE UFEMISM_main_model
                                                  create_debug_file, write_PETSc_matrix_to_NetCDF
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
-  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
+  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
   USE mesh_memory_module,                  ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
@@ -191,8 +191,23 @@ CONTAINS
 
       CALL run_isotopes_model( region)
 
-      ! == Time step and output
-      ! =======================
+      ! == Basal sliding inversion
+      ! ==========================
+
+      IF (C%do_basal_sliding_inversion) THEN
+        IF (region%do_basal) THEN
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
+        END IF
+      END IF
+
+      ! == Update ice geometry
+      ! ======================
+
+      CALL update_ice_thickness( region%mesh, region%ice)
+      CALL sync
+
+      ! == Output
+      ! =========
 
       ! Write output
       IF (region%do_output) THEN
@@ -205,19 +220,9 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
-      ! == Basal sliding inversion
-      ! ==========================
+      ! == Advance region time
+      ! ======================
 
-      IF (C%do_basal_sliding_inversion) THEN
-        IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
-        END IF
-      END IF
-
-      ! == Update ice geometry and advance region time
-      ! ==============================================
-
-      CALL update_ice_thickness( region%mesh, region%ice)
       IF (par%master) region%time = region%time + region%dt
       CALL sync
 
@@ -271,6 +276,8 @@ CONTAINS
 
     ! Create a new mesh
     CALL create_new_mesh( region)
+
+    IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
 
     ! Update the mapping operators between the new mesh and the fixed square grids
     CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
@@ -327,6 +334,11 @@ CONTAINS
 
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
+
+    IF (C%is_restart) THEN
+      ! Map restart initial geometry from old to new mesh (if needed)
+      CALL remap_restart_init_topo( region, region%mesh, region%mesh_new, map)
+    END IF
 
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'SELEN') THEN
@@ -385,6 +397,8 @@ CONTAINS
     region%do_BMB         = .TRUE.
     region%do_ELRA        = .TRUE.
     region%do_basal       = .TRUE.
+
+    IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -454,6 +468,8 @@ CONTAINS
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
 
+    IF (par%master) WRITE(0,*) '  Mapping reference geometries onto the initial model mesh...'
+
     ! Allocate memory for reference data on the mesh
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hi , region%refgeo_init%wHi )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
@@ -469,6 +485,8 @@ CONTAINS
 
     ! Map data from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh)
+
+    IF (par%master) WRITE(0,*) '  Finished mapping reference geometries.'
 
     ! ===== The different square grids =====
     ! ======================================

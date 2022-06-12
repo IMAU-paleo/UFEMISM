@@ -404,6 +404,7 @@ MODULE configuration_module
 
     CHARACTER(LEN=256)  :: choice_calving_law_config                   = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
     REAL(dp)            :: calving_threshold_thickness_config          = 200._dp                          ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
+    INTEGER             :: max_calving_rounds_config                   = 20                               ! Maximum number of calving loops during chain reaction
     LOGICAL             :: do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
     LOGICAL             :: remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
     LOGICAL             :: continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
@@ -549,7 +550,6 @@ MODULE configuration_module
     REAL(dp)            :: BMB_shelf_uniform_config                    = 0._dp                            ! Uniform shelf BMB, applied when choice_BMB_shelf_model = "uniform" [mie/yr]
     REAL(dp)            :: BMB_sheet_uniform_config                    = 0._dp                            ! Uniform sheet BMB, applied when choice_BMB_sheet_model = "uniform" [mie/yr]
     CHARACTER(LEN=256)  :: choice_BMB_subgrid_config                   = 'FCMP'                           ! Choice of sub-grid BMB scheme: "FCMP", "PMP", "NMP" (following Leguy et al., 2021)
-    LOGICAL             :: do_asynchronous_BMB_config                  = .FALSE.                          ! Whether or not to run the BMB asynchronously from the ice dynamics (if so, run it at dt_BMB; if not, run it in every ice dynamics time step)
     REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
@@ -577,7 +577,7 @@ MODULE configuration_module
     (/ 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp /)
 
     ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
-    REAL(dp)            :: BMB_Favier2019_lin_GammaT_config            = 3.3314E-05_dp  ! 2.03E-5_dp      ! Heat exchange velocity [m s^-1]
+    REAL(dp)            :: BMB_Favier2019_lin_GammaT_config            = 3.3314E-5_dp   ! 2.03E-5_dp      ! Heat exchange velocity [m s^-1]
     REAL(dp)            :: BMB_Favier2019_quad_GammaT_config           = 111.6E-5_dp    ! 99.32E-5_dp     ! Commented values are from Favier et al. (2019), Table 3
     REAL(dp)            :: BMB_Favier2019_Mplus_GammaT_config          = 108.6E-5_dp    ! 132.9E-5_dp     ! Actual value are re-tuned for IMAU-ICE, following the same approach (see Asay-Davis et al., 2016, ISOMIP+)
 
@@ -1081,6 +1081,7 @@ MODULE configuration_module
 
     CHARACTER(LEN=256)                  :: choice_calving_law
     REAL(dp)                            :: calving_threshold_thickness
+    INTEGER                             :: max_calving_rounds
     LOGICAL                             :: do_remove_shelves
     LOGICAL                             :: remove_shelves_larger_than_PD
     LOGICAL                             :: continental_shelf_calving
@@ -1228,7 +1229,6 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_shelf_uniform
     REAL(dp)                            :: BMB_sheet_uniform
     CHARACTER(LEN=256)                  :: choice_BMB_subgrid
-    LOGICAL                             :: do_asynchronous_BMB
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
 
@@ -1907,6 +1907,7 @@ CONTAINS
                      basal_sliding_inv_wsmooth_config,                &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
+                     max_calving_rounds_config,                       &
                      do_remove_shelves_config,                        &
                      remove_shelves_larger_than_PD_config,            &
                      continental_shelf_calving_config,                &
@@ -2029,7 +2030,6 @@ CONTAINS
                      BMB_shelf_uniform_config,                        &
                      BMB_sheet_uniform_config,                        &
                      choice_BMB_subgrid_config,                       &
-                     do_asynchronous_BMB_config,                      &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
                      BMB_inv_scale_shelf_config,                      &
@@ -2535,6 +2535,7 @@ CONTAINS
 
     C%choice_calving_law                       = choice_calving_law_config
     C%calving_threshold_thickness              = calving_threshold_thickness_config
+    C%max_calving_rounds                       = max_calving_rounds_config
     C%do_remove_shelves                        = do_remove_shelves_config
     C%remove_shelves_larger_than_PD            = remove_shelves_larger_than_PD_config
     C%continental_shelf_calving                = continental_shelf_calving_config
@@ -2680,7 +2681,6 @@ CONTAINS
     C%BMB_shelf_uniform                        = BMB_shelf_uniform_config
     C%BMB_sheet_uniform                        = BMB_sheet_uniform_config
     C%choice_BMB_subgrid                       = choice_BMB_subgrid_config
-    C%do_asynchronous_BMB                      = do_asynchronous_BMB_config
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
 

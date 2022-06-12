@@ -991,7 +991,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_freeze_base, BMB%wT_ocean_freeze_base)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE initialise_BMB_model_Favier2019
 

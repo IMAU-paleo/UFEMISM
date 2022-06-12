@@ -471,6 +471,87 @@ CONTAINS
     CALL find_triangle_area( va, pab, pac, A_tri_flt)
     
   END SUBROUTINE determine_grounded_area_triangle_1flt_2grnd
+
+! == Routines for calculating the sub-grid ice-filled fraction and effective ice thickness at the calving front
+  SUBROUTINE determine_floating_margin_fraction( mesh, ice)
+    ! Determine the ice-filled fraction and effective ice thickness of floating margin pixels
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_floating_margin_fraction'
+    INTEGER                                            :: vi, ci, vc
+    LOGICAL                                            :: has_noncf_neighbours
+    REAL(dp)                                           :: Hi_neighbour_max
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Initialise
+      IF (ice%mask_ice_a( vi) == 1) THEN
+        ice%float_margin_frac_a( vi) = 1._dp
+        ice%Hi_eff_cf_a(         vi) = ice%Hi_a( vi)
+      ELSE
+        ice%float_margin_frac_a( vi) = 0._dp
+        ice%Hi_eff_cf_a(         vi) = 0._dp
+      END IF
+
+      IF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 1) THEN
+
+        ! First check if any non-calving-front neighbours actually exist
+        DO ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+            has_noncf_neighbours = .TRUE.
+          END IF
+        END DO
+
+        ! If not, then the floating fraction is defined as 1
+        IF (.NOT. has_noncf_neighbours) THEN
+          ice%float_margin_frac_a( vi) = 1._dp
+          ice%Hi_eff_cf_a(         vi) = ice%Hi_a( vi)
+          CYCLE
+        END IF
+
+        ! If so, find the ice thickness the thickest non-calving-front neighbour
+        Hi_neighbour_max = 0._dp
+        DO ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+            Hi_neighbour_max = MAX( Hi_neighbour_max, ice%Hi_a( vc))
+          END IF
+        END DO
+
+        ! If the thickest non-calving-front neighbour has thinner ice, define the fraction as 1
+        IF (Hi_neighbour_max < ice%Hi_a( vi)) THEN
+          ice%float_margin_frac_a( vi) = 1._dp
+          ice%Hi_eff_cf_a(         vi) = ice%Hi_a( vi)
+          CYCLE
+        END IF
+
+        ! Calculate ice-filled fraction
+        ice%float_margin_frac_a( vi) = ice%Hi_a( vi) / Hi_neighbour_max
+        ice%Hi_eff_cf_a(         vi) = Hi_neighbour_max
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Safety
+    CALL check_for_NaN_dp_1D( ice%float_margin_frac_a, 'ice%float_margin_frac_a')
+    CALL check_for_NaN_dp_1D( ice%Hi_eff_cf_a        , 'ice%Hi_eff_cf_a'        )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE determine_floating_margin_fraction
   
 ! == The no-ice mask, to prevent ice growth in certain areas
   SUBROUTINE initialise_mask_noice( region, mesh)

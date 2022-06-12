@@ -180,6 +180,11 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
     INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wHi_tplusdt_a
 
+    ! Ice dynamics - calving
+    REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_eff_cf_a                 ! Effective ice thickness at calving front pixels (= Hi of thinnest non-calving-front neighbour)
+    INTEGER :: wfloat_margin_frac_a, wHi_eff_cf_a
+
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp),                   POINTER     :: pc_zeta
     REAL(dp), DIMENSION(:    ), POINTER     :: pc_tau

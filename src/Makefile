@@ -56,6 +56,7 @@ UFEMISM_program_objects = \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
+        calving_module.o \
         SMB_module.o \
         BMB_module.o \
         ocean_module.o \

@@ -381,11 +381,11 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Apply calving law in chain mode: hunt for calving until extintion
+    ! Apply calving law in chain mode: hunt until extintion
     calving_round = 0                                       ! Initialise loop counter
     calving_event = .TRUE.                                  ! Let all processes enter the loop
     DO WHILE ( ANY(calving_event) .AND. &                   ! Exit loop if no more calving occurs
-               calving_round < C%max_calving_rounds)        ! Exit loop if it exceeds the max loops allowed
+               calving_round < C%max_calving_rounds)        ! Exit loop if it exceeds the max rounds allowed
       CALL determine_masks( mesh, ice)                      ! Update the mask to identify new calving fronts
       CALL determine_floating_margin_fraction( mesh, ice)   ! Update the fractions for new calving fronts
       CALL apply_calving_law( mesh, ice, calving_event)     ! Apply calving law and update calving event flag

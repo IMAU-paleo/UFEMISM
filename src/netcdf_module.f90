@@ -1784,7 +1784,8 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
 
     ! Masks
-    ! NOTE: not meant to be included, as mapping masks between grids is meaningless
+    ! NOTE: not meant to be included, as mapping masks between grids is meaningless. These lines are needed so the model can output
+    !       the mesh version of these variables without crashing at the ELSE below.
     ELSEIF (field_name == 'mask'       ) THEN
     ELSEIF (field_name == 'mask_land'  ) THEN
     ELSEIF (field_name == 'mask_ocean' ) THEN

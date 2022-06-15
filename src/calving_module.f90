@@ -155,7 +155,6 @@ CONTAINS
       ! Remove ice for all unconnected shelves
       DO vi = 1, mesh%nV
         IF (ice%mask_shelf_a( vi) == 1 .AND. map( vi) == 0) THEN
-          print*, 'bang!'
           ice%Hi_a( vi) = 0._dp
         END IF
       END DO

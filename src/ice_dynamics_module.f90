@@ -6,6 +6,10 @@ MODULE ice_dynamics_module
   !       routines for integrating the ice thickness equation have been moved to the ice_thickness_module.
 
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,                  ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE petsc_module,                          ONLY: perr
@@ -41,7 +45,9 @@ MODULE ice_dynamics_module
 
 CONTAINS
 
-! == The main ice dynamics routine
+! ===== Run ice dynamics =====
+! ============================
+
   SUBROUTINE run_ice_model( region, t_end)
     ! Calculate ice velocities and the resulting change in ice geometry
 
@@ -69,6 +75,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ice_model
+
   SUBROUTINE run_ice_dynamics_direct( region, t_end)
     ! Ice dynamics and time-stepping with the "direct" method
     ! NOTE: this does not work for DIVA ice dynamics!
@@ -189,6 +196,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ice_dynamics_direct
+
   SUBROUTINE run_ice_dynamics_pc( region, t_end)
     ! Ice dynamics and time-stepping with the predictor/correct method
     ! (adopted from Yelmo, originally based on Cheng et al., 2017)
@@ -343,7 +351,9 @@ CONTAINS
 
   END SUBROUTINE run_ice_dynamics_pc
 
-! == Update the ice thickness at the end of a model time loop
+! ===== Ice thickness update =====
+! ================================
+
   SUBROUTINE update_ice_thickness( mesh, ice)
     ! Update the ice thickness at the end of a model time loop
 
@@ -356,7 +366,9 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'update_ice_thickness'
     LOGICAL, DIMENSION(:), POINTER                     :: calving_event
-    INTEGER                                            :: wcalving_event, calving_round, vi
+    INTEGER                                            :: vi
+    INTEGER                                            :: wcalving_event, calving_round
+    LOGICAL                                            :: fix_Hi_here
 
 
     ! Add routine to path
@@ -368,6 +380,9 @@ CONTAINS
     ! Save the previous ice mask, for use in thermodynamics
     ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
     CALL sync
+
+    ! Check if we want to keep the ice thickness fixed for some specific areas
+    CALL fix_ice_thickness( mesh, ice)
 
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
@@ -409,7 +424,116 @@ CONTAINS
 
   END SUBROUTINE update_ice_thickness
 
-! == Time stepping
+  SUBROUTINE fix_ice_thickness( mesh, ice)
+    ! Check if we want to keep the ice thickness fixed in time for specific areas
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'fix_ice_thickness'
+    INTEGER                                            :: vi, ci, vc
+    LOGICAL                                            :: fix_Hi_here
+
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! If so specified, keep sheet geometry fixed (incl. first adjacent shelf points)
+    IF (C%fixed_sheet_geometry) THEN
+      DO vi = mesh%vi1, mesh%vi2
+
+        fix_Hi_here = .FALSE.
+
+        IF (ice%mask_sheet_a( vi) == 1) THEN
+          fix_Hi_here = .TRUE.
+        ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (ice%mask_sheet_a( vc) == 1) THEN
+              fix_Hi_here = .TRUE.
+              EXIT
+            END IF
+          END DO
+        END IF
+
+        IF (fix_Hi_here) THEN
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
+        END IF
+
+      END DO
+      CALL sync
+    END IF
+
+    ! If so specified, keep GL position fixed (both grounded and floating sides)
+    IF (C%fixed_grounding_line) THEN
+      DO vi = mesh%vi1, mesh%vi2
+
+        fix_Hi_here = .FALSE.
+
+        IF (ice%mask_sheet_a( vi) == 1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (ice%mask_shelf_a( vc) == 1) THEN
+              fix_Hi_here = .TRUE.
+              EXIT
+            END IF
+          END DO
+        ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (ice%mask_sheet_a( vc) == 1) THEN
+              fix_Hi_here = .TRUE.
+              EXIT
+            END IF
+          END DO
+        END IF
+
+        IF (fix_Hi_here) THEN
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
+        END IF
+
+      END DO
+      CALL sync
+    END IF
+
+    ! If so specified, keep shelf geometry fixed (incl. first adjacent sheet points)
+    IF (C%fixed_shelf_geometry) THEN
+      DO vi = mesh%vi1, mesh%vi2
+
+        fix_Hi_here = .FALSE.
+
+        IF (ice%mask_shelf_a( vi) == 1) THEN
+          fix_Hi_here = .TRUE.
+        ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
+          DO ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+            IF (ice%mask_shelf_a( vc) == 1) THEN
+              fix_Hi_here = .TRUE.
+              EXIT
+            END IF
+          END DO
+        END IF
+
+        IF (fix_Hi_here) THEN
+          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
+        END IF
+
+      END DO
+      CALL sync
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE
+
+! ===== Time stepping =====
+! =========================
+
   SUBROUTINE calc_critical_timestep_SIA( mesh, ice, dt_crit_SIA)
     ! Calculate the critical time step for advective ice flow (CFL criterion)
 
@@ -489,6 +613,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_critical_timestep_SIA
+
   SUBROUTINE calc_critical_timestep_adv( mesh, ice, dt_crit_adv)
     ! Calculate the critical time step for advective ice flow (CFL criterion)
 
@@ -540,6 +665,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_critical_timestep_adv
+
   SUBROUTINE calc_pc_truncation_error( mesh, ice, dt, dt_prev)
     ! Calculate the truncation error in the ice thickness rate of change (Robinson et al., 2020, Eq. 32)
 
@@ -592,6 +718,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_pc_truncation_error
+
   SUBROUTINE determine_timesteps_and_actions( region, t_end)
     ! Determine how long we can run just ice dynamics before another "action" (thermodynamics,
     ! GIA, output writing, inverse routine, etc.) has to be performed, and adjust the time step accordingly.
@@ -713,7 +840,9 @@ CONTAINS
 
   END SUBROUTINE determine_timesteps_and_actions
 
-! == Administration: allocation, initialisation, and remapping
+! ===== Administration: allocation, initialisation, and remapping =====
+! =====================================================================
+
   SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init, restart)
     ! Allocate shared memory for all the data fields of the ice dynamical module, and
     ! initialise some of them
@@ -768,6 +897,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_ice_model
+
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
 
     USE data_types_module,          ONLY: type_remapping_latlon2mesh
@@ -800,6 +930,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_geothermal_heat_flux_to_mesh
+
   SUBROUTINE allocate_ice_model( mesh, ice)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
     ! Return a pointer associated with that memory space. Makes it so that all processes
@@ -931,6 +1062,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE allocate_ice_model
+
   SUBROUTINE remap_ice_model( mesh_old, mesh_new, map, ice, refgeo_PD, time)
     ! Remap or reallocate all the data fields
 
@@ -1084,7 +1216,7 @@ CONTAINS
    ! Ice dynamics - calving
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_eff_cf_a           , ice%wHi_eff_cf_a          )
-    
+
     ! Ice dynamics - predictor/corrector ice thickness update
    !CALL reallocate_shared_dp_0D(                                   ice%pc_zeta               , ice%wpc_zeta              )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_tau                , ice%wpc_tau               )
@@ -1102,33 +1234,33 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_old                , ice%wHi_old               )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_pred               , ice%wHi_pred              )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_corr               , ice%wHi_corr              )
-    
+
     ! Thermodynamics
    !CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%internal_heating_a    , ice%winternal_heating_a   )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%frictional_heating_a  , ice%wfrictional_heating_a )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%GHF_a                 , ice%wGHF_a                )
-    
+
     ! Mesh adaptation data
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%surf_curv             , ice%wsurf_curv            )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%log_velocity          , ice%wlog_velocity         )
 
-    
+
     ! End of memory reallocation
     ! ==========================
-    
+
     ! Remap velocities
     CALL remap_velocities( mesh_old, mesh_new, map, ice)
-    
+
     ! Recalculate ice flow factor
     CALL calc_ice_rheology( mesh_new, ice, time)
-    
+
     ! Update masks
     CALL update_general_ice_model_data( mesh_new, ice)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE remap_ice_model
-  
+
 END MODULE ice_dynamics_module

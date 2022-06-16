@@ -358,6 +358,11 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
     CHARACTER(LEN=256)  :: choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
+    ! Partially fixed geometry, useful for initialisation and inversion runs
+    LOGICAL             :: fixed_shelf_geometry_config                 = .FALSE.                          ! Keep geometry of floating ice fixed
+    LOGICAL             :: fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
+    LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
+
   ! == Ice dynamics - basal conditions and sliding
   ! ==============================================
 
@@ -1034,6 +1039,11 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_mask_noice_EAS
     CHARACTER(LEN=256)                  :: choice_mask_noice_GRL
     CHARACTER(LEN=256)                  :: choice_mask_noice_ANT
+
+    ! Partially fixed geometry, useful for initialisation and inversion runs
+    LOGICAL                             :: fixed_shelf_geometry
+    LOGICAL                             :: fixed_sheet_geometry
+    LOGICAL                             :: fixed_grounding_line
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -1875,6 +1885,9 @@ CONTAINS
                      choice_mask_noice_EAS_config,                    &
                      choice_mask_noice_GRL_config,                    &
                      choice_mask_noice_ANT_config,                    &
+                     fixed_shelf_geometry_config,                     &
+                     fixed_sheet_geometry_config,                     &
+                     fixed_grounding_line_config,                     &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -2488,6 +2501,11 @@ CONTAINS
     C%choice_mask_noice_EAS                    = choice_mask_noice_EAS_config
     C%choice_mask_noice_GRL                    = choice_mask_noice_GRL_config
     C%choice_mask_noice_ANT                    = choice_mask_noice_ANT_config
+
+    ! Partially fixed geometry, useful for initialisation and inversion runs
+    C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
+    C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
+    C%fixed_grounding_line                     = fixed_grounding_line_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================

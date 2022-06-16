@@ -29,7 +29,7 @@
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
 
-  create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+  create_procedural_output_dir_config         = .TRUE.                           ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
   fixed_output_dir_config                     = 'results_GRL_040km_spin04_steady'! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
@@ -110,6 +110,14 @@
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'results_GRL_040km_spin03_deglacial/restart_GRL_00001.nc'
   filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+
+  ! Ice dynamics - time integration
+  ! ===============================
+
+  ! Partially fixed geometry, useful for initialisation and inversion runs
+  fixed_shelf_geometry_config                 = .FALSE.                          ! Keep geometry of floating ice fixed
+  fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
+  fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
   ! Ice dynamics - velocity
   ! =======================

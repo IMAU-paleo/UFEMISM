@@ -31,15 +31,14 @@ MODULE ice_dynamics_module
   USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
                                                    type_remapping_mesh_mesh, type_restart_data
   USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
-  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data, determine_masks, &
-                                                   determine_floating_margin_fraction
+  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data
   USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
   USE ice_velocity_module,                   ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
                                                    map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
   USE ice_thickness_module,                  ONLY: calc_dHi_dt
   USE basal_conditions_and_sliding_module,   ONLY: initialise_basal_conditions, remap_basal_conditions
   USE thermodynamics_module,                 ONLY: calc_ice_rheology, remap_ice_temperature
-  USE calving_module,                        ONLY: apply_calving_law, remove_unconnected_shelves
+  USE calving_module,                        ONLY: run_calving_model, remove_unconnected_shelves, imposed_shelf_removal
 
   IMPLICIT NONE
 
@@ -354,28 +353,24 @@ CONTAINS
 ! ===== Ice thickness update =====
 ! ================================
 
-  SUBROUTINE update_ice_thickness( mesh, ice)
+  SUBROUTINE update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
     ! Update the ice thickness at the end of a model time loop
 
     IMPLICIT NONE
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),                             INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                        INTENT(INOUT) :: ice
+    INTEGER,                       DIMENSION(:), INTENT(IN)    :: mask_noice
+    TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_PD
+    TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_GIAeq
 
     ! Local variables:
-    CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'update_ice_thickness'
-    LOGICAL, DIMENSION(:), POINTER                     :: calving_event
-    INTEGER                                            :: vi
-    INTEGER                                            :: wcalving_event, calving_round
-    LOGICAL                                            :: fix_Hi_here
-
+    CHARACTER(LEN=256),    PARAMETER                           :: routine_name = 'update_ice_thickness'
+    INTEGER                                                    :: vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Allocate the calving event flag
-    CALL allocate_shared_bool_1D(par%n, calving_event, wcalving_event)
 
     ! Save the previous ice mask, for use in thermodynamics
     ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
@@ -388,36 +383,14 @@ CONTAINS
     ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
     CALL sync
 
-    ! Remove very thin ice
-    DO vi = mesh%vi1, mesh%vi2
-      IF (ice%Hi_a( vi) < 1._dp) THEN
-        ice%Hi_a( vi) = 0._dp
-      END IF
-    END DO
-    CALL sync
+    ! Apply calving
+    CALL run_calving_model( mesh, ice)
 
-    ! Apply calving law in chain mode: hunt until extintion
-    calving_round = 0                                       ! Initialise loop counter
-    calving_event = .TRUE.                                  ! Let all processes enter the loop
-    DO WHILE ( ANY(calving_event) .AND. &                   ! Exit loop if no more calving occurs
-               calving_round < C%max_calving_rounds)        ! Exit loop if it exceeds the max rounds allowed
-      CALL determine_masks( mesh, ice)                      ! Update the mask to identify new calving fronts
-      CALL determine_floating_margin_fraction( mesh, ice)   ! Update the fractions for new calving fronts
-      CALL apply_calving_law( mesh, ice, calving_event)     ! Apply calving law and update calving event flag
-      calving_round = calving_round + 1                     ! Increase the counter
-    END DO
-    IF (par%master .AND. calving_round == C%max_calving_rounds .AND. C%max_calving_rounds > 5) THEN
-      CALL warning('max_calving_rounds reached! Thin ice potentially still floating around...')
-    END IF
+    ! Remove ice following various criteria
+    CALL additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
 
-    ! Remove unconnected shelves
-    CALL determine_masks( mesh, ice)
-    CALL remove_unconnected_shelves( mesh, ice)
-
+    ! Update masks, surface elevation, and thickness above floatation
     CALL update_general_ice_model_data( mesh, ice)
-
-    ! Clean up after yourself
-    CALL deallocate_shared(wcalving_event)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -529,7 +502,53 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE
+  END SUBROUTINE fix_ice_thickness
+
+  SUBROUTINE additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
+    ! Remove ice following various criteria
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_mesh),                             INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                        INTENT(INOUT) :: ice
+    INTEGER,                       DIMENSION(:), INTENT(IN)    :: mask_noice
+    TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_PD
+    TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_GIAeq
+
+    ! Local variables:
+    CHARACTER(LEN=256),    PARAMETER                           :: routine_name = 'additional_ice_removal'
+    INTEGER                                                    :: vi
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Remove very thin ice
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%Hi_a( vi) < 1._dp) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
+
+    ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
+    DO vi = mesh%vi1, mesh%vi2
+      IF (mask_noice( vi) == 1) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
+
+    ! If so specified, remove specific shelf areas
+    CALL imposed_shelf_removal( mesh, ice, refgeo_PD, refgeo_GIAeq)
+
+    ! Remove unconnected shelves
+    CALL remove_unconnected_shelves( mesh, ice)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE additional_ice_removal
 
 ! ===== Time stepping =====
 ! =========================

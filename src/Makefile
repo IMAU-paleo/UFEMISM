@@ -56,13 +56,13 @@ UFEMISM_program_objects = \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
-        calving_module.o \
         SMB_module.o \
         BMB_module.o \
         ocean_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
         general_sea_level_module.o \
+        calving_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
         thermodynamics_module.o \

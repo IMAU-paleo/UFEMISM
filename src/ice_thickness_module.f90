@@ -73,7 +73,7 @@ CONTAINS
     END IF
 
     ! Apply boundary conditions
-    CALL apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
+    CALL apply_ice_thickness_BC( mesh, ice, dt, refgeo_PD)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -254,8 +254,8 @@ CONTAINS
 ! ===== Boundary conditions =====
 ! ===============================
 
-  ! Apply ice thickness boundary conditions (at the domain boundary, and through the mask_noice)
-  SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
+  ! Apply ice thickness boundary conditions
+  SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, refgeo_PD)
 
     IMPLICIT NONE
 
@@ -263,7 +263,6 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp),                            INTENT(IN)    :: dt
-    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_noice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
 
     ! Local variables:
@@ -358,54 +357,9 @@ CONTAINS
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
 
-    ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mask_noice(     vi) == 1) THEN
-        ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-        ice%Hi_tplusdt_a( vi) = 0._dp
-      END IF
-    END DO
-    CALL sync
-
-    ! If so specified, remove all floating ice
-    IF (C%do_remove_shelves) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (is_floating( ice%Hi_tplusdt_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
-          ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-          ice%Hi_tplusdt_a( vi) = 0._dp
-        END IF
-      END DO
-      CALL sync
-    END IF ! IF (C%do_remove_shelves) THEN
-
-    ! If so specified, remove all floating ice beyond the present-day calving front
-    IF (C%remove_shelves_larger_than_PD) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (refgeo_PD%Hi( vi) == 0._dp .AND. refgeo_PD%Hb( vi) < 0._dp) THEN
-          ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-          ice%Hi_tplusdt_a( vi) = 0._dp
-        END IF
-      END DO
-      CALL sync
-    END IF ! IF (C%remove_shelves_larger_than_PD) THEN
-
-    ! If so specified, remove all floating ice crossing the continental shelf edge
-    IF (C%continental_shelf_calving) THEN
-      CALL crash('continental_shelf_calving: FIXME!')
-     ! DO i = grid%i1, grid%i2
-     ! DO j = 1, grid%ny
-     !   IF (refgeo_GIAeq%Hi( j,i) == 0._dp .AND. refgeo_GIAeq%Hb( j,i) < C%continental_shelf_min_height) THEN
-     !     ice%dHi_dt_a(     j,i) = -ice%Hi_a( j,i) / dt
-     !     ice%Hi_tplusdt_a( j,i) = 0._dp
-     !   END IF
-     ! END DO
-     ! END DO
-     ! CALL sync
-    END IF ! IF (C%continental_shelf_calving) THEN
-    
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE apply_ice_thickness_BC
-  
+
 END MODULE ice_thickness_module

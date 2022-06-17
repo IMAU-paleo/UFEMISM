@@ -39,6 +39,7 @@ CONTAINS
 ! ==================================
 
   SUBROUTINE update_general_ice_model_data( mesh, ice)
+    ! Update masks, surface elevation, and thickness above floatation
 
     IMPLICIT NONE
 
@@ -174,9 +175,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL determine_masks_landocean( mesh, ice)
-
-    ! Initialise: start with land everywhere.
+    ! Initialise: no ice everywhere
     ice%mask_ice_a(   mesh%vi1:mesh%vi2) = 0
     ice%mask_sheet_a( mesh%vi1:mesh%vi2) = 0
     ice%mask_shelf_a( mesh%vi1:mesh%vi2) = 0
@@ -225,8 +224,6 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    CALL determine_masks_landocean( mesh, ice)
 
     ! Initialise
     ice%mask_coast_a(  mesh%vi1:mesh%vi2) = 0

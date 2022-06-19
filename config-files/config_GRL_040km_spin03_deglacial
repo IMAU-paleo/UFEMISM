@@ -108,15 +108,23 @@
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
-  filename_restart_GRL_config                 = 'results_GRL_040km_spin02_semycycle/restart_GRL_00001.nc'
+  filename_restart_GRL_config                 = 'results_GRL_040km_spin02_semicycle/restart_GRL_00001.nc'
   filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+
+  ! Ice dynamics - time integration
+  ! ===============================
+
+  ! Partially fixed geometry, useful for initialisation and inversion runs
+  fixed_shelf_geometry_config                 = .FALSE.                          ! Keep geometry of floating ice fixed
+  fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
+  fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
   ! Ice dynamics - velocity
   ! =======================
 
   choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
-  m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
-  m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice
+  m_enh_sheet_config                          = 0.5                              ! Ice flow enhancement factor for grounded ice
+  m_enh_shelf_config                          = 0.3                              ! Ice flow enhancement factor for floating ice
 
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
@@ -164,9 +172,10 @@
 
     choice_calving_law_config                   = 'threshold_thickness'          ! Choice of calving law: "none", "threshold_thickness"
     calving_threshold_thickness_config          = 200.0                          ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
-    do_remove_shelves_config                    = .TRUE.                         ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
+    max_calving_rounds_config                   = 20                             ! Maximum number of calving loops during chain reaction
+    do_remove_shelves_config                    = .FALSE.                        ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
     remove_shelves_larger_than_PD_config        = .FALSE.                        ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-    continental_shelf_calving_config            = .FALSE.                         ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
+    continental_shelf_calving_config            = .FALSE.                        ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
     continental_shelf_min_height_config         = -2000.0                        ! Maximum depth of the continental shelf
 
   ! Thermodynamics and rheology
@@ -211,6 +220,11 @@
   ! =====
 
   choice_ocean_model_config                   = 'none'                           ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+
+  ! NetCDF file containing the present-day observed ocean (e.g WOA18)
+  filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
+  name_ocean_temperature_config               = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+  name_ocean_salinity_config                  = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
 
   ! Surface mass balance
   ! ====================
@@ -266,6 +280,10 @@
   do_merge_basins_ANT_config                  = .TRUE.                           ! Whether or not to merge some of the Antarctic basins
   do_merge_basins_GRL_config                  = .TRUE.                           ! Whether or not to merge some of the Greenland basins
 
+  ! Parameters for the three simple melt parameterisations from Favier et al. (2019)
+  BMB_Favier2019_quad_GammaT_config           = 1.00E-2        ! 99.32E-5        ! Commented values are from Favier et al. (2019), Table 3
+  BMB_Favier2019_Mplus_GammaT_config          = 1.00E-3        ! 132.9E-5        ! Actual value are re-tuned for IMAU-ICE, following the same approach (see Asay-Davis et al., 2016, ISOMIP+)
+
   ! Sea level and GIA
   ! =================
 
@@ -301,26 +319,25 @@
   help_field_01_config                        = 'lat'
   help_field_02_config                        = 'lon'
   help_field_03_config                        = 'resolution'
-  help_field_04_config                        = 'Hi'
-  help_field_05_config                        = 'Hs'
-  help_field_06_config                        = 'Hb'
-  help_field_07_config                        = 'T2m_year'
-  help_field_08_config                        = 'Precip_year'
-  help_field_09_config                        = 'SMB_year'
-  help_field_10_config                        = 'BMB'
-  help_field_11_config                        = 'BMB_shelf'
-  help_field_12_config                        = 'Snowfall_year'
-  help_field_13_config                        = 'Rainfall_year'
-  help_field_14_config                        = 'Refreezing_year'
-  help_field_15_config                        = 'Runoff_year'
-  help_field_16_config                        = 'Albedo_year'
-  help_field_17_config                        = 'dHb'
-  !help_field_18_config                        = 'dHb_dt'
+  help_field_04_config                        = 'mask'
+  help_field_05_config                        = 'Hi'
+  help_field_06_config                        = 'Hs'
+  help_field_07_config                        = 'Hb'
+  help_field_08_config                        = 'T2m_year'
+  help_field_09_config                        = 'Precip_year'
+  help_field_10_config                        = 'SMB_year'
+  help_field_11_config                        = 'BMB'
+  help_field_12_config                        = 'BMB_shelf'
+  help_field_13_config                        = 'Snowfall_year'
+  help_field_14_config                        = 'Rainfall_year'
+  help_field_15_config                        = 'Refreezing_year'
+  help_field_16_config                        = 'Runoff_year'
+  help_field_17_config                        = 'Albedo_year'
+  help_field_18_config                        = 'dHb'
   help_field_19_config                        = 'SL'
-  !help_field_20_config                        = 'dSL_dt'
-  help_field_21_config                        = 'phi_fric'
-  !help_field_22_config                        = 'beta_sq'
-  help_field_23_config                        = 'uabs_surf'
-  help_field_24_config                        = 'uabs_base'
+  help_field_20_config                        = 'phi_fric'
+  help_field_21_config                        = 'uabs_surf'
+  help_field_22_config                        = 'uabs_base'
+  help_field_23_config                        = 'none'
 
 /

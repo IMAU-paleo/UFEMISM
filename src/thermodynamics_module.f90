@@ -655,6 +655,7 @@ CONTAINS
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_sliding_law == 'no_sliding') THEN
       ice%frictional_heating_a( mesh%vi1:mesh%vi2) = 0._dp
       CALL sync
+      CALL finalise_routine( routine_name)
       RETURN
     END IF
     

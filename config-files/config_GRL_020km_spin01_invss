@@ -30,7 +30,7 @@
   ! =======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_GRL_040km_spin01_invss' ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_GRL_020km_spin01_invss' ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -44,18 +44,18 @@
   nconmax_config                              = 16                               ! Maximum number of vertex connections
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
-  res_max_config                              = 80.0                             ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 40.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 40.0                             !                                 grounding line        [km]
-  res_max_cf_config                           = 40.0                             !                                 calving front         [km]
-  res_max_mountain_config                     = 40.0                             !                                 mountains             [km]
-  res_max_coast_config                        = 40.0                             !                                 coastline             [km]
+  res_max_config                              = 40.0                             ! Maximum allowed resolution                            [km]
+  res_max_margin_config                       = 20.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 20.0                             !                                 grounding line        [km]
+  res_max_cf_config                           = 20.0                             !                                 calving front         [km]
+  res_max_mountain_config                     = 20.0                             !                                 mountains             [km]
+  res_max_coast_config                        = 20.0                             !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.95                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
 
   ! Resolutions of the different square grids
   ! =========================================
 
-  dx_grid_output_config                       = 40000.0                          ! Resolution of the square grid used for writing output                       [m]
+  dx_grid_output_config                       = 20000.0                          ! Resolution of the square grid used for writing output                       [m]
   dx_grid_GIA_config                          = 100000.0                         ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
   dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing in the climate matrix [m]
 

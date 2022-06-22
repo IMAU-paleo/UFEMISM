@@ -1372,35 +1372,35 @@ CONTAINS
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask',                     [vi,    t], id_var, long_name='mask')
+      CALL create_int_var(    netcdf%ncid, 'mask',                     [vi,    t], id_var, long_name='Mask')
     ELSEIF (field_name == 'mask_land') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_land',                [vi,    t], id_var, long_name='land mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_land',                [vi,    t], id_var, long_name='Land mask')
     ELSEIF (field_name == 'mask_ocean') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [vi,    t], id_var, long_name='ocean mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [vi,    t], id_var, long_name='Ocean mask')
     ELSEIF (field_name == 'mask_lake') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_lake',                [vi,    t], id_var, long_name='lake mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_lake',                [vi,    t], id_var, long_name='Lake mask')
     ELSEIF (field_name == 'mask_ice') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [vi,    t], id_var, long_name='ice mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [vi,    t], id_var, long_name='Ice mask')
     ELSEIF (field_name == 'mask_sheet') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [vi,    t], id_var, long_name='sheet mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [vi,    t], id_var, long_name='Sheet mask')
     ELSEIF (field_name == 'mask_shelf') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [vi,    t], id_var, long_name='shelf mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [vi,    t], id_var, long_name='Shelf mask')
     ELSEIF (field_name == 'mask_coast') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_coast',               [vi,    t], id_var, long_name='coast mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_coast',               [vi,    t], id_var, long_name='Coast mask')
     ELSEIF (field_name == 'mask_margin') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_margin',              [vi,    t], id_var, long_name='margin mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_margin',              [vi,    t], id_var, long_name='Margin mask')
     ELSEIF (field_name == 'mask_gl') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [vi,    t], id_var, long_name='grounding-line mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [vi,    t], id_var, long_name='Grounding-line mask')
     ELSEIF (field_name == 'mask_cf') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='calving-front mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='Calving-front mask')
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
-      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
+      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='Till friction angle', units='degrees')
     ELSEIF (field_name == 'tau_yield') THEN
-      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
+      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='Basal yield stress', units='Pa')
     ELSEIF (field_name == 'beta_sq') THEN
-      CALL create_double_var( netcdf%ncid, 'beta_sq',                  [vi,    t], id_var, long_name='sliding coefficient', units='?')
+      CALL create_double_var( netcdf%ncid, 'beta_sq',                  [vi,    t], id_var, long_name='Sliding coefficient', units='?')
 
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN

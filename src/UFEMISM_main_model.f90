@@ -223,7 +223,7 @@ CONTAINS
       ! == Update initial mesh after first round
 
       ! If required, update the mesh
-      IF (region%time == C%start_time_of_run) THEN
+      IF (region%time == C%start_time_of_run .AND. (.NOT. C%is_restart)) THEN
         region%t_last_mesh = region%time
         IF (par%master) t2 = MPI_WTIME()
         CALL run_model_update_mesh( region, climate_matrix_global)

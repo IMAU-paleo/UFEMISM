@@ -288,6 +288,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_mesh'
+    integer :: n
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -302,56 +303,9 @@ CONTAINS
     endif
 
     ! Write data
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_02, C%help_field_02)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_03, C%help_field_03)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_04, C%help_field_04)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_05, C%help_field_05)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_06, C%help_field_06)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_07, C%help_field_07)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_08, C%help_field_08)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_09, C%help_field_09)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_10, C%help_field_10)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_11, C%help_field_11)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_12, C%help_field_12)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_13, C%help_field_13)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_14, C%help_field_14)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_15, C%help_field_15)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_16, C%help_field_16)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_17, C%help_field_17)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_18, C%help_field_18)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_19, C%help_field_19)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_20, C%help_field_20)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_21, C%help_field_21)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_22, C%help_field_22)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_23, C%help_field_23)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_24, C%help_field_24)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_25, C%help_field_25)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_26, C%help_field_26)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_27, C%help_field_27)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_28, C%help_field_28)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_29, C%help_field_29)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_30, C%help_field_30)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_31, C%help_field_31)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_32, C%help_field_32)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_33, C%help_field_33)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_34, C%help_field_34)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_35, C%help_field_35)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_36, C%help_field_36)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_37, C%help_field_37)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_38, C%help_field_38)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_39, C%help_field_39)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_40, C%help_field_40)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_41, C%help_field_41)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_42, C%help_field_42)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_43, C%help_field_43)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_44, C%help_field_44)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_45, C%help_field_45)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_46, C%help_field_46)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_47, C%help_field_47)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_48, C%help_field_48)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_49, C%help_field_49)
-    CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_50, C%help_field_50)
+    do n = 1, size(C%help_fields)
+      CALL write_help_field_mesh( region, netcdf, netcdf%id_help_fields(n), C%help_fields(n))
+    end do
 
     if (par%master) then
       ! Close the file
@@ -875,7 +829,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_mesh'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
+    INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month, n
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -964,56 +918,9 @@ CONTAINS
     ! Define model data variables
 
     ! Define data variables
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_01, C%help_field_01)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_02, C%help_field_02)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_03, C%help_field_03)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_04, C%help_field_04)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_05, C%help_field_05)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_06, C%help_field_06)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_07, C%help_field_07)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_08, C%help_field_08)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_09, C%help_field_09)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_10, C%help_field_10)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_11, C%help_field_11)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_12, C%help_field_12)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_13, C%help_field_13)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_14, C%help_field_14)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_15, C%help_field_15)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_16, C%help_field_16)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_17, C%help_field_17)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_18, C%help_field_18)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_19, C%help_field_19)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_20, C%help_field_20)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_21, C%help_field_21)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_22, C%help_field_22)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_23, C%help_field_23)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_24, C%help_field_24)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_25, C%help_field_25)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_26, C%help_field_26)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_27, C%help_field_27)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_28, C%help_field_28)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_29, C%help_field_29)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_30, C%help_field_30)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_31, C%help_field_31)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_32, C%help_field_32)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_33, C%help_field_33)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_34, C%help_field_34)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_35, C%help_field_35)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_36, C%help_field_36)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_37, C%help_field_37)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_38, C%help_field_38)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_39, C%help_field_39)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_40, C%help_field_40)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_41, C%help_field_41)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_42, C%help_field_42)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_43, C%help_field_43)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_44, C%help_field_44)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_45, C%help_field_45)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_46, C%help_field_46)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_47, C%help_field_47)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_48, C%help_field_48)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_49, C%help_field_49)
-    CALL create_help_field_mesh( netcdf, netcdf%id_help_field_50, C%help_field_50)
+    do n = 1, size(C%help_fields)
+      CALL create_help_field_mesh( netcdf, netcdf%id_help_fields(n), C%help_fields(n))
+    end do
 
     ! Leave definition mode
     CALL handle_error(nf90_enddef( netcdf%ncid))
@@ -1354,6 +1261,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_grid'
+    integer :: n
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1365,56 +1273,9 @@ CONTAINS
     IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
 
     ! Write data
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_02, C%help_field_02)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_03, C%help_field_03)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_04, C%help_field_04)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_05, C%help_field_05)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_06, C%help_field_06)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_07, C%help_field_07)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_08, C%help_field_08)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_09, C%help_field_09)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_10, C%help_field_10)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_11, C%help_field_11)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_12, C%help_field_12)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_13, C%help_field_13)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_14, C%help_field_14)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_15, C%help_field_15)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_16, C%help_field_16)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_17, C%help_field_17)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_18, C%help_field_18)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_19, C%help_field_19)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_20, C%help_field_20)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_21, C%help_field_21)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_22, C%help_field_22)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_23, C%help_field_23)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_24, C%help_field_24)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_25, C%help_field_25)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_26, C%help_field_26)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_27, C%help_field_27)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_28, C%help_field_28)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_29, C%help_field_29)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_30, C%help_field_30)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_31, C%help_field_31)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_32, C%help_field_32)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_33, C%help_field_33)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_34, C%help_field_34)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_35, C%help_field_35)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_36, C%help_field_36)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_37, C%help_field_37)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_38, C%help_field_38)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_39, C%help_field_39)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_40, C%help_field_40)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_41, C%help_field_41)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_42, C%help_field_42)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_43, C%help_field_43)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_44, C%help_field_44)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_45, C%help_field_45)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_46, C%help_field_46)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_47, C%help_field_47)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_48, C%help_field_48)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_49, C%help_field_49)
-    CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_50, C%help_field_50)
+    do n = 1, size(C%help_fields)
+      CALL write_help_field_grid( region, netcdf, netcdf%id_help_fields(n), C%help_fields(n))
+    end do
 
     ! Close the file
     IF (par%master) CALL close_netcdf_file(netcdf%ncid)
@@ -1797,7 +1658,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_grid'
     LOGICAL                                       :: file_exists
-    INTEGER                                       :: x, y, z, m, t
+    INTEGER                                       :: x, y, z, m, t, n
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1843,56 +1704,9 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [netcdf%id_dim_time ], netcdf%id_var_time,  long_name='Time', units='years'   )
 
     ! Define data variables
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_01, C%help_field_01)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_02, C%help_field_02)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_03, C%help_field_03)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_04, C%help_field_04)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_05, C%help_field_05)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_06, C%help_field_06)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_07, C%help_field_07)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_08, C%help_field_08)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_09, C%help_field_09)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_10, C%help_field_10)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_11, C%help_field_11)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_12, C%help_field_12)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_13, C%help_field_13)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_14, C%help_field_14)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_15, C%help_field_15)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_16, C%help_field_16)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_17, C%help_field_17)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_18, C%help_field_18)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_19, C%help_field_19)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_20, C%help_field_20)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_21, C%help_field_21)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_22, C%help_field_22)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_23, C%help_field_23)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_24, C%help_field_24)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_25, C%help_field_25)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_26, C%help_field_26)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_27, C%help_field_27)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_28, C%help_field_28)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_29, C%help_field_29)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_30, C%help_field_30)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_31, C%help_field_31)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_32, C%help_field_32)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_33, C%help_field_33)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_34, C%help_field_34)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_35, C%help_field_35)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_36, C%help_field_36)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_37, C%help_field_37)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_38, C%help_field_38)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_39, C%help_field_39)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_40, C%help_field_40)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_41, C%help_field_41)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_42, C%help_field_42)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_43, C%help_field_43)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_44, C%help_field_44)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_45, C%help_field_45)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_46, C%help_field_46)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_47, C%help_field_47)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_48, C%help_field_48)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_49, C%help_field_49)
-    CALL create_help_field_grid( netcdf, netcdf%id_help_field_50, C%help_field_50)
+    do n = 1, size(C%help_fields)
+      CALL create_help_field_grid( netcdf, netcdf%id_help_fields(n), C%help_fields(n))
+    end do
 
     ! Leave definition mode:
     CALL handle_error(nf90_enddef( netcdf%ncid))
@@ -2169,7 +1983,7 @@ CONTAINS
 
     call partition_list(grid%nx, par%i, par%n, j1,j2)
 
-    ! Allocate shared memory
+    ! Allocate memory
     allocate( d_grid ( grid%nx, grid%ny ))
 
 

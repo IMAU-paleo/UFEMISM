@@ -257,56 +257,7 @@ MODULE data_types_netcdf_module
     ! Variables
     ! =========
     
-    INTEGER :: id_help_field_01
-    INTEGER :: id_help_field_02
-    INTEGER :: id_help_field_03
-    INTEGER :: id_help_field_04
-    INTEGER :: id_help_field_05
-    INTEGER :: id_help_field_06
-    INTEGER :: id_help_field_07
-    INTEGER :: id_help_field_08
-    INTEGER :: id_help_field_09
-    INTEGER :: id_help_field_10
-    INTEGER :: id_help_field_11
-    INTEGER :: id_help_field_12
-    INTEGER :: id_help_field_13
-    INTEGER :: id_help_field_14
-    INTEGER :: id_help_field_15
-    INTEGER :: id_help_field_16
-    INTEGER :: id_help_field_17
-    INTEGER :: id_help_field_18
-    INTEGER :: id_help_field_19
-    INTEGER :: id_help_field_20
-    INTEGER :: id_help_field_21
-    INTEGER :: id_help_field_22
-    INTEGER :: id_help_field_23
-    INTEGER :: id_help_field_24
-    INTEGER :: id_help_field_25
-    INTEGER :: id_help_field_26
-    INTEGER :: id_help_field_27
-    INTEGER :: id_help_field_28
-    INTEGER :: id_help_field_29
-    INTEGER :: id_help_field_30
-    INTEGER :: id_help_field_31
-    INTEGER :: id_help_field_32
-    INTEGER :: id_help_field_33
-    INTEGER :: id_help_field_34
-    INTEGER :: id_help_field_35
-    INTEGER :: id_help_field_36
-    INTEGER :: id_help_field_37
-    INTEGER :: id_help_field_38
-    INTEGER :: id_help_field_39
-    INTEGER :: id_help_field_40
-    INTEGER :: id_help_field_41
-    INTEGER :: id_help_field_42
-    INTEGER :: id_help_field_43
-    INTEGER :: id_help_field_44
-    INTEGER :: id_help_field_45
-    INTEGER :: id_help_field_46
-    INTEGER :: id_help_field_47
-    INTEGER :: id_help_field_48
-    INTEGER :: id_help_field_49
-    INTEGER :: id_help_field_50
+    INTEGER, dimension(50) :: id_help_fields
         
   END TYPE type_netcdf_help_fields
     

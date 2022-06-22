@@ -19,9 +19,9 @@
   ! Which ice sheets do we simulate?
   ! ================================
 
-  do_NAM_config                               = .TRUE.                           ! North America
-  do_EAS_config                               = .TRUE.                           ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_NAM_config                               = .False.                           ! North America
+  do_EAS_config                               = .False.                           ! Eurasia
+  do_GRL_config                               = .False.                           ! Greenland
   do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Benchmark experiments
@@ -428,55 +428,6 @@
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
 
-  help_field_01_config                        = 'lat'
-  help_field_02_config                        = 'lon'
-  help_field_03_config                        = 'resolution'
-  help_field_04_config                        = 'Hi'
-  help_field_05_config                        = 'Hs'
-  help_field_06_config                        = 'Hb'
-  help_field_07_config                        = 'none'
-  help_field_08_config                        = 'none'
-  help_field_09_config                        = 'none'
-  help_field_10_config                        = 'none'
-  help_field_11_config                        = 'none'
-  help_field_12_config                        = 'none'
-  help_field_13_config                        = 'none'
-  help_field_14_config                        = 'none'
-  help_field_15_config                        = 'none'
-  help_field_16_config                        = 'none'
-  help_field_17_config                        = 'none'
-  help_field_18_config                        = 'none'
-  help_field_19_config                        = 'none'
-  help_field_20_config                        = 'none'
-  help_field_21_config                        = 'none'
-  help_field_22_config                        = 'none'
-  help_field_23_config                        = 'none'
-  help_field_24_config                        = 'none'
-  help_field_25_config                        = 'none'
-  help_field_26_config                        = 'none'
-  help_field_27_config                        = 'none'
-  help_field_28_config                        = 'none'
-  help_field_29_config                        = 'none'
-  help_field_30_config                        = 'none'
-  help_field_31_config                        = 'none'
-  help_field_32_config                        = 'none'
-  help_field_33_config                        = 'none'
-  help_field_34_config                        = 'none'
-  help_field_35_config                        = 'none'
-  help_field_36_config                        = 'none'
-  help_field_37_config                        = 'none'
-  help_field_38_config                        = 'none'
-  help_field_39_config                        = 'none'
-  help_field_40_config                        = 'none'
-  help_field_41_config                        = 'none'
-  help_field_42_config                        = 'none'
-  help_field_43_config                        = 'none'
-  help_field_44_config                        = 'none'
-  help_field_45_config                        = 'none'
-  help_field_46_config                        = 'none'
-  help_field_47_config                        = 'none'
-  help_field_48_config                        = 'none'
-  help_field_49_config                        = 'none'
-  help_field_50_config                        = 'none'
+  help_fields_config                         = 'lat', 'lon', 'resolution', 'Hi', 'Hs', 'Hb'
 
 /

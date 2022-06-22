@@ -650,58 +650,8 @@ MODULE configuration_module
   
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
-  
-  CHARACTER(LEN=256)  :: help_field_01_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_02_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_03_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_04_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_05_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_06_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_07_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_08_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_09_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_10_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_11_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_12_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_13_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_14_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_15_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_16_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_17_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_18_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_19_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_20_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_21_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_22_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_23_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_24_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_25_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_26_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_27_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_28_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_29_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_30_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_31_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_32_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_33_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_34_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_35_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_36_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_37_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_38_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_39_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_40_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_41_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_42_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_43_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_44_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_45_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_46_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_47_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_48_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_49_config                        = 'none'
-  CHARACTER(LEN=256)  :: help_field_50_config                        = 'none'
 
+  CHARACTER(LEN=256), dimension(50)  :: help_fields_config = 'none'
 
 
   ! ==========================================================================
@@ -1291,56 +1241,7 @@ MODULE configuration_module
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
     
-    CHARACTER(LEN=256)                  :: help_field_01  
-    CHARACTER(LEN=256)                  :: help_field_02  
-    CHARACTER(LEN=256)                  :: help_field_03  
-    CHARACTER(LEN=256)                  :: help_field_04  
-    CHARACTER(LEN=256)                  :: help_field_05  
-    CHARACTER(LEN=256)                  :: help_field_06  
-    CHARACTER(LEN=256)                  :: help_field_07  
-    CHARACTER(LEN=256)                  :: help_field_08  
-    CHARACTER(LEN=256)                  :: help_field_09
-    CHARACTER(LEN=256)                  :: help_field_10  
-    CHARACTER(LEN=256)                  :: help_field_11  
-    CHARACTER(LEN=256)                  :: help_field_12  
-    CHARACTER(LEN=256)                  :: help_field_13  
-    CHARACTER(LEN=256)                  :: help_field_14  
-    CHARACTER(LEN=256)                  :: help_field_15  
-    CHARACTER(LEN=256)                  :: help_field_16  
-    CHARACTER(LEN=256)                  :: help_field_17  
-    CHARACTER(LEN=256)                  :: help_field_18  
-    CHARACTER(LEN=256)                  :: help_field_19
-    CHARACTER(LEN=256)                  :: help_field_20  
-    CHARACTER(LEN=256)                  :: help_field_21  
-    CHARACTER(LEN=256)                  :: help_field_22  
-    CHARACTER(LEN=256)                  :: help_field_23  
-    CHARACTER(LEN=256)                  :: help_field_24  
-    CHARACTER(LEN=256)                  :: help_field_25  
-    CHARACTER(LEN=256)                  :: help_field_26  
-    CHARACTER(LEN=256)                  :: help_field_27  
-    CHARACTER(LEN=256)                  :: help_field_28  
-    CHARACTER(LEN=256)                  :: help_field_29
-    CHARACTER(LEN=256)                  :: help_field_30  
-    CHARACTER(LEN=256)                  :: help_field_31  
-    CHARACTER(LEN=256)                  :: help_field_32  
-    CHARACTER(LEN=256)                  :: help_field_33  
-    CHARACTER(LEN=256)                  :: help_field_34  
-    CHARACTER(LEN=256)                  :: help_field_35  
-    CHARACTER(LEN=256)                  :: help_field_36  
-    CHARACTER(LEN=256)                  :: help_field_37  
-    CHARACTER(LEN=256)                  :: help_field_38  
-    CHARACTER(LEN=256)                  :: help_field_39
-    CHARACTER(LEN=256)                  :: help_field_40  
-    CHARACTER(LEN=256)                  :: help_field_41  
-    CHARACTER(LEN=256)                  :: help_field_42  
-    CHARACTER(LEN=256)                  :: help_field_43  
-    CHARACTER(LEN=256)                  :: help_field_44  
-    CHARACTER(LEN=256)                  :: help_field_45  
-    CHARACTER(LEN=256)                  :: help_field_46  
-    CHARACTER(LEN=256)                  :: help_field_47  
-    CHARACTER(LEN=256)                  :: help_field_48  
-    CHARACTER(LEN=256)                  :: help_field_49
-    CHARACTER(LEN=256)                  :: help_field_50
+    CHARACTER(LEN=256), dimension(50)   :: help_fields  
     
     ! Values to be filled into the total mask (used only for diagnostic output)
     ! ==========================================================================
@@ -2006,56 +1907,7 @@ CONTAINS
                      C_refr_EAS_config,                               &
                      C_refr_GRL_config,                               &
                      C_refr_ANT_config,                               &
-                     help_field_01_config,                            &
-                     help_field_02_config,                            &
-                     help_field_03_config,                            &
-                     help_field_04_config,                            &
-                     help_field_05_config,                            &
-                     help_field_06_config,                            &
-                     help_field_07_config,                            &
-                     help_field_08_config,                            &
-                     help_field_09_config,                            &
-                     help_field_10_config,                            &
-                     help_field_11_config,                            &
-                     help_field_12_config,                            &
-                     help_field_13_config,                            &
-                     help_field_14_config,                            &
-                     help_field_15_config,                            &
-                     help_field_16_config,                            &
-                     help_field_17_config,                            &
-                     help_field_18_config,                            &
-                     help_field_19_config,                            &
-                     help_field_20_config,                            &
-                     help_field_21_config,                            &
-                     help_field_22_config,                            &
-                     help_field_23_config,                            &
-                     help_field_24_config,                            &
-                     help_field_25_config,                            &
-                     help_field_26_config,                            &
-                     help_field_27_config,                            &
-                     help_field_28_config,                            &
-                     help_field_29_config,                            &
-                     help_field_30_config,                            &
-                     help_field_31_config,                            &
-                     help_field_32_config,                            &
-                     help_field_33_config,                            &
-                     help_field_34_config,                            &
-                     help_field_35_config,                            &
-                     help_field_36_config,                            &
-                     help_field_37_config,                            &
-                     help_field_38_config,                            &
-                     help_field_39_config,                            &
-                     help_field_40_config,                            &
-                     help_field_41_config,                            &
-                     help_field_42_config,                            &
-                     help_field_43_config,                            &
-                     help_field_44_config,                            &
-                     help_field_45_config,                            &
-                     help_field_46_config,                            &
-                     help_field_47_config,                            &
-                     help_field_48_config,                            &
-                     help_field_49_config,                            &
-                     help_field_50_config
+                     help_fields_config
                       
      IF (config_filename == '') RETURN
       
@@ -2662,57 +2514,7 @@ CONTAINS
 
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
-    
-    C%help_field_01                            = help_field_01_config
-    C%help_field_02                            = help_field_02_config
-    C%help_field_03                            = help_field_03_config
-    C%help_field_04                            = help_field_04_config
-    C%help_field_05                            = help_field_05_config
-    C%help_field_06                            = help_field_06_config
-    C%help_field_07                            = help_field_07_config
-    C%help_field_08                            = help_field_08_config
-    C%help_field_09                            = help_field_09_config
-    C%help_field_10                            = help_field_10_config
-    C%help_field_11                            = help_field_11_config
-    C%help_field_12                            = help_field_12_config
-    C%help_field_13                            = help_field_13_config
-    C%help_field_14                            = help_field_14_config
-    C%help_field_15                            = help_field_15_config
-    C%help_field_16                            = help_field_16_config
-    C%help_field_17                            = help_field_17_config
-    C%help_field_18                            = help_field_18_config
-    C%help_field_19                            = help_field_19_config
-    C%help_field_20                            = help_field_20_config
-    C%help_field_21                            = help_field_21_config
-    C%help_field_22                            = help_field_22_config
-    C%help_field_23                            = help_field_23_config
-    C%help_field_24                            = help_field_24_config
-    C%help_field_25                            = help_field_25_config
-    C%help_field_26                            = help_field_26_config
-    C%help_field_27                            = help_field_27_config
-    C%help_field_28                            = help_field_28_config
-    C%help_field_29                            = help_field_29_config
-    C%help_field_30                            = help_field_30_config
-    C%help_field_31                            = help_field_31_config
-    C%help_field_32                            = help_field_32_config
-    C%help_field_33                            = help_field_33_config
-    C%help_field_34                            = help_field_34_config
-    C%help_field_35                            = help_field_35_config
-    C%help_field_36                            = help_field_36_config
-    C%help_field_37                            = help_field_37_config
-    C%help_field_38                            = help_field_38_config
-    C%help_field_39                            = help_field_39_config
-    C%help_field_40                            = help_field_40_config
-    C%help_field_41                            = help_field_41_config
-    C%help_field_42                            = help_field_42_config
-    C%help_field_43                            = help_field_43_config
-    C%help_field_44                            = help_field_44_config
-    C%help_field_45                            = help_field_45_config
-    C%help_field_46                            = help_field_46_config
-    C%help_field_47                            = help_field_47_config
-    C%help_field_48                            = help_field_48_config
-    C%help_field_49                            = help_field_49_config
-    C%help_field_50                            = help_field_50_config
+    C%help_fields                              = help_fields_config
     
     ! Values to be filled into the total mask (used only for diagnostic output)
     ! ==========================================================================

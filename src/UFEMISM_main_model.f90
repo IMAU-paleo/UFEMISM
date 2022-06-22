@@ -220,6 +220,17 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
+      ! == Update initial mesh after first round
+
+      ! If required, update the mesh
+      IF (region%time == C%start_time_of_run) THEN
+        region%t_last_mesh = region%time
+        IF (par%master) t2 = MPI_WTIME()
+        CALL run_model_update_mesh( region, climate_matrix_global)
+        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+        CALL sync
+      END IF
+
       ! == Advance region time
       ! ======================
 
@@ -376,27 +387,30 @@ CONTAINS
     ! Recalculate the reference precipitation isotope content (must be done after region%mesh has been cycled)
     CALL calculate_reference_isotopes( region)
 
-    ! Run all model components again after updating the mesh
-    region%t_next_SIA     = region%time
-    region%t_next_SSA     = region%time
-    region%t_next_DIVA    = region%time
-    region%t_next_thermo  = region%time
-    region%t_next_climate = region%time
-    region%t_next_ocean   = region%time
-    region%t_next_SMB     = region%time
-    region%t_next_BMB     = region%time
-    region%t_next_ELRA    = region%time
+    IF (.NOT. region%time == C%start_time_of_run) THEN
+      ! If not the initial mesh update, run all model components again after updating the mesh
+      region%t_next_SIA     = region%time
+      region%t_next_SSA     = region%time
+      region%t_next_DIVA    = region%time
+      region%t_next_thermo  = region%time
+      region%t_next_climate = region%time
+      region%t_next_ocean   = region%time
+      region%t_next_SMB     = region%time
+      region%t_next_BMB     = region%time
+      region%t_next_ELRA    = region%time
 
-    region%do_SIA         = .TRUE.
-    region%do_SSA         = .TRUE.
-    region%do_DIVA        = .TRUE.
-    region%do_thermo      = .TRUE.
-    region%do_climate     = .TRUE.
-    region%do_ocean       = .TRUE.
-    region%do_SMB         = .TRUE.
-    region%do_BMB         = .TRUE.
-    region%do_ELRA        = .TRUE.
-    region%do_basal       = .TRUE.
+      region%do_SIA         = .TRUE.
+      region%do_SSA         = .TRUE.
+      region%do_DIVA        = .TRUE.
+      region%do_thermo      = .TRUE.
+      region%do_climate     = .TRUE.
+      region%do_ocean       = .TRUE.
+      region%do_SMB         = .TRUE.
+      region%do_BMB         = .TRUE.
+      region%do_ELRA        = .TRUE.
+      region%do_basal       = .TRUE.
+
+    END IF ! (.NOT. region%time == C%start_time_of_run)
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
 

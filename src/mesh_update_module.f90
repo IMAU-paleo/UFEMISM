@@ -270,8 +270,12 @@ MODULE mesh_update_module
     
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    IF (par%master) WRITE(0,*) '  Creating a new mesh for region ', region%mesh%region_name, '...'
+
+    IF (region%time == C%start_time_of_run) THEN
+      IF (par%master) WRITE(0,*) '  Updating initial mesh after first model round...'
+    ELSE
+      IF (par%master) WRITE(0,*) '  Creating a new mesh for region ', region%mesh%region_name, '...'
+    END IF
     
     ! Orientation of domain partitioning: east-west for GRL, north-south everywhere else
     IF (region%name == 'GRL') THEN
@@ -364,7 +368,11 @@ MODULE mesh_update_module
     CALL create_final_mesh_from_merged_submesh( submesh, region%mesh_new)
 
     IF (par%master) THEN
-      WRITE(0,'(A)')                '   Finished creating final mesh.'
+      IF (region%time == C%start_time_of_run) THEN
+        WRITE(0,*)                  '  Finished updating initial mesh'
+      ELSE
+        WRITE(0,'(A)')              '  Finished creating final mesh.'
+      END IF
       WRITE(0,'(A,I6)')             '    Vertices  : ', region%mesh_new%nV
       WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh_new%nTri
       WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh_new%resolution_min/1000._dp, ' - ', region%mesh_new%resolution_max/1000._dp, ' km'

@@ -314,7 +314,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
+    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
 
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)

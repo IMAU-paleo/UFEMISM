@@ -752,8 +752,8 @@ CONTAINS
       END IF
 
       region%t_last_basal   = C%start_time_of_run
-      region%t_next_basal   = C%start_time_of_run
-      region%do_basal       = .TRUE.
+      region%t_next_basal   = C%start_time_of_run + C%dt_basal
+      region%do_basal       = .FALSE.
 
       region%t_last_output  = C%start_time_of_run
       region%t_next_output  = C%start_time_of_run

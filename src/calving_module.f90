@@ -45,6 +45,7 @@ CONTAINS
       CALL determine_floating_margin_fraction( mesh, ice)   ! Update the fractions for new calving fronts
       CALL apply_calving_law( mesh, ice, calving_event)     ! Apply calving law and update calving event flag
       calving_round = calving_round + 1                     ! Increase the counter
+      CALL sync                                             ! Let all processes reach this point before next loop
     END DO
     IF (par%master .AND. calving_round == C%max_calving_rounds .AND. C%max_calving_rounds > 5) THEN
       CALL warning('max_calving_rounds reached! Thin ice potentially still floating around...')

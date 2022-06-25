@@ -1653,7 +1653,7 @@ CONTAINS
 
             new_val = ice%phi_fric_a( vi)
             new_val = new_val * (10._dp ** (-h_delta))
-            new_val = MIN(MAX(new_val, 0.01_dp), 45._dp)
+            new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
 
             ice%phi_fric_a( vi) = new_val
 

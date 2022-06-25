@@ -415,7 +415,8 @@ MODULE configuration_module
     REAL(dp)            :: basal_sliding_inv_scale_config              = 5000._dp                         ! Scaling constant for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
-
+    REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
+    REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
   ! == Ice dynamics - calving
   ! =========================
 
@@ -1097,6 +1098,8 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_scale
     REAL(dp)                            :: basal_sliding_inv_rsmooth
     REAL(dp)                            :: basal_sliding_inv_wsmooth
+    REAL(dp)                            :: basal_sliding_inv_phi_min
+    REAL(dp)                            :: basal_sliding_inv_phi_max
 
     ! Ice dynamics - calving
     ! ======================
@@ -1930,6 +1933,8 @@ CONTAINS
                      basal_sliding_inv_scale_config,                  &
                      basal_sliding_inv_rsmooth_config,                &
                      basal_sliding_inv_wsmooth_config,                &
+                     basal_sliding_inv_phi_min_config,                &
+                     basal_sliding_inv_phi_max_config,                &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
                      max_calving_rounds_config,                       &
@@ -2559,6 +2564,8 @@ CONTAINS
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
     C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
     C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
+    C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
+    C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
 
     ! Ice dynamics - calving
     ! ======================

@@ -910,7 +910,16 @@ CONTAINS
     END IF
 
     ! Initialise data and matrices for the velocity solver(s)
-    CALL initialise_velocity_solver( mesh, ice)
+    ! If we're running with choice_ice_dynamics == "none", initialise the velocity
+    ! solver pretending we are using the DIVA, as we will need to get reasonable
+    ! velocities at least once during initialisation to get the thermodynamics right.
+    IF (C%choice_ice_dynamics == 'none') THEN
+      C%choice_ice_dynamics = 'DIVA'
+      CALL initialise_velocity_solver( mesh, ice)
+      C%choice_ice_dynamics = 'none'
+    ELSE
+      CALL initialise_velocity_solver( mesh, ice)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -1269,7 +1278,16 @@ CONTAINS
     ! ==========================
 
     ! Remap velocities
-    CALL remap_velocities( mesh_old, mesh_new, map, ice)
+    ! If we're running with choice_ice_dynamics == "none", remap velocities
+    ! pretending we are using the DIVA, just like we did  during initialisation
+    ! to get reasonable velocities for the thermodynamics.
+    IF (C%choice_ice_dynamics == 'none') THEN
+      C%choice_ice_dynamics = 'DIVA'
+      CALL remap_velocities( mesh_old, mesh_new, map, ice)
+      C%choice_ice_dynamics = 'none'
+    ELSE
+      CALL remap_velocities( mesh_old, mesh_new, map, ice)
+    END IF
 
     ! Recalculate ice flow factor
     CALL calc_ice_rheology( mesh_new, ice, time)

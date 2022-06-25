@@ -48,6 +48,7 @@ MODULE UFEMISM_main_model
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
+  USE ice_velocity_module,                 ONLY: solve_DIVA
 
   IMPLICIT NONE
 
@@ -615,6 +616,17 @@ CONTAINS
     ! ====================================================================
 
     ! IF (par%master) CALL create_text_output_files( region)
+
+    ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
+    ! ===========================================================================
+
+    ! If we're running with choice_ice_dynamics == "none", calculate a velocity field
+    ! once during initialisation (so that the thermodynamics are solved correctly)
+    IF (C%choice_ice_dynamics == 'none') THEN
+      C%choice_ice_dynamics = 'DIVA'
+      CALL solve_DIVA( region%mesh, region%ice)
+      C%choice_ice_dynamics = 'none'
+    END IF
 
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
 

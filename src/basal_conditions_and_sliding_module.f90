@@ -1616,7 +1616,7 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_scale, h_delta, new_val, w_smooth
+    REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val, w_smooth
     REAL(dp),           DIMENSION(SIZE(ice%Hi_a))      :: rough_smoothed
 
     ! Add routine to path
@@ -1627,41 +1627,47 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
 
       ! Invert only where the reference/model is grounded ice
-      IF ( ice%mask_sheet_a( vi) == 1 ) THEN
+      IF (ice%mask_sheet_a( vi) == 1) THEN
 
-        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+        IF (ABS(h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
+            ABS(h_dfrac) >= C%basal_sliding_inv_tol_frac) THEN
 
-        ! Further adjust only where the previous value is not improving the result
-        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
-             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+          h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
-          IF (C%choice_sliding_law == 'Weertman' .OR. &
-              C%choice_sliding_law == 'Tsai2015' .OR. &
-              C%choice_sliding_law == 'Schoof2005') THEN
+          ! Further adjust only where the previous value is not improving the result
+          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
-            new_val = ice%beta_sq_a( vi)
-            new_val = new_val * (10._dp ** h_delta)
-            new_val = MIN(MAX(new_val, 1._dp), 10._dp)
+            IF (C%choice_sliding_law == 'Weertman' .OR. &
+                C%choice_sliding_law == 'Tsai2015' .OR. &
+                C%choice_sliding_law == 'Schoof2005') THEN
 
-            ice%beta_sq_a( vi) = new_val
+              new_val = ice%beta_sq_a( vi)
+              new_val = new_val * (10._dp ** h_delta)
+              new_val = MIN(MAX(new_val, 1._dp), 10._dp)
 
-          ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-                  C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-                  C%choice_sliding_law == 'Zoet-Iverson') THEN
+              ice%beta_sq_a( vi) = new_val
 
-            new_val = ice%phi_fric_a( vi)
-            new_val = new_val * (10._dp ** (-h_delta))
-            new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+            ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+                    C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+                    C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-            ice%phi_fric_a( vi) = new_val
+              new_val = ice%phi_fric_a( vi)
+              new_val = new_val * (10._dp ** (-h_delta))
+              new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
 
-          ELSE
-            CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
-          END IF
+              ice%phi_fric_a( vi) = new_val
 
-        END IF ! else phi_fric_a does not change from previous time step
+            ELSE
+              CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+            END IF
+
+          END IF ! else the fit is already improving for some other reason, so leave it alone
+
+        END IF ! else the difference is within the specified tolerance, so leave it alone
 
       END IF ! else the reference is not grounded ice sheet, so leave it alone
 

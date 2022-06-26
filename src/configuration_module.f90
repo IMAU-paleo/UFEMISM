@@ -412,11 +412,14 @@ MODULE configuration_module
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
     LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
-    REAL(dp)            :: basal_sliding_inv_scale_config              = 5000._dp                         ! Scaling constant for inversion procedure [m]
+    REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
     REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
     REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
+    REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
+    REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+
   ! == Ice dynamics - calving
   ! =========================
 
@@ -1100,6 +1103,8 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_wsmooth
     REAL(dp)                            :: basal_sliding_inv_phi_min
     REAL(dp)                            :: basal_sliding_inv_phi_max
+    REAL(dp)                            :: basal_sliding_inv_tol_diff
+    REAL(dp)                            :: basal_sliding_inv_tol_frac
 
     ! Ice dynamics - calving
     ! ======================
@@ -1935,6 +1940,8 @@ CONTAINS
                      basal_sliding_inv_wsmooth_config,                &
                      basal_sliding_inv_phi_min_config,                &
                      basal_sliding_inv_phi_max_config,                &
+                     basal_sliding_inv_tol_diff_config,               &
+                     basal_sliding_inv_tol_frac_config,               &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
                      max_calving_rounds_config,                       &
@@ -2566,6 +2573,8 @@ CONTAINS
     C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
     C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
     C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
+    C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
+    C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
 
     ! Ice dynamics - calving
     ! ======================

@@ -75,7 +75,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Set the default state: if no calving, exit loop after this round
+    ! Reset the flag to false and check if any more calving occurs
     calving_event(par%i+1) = .FALSE.
 
     ! Apply the selected calving law

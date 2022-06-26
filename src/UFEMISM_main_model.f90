@@ -49,6 +49,7 @@ MODULE UFEMISM_main_model
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
+  USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
 
   IMPLICIT NONE
 
@@ -218,10 +219,17 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
+        ! Determine total ice sheet area, volume, and volume-above-flotation,
+        CALL calculate_icesheet_volume_and_area( region)
+        ! Write to regional text output file
+        CALL write_regional_text_output( region)
+        ! Write to regional NetCDF output files
         CALL write_to_output_files( region)
       END IF
 
+
       ! == Update initial mesh after first round
+      ! ========================================
 
       ! If required, update the mesh
       IF (region%time == C%start_time_of_run .AND. (.NOT. C%is_restart)) THEN
@@ -256,10 +264,11 @@ CONTAINS
         region%output_file_exists = .TRUE.
       END IF
       CALL write_to_output_files( region)
+      CALL write_regional_text_output( region)
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
-    ! used for writing to text output and in the inverse routine
+    ! used for writing to global text output and in the inverse routine
     CALL calculate_icesheet_volume_and_area( region)
 
     ! Finalise routine path
@@ -612,10 +621,10 @@ CONTAINS
     CALL calculate_PD_sealevel_contribution( region)
     CALL calculate_icesheet_volume_and_area( region)
 
-    ! ===== ASCII output (computation time tracking, general output) =====
-    ! ====================================================================
+    ! ===== Regional ASCII output (Scalar data, POIs) =====
+    ! =====================================================
 
-    ! IF (par%master) CALL create_text_output_files( region)
+    CALL create_regional_text_output( region)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================
@@ -1009,265 +1018,4 @@ CONTAINS
 
   END SUBROUTINE calculate_icesheet_volume_and_area
 
-! ===== Extras =====
-! ==================
-
 END MODULE UFEMISM_main_model
-
-
-
-  ! Commented out stuff
-
-    !  ! Create and write to this region's text output files - both the region-wide one,
-    !  ! and the ones for the different Points-Of-Interest
-    !  SUBROUTINE create_text_output_files( region)
-    !    ! Creates the following text output files:
-    !    !   time_log_REG.txt             - a log of how much computation time the different model parts take
-    !    !   general_output_REG.txt       - some general info - ice sheet volume, average surface temperature, total mass balance, etc.
-    !
-    !    IMPLICIT NONE
-    !
-    !    TYPE(type_model_region),    INTENT(IN)        :: region
-    !
-    !    CHARACTER(LEN=256)                            :: filename
-    !    CHARACTER(LEN=3)                              :: ns
-    !    CHARACTER(LEN=1)                              :: ns3
-    !    CHARACTER(LEN=2)                              :: ns2
-    !    INTEGER                                       :: n, k
-    !
-    !    ! Time log
-    !    ! ========
-    !
-    !    filename = TRIM(C%output_dir) // 'aa_time_log_' // region%name // '.txt'
-    !    OPEN(UNIT  = 1337, FILE = filename, STATUS = 'NEW')
-    !
-    !    WRITE(UNIT = 1337, FMT = '(A)') 'Time log for region ' // TRIM(region%long_name)
-    !    WRITE(UNIT = 1337, FMT = '(A)') 'Computation time (in seconds) required by each model component'
-    !    WRITE(UNIT = 1337, FMT = '(A)') ''
-    !    WRITE(UNIT = 1337, FMT = '(A)') '     Time  vertices     total       mesh        SIA        SSA     thermo    climate     output'
-    !
-    !    CLOSE(UNIT = 1337)
-    !
-    !    ! General output
-    !    ! ==============
-    !
-    !    filename = TRIM(C%output_dir) // 'aa_general_output_' // region%name // '.txt'
-    !    OPEN(UNIT  = 1337, FILE = filename, STATUS = 'NEW')
-    !
-    !    WRITE(UNIT = 1337, FMT = '(A)') 'General output for region ' // TRIM(region%long_name)
-    !    WRITE(UNIT = 1337, FMT = '(A)') ''
-    !    WRITE(UNIT = 1337, FMT = '(A)') ' Columns in order:'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   1)  Model time                  (years) '
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   2)  Ice volume                  (meter sea level equivalent)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   3)  Ice volume above flotation  (meter sea level equivalent)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   4)  Ice area                    (km^2)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   5)  Mean surface temperature    (Kelvin)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   6)  Total snowfall     over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   7)  Total rainfall     over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   8)  Total melt         over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '   9)  Total refreezing   over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '  10)  Total runoff       over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '  11)  Total SMB          over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '  12)  Total BMB          over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '  13)  Total mass balance over ice (Gton/y)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') '  14)  Grounding line x position (for MISMIP benchmark experiments)'
-    !    WRITE(UNIT = 1337, FMT = '(A)') ''
-    !    WRITE(UNIT = 1337, FMT = '(A)') '     Time     Ice  Ice-af     Ice-area     T2m       Snow       Rain       Melt   Refreeze     Runoff        SMB        BMB         MB       x_GL'
-    !
-    !    CLOSE(UNIT = 1337)
-    !
-    !    ! Point-of-interest output
-    !    ! ========================
-    !
-    !    DO n = 1, region%mesh%nPOI
-    !
-    !      IF (n<10) THEN
-    !        WRITE(ns3,'(I1)') n
-    !        ns(1:2) = '00'
-    !        ns(3:3) = ns3
-    !      ELSEIF (n<100) THEN
-    !        WRITE(ns2,'(I2)') n
-    !        ns(1:1) = '0'
-    !        ns(2:3) = ns3
-    !      ELSE
-    !        WRITE(ns,'(I3)') n
-    !      END IF
-    !
-    !      filename = TRIM(C%output_dir) // 'ab_POI_' // TRIM(region%name) // '_' // TRIM(ns) // '_data.txt'
-    !      OPEN(UNIT  = 1337, FILE = filename, STATUS = 'NEW')
-    !
-    !      WRITE(UNIT = 1337, FMT = '(A)') 'Relevant data for Point of Interest ' // TRIM(ns)
-    !      WRITE(UNIT = 1337, FMT = '(A)') ''
-    !      WRITE(UNIT = 1337, FMT = '(A,F10.2)') '  Lat = ', region%mesh%POI_coordinates(n,1)
-    !      WRITE(UNIT = 1337, FMT = '(A,F10.2)') '  Lon = ', region%mesh%POI_coordinates(n,2)
-    !      WRITE(UNIT = 1337, FMT = '(A,F10.2)') '  x   = ', region%mesh%POI_XY_coordinates(n,1)
-    !      WRITE(UNIT = 1337, FMT = '(A,F10.2)') '  y   = ', region%mesh%POI_XY_coordinates(n,2)
-    !      WRITE(UNIT = 1337, FMT = '(A,F10.2)') '  res = ', region%mesh%POI_resolutions(n)
-    !      WRITE(UNIT = 1337, FMT = '(A)') ''
-    !      WRITE(UNIT = 1337, FMT = '(A)') '  zeta = '
-    !      DO k = 1, C%nZ
-    !        WRITE(UNIT = 1337, FMT = '(F22.16)') C%zeta(k)
-    !      END DO
-    !      WRITE(UNIT = 1337, FMT = '(A)') ''
-    !      WRITE(UNIT = 1337, FMT = '(A)') '     Time         Hi         Hb         Hs         Ti'
-    !
-    !      CLOSE(UNIT = 1337)
-    !
-    !    END DO
-    !
-    !  END SUBROUTINE create_text_output_files
-    !  SUBROUTINE write_text_output( region)
-    !    ! Write data to the following text output files:
-    !    !   time_log_REG.txt             - a log of how much computation time the different model parts take
-    !    !   general_output_REG.txt       - some general info - ice sheet volume, average surface temperature, total mass balance, etc.
-    !
-    !    USE parameters_module,           ONLY: ocean_area, seawater_density, ice_density
-    !
-    !    IMPLICIT NONE
-    !
-    !    TYPE(type_model_region),    INTENT(IN)        :: region
-    !
-    !    CHARACTER(LEN=256)                            :: filename
-    !    CHARACTER(LEN=3)                              :: ns
-    !    CHARACTER(LEN=1)                              :: ns3
-    !    CHARACTER(LEN=2)                              :: ns2
-    !    INTEGER                                       :: n
-    !    INTEGER                                       :: vi, m, k, aci, vj
-    !    REAL(dp)                                      :: T2m_mean
-    !    REAL(dp)                                      :: total_snowfall
-    !    REAL(dp)                                      :: total_rainfall
-    !    REAL(dp)                                      :: total_melt
-    !    REAL(dp)                                      :: total_refreezing
-    !    REAL(dp)                                      :: total_runoff
-    !    REAL(dp)                                      :: total_SMB
-    !    REAL(dp)                                      :: total_BMB
-    !    REAL(dp)                                      :: total_MB
-    !    REAL(dp)                                      :: TAFi, TAFj, lambda, x_GL
-    !    INTEGER                                       :: n_GL
-    !
-    !    INTEGER                                       :: vi1, vi2, vi3
-    !    REAL(dp)                                      :: w1, w2, w3
-    !    REAL(dp)                                      :: Hi_POI, Hb_POI, Hs_POI
-    !    REAL(dp), DIMENSION(C%nZ)                     :: Ti_POI
-    !
-    !  ! Time log
-    !  ! ========
-    !
-    !    filename = TRIM(C%output_dir) // 'aa_time_log_' // region%name // '.txt'
-    !    OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
-    !
-    !    WRITE(UNIT = 1337, FMT = '(F10.1,I9,F11.3,F11.3,F11.3,F11.3,F11.3,F11.3,F11.3,F11.3)') region%time, region%mesh%nV, &
-    !      region%tcomp_total, region%tcomp_mesh, region%tcomp_SIA, region%tcomp_SSA, region%tcomp_thermo, region%tcomp_climate, region%tcomp_output
-    !
-    !    CLOSE(UNIT = 1337)
-    !
-    !  ! General output
-    !  ! ==============
-    !
-    !    T2m_mean                   = 0._dp
-    !    total_snowfall             = 0._dp
-    !    total_rainfall             = 0._dp
-    !    total_melt                 = 0._dp
-    !    total_refreezing           = 0._dp
-    !    total_runoff               = 0._dp
-    !    total_SMB                  = 0._dp
-    !    total_BMB                  = 0._dp
-    !    total_MB                   = 0._dp
-    !
-    !    DO vi = 1, region%mesh%nV
-    !      IF (region%ice%Hi(vi) > 0._dp) THEN
-    !
-    !        total_BMB = total_BMB + (region%BMB%BMB(vi) * region%mesh%A(vi) / 1E9_dp)
-    !
-    !        DO m = 1, 12
-    !          total_snowfall   = total_snowfall   + (region%SMB%Snowfall(  vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !          total_rainfall   = total_rainfall   + (region%SMB%Rainfall(  vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !          total_melt       = total_melt       + (region%SMB%Melt(      vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !          total_refreezing = total_refreezing + (region%SMB%Refreezing(vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !          total_runoff     = total_runoff     + (region%SMB%Runoff(    vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !          total_SMB        = total_SMB        + (region%SMB%SMB(       vi,m) * region%mesh%A(vi) / 1E9_dp)
-    !        END DO
-    !
-    !      END IF
-    !
-    !      T2m_mean = T2m_mean + SUM(region%climate%applied%ti2m(vi,:)) * region%mesh%A(vi) / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
-    !
-    !    END DO
-    !
-    !    total_MB = total_SMB + total_BMB
-    !
-    !    ! Average x-position of grounding line
-    !    x_GL = 0._dp
-    !    n_GL = 0
-    !    DO aci = 1, region%mesh%nAc
-    !      IF (region%ice%mask_gl_Ac( aci) == 1) THEN
-    !        n_GL = n_GL + 1
-    !
-    !        vi = region%mesh%Aci( aci,1)
-    !        vj = region%mesh%Aci( aci,2)
-    !
-    !        ! Find interpolated GL position
-    !        TAFi = region%ice%Hi( vi) - ((region%ice%SL( vi) - region%ice%Hb( vi)) * (seawater_density / ice_density))
-    !        TAFj = region%ice%Hi( vj) - ((region%ice%SL( vj) - region%ice%Hb( vj)) * (seawater_density / ice_density))
-    !        lambda = TAFi / (TAFi - TAFj)
-    !
-    !        x_GL = x_GL + (NORM2(region%mesh%V( vi,:)) * (1._dp - lambda)) + (NORM2(region%mesh%V( vj,:)) * lambda)
-    !      END IF
-    !    END DO
-    !    x_GL = x_GL / n_GL
-    !
-    !    filename = TRIM(C%output_dir) // 'aa_general_output_' // region%name // '.txt'
-    !    OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
-    !
-    !    WRITE(UNIT = 1337, FMT = '(F10.1,2F8.2,F13.2,F8.2,9F11.2)') region%time, &
-    !      region%ice_volume, region%ice_volume_above_flotation, region%ice_area, T2m_mean, &
-    !      total_snowfall, total_rainfall, total_melt, total_refreezing, total_runoff, total_SMB, total_BMB, total_MB, x_GL
-    !
-    !    CLOSE(UNIT = 1337)
-    !
-    !  ! Point-of-interest output
-    !  ! ========================
-    !
-    !    DO n = 1, region%mesh%nPOI
-    !
-    !      vi1 = region%mesh%POI_vi(n,1)
-    !      vi2 = region%mesh%POI_vi(n,2)
-    !      vi3 = region%mesh%POI_vi(n,3)
-    !
-    !      w1  = region%mesh%POI_w(n,1)
-    !      w2  = region%mesh%POI_w(n,2)
-    !      w3  = region%mesh%POI_w(n,3)
-    !
-    !      Hi_POI = (region%ice%Hi(vi1  ) * w1) + (region%ice%Hi(vi2  ) * w2) + (region%ice%Hi(vi3  ) * w3)
-    !      Hb_POI = (region%ice%Hb(vi1  ) * w1) + (region%ice%Hb(vi2  ) * w2) + (region%ice%Hb(vi3  ) * w3)
-    !      Hs_POI = (region%ice%Hs(vi1  ) * w1) + (region%ice%Hs(vi2  ) * w2) + (region%ice%Hs(vi3  ) * w3)
-    !      Ti_POI = (region%ice%Ti(vi1,:) * w1) + (region%ice%Ti(vi2,:) * w2) + (region%ice%Ti(vi3,:) * w3)
-    !
-    !      IF (n<10) THEN
-    !        WRITE(ns3,'(I1)') n
-    !        ns(1:2) = '00'
-    !        ns(3:3) = ns3
-    !      ELSEIF (n<100) THEN
-    !        WRITE(ns2,'(I2)') n
-    !        ns(1:1) = '0'
-    !        ns(2:3) = ns3
-    !      ELSE
-    !        WRITE(ns,'(I3)') n
-    !      END IF
-    !
-    !      filename = TRIM(C%output_dir) // 'ab_POI_' // TRIM(region%name) // '_' // TRIM(ns) // '_data.txt'
-    !      OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
-    !
-    !      WRITE(UNIT = 1337, FMT = '(F10.1,3F11.2)', ADVANCE='NO') region%time, Hi_POI, Hb_POI, Hs_POI
-    !      DO k = 1, C%nZ
-    !        WRITE(UNIT = 1337, FMT = '(F11.2)', ADVANCE='NO') Ti_POI(k)
-    !      END DO
-    !      WRITE(UNIT = 1337, FMT = '(A)') ''
-    !
-    !      CLOSE(UNIT = 1337)
-    !
-    !    END DO
-    !
-    !  END SUBROUTINE write_text_output
-
-  ! END Commented out stuff

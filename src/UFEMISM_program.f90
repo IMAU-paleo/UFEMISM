@@ -50,7 +50,7 @@ PROGRAM UFEMISM_program
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
   ! USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
-  USE global_text_output_module,   ONLY: create_text_output_files, write_text_output
+  USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
   USE general_sea_level_module,    ONLY: determine_GMSL_contributions, update_regional_sea_level
@@ -173,10 +173,10 @@ PROGRAM UFEMISM_program
   ! ========================
 
   ! Create file and header
-  CALL create_text_output_files
+  CALL create_global_text_output
 
   ! Write global data at t=0 to output file
-  CALL write_text_output( C%start_time_of_run, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
+  CALL write_global_text_output( C%start_time_of_run, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
 
 ! ===== The big time loop =====
 ! =============================
@@ -240,7 +240,7 @@ PROGRAM UFEMISM_program
     ! ================
 
     ! Write global data to output file
-    CALL write_text_output( t_coupling, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
+    CALL write_global_text_output( t_coupling, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
 
     ! == Resource tracking output
     ! ===========================

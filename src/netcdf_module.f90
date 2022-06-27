@@ -1382,13 +1382,13 @@ CONTAINS
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [vi,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'C_abl_constant_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [vi,    t], id_var, long_name='Constant ablation', units='-')
     ELSEIF (field_name == 'C_abl_Ts_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [vi,    t], id_var, long_name='Temperature ablation factor', units='-')
     ELSEIF (field_name == 'C_abl_Q_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [vi,    t], id_var, long_name='Insolation ablation factor', units='-')
     ELSEIF (field_name == 'C_refr_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [vi,    t], id_var, long_name='Refreezing factor', units='-')
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -2278,13 +2278,13 @@ CONTAINS
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [x, y,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'C_abl_constant_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [x, y,    t], id_var, long_name='Constant ablation', units='-')
     ELSEIF (field_name == 'C_abl_Ts_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [x, y,    t], id_var, long_name='Temperature ablation factor', units='-')
     ELSEIF (field_name == 'C_abl_Q_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [x, y,    t], id_var, long_name='Insolation ablation factor', units='-')
     ELSEIF (field_name == 'C_refr_inv') THEN
-      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [x, y,    t], id_var, long_name='Refreezing factor', units='-')
 
     ! NOTE: masks commented out; mapping masks between grids is meaningless
 

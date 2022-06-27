@@ -207,7 +207,7 @@ CONTAINS
 
       IF (C%do_SMB_IMAUITM_inversion) THEN
         IF (region%do_SMB_inv) THEN
-          CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%SMB, region%refgeo_PD)
+          CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
         END IF
       END IF
 

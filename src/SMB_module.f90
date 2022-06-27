@@ -912,13 +912,13 @@ CONTAINS
             ! is in contrast to the other parameters, which use positve values to have a stronger
             ! melting (or refreezin) effect. Thus, pay attention to the sign of the adjustment.
 
-            ! == Constant and temperature-based ablation
-            ! ==========================================
+            ! == Constant ablation
+            ! ====================
 
-            ! If any month has melting temperatures
-            IF ( ANY(climate%T2m(vi,:) - T0 > 0._dp) ) THEN
+            ! If any month has temperatures above or close enough to melting point
+            IF ( ANY(climate%T2m(vi,:) - T0 > -5._dp) ) THEN
 
-              ! Constant ablation
+              ! Adjust parameter
               IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
                 ! Get value to be adjusted
                 new_val = SMB%C_abl_constant_inv( vi)
@@ -931,7 +931,15 @@ CONTAINS
                 SMB%C_abl_constant_inv( vi) = new_val
               END IF
 
-              ! Temperature ablation
+            END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
+
+            ! == Temperature-based ablation
+            ! =============================
+
+            ! If any month has melting temperatures
+            IF ( ANY(climate%T2m(vi,:) - T0 > 0._dp) ) THEN
+
+              ! Adjust parameter
               IF (C%SMB_IMAUITM_inv_C_abl_Ts_min /= C%SMB_IMAUITM_inv_C_abl_Ts_max) THEN
                 new_val = SMB%C_abl_Ts_inv( vi)
                 new_val = new_val + 1.72476_dp * TAN(h_delta) ! Note the positive sign here

@@ -180,9 +180,10 @@ CONTAINS
     WRITE(UNIT = 1337, FMT = '(A)') '  11)  Total SMB          over ice (Gton/y)'
     WRITE(UNIT = 1337, FMT = '(A)') '  12)  Total BMB          over ice (Gton/y)'
     WRITE(UNIT = 1337, FMT = '(A)') '  13)  Total mass balance over ice (Gton/y)'
-    WRITE(UNIT = 1337, FMT = '(A)') '  14)  Grounding line x position (for MISMIP benchmark experiments)'
+    WRITE(UNIT = 1337, FMT = '(A)') '  14)  Effective mass balance      (Gton/y)'
+    WRITE(UNIT = 1337, FMT = '(A)') '  15)  Grounding line x position (for MISMIP benchmark experiments)'
     WRITE(UNIT = 1337, FMT = '(A)') ''
-    WRITE(UNIT = 1337, FMT = '(A)') '      Time     Volume  Volume_AF         Area     T2m       Snow       Rain       Melt   Refreeze     Runoff        SMB        BMB         MB       x_GL'
+    WRITE(UNIT = 1337, FMT = '(A)') '      Time     Volume  Volume_AF         Area     T2m       Snow       Rain       Melt   Refreeze     Runoff        SMB        BMB         MB     MB_eff       x_GL'
 
     CLOSE(UNIT = 1337)
 
@@ -249,17 +250,11 @@ CONTAINS
     CHARACTER(LEN=3)                              :: ns
     CHARACTER(LEN=1)                              :: ns3
     CHARACTER(LEN=2)                              :: ns2
-    INTEGER                                       :: n
-    INTEGER                                       :: vi, m, k, aci, vj
-    REAL(dp)                                      :: T2m_mean
-    REAL(dp)                                      :: total_snowfall
-    REAL(dp)                                      :: total_rainfall
-    REAL(dp)                                      :: total_melt
-    REAL(dp)                                      :: total_refreezing
-    REAL(dp)                                      :: total_runoff
-    REAL(dp)                                      :: total_SMB
-    REAL(dp)                                      :: total_BMB
-    REAL(dp)                                      :: total_MB
+    INTEGER                                       :: n, vi, m, k, aci, vj
+    REAL(dp)                                      :: total_snowfall, total_rainfall, total_melt
+    REAL(dp)                                      :: total_refreezing, total_runoff, T2m_mean
+    REAL(dp)                                      :: total_SMB, total_BMB, total_MB
+    REAL(dp)                                      :: MB_eff, total_MB_eff
     REAL(dp)                                      :: TAFi, TAFj, lambda, x_GL
     INTEGER                                       :: n_GL
 
@@ -279,7 +274,7 @@ CONTAINS
     ! General output
     ! ==============
 
-    T2m_mean                   = -273.5_dp
+    T2m_mean                   = 0._dp
     total_snowfall             = 0._dp
     total_rainfall             = 0._dp
     total_melt                 = 0._dp
@@ -288,29 +283,34 @@ CONTAINS
     total_SMB                  = 0._dp
     total_BMB                  = 0._dp
     total_MB                   = 0._dp
+    total_MB_eff               = 0._dp
 
     DO vi = 1, region%mesh%nV
-      IF (region%ice%mask_ice_a( vi)==0) THEN
 
-        total_BMB = total_BMB + (region%BMB%BMB(vi) * region%mesh%A(vi) / 1E9_dp) * ice_density / 1000._dp ! m3ie -> m3we -> Gt
+      IF (region%ice%mask_ice_a( vi) == 1) THEN
+
+        total_BMB = total_BMB + (region%BMB%BMB( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp) ! m^3 ice eq. -> m^3 water eq. -> Gt
 
         DO m = 1, 12
-          total_snowfall   = total_snowfall   + (region%SMB%Snowfall(  vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
-          total_rainfall   = total_rainfall   + (region%SMB%Rainfall(  vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
-          total_melt       = total_melt       + (region%SMB%Melt(      vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
-          total_refreezing = total_refreezing + (region%SMB%Refreezing(vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
-          total_runoff     = total_runoff     + (region%SMB%Runoff(    vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
-          total_SMB        = total_SMB        + (region%SMB%SMB(       vi,m) * region%mesh%A(vi) / 1E9_dp) * ice_density / 1000._dp
+          total_snowfall   = total_snowfall   + (region%SMB%Snowfall(   vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
+          total_rainfall   = total_rainfall   + (region%SMB%Rainfall(   vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
+          total_melt       = total_melt       + (region%SMB%Melt(       vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
+          total_refreezing = total_refreezing + (region%SMB%Refreezing( vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
+          total_runoff     = total_runoff     + (region%SMB%Runoff(     vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
+          total_SMB        = total_SMB        + (region%SMB%SMB(        vi,m) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp)
         END DO
+
+        total_MB_eff = total_MB_eff + region%ice%dHi_dt_a( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp
 
       END IF
 
-      T2m_mean = T2m_mean + SUM(region%climate_matrix%applied%T2m(vi,:)) * region%mesh%A(vi) &
+      T2m_mean = T2m_mean + SUM(region%climate_matrix%applied%T2m( vi,:)) * region%mesh%A( vi) &
                             / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
 
     END DO
 
     total_MB = total_SMB + total_BMB
+    T2m_mean = T2m_mean - 273.15_dp
 
     ! Average x-position of grounding line
     x_GL = 0._dp
@@ -335,9 +335,9 @@ CONTAINS
     filename = TRIM(C%output_dir) // 'ab_general_output_' // region%name // '.txt'
     OPEN(UNIT  = 1337, FILE = filename, ACCESS = 'APPEND')
 
-    WRITE(UNIT = 1337, FMT = '(F10.1,2F11.2,F13.2,F8.2,9F11.2)') region%time, &
+    WRITE(UNIT = 1337, FMT = '(F10.2,2F11.2,F13.2,F8.2,10F11.2)') region%time, &
       region%ice_volume, region%ice_volume_above_flotation, region%ice_area, T2m_mean, &
-      total_snowfall, total_rainfall, total_melt, total_refreezing, total_runoff, total_SMB, total_BMB, total_MB, x_GL
+      total_snowfall, total_rainfall, total_melt, total_refreezing, total_runoff, total_SMB, total_BMB, total_MB, total_MB_eff, x_GL
 
     CLOSE(UNIT = 1337)
 

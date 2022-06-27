@@ -46,7 +46,7 @@
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
   res_max_config                              = 80.0                             ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 30.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_margin_config                       = 20.0                             ! Maximum allowed resolution over land-based ice margin [km]
   res_max_gl_config                           = 80.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 80.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 80.0                             !                                 mountains             [km]
@@ -56,7 +56,7 @@
   ! Resolutions of the different square grids
   ! =========================================
 
-  dx_grid_output_config                       = 30000.0                          ! Resolution of the square grid used for writing output                       [m]
+  dx_grid_output_config                       = 20000.0                          ! Resolution of the square grid used for writing output                       [m]
   dx_grid_GIA_config                          = 100000.0                         ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
   dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing in the climate matrix [m]
 
@@ -265,12 +265,12 @@
   SMB_IMAUITM_inv_scale_config                = 5000.0                           ! Scaling constant for inversion procedure [m]
   SMB_IMAUITM_inv_C_abl_constant_min_config   = -100.0                           ! Minimum value of C_abl_constant allowed during inversion
   SMB_IMAUITM_inv_C_abl_constant_max_config   = 0.0                              ! Maximum value of C_abl_constant allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Ts_min_config         = 0.0                              ! Minimum value of C_abl_Ts       allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 0.0                              ! Maximum value of C_abl_Ts       allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Q_min_config          = 0.0                              ! Minimum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Q_max_config          = 0.0                              ! Maximum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_refr_min_config           = 0.0                              ! Minimum value of C_refr         allowed during inversion
-  SMB_IMAUITM_inv_C_refr_max_config           = 0.0                              ! Maximum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Ts_min_config         = 5.0                              ! Minimum value of C_abl_Ts       allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 15.0                             ! Maximum value of C_abl_Ts       allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Q_min_config          = 0.01                             ! Minimum value of C_abl_Q        allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Q_max_config          = 0.03                             ! Maximum value of C_abl_Q        allowed during inversion
+  SMB_IMAUITM_inv_C_refr_min_config           = 0.01                             ! Minimum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_refr_max_config           = 0.1                              ! Maximum value of C_refr         allowed during inversion
 
   ! Basal mass balance
   ! ==================

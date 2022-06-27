@@ -150,8 +150,8 @@ CONTAINS
 
   END SUBROUTINE initialise_reference_geometries
 
-! ===== Realistic reference geometries =====
-! ==========================================
+! ===== Realistic reference geometries (grid) =====
+! =================================================
 
   ! Initialise a reference geometry with data from a (timeless) NetCDF file (e.g. BedMachine)
   SUBROUTINE initialise_reference_geometry_from_file( refgeo, filename_refgeo, region_name)
@@ -253,10 +253,206 @@ CONTAINS
       CALL remove_Lake_Vostok( refgeo%grid%x, refgeo%grid%y, refgeo%Hi_grid, refgeo%Hb_grid, refgeo%Hs_grid)
     END IF
 
+    ! Remove ice based on the no-ice masks (grid versions)
+    CALL apply_mask_noice_grid( refgeo, region_name)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
 
   END SUBROUTINE initialise_reference_geometry_from_file
+
+! ===== Clean-up of realistic geometries (grid) =====
+! ===================================================
+
+  SUBROUTINE apply_mask_noice_grid( refgeo, region_name)
+    ! Remove ice from a certain area. This is used to remove
+    ! Greenland from NAM and EAS, and Ellesmere Island from GRL.
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    CHARACTER(LEN=3),              INTENT(IN)    :: region_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_grid'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF     (region_name == 'NAM') THEN
+      ! Clean up the NAM domain
+
+      IF     (C%choice_mask_noice_NAM == 'none') THEN
+        ! Do not remove ice from anywhere
+      ELSEIF (C%choice_mask_noice_NAM == 'NAM_remove_GRL') THEN
+        ! Remove ice from the Greenlandic part of the North America domain
+        CALL apply_mask_noice_NAM_remove_GRL_grid( refgeo)
+      ELSE
+        CALL crash('unknown choice_mask_noice_NAM "' // TRIM(C%choice_mask_noice_NAM) // '"!')
+      END IF
+
+    ELSEIF (region_name == 'EAS') THEN
+      ! Clean up the EAS domain
+
+      IF     (C%choice_mask_noice_EAS == 'none') THEN
+        ! Do not remove ice from anywhere
+      ELSEIF (C%choice_mask_noice_EAS == 'EAS_remove_GRL') THEN
+        ! Remove ice from the Greenlandic part of the Eurasia domain
+        CALL apply_mask_noice_EAS_remove_GRL_grid( refgeo)
+      ELSE
+        CALL crash('unknown choice_mask_noice_EAS "' // TRIM(C%choice_mask_noice_EAS) // '"!')
+      END IF
+
+    ELSEIF (region_name == 'GRL') THEN
+      ! Clean up the GRL domain
+
+      IF     (C%choice_mask_noice_GRL == 'none') THEN
+        ! Do not remove ice from anywhere
+      ELSEIF (C%choice_mask_noice_GRL == 'GRL_remove_Ellesmere') THEN
+        ! Remove ice from the Ellesmere Island part of the Greenland domain
+        CALL apply_mask_noice_GRL_remove_Ellesmere_grid( refgeo)
+      ELSE
+        CALL crash('unknown choice_mask_noice_GRL "' // TRIM(C%choice_mask_noice_GRL) // '"!')
+      END IF
+
+    ELSEIF (region_name == 'ANT') THEN
+      ! Clean up the ANT domain
+
+      IF     (C%choice_mask_noice_ANT == 'none') THEN
+        ! Do not remove ice from anywhere
+      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
+        ! Nothing to do here, as all belongs to the mesh version
+      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP+') THEN
+        ! Nothing to do here, as all belongs to the mesh version
+      ELSE
+        CALL crash('unknown choice_mask_noice_ANT "' // TRIM(C%choice_mask_noice_ANT) // '"!')
+      END IF
+
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_mask_noice_grid
+
+  SUBROUTINE apply_mask_noice_NAM_remove_GRL_grid( refgeo)
+    ! Remove ice from the Greenlandic part of the North America domain
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_NAM_remove_GRL_grid'
+    INTEGER                                      :: i,j
+    REAL(dp), DIMENSION(2)                       :: pa, pb
+    REAL(dp)                                     :: yl_ab
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    pa = [ 490000._dp, 1530000._dp]
+    pb = [2030000._dp,  570000._dp]
+
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      yl_ab = pa(2) + (refgeo%grid%x(i) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      DO j = 1, refgeo%grid%ny
+        IF (refgeo%grid%y(j) > yl_ab .AND. refgeo%grid%x(i) > pa(1) .AND. refgeo%grid%y(j) > pb(2)) THEN
+
+          refgeo%Hi_grid( i,j) = 0._dp
+
+        END IF
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_mask_noice_NAM_remove_GRL_grid
+
+  SUBROUTINE apply_mask_noice_EAS_remove_GRL_grid( refgeo)
+    ! Remove ice from the Greenlandic part of the Eurasia domain
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_EAS_remove_GRL_grid'
+    INTEGER                                      :: i,j
+    REAL(dp), DIMENSION(2)                       :: pa, pb, pc, pd
+    REAL(dp)                                     :: yl_ab, yl_bc, yl_cd
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    pa = [-2900000._dp, 1300000._dp]
+    pb = [-1895000._dp,  900000._dp]
+    pc = [ -835000._dp, 1135000._dp]
+    pd = [ -400000._dp, 1855000._dp]
+
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      yl_ab = pa(2) + (refgeo%grid%x(i) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      yl_bc = pb(2) + (refgeo%grid%x(i) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
+      yl_cd = pc(2) + (refgeo%grid%x(i) - pc(1))*(pd(2)-pc(2))/(pd(1)-pc(1))
+      DO j = 1, refgeo%grid%ny
+        IF ((refgeo%grid%x(i) <  pa(1) .AND. refgeo%grid%y(j) > pa(2)) .OR. &
+            (refgeo%grid%x(i) >= pa(1) .AND. refgeo%grid%x(i) < pb(1) .AND. refgeo%grid%y(j) > yl_ab) .OR. &
+            (refgeo%grid%x(i) >= pb(1) .AND. refgeo%grid%x(i) < pc(1) .AND. refgeo%grid%y(j) > yl_bc) .OR. &
+            (refgeo%grid%x(i) >= pc(1) .AND. refgeo%grid%x(i) < pd(1) .AND. refgeo%grid%y(j) > yl_cd)) THEN
+
+          refgeo%Hi_grid( i,j) = 0._dp
+
+        END IF
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_mask_noice_EAS_remove_GRL_grid
+
+  SUBROUTINE apply_mask_noice_GRL_remove_Ellesmere_grid( refgeo)
+    ! Remove ice from the Ellesmere Island part of the Greenland domain
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_GRL_remove_Ellesmere_grid'
+    INTEGER                                      :: i,j
+    REAL(dp), DIMENSION(2)                       :: pa, pb
+    REAL(dp)                                     :: yl_ab
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    pa = [-750000._dp,  900000._dp]
+    pb = [-250000._dp, 1250000._dp]
+
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      yl_ab = pa(2) + (refgeo%grid%x(i) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
+      DO j = 1, refgeo%grid%ny
+        IF (refgeo%grid%y(j) > pa(2) .AND. refgeo%grid%y(j) > yl_ab .AND. refgeo%grid%x(i) < pb(1)) THEN
+
+          refgeo%Hi_grid( i,j) = 0._dp
+
+        END IF
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE apply_mask_noice_GRL_remove_Ellesmere_grid
 
 ! ===== Idealised reference geometries (grid) =====
 ! =================================================

@@ -1610,7 +1610,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
     ! Local variables
@@ -1629,7 +1629,7 @@ CONTAINS
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
       h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
 
-      ! Invert only where the reference/model is grounded ice
+      ! Invert only where the model is grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
 
         IF (ABS(h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
@@ -1669,7 +1669,7 @@ CONTAINS
 
         END IF ! else the difference is within the specified tolerance, so leave it alone
 
-      END IF ! else the reference is not grounded ice sheet, so leave it alone
+      END IF ! else the model is not grounded ice sheet, so leave it alone
 
     END DO
     CALL sync

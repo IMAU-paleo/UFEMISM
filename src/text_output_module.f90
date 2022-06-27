@@ -171,7 +171,7 @@ CONTAINS
     WRITE(UNIT = 1337, FMT = '(A)') '   2)  Ice volume                  (meter sea level equivalent)'
     WRITE(UNIT = 1337, FMT = '(A)') '   3)  Ice volume above flotation  (meter sea level equivalent)'
     WRITE(UNIT = 1337, FMT = '(A)') '   4)  Ice area                    (km^2)'
-    WRITE(UNIT = 1337, FMT = '(A)') '   5)  Mean surface temperature    (Kelvin)'
+    WRITE(UNIT = 1337, FMT = '(A)') '   5)  Mean surface temperature    (degrees Celsius)'
     WRITE(UNIT = 1337, FMT = '(A)') '   6)  Total snowfall     over ice (Gton/y)'
     WRITE(UNIT = 1337, FMT = '(A)') '   7)  Total rainfall     over ice (Gton/y)'
     WRITE(UNIT = 1337, FMT = '(A)') '   8)  Total melt         over ice (Gton/y)'
@@ -279,7 +279,7 @@ CONTAINS
     ! General output
     ! ==============
 
-    T2m_mean                   = 0._dp
+    T2m_mean                   = -273.5_dp
     total_snowfall             = 0._dp
     total_rainfall             = 0._dp
     total_melt                 = 0._dp
@@ -290,22 +290,23 @@ CONTAINS
     total_MB                   = 0._dp
 
     DO vi = 1, region%mesh%nV
-      IF (region%ice%Hi_a(vi) > 0._dp) THEN
+      IF (region%ice%mask_ice_a( vi)==0) THEN
 
-        total_BMB = total_BMB + (region%BMB%BMB(vi) * region%mesh%A(vi) / 1E9_dp)
+        total_BMB = total_BMB + (region%BMB%BMB(vi) * region%mesh%A(vi) / 1E9_dp) * ice_density / 1000._dp ! m3ie -> m3we -> Gt
 
         DO m = 1, 12
-          total_snowfall   = total_snowfall   + (region%SMB%Snowfall(  vi,m) * region%mesh%A(vi) / 1E9_dp)
-          total_rainfall   = total_rainfall   + (region%SMB%Rainfall(  vi,m) * region%mesh%A(vi) / 1E9_dp)
-          total_melt       = total_melt       + (region%SMB%Melt(      vi,m) * region%mesh%A(vi) / 1E9_dp)
-          total_refreezing = total_refreezing + (region%SMB%Refreezing(vi,m) * region%mesh%A(vi) / 1E9_dp)
-          total_runoff     = total_runoff     + (region%SMB%Runoff(    vi,m) * region%mesh%A(vi) / 1E9_dp)
-          total_SMB        = total_SMB        + (region%SMB%SMB(       vi,m) * region%mesh%A(vi) / 1E9_dp)
+          total_snowfall   = total_snowfall   + (region%SMB%Snowfall(  vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
+          total_rainfall   = total_rainfall   + (region%SMB%Rainfall(  vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
+          total_melt       = total_melt       + (region%SMB%Melt(      vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
+          total_refreezing = total_refreezing + (region%SMB%Refreezing(vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
+          total_runoff     = total_runoff     + (region%SMB%Runoff(    vi,m) * region%mesh%A(vi) / 1E9_dp) ! Already in water equivalent
+          total_SMB        = total_SMB        + (region%SMB%SMB(       vi,m) * region%mesh%A(vi) / 1E9_dp) * ice_density / 1000._dp
         END DO
 
       END IF
 
-      T2m_mean = T2m_mean + SUM(region%climate_matrix%applied%T2m(vi,:)) * region%mesh%A(vi) / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
+      T2m_mean = T2m_mean + SUM(region%climate_matrix%applied%T2m(vi,:)) * region%mesh%A(vi) &
+                            / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
 
     END DO
 

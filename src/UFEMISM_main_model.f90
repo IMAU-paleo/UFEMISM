@@ -220,7 +220,7 @@ CONTAINS
       ! == Output
       ! =========
 
-      ! Write output
+      ! Write NetCDF output
       IF (region%do_output) THEN
         ! If the mesh has been updated, create a new NetCDF file
         IF (.NOT. region%output_file_exists) THEN
@@ -228,26 +228,29 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! Determine total ice sheet area, volume, and volume-above-flotation,
-        CALL calculate_icesheet_volume_and_area( region)
-        ! Write to regional text output file
-        CALL write_regional_text_output( region)
         ! Write to regional NetCDF output files
         CALL write_to_output_files( region)
       END IF
 
+      ! Write scalar text output
+      IF (region%do_output .OR. region%do_SMB .OR. region%do_BMB) THEN
+        ! Determine total ice sheet area, volume, and volume-above-flotation,
+        CALL calculate_icesheet_volume_and_area( region)
+        ! Write to regional text output file
+        CALL write_regional_text_output( region)
+      END IF
 
       ! == Update initial mesh after first round
       ! ========================================
 
-      ! If required, update the mesh
-      IF (region%time == C%start_time_of_run .AND. (.NOT. C%is_restart)) THEN
-        region%t_last_mesh = region%time
-        IF (par%master) t2 = MPI_WTIME()
-        CALL run_model_update_mesh( region, climate_matrix_global)
-        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
-        CALL sync
-      END IF
+      ! ! If required, update the mesh
+      ! IF (region%time == C%start_time_of_run .AND. (.NOT. C%is_restart)) THEN
+      !   region%t_last_mesh = region%time
+      !   IF (par%master) t2 = MPI_WTIME()
+      !   CALL run_model_update_mesh( region, climate_matrix_global)
+      !   IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+      !   CALL sync
+      ! END IF
 
       ! == Advance region time
       ! ======================
@@ -407,7 +410,7 @@ CONTAINS
     CALL calculate_reference_isotopes( region)
 
     IF (.NOT. region%time == C%start_time_of_run) THEN
-      ! If not the initial mesh update, run all model components again after updating the mesh
+      ! If not an initial mesh update, run all model components again after updating the mesh
       region%t_next_SIA     = region%time
       region%t_next_SSA     = region%time
       region%t_next_DIVA    = region%time
@@ -792,9 +795,9 @@ CONTAINS
       region%t_next_basal   = C%start_time_of_run + C%dt_basal
       region%do_basal       = .FALSE.
 
-      region%t_last_SMB_inv   = C%start_time_of_run
-      region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv
-      region%do_SMB_inv       = .FALSE.
+      region%t_last_SMB_inv = C%start_time_of_run
+      region%t_next_SMB_inv = C%start_time_of_run + C%dt_SMB_inv
+      region%do_SMB_inv     = .FALSE.
 
       region%t_last_output  = C%start_time_of_run
       region%t_next_output  = C%start_time_of_run

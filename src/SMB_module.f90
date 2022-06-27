@@ -972,13 +972,13 @@ CONTAINS
             ! == Refreezing
             ! =============
 
-            !If any month has freezing temperatures
+            ! If any month has freezing temperatures
             IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ) THEN
 
               ! Adjust parameter
               IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
                 new_val = SMB%C_refr_inv( vi)
-                new_val = new_val + 0.01724_dp * TAN(h_delta) ! Note the positive sign here
+                new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
                 new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
                 new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
 

@@ -60,17 +60,17 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Initialise at zero
+    ! Initialise total and grounded BMB
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
 
-    ! Initialise at zero only if not iteratively inverting
+    ! Initialise BMB over ice shelves
     IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      ! DO vi = mesh%vi1, mesh%vi2
-      !   IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
-      !      BMB%BMB_shelf = 0._dp
-      !   END IF
-      ! END DO
+      DO vi = mesh%vi1, mesh%vi2
+        IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
+           BMB%BMB_shelf = 0._dp
+        END IF
+      END DO
     ELSE
       BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
     END IF
@@ -140,15 +140,23 @@ CONTAINS
     ! (see Leguy et al. 2021 for explanations of the three schemes)
     DO vi = mesh%vi1, mesh%vi2
 
-      ! No sub-grid scaling for sub-sheet melt yet
+      ! Add sub-sheet melt rates (no sub-grid scaling yet)
       BMB%BMB( vi) = 0._dp
-      IF (ice%mask_sheet_a( vi) == 1) BMB%BMB( vi) = BMB%BMB_sheet( vi)
+      IF (ice%mask_sheet_a( vi) == 1) THEN
+        BMB%BMB( vi) = BMB%BMB_sheet( vi)
+      END IF
 
-      ! For the inversion of melt rates, add inverted rates everywhere (i.e. shelf and ocean)
+      ! Add sub-shelf melt rates
       IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+        ! For the inversion of melt rates, add inverted rates everywhere. BMB_shelf
+        ! can be non-zero only at points where the model OR the reference data is
+        ! shelf or ocean (this helps to account for 'unwanted' grounding line advance
+        ! or retreat, and to get an idea of the melt rates needed at ocean points).
+        ! Thus, no need for masks here.
         BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
-        ! Different sub-grid schemes for sub-shelf melt
+        ! Different sub-grid schemes for sub-shelf melt. BMB_shelf can be non-zero
+        ! only at ice shelf points, so no need for masks here.
         IF     (C%choice_BMB_subgrid == 'FCMP') THEN
           IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
@@ -2269,7 +2277,7 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
 
-      ! Invert only where the reference/model is shelf or ocean
+      ! Invert only where the reference or model is shelf or ocean
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN
 
         IF (refgeo%Hi( vi) > 0._dp) THEN

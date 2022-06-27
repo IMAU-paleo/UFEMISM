@@ -4,7 +4,7 @@
   ! ====================
 
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 100.0                            ! End   time (in years) of the simulations
+  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
   dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
@@ -224,7 +224,7 @@
   ! Ocean
   ! =====
 
-  choice_ocean_model_config                   = 'none'                           ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+  choice_ocean_model_config                   = 'PD_obs'                         ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
 
   ! NetCDF file containing the present-day observed ocean (e.g WOA18)
   filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
@@ -249,15 +249,15 @@
   SMB_IMAUITM_C_abl_constant_ANT_config       = 0.0                              !           in ANICE.)
   SMB_IMAUITM_C_abl_Ts_NAM_config             = 10.0                             ! 10._dp
   SMB_IMAUITM_C_abl_Ts_EAS_config             = 10.0
-  SMB_IMAUITM_C_abl_Ts_GRL_config             = -10.0
+  SMB_IMAUITM_C_abl_Ts_GRL_config             = 50.0
   SMB_IMAUITM_C_abl_Ts_ANT_config             = 10.0
   SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227                           ! 0.513_dp
   SMB_IMAUITM_C_abl_Q_EAS_config              = 0.0227
-  SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0
+  SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0227
   SMB_IMAUITM_C_abl_Q_ANT_config              = 0.0227
   SMB_IMAUITM_C_refr_NAM_config               = 0.051                            ! 0.012_dp
   SMB_IMAUITM_C_refr_EAS_config               = 0.051
-  SMB_IMAUITM_C_refr_GRL_config               = 0.0
+  SMB_IMAUITM_C_refr_GRL_config               = 0.051
   SMB_IMAUITM_C_refr_ANT_config               = 0.051
 
   ! IMAU-ITM SMB model inversion

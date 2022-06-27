@@ -2,8 +2,11 @@ MODULE SMB_module
 
   ! All the routines for calculating the surface mass balance from the climate forcing
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -23,13 +26,11 @@ MODULE SMB_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              transpose_dp_2D, transpose_dp_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-
-  ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, &
                                              type_SMB_model, type_remapping_mesh_mesh, &
                                              type_climate_matrix_regional, &
                                              type_climate_snapshot_regional, type_direct_SMB_forcing_regional, &
-                                             type_restart_data
+                                             type_restart_data, type_grid, type_reference_geometry
   USE forcing_module,                  ONLY: forcing
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, &
                                              calc_remapping_operator_grid2mesh, map_grid2mesh_2D, map_grid2mesh_3D, &
@@ -45,8 +46,8 @@ MODULE SMB_module
 
 CONTAINS
 
-  ! == The main routines that should be called from the main ice model/program
-  ! ==========================================================================
+! == The main routines that should be called from the main ice model/program
+! ==========================================================================
 
   SUBROUTINE run_SMB_model( mesh, ice, climate_matrix, time, SMB, mask_noice)
     ! Run the selected regional SMB model
@@ -149,12 +150,12 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=18)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=22)
 
   END SUBROUTINE initialise_SMB_model
 
-  ! == Idealised SMB parameterisations
-  ! ==================================
+! == Idealised SMB parameterisations
+! ==================================
 
   SUBROUTINE run_SMB_model_idealised( mesh, SMB, time, mask_noice)
     ! Run the selected SMB model.
@@ -340,8 +341,8 @@ CONTAINS
 
   END SUBROUTINE run_SMB_model_idealised_BIVMIP_B
 
-  ! == The IMAU-ITM SMB model
-  ! =========================
+! == The IMAU-ITM SMB model
+! =========================
 
   SUBROUTINE run_SMB_model_IMAUITM( mesh, ice, climate, SMB, mask_noice)
     ! Run the IMAU-ITM SMB model.
@@ -391,9 +392,17 @@ CONTAINS
         ! Determine albation as function af surface temperature and albedo/insolation
         ! according to Bintanja et al. (2002)
 
-        SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts         * (climate%T2m( vi,m) - T0) + &
-                                       SMB%C_abl_Q          * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
-                                       SMB%C_abl_constant)  * sec_per_year / (L_fusion * 1000._dp * 12._dp))
+        IF (C%do_SMB_IMAUITM_inversion) THEN
+
+          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts_inv( vi)         * MAX(0._dp, climate%T2m( vi,m) - T0) + &
+                                         SMB%C_abl_Q_inv( vi)          * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
+                                         SMB%C_abl_constant_inv( vi))  * sec_per_year / (L_fusion * 1000._dp * 12._dp))
+        ELSE
+
+          SMB%Melt( vi,m) = MAX(0._dp, ( SMB%C_abl_Ts                  * MAX(0._dp, climate%T2m( vi,m) - T0) + &
+                                         SMB%C_abl_Q                   * (1.0_dp - SMB%Albedo( vi,m)) * climate%Q_TOA( vi,m) - &
+                                         SMB%C_abl_constant)           * sec_per_year / (L_fusion * 1000._dp * 12._dp))
+        END IF
 
         ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999),
         ! liquid water content (rain and melt water) and snowdepth
@@ -401,7 +410,7 @@ CONTAINS
         ! NOTE: commented version is the old ANICE version, supposedly based on "physics" (which we cant check), but
         !       the new version was tuned to RACMO output and produced significantly better snow fractions...
 
-  !      snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp   * (1 - ATAN((climate%T2m(vi,m) - T0) / 3.5_dp)  / 1.25664_dp)))
+       ! snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp   * (1 - ATAN((climate%T2m(vi,m) - T0) / 3.5_dp)  / 1.25664_dp)))
         snowfrac = MAX(0._dp, MIN(1._dp, 0.725_dp * (1 - ATAN((climate%T2m( vi,m) - T0) / 5.95_dp) / 1.8566_dp)))
 
         SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac
@@ -623,6 +632,13 @@ CONTAINS
     CALL allocate_shared_dp_0D( SMB%C_abl_Q,        SMB%wC_abl_Q       )
     CALL allocate_shared_dp_0D( SMB%C_refr,         SMB%wC_refr        )
 
+    ! Inversion parameters
+    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_constant_inv, SMB%wC_abl_constant_inv)
+    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_Ts_inv,       SMB%wC_abl_Ts_inv      )
+    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_abl_Q_inv,        SMB%wC_abl_Q_inv       )
+    CALL allocate_shared_dp_1D( mesh%nV, SMB%C_refr_inv,         SMB%wC_refr_inv        )
+
+    ! Initialise regional scalar parameters to specified values
     IF (par%master) THEN
       IF     (region_name == 'NAM') THEN
         SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_NAM
@@ -644,6 +660,32 @@ CONTAINS
         SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_ANT
         SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_ANT
         SMB%C_refr                   = C%SMB_IMAUITM_C_refr_ANT
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Initialise regional 1-D inversion parameters to specified values
+    IF (par%master) THEN
+      IF     (region_name == 'NAM') THEN
+        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_NAM
+        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_NAM
+        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_NAM
+        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_NAM
+      ELSEIF (region_name == 'EAS') THEN
+        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_EAS
+        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_EAS
+        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_EAS
+        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_EAS
+      ELSEIF (region_name == 'GRL') THEN
+        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_GRL
+        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_GRL
+        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_GRL
+        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_GRL
+      ELSEIF (region_name == 'ANT') THEN
+        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_ANT
+        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_ANT
+        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_ANT
+        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_ANT
       END IF
     END IF ! IF (par%master) THEN
     CALL sync
@@ -713,12 +755,12 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=18)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=22)
 
   END SUBROUTINE initialise_SMB_model_IMAU_ITM
 
-  ! == Directly prescribed global/regional SMB
-  ! ==========================================
+! == Directly prescribed global/regional SMB
+! ==========================================
 
   SUBROUTINE run_SMB_model_direct( mesh, SMB_direct, SMB, time, mask_noice)
     ! Run the selected SMB model: direct global/regional SMB forcing.
@@ -764,8 +806,8 @@ CONTAINS
 
   END SUBROUTINE run_SMB_model_direct
 
-  ! == Remapping after mesh update
-  ! ==============================
+! == Remapping after mesh update
+! ==============================
 
   SUBROUTINE remap_SMB_model( mesh_old, mesh_new, map, SMB)
     ! Remap or reallocate all the data fields
@@ -793,6 +835,14 @@ CONTAINS
       CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
       CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
 
+      ! IF (C%do_SMB_IMAUITM_inversion) THEN
+        ! Remap inverted IMAU-ITM paramaters so they are not reset after a mesh update
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_constant_inv, SMB%wC_abl_constant_inv, 'trilin')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Ts_inv,       SMB%wC_abl_Ts_inv,       'trilin')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Q_inv,        SMB%wC_abl_Q_inv,        'trilin')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_refr_inv,         SMB%wC_refr_inv,         'trilin')
+      ! END IF
+
       ! Reallocate rather than remap; after a mesh update we'll immediately run the SMB model anyway
       CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )
       CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
@@ -814,6 +864,90 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_SMB_model
+
+! == Inversion
+! ============
+
+  SUBROUTINE SMB_IMAUITM_inversion( mesh, ice, SMB, refgeo)
+    ! Iteratively invert for IMAU-ITM SMB parameters over the entire domain
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+
+    ! Local variables
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'SMB_IMAUITM_inversion'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val, w_smooth
+    REAL(dp),           DIMENSION(SIZE(ice%Hi_a))      :: rough_smoothed
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    h_scale = 1.0_dp/C%SMB_IMAUITM_inv_scale
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
+
+      ! Invert only where the model has ice
+      IF (ice%mask_ice_a( vi) == 1) THEN
+
+        ! IF (ABS(h_delta) >= C%SMB_IMAUITM_inv_tol_diff .OR. &
+        !     ABS(h_dfrac) >= C%SMB_IMAUITM_inv_tol_frac) THEN
+
+          h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+          ! Further adjust only where the previous value is not improving the result
+          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+
+            IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
+              new_val = SMB%C_abl_constant_inv( vi)
+              new_val = new_val - h_delta
+              new_val = MIN(MAX(new_val, C%SMB_IMAUITM_inv_C_abl_constant_min), C%SMB_IMAUITM_inv_C_abl_constant_max)
+              SMB%C_abl_constant_inv( vi) = new_val
+            END IF
+
+            IF (C%SMB_IMAUITM_inv_C_abl_Ts_min /= C%SMB_IMAUITM_inv_C_abl_Ts_max) THEN
+              new_val = SMB%C_abl_Ts_inv( vi)
+              new_val = new_val - h_delta
+              new_val = MIN(MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_min), C%SMB_IMAUITM_inv_C_abl_Ts_max)
+              SMB%C_abl_Ts_inv( vi) = new_val
+            END IF
+
+            IF (C%SMB_IMAUITM_inv_C_abl_Q_min /= C%SMB_IMAUITM_inv_C_abl_Q_max) THEN
+              new_val = SMB%C_abl_Q_inv( vi)
+              new_val = new_val - h_delta
+              new_val = MIN(MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Q_min), C%SMB_IMAUITM_inv_C_abl_Q_max)
+              SMB%C_abl_Q_inv( vi) = new_val
+            END IF
+
+            IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
+              new_val = SMB%C_refr_inv( vi)
+              new_val = new_val - h_delta
+              new_val = MIN(MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min), C%SMB_IMAUITM_inv_C_refr_max)
+              SMB%C_refr_inv( vi) = new_val
+            END IF
+
+          END IF ! else the fit is already improving for some other reason, so leave it alone
+
+        ! END IF ! else the difference is within the specified tolerance, so leave it alone
+
+      END IF ! else the model does not have ice there, so leave it alone
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE SMB_IMAUITM_inversion
 
 ! == Some generally useful tools
 ! ==============================

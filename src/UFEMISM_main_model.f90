@@ -39,7 +39,7 @@ MODULE UFEMISM_main_model
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
   USE climate_module,                      ONLY: initialise_climate_model_regional,       remap_climate_model,  run_climate_model
   USE ocean_module,                        ONLY: initialise_ocean_model_regional,         remap_ocean_model,    run_ocean_model
-  USE SMB_module,                          ONLY: initialise_SMB_model,                    remap_SMB_model,      run_SMB_model
+  USE SMB_module,                          ONLY: initialise_SMB_model,                    remap_SMB_model,      run_SMB_model,      SMB_IMAUITM_inversion
   USE BMB_module,                          ONLY: initialise_BMB_model,                    remap_BMB_model,      run_BMB_model
   USE isotopes_module,                     ONLY: initialise_isotopes_model,               remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
@@ -199,6 +199,15 @@ CONTAINS
       IF (C%do_basal_sliding_inversion) THEN
         IF (region%do_basal) THEN
           CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
+        END IF
+      END IF
+
+      ! == SBM IMAU-ITM inversion
+      ! =========================
+
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        IF (region%do_SMB_inv) THEN
+          CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%SMB, region%refgeo_PD)
         END IF
       END IF
 
@@ -408,6 +417,8 @@ CONTAINS
       region%t_next_SMB     = region%time
       region%t_next_BMB     = region%time
       region%t_next_ELRA    = region%time
+      region%t_next_basal   = region%time
+      region%t_next_SMB_inv = region%time
 
       region%do_SIA         = .TRUE.
       region%do_SSA         = .TRUE.
@@ -419,6 +430,7 @@ CONTAINS
       region%do_BMB         = .TRUE.
       region%do_ELRA        = .TRUE.
       region%do_basal       = .TRUE.
+      region%do_SMB_inv     = .TRUE.
 
     END IF ! (.NOT. region%time == C%start_time_of_run)
 
@@ -715,9 +727,13 @@ CONTAINS
     CALL allocate_shared_dp_0D(   region%t_next_ELRA,      region%wt_next_ELRA     )
     CALL allocate_shared_bool_0D( region%do_ELRA,          region%wdo_ELRA         )
 
-    CALL allocate_shared_dp_0D(   region%t_last_basal,      region%wt_last_basal   )
-    CALL allocate_shared_dp_0D(   region%t_next_basal,      region%wt_next_basal   )
-    CALL allocate_shared_bool_0D( region%do_basal,          region%wdo_basal       )
+    CALL allocate_shared_dp_0D(   region%t_last_basal,     region%wt_last_basal    )
+    CALL allocate_shared_dp_0D(   region%t_next_basal,     region%wt_next_basal    )
+    CALL allocate_shared_bool_0D( region%do_basal,         region%wdo_basal        )
+
+    CALL allocate_shared_dp_0D(   region%t_last_SMB_inv,   region%wt_last_SMB_inv  )
+    CALL allocate_shared_dp_0D(   region%t_next_SMB_inv,   region%wt_next_SMB_inv  )
+    CALL allocate_shared_bool_0D( region%do_SMB_inv,       region%wdo_SMB_inv      )
 
     CALL allocate_shared_dp_0D(   region%t_last_output,    region%wt_last_output   )
     CALL allocate_shared_dp_0D(   region%t_next_output,    region%wt_next_output   )
@@ -776,6 +792,10 @@ CONTAINS
       region%t_next_basal   = C%start_time_of_run + C%dt_basal
       region%do_basal       = .FALSE.
 
+      region%t_last_SMB_inv   = C%start_time_of_run
+      region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv
+      region%do_SMB_inv       = .FALSE.
+
       region%t_last_output  = C%start_time_of_run
       region%t_next_output  = C%start_time_of_run
       region%do_output      = .TRUE.
@@ -818,7 +838,7 @@ CONTAINS
     CALL allocate_shared_dp_0D( region%tcomp_mesh                   , region%wtcomp_mesh                   )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 68)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 71)
 
   END SUBROUTINE allocate_region_timers_and_scalars
 

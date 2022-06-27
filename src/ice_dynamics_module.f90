@@ -840,6 +840,14 @@ CONTAINS
       END IF
       t_next = MIN( t_next, region%t_next_basal)
 
+      region%do_SMB_inv = .FALSE.
+      IF (region%time == region%t_next_SMB_inv) THEN
+        region%do_SMB_inv       = .TRUE.
+        region%t_last_SMB_inv   = region%time
+        region%t_next_SMB_inv   = region%t_last_SMB_inv + C%dt_SMB_inv
+      END IF
+      t_next = MIN( t_next, region%t_next_SMB_inv)
+
       region%do_output  = .FALSE.
       IF (region%time == region%t_next_output) THEN
         region%do_output      = .TRUE.

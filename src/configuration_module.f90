@@ -67,7 +67,8 @@ MODULE configuration_module
     REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
     REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
-    REAL(dp)            :: dt_basal_config                             = 1._dp                            ! Time step (in years) for calling the iterative inversion of basal roughness
+    REAL(dp)            :: dt_basal_config                             = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
+    REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! == Which ice sheets do we simulate?
   ! ===================================
@@ -562,6 +563,18 @@ MODULE configuration_module
     REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
     REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp
 
+    ! IMAU-ITM SMB model inversion
+    LOGICAL             :: do_SMB_IMAUITM_inversion_config             = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+    REAL(dp)            :: SMB_IMAUITM_inv_scale_config                = 10000._dp                        ! Scaling constant for inversion procedure [m]
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_min_config   = -50._dp                          ! Minimum value of C_abl_constant allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_max_config   = 0._dp                            ! Maximum value of C_abl_constant allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Ts_min_config         = 0._dp                            ! Minimum value of C_abl_Ts       allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Ts_max_config         = 50._dp                           ! Maximum value of C_abl_Ts       allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Q_min_config          = 0._dp                            ! Minimum value of C_abl_Q        allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_abl_Q_max_config          = 1.0_dp                           ! Maximum value of C_abl_Q        allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_refr_min_config           = 0._dp                            ! Minimum value of C_refr         allowed during inversion
+    REAL(dp)            :: SMB_IMAUITM_inv_C_refr_max_config           = 0.1_dp                           ! Maximum value of C_refr         allowed during inversion
+
   ! == Basal mass balance
   ! =====================
 
@@ -792,6 +805,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
     REAL(dp)                            :: dt_basal
+    REAL(dp)                            :: dt_SMB_inv
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -1249,6 +1263,18 @@ MODULE configuration_module
     REAL(dp)                            :: SMB_IMAUITM_C_refr_EAS
     REAL(dp)                            :: SMB_IMAUITM_C_refr_GRL
     REAL(dp)                            :: SMB_IMAUITM_C_refr_ANT
+
+    ! IMAU-ITM SMB model inversion
+    LOGICAL                             :: do_SMB_IMAUITM_inversion
+    REAL(dp)                            :: SMB_IMAUITM_inv_scale
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_min
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_max
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Ts_min
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Ts_max
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Q_min
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_Q_max
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_min
+    REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_max
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================
@@ -1755,6 +1781,7 @@ CONTAINS
                      dt_bedrock_ELRA_config,                          &
                      dt_SELEN_config,                                 &
                      dt_basal_config,                                 &
+                     dt_SMB_inv_config,                               &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
@@ -2061,6 +2088,16 @@ CONTAINS
                      SMB_IMAUITM_C_refr_EAS_config,                   &
                      SMB_IMAUITM_C_refr_GRL_config,                   &
                      SMB_IMAUITM_C_refr_ANT_config,                   &
+                     do_SMB_IMAUITM_inversion_config,                 &
+                     SMB_IMAUITM_inv_scale_config,                    &
+                     SMB_IMAUITM_inv_C_abl_constant_min_config,       &
+                     SMB_IMAUITM_inv_C_abl_constant_max_config,       &
+                     SMB_IMAUITM_inv_C_abl_Ts_min_config,             &
+                     SMB_IMAUITM_inv_C_abl_Ts_max_config,             &
+                     SMB_IMAUITM_inv_C_abl_Q_min_config,              &
+                     SMB_IMAUITM_inv_C_abl_Q_max_config,              &
+                     SMB_IMAUITM_inv_C_refr_min_config,               &
+                     SMB_IMAUITM_inv_C_refr_max_config,               &
                      choice_BMB_shelf_model_config,                   &
                      choice_idealised_BMB_shelf_config,               &
                      choice_BMB_sheet_model_config,                   &
@@ -2261,6 +2298,7 @@ CONTAINS
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
     C%dt_basal                                 = dt_basal_config
+    C%dt_SMB_inv                               = dt_SMB_inv_config
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -2717,6 +2755,18 @@ CONTAINS
     C%SMB_IMAUITM_C_refr_EAS                   = SMB_IMAUITM_C_refr_EAS_config
     C%SMB_IMAUITM_C_refr_GRL                   = SMB_IMAUITM_C_refr_GRL_config
     C%SMB_IMAUITM_C_refr_ANT                   = SMB_IMAUITM_C_refr_ANT_config
+
+    ! IMAU-ITM SMB model inversion
+    C%do_SMB_IMAUITM_inversion                 = do_SMB_IMAUITM_inversion_config
+    C%SMB_IMAUITM_inv_scale                    = SMB_IMAUITM_inv_scale_config
+    C%SMB_IMAUITM_inv_C_abl_constant_min       = SMB_IMAUITM_inv_C_abl_constant_min_config
+    C%SMB_IMAUITM_inv_C_abl_constant_max       = SMB_IMAUITM_inv_C_abl_constant_max_config
+    C%SMB_IMAUITM_inv_C_abl_Ts_min             = SMB_IMAUITM_inv_C_abl_Ts_min_config
+    C%SMB_IMAUITM_inv_C_abl_Ts_max             = SMB_IMAUITM_inv_C_abl_Ts_max_config
+    C%SMB_IMAUITM_inv_C_abl_Q_min              = SMB_IMAUITM_inv_C_abl_Q_min_config
+    C%SMB_IMAUITM_inv_C_abl_Q_max              = SMB_IMAUITM_inv_C_abl_Q_max_config
+    C%SMB_IMAUITM_inv_C_refr_min               = SMB_IMAUITM_inv_C_refr_min_config
+    C%SMB_IMAUITM_inv_C_refr_max               = SMB_IMAUITM_inv_C_refr_max_config
 
     ! Basal mass balance - sub-shelf melt
     ! ===================================

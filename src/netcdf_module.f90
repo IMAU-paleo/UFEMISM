@@ -784,6 +784,14 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%FirnDepth, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%FirnDepth,2)/12._dp, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_constant_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_Ts_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_Q_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_refr_inv, start=(/1,  netcdf%ti /) ))
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -1373,6 +1381,14 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [vi, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [vi,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [vi,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -1788,6 +1804,14 @@ CONTAINS
         dp_2D_a( vi) = SUM( region%SMB%FirnDepth( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_constant_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Ts_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Q_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_refr_inv, id_var, netcdf%ti)
 
     ! Masks
     ! NOTE: not meant to be included, as mapping masks between grids is meaningless. These lines are needed so the model can output
@@ -2253,6 +2277,14 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [x, y, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [x, y,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [x, y,    t], id_var, long_name='Inverted IMAU-ITM parameter', units='-')
 
     ! NOTE: masks commented out; mapping masks between grids is meaningless
 

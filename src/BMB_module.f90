@@ -65,7 +65,7 @@ CONTAINS
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
 
     ! Initialise BMB over ice shelves
-    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
       DO vi = mesh%vi1, mesh%vi2
         IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
            BMB%BMB_shelf = 0._dp
@@ -96,8 +96,8 @@ CONTAINS
       CALL run_BMB_model_PICO(                 mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
-    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      CALL run_BMB_model_melt_inv(             mesh, ice, BMB, refgeo)
+    ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL run_BMB_model_shelf_inversion(             mesh, ice, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -147,7 +147,7 @@ CONTAINS
       END IF
 
       ! Add sub-shelf melt rates
-      IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+      IF (C%choice_BMB_shelf_model == 'inversion') THEN
         ! For the inversion of melt rates, add inverted rates everywhere. BMB_shelf
         ! can be non-zero only at points where the model OR the reference data is
         ! shelf or ocean (this helps to account for 'unwanted' grounding line advance
@@ -215,7 +215,7 @@ CONTAINS
     ! Shelf
     IF     (C%choice_BMB_shelf_model == 'uniform' .OR. &
             C%choice_BMB_shelf_model == 'idealised' .OR. &
-            C%choice_BMB_shelf_model == 'melt_inv') THEN
+            C%choice_BMB_shelf_model == 'inversion') THEN
       ! Nothing else needs to be done
     ELSEIF (C%choice_BMB_shelf_model == 'ANICE_legacy') THEN
       CALL initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
@@ -2254,7 +2254,7 @@ CONTAINS
 ! ===== Inversion of ice shelf basal melt rates =====
 ! ===================================================
 
-  SUBROUTINE run_BMB_model_melt_inv( mesh, ice, BMB, refgeo)
+  SUBROUTINE run_BMB_model_shelf_inversion( mesh, ice, BMB, refgeo)
     ! Invert basal melt using the reference topography
 
     IMPLICIT NONE
@@ -2266,7 +2266,7 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_melt_inv'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_shelf_inversion'
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_delta, h_scale
 
@@ -2312,7 +2312,7 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE run_BMB_model_melt_inv
+  END SUBROUTINE run_BMB_model_shelf_inversion
 
 ! ===== Some generally useful tools =====
 ! =======================================
@@ -2585,7 +2585,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
 
     ! Exception for iterative inversion of ice shelf basal melt rates, to avoid resetting it.
-    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%BMB_shelf, BMB%wBMB_shelf, 'cons_2nd_order')
     ELSE
       CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
@@ -2663,7 +2663,7 @@ CONTAINS
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_p,                 BMB%wPICO_p )
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_m,                 BMB%wPICO_m )
 
-    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+    ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
 
       ! Nothing else needs to be done for now. Main stuff was done at the start of this routine.
 

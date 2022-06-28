@@ -897,7 +897,7 @@ CONTAINS
       IF (ice%mask_ice_a( vi) == 1 .OR. refgeo%Hi( vi) > 0._dp) THEN
 
         ! Exception for floating ice when inverting for basal melt rates
-        IF (ice%mask_shelf_a( vi) == 1 .AND. C%choice_BMB_shelf_model == 'melt_inv') THEN
+        IF (ice%mask_shelf_a( vi) == 1 .AND. C%choice_BMB_shelf_model == 'inversion') THEN
           ! Skip to next vertex and let the BMB inversion do the job
           CYCLE
         END IF

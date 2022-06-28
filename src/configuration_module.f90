@@ -540,12 +540,14 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_direct_regional_SMB_GRL_config     = ''
     CHARACTER(LEN=256)  :: filename_direct_regional_SMB_ANT_config     = ''
 
-    ! Tuning parameters for the IMAU-ITM SMB model
+    ! Firn layer
     CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_NAM_config     = 'uniform'                        ! How to initialise the firn layer in the IMAU-ITM SMB model: "uniform", "restart"
     CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_EAS_config     = 'uniform'
     CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_GRL_config     = 'uniform'
     CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
     REAL(dp)            :: SMB_IMAUITM_initial_firn_thickness_config   = 1._dp                            ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
+
+    ! IMAU-ITM SMB model parameters
     REAL(dp)            :: SMB_IMAUITM_C_abl_constant_NAM_config       = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
     REAL(dp)            :: SMB_IMAUITM_C_abl_constant_EAS_config       = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
     REAL(dp)            :: SMB_IMAUITM_C_abl_constant_GRL_config       = -49._dp                          !            they used to in ANICE.)
@@ -578,7 +580,7 @@ MODULE configuration_module
   ! == Basal mass balance
   ! =====================
 
-    CHARACTER(LEN=256)  :: choice_BMB_shelf_model_config               = 'ANICE_legacy'                   ! Choice of shelf BMB: "uniform", "idealised", "ANICE_legacy", "Favier2019_lin", "Favier2019_quad", "Favier2019_Mplus", "Lazeroms2018_plume", "PICO", "PICOP"
+    CHARACTER(LEN=256)  :: choice_BMB_shelf_model_config               = 'Favier2019_quad'                ! Choice of shelf BMB: "uniform", "idealised", "ANICE_legacy", "Favier2019_lin", "Favier2019_quad", "Favier2019_Mplus", "Lazeroms2018_plume", "PICO", "PICOP", 'inversion'
     CHARACTER(LEN=256)  :: choice_idealised_BMB_shelf_config           = 'MISMIP+'
     CHARACTER(LEN=256)  :: choice_BMB_sheet_model_config               = 'uniform'                        ! Choice of sheet BMB: "uniform"
     REAL(dp)            :: BMB_shelf_uniform_config                    = 0._dp                            ! Uniform shelf BMB, applied when choice_BMB_shelf_model = "uniform" [mie/yr]

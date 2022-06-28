@@ -60,15 +60,15 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Initialise total and grounded BMB
+    ! Re-initialise total and grounded BMB
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
 
-    ! Initialise BMB over ice shelves
+    ! Re-initialise BMB over ice shelves
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       DO vi = mesh%vi1, mesh%vi2
         IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
-           BMB%BMB_shelf = 0._dp
+           BMB%BMB_shelf( vi) = 0._dp
         END IF
       END DO
     ELSE

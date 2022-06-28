@@ -893,101 +893,107 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Invert only where the model has ice
-      IF (ice%mask_ice_a( vi) == 1) THEN
+      ! Invert only where the model or the reference topo has ice
+      IF (ice%mask_ice_a( vi) == 1 .OR. refgeo%Hi( vi) > 0._dp) THEN
 
-          ! Compute ice thickness difference
-          h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-          ! To what fraction of the ice thickness this difference corresponds
-          h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
-          ! Scale down the difference to the range [-1.5, 1.5] (in the style of Pollard & DeConto 2012)
-          h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+        ! Exception for floating ice when inverting for basal melt rates
+        IF (ice%mask_shelf_a( vi) == 1 .AND. C%choice_BMB_shelf_model == 'melt_inv') THEN
+          ! Skip to next vertex and let the BMB inversion do the job
+          CYCLE
+        END IF
 
-          ! Further adjust only where the current value is not improving the result
-          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+        ! Compute ice thickness difference
+        h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+        ! To what fraction of the ice thickness this difference corresponds
+        h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
+        ! Scale down the difference to the range [-1.5, 1.5] (in the style of Pollard & DeConto 2012)
+        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+        ! Further adjust only where the current value is not improving the result
+        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
                (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
-            ! NOTE: For some reason, the values for the C_abl_constant parameter are negative
-            ! for more melting and positive for less (final total melt never negative tho). This
-            ! is in contrast to the other parameters, which use positve values to have a stronger
-            ! melting (or refreezin) effect. Thus, pay attention to the sign of the adjustment.
+          ! NOTE: For some reason, the values for the C_abl_constant parameter are negative
+          ! for more melting and positive for less (final total melt never negative tho). This
+          ! is in contrast to the other parameters, which use positve values to have a stronger
+          ! melting (or refreezin) effect. Thus, pay attention to the sign of the adjustment.
 
-            ! == Constant ablation
-            ! ====================
+          ! == Constant ablation
+          ! ====================
 
-            ! If any month has temperatures above or close enough to melting point
-            IF ( ANY(climate%T2m(vi,:) - T0 > -5._dp) ) THEN
+          ! If any month has temperatures above or close enough to melting point
+          IF ( ANY(climate%T2m(vi,:) - T0 > -5._dp) ) THEN
 
-              ! Adjust parameter
-              IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
-                ! Get value to be adjusted
-                new_val = SMB%C_abl_constant_inv( vi)
-                ! Adjust value based on ice thickness difference (note the negative sign here)
-                new_val = new_val - 1.72476_dp * TAN(h_delta)
-                ! Limit adjusted value
-                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_constant_min)
-                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_constant_max)
-                ! Assign adjusted value to the SMB parameter
-                SMB%C_abl_constant_inv( vi) = new_val
-              END IF
+            ! Adjust parameter
+            IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
+              ! Get value to be adjusted
+              new_val = SMB%C_abl_constant_inv( vi)
+              ! Adjust value based on ice thickness difference (note the negative sign here)
+              new_val = new_val - 1.72476_dp * TAN(h_delta)
+              ! Limit adjusted value
+              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_constant_min)
+              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_constant_max)
+              ! Assign adjusted value to the SMB parameter
+              SMB%C_abl_constant_inv( vi) = new_val
+            END IF
 
-            END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
+          END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
 
-            ! == Temperature-based ablation
-            ! =============================
+          ! == Temperature-based ablation
+          ! =============================
 
-            ! If any month has melting temperatures
-            IF ( ANY(climate%T2m(vi,:) - T0 > 0._dp) ) THEN
+          ! If any month has melting temperatures
+          IF ( ANY(climate%T2m(vi,:) - T0 > 0._dp) ) THEN
 
-              ! Adjust parameter
-              IF (C%SMB_IMAUITM_inv_C_abl_Ts_min /= C%SMB_IMAUITM_inv_C_abl_Ts_max) THEN
-                new_val = SMB%C_abl_Ts_inv( vi)
-                new_val = new_val + 1.72476_dp * TAN(h_delta) ! Note the positive sign here
-                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_min)
-                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_max)
+            ! Adjust parameter
+            IF (C%SMB_IMAUITM_inv_C_abl_Ts_min /= C%SMB_IMAUITM_inv_C_abl_Ts_max) THEN
+              new_val = SMB%C_abl_Ts_inv( vi)
+              new_val = new_val + 1.72476_dp * TAN(h_delta) ! Note the positive sign here
+              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_min)
+              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Ts_max)
 
-                SMB%C_abl_Ts_inv( vi) = new_val
-              END IF
+              SMB%C_abl_Ts_inv( vi) = new_val
+            END IF
 
-            END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
+          END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
 
-            ! == Insolation-based ablation
-            ! ============================
+          ! == Insolation-based ablation
+          ! ============================
 
-            ! If any month has less than maximum albedo
-            IF ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) ) THEN
+          ! If any month has less than maximum albedo
+          IF ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) ) THEN
 
-              ! Adjust parameter
-              IF (C%SMB_IMAUITM_inv_C_abl_Q_min /= C%SMB_IMAUITM_inv_C_abl_Q_max) THEN
-                new_val = SMB%C_abl_Q_inv( vi)
-                new_val = new_val + 0.01724_dp * TAN(h_delta) ! Note the positive sign here
-                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Q_min)
-                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Q_max)
+            ! Adjust parameter
+            IF (C%SMB_IMAUITM_inv_C_abl_Q_min /= C%SMB_IMAUITM_inv_C_abl_Q_max) THEN
+              new_val = SMB%C_abl_Q_inv( vi)
+              new_val = new_val + 0.01724_dp * TAN(h_delta) ! Note the positive sign here
+              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_abl_Q_min)
+              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_abl_Q_max)
 
-                SMB%C_abl_Q_inv( vi) = new_val
-              END IF
+              SMB%C_abl_Q_inv( vi) = new_val
+            END IF
 
-            END IF ! ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) )
+          END IF ! ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) )
 
-            ! == Refreezing
-            ! =============
+          ! == Refreezing
+          ! =============
 
-            ! If any month has freezing temperatures
-            IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ) THEN
+          ! If any month has freezing temperatures
+          IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ) THEN
 
-              ! Adjust parameter
-              IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
-                new_val = SMB%C_refr_inv( vi)
-                new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
-                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
-                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
+            ! Adjust parameter
+            IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
+              new_val = SMB%C_refr_inv( vi)
+              new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
+              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
+              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
 
-                SMB%C_refr_inv( vi) = new_val
-              END IF
+              SMB%C_refr_inv( vi) = new_val
+            END IF
 
-            END IF ! ( ANY(climate%T2m(vi,:) - T0 < 0._dp) )
+          END IF ! ( ANY(climate%T2m(vi,:) - T0 < 0._dp) )
 
-          END IF ! else the fit is already improving for some other reason, so leave it alone
+        END IF ! else the fit is already improving for some other reason, so leave it alone
 
       END IF ! else the model does not have ice there, so leave it alone
 

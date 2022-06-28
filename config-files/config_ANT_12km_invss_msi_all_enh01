@@ -6,32 +6,32 @@
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
   end_time_of_run_config                      = 100000.0                         ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
-  dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
-  dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
+  dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
+  dt_thermo_config                            = 1.0                              ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
-  dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
-  dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
-  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
+  dt_SMB_config                               = 1.0                              ! Time step (in years) for updating the SMB
+  dt_BMB_config                               = 1.0                              ! Time step (in years) for updating the BMB
+  dt_output_config                            = 100.0                            ! Time step (in years) for writing output
   dt_mesh_min_config                          = 50.0                             ! Minimum amount of time (in years) between mesh updates
   dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
-  dt_basal_config                             = 10.0                             ! Time step (in years) for calling the iterative inversion of basal roughness
-  dt_SMB_inv_config                           = 20.0                             ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
+  dt_basal_config                             = 1.0                              ! Time step (in years) for calling the iterative inversion of basal roughness
+  dt_SMB_inv_config                           = 1.0                              ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! Which ice sheets do we simulate?
   ! ================================
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_GRL_config                               = .FALSE.                          ! Greenland
+  do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
 
-  create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_GRL_15km_invss_msi_ablq'! If not, create a directory with this name instead (stops the program if this directory already exists)
+  create_procedural_output_dir_config         = .FALSE.                           ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+  fixed_output_dir_config                     = 'results_ANT_12km_invss_msi_all_enh01' ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -42,15 +42,15 @@
   ! Mesh generation parameters
   ! ==========================
 
-  nconmax_config                              = 16                               ! Maximum number of vertex connections
+  nconmax_config                              = 32                               ! Maximum number of vertex connections
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
-  res_max_config                              = 80.0                             ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 15.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 80.0                             !                                 grounding line        [km]
-  res_max_cf_config                           = 80.0                             !                                 calving front         [km]
-  res_max_mountain_config                     = 80.0                             !                                 mountains             [km]
-  res_max_coast_config                        = 80.0                             !                                 coastline             [km]
+  res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
+  res_max_margin_config                       = 12.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 12.0                             !                                 grounding line        [km]
+  res_max_cf_config                           = 12.0                             !                                 calving front         [km]
+  res_max_mountain_config                     = 200.0                            !                                 mountains             [km]
+  res_max_coast_config                        = 200.0                            !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.95                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
 
   ! Resolutions of the different square grids
@@ -124,8 +124,8 @@
   ! =======================
 
   choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
-  m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
-  m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice
+  m_enh_sheet_config                          = 0.1                              ! Ice flow enhancement factor for grounded ice
+  m_enh_shelf_config                          = 0.1                              ! Ice flow enhancement factor for floating ice
 
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
@@ -148,7 +148,7 @@
   ! Basal roughness / friction
   choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 45.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
   slid_Tsai2015_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in the Tsai2015 sliding law
   slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
@@ -167,12 +167,12 @@
   basal_sliding_inv_scale_config              = 5000.0                           ! Scaling constant for inversion procedure [m]
   basal_sliding_inv_rsmooth_config            = 1000.0                           ! Smoothing radius for inversion procedure [m]
   basal_sliding_inv_wsmooth_config            = 0.01                             ! Weight given to the smoothed roughness (1 = full smoothing applied)
-  basal_sliding_inv_phi_min_config            = 1.0                              ! Minimum value of phi_fric allowed during inversion
+  basal_sliding_inv_phi_min_config            = 2.0                              ! Minimum value of phi_fric allowed during inversion
   basal_sliding_inv_phi_max_config            = 45.0                             ! Maximum value of phi_fric allowed during inversion
   basal_sliding_inv_tol_diff_config           = 100.0                            ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
   basal_sliding_inv_tol_frac_config           = 1.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
 
-  ! == Ice dynamics - calving
+  ! Ice dynamics - calving
   ! =========================
 
     choice_calving_law_config                 = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
@@ -243,6 +243,8 @@
   SMB_IMAUITM_choice_init_firn_GRL_config     = 'uniform'
   SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
   SMB_IMAUITM_initial_firn_thickness_config   = 1.0                              ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
+
+  ! IMAU-ITM SMB model parameters
   SMB_IMAUITM_C_abl_constant_NAM_config       = 0.0                              ! 34.0      (commented values are old ANICE defaults, but since refreezing
   SMB_IMAUITM_C_abl_constant_EAS_config       = 0.0                              !           was not calculated right and this has since been fixed, these
   SMB_IMAUITM_C_abl_constant_GRL_config       = 0.0                              !           values will still not give the same results as they used to
@@ -262,15 +264,15 @@
 
   ! IMAU-ITM SMB model inversion
   do_SMB_IMAUITM_inversion_config             = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-  SMB_IMAUITM_inv_scale_config                = 50000.0                          ! Scaling constant for inversion procedure [m]
-  SMB_IMAUITM_inv_C_abl_constant_min_config   = 0.0                              ! Minimum value of C_abl_constant allowed during inversion
+  SMB_IMAUITM_inv_scale_config                = 5000.0                           ! Scaling constant for inversion procedure [m]
+  SMB_IMAUITM_inv_C_abl_constant_min_config   = -100.0                           ! Minimum value of C_abl_constant allowed during inversion
   SMB_IMAUITM_inv_C_abl_constant_max_config   = 0.0                              ! Maximum value of C_abl_constant allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Ts_min_config         = 0.0                              ! Minimum value of C_abl_Ts       allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 0.0                              ! Maximum value of C_abl_Ts       allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Q_min_config          = 0.0                              ! Minimum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Q_max_config          = 10.0                             ! Maximum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_refr_min_config           = 0.0                              ! Minimum value of C_refr         allowed during inversion
-  SMB_IMAUITM_inv_C_refr_max_config           = 0.0                              ! Maximum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Ts_min_config         = 5.0                              ! Minimum value of C_abl_Ts       allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 15.0                             ! Maximum value of C_abl_Ts       allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Q_min_config          = 0.01                             ! Minimum value of C_abl_Q        allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Q_max_config          = 0.03                             ! Maximum value of C_abl_Q        allowed during inversion
+  SMB_IMAUITM_inv_C_refr_min_config           = 0.01                             ! Minimum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_refr_max_config           = 0.1                              ! Maximum value of C_refr         allowed during inversion
 
   ! Basal mass balance
   ! ==================

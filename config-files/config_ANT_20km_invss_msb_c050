@@ -31,7 +31,7 @@
   ! =======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_ANT_20km_invss_cxxr'    ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_ANT_20km_invss_msb_c050'! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -176,7 +176,7 @@
   ! =========================
 
     choice_calving_law_config                 = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
-    calving_threshold_thickness_config        = 200.0                            ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
+    calving_threshold_thickness_config        = 50.0                             ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
     max_calving_rounds_config                 = 10                               ! Maximum number of calving loops during chain reaction
     do_remove_shelves_config                  = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
     remove_shelves_larger_than_PD_config      = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
@@ -265,14 +265,14 @@
   ! IMAU-ITM SMB model inversion
   do_SMB_IMAUITM_inversion_config             = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
   SMB_IMAUITM_inv_scale_config                = 5000.0                           ! Scaling constant for inversion procedure [m]
-  SMB_IMAUITM_inv_C_abl_constant_min_config   = -100.0                           ! Minimum value of C_abl_constant allowed during inversion
-  SMB_IMAUITM_inv_C_abl_constant_max_config   = 0.0                              ! Maximum value of C_abl_constant allowed during inversion
+  SMB_IMAUITM_inv_C_abl_constant_min_config   = 0.0                              ! Minimum value of C_abl_constant allowed during inversion
+  SMB_IMAUITM_inv_C_abl_constant_max_config   = 100.0                            ! Maximum value of C_abl_constant allowed during inversion
   SMB_IMAUITM_inv_C_abl_Ts_min_config         = 0.0                              ! Minimum value of C_abl_Ts       allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 0.0                              ! Maximum value of C_abl_Ts       allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Ts_max_config         = 100.0                            ! Maximum value of C_abl_Ts       allowed during inversion
   SMB_IMAUITM_inv_C_abl_Q_min_config          = 0.0                              ! Minimum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_abl_Q_max_config          = 0.0                              ! Maximum value of C_abl_Q        allowed during inversion
-  SMB_IMAUITM_inv_C_refr_min_config           = 0.01                             ! Minimum value of C_refr         allowed during inversion
-  SMB_IMAUITM_inv_C_refr_max_config           = 0.1                              ! Maximum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_abl_Q_max_config          = 10.0                             ! Maximum value of C_abl_Q        allowed during inversion
+  SMB_IMAUITM_inv_C_refr_min_config           = 0.0                              ! Minimum value of C_refr         allowed during inversion
+  SMB_IMAUITM_inv_C_refr_max_config           = 10.0                             ! Maximum value of C_refr         allowed during inversion
 
   ! Basal mass balance
   ! ==================

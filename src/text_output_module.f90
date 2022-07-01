@@ -274,6 +274,7 @@ CONTAINS
     ! General output
     ! ==============
 
+    ! Initialise output scalars
     T2m_mean                   = 0._dp
     total_snowfall             = 0._dp
     total_rainfall             = 0._dp
@@ -285,12 +286,18 @@ CONTAINS
     total_MB                   = 0._dp
     total_MB_eff               = 0._dp
 
+    ! Compute over whole domain
     DO vi = 1, region%mesh%nV
 
+      ! Only consider vertices with ice
       IF (region%ice%mask_ice_a( vi) == 1) THEN
 
-        total_BMB = total_BMB + (region%BMB%BMB( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp) ! m^3 ice eq. -> m^3 water eq. -> Gt
+        ! BMB contribution
+        IF (region%ice%mask_cf_a( vi) == 0) THEN ! Here, exclude the calving front (otherwise values explode when using the inversion of melt rates)
+          total_BMB = total_BMB + (region%BMB%BMB( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp) ! m^3 ice eq. -> m^3 water eq. -> Gt
+        END IF
 
+        ! Monthly SMB contributions
         DO m = 1, 12
           total_snowfall   = total_snowfall   + (region%SMB%Snowfall(   vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
           total_rainfall   = total_rainfall   + (region%SMB%Rainfall(   vi,m) * region%mesh%A( vi) / 1E9_dp) ! Already in water equivalent
@@ -300,16 +307,20 @@ CONTAINS
           total_SMB        = total_SMB        + (region%SMB%SMB(        vi,m) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp)
         END DO
 
+        ! "Effective" change in mass of the ice sheet (derived from the total ice thickness change rate)
         total_MB_eff = total_MB_eff + region%ice%dHi_dt_a( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp
 
       END IF
 
+      ! Mean near-surface air temperature over the whole domain
       T2m_mean = T2m_mean + SUM(region%climate_matrix%applied%T2m( vi,:)) * region%mesh%A( vi) &
                             / (12._dp * (region%mesh%xmax - region%mesh%xmin) * (region%mesh%ymax - region%mesh%ymin))
 
     END DO
 
+    ! Total change of mass
     total_MB = total_SMB + total_BMB
+    ! Turn mean temperature into Celsius
     T2m_mean = T2m_mean - 273.15_dp
 
     ! Average x-position of grounding line

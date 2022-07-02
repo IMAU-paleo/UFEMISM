@@ -893,8 +893,15 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Invert only where the model or the reference topo has ice
-      IF (ice%mask_ice_a( vi) == 1 .OR. refgeo%Hi( vi) > 0._dp) THEN
+      ! Compute ice thickness difference
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      ! To what fraction of the ice thickness this difference corresponds
+      h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
+      ! Scale down the difference to the range [-1.5, 1.5] (a la Pollard & DeConto 2012)
+      h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+      ! Invert only where the model has diverged from the reference
+      IF (ABS(h_delta) > 0._dp) THEN
 
         ! Exception for floating ice when inverting for basal melt rates
         IF (ice%mask_shelf_a( vi) == 1 .AND. C%choice_BMB_shelf_model == 'inversion') THEN
@@ -902,27 +909,21 @@ CONTAINS
           CYCLE
         END IF
 
-        ! Compute ice thickness difference
-        h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
-        ! To what fraction of the ice thickness this difference corresponds
-        h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
-        ! Scale down the difference to the range [-1.5, 1.5] (in the style of Pollard & DeConto 2012)
-        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
-
         ! Further adjust only where the current value is not improving the result
         IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
                (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
 
-          ! NOTE: For some reason, the values for the C_abl_constant parameter are negative
-          ! for more melting and positive for less (final total melt never negative tho). This
-          ! is in contrast to the other parameters, which use positve values to have a stronger
-          ! melting (or refreezin) effect. Thus, pay attention to the sign of the adjustment.
+          ! NOTE: The C_abl_constant parameter is meant to serve as a threshold for melting, in
+          ! the sense that it decreases the total parameter-based melting unformly over the
+          ! entire domain. Only the remaining melt is then applied. That's why in the inversion
+          ! it decreases when the thickness difference is positive, to lower the threshold and
+          ! allow for more melting.
 
           ! == Constant ablation
           ! ====================
 
-          ! If any month has temperatures above or close enough to melting point
-          IF ( ANY(climate%T2m(vi,:) - T0 > -5._dp) ) THEN
+          ! If any month has surface melt
+          IF ( ANY(SMB%Melt(vi,:) > 0._dp) ) THEN
 
             ! Adjust parameter
             IF (C%SMB_IMAUITM_inv_C_abl_constant_min /= C%SMB_IMAUITM_inv_C_abl_constant_max) THEN
@@ -937,7 +938,11 @@ CONTAINS
               SMB%C_abl_constant_inv( vi) = new_val
             END IF
 
-          END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
+          ELSE
+            ! Reset vertex to its minimum allowed value
+            SMB%C_abl_constant_inv( vi) = C%SMB_IMAUITM_inv_C_abl_constant_min
+
+          END IF ! ( ANY(SMB%Melt(vi,:) > 0._dp) )
 
           ! == Temperature-based ablation
           ! =============================
@@ -955,13 +960,18 @@ CONTAINS
               SMB%C_abl_Ts_inv( vi) = new_val
             END IF
 
+          ELSE
+            ! Reset vertex to its minimum allowed value
+            SMB%C_abl_Ts_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Ts_min
+
           END IF ! ( ANY(climate%T2m(vi,:) - T0 > 0._dp) )
 
           ! == Insolation-based ablation
           ! ============================
 
-          ! If any month has less than maximum albedo
-          IF ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) ) THEN
+          ! If any month has less than maximum albedo and not inverted above (Ts_inv)
+          IF ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) .AND. &
+               ALL(climate%T2m(vi,:) - T0 <= 0._dp) ) THEN
 
             ! Adjust parameter
             IF (C%SMB_IMAUITM_inv_C_abl_Q_min /= C%SMB_IMAUITM_inv_C_abl_Q_max) THEN
@@ -973,29 +983,41 @@ CONTAINS
               SMB%C_abl_Q_inv( vi) = new_val
             END IF
 
-          END IF ! ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) )
+          ELSE
+            ! Reset vertex to its minimum allowed value
+            SMB%C_abl_Q_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Q_min
+
+          END IF ! ( ANY(1.0_dp - SMB%Albedo( vi,:) > 0._dp) ...)
 
           ! == Refreezing
           ! =============
 
-          ! If any month has freezing temperatures
-          IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ) THEN
+          ! If any month has freezing temperatures and there is any liquid water to refreeze
+          IF ( ANY(climate%T2m(vi,:) - T0 < 0._dp) .AND. &
+               ANY(SMB%Rainfall( vi,:) + SMB%Melt( vi,:) > 0._dp) ) THEN
 
-            ! Adjust parameter
-            IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
-              new_val = SMB%C_refr_inv( vi)
-              new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
-              new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
-              new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
+              ! Adjust parameter
+              IF (C%SMB_IMAUITM_inv_C_refr_min /= C%SMB_IMAUITM_inv_C_refr_max) THEN
+                new_val = SMB%C_refr_inv( vi)
+                new_val = new_val - 0.01724_dp * TAN(h_delta) ! Note the negative sign here
+                new_val = MAX(new_val, C%SMB_IMAUITM_inv_C_refr_min)
+                new_val = MIN(new_val, C%SMB_IMAUITM_inv_C_refr_max)
 
-              SMB%C_refr_inv( vi) = new_val
-            END IF
+                SMB%C_refr_inv( vi) = new_val
+              END IF
 
-          END IF ! ( ANY(climate%T2m(vi,:) - T0 < 0._dp) )
+          ELSE
+            ! Reset vertex to its minimum allowed value
+            SMB%C_abl_Q_inv( vi) = C%SMB_IMAUITM_inv_C_abl_Q_min
+
+          END IF ! ( ANY(climate%T2m(vi,:) - T0 < 0._dp) ...)
+
+          ! == END
+          ! ======
 
         END IF ! else the fit is already improving for some other reason, so leave it alone
 
-      END IF ! else the model does not have ice there, so leave it alone
+      END IF ! else the model and the reference don't have ice there, so leave it alone
 
     END DO
     CALL sync

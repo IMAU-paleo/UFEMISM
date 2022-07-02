@@ -772,6 +772,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing_year, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'Melt') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Melt, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Melt,2), start=(/1,  netcdf%ti /) ))
     ELSEIF (field_name == 'Runoff') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Runoff, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -1369,6 +1373,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Refreezing',               [vi, m, t], id_var, long_name='Monthly total refreezing', units='m water equivalent')
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL create_double_var( netcdf%ncid, 'Refreezing_year',          [vi,    t], id_var, long_name='Annual total refreezing', units='m water equivalent')
+    ELSEIF (field_name == 'Melt') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt',                     [vi, m, t], id_var, long_name='Monthly total melting', units='m water equivalent')
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt_year',                [vi,    t], id_var, long_name='Annual total melt', units='m water equivalent')
     ELSEIF (field_name == 'Runoff') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff',                   [vi, m, t], id_var, long_name='Monthly total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -1781,6 +1789,13 @@ CONTAINS
     ELSEIF (field_name == 'Refreezing_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
         dp_2D_a( vi) = SUM( region%SMB%Refreezing( vi,:))
+      END DO
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'Melt') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Melt, id_var, netcdf%ti, 12)
+    ELSEIF (field_name == 'Melt_year') THEN
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        dp_2D_a( vi) = SUM( region%SMB%Melt( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Runoff') THEN
@@ -2265,6 +2280,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Refreezing',               [x, y, m, t], id_var, long_name='Monthly total refreezing', units='m water equivalent')
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL create_double_var( netcdf%ncid, 'Refreezing_year',          [x, y,    t], id_var, long_name='Annual total refreezing', units='m water equivalent')
+    ELSEIF (field_name == 'Melt') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt',                     [x, y, m, t], id_var, long_name='Monthly total melt', units='m water equivalent')
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt_year',                [x, y,    t], id_var, long_name='Annual total melt', units='m water equivalent')
     ELSEIF (field_name == 'Runoff') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff',                   [x, y, m, t], id_var, long_name='Monthly total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Runoff_year') THEN

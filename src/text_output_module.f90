@@ -293,7 +293,7 @@ CONTAINS
       IF (region%ice%mask_ice_a( vi) == 1) THEN
 
         ! BMB contribution
-        IF (region%ice%mask_cf_a( vi) == 0) THEN ! Here, exclude the calving front (otherwise values explode when using the inversion of melt rates)
+        IF (region%ice%mask_cf_a( vi) == 0) THEN ! Exclude the calving front (otherwise values explode when using the inversion of melt rates)
           total_BMB = total_BMB + (region%BMB%BMB( vi) * region%mesh%A( vi) * ice_density/1000._dp / 1E9_dp) ! m^3 ice eq. -> m^3 water eq. -> Gt
         END IF
 
@@ -320,7 +320,7 @@ CONTAINS
 
     ! Total change of mass
     total_MB = total_SMB + total_BMB
-    ! Turn mean temperature into Celsius
+    ! Turn mean temperature into degrees Celsius
     T2m_mean = T2m_mean - 273.15_dp
 
     ! Average x-position of grounding line

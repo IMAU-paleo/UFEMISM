@@ -182,6 +182,18 @@ CONTAINS
     deallocate(Hb_a)
     deallocate(SL_a)
 
+    call allgather_array(ice%mask_land_a)
+    call allgather_array(ice%mask_lake_a  )
+    call allgather_array(ice%mask_ocean_a )
+    call allgather_array(ice%mask_ice_a   )
+    call allgather_array(ice%mask_shelf_a )
+    call allgather_array(ice%mask_sheet_a )
+    call allgather_array(ice%mask_coast_a )
+    call allgather_array(ice%mask_margin_a)
+    call allgather_array(ice%mask_gl_a    )
+    call allgather_array(ice%mask_cf_a    )
+    call allgather_array(ice%mask_a       )
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
   

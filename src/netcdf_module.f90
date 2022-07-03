@@ -620,27 +620,27 @@ CONTAINS
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_land') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_land_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_land_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_ocean') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_ocean_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_ocean_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_lake') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_lake_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_lake_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_ice') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_ice_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_ice_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_sheet') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_sheet_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_sheet_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_shelf') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_shelf_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_shelf_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_coast') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_coast_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_coast_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_margin') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_margin_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_margin_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_gl') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_gl_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_gl_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'mask_cf') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_cf_a, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%mask_cf_a(region%mesh%vi1:region%mesh%vi2), region%mesh%nV, start=(/1, netcdf%ti /) )
 
 !    ! Basal conditions
 !    ELSEIF (field_name == 'phi_fric') THEN

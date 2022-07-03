@@ -398,7 +398,6 @@ MODULE mesh_update_module
       RETURN
     END IF
             
-    IF (par%master) THEN
     
   ! Ice margin
   ! ==========
@@ -457,9 +456,6 @@ MODULE mesh_update_module
       
       ice%mask_cf_a = mask_widened
       
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
     ! Finalise routine path
     CALL finalise_routine( routine_name)
   
@@ -679,7 +675,7 @@ MODULE mesh_update_module
     
     fitness = MIN( MIN( MIN( fcoast, fmargin), fgl), fcf)
     
-    !IF (par%master) WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(meshfitness * 100._dp), ' %'
+    !WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(fitness * 100._dp), ' %'
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

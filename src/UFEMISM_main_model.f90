@@ -233,12 +233,12 @@ CONTAINS
       END IF
 
       ! Write scalar text output
-      ! IF (region%do_output .OR. region%do_SMB .OR. region%do_BMB) THEN
+      IF (region%do_output .OR. region%do_SMB .OR. region%do_BMB) THEN
         ! Determine total ice sheet area, volume, and volume-above-flotation,
         CALL calculate_icesheet_volume_and_area( region)
         ! Write to regional text output file
         CALL write_regional_text_output( region)
-      ! END IF
+      END IF
 
       ! == Update initial mesh after first round
       ! ========================================

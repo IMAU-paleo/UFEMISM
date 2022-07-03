@@ -81,19 +81,19 @@ CONTAINS
     
 
     ! Start out with land everywhere, fill in the rest based on input.
-    ice%mask_land_a(   1:mesh%nV) = 1
-    ice%mask_lake_a(   1:mesh%nV) = 0
-    ice%mask_ocean_a(  1:mesh%nV) = 0
-    ice%mask_ice_a(    1:mesh%nV) = 0
-    ice%mask_shelf_a(  1:mesh%nV) = 0
-    ice%mask_sheet_a(  1:mesh%nV) = 0
-    ice%mask_coast_a(  1:mesh%nV) = 0
-    ice%mask_margin_a( 1:mesh%nV) = 0
-    ice%mask_gl_a(     1:mesh%nV) = 0
-    ice%mask_cf_a(     1:mesh%nV) = 0
-    ice%mask_a(        1:mesh%nV) = C%type_land
+    ice%mask_land_a   = 1
+    ice%mask_lake_a   = 0
+    ice%mask_ocean_a  = 0
+    ice%mask_ice_a    = 0
+    ice%mask_shelf_a  = 0
+    ice%mask_sheet_a  = 0
+    ice%mask_coast_a  = 0
+    ice%mask_margin_a = 0
+    ice%mask_gl_a     = 0
+    ice%mask_cf_a     = 0
+    ice%mask_a        = C%type_land
   
-    DO vi = 1, mesh%nV
+    DO vi = mesh%vi1, mesh%vi2
       
       ! Determine ocean (both open and shelf-covered)
       IF (is_floating( Hi_a( vi), Hb_a( vi), SL_a( vi))) THEN
@@ -122,14 +122,15 @@ CONTAINS
     END DO ! DO vi = 1, mesh%nV
   
     ! Determine coast, grounding line and calving front
-    DO vi = 1, mesh%nV
+    DO vi = mesh%vi1, mesh%vi2
     
       IF (ice%mask_land_a( vi) == 1) THEN  
         ! Land bordering ocean equals coastline
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean_a( vc) == 1) THEN
+          ! if neighbour is sea
+          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc))) THEN
             ice%mask_a( vi) = C%type_coast
             ice%mask_coast_a( vi) =  1
           END IF
@@ -141,7 +142,8 @@ CONTAINS
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ice_a( vc) == 0) THEN
+          ! if neighbour has no ice
+          IF (Hi_a( vc) <= 0._dp) THEN
             ice%mask_a( vi) = C%type_margin
             ice%mask_margin_a( vi) =  1
           END IF
@@ -153,7 +155,8 @@ CONTAINS
         
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_shelf_a( vc) == 1) THEN
+          ! if neighbour has ocean and ice
+          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc)) .and. Hi_a( vc) > 0._dp) THEN
             ice%mask_a( vi) = C%type_groundingline
             ice%mask_gl_a( vi) = 1
           END IF
@@ -165,7 +168,8 @@ CONTAINS
         
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C( vi,ci)
-          IF (ice%mask_ocean_a( vc) == 1 .AND. ice%mask_ice_a( vc) == 0) THEN
+          ! if neighbour has ocean and no ice
+          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc)) .and. Hi_a( vc) <= 0._dp) THEN
             ice%mask_a( vi) = C%type_calvingfront
             ice%mask_cf_a( vi) = 1
           END IF

@@ -97,7 +97,7 @@ CONTAINS
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
-      CALL run_BMB_model_shelf_inversion(             mesh, ice, BMB, refgeo)
+      CALL run_BMB_model_shelf_inversion(      mesh, ice, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF

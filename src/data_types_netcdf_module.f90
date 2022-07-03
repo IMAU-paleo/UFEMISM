@@ -140,6 +140,10 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_Ti
     INTEGER :: id_var_FirnDepth
     INTEGER :: id_var_MeltPreviousYear
+    INTEGER :: id_var_C_abl_constant_inv
+    INTEGER :: id_var_C_abl_Ts_inv
+    INTEGER :: id_var_C_abl_Q_inv
+    INTEGER :: id_var_C_refr_inv
 
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
@@ -151,6 +155,10 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_Ti                    = 'Ti                   '
     CHARACTER(LEN=256) :: name_var_FirnDepth             = 'FirnDepth            '
     CHARACTER(LEN=256) :: name_var_MeltPreviousYear      = 'MeltPreviousYear     '
+    CHARACTER(LEN=256) :: name_var_C_abl_constant_inv    = 'C_abl_constant_inv   '
+    CHARACTER(LEN=256) :: name_var_C_abl_Ts_inv          = 'C_abl_Ts_inv         '
+    CHARACTER(LEN=256) :: name_var_C_abl_Q_inv           = 'C_abl_Q_inv          '
+    CHARACTER(LEN=256) :: name_var_C_refr_inv            = 'C_refr_inv           '
 
   END TYPE type_netcdf_restart
 

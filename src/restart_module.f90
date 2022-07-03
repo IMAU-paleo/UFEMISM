@@ -163,21 +163,25 @@ CONTAINS
     CALL sync
 
     ! Allocate memory
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,               region%restart%wHi              )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hb,               region%restart%wHb              )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,               region%restart%wHs              )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%beta_sq,          region%restart%wbeta_sq         )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%phi_fric,         region%restart%wphi_fric        )
-    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,               region%restart%wTi              )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear, region%restart%wMeltPreviousYear)
-    CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,        region%restart%wFirnDepth       )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,                 region%restart%wHi                )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hb,                 region%restart%wHb                )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,                 region%restart%wHs                )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%beta_sq,            region%restart%wbeta_sq           )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%phi_fric,           region%restart%wphi_fric          )
+    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,                 region%restart%wTi                )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear,   region%restart%wMeltPreviousYear  )
+    CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,          region%restart%wFirnDepth         )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_constant_inv, region%restart%wC_abl_constant_inv)
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_Ts_inv,       region%restart%wC_abl_Ts_inv      )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_Q_inv,        region%restart%wC_abl_Q_inv       )
+    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_refr_inv,         region%restart%wC_refr_inv        )
 
     ! Read data from the restart file
     IF (par%master) CALL read_restart_file_init( region%name, region%restart, region%restart%netcdf)
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 8)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 12)
 
   END SUBROUTINE read_init_data_from_restart_file
 

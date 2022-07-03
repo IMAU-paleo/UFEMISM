@@ -567,6 +567,7 @@ MODULE configuration_module
 
     ! IMAU-ITM SMB model inversion
     LOGICAL             :: do_SMB_IMAUITM_inversion_config             = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+    CHARACTER(LEN=256)  :: SMB_IMAUITM_inv_choice_init_C_config        = 'uniform'                        ! How to initialise the C parameters in the IMAU-ITM SMB inversion: "uniform", "restart"
     REAL(dp)            :: SMB_IMAUITM_inv_scale_config                = 10000._dp                        ! Scaling constant for inversion procedure [m]
     REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_min_config   = -50._dp                          ! Minimum value of C_abl_constant allowed during inversion
     REAL(dp)            :: SMB_IMAUITM_inv_C_abl_constant_max_config   = 0._dp                            ! Maximum value of C_abl_constant allowed during inversion
@@ -1268,6 +1269,7 @@ MODULE configuration_module
 
     ! IMAU-ITM SMB model inversion
     LOGICAL                             :: do_SMB_IMAUITM_inversion
+    CHARACTER(LEN=256)                  :: SMB_IMAUITM_inv_choice_init_C
     REAL(dp)                            :: SMB_IMAUITM_inv_scale
     REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_min
     REAL(dp)                            :: SMB_IMAUITM_inv_C_abl_constant_max
@@ -2091,6 +2093,7 @@ CONTAINS
                      SMB_IMAUITM_C_refr_GRL_config,                   &
                      SMB_IMAUITM_C_refr_ANT_config,                   &
                      do_SMB_IMAUITM_inversion_config,                 &
+                     SMB_IMAUITM_inv_choice_init_C_config,            &
                      SMB_IMAUITM_inv_scale_config,                    &
                      SMB_IMAUITM_inv_C_abl_constant_min_config,       &
                      SMB_IMAUITM_inv_C_abl_constant_max_config,       &
@@ -2760,6 +2763,7 @@ CONTAINS
 
     ! IMAU-ITM SMB model inversion
     C%do_SMB_IMAUITM_inversion                 = do_SMB_IMAUITM_inversion_config
+    C%SMB_IMAUITM_inv_choice_init_C            = SMB_IMAUITM_inv_choice_init_C_config
     C%SMB_IMAUITM_inv_scale                    = SMB_IMAUITM_inv_scale_config
     C%SMB_IMAUITM_inv_C_abl_constant_min       = SMB_IMAUITM_inv_C_abl_constant_min_config
     C%SMB_IMAUITM_inv_C_abl_constant_max       = SMB_IMAUITM_inv_C_abl_constant_max_config

@@ -666,26 +666,35 @@ CONTAINS
 
     ! Initialise regional 1-D inversion parameters to specified values
     IF (par%master) THEN
-      IF     (region_name == 'NAM') THEN
-        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_NAM
-        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_NAM
-        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_NAM
-        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_NAM
-      ELSEIF (region_name == 'EAS') THEN
-        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_EAS
-        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_EAS
-        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_EAS
-        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_EAS
-      ELSEIF (region_name == 'GRL') THEN
-        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_GRL
-        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_GRL
-        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_GRL
-        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_GRL
-      ELSEIF (region_name == 'ANT') THEN
-        SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_ANT
-        SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_ANT
-        SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_ANT
-        SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_ANT
+      IF (C%SMB_IMAUITM_inv_choice_init_C == 'uniform') THEN
+        IF     (region_name == 'NAM') THEN
+          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_NAM
+          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_NAM
+          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_NAM
+          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_NAM
+        ELSEIF (region_name == 'EAS') THEN
+          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_EAS
+          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_EAS
+          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_EAS
+          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_EAS
+        ELSEIF (region_name == 'GRL') THEN
+          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_GRL
+          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_GRL
+          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_GRL
+          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_GRL
+        ELSEIF (region_name == 'ANT') THEN
+          SMB%C_abl_constant_inv       = C%SMB_IMAUITM_C_abl_constant_ANT
+          SMB%C_abl_Ts_inv             = C%SMB_IMAUITM_C_abl_Ts_ANT
+          SMB%C_abl_Q_inv              = C%SMB_IMAUITM_C_abl_Q_ANT
+          SMB%C_refr_inv               = C%SMB_IMAUITM_C_refr_ANT
+        END IF
+      ELSEIF (C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
+          SMB%C_abl_constant_inv       = restart%C_abl_constant_inv
+          SMB%C_abl_Ts_inv             = restart%C_abl_Ts_inv
+          SMB%C_abl_Q_inv              = restart%C_abl_Q_inv
+          SMB%C_refr_inv               = restart%C_refr_inv
+      ELSE
+        CALL crash('unknown SMB_IMAUITM_inv_choice_init_C "' // TRIM( C%SMB_IMAUITM_inv_choice_init_C) // '"!')
       END IF
     END IF ! IF (par%master) THEN
     CALL sync

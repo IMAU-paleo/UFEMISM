@@ -1,6 +1,6 @@
 MODULE data_types_module
   ! Contains all the different types for storing data. Put all together in a separate module so that
-  ! all subroutines can use all types without interdependency conflicts, and also to make the 
+  ! all subroutines can use all types without interdependency conflicts, and also to make the
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
 
@@ -1315,7 +1315,11 @@ MODULE data_types_module
     ! SMB
     REAL(dp), DIMENSION(:,:  ), POINTER     :: FirnDepth
     REAL(dp), DIMENSION(:    ), POINTER     :: MeltPreviousYear
-    INTEGER :: wFirnDepth, wMeltPreviousYear
+    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_constant_inv
+    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Ts_inv
+    REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Q_inv
+    REAL(dp), DIMENSION(:    ), POINTER     :: C_refr_inv
+    INTEGER :: wFirnDepth, wMeltPreviousYear, wC_abl_constant_inv, wC_abl_Ts_inv, wC_abl_Q_inv, wC_refr_inv
 
     ! Isotopes
     REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce

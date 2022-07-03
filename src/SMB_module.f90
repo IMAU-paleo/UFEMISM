@@ -909,9 +909,9 @@ CONTAINS
           CYCLE
         END IF
 
-        ! Further adjust only where the current value is not improving the result
-        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
-               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+        ! Further adjust only where the current value is not significantly improving the result
+        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.02_dp) .OR. &
+             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.02_dp) ) THEN
 
           ! NOTE: The C_abl_constant parameter is meant to serve as a threshold for melting, in
           ! the sense that it decreases the total parameter-based melting unformly over the

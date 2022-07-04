@@ -83,8 +83,8 @@ CONTAINS
       IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
         CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)
       END IF
-      region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2 
-    
+      region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+
       ! If required, update the mesh
       IF (meshfitness < C%mesh_fitness_threshold) THEN
       ! IF (.FALSE.) THEN
@@ -95,8 +95,14 @@ CONTAINS
         region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
 
-    ! Time step and output
-    ! ====================
+    ! Determine time step
+    ! ===================
+
+      ! Adjust the time step to prevent overshooting other model components
+      CALL determine_timesteps_and_actions( region, t_end)
+
+    ! Output
+    ! ======
 
       ! Write output
       IF (region%do_output) THEN
@@ -109,12 +115,11 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
-      ! Advance region time
+    ! Advance region time
+    ! ===================
+
       region%time = region%time + region%dt
       CALL sync
-
-      ! Adjust the time step to prevent overshooting other model components
-      CALL determine_timesteps_and_actions( region, t_end)
 
     END DO ! DO WHILE (region%time < t_end)
 
@@ -197,15 +202,15 @@ CONTAINS
     allocate( region%refgeo_init%Hi (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_init%Hb (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_init%Hs (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
-                                                                                             
+
     allocate( region%refgeo_PD%Hi   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_PD%Hb   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_PD%Hs   (region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
-                                                                                             
+
     allocate( region%refgeo_GIAeq%Hi(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_GIAeq%Hb(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_GIAeq%Hs(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
-   
+
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
@@ -299,11 +304,11 @@ CONTAINS
     allocate( region%refgeo_init%Hi (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_init%Hb (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_init%Hs (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
-                                                                    
+
     allocate( region%refgeo_PD%Hi   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_PD%Hb   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_PD%Hs   (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
-                                                                    
+
     allocate( region%refgeo_GIAeq%Hi(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_GIAeq%Hb(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
     allocate( region%refgeo_GIAeq%Hs(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
@@ -367,51 +372,51 @@ CONTAINS
     region%time           = C%start_time_of_run
     region%dt             = C%dt_min
     region%dt_prev        = C%dt_min
-    
+
     region%t_last_mesh    = C%start_time_of_run
     region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
     region%do_mesh        = .FALSE.
-    
+
     region%t_last_SIA     = C%start_time_of_run
     region%t_next_SIA     = C%start_time_of_run
     region%do_SIA         = .TRUE.
-    
+
     region%t_last_SSA     = C%start_time_of_run
     region%t_next_SSA     = C%start_time_of_run
     region%do_SSA         = .TRUE.
-    
+
     region%t_last_DIVA    = C%start_time_of_run
     region%t_next_DIVA    = C%start_time_of_run
     region%do_DIVA        = .TRUE.
-    
+
     region%t_last_thermo  = C%start_time_of_run
     region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
     region%do_thermo      = .FALSE.
-    
+
     region%t_last_climate = C%start_time_of_run
     region%t_next_climate = C%start_time_of_run
     region%do_climate     = .TRUE.
-    
+
     region%t_last_ocean   = C%start_time_of_run
     region%t_next_ocean   = C%start_time_of_run
     region%do_ocean       = .TRUE.
-    
+
     region%t_last_SMB     = C%start_time_of_run
     region%t_next_SMB     = C%start_time_of_run
     region%do_SMB         = .TRUE.
-    
+
     region%t_last_BMB     = C%start_time_of_run
     region%t_next_BMB     = C%start_time_of_run
     region%do_BMB         = .TRUE.
-    
+
     region%t_last_ELRA    = C%start_time_of_run
     region%t_next_ELRA    = C%start_time_of_run
     region%do_ELRA        = .TRUE.
-    
+
     region%t_last_output  = C%start_time_of_run
     region%t_next_output  = C%start_time_of_run
     region%do_output      = .TRUE.
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 65)
   END SUBROUTINE allocate_region_timers_and_scalars

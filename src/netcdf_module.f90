@@ -668,6 +668,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'SL') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dHi') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHi_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dHs') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_a, start=(/1, netcdf%ti /) ))
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1275,6 +1279,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [vi,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [vi,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
+    ELSEIF (field_name == 'dHi') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi',                      [vi,    t], id_var, long_name='Ice thickness difference w.r.t PD', units='m')
+    ELSEIF (field_name == 'dHs') THEN
+      CALL create_double_var( netcdf%ncid, 'dHs',                      [vi,    t], id_var, long_name='Ice elevation difference w.r.t PD', units='m')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1675,6 +1683,10 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'SL') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dHi') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dHs') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_a, id_var, netcdf%ti)
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -2194,6 +2206,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [x, y,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [x, y,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
+    ELSEIF (field_name == 'dHi') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi',                      [x, y,    t], id_var, long_name='Ice thickness difference w.r.t. PD', units='m')
+    ELSEIF (field_name == 'dHs') THEN
+      CALL create_double_var( netcdf%ncid, 'dHs',                      [x, y,    t], id_var, long_name='Ice elevation difference w.r.t. PD', units='m')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN

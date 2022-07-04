@@ -211,12 +211,6 @@ CONTAINS
         END IF
       END IF
 
-      ! == Update ice geometry
-      ! ======================
-
-      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
-      CALL sync
-
       ! == Output
       ! =========
 
@@ -239,6 +233,12 @@ CONTAINS
         ! Write to regional text output file
         CALL write_regional_text_output( region)
       END IF
+
+      ! == Update ice geometry
+      ! ======================
+
+      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
+      CALL sync
 
       ! == Update initial mesh after first round
       ! ========================================

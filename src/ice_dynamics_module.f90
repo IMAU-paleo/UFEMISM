@@ -392,6 +392,10 @@ CONTAINS
     ! Update masks, surface elevation, and thickness above floatation
     CALL update_general_ice_model_data( mesh, ice)
 
+    ! Compute ice thickness/elevation difference w.r.t PD
+    ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
+    ice%dHs_a( mesh%vi1:mesh%vi2) = ice%Hs_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hs( mesh%vi1:mesh%vi2)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1094,6 +1098,10 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHb_dt_a              , ice%wdHb_dt_a             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dSL_dt_a              , ice%wdSL_dt_a             )
 
+    ! Useful extra stuff
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHi_a                 , ice%wdHi_a                )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHs_a                 , ice%wdHs_a                )
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
@@ -1280,6 +1288,10 @@ CONTAINS
     ! Mesh adaptation data
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%surf_curv             , ice%wsurf_curv            )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%log_velocity          , ice%wlog_velocity         )
+
+    ! Useful extra stuff
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHi_a                 , ice%wdHi_a                )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHs_a                 , ice%wdHs_a                )
 
 
     ! End of memory reallocation

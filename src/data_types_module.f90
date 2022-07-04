@@ -245,6 +245,11 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: log_velocity
     INTEGER :: wsurf_curv, wlog_velocity
 
+    ! Useful extra stuff
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_a   ! Ice thickness difference w.r.t. PD
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_a   ! Ice elevation difference w.r.t. PD
+    INTEGER :: wdHi_a, wdHs_a
+
   END TYPE type_ice_model
 
   ! == Mesh

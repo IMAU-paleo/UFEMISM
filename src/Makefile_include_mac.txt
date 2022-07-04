@@ -1,12 +1,12 @@
 # Compiler:
-  F90 = mpifort 
+  F90 = mpifort
 
 # Path to NetCDF:
-  NETCDF_DIR = /opt/homebrew/Cellar/netcdf/4.8.1
+  NETCDF_DIR = /opt/homebrew/Cellar/netcdf/4.8.1_2
 # Path to PETSc:
-  PETSC_DIR = /opt/homebrew/Cellar/petsc/3.16.2
+  PETSC_DIR = /opt/homebrew/Cellar/petsc/3.17.2
 # PAth to LAPACK:
-  LAPACK_DIR = /opt/homebrew/Cellar/lapack/3.10.0
+  LAPACK_DIR = /opt/homebrew/Cellar/lapack/3.10.1
 
 # Compiler flags:
   COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -ffree-line-length-none -cpp

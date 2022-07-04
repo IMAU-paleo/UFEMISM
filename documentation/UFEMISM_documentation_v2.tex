@@ -272,7 +272,7 @@ This experiment concerns the same geometry as MISMIP+. Proposed by Asay-Davis et
 
 \section{Ice dynamics}
 
-IMAU-ICE and UFEMISM by default solve the Depth-Integrated Viscosity Approximation (DIVA) to calculate the ice velocities. The hybrid SIA/SSA, as well as only the SIA or SSA, is included as an alternative. The DIVA has been shown to be significantly more physically accurate than the hybrid SIA/SSA, at almost no additional computational expense.
+IMAU-ICE and UFEMISM by default solve the Depth-Integrated Viscosity Approximation (DIVA) to calculate the ice velocities. The hybrid SIA/SSA, as well as only the SIA or SSA, is included as an alternative. The DIVA has been shown to be significantly more physically accurate than the hybrid SIA/SSA, at almost no additional computational expense. In UFEMISM, the Blatter-Pattyn Approximation (BPA) is additionally available, but since it is much more computationally demanding it is not used by default.
 
 \subsection{SIA}
 
@@ -357,11 +357,25 @@ The expression for the effective strain rate is slightly different as well, now 
 {\dot{\epsilon}}_e \left( z \right) = { \left[ {\left( \frac{\partial \overline{u}}{\partial x} \right) }^2 + {\left( \frac{\partial \overline{v}}{\partial y} \right) }^2 + \frac{\partial \overline{u}}{\partial x} \frac{\partial \overline{v}}{\partial y} + \frac14 {\left( {\left( \frac{\partial \overline{u}}{\partial y} \right) } + {\left( \frac{\partial \overline{v}}{\partial x} \right) } \right)}^2 + \frac14 \frac{\partial u \left( z \right)}{\partial z} + \frac14 \frac{\partial v \left( z \right)}{\partial z} \right] }^{\frac12}.
 \end{equation}
 
-The term $\beta_{\textrm{eff}}$ is defined as:
+The vertical shear strain rates $\frac{\partial u}{\partial z}$, $\frac{\partial u}{\partial z}$ are parameterised as follows:
+
+\begin{align}
+\frac{\partial u}{\partial z} &= \frac{\tau_{b,x}}{\eta} \zeta, \\
+\frac{\partial v}{\partial z} &= \frac{\tau_{b,y}}{\eta} \zeta.
+\end{align} 
+
+The term $\beta_{\textrm{eff}}$, which describes the stresses from both vertical shear and basal friction, is defined as:
 
 \begin{align} \label{DIVA_03}
 \beta_{\textrm{eff}} &= \frac{\beta_b}{1 + \beta_b F_2}, \\
 F_n &= \int_b^s \frac{1}{\eta \left( z \right)} {\left( \frac{s - z}{H} \right)}^n dz.
+\end{align}
+
+The equations listed above all concern the vertically averaged velocities $\overline{u}$, $\overline{v}$. The full vertical velocity profile can be found by applying the following parameterised relation:
+
+\begin{align} \label{DIVA_04}
+u \left( z \right) &= u \left( z = 0 \right) + F_1 \left( z \right) \tau_{b,x}, \\
+u \left( z = 0 \right) &= \overline{u} - F_2 \tau_{b,x}.
 \end{align}
 
 A comprehensive derivation of these equations is provided by Lipscomb et al. (2019).\\
@@ -369,6 +383,97 @@ A comprehensive derivation of these equations is provided by Lipscomb et al. (20
 Due to their strong similarity, the same numerical solver can be used to solve both the linearised SSA and the linearised DIVA. The non-linear iteration solving $\beta_b$/$\beta_{\textrm{eff}}$ and $\eta$ is, of course, different.\\
 \\
 The solution to the DIVA can be verified in the ISMIP-HOM experiments, where it remains closer to the full-Stokes solution at significantly smaller scales than does the hybrid SIA/SSA.
+
+\subsection{Blatter-Pattyn Approximation}
+
+The Blatter-Pattyn Approximation (BPA) is the most common "higher-order" stress balance, which results from the full-Stokes equations by neglecting all variations in the vertical velocity component $w$. The SIA, the SSA, and the DIVA can all be derived by neglecting certain terms from the BPA and/or integrating the resulting equations.
+
+\subsubsection{Stress balance}
+
+The two equations describing the stress balance read as follows:
+
+\begin{align} \label{eq:BPA_01}
+\frac{\partial}{\partial x} \left[ 2 \eta \left( 2 \frac{\partial u}{\partial x} + 
+\frac{\partial v}{\partial y} \right) \right] + 
+\frac{\partial}{\partial y} \left[ \eta \left( \frac{\partial u}{\partial y} + 
+\frac{\partial v}{\partial x} \right) \right] + 
+\frac{\partial}{\partial z} \left[ \eta \frac{\partial u}{\partial z} \right] &= \rho_i g \frac{\partial h}{\partial x}, \\
+\frac{\partial}{\partial y} \left[ 2 \eta \left( 2 \frac{\partial v}{\partial y} + 
+\frac{\partial u}{\partial x} \right) \right] + 
+\frac{\partial}{\partial x} \left[ \eta \left( \frac{\partial v}{\partial x} + 
+\frac{\partial u}{\partial y} \right) \right] + 
+\frac{\partial}{\partial z} \left[ \eta \frac{\partial v}{\partial z} \right] &= \rho_i g \frac{\partial h}{\partial y}.
+\end{align}
+
+Note that $u = u(x,y,z)$, $v = v(x,y,z)$ are now three-dimensional fields, instead of the two-dimensional solutions of the SSA and the DIVA.\\
+\\
+In order to obtain a solution, boundary conditions need to be applied at the surface and the base of the ice. A comprehensive derivation of these boundary conditions can be found in the documentation of CISM. The resulting equations for the ice surface read as follows:
+
+\begin{align} \label{eq:BPA_02}
+2 \frac{\partial h}{\partial x} \left( 2 \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} \right) + 
+\frac{\partial h}{\partial y} \left( \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right) -
+\frac{\partial u}{\partial z} &= 0, \\
+2 \frac{\partial h}{\partial y} \left( 2 \frac{\partial v}{\partial y} + \frac{\partial u}{\partial x} \right) + 
+\frac{\partial h}{\partial x} \left( \frac{\partial v}{\partial x} + \frac{\partial u}{\partial y} \right) -
+\frac{\partial v}{\partial z} &= 0.
+\end{align}
+
+The boundary conditions at the base of the ice read:
+
+\begin{align} \label{eq:BPA_03}
+2 \frac{\partial b}{\partial x} \left( 2 \frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} \right) + 
+\frac{\partial b}{\partial y} \left( \frac{\partial u}{\partial y} + \frac{\partial v}{\partial x} \right) -
+\frac{\partial u}{\partial z} + \frac{\beta_b}{\eta} u &= 0, \\
+2 \frac{\partial b}{\partial y} \left( 2 \frac{\partial v}{\partial y} + \frac{\partial u}{\partial x} \right) + 
+\frac{\partial b}{\partial x} \left( \frac{\partial v}{\partial x} + \frac{\partial u}{\partial y} \right) -
+\frac{\partial v}{\partial z} + \frac{\beta_b}{\eta} v &= 0.
+\end{align}
+
+The expression for the effective viscosity $\eta$ is the same as for the DIVA, including all strain rates from $u$ and $v$ but none from $w$. However, whereas in the DIVA the vertical shear strain rates $\frac{\partial u}{\partial z}$, $\frac{\partial v}{\partial z}$ are parameterised, in the BPA they are calculated explicitly.
+
+\subsubsection{Coordinate transformation}
+
+Since the BPA describes the horizontal velocities $u,v$ in three dimensions, the vertical dimension too needs to be discretised. However, even more so than in the horizontal dimensions, problems can arise when the vertical boundaries of the physical domain (i.e. the ice base and ice surface) do not coincide with a grid cell. As in the solution of the heat equation, these problems are avoided by introducing a terrain-following scaled coordinate $\zeta$:
+
+\begin{equation} \label{BPA_04}
+\zeta = \frac{h - z}{H}.
+\end{equation}
+
+Here, $\zeta = 0$ when $z = h$, and $\zeta = 1$ when $z = b$; in other words, the first and last vertical grid points always coincide with the ice surface and the ice base, respectively.\\
+\\
+The transformation from regular coordinates $[x,y,z]$ to scaled coordinates $[\hat{x},\hat{y},\zeta]$ results in the following expressions for the first- and second-order partial derivatives:
+
+\begin{align} \label{BPA_05}
+\frac{\partial}{\partial x} &= \frac{\partial}{\partial \hat{x}} +
+\frac{\partial \zeta}{\partial x} \frac{\partial}{\partial \zeta}, \\
+\frac{\partial}{\partial y} &= \frac{\partial}{\partial \hat{y}} +
+\frac{\partial \zeta}{\partial y} \frac{\partial}{\partial \zeta}, \\
+\frac{\partial}{\partial z} &= \frac{\partial \zeta}{\partial z} \frac{\partial}{\partial \zeta}, \\
+\frac{\partial^2}{\partial x^2} &= \frac{\partial^2}{\partial \hat{x}^2} + 
+{\left( \frac{\partial \zeta}{\partial x} \right)}^2 \frac{\partial^2}{\partial \zeta^2}+ 
+2 \frac{\partial \zeta}{\partial x} \frac{\partial^2}{\partial \hat{x} \partial \zeta} \\
+\frac{\partial^2}{\partial y^2} &= \frac{\partial^2}{\partial \hat{y}^2} + 
+{\left( \frac{\partial \zeta}{\partial y} \right)}^2 \frac{\partial^2}{\partial \zeta^2}+ 
+2 \frac{\partial \zeta}{\partial y} \frac{\partial^2}{\partial \hat{y} \partial \zeta}, \\
+\frac{\partial^2}{\partial x \partial y} &= \frac{\partial^2}{\partial \hat{x} \partial \hat{y}} +
+\frac{\partial \zeta}{\partial x} \frac{\partial \zeta}{\partial y} \frac{\partial^2}{\partial \zeta^2} +
+\frac{\partial \zeta}{\partial x} \frac{\partial^2}{\partial \hat{x} \partial \zeta} +
+\frac{\partial \zeta}{\partial y} \frac{\partial^2}{\partial \hat{y} \partial \zeta}, \\
+\frac{\partial^2}{\partial z^2} &= {\left( \frac{\partial \zeta}{\partial z} \right) }^2
+\frac{\partial^2}{\partial \zeta^2}.
+\end{align}
+
+The gradients of $\zeta$ are related to the ice-sheet geometry as follows:
+
+\begin{align} \label{BPA_06}
+\frac{\partial \zeta}{\partial x} &= \frac{1}{H} \left( \frac{\partial h}{\partial x} -
+\zeta \frac{\partial H}{\partial x} \right), \\
+\frac{\partial \zeta}{\partial y} &= \frac{1}{H} \left( \frac{\partial h}{\partial y} -
+\zeta \frac{\partial H}{\partial y} \right), \\
+\frac{\partial \zeta}{\partial z} &= \frac{-1}{H}.
+\end{align}
+
+In UFEMISM, the sparse matrices that represent the gradient operations in scaled coordinates ($\frac{\partial}{\partial \hat{x}}$, $\frac{\partial}{\partial \hat{y}}$, etc.) depend solely on the 2-D mesh geometry, and can therefore be calculated during model initialisation. The gradient operators in regular coordinates are recalculated in every model time step.
 
 \newpage
 \subsection{Thickness equation}

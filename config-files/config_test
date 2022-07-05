@@ -163,10 +163,10 @@
 
   ! Basal sliding inversion
   do_basal_sliding_inversion_config           = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-  do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
+  do_basal_sliding_smoothing_config           = .TRUE.                           ! If set to TRUE, inverted basal roughness is smoothed
   basal_sliding_inv_scale_config              = 5000.0                           ! Scaling constant for inversion procedure [m]
-  basal_sliding_inv_rsmooth_config            = 1000.0                           ! Smoothing radius for inversion procedure [m]
-  basal_sliding_inv_wsmooth_config            = 0.01                             ! Weight given to the smoothed roughness (1 = full smoothing applied)
+  basal_sliding_inv_rsmooth_config            = 10000.0                          ! Smoothing radius for inversion procedure [m]
+  basal_sliding_inv_wsmooth_config            = 1.0                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
   basal_sliding_inv_phi_min_config            = 1.0                              ! Minimum value of phi_fric allowed during inversion
   basal_sliding_inv_phi_max_config            = 45.0                             ! Maximum value of phi_fric allowed during inversion
   basal_sliding_inv_tol_diff_config           = 100.0                            ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
@@ -341,26 +341,27 @@
   help_field_03_config                        = 'resolution'
   help_field_04_config                        = 'mask'
   help_field_05_config                        = 'Hi'
-  help_field_06_config                        = 'Hs'
-  help_field_07_config                        = 'Hb'
-  help_field_08_config                        = 'dHb'
-  help_field_09_config                        = 'SL'
-  help_field_10_config                        = 'BMB'
-  help_field_11_config                        = 'BMB_shelf'
-  help_field_12_config                        = 'T2m_year'
-  help_field_13_config                        = 'Precip_year'
-  help_field_14_config                        = 'Rainfall_year'
-  help_field_15_config                        = 'Snowfall_year'
-  help_field_16_config                        = 'Albedo_year'
-  help_field_17_config                        = 'SMB_year'
-  help_field_18_config                        = 'phi_fric'
-  help_field_19_config                        = 'uabs_surf'
-  help_field_20_config                        = 'uabs_base'
-  help_field_21_config                        = 'C_abl_constant_inv'
-  help_field_22_config                        = 'C_abl_Ts_inv'
-  help_field_23_config                        = 'C_abl_Q_inv'
-  help_field_24_config                        = 'C_refr_inv'
-  help_field_25_config                        = 'dHi'
-  help_field_26_config                        = 'dHs'
+  help_field_06_config                        = 'dHi'
+  help_field_07_config                        = 'Hs'
+  help_field_08_config                        = 'dHs'
+  help_field_09_config                        = 'Hb'
+  help_field_10_config                        = 'dHb'
+  help_field_11_config                        = 'BMB'
+  help_field_12_config                        = 'phi_fric'
+  help_field_13_config                        = 'uabs_surf'
+  help_field_14_config                        = 'uabs_base'
+  help_field_15_config                        = 'T2m_year'
+  help_field_16_config                        = 'Precip_year'
+  help_field_17_config                        = 'Rainfall_year'
+  help_field_18_config                        = 'Snowfall_year'
+  help_field_19_config                        = 'Albedo_year'
+  help_field_20_config                        = 'Melt_year'
+  help_field_21_config                        = 'Refreezing_year'
+  help_field_22_config                        = 'Runoff_year'
+  help_field_23_config                        = 'C_abl_constant_inv'
+  help_field_24_config                        = 'C_abl_Ts_inv'
+  help_field_25_config                        = 'C_abl_Q_inv'
+  help_field_26_config                        = 'C_refr_inv'
+  help_field_27_config                        = 'SMB_year'
 
 /

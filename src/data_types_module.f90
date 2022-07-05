@@ -137,10 +137,12 @@ MODULE data_types_module
 
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
-    INTEGER :: wphi_fric_a, wtauc_a, walpha_sq_a, wbeta_sq_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_inv_a               ! Inverted power-law friction coefficient [Pa m^−1/3 yr^1/3]
+    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
 
     ! Ice dynamics - physical terms in the SSA/DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress

@@ -55,8 +55,8 @@ MODULE UFEMISM_main_model
 
 CONTAINS
 
-! ===== Main routines ======
-! ==========================
+! ===== Main routines =====
+! =========================
 
   ! Run the model region until the next coupling time
   SUBROUTINE run_model( region, climate_matrix_global, t_end)
@@ -659,8 +659,8 @@ CONTAINS
 
   END SUBROUTINE initialise_model
 
-! ===== Auxiliary routines ======
-! ===============================
+! ===== Auxiliary routines =====
+! ==============================
 
   ! Allocate some basic variables
   SUBROUTINE allocate_region_timers_and_scalars( region)

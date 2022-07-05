@@ -3,6 +3,10 @@ MODULE basal_conditions_and_sliding_module
   ! Contains all the routines for calculating the basal conditions underneath the ice.
 
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -29,6 +33,9 @@ MODULE basal_conditions_and_sliding_module
   IMPLICIT NONE
 
 CONTAINS
+
+! ===== Main routines =====
+! =========================
 
   ! The main routine, to be called from the ice_velocity_module
   SUBROUTINE calc_basal_conditions( mesh, ice)
@@ -83,8 +90,8 @@ CONTAINS
 
   END SUBROUTINE initialise_basal_conditions
 
-! == Basal hydrology
-! ==================
+! ===== Basal hydrology =====
+! ===========================
 
   SUBROUTINE calc_basal_hydrology( mesh, ice)
     ! Calculate the pore water pressure and effective basal pressure
@@ -223,8 +230,8 @@ CONTAINS
 
   END SUBROUTINE calc_pore_water_pressure_Martin2011
 
-! == Bed roughness
-! ================
+! ===== Bed roughness =====
+! =========================
 
   SUBROUTINE calc_bed_roughness( mesh, ice)
     ! Calculate the bed roughness
@@ -283,6 +290,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_bed_roughness
+
   SUBROUTINE initialise_bed_roughness( mesh, ice, restart)
     ! Allocation and initialisation
 
@@ -299,73 +307,85 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory
+    ! Shared memory allocation
+    ! ========================
+
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed
-
     ELSEIF (C%choice_sliding_law == 'idealised') THEN
       ! Sliding laws for some idealised experiments
-
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
-
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
       CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
-
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
       CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
-
     ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation according to Schoof (2005)
       CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
-
     ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
       CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
-
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
     CALL sync
 
-    ! Initialise values
+    ! Inversion-stuff allocation
+    ! ==========================
+
+    IF (C%do_basal_sliding_inversion) THEN
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
+
+        CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_inv_a , ice%wbeta_sq_inv_a )
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_inv_a, ice%wphi_fric_inv_a)
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
+    END IF
+
+    ! Initialisation
+    ! ==============
+
     IF (C%choice_basal_roughness == 'uniform') THEN
       ! Apply a uniform bed roughness
 
       IF     (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
-
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
         ! Coulomb sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
-
       ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
         ! Regularised Coulomb sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
-
       ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
         ! Tsai2015 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Tsai2015_beta_sq_uniform
-
       ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
         ! Schoof2005 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Schoof2005_beta_sq_uniform
-
       ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
         ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
-
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
@@ -385,24 +405,18 @@ CONTAINS
 
       IF     (C%choice_sliding_law == 'Weertman') THEN
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
-
       ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
-
       ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-
       ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-
       ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
-
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
@@ -411,6 +425,27 @@ CONTAINS
       CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
     END IF
     CALL sync
+
+    ! Inversion initialisation
+    ! ========================
+
+    IF (C%do_basal_sliding_inversion) THEN
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
+
+        ice%beta_sq_inv_a(  mesh%vi1:mesh%vi2) = ice%beta_sq_a(  mesh%vi1:mesh%vi2)
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        ice%phi_fric_inv_a( mesh%vi1:mesh%vi2) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -490,6 +525,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_bed_roughness_SSA_icestream
+
   SUBROUTINE calc_bed_roughness_MISMIPplus( mesh, ice)
     ! Determine the basal conditions underneath the ice
     !
@@ -589,6 +625,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file
+
   SUBROUTINE initialise_bed_roughness_from_file_Weertman( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
     !
@@ -609,53 +646,54 @@ CONTAINS
 
     CALL crash('FIXME!')
 
-!    ! Local variables:
-!    TYPE(type_BIV_bed_roughness)                       :: BIV
-!
-!    ! Add routine to path
-!    CALL init_routine( routine_name)
-!
-!    ! Determine filename
-!    BIV%netcdf%filename = C%basal_roughness_filename
-!
-!    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-!
-!    ! Inquire mesh data from the NetCDF file
-!    CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-!    CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-!
-!    IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Allocate memory - mesh
-!    CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-!    CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
-!
-!    ! Read mesh & bed roughness data from file
-!    IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq')
-!
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
-!
-!    ! Map (transposed) raw data to the model mesh
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
-!
-!    ! Deallocate raw data
-!    CALL deallocate_shared( BIV%wnx      )
-!    CALL deallocate_shared( BIV%wny      )
-!    CALL deallocate_shared( BIV%wx       )
-!    CALL deallocate_shared( BIV%wy       )
-!    CALL deallocate_shared( BIV%wbeta_sq )
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
+   ! ! Local variables:
+   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+
+   ! ! Add routine to path
+   ! CALL init_routine( routine_name)
+
+   ! ! Determine filename
+   ! BIV%netcdf%filename = C%basal_roughness_filename
+
+   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
+
+   ! ! Inquire mesh data from the NetCDF file
+   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
+   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
+
+   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Allocate memory - mesh
+   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
+   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
+
+   ! ! Read mesh & bed roughness data from file
+   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Safety
+   ! CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq')
+
+   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+   ! CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
+
+   ! ! Map (transposed) raw data to the model mesh
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
+
+   ! ! Deallocate raw data
+   ! CALL deallocate_shared( BIV%wnx      )
+   ! CALL deallocate_shared( BIV%wny      )
+   ! CALL deallocate_shared( BIV%wx       )
+   ! CALL deallocate_shared( BIV%wy       )
+   ! CALL deallocate_shared( BIV%wbeta_sq )
+
+   ! ! Finalise routine path
+   ! CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_Weertman
+
   SUBROUTINE initialise_bed_roughness_from_file_Coulomb( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
     !
@@ -676,53 +714,54 @@ CONTAINS
 
     CALL crash('FIXME!')
 
-!    ! Local variables:
-!    TYPE(type_BIV_bed_roughness)                       :: BIV
-!
-!    ! Add routine to path
-!    CALL init_routine( routine_name)
-!
-!    ! Determine filename
-!    BIV%netcdf%filename = C%basal_roughness_filename
-!
-!    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-!
-!    ! Inquire mesh data from the NetCDF file
-!    CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-!    CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-!
-!    IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Allocate memory - mesh
-!    CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-!    CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%phi_fric, BIV%wphi_fric)
-!
-!    ! Read mesh & bed roughness data from file
-!    IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
-!
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
-!
-!    ! Map (transposed) raw data to the model mesh
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%phi_fric, ice%phi_fric_a)
-!
-!    ! Deallocate raw data
-!    CALL deallocate_shared( BIV%wnx      )
-!    CALL deallocate_shared( BIV%wny      )
-!    CALL deallocate_shared( BIV%wx       )
-!    CALL deallocate_shared( BIV%wy       )
-!    CALL deallocate_shared( BIV%wphi_fric)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
+   ! ! Local variables:
+   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+
+   ! ! Add routine to path
+   ! CALL init_routine( routine_name)
+
+   ! ! Determine filename
+   ! BIV%netcdf%filename = C%basal_roughness_filename
+
+   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
+
+   ! ! Inquire mesh data from the NetCDF file
+   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
+   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
+
+   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Allocate memory - mesh
+   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
+   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%phi_fric, BIV%wphi_fric)
+
+   ! ! Read mesh & bed roughness data from file
+   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Safety
+   ! CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
+
+   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+   ! CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
+
+   ! ! Map (transposed) raw data to the model mesh
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%phi_fric, ice%phi_fric_a)
+
+   ! ! Deallocate raw data
+   ! CALL deallocate_shared( BIV%wnx      )
+   ! CALL deallocate_shared( BIV%wny      )
+   ! CALL deallocate_shared( BIV%wx       )
+   ! CALL deallocate_shared( BIV%wy       )
+   ! CALL deallocate_shared( BIV%wphi_fric)
+
+   ! ! Finalise routine path
+   ! CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_Coulomb
+
   SUBROUTINE initialise_bed_roughness_from_file_Tsai2015( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
     !
@@ -743,58 +782,59 @@ CONTAINS
 
     CALL crash('FIXME!')
 
-!    ! Local variables:
-!    TYPE(type_BIV_bed_roughness)                       :: BIV
-!
-!    ! Add routine to path
-!    CALL init_routine( routine_name)
-!
-!    ! Determine filename
-!    BIV%netcdf%filename = C%basal_roughness_filename
-!
-!    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-!
-!    ! Inquire mesh data from the NetCDF file
-!    CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-!    CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-!
-!    IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Allocate memory - mesh
-!    CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-!    CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%alpha_sq, BIV%walpha_sq)
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
-!
-!    ! Read mesh & bed roughness data from file
-!    IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
-!
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
-!    CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
-!
-!    ! Map (transposed) raw data to the model mesh
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%alpha_sq, ice%alpha_sq_a)
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
-!
-!    ! Deallocate raw data
-!    CALL deallocate_shared( BIV%wnx      )
-!    CALL deallocate_shared( BIV%wny      )
-!    CALL deallocate_shared( BIV%wx       )
-!    CALL deallocate_shared( BIV%wy       )
-!    CALL deallocate_shared( BIV%walpha_sq)
-!    CALL deallocate_shared( BIV%wbeta_sq )
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
+   ! ! Local variables:
+   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+
+   ! ! Add routine to path
+   ! CALL init_routine( routine_name)
+
+   ! ! Determine filename
+   ! BIV%netcdf%filename = C%basal_roughness_filename
+
+   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
+
+   ! ! Inquire mesh data from the NetCDF file
+   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
+   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
+
+   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Allocate memory - mesh
+   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
+   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%alpha_sq, BIV%walpha_sq)
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
+
+   ! ! Read mesh & bed roughness data from file
+   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Safety
+   ! CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
+   ! CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
+
+   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+   ! CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
+   ! CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
+
+   ! ! Map (transposed) raw data to the model mesh
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%alpha_sq, ice%alpha_sq_a)
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
+
+   ! ! Deallocate raw data
+   ! CALL deallocate_shared( BIV%wnx      )
+   ! CALL deallocate_shared( BIV%wny      )
+   ! CALL deallocate_shared( BIV%wx       )
+   ! CALL deallocate_shared( BIV%wy       )
+   ! CALL deallocate_shared( BIV%walpha_sq)
+   ! CALL deallocate_shared( BIV%wbeta_sq )
+
+   ! ! Finalise routine path
+   ! CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_Tsai2015
+
   SUBROUTINE initialise_bed_roughness_from_file_Schoof2005( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
     !
@@ -815,58 +855,59 @@ CONTAINS
 
     CALL crash('FIXME!')
 
-!    ! Local variables:
-!    TYPE(type_BIV_bed_roughness)                       :: BIV
-!
-!    ! Add routine to path
-!    CALL init_routine( routine_name)
-!
-!    ! Determine filename
-!    BIV%netcdf%filename = C%basal_roughness_filename
-!
-!    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-!
-!    ! Inquire mesh data from the NetCDF file
-!    CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-!    CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-!
-!    IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Allocate memory - mesh
-!    CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-!    CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%alpha_sq, BIV%walpha_sq)
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
-!
-!    ! Read mesh & bed roughness data from file
-!    IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
-!    CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
-!
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
-!    CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
-!
-!    ! Map (transposed) raw data to the model mesh
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%alpha_sq, ice%alpha_sq_a)
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
-!
-!    ! Deallocate raw data
-!    CALL deallocate_shared( BIV%wnx      )
-!    CALL deallocate_shared( BIV%wny      )
-!    CALL deallocate_shared( BIV%wx       )
-!    CALL deallocate_shared( BIV%wy       )
-!    CALL deallocate_shared( BIV%walpha_sq)
-!    CALL deallocate_shared( BIV%wbeta_sq )
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
+   ! ! Local variables:
+   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+
+   ! ! Add routine to path
+   ! CALL init_routine( routine_name)
+
+   ! ! Determine filename
+   ! BIV%netcdf%filename = C%basal_roughness_filename
+
+   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
+
+   ! ! Inquire mesh data from the NetCDF file
+   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
+   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
+
+   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Allocate memory - mesh
+   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
+   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%alpha_sq, BIV%walpha_sq)
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%beta_sq , BIV%wbeta_sq )
+
+   ! ! Read mesh & bed roughness data from file
+   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Safety
+   ! CALL check_for_NaN_dp_1D( BIV%alpha_sq, 'BIV%alpha_sq')
+   ! CALL check_for_NaN_dp_1D( BIV%beta_sq,  'BIV%beta_sq' )
+
+   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+   ! CALL transpose_dp_2D( BIV%alpha_sq, BIV%walpha_sq)
+   ! CALL transpose_dp_2D( BIV%beta_sq,  BIV%wbeta_sq )
+
+   ! ! Map (transposed) raw data to the model mesh
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%alpha_sq, ice%alpha_sq_a)
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%beta_sq , ice%beta_sq_a )
+
+   ! ! Deallocate raw data
+   ! CALL deallocate_shared( BIV%wnx      )
+   ! CALL deallocate_shared( BIV%wny      )
+   ! CALL deallocate_shared( BIV%wx       )
+   ! CALL deallocate_shared( BIV%wy       )
+   ! CALL deallocate_shared( BIV%walpha_sq)
+   ! CALL deallocate_shared( BIV%wbeta_sq )
+
+   ! ! Finalise routine path
+   ! CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_Schoof2005
+
   SUBROUTINE initialise_bed_roughness_from_file_ZoetIverson( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
     !
@@ -887,56 +928,56 @@ CONTAINS
 
     CALL crash('FIXME!')
 
-!    ! Local variables:
-!    TYPE(type_BIV_bed_roughness)                       :: BIV
-!
-!    ! Add routine to path
-!    CALL init_routine( routine_name)
-!
-!    ! Determine filename
-!    BIV%netcdf%filename = C%basal_roughness_filename
-!
-!    IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
-!
-!    ! Inquire mesh data from the NetCDF file
-!    CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
-!    CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
-!
-!    IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Allocate memory - mesh
-!    CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
-!    CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
-!    CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%phi_fric, BIV%wphi_fric)
-!
-!    ! Read mesh & bed roughness data from file
-!    IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
-!    CALL sync
-!
-!    ! Safety
-!    CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
-!
-!    ! Since we want data represented as [j,i] internally, transpose the data we just read.
-!    CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
-!
-!    ! Map (transposed) raw data to the model mesh
-!    CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%phi_fric, ice%phi_fric_a)
-!
-!    ! Deallocate raw data
-!    CALL deallocate_shared( BIV%wnx      )
-!    CALL deallocate_shared( BIV%wny      )
-!    CALL deallocate_shared( BIV%wx       )
-!    CALL deallocate_shared( BIV%wy       )
-!    CALL deallocate_shared( BIV%wphi_fric)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
+   ! ! Local variables:
+   ! TYPE(type_BIV_bed_roughness)                       :: BIV
+
+   ! ! Add routine to path
+   ! CALL init_routine( routine_name)
+
+   ! ! Determine filename
+   ! BIV%netcdf%filename = C%basal_roughness_filename
+
+   ! IF (par%master) WRITE(0,*) '  Initialising basal roughness from file ', TRIM( BIV%netcdf%filename), '...'
+
+   ! ! Inquire mesh data from the NetCDF file
+   ! CALL allocate_shared_int_0D( BIV%nx, BIV%wnx)
+   ! CALL allocate_shared_int_0D( BIV%ny, BIV%wny)
+
+   ! IF (par%master) CALL inquire_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Allocate memory - mesh
+   ! CALL allocate_shared_dp_1D( BIV%nx,         BIV%x       , BIV%wx       )
+   ! CALL allocate_shared_dp_1D(         BIV%ny, BIV%y       , BIV%wy       )
+   ! CALL allocate_shared_dp_2D( BIV%ny, BIV%nx, BIV%phi_fric, BIV%wphi_fric)
+
+   ! ! Read mesh & bed roughness data from file
+   ! IF (par%master) CALL read_BIV_bed_roughness_file( BIV)
+   ! CALL sync
+
+   ! ! Safety
+   ! CALL check_for_NaN_dp_1D( BIV%phi_fric, 'BIV%phi_fric')
+
+   ! ! Since we want data represented as [j,i] internally, transpose the data we just read.
+   ! CALL transpose_dp_2D( BIV%phi_fric, BIV%wphi_fric)
+
+   ! ! Map (transposed) raw data to the model mesh
+   ! CALL map_square_to_square_cons_2nd_order_2D( BIV%nx, BIV%ny, BIV%x, BIV%y, mesh%nx, mesh%ny, mesh%x, mesh%y, BIV%phi_fric, ice%phi_fric_a)
+
+   ! ! Deallocate raw data
+   ! CALL deallocate_shared( BIV%wnx      )
+   ! CALL deallocate_shared( BIV%wny      )
+   ! CALL deallocate_shared( BIV%wx       )
+   ! CALL deallocate_shared( BIV%wy       )
+   ! CALL deallocate_shared( BIV%wphi_fric)
+
+   ! ! Finalise routine path
+   ! CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_bed_roughness_from_file_ZoetIverson
 
-! == Sliding laws
-! ===============
+! ===== Sliding laws =====
+! ========================
 
   SUBROUTINE calc_sliding_law( mesh, ice, u_a, v_a, beta_a)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
@@ -1405,8 +1446,8 @@ CONTAINS
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F
 
-! == Remapping
-! ============
+! ===== Remapping =====
+! =====================
 
   SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
@@ -1498,8 +1539,8 @@ CONTAINS
     int_dummy = mesh_new%nV
     int_dummy = map%int_dummy
 
-    ! == Reallocate shared memory
-    ! ===========================
+    ! == Reallocate/Remap shared memory
+    ! =================================
 
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed
@@ -1511,6 +1552,9 @@ CONTAINS
       ! Power-law sliding law
       IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
+        IF (C%do_basal_sliding_inversion) THEN
+          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+        END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
       END IF
@@ -1521,6 +1565,9 @@ CONTAINS
       IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
+        IF (C%do_basal_sliding_inversion) THEN
+          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+        END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
@@ -1533,6 +1580,9 @@ CONTAINS
       IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+        IF (C%do_basal_sliding_inversion) THEN
+          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
+        END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
@@ -1554,25 +1604,19 @@ CONTAINS
 
         IF     (C%choice_sliding_law == 'Weertman') THEN
           ice%beta_sq_a( mesh_new%vi1:mesh_new%vi2) = C%slid_Weertman_beta_sq_uniform
-
         ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
                 C%choice_sliding_law == 'Coulomb_regularised') THEN
           ice%phi_fric_a( mesh_new%vi1:mesh_new%vi2) = C%slid_Coulomb_phi_fric_uniform
-
         ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
           ice%alpha_sq_a( mesh_new%vi1:mesh_new%vi2) = C%slid_Tsai2015_alpha_sq_uniform
           ice%beta_sq_a(  mesh_new%vi1:mesh_new%vi2) = C%slid_Tsai2015_beta_sq_uniform
-
         ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
           ice%alpha_sq_a( mesh_new%vi1:mesh_new%vi2) = C%slid_Schoof2005_alpha_sq_uniform
           ice%beta_sq_a(  mesh_new%vi1:mesh_new%vi2) = C%slid_Schoof2005_beta_sq_uniform
-
         ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
           ice%phi_fric_a( mesh_new%vi1:mesh_new%vi2) = C%slid_ZI_phi_fric_uniform
-
         ELSE
           CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
-
         END IF ! (C%choice_sliding_law)
 
       ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
@@ -1599,8 +1643,8 @@ CONTAINS
 
   END SUBROUTINE remap_bed_roughness
 
-! == Inversion
-! ============
+! ===== Inversion =====
+! =====================
 
   SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet
@@ -1645,21 +1689,21 @@ CONTAINS
                 C%choice_sliding_law == 'Tsai2015' .OR. &
                 C%choice_sliding_law == 'Schoof2005') THEN
 
-              new_val = ice%beta_sq_a( vi)
+              new_val = ice%beta_sq_inv_a( vi)
               new_val = new_val * (10._dp ** h_delta)
               new_val = MIN(MAX(new_val, 1._dp), 10._dp)
 
-              ice%beta_sq_a( vi) = new_val
+              ice%beta_sq_inv_a( vi) = new_val
 
             ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
                     C%choice_sliding_law == 'Coulomb_regularised' .OR. &
                     C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-              new_val = ice%phi_fric_a( vi)
+              new_val = ice%phi_fric_inv_a( vi)
               new_val = new_val * (10._dp ** (-h_delta))
               new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
 
-              ice%phi_fric_a( vi) = new_val
+              ice%phi_fric_inv_a( vi) = new_val
 
             ELSE
               CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
@@ -1674,30 +1718,68 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Smooth the resulting field
-    ! ==========================
+    ! Smoothing
+    ! =========
 
     IF (C%do_basal_sliding_smoothing) THEN
+      ! Smooth the resulting field
 
       IF (C%choice_sliding_law == 'Weertman' .OR. &
           C%choice_sliding_law == 'Tsai2015' .OR. &
           C%choice_sliding_law == 'Schoof2005') THEN
 
-        ! CALL smooth_Gaussian_2D( mesh, grid, ice%beta_sq_a, C%basal_sliding_inv_rsmooth)
+        ! Store the inverted parameters in a local variable
+        rough_smoothed( 1:mesh%nV) = ice%beta_sq_inv_a( 1:mesh%nV)
+        CALL sync
+
+        ! Smooth the local variable
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%basal_sliding_inv_rsmooth)
+
+        ! Combined the smoothed and raw inverted parameter through a weighed average
+        DO vi = mesh%vi1, mesh%vi2
+            ice%beta_sq_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%beta_sq_inv_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+            ! Make sure the variable stays within the prescribed limits
+            ice%beta_sq_a( vi) = MIN(MAX(ice%beta_sq_a( vi), 1._dp), 10._dp)
+        END DO
+        CALL sync
 
       ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
               C%choice_sliding_law == 'Coulomb_regularised' .OR. &
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-        rough_smoothed( 1:mesh%nV) = ice%phi_fric_a( 1:mesh%nV)
+        ! Store the inverted parameters in a local variable
+        rough_smoothed( 1:mesh%nV) = ice%phi_fric_inv_a( 1:mesh%nV)
         CALL sync
 
+        ! Smooth the local variable
         CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%basal_sliding_inv_rsmooth)
 
+        ! Combined the smoothed and raw inverted parameter through a weighed average
         DO vi = mesh%vi1, mesh%vi2
-            ice%phi_fric_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%phi_fric_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+            ice%phi_fric_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%phi_fric_inv_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+            ! Make sure the variable stays within the prescribed limits
+            ice%phi_fric_a( vi) = MIN(MAX(ice%phi_fric_a( vi), C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
         END DO
         CALL sync
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
+
+    ELSE
+      ! Don't smooth the resulting field; simply copy it into the main variable
+
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
+
+        ice%beta_sq_a( mesh%vi1:mesh%vi2) = ice%beta_sq_inv_a( mesh%vi1:mesh%vi2)
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
 
       ELSE
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')

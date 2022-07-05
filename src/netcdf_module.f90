@@ -2589,7 +2589,7 @@ CONTAINS
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear  )
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth         )
-      IF (C%do_SMB_IMAUITM_inversion) THEN
+      IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
         CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv, (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_constant_inv)
         CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,       (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Ts_inv      )
         CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Q_inv       )
@@ -2718,7 +2718,7 @@ CONTAINS
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1,    ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, ti /) ))
-      IF (C%do_SMB_IMAUITM_inversion) THEN
+      IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, restart%C_abl_constant_inv, start = (/ 1,    ti /) ))
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       restart%C_abl_Ts_inv,       start = (/ 1,    ti /) ))
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        restart%C_abl_Q_inv,        start = (/ 1,    ti /) ))

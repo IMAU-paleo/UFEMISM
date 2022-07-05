@@ -560,7 +560,7 @@ CONTAINS
     ! ===== The ice dynamics model =====
     ! ==================================
 
-    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%restart)
+    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD, region%restart)
 
     ! ===== Define ice basins =====
     ! =============================

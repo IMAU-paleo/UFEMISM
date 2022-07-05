@@ -874,7 +874,7 @@ CONTAINS
 ! ===== Administration: allocation, initialisation, and remapping =====
 ! =====================================================================
 
-  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init, restart)
+  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init, refgeo_PD, restart)
     ! Allocate shared memory for all the data fields of the ice dynamical module, and
     ! initialise some of them
 
@@ -884,6 +884,7 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     TYPE(type_restart_data),             INTENT(IN)    :: restart
 
     ! Local variables:
@@ -900,9 +901,15 @@ CONTAINS
 
     ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
     DO vi = mesh%vi1, mesh%vi2
+      ! Main quantities
       ice%Hi_a( vi) = refgeo_init%Hi( vi)
       ice%Hb_a( vi) = refgeo_init%Hb( vi)
       ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), 0._dp)
+
+      ! Differences w.r.t. present-day
+      ice%dHi_a( vi) = ice%Hi_a( vi) - refgeo_PD%Hi( vi)
+      ice%dHb_a( vi) = ice%Hb_a( vi) - refgeo_PD%Hb( vi)
+      ice%dHs_a( vi) = ice%Hs_a( vi) - refgeo_PD%Hs( vi)
     END DO
     CALL sync
 

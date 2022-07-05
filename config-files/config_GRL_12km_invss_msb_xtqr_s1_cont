@@ -31,7 +31,7 @@
   ! =======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_GRL_12km_invss_msb_xtqr_s05_cont'! If not, create a directory with this name instead (stops the program if this directory already exists)
+  fixed_output_dir_config                     = 'results_GRL_12km_invss_msb_xtqr_s1_cont'! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -109,7 +109,7 @@
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
-  filename_restart_GRL_config                 = 'results_GRL_12km_invss_msb_xtqr_s05/restart_GRL_00001.nc'
+  filename_restart_GRL_config                 = 'results_GRL_12km_invss_msb_xtqr_s1/restart_GRL_00001.nc'
   filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
 
   ! Ice dynamics - time integration

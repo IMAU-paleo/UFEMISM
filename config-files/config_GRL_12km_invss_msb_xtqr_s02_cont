@@ -109,7 +109,7 @@
   ! Initial model state when restarting from a previous run
   filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
-  filename_restart_GRL_config                 = 'results/snellius/results_GRL_12km_invss_msb_xtqr_s02/restart_GRL_00001.nc'
+  filename_restart_GRL_config                 = 'results_GRL_12km_invss_msb_xtqr_s02/restart_GRL_00001.nc'
   filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
 
   ! Ice dynamics - time integration

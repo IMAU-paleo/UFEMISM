@@ -22,3 +22,9 @@ result*/
 
 # Ignore SLURM output on Snellius
 slurm-*.out
+
+# Ignore Latex files in doc folder
+/documentation/*.aux
+/documentation/*.log
+/documentation/*.gz
+/documentation/*.toc

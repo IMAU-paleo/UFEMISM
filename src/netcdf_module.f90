@@ -2,12 +2,16 @@ MODULE netcdf_module
 
   ! Contains all the subroutines for reading, creating, and writing to NetCDF files.
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
-  USE petsc_module,                    ONLY: perr
+  USE petsc_module,                    ONLY: perr, mat_petsc2CSR
+  USE petscksp
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -21,44 +25,253 @@ MODULE netcdf_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  
-  ! Import specific functionality
-  USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
-  USE data_types_module,             ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
-                                           type_debug_fields, &
-                                           type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
-                                           type_ocean_snapshot_global, type_highres_ocean_data, &
-                                           type_restart_data, type_netcdf_resource_tracker, &
-                                           type_direct_SMB_forcing_global, type_direct_climate_forcing_global, &
-                                           type_direct_SMB_forcing_regional, type_direct_climate_forcing_regional, &
-                                           type_SELEN_global
-  USE petscksp
-  USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
-                                           nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
-                                           nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
-                                           nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
-  USE mesh_mapping_module,           ONLY: map_mesh2grid_2D, map_mesh2grid_3D
-  USE mesh_operators_module,         ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
-  USE petsc_module,                  ONLY: mat_petsc2CSR
-  USE sparse_matrix_module,          ONLY: deallocate_matrix_CSR
-  
+  USE data_types_netcdf_module,        ONLY: type_netcdf_restart, type_netcdf_help_fields
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
+                                             type_debug_fields, &
+                                             type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
+                                             type_ocean_snapshot_global, type_highres_ocean_data, &
+                                             type_restart_data, type_netcdf_resource_tracker, &
+                                             type_direct_SMB_forcing_global, type_direct_climate_forcing_global, &
+                                             type_direct_SMB_forcing_regional, type_direct_climate_forcing_regional, &
+                                             type_SELEN_global
+  USE netcdf,                          ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
+                                             nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
+                                             nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
+                                             nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
+  USE mesh_mapping_module,             ONLY: map_mesh2grid_2D, map_mesh2grid_3D
+  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
+  USE sparse_matrix_module,            ONLY: deallocate_matrix_CSR
+
   IMPLICIT NONE
-  
+
   TYPE(type_debug_fields) :: debug_NAM, debug_EAS, debug_GRL, debug_ANT, debug
 
 CONTAINS
 
-! Main output functions
-! =====================
+! ===== Basic NetCDF wrapper functions =====
+! ==========================================
+
+  SUBROUTINE open_netcdf_file( filename, ncid)
+    IMPLICIT NONE
+
+    CHARACTER(LEN=*), INTENT(IN)  :: filename
+    INTEGER,          INTENT(OUT) :: ncid
+
+    ! Open netCDF file:
+    CALL handle_error(nf90_open(filename, IOR(nf90_write,nf90_share), ncid))
+
+  END SUBROUTINE open_netcdf_file
+
+  SUBROUTINE close_netcdf_file( ncid)
+    IMPLICIT NONE
+
+    INTEGER, INTENT(INOUT) :: ncid
+
+    ! Close netCDF file:
+    CALL handle_error(nf90_close(ncid))
+
+  END SUBROUTINE close_netcdf_file
+
+  SUBROUTINE create_dim( ncid, dim_name, length, id_dim)
+    ! Subroutine for creating netCDF dimensions more convenient:
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN) :: ncid
+    CHARACTER(LEN=*),           INTENT(IN) :: dim_name
+    INTEGER,                    INTENT(IN) :: length
+
+    ! Output variables:
+    INTEGER, INTENT(OUT)               :: id_dim
+
+    CALL handle_error(nf90_def_dim(ncid,dim_name,length,id_dim))
+
+  END SUBROUTINE create_dim
+
+  SUBROUTINE create_int_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
+    ! Subroutine for creating netCDF variables of type nf90_int more convenient:
+
+    ! Input variables:
+    INTEGER,                      INTENT(IN)  :: ncid
+    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
+    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
+    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
+
+    ! Output variables:
+    INTEGER,                      INTENT(OUT) :: id_var
+
+    CALL handle_error(nf90_def_var(ncid,var_name,nf90_int,id_dims,id_var))
+    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
+    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
+    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
+
+  END SUBROUTINE create_int_var
+
+  SUBROUTINE create_double_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
+    ! Subroutine for creating netCDF variables of type nf90_DOUBLE more convenient:
+
+    ! Input variables:
+    INTEGER,                      INTENT(IN)  :: ncid
+    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
+    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
+    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
+
+    ! Output variables:
+    INTEGER,                      INTENT(OUT) :: id_var
+
+    CALL handle_error(nf90_def_var(ncid,var_name,nf90_double,id_dims,id_var))
+    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
+    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
+    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
+
+  END SUBROUTINE create_double_var
+
+  SUBROUTINE inquire_dim( ncid, dim_name, dim_length, id_dim)
+    ! Inquire the id of a dimension and return its length.
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)  :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)  :: dim_name
+
+    ! Output variables:
+    INTEGER,                    INTENT(OUT) :: dim_length
+    INTEGER,                    INTENT(OUT) :: id_dim
+
+    CALL handle_error(nf90_inq_dimid(ncid,dim_name,id_dim))
+    CALL handle_error(nf90_inquire_dimension(ncid, id_dim, len=dim_length))
+
+  END SUBROUTINE inquire_dim
+
+  SUBROUTINE inquire_int_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_int.
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF (xtype /= nf90_int) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_int!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+
+  END SUBROUTINE inquire_int_var
+
+  SUBROUTINE inquire_single_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_DOUBLE.
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF (xtype /= nf90_float) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_float!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+
+  END SUBROUTINE inquire_single_var
+
+  SUBROUTINE inquire_double_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_DOUBLE.
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF(xtype /= nf90_double) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_double!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+
+  END SUBROUTINE inquire_double_var
+
+  SUBROUTINE handle_error( stat, message)
+    USE netcdf, ONLY: nf90_noerr, nf90_strerror
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN) :: stat
+    CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
+
+    IF (stat /= nf90_noerr) THEN
+      IF (PRESENT( message)) THEN
+        CALL crash( message)
+      ELSE
+        CALL crash( 'netcdf error')
+      END IF
+    END IF
+
+  END SUBROUTINE handle_error
+
+! ===== Main output functions =====
+! =================================
 
   SUBROUTINE create_output_files( region)
     ! Create a new set of output NetCDF files (restart + help_fields + debug)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_output_files'
 
@@ -69,52 +282,54 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     IF (par%master) WRITE(0,*) '  Creating output files...'
-    
+
     ! Get output file names
     CALL get_output_filenames( region)
-    
+
     ! Create the files
-    ! CALL create_restart_file_mesh(     region, region%restart_mesh)
-    ! CALL create_restart_file_grid(     region, region%restart_grid)
+    CALL create_restart_file_mesh(     region, region%restart_mesh)
+    CALL create_restart_file_grid(     region, region%restart_grid)
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_output_files
+
   SUBROUTINE write_to_output_files( region)
     ! Write the current model state to the existing output files
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_output_files'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
-    
-    ! CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    ! CALL write_to_restart_file_grid(     region, region%restart_grid)
+    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
+
+    CALL write_to_restart_file_mesh(     region, region%restart_mesh)
+    CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_output_files
+
   SUBROUTINE get_output_filenames( region)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
 
@@ -122,9 +337,9 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_output_filenames'
     CHARACTER(LEN=256)          :: short_filename
     LOGICAL                     :: ex
-    INTEGER                     :: n    
+    INTEGER                     :: n
     CHARACTER(LEN=256)          :: ns
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -135,7 +350,7 @@ CONTAINS
 
     ! restart file (mesh)
     ! ===================
-    
+
     short_filename = 'restart_NAM_00001.nc'
     short_filename(9:11) = region%name
     n = 1
@@ -143,12 +358,12 @@ CONTAINS
     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     DO WHILE (ex)
-    
+
      n=n+1
-     
+
      WRITE(ns,*) n
      ns = ADJUSTL(ns)
-     
+
      IF (n<10) THEN
        short_filename = short_filename(1:12) // '0000' // TRIM(ns) // '.nc'
      ELSEIF (n<100) THEN
@@ -164,7 +379,7 @@ CONTAINS
      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     END DO
-    
+
     DO n = 1, 256
       region%restart_mesh%filename(n:n) = ' '
     END DO
@@ -172,7 +387,7 @@ CONTAINS
 
     ! help_fields file (mesh)
     ! =======================
-    
+
     short_filename = 'help_fields_NAM_00001.nc'
     short_filename(13:15) = region%name
     n = 1
@@ -180,12 +395,12 @@ CONTAINS
     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     DO WHILE (ex)
-    
+
      n=n+1
-     
+
      WRITE(ns,*) n
      ns = ADJUSTL(ns)
-     
+
      IF (n<10) THEN
        short_filename = short_filename(1:16) // '0000' // TRIM(ns) // '.nc'
      ELSEIF (n<100) THEN
@@ -201,7 +416,7 @@ CONTAINS
      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     END DO
-    
+
     DO n = 1, 256
       region%help_fields_mesh%filename(n:n) = ' '
     END DO
@@ -209,7 +424,7 @@ CONTAINS
 
     ! restart file (grid)
     ! ===================
-    
+
     short_filename = 'restart_grid_NAM.nc'
     short_filename(14:16) = region%name
     DO n = 1, 256
@@ -219,7 +434,7 @@ CONTAINS
 
     ! help_fields file (grid)
     ! =======================
-    
+
     short_filename = 'help_fields_grid_NAM.nc'
     short_filename(18:20) = region%name
     DO n = 1, 256
@@ -232,18 +447,18 @@ CONTAINS
 
   END SUBROUTINE get_output_filenames
 
-! Create and write to output NetCDF files (mesh versions)
-! =======================================================
+! ===== Create and write to output NetCDF files (mesh versions) =====
+! ===================================================================
 
   SUBROUTINE write_to_restart_file_mesh( region, netcdf)
     ! Write the current model state to the existing output file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),   INTENT(INOUT) :: region
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_restart_file_mesh'
 
@@ -254,48 +469,74 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the file for writing
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-        
+
     ! Time
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
-    
+
     ! Write data
-    
+
     ! Geometry
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start = (/ 1,     netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start = (/ 1,     netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start = (/ 1,     netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,               region%ice%SL_a,                start = (/ 1,     netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb,              region%ice%dHb_a,               start = (/ 1,     netcdf%ti/)))
-    
+
+    ! Bed roughness
+    IF (C%choice_sliding_law == 'Weertman' .OR. &
+        C%choice_sliding_law == 'Tsai2015' .OR. &
+        C%choice_sliding_law == 'Schoof2005') THEN
+
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq,          region%ice%beta_sq_a,           start = (/ 1,     netcdf%ti/)))
+
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+            C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric,         region%ice%phi_fric_a,          start = (/ 1,     netcdf%ti/)))
+
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
     ! Temperature
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
-    
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,                 region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
+
     ! SMB
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start = (/ 1, 1,  netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start = (/ 1,     netcdf%ti/)))
-    
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start = (/ 1, 1,  netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start = (/ 1,     netcdf%ti/)))
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, region%SMB%C_abl_constant_inv, start = (/ 1,  netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       region%SMB%C_abl_Ts_inv,       start = (/ 1,  netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        region%SMB%C_abl_Q_inv,        start = (/ 1,  netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         region%SMB%C_refr_inv,         start = (/ 1,  netcdf%ti/)))
+      END IF
+    END IF
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-        
+
   END SUBROUTINE write_to_restart_file_mesh
+
   SUBROUTINE write_to_help_fields_file_mesh( region, netcdf)
     ! Write the current model state to the existing output file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),       INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_mesh'
 
@@ -309,10 +550,10 @@ CONTAINS
 
     ! Open the file for writing
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-        
+
     ! Time
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
-    
+
     ! Write data
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_02, C%help_field_02)
@@ -364,28 +605,29 @@ CONTAINS
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_48, C%help_field_48)
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_49, C%help_field_49)
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_50, C%help_field_50)
-    
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-        
+
   END SUBROUTINE write_to_help_fields_file_mesh
+
   SUBROUTINE write_help_field_mesh( region, netcdf, id_var, field_name)
     ! Write the current model state to the existing output file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(IN)    :: region
     TYPE(type_netcdf_help_fields),  INTENT(IN)    :: netcdf
     INTEGER,                        INTENT(IN)    :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_help_field_mesh'
 
@@ -396,27 +638,27 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-      
+
     ! Fields with no time dimension
     ! =============================
-      
+
     ! Lat/lon
     IF     (field_name == 'lat') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lat, start=(/1 /) ))
     ELSEIF (field_name == 'lon') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%mesh%lon, start=(/1 /) ))
-    
+
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%GHF_a, start=(/1 /) ))
-      
+
     ! Fields with a time dimension
     ! ============================
-    
+
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
       ! Not needed, this is already part of regular mesh data
-      
+
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hi_a, start=(/1, netcdf%ti /) ))
@@ -426,7 +668,11 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hs_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'SL') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%SL_a, start=(/1, netcdf%ti /) ))
-      
+    ELSEIF (field_name == 'dHi') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHi_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dHs') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_a, start=(/1, netcdf%ti /) ))
+
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a, start=(/1, 1, netcdf%ti /) ))
@@ -442,7 +688,7 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_3D_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'A_flow_vav') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_vav_a, start=(/1, netcdf%ti /) ))
-      
+
     ! Velocity fields
     ELSEIF (field_name == 'u_3D') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%u_3D_a, start=(/1, 1, netcdf%ti /) ))
@@ -490,7 +736,7 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'uabs_base_b') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%uabs_base_b, start=(/1, netcdf%ti /) ))
-      
+
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%T2m, start=(/1, 1, netcdf%ti /) ))
@@ -508,7 +754,7 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_SN, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_SN_year') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Wind_SN,2)/12._dp, start=(/1, netcdf%ti /) ))
-      
+
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%SMB, start=(/1, 1, netcdf%ti /) ))
@@ -536,6 +782,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Refreezing_year, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'Melt') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Melt, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Melt,2), start=(/1,  netcdf%ti /) ))
     ELSEIF (field_name == 'Runoff') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Runoff, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -548,7 +798,15 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%FirnDepth, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%FirnDepth,2)/12._dp, start=(/1,  netcdf%ti /) ))
-      
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_constant_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_Ts_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_Q_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_refr_inv, start=(/1,  netcdf%ti /) ))
+
     ! Masks
     ELSEIF (field_name == 'mask') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_a, start=(/1, netcdf%ti /) ))
@@ -572,7 +830,7 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_gl_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_cf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf_a, start=(/1, netcdf%ti /) ))
-      
+
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%phi_fric_a(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
@@ -580,13 +838,13 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%tauc_a(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'beta_sq') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%beta_sq_a(1:region%mesh%nV), start=(/1, netcdf%ti /) ))
-      
+
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%IsoIce, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'iso_surf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%IsoSurf, start=(/1, netcdf%ti /) ))
-    
+
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Hb_a - region%refgeo_PD%Hb, start=(/1, netcdf%ti /) ))
@@ -597,26 +855,26 @@ CONTAINS
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_help_field_mesh
-  
+
   SUBROUTINE create_restart_file_mesh( region, netcdf)
     ! Create a new restart NetCDF file, write the current mesh data to it.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_restart_file_mesh'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_restart_file_mesh'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -624,24 +882,24 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Set time frame index to 1
     netcdf%ti = 1
 
-    ! Create a new restart file if none exists and, to prevent loss of data, 
+    ! Create a new restart file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
       CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
     END IF
-    
+
     ! Create netCDF file
-!    WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
+    ! WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-        
+
     ! Mesh data
     ! =========
-    
+
     ! Define dimensions
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vi,           region%mesh%nV,          netcdf%id_dim_vi          ) ! Vertex indices
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ti,           region%mesh%nTri,        netcdf%id_dim_ti          ) ! Triangle indices
@@ -652,7 +910,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
     ti        = netcdf%id_dim_ti
@@ -663,7 +921,7 @@ CONTAINS
     three     = netcdf%id_dim_three
     six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
-    
+
     ! Define variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_V,                [vi,  two  ], netcdf%id_var_V,                long_name='Vertex coordinates', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri,              [ti,  three], netcdf%id_var_Tri,              long_name='Vertex indices')
@@ -674,8 +932,8 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_edge_index,       [vi        ], netcdf%id_var_edge_index,       long_name='Edge index')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Tricc,            [ti,  two  ], netcdf%id_var_Tricc,            long_name='Triangle circumcenter', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
@@ -685,41 +943,53 @@ CONTAINS
 
     ! Model output
     ! ============
-    
+
     ! Define dimensions
     CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,  C%nZ,           netcdf%id_dim_zeta ) ! Scaled vertical coordinate
     CALL create_dim( netcdf%ncid, netcdf%name_dim_month, 12,             netcdf%id_dim_month) ! Months (for monthly data)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_time,  nf90_unlimited, netcdf%id_dim_time ) ! Time frames
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     time  = netcdf%id_dim_time
     zeta  = netcdf%id_dim_zeta
     month = netcdf%id_dim_month
-    
+
     ! Define dimension variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [time  ], netcdf%id_var_time,  long_name='Time', units='years')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [zeta  ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless (0 = ice surface, 1 = bedrock)')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [month ], netcdf%id_var_month, long_name='Month', units='1-12')
-    
+
     ! Define model data variables
-    
+
     ! Geometry
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [vi,        time], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [vi,        time], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
-    
+
+    ! Bed roughness
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,          [vi,        time], netcdf%id_var_beta_sq,          long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric,         [vi,        time], netcdf%id_var_phi_fric,         long_name='Bed roughness', units='?')
+
     ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [vi, zeta,  time], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
-    
+
     ! SMB
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [vi, month, time], netcdf%id_var_FirnDepth,        long_name='Firn depth', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [vi,        time], netcdf%id_var_MeltPreviousYear, long_name='Melt during previous year', units='mie')
-       
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [vi, month, time], netcdf%id_var_FirnDepth,          long_name='Firn depth', units='m')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [vi,        time], netcdf%id_var_MeltPreviousYear,   long_name='Melt during previous year', units='mie')
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv, [vi,    time], netcdf%id_var_C_abl_constant_inv, long_name='Threshold ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,       [vi,    time], netcdf%id_var_C_abl_Ts_inv,       long_name='Temperature ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        [vi,    time], netcdf%id_var_C_abl_Q_inv,        long_name='Insolation ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         [vi,    time], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
+      END IF
+    END IF
+
     ! Leave definition mode
-    CALL handle_error(nf90_enddef( netcdf%ncid))    
-    
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+
     ! Write mesh data
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_V,               region%mesh%V             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Tri,             region%mesh%Tri           ))
@@ -738,26 +1008,27 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_vi_transect,     region%mesh%vi_transect   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_w_transect,      region%mesh%w_transect    ))
-    
+
     ! Write zeta and month dimension variables
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_restart_file_mesh
+
   SUBROUTINE create_help_fields_file_mesh( region, netcdf)
     ! Create a new help_fields NetCDF file, write the current mesh data to it.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
@@ -766,7 +1037,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_mesh'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, time, zeta, month
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -774,24 +1045,24 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Set time frame index to 1
     netcdf%ti = 1
 
-    ! Create a new restart file if none exists and, to prevent loss of data, 
+    ! Create a new help file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
       CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
     END IF
-    
+
     ! Create netCDF file
-!    WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
+    ! WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-        
+
     ! Mesh data
     ! =========
-    
+
     ! Define dimensions
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vi,           region%mesh%nV,          netcdf%id_dim_vi          ) ! Vertex indices
     CALL create_dim( netcdf%ncid, netcdf%name_dim_ti,           region%mesh%nTri,        netcdf%id_dim_ti          ) ! Triangle indices
@@ -802,7 +1073,7 @@ CONTAINS
     CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                       netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                       netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, region%mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     vi        = netcdf%id_dim_vi
     ti        = netcdf%id_dim_ti
@@ -813,7 +1084,7 @@ CONTAINS
     three     = netcdf%id_dim_three
     six       = netcdf%id_dim_six
     vii       = netcdf%id_dim_vii_transect
-    
+
     ! Define variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_V,                [vi,  two  ], netcdf%id_var_V,                long_name='Vertex coordinates', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri,              [ti,  three], netcdf%id_var_Tri,              long_name='Vertex indices')
@@ -824,8 +1095,8 @@ CONTAINS
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_edge_index,       [vi        ], netcdf%id_var_edge_index,       long_name='Edge index')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Tricc,            [ti,  two  ], netcdf%id_var_Tricc,            long_name='Triangle circumcenter', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
-    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index') 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
@@ -835,24 +1106,24 @@ CONTAINS
 
     ! Model output
     ! ============
-    
+
     ! Define dimensions
     CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,  C%nZ,           netcdf%id_dim_zeta ) ! Scaled vertical coordinate
     CALL create_dim( netcdf%ncid, netcdf%name_dim_month, 12,             netcdf%id_dim_month) ! Months (for monthly data)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_time,  nf90_unlimited, netcdf%id_dim_time ) ! Time frames
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     time  = netcdf%id_dim_time
     zeta  = netcdf%id_dim_zeta
     month = netcdf%id_dim_month
-    
+
     ! Define dimension variables
     CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [time  ], netcdf%id_var_time,  long_name='Time', units='years')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [zeta  ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless (0 = ice surface, 1 = bedrock)')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [month ], netcdf%id_var_month, long_name='Month', units='1-12')
-    
+
     ! Define model data variables
-    
+
     ! Define data variables
     CALL create_help_field_mesh( netcdf, netcdf%id_help_field_01, C%help_field_01)
     CALL create_help_field_mesh( netcdf, netcdf%id_help_field_02, C%help_field_02)
@@ -904,10 +1175,10 @@ CONTAINS
     CALL create_help_field_mesh( netcdf, netcdf%id_help_field_48, C%help_field_48)
     CALL create_help_field_mesh( netcdf, netcdf%id_help_field_49, C%help_field_49)
     CALL create_help_field_mesh( netcdf, netcdf%id_help_field_50, C%help_field_50)
-       
+
     ! Leave definition mode
-    CALL handle_error(nf90_enddef( netcdf%ncid))    
-    
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+
     ! Write mesh data
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_V,               region%mesh%V             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Tri,             region%mesh%Tri           ))
@@ -926,35 +1197,36 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_vi_transect,     region%mesh%vi_transect   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_w_transect,      region%mesh%w_transect    ))
-    
+
     ! Write zeta and month dimension variables
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_help_fields_file_mesh
+
   SUBROUTINE create_help_field_mesh( netcdf, id_var, field_name)
     ! Add a data field to the help_fields file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
     INTEGER,                        INTENT(INOUT) :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_mesh'
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, ai, tai, t, z, m
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -973,31 +1245,31 @@ CONTAINS
     t         = netcdf%id_dim_time
     z         = netcdf%id_dim_zeta
     m         = netcdf%id_dim_month
-    
+
     IF (field_name == 'none') THEN
       CALL finalise_routine( routine_name)
       RETURN
-      
+
     ! Fields with no time dimension
     ! =============================
-      
+
     ! Lat/lon
     ELSEIF (field_name == 'lat') THEN
       CALL create_double_var( netcdf%ncid, 'lat',                      [vi      ], id_var, long_name='Latitude',  units='degrees north')
     ELSEIF (field_name == 'lon') THEN
       CALL create_double_var( netcdf%ncid, 'lon',                      [vi      ], id_var, long_name='Longitude', units='degrees east')
-      
+
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
       CALL create_double_var( netcdf%ncid, 'GHF',                      [vi      ], id_var, long_name='Geothermal heat flux', units='J m^-2 yr^-1')
-      
+
     ! Fields with a time dimension
     ! ============================
-    
+
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
       ! Not needed, this is already part of regular mesh data
-      
+
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
       CALL create_double_var( netcdf%ncid, 'Hi',                       [vi,    t], id_var, long_name='Ice thickness', units='m')
@@ -1007,7 +1279,11 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [vi,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [vi,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
-      
+    ELSEIF (field_name == 'dHi') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi',                      [vi,    t], id_var, long_name='Ice thickness difference w.r.t PD', units='m')
+    ELSEIF (field_name == 'dHs') THEN
+      CALL create_double_var( netcdf%ncid, 'dHs',                      [vi,    t], id_var, long_name='Ice elevation difference w.r.t PD', units='m')
+
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
       CALL create_double_var( netcdf%ncid, 'Ti',                       [vi, z, t], id_var, long_name='Englacial temperature', units='K')
@@ -1023,7 +1299,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [vi, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
     ELSEIF (field_name == 'A_flow_vav') THEN
       CALL create_double_var( netcdf%ncid, 'A_flow_vav',               [vi,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
-      
+
     ! Velocity fields
     ELSEIF (field_name == 'u_3D') THEN
       CALL create_double_var( netcdf%ncid, 'u_3D',                     [vi, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
@@ -1071,7 +1347,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [vi,    t], id_var, long_name='Basal ice velocity', units='m/yr')
     ELSEIF (field_name == 'uabs_base_b') THEN
       CALL create_double_var( netcdf%ncid, 'uabs_base_b',              [ti,    t], id_var, long_name='Basal ice velocity (b-grid)', units='m/yr')
-      
+
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
       CALL create_double_var( netcdf%ncid, 'T2m',                      [vi, m, t], id_var, long_name='Monthly mean 2-m air temperature', units='K')
@@ -1089,7 +1365,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Wind_SN',                  [vi, m, t], id_var, long_name='Monthly mean meridional wind', units='m/s')
     ELSEIF (field_name == 'Wind_SN_year') THEN
       CALL create_double_var( netcdf%ncid, 'Wind_SN_year',             [vi,    t], id_var, long_name='Annual mean meridional wind', units='m/s')
-      
+
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
       CALL create_double_var( netcdf%ncid, 'SMB',                      [vi, m, t], id_var, long_name='Monthly surface mass balance', units='m ice equivalent')
@@ -1117,6 +1393,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Refreezing',               [vi, m, t], id_var, long_name='Monthly total refreezing', units='m water equivalent')
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL create_double_var( netcdf%ncid, 'Refreezing_year',          [vi,    t], id_var, long_name='Annual total refreezing', units='m water equivalent')
+    ELSEIF (field_name == 'Melt') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt',                     [vi, m, t], id_var, long_name='Monthly total melting', units='m water equivalent')
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt_year',                [vi,    t], id_var, long_name='Annual total melt', units='m water equivalent')
     ELSEIF (field_name == 'Runoff') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff',                   [vi, m, t], id_var, long_name='Monthly total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -1129,45 +1409,53 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [vi, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [vi,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
-      
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [vi,    t], id_var, long_name='Constant ablation', units='-')
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [vi,    t], id_var, long_name='Temperature ablation factor', units='-')
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [vi,    t], id_var, long_name='Insolation ablation factor', units='-')
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [vi,    t], id_var, long_name='Refreezing factor', units='-')
+
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask',                     [vi,    t], id_var, long_name='mask')
+      CALL create_int_var(    netcdf%ncid, 'mask',                     [vi,    t], id_var, long_name='Mask')
     ELSEIF (field_name == 'mask_land') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_land',                [vi,    t], id_var, long_name='land mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_land',                [vi,    t], id_var, long_name='Land mask')
     ELSEIF (field_name == 'mask_ocean') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [vi,    t], id_var, long_name='ocean mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [vi,    t], id_var, long_name='Ocean mask')
     ELSEIF (field_name == 'mask_lake') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_lake',                [vi,    t], id_var, long_name='lake mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_lake',                [vi,    t], id_var, long_name='Lake mask')
     ELSEIF (field_name == 'mask_ice') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [vi,    t], id_var, long_name='ice mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [vi,    t], id_var, long_name='Ice mask')
     ELSEIF (field_name == 'mask_sheet') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [vi,    t], id_var, long_name='sheet mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [vi,    t], id_var, long_name='Sheet mask')
     ELSEIF (field_name == 'mask_shelf') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [vi,    t], id_var, long_name='shelf mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [vi,    t], id_var, long_name='Shelf mask')
     ELSEIF (field_name == 'mask_coast') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_coast',               [vi,    t], id_var, long_name='coast mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_coast',               [vi,    t], id_var, long_name='Coast mask')
     ELSEIF (field_name == 'mask_margin') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_margin',              [vi,    t], id_var, long_name='margin mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_margin',              [vi,    t], id_var, long_name='Margin mask')
     ELSEIF (field_name == 'mask_gl') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [vi,    t], id_var, long_name='grounding-line mask')
+      CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [vi,    t], id_var, long_name='Grounding-line mask')
     ELSEIF (field_name == 'mask_cf') THEN
-      CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='calving-front mask')
-      
+      CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='Calving-front mask')
+
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
-      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='till friction angle', units='degrees')
+      CALL create_double_var( netcdf%ncid, 'phi_fric',                 [vi,    t], id_var, long_name='Till friction angle', units='degrees')
     ELSEIF (field_name == 'tau_yield') THEN
-      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='basal yield stress', units='Pa')
+      CALL create_double_var( netcdf%ncid, 'tau_yield',                [vi,    t], id_var, long_name='Basal yield stress', units='Pa')
     ELSEIF (field_name == 'beta_sq') THEN
-      CALL create_double_var( netcdf%ncid, 'beta_sq',                  [vi,    t], id_var, long_name='sliding coefficient', units='?')
-      
+      CALL create_double_var( netcdf%ncid, 'beta_sq',                  [vi,    t], id_var, long_name='Sliding coefficient', units='?')
+
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
       CALL create_double_var( netcdf%ncid, 'iso_ice',                  [vi,    t], id_var, long_name='Vertically averaged ice d18O', units='per mille')
     ELSEIF (field_name == 'iso_surf') THEN
       CALL create_double_var( netcdf%ncid, 'iso_surf',                 [vi,    t], id_var, long_name='d18O of precipitation', units='per mille')
-    
+
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [vi,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
@@ -1178,23 +1466,23 @@ CONTAINS
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_help_field_mesh
-  
-! Create and write to output NetCDF files (grid versions)
-! =======================================================
+
+! ===== Create and write to output NetCDF files (grid versions) =====
+! ===================================================================
 
   SUBROUTINE write_to_restart_file_grid( region, netcdf)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),   INTENT(INOUT) :: region
     TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_restart_file_grid'
 
@@ -1203,45 +1491,65 @@ CONTAINS
 
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-        
+
     ! Time
     IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,      start=(/         netcdf%ti/)))
-    
+
     ! Map and write data
-    
+
     ! Geometry
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a,             netcdf%id_var_Hi,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a,             netcdf%id_var_Hb,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a,             netcdf%id_var_Hs,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,             netcdf%id_var_SL,               netcdf%ti      )
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a,            netcdf%id_var_dHb,              netcdf%ti      )
-    
+
+    ! Bed roughness
+    IF (C%choice_sliding_law == 'Weertman' .OR. C%choice_sliding_law == 'Tsai2015' .OR. C%choice_sliding_law == 'Schoof2005') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%beta_sq_a,      netcdf%id_var_beta_sq,          netcdf%ti      )
+
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_a,     netcdf%id_var_phi_fric,         netcdf%ti      )
+
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
     ! Temperature
     CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a,             netcdf%id_var_Ti,               netcdf%ti, C%nZ)
-    
+
     ! SMB
-    CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12  )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
-    
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12  )
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_constant_inv, netcdf%id_var_C_abl_constant_inv, netcdf%ti)
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Ts_inv,       netcdf%id_var_C_abl_Ts_inv,       netcdf%ti)
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Q_inv,        netcdf%id_var_C_abl_Q_inv,        netcdf%ti)
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_refr_inv,         netcdf%id_var_C_refr_inv,         netcdf%ti)
+      END IF
+    END IF
+
     ! Close the file
     IF (par%master) CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Increase time frame counter
     IF (par%master) netcdf%ti = netcdf%ti + 1
     CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-        
+
   END SUBROUTINE write_to_restart_file_grid
+
   SUBROUTINE write_to_help_fields_file_grid( region, netcdf)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),       INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_grid'
 
@@ -1250,10 +1558,10 @@ CONTAINS
 
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-        
+
     ! Time
     IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
-    
+
     ! Write data
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_02, C%help_field_02)
@@ -1305,35 +1613,36 @@ CONTAINS
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_48, C%help_field_48)
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_49, C%help_field_49)
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_50, C%help_field_50)
-    
+
     ! Close the file
     IF (par%master) CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Increase time frame counter
     IF (par%master) netcdf%ti = netcdf%ti + 1
     CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-        
+
   END SUBROUTINE write_to_help_fields_file_grid
+
   SUBROUTINE write_help_field_grid( region, netcdf, id_var, field_name)
     ! Write the current model state to the existing output file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),       INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
     INTEGER,                       INTENT(IN)    :: id_var
     CHARACTER(LEN=*),              INTENT(IN)    :: field_name
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                :: routine_name = 'write_help_field_grid'
     INTEGER                                      :: vi
     REAL(dp), DIMENSION(:    ), POINTER          ::  dp_2D_a
     INTEGER                                      :: wdp_2D_a
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1341,30 +1650,30 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( region%mesh%nV, dp_2D_a, wdp_2D_a)
-      
+
     ! Fields with no time dimension
     ! =============================
-      
+
     ! Lat/lon
     IF     (field_name == 'lat') THEN
       IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%grid_output%lat ))
     ELSEIF (field_name == 'lon') THEN
       IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%grid_output%lon ))
-    
+
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%GHF_a, id_var, netcdf%ti)
-      
+
     ! Fields with a time dimension
     ! ============================
-    
+
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%mesh%R, id_var, netcdf%ti)
-      
+
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a, id_var, netcdf%ti)
@@ -1374,7 +1683,11 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'SL') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a, id_var, netcdf%ti)
-      
+    ELSEIF (field_name == 'dHi') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dHs') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_a, id_var, netcdf%ti)
+
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a, id_var, netcdf%ti, C%nZ)
@@ -1390,7 +1703,7 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_3D_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'A_flow_vav') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_vav_a, id_var, netcdf%ti)
-      
+
     ! Velocity fields
     ELSEIF (field_name == 'u_3D') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%u_3D_a, id_var, netcdf%ti, C%nZ)
@@ -1438,7 +1751,7 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%uabs_base_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'uabs_base_b') THEN
       ! Do nothing; b-grid variables are only written to the mesh-version of the file
-      
+
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%T2m, id_var, netcdf%ti, 12)
@@ -1468,7 +1781,7 @@ CONTAINS
         dp_2D_a( vi) = SUM( region%climate_matrix%applied%Wind_SN( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-      
+
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%SMB, id_var, netcdf%ti, 12)
@@ -1508,6 +1821,13 @@ CONTAINS
         dp_2D_a( vi) = SUM( region%SMB%Refreezing( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'Melt') THEN
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Melt, id_var, netcdf%ti, 12)
+    ELSEIF (field_name == 'Melt_year') THEN
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        dp_2D_a( vi) = SUM( region%SMB%Melt( vi,:))
+      END DO
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Runoff') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%Runoff, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -1529,23 +1849,30 @@ CONTAINS
         dp_2D_a( vi) = SUM( region%SMB%FirnDepth( vi,:)) / 12._dp
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-      
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_constant_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Ts_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Q_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_refr_inv, id_var, netcdf%ti)
 
-      
     ! Masks
-    ! NOTE: not included, as mapping masks between grids is meaningless
-    ELSEIF (field_name == 'mask') THEN
-    ELSEIF (field_name == 'mask_land') THEN
-    ELSEIF (field_name == 'mask_ocean') THEN
-    ELSEIF (field_name == 'mask_lake') THEN
-    ELSEIF (field_name == 'mask_ice') THEN
-    ELSEIF (field_name == 'mask_sheet') THEN
-    ELSEIF (field_name == 'mask_shelf') THEN
-    ELSEIF (field_name == 'mask_coast') THEN
+    ! NOTE: not meant to be included, as mapping masks between grids is meaningless. These lines are needed so the model can output
+    !       the mesh version of these variables without crashing at the ELSE below.
+    ELSEIF (field_name == 'mask'       ) THEN
+    ELSEIF (field_name == 'mask_land'  ) THEN
+    ELSEIF (field_name == 'mask_ocean' ) THEN
+    ELSEIF (field_name == 'mask_lake'  ) THEN
+    ELSEIF (field_name == 'mask_ice'   ) THEN
+    ELSEIF (field_name == 'mask_sheet' ) THEN
+    ELSEIF (field_name == 'mask_shelf' ) THEN
+    ELSEIF (field_name == 'mask_coast' ) THEN
     ELSEIF (field_name == 'mask_margin') THEN
-    ELSEIF (field_name == 'mask_gl') THEN
-    ELSEIF (field_name == 'mask_cf') THEN
-      
+    ELSEIF (field_name == 'mask_gl'    ) THEN
+    ELSEIF (field_name == 'mask_cf'    ) THEN
+
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_a( region%mesh%vi1:region%mesh%vi2)
@@ -1556,13 +1883,13 @@ CONTAINS
     ELSEIF (field_name == 'beta_sq') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%beta_sq_a( region%mesh%vi1:region%mesh%vi2)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
-      
+
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%IsoIce, id_var, netcdf%ti)
     ELSEIF (field_name == 'iso_surf') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%IsoSurf, id_var, netcdf%ti)
-    
+
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%Hb_a( region%mesh%vi1:region%mesh%vi2) - region%refgeo_PD%Hb( region%mesh%vi1:region%mesh%vi2)
@@ -1574,10 +1901,10 @@ CONTAINS
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wdp_2D_a)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1585,18 +1912,18 @@ CONTAINS
 
   SUBROUTINE create_restart_file_grid( region, netcdf)
     ! Create a new restart NetCDF file.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_netcdf_restart),      INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_restart_file_grid'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_restart_file_grid'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: x,y,z,m,t
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1611,79 +1938,93 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Create netCDF file
-!    WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
+
+    ! WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-    
+
     ! Set time frame index to 1
     netcdf%ti = 1
-        
+
     ! Define dimensions:
     CALL create_dim( netcdf%ncid, netcdf%name_dim_x,         region%grid_output%nx, netcdf%id_dim_x    )
     CALL create_dim( netcdf%ncid, netcdf%name_dim_y,         region%grid_output%ny, netcdf%id_dim_y    )
     CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,      C%nZ,                  netcdf%id_dim_zeta ) ! Scaled vertical coordinate
     CALL create_dim( netcdf%ncid, netcdf%name_dim_month,     12,                    netcdf%id_dim_month) ! Months (for monthly data)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_time,      nf90_unlimited,        netcdf%id_dim_time ) ! Time frames
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     x = netcdf%id_dim_x
     y = netcdf%id_dim_y
     z = netcdf%id_dim_zeta
     m = netcdf%id_dim_month
     t = netcdf%id_dim_time
-    
+
     ! Define variables:
     ! The order of the CALL statements for the different variables determines their
     ! order of appearence in the netcdf file.
-    
+
     ! Dimension variables: zeta, month, time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,                [x            ], netcdf%id_var_x,                long_name='X-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,                [   y         ], netcdf%id_var_y,                long_name='Y-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,             [      z      ], netcdf%id_var_zeta,             long_name='Vertical scaled coordinate', units='unitless')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_month,            [         m   ], netcdf%id_var_month,            long_name='Month', units='1-12'    )
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,             [            t], netcdf%id_var_time,             long_name='Time', units='years'   )
-    
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,                  [x            ], netcdf%id_var_x,                  long_name='X-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,                  [   y         ], netcdf%id_var_y,                  long_name='Y-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,               [      z      ], netcdf%id_var_zeta,               long_name='Vertical scaled coordinate', units='unitless')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_month,              [         m   ], netcdf%id_var_month,              long_name='Month', units='1-12'    )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,               [            t], netcdf%id_var_time,               long_name='Time', units='years'   )
+
     ! Ice model data
-    
+
     ! Geometry
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [x, y,       t], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [x, y,       t], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [x, y,       t], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [x, y,       t], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [x, y,       t], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
-    
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,                 [x, y,       t], netcdf%id_var_Hi,                 long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,                 [x, y,       t], netcdf%id_var_Hb,                 long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,                 [x, y,       t], netcdf%id_var_Hs,                 long_name='Surface elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,                 [x, y,       t], netcdf%id_var_SL,                 long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,                [x, y,       t], netcdf%id_var_dHb,                long_name='Bedrock deformation', units='m')
+
+    ! Bed roughness
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,            [x, y,       t], netcdf%id_var_beta_sq,            long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric,           [x, y,       t], netcdf%id_var_phi_fric,           long_name='Bed roughness', units='?')
+
     ! Temperature
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [x, y, z,    t], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
-    
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,                 [x, y, z,    t], netcdf%id_var_Ti,                 long_name='Ice temperature', units='K')
+
     ! SMB
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [x, y,    m, t], netcdf%id_var_FirnDepth,        long_name='Firn depth', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [x, y,       t], netcdf%id_var_MeltPreviousYear, long_name='Melt during previous year', units='mie')
-       
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [x, y,    m, t], netcdf%id_var_FirnDepth,          long_name='Firn depth', units='m')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [x, y,       t], netcdf%id_var_MeltPreviousYear,   long_name='Melt during previous year', units='mie')
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv,   [x, y, t], netcdf%id_var_C_abl_constant_inv, long_name='Threshold ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,         [x, y, t], netcdf%id_var_C_abl_Ts_inv,       long_name='Temperature ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,          [x, y, t], netcdf%id_var_C_abl_Q_inv,        long_name='Insolation ablation factor', units='-')
+        CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,           [x, y, t], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
+      END IF
+    END IF
+
     ! Leave definition mode
-    CALL handle_error(nf90_enddef( netcdf%ncid))    
-    
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+
     ! Write zeta and month dimension variables
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_x,        region%grid_output%x                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y,        region%grid_output%y                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_restart_file_grid
+
   SUBROUTINE create_help_fields_file_grid( region, netcdf)
     ! Create a new help fields file, containing secondary model output (not needed for a restart, but interesting to look at)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
@@ -1692,7 +2033,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_help_fields_file_grid'
     LOGICAL                                       :: file_exists
     INTEGER                                       :: x, y, z, m, t
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1707,35 +2048,35 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Create netCDF file
     !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-    
+
     ! Set time frame index to 1
     netcdf%ti = 1
-        
+
     ! Define dimensions:
     CALL create_dim( netcdf%ncid, netcdf%name_dim_x,     region%grid_output%nx, netcdf%id_dim_x    )
     CALL create_dim( netcdf%ncid, netcdf%name_dim_y,     region%grid_output%ny, netcdf%id_dim_y    )
     CALL create_dim( netcdf%ncid, netcdf%name_dim_zeta,  C%nZ,                  netcdf%id_dim_zeta )
     CALL create_dim( netcdf%ncid, netcdf%name_dim_month, 12,                    netcdf%id_dim_month)
     CALL create_dim( netcdf%ncid, netcdf%name_dim_time,  nf90_unlimited,        netcdf%id_dim_time )
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     x = netcdf%id_dim_x
     y = netcdf%id_dim_y
     z = netcdf%id_dim_zeta
     m = netcdf%id_dim_month
     t = netcdf%id_dim_time
-    
+
     ! Dimension variables: zeta, month, time
     CALL create_double_var( netcdf%ncid, netcdf%name_var_x,     [netcdf%id_dim_x    ], netcdf%id_var_x,     long_name='X-coordinate', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_y,     [netcdf%id_dim_y    ], netcdf%id_var_y,     long_name='Y-coordinate', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [netcdf%id_dim_zeta ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [netcdf%id_dim_month], netcdf%id_var_month, long_name='Month', units='1-12'    )
     CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [netcdf%id_dim_time ], netcdf%id_var_time,  long_name='Time', units='years'   )
-    
+
     ! Define data variables
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_01, C%help_field_01)
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_02, C%help_field_02)
@@ -1787,40 +2128,41 @@ CONTAINS
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_48, C%help_field_48)
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_49, C%help_field_49)
     CALL create_help_field_grid( netcdf, netcdf%id_help_field_50, C%help_field_50)
-    
+
     ! Leave definition mode:
     CALL handle_error(nf90_enddef( netcdf%ncid))
-    
+
     ! Write the x, y, zeta, months, and lat/lon variable data
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_x,        region%grid_output%x                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y,        region%grid_output%y                     ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( netcdf%ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_help_fields_file_grid
+
   SUBROUTINE create_help_field_grid( netcdf, id_var, field_name)
     ! Add a data field to the help_fields file
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_netcdf_help_fields),  INTENT(INOUT) :: netcdf
     INTEGER,                        INTENT(INOUT) :: id_var
     CHARACTER(LEN=*),               INTENT(IN)    :: field_name
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_help_field_grid'
     INTEGER                                       :: x, y, t, z, m
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1830,31 +2172,31 @@ CONTAINS
     t         = netcdf%id_dim_time
     z         = netcdf%id_dim_zeta
     m         = netcdf%id_dim_month
-    
+
     IF (field_name == 'none') THEN
       CALL finalise_routine( routine_name)
       RETURN
-      
+
     ! Fields with no time dimension
     ! =============================
-      
+
     ! Lat/lon
     ELSEIF (field_name == 'lat') THEN
       CALL create_double_var( netcdf%ncid, 'lat',                      [x, y      ], id_var, long_name='Latitude',  units='degrees north')
     ELSEIF (field_name == 'lon') THEN
       CALL create_double_var( netcdf%ncid, 'lon',                      [x, y      ], id_var, long_name='Longitude', units='degrees east')
-      
+
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
       CALL create_double_var( netcdf%ncid, 'GHF',                      [x, y      ], id_var, long_name='Geothermal heat flux', units='J m^-2 yr^-1')
-      
+
     ! Fields with a time dimension
     ! ============================
-    
+
     ! Mesh
     ELSEIF (field_name == 'resolution') THEN
       CALL create_double_var( netcdf%ncid, 'resolution',               [x, y,    t], id_var, long_name='Mesh resolution', units='m')
-      
+
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
       CALL create_double_var( netcdf%ncid, 'Hi',                       [x, y,    t], id_var, long_name='Ice thickness', units='m')
@@ -1864,7 +2206,11 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Hs',                       [x, y,    t], id_var, long_name='Surface elevation', units='m w.r.t PD sealevel')
     ELSEIF (field_name == 'SL') THEN
       CALL create_double_var( netcdf%ncid, 'SL',                       [x, y,    t], id_var, long_name='Geoid elevation', units='m w.r.t PD sealevel')
-      
+    ELSEIF (field_name == 'dHi') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi',                      [x, y,    t], id_var, long_name='Ice thickness difference w.r.t. PD', units='m')
+    ELSEIF (field_name == 'dHs') THEN
+      CALL create_double_var( netcdf%ncid, 'dHs',                      [x, y,    t], id_var, long_name='Ice elevation difference w.r.t. PD', units='m')
+
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
       CALL create_double_var( netcdf%ncid, 'Ti',                       [x, y, z, t], id_var, long_name='Englacial temperature', units='K')
@@ -1880,7 +2226,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [x, y, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
     ELSEIF (field_name == 'A_flow_vav') THEN
       CALL create_double_var( netcdf%ncid, 'A_flow_vav',               [x, y,    t], id_var, long_name='Vertically averaged ice flow factor', units='Pa^-3 y^-1')
-      
+
     ! Velocity fields
     ELSEIF (field_name == 'u_3D') THEN
       CALL create_double_var( netcdf%ncid, 'u_3D',                     [x, y, z, t], id_var, long_name='3D ice x-velocity', units='m/yr')
@@ -1928,7 +2274,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'uabs_base',                [x, y,    t], id_var, long_name='Basal ice velocity', units='m/yr')
     ELSEIF (field_name == 'uabs_base_b') THEN
       ! Do nothing; b-grid variables are only written to the mesh-version of the file
-      
+
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
       CALL create_double_var( netcdf%ncid, 'T2m',                      [x, y, m, t], id_var, long_name='Monthly mean 2-m air temperature', units='K')
@@ -1946,7 +2292,7 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Wind_SN',                  [x, y, m, t], id_var, long_name='Monthly mean meridional wind', units='m/s')
     ELSEIF (field_name == 'Wind_SN_year') THEN
       CALL create_double_var( netcdf%ncid, 'Wind_SN_year',             [x, y,    t], id_var, long_name='Annual mean meridional wind', units='m/s')
-      
+
     ! Mass balance
     ELSEIF (field_name == 'SMB') THEN
       CALL create_double_var( netcdf%ncid, 'SMB',                      [x, y, m, t], id_var, long_name='Monthly surface mass balance', units='m ice equivalent')
@@ -1974,6 +2320,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Refreezing',               [x, y, m, t], id_var, long_name='Monthly total refreezing', units='m water equivalent')
     ELSEIF (field_name == 'Refreezing_year') THEN
       CALL create_double_var( netcdf%ncid, 'Refreezing_year',          [x, y,    t], id_var, long_name='Annual total refreezing', units='m water equivalent')
+    ELSEIF (field_name == 'Melt') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt',                     [x, y, m, t], id_var, long_name='Monthly total melt', units='m water equivalent')
+    ELSEIF (field_name == 'Melt_year') THEN
+      CALL create_double_var( netcdf%ncid, 'Melt_year',                [x, y,    t], id_var, long_name='Annual total melt', units='m water equivalent')
     ELSEIF (field_name == 'Runoff') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff',                   [x, y, m, t], id_var, long_name='Monthly total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Runoff_year') THEN
@@ -1986,34 +2336,41 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [x, y, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth_year',           [x, y,    t], id_var, long_name='Annual mean firn layer depth', units='m water equivalent')
-      
-      
-      ! NOTE: masks commented out; mapping masks between grids is meaningless
-      
+    ELSEIF (field_name == 'C_abl_constant_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_constant_inv',       [x, y,    t], id_var, long_name='Constant ablation', units='-')
+    ELSEIF (field_name == 'C_abl_Ts_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Ts_inv',             [x, y,    t], id_var, long_name='Temperature ablation factor', units='-')
+    ELSEIF (field_name == 'C_abl_Q_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [x, y,    t], id_var, long_name='Insolation ablation factor', units='-')
+    ELSEIF (field_name == 'C_refr_inv') THEN
+      CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [x, y,    t], id_var, long_name='Refreezing factor', units='-')
+
+    ! NOTE: masks commented out; mapping masks between grids is meaningless
+
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask',                     [x, y,    t], id_var, long_name='mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask',                     [x, y,    t], id_var, long_name='mask')
     ELSEIF (field_name == 'mask_land') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_land',                [x, y,    t], id_var, long_name='land mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_land',                [x, y,    t], id_var, long_name='land mask')
     ELSEIF (field_name == 'mask_ocean') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [x, y,    t], id_var, long_name='ocean mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_ocean',               [x, y,    t], id_var, long_name='ocean mask')
     ELSEIF (field_name == 'mask_lake') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_lake',                [x, y,    t], id_var, long_name='lake mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_lake',                [x, y,    t], id_var, long_name='lake mask')
     ELSEIF (field_name == 'mask_ice') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [x, y,    t], id_var, long_name='ice mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_ice',                 [x, y,    t], id_var, long_name='ice mask')
     ELSEIF (field_name == 'mask_sheet') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [x, y,    t], id_var, long_name='sheet mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_sheet',               [x, y,    t], id_var, long_name='sheet mask')
     ELSEIF (field_name == 'mask_shelf') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [x, y,    t], id_var, long_name='shelf mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_shelf',               [x, y,    t], id_var, long_name='shelf mask')
     ELSEIF (field_name == 'mask_coast') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_coast',               [x, y,    t], id_var, long_name='coast mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_coast',               [x, y,    t], id_var, long_name='coast mask')
     ELSEIF (field_name == 'mask_margin') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_margin',              [x, y,    t], id_var, long_name='margin mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_margin',              [x, y,    t], id_var, long_name='margin mask')
     ELSEIF (field_name == 'mask_gl') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [x, y,    t], id_var, long_name='grounding-line mask')
+      ! CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [x, y,    t], id_var, long_name='grounding-line mask')
     ELSEIF (field_name == 'mask_cf') THEN
-!      CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [x, y,    t], id_var, long_name='calving-front mask')
-      
+      ! CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [x, y,    t], id_var, long_name='calving-front mask')
+
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
       CALL create_double_var( netcdf%ncid, 'phi_fric',                 [x, y,    t], id_var, long_name='till friction angle', units='degrees')
@@ -2021,13 +2378,13 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'tau_yield',                [x, y,    t], id_var, long_name='basal yield stress', units='Pa')
     ELSEIF (field_name == 'beta_sq') THEN
       CALL create_double_var( netcdf%ncid, 'beta_sq',                  [x, y,    t], id_var, long_name='sliding coefficient', units='?')
-      
+
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
       CALL create_double_var( netcdf%ncid, 'iso_ice',                  [x, y,    t], id_var, long_name='Vertically averaged ice d18O', units='per mille')
     ELSEIF (field_name == 'iso_surf') THEN
       CALL create_double_var( netcdf%ncid, 'iso_surf',                 [x, y,    t], id_var, long_name='d18O of precipitation', units='per mille')
-    
+
     ! GIA
     ELSEIF (field_name == 'dHb') THEN
       CALL create_double_var( netcdf%ncid, 'dHb',                      [x, y,    t], id_var, long_name='Change in bedrock elevation w.r.t. PD', units='m')
@@ -2038,17 +2395,17 @@ CONTAINS
     ELSE
       CALL crash('unknown help field name "' // TRIM( field_name) // '"!')
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_help_field_grid
-  
+
   ! Map a model data field from the model mesh to the output grid, and write it to a NetCDF file.
   SUBROUTINE map_and_write_to_grid_netcdf_dp_2D(  ncid, mesh, grid, d_mesh, id_var, ti)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     INTEGER,                    INTENT(IN)        :: ncid
     TYPE(type_mesh),            INTENT(IN)        :: mesh
@@ -2056,35 +2413,36 @@ CONTAINS
     REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
     INTEGER,                    INTENT(IN)        :: id_var
     INTEGER,                    INTENT(IN)        :: ti
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D'
     REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
     INTEGER                                       :: wd_grid
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
-    
+
     ! Map data from the model mesh to the square grid
     CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
-    
+
     ! Write grid data to NetCDF
     IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
-    
+
     ! Deallocate shared memory
     CALL deallocate_shared( wd_grid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D
+
   SUBROUTINE map_and_write_to_grid_netcdf_dp_3D(  ncid, mesh, grid, d_mesh, id_var, ti, nz)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     INTEGER,                    INTENT(IN)        :: ncid
     TYPE(type_mesh),            INTENT(IN)        :: mesh
@@ -2093,44 +2451,1160 @@ CONTAINS
     INTEGER,                    INTENT(IN)        :: id_var
     INTEGER,                    INTENT(IN)        :: ti
     INTEGER,                    INTENT(IN)        :: nz
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_3D'
     REAL(dp), DIMENSION(:,:,:), POINTER           :: d_grid
     INTEGER                                       :: wd_grid
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz, d_grid, wd_grid)
-    
+
     ! Map data from the model mesh to the square grid
     CALL map_mesh2grid_3D( mesh, grid, d_mesh, d_grid)
-    
+
     ! Write grid data to NetCDF
     IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, 1, ti/) ))
-    
+
     ! Deallocate shared memory
     CALL deallocate_shared( wd_grid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_3D
-  
-! Create and write to debug NetCDF file
-! =====================================
 
-  SUBROUTINE write_to_debug_file
-    ! Write the current set of debug data fields to the debug NetCDF file
-   
+! ===== Read all kinds of input files =====
+! =========================================
+
+  ! A restart file produced by an earlier run
+  SUBROUTINE inquire_restart_file_mesh( netcdf, nV, nTri, nC_mem)
+    ! Check if the right dimensions and variables are present in the file.
+
     IMPLICIT NONE
-    
+
+    ! Input variables:
+    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
+    INTEGER,                   INTENT(OUT)   :: nV, nTri, nC_mem
+
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'write_to_debug_file'
-    INTEGER                                :: ncid
-    
+    CHARACTER(LEN=256), PARAMETER            :: routine_name = 'inquire_restart_file_mesh'
+    INTEGER                                  :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_vi,    nV,        netcdf%id_dim_vi   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ti,    nTri,      netcdf%id_dim_ti   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ci,    nC_mem,    netcdf%id_dim_ci   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_two,   int_dummy, netcdf%id_dim_two  )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_three, int_dummy, netcdf%id_dim_three)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_V,              (/ netcdf%id_dim_vi, netcdf%id_dim_two  /), netcdf%id_var_V             )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_nC,             (/ netcdf%id_dim_vi                     /), netcdf%id_var_nC            )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_C,              (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_C             )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_niTri,          (/ netcdf%id_dim_vi                     /), netcdf%id_var_niTri         )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_iTri,           (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_iTri          )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_edge_index,     (/ netcdf%id_dim_vi                     /), netcdf%id_var_edge_index    )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri,            (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_Tri           )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Tricc,          (/ netcdf%id_dim_ti, netcdf%id_dim_two  /), netcdf%id_var_Tricc         )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_TriC,           (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_TriC          )
+    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index, (/ netcdf%id_dim_ti                     /), netcdf%id_var_Tri_edge_index)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_restart_file_mesh
+
+  SUBROUTINE inquire_restart_file_init( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER            :: routine_name = 'inquire_restart_file_init'
+    INTEGER                                  :: nZ, nt, nm, k
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
+
+    IF (nZ /= C%nZ) THEN
+      CALL crash('nZ in restart file doesnt match nZ in config!')
+    END IF
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
+
+    ! Read zeta, check if it matches the config zeta levels
+    ALLOCATE( zeta( nZ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
+    DO k = 1, C%nz
+      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
+        CALL warning('Vertical coordinate zeta in restart file doesnt match zeta in config!')
+      END IF
+      END DO
+    DEALLOCATE( zeta)
+
+    ! Inquire model data
+
+    ! Geometry
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
+
+    ! Bed roughness
+
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,          (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_beta_sq         )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric,         (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_phi_fric        )
+
+    ! Temperature
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
+
+    ! SMB
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear  )
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth         )
+      IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv, (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_constant_inv)
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,       (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Ts_inv      )
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Q_inv       )
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_refr_inv        )
+      END IF
+    END IF
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_restart_file_init
+
+  SUBROUTINE read_restart_file_mesh( mesh, netcdf)
+    ! Read mesh data from a restart file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),           INTENT(INOUT) :: mesh
+    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER            :: routine_name = 'read_restart_file_mesh'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_restart_file_mesh
+
+  SUBROUTINE read_restart_file_init( name, restart, netcdf)
+    ! Read mesh data from a restart file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=3),              INTENT(IN)    :: name
+    TYPE(type_restart_data),       INTENT(INOUT) :: restart
+    TYPE(type_netcdf_restart),     INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'read_restart_file_init'
+    INTEGER                                      :: nt, ti, ti_min
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE      :: time
+    REAL(dp)                                     :: dt_min, dt, time_to_restart_from
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Set the restarting time
+   IF     (name == 'NAM') THEN
+     time_to_restart_from = C%time_to_restart_from_NAM
+   ELSEIF (name == 'EAS') THEN
+     time_to_restart_from = C%time_to_restart_from_EAS
+   ELSEIF (name == 'GRL') THEN
+     time_to_restart_from = C%time_to_restart_from_GRL
+   ELSEIF (name == 'ANT') THEN
+     time_to_restart_from = C%time_to_restart_from_ANT
+   END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Read time, determine which time frame to read
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
+
+    ALLOCATE( time( nt))
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
+
+    IF (time_to_restart_from < MINVAL(time) .OR. time_to_restart_from > MAXVAL(time)) THEN
+      CALL crash('time_to_restart_from outside range of restart file!')
+    END IF
+
+    ti_min = 0
+    dt_min = 1E8_dp
+    DO ti = 1, nt
+      dt = ABS(time( ti) - time_to_restart_from)
+      IF (dt < dt_min) THEN
+        ti_min = ti
+        dt_min = dt
+      END IF
+    END DO
+    ti = ti_min
+
+    DEALLOCATE( time)
+
+    ! Read the data
+
+    ! Geometry
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               restart%Hi,               start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               restart%Hb,               start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               restart%Hs,               start = (/ 1,    ti /) ))
+
+    ! Bed roughness
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,          restart%beta_sq,          start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric,         restart%phi_fric,         start = (/ 1,    ti /) ))
+
+    ! Temperature
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               restart%Ti,               start = (/ 1, 1, ti /) ))
+
+    ! SMB
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1,    ti /) ))
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, ti /) ))
+      IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
+        CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, restart%C_abl_constant_inv, start = (/ 1,    ti /) ))
+        CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       restart%C_abl_Ts_inv,       start = (/ 1,    ti /) ))
+        CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        restart%C_abl_Q_inv,        start = (/ 1,    ti /) ))
+        CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         restart%C_refr_inv,         start = (/ 1,    ti /) ))
+      END IF
+    END IF
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_restart_file_init
+
+  ! Reference ice-sheet geometry (ice thickness, bed topography, and surface elevation)
+  SUBROUTINE inquire_reference_geometry_file( refgeo)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_reference_geometry_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
+    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
+
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
+    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( refgeo%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_reference_geometry_file
+
+  SUBROUTINE read_reference_geometry_file(    refgeo)
+    ! Read reference geometry data from a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_reference_geometry_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( refgeo%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_reference_geometry_file
+
+  ! Insolation solution (e.g. Laskar 2004)
+  SUBROUTINE inquire_insolation_data_file( forcing)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
+    INTEGER                                :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_insolation_data_file
+
+  SUBROUTINE read_insolation_data_file( forcing, ti0, ti1, ins_Q_TOA0, ins_Q_TOA1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
+    REAL(dp), DIMENSION(:,:),       INTENT(OUT)   :: ins_Q_TOA0, ins_Q_TOA1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file'
+    INTEGER                                       :: mi, li
+    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
+    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
+
+    ! Read data
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+    ! Store the data in the shared memory structure
+    DO mi = 1, 12
+    DO li = 1, forcing%ins_nlat
+      ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
+      ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
+    END DO
+    END DO
+
+    ! Clean up temporary memory
+    DEALLOCATE(Q_temp0)
+    DEALLOCATE(Q_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_insolation_data_file
+
+  SUBROUTINE read_insolation_data_file_time_lat( forcing)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_insolation_data_file_time_lat
+
+  ! Geothermal heat flux
+  SUBROUTINE inquire_geothermal_heat_flux_file( forcing)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_geothermal_heat_flux_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lon, forcing%grid_ghf%nlon, forcing%netcdf_ghf%id_dim_lon)
+    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lat, forcing%grid_ghf%nlat, forcing%netcdf_ghf%id_dim_lat)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lon, (/ forcing%netcdf_ghf%id_dim_lon                                /), forcing%netcdf_ghf%id_var_lon)
+    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lat, (/ forcing%netcdf_ghf%id_dim_lat                                /), forcing%netcdf_ghf%id_var_lat)
+    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_ghf, (/ forcing%netcdf_ghf%id_dim_lon, forcing%netcdf_ghf%id_dim_lat /), forcing%netcdf_ghf%id_var_ghf)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_geothermal_heat_flux_file
+
+  SUBROUTINE read_geothermal_heat_flux_file( forcing)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_geothermal_heat_flux_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lon, forcing%grid_ghf%lon, start=(/1   /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lat, forcing%grid_ghf%lat, start=(/1   /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_ghf, forcing%ghf_ghf,      start=(/1, 1/) ))
+
+    ! Close the NetCDF file
+    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
+
+    ! Convert from W m-2 (J m-2 s-1) to J m-2 yr-1
+    forcing%ghf_ghf = forcing%ghf_ghf * sec_per_year
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_geothermal_heat_flux_file
+
+  ! Write a sparse matrix to a NetCDF file
+  SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
+    ! Write a PETSc matrix to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(tMat),                          INTENT(IN)    :: A
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Get matrix in CSR format using native Fortran arrays
+    CALL mat_petsc2CSR( A, A_CSR)
+
+    ! Write the CSR matrix to a file
+    CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
+
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR( A_CSR)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_PETSc_matrix_to_NetCDF
+
+  SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
+    ! Write a CSR matrix to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
+    INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (par%master) THEN
+
+      ! Safety
+      INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL crash('file "' // TRIM( filename) // '" already exists!')
+      END IF
+
+      WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
+
+      ! Create netCDF file
+      CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
+
+      ! Define dimensions:
+      CALL create_dim( ncid, 'm',      A_CSR%m  , id_dim_m  )
+      CALL create_dim( ncid, 'mplus1', A_CSR%m+1, id_dim_mp1)
+      CALL create_dim( ncid, 'n',      A_CSR%n  , id_dim_n  )
+      CALL create_dim( ncid, 'nnz',    A_CSR%nnz, id_dim_nnz)
+
+      ! Define variables:
+      ! The order of the CALL statements for the different variables determines their
+      ! order of appearence in the netcdf file.
+
+      CALL create_int_var(    ncid, 'ptr',   [id_dim_mp1], id_var_ptr  , long_name = 'ptr'  )
+      CALL create_int_var(    ncid, 'index', [id_dim_nnz], id_var_index, long_name = 'index')
+      CALL create_double_var( ncid, 'val',   [id_dim_nnz], id_var_val  , long_name = 'val'  )
+
+      ! Leave definition mode
+      CALL handle_error( nf90_enddef( ncid))
+
+      ! Write data
+      CALL handle_error( nf90_put_var( ncid, id_var_ptr  , A_CSR%ptr  ))
+      CALL handle_error( nf90_put_var( ncid, id_var_index, A_CSR%index))
+      CALL handle_error( nf90_put_var( ncid, id_var_val  , A_CSR%val  ))
+
+      ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+      CALL handle_error(nf90_sync( ncid))
+
+      ! Close the file
+      CALL close_netcdf_file( ncid)
+
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_CSR_matrix_to_NetCDF
+
+  ! Present-day observed global climate (e.g. ERA-40)
+  SUBROUTINE inquire_PD_obs_global_climate_file( clim)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    INTEGER                               :: int_dummy
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,     clim%nlat,  clim%netcdf%id_dim_lat)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,     clim%nlon,  clim%netcdf%id_dim_lon)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /), clim%netcdf%id_var_lat)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /), clim%netcdf%id_var_lon)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Hs)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_T2m)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Precip)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_WE)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_SN)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+  END SUBROUTINE inquire_PD_obs_global_climate_file
+
+  SUBROUTINE read_PD_obs_global_climate_file(    clim)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+  END SUBROUTINE read_PD_obs_global_climate_file
+
+  ! GCM global climate (climate matrix snapshots)
+  SUBROUTINE inquire_GCM_global_climate_file( clim)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    INTEGER                                     :: int_dummy
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,     clim%nlat,  clim%netcdf%id_dim_lat)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,     clim%nlon,  clim%netcdf%id_dim_lon)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /),  clim%netcdf%id_var_lat)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /),  clim%netcdf%id_var_lon)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /),  clim%netcdf%id_var_Hs)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_T2m)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Precip)
+    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_WE)
+    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_SN)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(clim%netcdf%ncid)
+
+  END SUBROUTINE inquire_GCM_global_climate_file
+
+  SUBROUTINE read_GCM_global_climate_file(    clim)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
+    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
+    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(clim%netcdf%ncid)
+
+  END SUBROUTINE read_GCM_global_climate_file
+
+  ! Insolation solution (e.g. Laskar 2004)
+  SUBROUTINE inquire_insolation_file( forcing)
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    ! Local variables:
+    INTEGER                                :: int_dummy
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
+    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
+    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+  END SUBROUTINE inquire_insolation_file
+
+  SUBROUTINE read_insolation_file_timeframes( forcing, ti0, ti1)
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    INTEGER                                       :: mi, li
+    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
+
+    IF (.NOT. par%master) RETURN
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
+    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
+
+    ! Read data
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+    ! Store the data in the shared memory structure
+    DO mi = 1, 12
+    DO li = 1, forcing%ins_nlat
+      forcing%ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
+      forcing%ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
+    END DO
+    END DO
+
+    ! Clean up temporary memory
+    DEALLOCATE(Q_temp0)
+    DEALLOCATE(Q_temp1)
+
+  END SUBROUTINE read_insolation_file_timeframes
+
+  SUBROUTINE read_insolation_file_time_lat( forcing)
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+
+  END SUBROUTINE read_insolation_file_time_lat
+
+  ! Present-day observed global ocean (e.g. WOA18)
+  SUBROUTINE inquire_PD_obs_global_ocean_file( ocn)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
+
+    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_T_ocean)
+    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_S_ocean)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( ocn%netcdf%ncid)
+
+  END SUBROUTINE inquire_PD_obs_global_ocean_file
+
+  SUBROUTINE read_PD_obs_global_ocean_file(    ocn)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
+
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( ocn%netcdf%ncid)
+
+  END SUBROUTINE read_PD_obs_global_ocean_file
+
+  ! GCM global ocean (ocean matrix snapshots)
+  SUBROUTINE inquire_GCM_global_ocean_file( ocn)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
+
+     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
+    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
+    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
+
+    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_T_ocean)
+    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_S_ocean)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( ocn%netcdf%ncid)
+
+  END SUBROUTINE inquire_GCM_global_ocean_file
+
+  SUBROUTINE read_GCM_global_ocean_file(    ocn)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
+
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( ocn%netcdf%ncid)
+
+  END SUBROUTINE read_GCM_global_ocean_file
+
+  ! High-resolution geometry used for extrapolating ocean data
+  SUBROUTINE inquire_hires_geometry_file( hires)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
+    CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
+    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
+    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
+    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf_geo%ncid)
+
+  END SUBROUTINE inquire_hires_geometry_file
+
+  SUBROUTINE read_hires_geometry_file(    hires)
+    ! Read the high-resolution geometry netcdf file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf_geo%ncid)
+
+  END SUBROUTINE read_hires_geometry_file
+
+  ! Create/read an extrapolated ocean data file
+  SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)
+    ! Create a new folder extrapolated ocean data file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
+    CHARACTER(LEN=256),                  INTENT(IN)    :: hires_ocean_filename
+
+    ! Local variables:
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: x, y, z
+
+    IF (.NOT. par%master) RETURN
+
+    ! Create a new file and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+
+    hires%netcdf%filename = hires_ocean_filename
+    INQUIRE(EXIST=file_exists, FILE = TRIM( hires%netcdf%filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM(hires%netcdf%filename) // '" already exists!')
+    END IF
+
+    ! Create hires%netcdf file
+    ! WRITE(0,*) '    Creating new hires%netcdf file at ', TRIM( hires%netcdf%filename)
+    CALL handle_error(nf90_create( hires%netcdf%filename, IOR(nf90_clobber,nf90_share), hires%netcdf%ncid))
+
+    ! Define dimensions:
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx, hires%netcdf%id_dim_x      )
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny, hires%netcdf%id_dim_y      )
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, C%nz_ocean,    hires%netcdf%id_dim_z_ocean)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    x = hires%netcdf%id_dim_x
+    y = hires%netcdf%id_dim_y
+    z = hires%netcdf%id_dim_z_ocean
+
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the hires%netcdf file.
+
+    ! Dimension variables
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       [x      ], hires%netcdf%id_var_x,       long_name='X-coordinate', units='m')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       [   y   ], hires%netcdf%id_var_y,       long_name='Y-coordinate', units='m')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, [      z], hires%netcdf%id_var_z_ocean, long_name='Depth in ocean', units='m')
+
+    ! Extrapolated ocean data
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, [x, y, z], hires%netcdf%id_var_T_ocean, long_name='3-D ocean temperature', units='K')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, [x, y, z], hires%netcdf%id_var_S_ocean, long_name='3-D ocean salinity', units='PSU')
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( hires%netcdf%ncid))
+
+    ! Write the data
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_x,        hires%grid%x ))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_y,        hires%grid%y ))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_z_ocean,  C%z_ocean    ))
+
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start=(/ 1,1,1 /)))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start=(/ 1,1,1 /)))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( hires%netcdf%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE create_extrapolated_ocean_file
+
+  SUBROUTINE inquire_extrapolated_ocean_file( hires)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    ! Local variables:
+    INTEGER                                      :: int_dummy
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx,   hires%netcdf%id_dim_x      )
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny,   hires%netcdf%id_dim_y      )
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, int_dummy,  hires%netcdf%id_dim_z_ocean)
+
+    ! Safety
+    IF (int_dummy /= C%nz_ocean) THEN
+      WRITE(0,*) 'inquire_extrapolated_ocean_file - ERROR: nz_ocean in file "', TRIM( hires%netcdf%filename), '" doesnt match ice model settings!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       (/ hires%netcdf%id_dim_x                                                     /), hires%netcdf%id_var_x      )
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       (/                        hires%netcdf%id_dim_y                              /), hires%netcdf%id_var_y      )
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, (/                                               hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_z_ocean)
+
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_T_ocean)
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_S_ocean)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE inquire_extrapolated_ocean_file
+
+  SUBROUTINE read_extrapolated_ocean_file(    hires)
+    ! Read the extrapolated ocean data netcdf file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    IF (.NOT. par%master) RETURN
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_x,       hires%grid%x,  start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_y,       hires%grid%y,  start = (/ 1       /) ))
+
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE read_extrapolated_ocean_file
+
+  ! Direct global SMB forcing
+  SUBROUTINE inquire_direct_global_SMB_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'inquire_direct_global_SMB_forcing_file'
+    INTEGER                                             :: lon,lat,t
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -2138,15 +3612,917 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,   clim%nlon,   clim%netcdf%id_dim_lon  )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,   clim%nlat,   clim%netcdf%id_dim_lat  )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+
+    ! Abbreviate dimension ID's for more readable code
+    lon = clim%netcdf%id_dim_lon
+    lat = clim%netcdf%id_dim_lat
+    t   = clim%netcdf%id_dim_time
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ lon         /), clim%netcdf%id_var_lon     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/      lat    /), clim%netcdf%id_var_lat     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,     (/           t /), clim%netcdf%id_var_time    )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m_year, (/ lon, lat, t /), clim%netcdf%id_var_T2m_year)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_SMB_year, (/ lon, lat, t /), clim%netcdf%id_var_SMB_year)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_global_SMB_forcing_file
+
+  SUBROUTINE read_direct_global_SMB_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
+    INTEGER,                        INTENT(IN)          :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'read_direct_global_SMB_file_timeframes'
+    INTEGER                                             :: loni,lati
+    REAL(dp), DIMENSION(:,:,:  ), ALLOCATABLE           :: T2m_temp0, T2m_temp1, SMB_temp0, SMB_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( T2m_temp0( clim%nlon, clim%nlat, 1))
+    ALLOCATE( T2m_temp1( clim%nlon, clim%nlat, 1))
+    ALLOCATE( SMB_temp0( clim%nlon, clim%nlat, 1))
+    ALLOCATE( SMB_temp1( clim%nlon, clim%nlat, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO loni = 1, clim%nlon
+    DO lati = 1, clim%nlat
+      clim%T2m_year0( loni,lati) = T2m_temp0( loni,lati,1)
+      clim%T2m_year1( loni,lati) = T2m_temp1( loni,lati,1)
+      clim%SMB_year0( loni,lati) = SMB_temp0( loni,lati,1)
+      clim%SMB_year1( loni,lati) = SMB_temp1( loni,lati,1)
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE( T2m_temp0)
+    DEALLOCATE( T2m_temp1)
+    DEALLOCATE( SMB_temp0)
+    DEALLOCATE( SMB_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_global_SMB_file_timeframes
+
+  SUBROUTINE read_direct_global_SMB_file_time_latlon( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_global_SMB_file_time_latlon'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,  clim%lat,  start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,  clim%lon,  start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_global_SMB_file_time_latlon
+
+  ! Direct global climate forcing
+  SUBROUTINE inquire_direct_global_climate_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'inquire_direct_global_climate_forcing_file'
+    INTEGER                                :: lon,lat,t,m
+    INTEGER                                :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_global"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,   clim%nlon,   clim%netcdf%id_dim_lon  )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,   clim%nlat,   clim%netcdf%id_dim_lat  )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,   clim%netcdf%id_dim_month)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
+
+    ! Abbreviate dimension ID's for more readable code
+    lon = clim%netcdf%id_dim_lon
+    lat = clim%netcdf%id_dim_lat
+    t   = clim%netcdf%id_dim_time
+    m   = clim%netcdf%id_dim_month
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,    (/ lon            /), clim%netcdf%id_var_lon   )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,    (/      lat       /), clim%netcdf%id_var_lat   )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_month,  (/           m    /), clim%netcdf%id_var_month )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,   (/              t /), clim%netcdf%id_var_time  )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,    (/ lon, lat, m, t /), clim%netcdf%id_var_T2m   )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip, (/ lon, lat, m, t /), clim%netcdf%id_var_Precip)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_global_climate_forcing_file
+
+  SUBROUTINE read_direct_global_climate_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
+    INTEGER,                        INTENT(IN)              :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'read_direct_global_climate_file_timeframes'
+    INTEGER                                                 :: loni,lati,m
+    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE               :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_global"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE(    T2m_temp0( clim%nlon, clim%nlat, 12, 1))
+    ALLOCATE(    T2m_temp1( clim%nlon, clim%nlat, 12, 1))
+    ALLOCATE( Precip_temp0( clim%nlon, clim%nlat, 12, 1))
+    ALLOCATE( Precip_temp1( clim%nlon, clim%nlat, 12, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO m    = 1, 12
+    DO loni = 1, clim%nlon
+    DO lati = 1, clim%nlat
+      clim%T2m0(    loni,lati,m) =    T2m_temp0( loni,lati,m,1)
+      clim%T2m1(    loni,lati,m) =    T2m_temp1( loni,lati,m,1)
+      clim%Precip0( loni,lati,m) = Precip_temp0( loni,lati,m,1)
+      clim%Precip1( loni,lati,m) = Precip_temp1( loni,lati,m,1)
+    END DO
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE(    T2m_temp0)
+    DEALLOCATE(    T2m_temp1)
+    DEALLOCATE( Precip_temp0)
+    DEALLOCATE( Precip_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_global_climate_file_timeframes
+
+  SUBROUTINE read_direct_global_climate_file_time_latlon( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_global_climate_file_time_latlon'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_global"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,  clim%lat,  start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,  clim%lon,  start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_global_climate_file_time_latlon
+
+  ! Direct regional SMB forcing
+  SUBROUTINE inquire_direct_regional_SMB_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'inquire_direct_regional_SMB_forcing_file'
+    INTEGER                                               :: x,y,t
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x   )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y   )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time)
+
+    ! Abbreviate dimension ID's for more readable code
+    x = clim%netcdf%id_dim_x
+    y = clim%netcdf%id_dim_y
+    t = clim%netcdf%id_dim_time
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,        (/ x       /), clim%netcdf%id_var_x       )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,        (/    y    /), clim%netcdf%id_var_y       )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,     (/       t /), clim%netcdf%id_var_time    )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m_year, (/ x, y, t /), clim%netcdf%id_var_T2m_year)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_SMB_year, (/ x, y, t /), clim%netcdf%id_var_SMB_year)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_regional_SMB_forcing_file
+
+  SUBROUTINE read_direct_regional_SMB_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+    INTEGER,                                INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_timeframes'
+    INTEGER                                               :: i,j
+    REAL(dp), DIMENSION(:,:,:  ), ALLOCATABLE             :: T2m_temp0, T2m_temp1, SMB_temp0, SMB_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( T2m_temp0( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( T2m_temp1( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( SMB_temp0( clim%grid%nx, clim%grid%ny, 1))
+    ALLOCATE( SMB_temp1( clim%grid%nx, clim%grid%ny, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO i = 1, clim%grid%nx
+    DO j = 1, clim%grid%ny
+      clim%T2m_year0_raw( j,i) = T2m_temp0( i,j,1)
+      clim%T2m_year1_raw( j,i) = T2m_temp1( i,j,1)
+      clim%SMB_year0_raw( j,i) = SMB_temp0( i,j,1)
+      clim%SMB_year1_raw( j,i) = SMB_temp1( i,j,1)
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE( T2m_temp0)
+    DEALLOCATE( T2m_temp1)
+    DEALLOCATE( SMB_temp0)
+    DEALLOCATE( SMB_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_SMB_file_timeframes
+
+  SUBROUTINE read_direct_regional_SMB_file_time_xy( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_time_xy'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_SMB_file_time_xy
+
+  ! Direct regional climate forcing
+  SUBROUTINE inquire_direct_regional_climate_forcing_file( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                             :: routine_name = 'inquire_direct_regional_climate_forcing_file'
+    INTEGER                                                   :: x,y,t,m
+    INTEGER                                                   :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y    )
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,    clim%netcdf%id_dim_month)
+    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time )
+
+    ! Abbreviate dimension ID's for more readable code
+    x = clim%netcdf%id_dim_x
+    y = clim%netcdf%id_dim_y
+    t = clim%netcdf%id_dim_time
+    m = clim%netcdf%id_dim_month
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,      (/ x          /), clim%netcdf%id_var_x     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,      (/    y       /), clim%netcdf%id_var_y     )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_month,  (/       m    /), clim%netcdf%id_var_month )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,   (/          t /), clim%netcdf%id_var_time  )
+
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,    (/ x, y, m, t /), clim%netcdf%id_var_T2m   )
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip, (/ x, y, m, t /), clim%netcdf%id_var_Precip)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_direct_regional_climate_forcing_file
+
+  SUBROUTINE read_direct_regional_climate_file_timeframes( clim, ti0, ti1)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_timeframes'
+    INTEGER                                       :: i,j,m
+    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE     :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE(    T2m_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE(    T2m_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE( Precip_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
+    ALLOCATE( Precip_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
+
+    ! Open netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
+
+     ! Close netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Store the data in the shared memory structure
+    DO m = 1, 12
+    DO i = 1, clim%grid%nx
+    DO j = 1, clim%grid%ny
+      clim%T2m0_raw(    m,j,i) =    T2m_temp0( i,j,m,1)
+      clim%T2m1_raw(    m,j,i) =    T2m_temp1( i,j,m,1)
+      clim%Precip0_raw( m,j,i) = Precip_temp0( i,j,m,1)
+      clim%Precip1_raw( m,j,i) = Precip_temp1( i,j,m,1)
+    END DO
+    END DO
+    END DO
+
+    ! Clean up after yourself
+    DEALLOCATE(    T2m_temp0)
+    DEALLOCATE(    T2m_temp1)
+    DEALLOCATE( Precip_temp0)
+    DEALLOCATE( Precip_temp1)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_climate_file_timeframes
+
+  SUBROUTINE read_direct_regional_climate_file_time_xy( clim)
+
+    IMPLICIT NONE
+
+    ! Output variable
+    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_time_xy'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Safety
+    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
+      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( clim%netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_direct_regional_climate_file_time_xy
+
+! ===== SELEN =====
+! =================
+
+  ! Global topography for SELEN
+  SUBROUTINE inquire_SELEN_global_topo_file( SELEN)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_SELEN_global_topo_file'
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    INQUIRE(EXIST=file_exists, FILE = TRIM( SELEN%netcdf_topo%filename))
+    IF (.NOT. file_exists) THEN
+      CALL crash('file "' // TRIM( SELEN%netcdf_topo%filename) // '" does not exist!')
+    ELSE
+      CALL open_netcdf_file( SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
+    END IF
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_vi,    SELEN%mesh%nV,     SELEN%netcdf_topo%id_dim_vi)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ti,    SELEN%mesh%nTri,   SELEN%netcdf_topo%id_dim_ti)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ci,    SELEN%mesh%nC_mem, SELEN%netcdf_topo%id_dim_ci)
+    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_three, int_dummy,         SELEN%netcdf_topo%id_dim_three)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_V,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_V       )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Tri,   (/ SELEN%netcdf_topo%id_dim_ti, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_Tri     )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_nC,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_nC      )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_C,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_C       )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_niTri, (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_niTri   )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_iTri,  (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_iTri    )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lat,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lat     )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lon,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lon     )
+    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Hb,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_Hb      )
+    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_ianc,  (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_ianc    )
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_SELEN_global_topo_file
+
+  SUBROUTINE read_SELEN_global_topo_file( SELEN)
+    ! Read the init netcdf file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_SELEN_global_topo_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file(SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_V,     SELEN%mesh%V,     start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Tri,   SELEN%mesh%Tri,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_nC,    SELEN%mesh%nC,    start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_C,     SELEN%mesh%C,     start = (/ 1, 1 /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_niTri, SELEN%mesh%niTri, start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_iTri,  SELEN%mesh%iTri,  start = (/ 1, 1 /) ))
+
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lat,   SELEN%mesh%lat,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lon,   SELEN%mesh%lon,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Hb,    SELEN%topo_ref,   start = (/ 1    /) ))
+    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_ianc,  SELEN%mesh%ianc,  start = (/ 1    /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_SELEN_global_topo_file
+
+  ! SELEN output file
+  SUBROUTINE create_SELEN_output_file( SELEN)
+    ! Create a new NetCDF output file for SELEN (on the irregular global mesh)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_SELEN_output_file'
+    LOGICAL                                       :: file_exists
+    INTEGER                                       :: vi, ti, ci, three, time, ki
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Set time frame index to 1
+    SELEN%output%ti = 1
+
+    ! Set output filename
+    SELEN%output%filename = TRIM(C%output_dir) // 'SELEN_output.nc'
+
+    ! Create a new output file if none exists and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+    INQUIRE(EXIST=file_exists, FILE = TRIM(SELEN%output%filename))
+    IF(file_exists) THEN
+      CALL crash('file "' // TRIM( SELEN%output%filename) // '" already exists!')
+    END IF
+
+    ! Create netCDF file
+    CALL handle_error(nf90_create(SELEN%output%filename,IOR(nf90_clobber,nf90_share),SELEN%output%ncid))
+
+    ! Mesh data
+    ! =========
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_vi,           SELEN%mesh%nV,           SELEN%output%id_dim_vi          ) ! Vertex indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ti,           SELEN%mesh%nTri,         SELEN%output%id_dim_ti          ) ! Triangle indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ci,           SELEN%mesh%nC_mem,       SELEN%output%id_dim_ci          ) ! Connection indices
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_three,        3,                       SELEN%output%id_dim_three       ) ! 3 (each vertex has three coordinates, each triangle has three vertices)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    vi        = SELEN%output%id_dim_vi
+    ti        = SELEN%output%id_dim_ti
+    ci        = SELEN%output%id_dim_ci
+    three     = SELEN%output%id_dim_three
+
+    ! Define variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_V,                [vi,  three], SELEN%output%id_var_V,                long_name='Vertex coordinates', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_Tri,              [ti,  three], SELEN%output%id_var_Tri,              long_name='Vertex indices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_nC,               [vi        ], SELEN%output%id_var_nC,               long_name='Number of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_C,                [vi,  ci   ], SELEN%output%id_var_C,                long_name='Indices of connected vertices')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_niTri,            [vi        ], SELEN%output%id_var_niTri,            long_name='Number of inverse triangles')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_iTri,             [vi,  ci   ], SELEN%output%id_var_iTri,             long_name='Indices of inverse triangles')
+
+    ! Model output
+    ! ============
+
+    ! Define dimensions
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited,         SELEN%output%id_dim_time ) ! Time frames
+    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ki,    C%SELEN_irreg_time_n+1, SELEN%output%id_dim_ki   ) ! Window frames
+
+    ! Placeholders for the dimension ID's, for shorter code
+    time  = SELEN%output%id_dim_time
+    ki    = SELEN%output%id_dim_ki
+
+    ! Define dimension variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_time,  [time  ], SELEN%output%id_var_time,  long_name='Time', units='years')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_ki,    [ki    ], SELEN%output%id_var_ki,    long_name='Window frames', units='years')
+
+    ! Define model data variables
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lat,              [vi             ], SELEN%output%id_var_lat,              long_name='Latitude', units='degrees north')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lon,              [vi             ], SELEN%output%id_var_lon,              long_name='Longtitude', units='degrees east')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi,               [vi,        time], SELEN%output%id_var_Hi,               long_name='Surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi_rel,           [vi,        time], SELEN%output%id_var_Hi_rel,           long_name='Relative surface load', units='mie')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_U,                [vi,        time], SELEN%output%id_var_U,                long_name='Land surface change', units='m')
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_N,                [vi,        time], SELEN%output%id_var_N,                long_name='Sea surface change', units='m')
+    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_ocean_function,   [vi,        time], SELEN%output%id_var_ocean_function,   long_name='Ocean function (1 = ocean)')
+
+    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_load_history,     [vi,   ki,  time], SELEN%output%id_var_load_history,     long_name='Load history', units='mie')
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( SELEN%output%ncid))
+
+    ! Write mesh data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_V,               SELEN%mesh%V             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Tri,             SELEN%mesh%Tri           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_nC,              SELEN%mesh%nC            ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_C,               SELEN%mesh%C             ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_niTri,           SELEN%mesh%niTri         ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_iTri,            SELEN%mesh%iTri          ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lat,             SELEN%mesh%lat           ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lon,             SELEN%mesh%lon           ))
+
+    ! Window frames
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ki, (/0._dp, C%SELEN_irreg_time_window/)))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( SELEN%output%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_SELEN_output_file
+
+  SUBROUTINE write_to_SELEN_output_file( SELEN, time)
+    ! Write the current model state to the existing output file
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_to_SELEN_output_file'
+    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
+    REAL(dp),                       INTENT(IN)    :: time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the file for writing
+    CALL open_netcdf_file( SELEN%output%filename, SELEN%output%ncid)
+
+    ! Time
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_time, time, start = (/ SELEN%output%ti /)))
+
+    ! Model data
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob,                    start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,                         start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,                        start = (/ 1,    SELEN%output%ti/) ))
+    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_load_history,   SELEN%ice_loading_history_irreg_glob, start = (/ 1, 1, SELEN%output%ti/) ))
+
+    ! Close the file
+    CALL close_netcdf_file(SELEN%output%ncid)
+
+    ! Increase time frame counter
+    SELEN%output%ti = SELEN%output%ti + 1
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_SELEN_output_file
+
+! ===== Create and write to debug NetCDF file =====
+! =================================================
+
+  SUBROUTINE write_to_debug_file
+    ! Write the current set of debug data fields to the debug NetCDF file
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'write_to_debug_file'
+    INTEGER                                :: ncid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
     IF (.NOT. C%do_write_debug_data) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the file for writing
     CALL open_netcdf_file( debug%netcdf%filename, ncid)
-    
+
     ! Write data
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_01, debug%int_2D_a_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_02, debug%int_2D_a_02, start = (/ 1 /) ))
@@ -2158,7 +4534,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_08, debug%int_2D_a_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_09, debug%int_2D_a_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_a_10, debug%int_2D_a_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_01, debug%int_2D_b_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_02, debug%int_2D_b_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_03, debug%int_2D_b_03, start = (/ 1 /) ))
@@ -2169,7 +4545,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_08, debug%int_2D_b_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_09, debug%int_2D_b_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_b_10, debug%int_2D_b_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_01, debug%int_2D_c_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_02, debug%int_2D_c_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_03, debug%int_2D_c_03, start = (/ 1 /) ))
@@ -2180,7 +4556,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_08, debug%int_2D_c_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_09, debug%int_2D_c_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_int_2D_c_10, debug%int_2D_c_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_01, debug%dp_2D_a_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_02, debug%dp_2D_a_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_03, debug%dp_2D_a_03, start = (/ 1 /) ))
@@ -2191,7 +4567,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_08, debug%dp_2D_a_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_09, debug%dp_2D_a_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_a_10, debug%dp_2D_a_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_01, debug%dp_2D_b_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_02, debug%dp_2D_b_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_03, debug%dp_2D_b_03, start = (/ 1 /) ))
@@ -2202,7 +4578,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_08, debug%dp_2D_b_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_09, debug%dp_2D_b_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_b_10, debug%dp_2D_b_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_01, debug%dp_2D_c_01, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_02, debug%dp_2D_c_02, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_03, debug%dp_2D_c_03, start = (/ 1 /) ))
@@ -2213,7 +4589,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_08, debug%dp_2D_c_08, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_09, debug%dp_2D_c_09, start = (/ 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_c_10, debug%dp_2D_c_10, start = (/ 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_01, debug%dp_3D_a_01, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_02, debug%dp_3D_a_02, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_03, debug%dp_3D_a_03, start = (/ 1, 1 /) ))
@@ -2224,7 +4600,7 @@ CONTAINS
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_08, debug%dp_3D_a_08, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_09, debug%dp_3D_a_09, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_3D_a_10, debug%dp_3D_a_10, start = (/ 1, 1 /) ))
-    
+
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_01, debug%dp_2D_monthly_a_01, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_02, debug%dp_2D_monthly_a_02, start = (/ 1, 1 /) ))
     CALL handle_error( nf90_put_var( ncid, debug%netcdf%id_var_dp_2D_monthly_a_03, debug%dp_2D_monthly_a_03, start = (/ 1, 1 /) ))
@@ -2241,15 +4617,16 @@ CONTAINS
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-        
+
   END SUBROUTINE write_to_debug_file
+
   SUBROUTINE create_debug_file( region)
     ! Create the debug NetCDF file; a lot of data fields but no time dimension.
-    
+
     USE data_types_netcdf_module, ONLY: type_netcdf_debug
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
 
@@ -2260,7 +4637,7 @@ CONTAINS
     INTEGER                                       :: n
     LOGICAL                                       :: file_exists
     INTEGER                                       :: vi, ti, ci, aci, ciplusone, two, three, six, vii, zeta, month
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -2268,7 +4645,7 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     IF (.NOT. C%do_write_debug_data) THEN
       CALL finalise_routine( routine_name)
       RETURN
@@ -2281,20 +4658,20 @@ CONTAINS
       debug_temp%filename(n:n) = ' '
     END DO
     debug_temp%filename = TRIM(C%output_dir)//TRIM(short_filename)
-    
+
     ! Delete existing debug file
     INQUIRE(EXIST=file_exists, FILE = TRIM(debug_temp%filename))
     IF (file_exists) THEN
       CALL system('rm -f ' // debug_temp%filename)
     END IF
-    
+
     ! Create netCDF file
     !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( debug_temp%filename)
     CALL handle_error(nf90_create(debug_temp%filename,IOR(nf90_clobber,nf90_share),debug_temp%ncid))
-        
+
     ! Mesh data
     ! =========
-    
+
     ! Define dimensions
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_vi,           region%mesh%nV,          debug_temp%id_dim_vi          ) ! Vertex indices
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_ti,           region%mesh%nTri,        debug_temp%id_dim_ti          ) ! Triangle indices
@@ -2305,7 +4682,7 @@ CONTAINS
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_three,        3,                       debug_temp%id_dim_three       ) ! 3 (each triangle has three vertices)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_six,          6,                       debug_temp%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_vii_transect, region%mesh%nV_transect, debug_temp%id_dim_vii_transect) ! Number of vertex pairs in the transect
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     vi        = debug_temp%id_dim_vi
     ti        = debug_temp%id_dim_ti
@@ -2316,7 +4693,7 @@ CONTAINS
     three     = debug_temp%id_dim_three
     six       = debug_temp%id_dim_six
     vii       = debug_temp%id_dim_vii_transect
-    
+
     ! Define variables
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_V,                [vi,  two  ], debug_temp%id_var_V,                long_name='Vertex coordinates', units='m')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Tri,              [ti,  three], debug_temp%id_var_Tri,              long_name='Vertex indices')
@@ -2327,30 +4704,30 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_edge_index,       [vi        ], debug_temp%id_var_edge_index,       long_name='Edge index')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_Tricc,            [ti,  two  ], debug_temp%id_var_Tricc,            long_name='Triangle circumcenter', units='m')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_TriC,             [ti,  three], debug_temp%id_var_TriC,             long_name='Triangle neighbours')
-    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Tri_edge_index,   [ti        ], debug_temp%id_var_Tri_edge_index,   long_name='Triangle edge index') 
-    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAc,              [aci, two  ], debug_temp%id_var_VAc,              long_name='Staggered vertex coordinates', units='m') 
+    CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Tri_edge_index,   [ti        ], debug_temp%id_var_Tri_edge_index,   long_name='Triangle edge index')
+    CALL create_double_var( debug_temp%ncid, debug_temp%name_var_VAc,              [aci, two  ], debug_temp%id_var_VAc,              long_name='Staggered vertex coordinates', units='m')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_Aci,              [aci, six  ], debug_temp%id_var_Aci,              long_name='Staggered to regular vertex indices')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_iAci,             [vi,  ci   ], debug_temp%id_var_iAci,             long_name='Regular to staggered vertex indices')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_A,                [vi        ], debug_temp%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_R,                [vi        ], debug_temp%id_var_R,                long_name='Vertex resolution', units='m')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_vi_transect,      [vii, two  ], debug_temp%id_var_vi_transect,      long_name='Transect vertex pairs')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_w_transect,       [vii, two  ], debug_temp%id_var_w_transect,       long_name='Transect interpolation weights')
-    
+
     ! Model output
     ! ============
-    
+
     ! Define dimensions
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_zeta,  C%nZ, debug_temp%id_dim_zeta ) ! Scaled vertical coordinate
     CALL create_dim( debug_temp%ncid, debug_temp%name_dim_month, 12,   debug_temp%id_dim_month) ! Months (for monthly data)
-    
+
     ! Placeholders for the dimension ID's, for shorter code
     zeta  = debug_temp%id_dim_zeta
     month = debug_temp%id_dim_month
-    
+
     ! Define dimension variables
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_zeta,  [zeta  ], debug_temp%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless (0 = ice surface, 1 = bedrock)')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_month, [month ], debug_temp%id_var_month, long_name='Month', units='1-12')
-    
+
     ! Data
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_01,  [vi], debug_temp%id_var_int_2D_a_01,  long_name='2D int a-grid (vertex) variable 01')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_02,  [vi], debug_temp%id_var_int_2D_a_02,  long_name='2D int a-grid (vertex) variable 02')
@@ -2362,7 +4739,7 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_08,  [vi], debug_temp%id_var_int_2D_a_08,  long_name='2D int a-grid (vertex) variable 08')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_09,  [vi], debug_temp%id_var_int_2D_a_09,  long_name='2D int a-grid (vertex) variable 09')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_a_10,  [vi], debug_temp%id_var_int_2D_a_10,  long_name='2D int a-grid (vertex) variable 10')
-     
+
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_01,  [ti], debug_temp%id_var_int_2D_b_01,  long_name='2D int b-grid (triangle) variable 01')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_02,  [ti], debug_temp%id_var_int_2D_b_02,  long_name='2D int b-grid (triangle) variable 02')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_03,  [ti], debug_temp%id_var_int_2D_b_03,  long_name='2D int b-grid (triangle) variable 03')
@@ -2373,7 +4750,7 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_08,  [ti], debug_temp%id_var_int_2D_b_08,  long_name='2D int b-grid (triangle) variable 08')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_09,  [ti], debug_temp%id_var_int_2D_b_09,  long_name='2D int b-grid (triangle) variable 09')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_b_10,  [ti], debug_temp%id_var_int_2D_b_10,  long_name='2D int b-grid (triangle) variable 10')
-    
+
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_01, [aci], debug_temp%id_var_int_2D_c_01,  long_name='2D int c-grid (edge) variable 01')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_02, [aci], debug_temp%id_var_int_2D_c_02,  long_name='2D int c-grid (edge) variable 02')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_03, [aci], debug_temp%id_var_int_2D_c_03,  long_name='2D int c-grid (edge) variable 03')
@@ -2384,7 +4761,7 @@ CONTAINS
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_08, [aci], debug_temp%id_var_int_2D_c_08,  long_name='2D int c-grid (edge) variable 08')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_09, [aci], debug_temp%id_var_int_2D_c_09,  long_name='2D int c-grid (edge) variable 09')
     CALL create_int_var(    debug_temp%ncid, debug_temp%name_var_int_2D_c_10, [aci], debug_temp%id_var_int_2D_c_10,  long_name='2D int c-grid (edge) variable 10')
-    
+
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_01,  [vi], debug_temp%id_var_dp_2D_a_01,  long_name='2D dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_02,  [vi], debug_temp%id_var_dp_2D_a_02,  long_name='2D dp a-grid (vertex) variable 02')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_03,  [vi], debug_temp%id_var_dp_2D_a_03,  long_name='2D dp a-grid (vertex) variable 03')
@@ -2395,7 +4772,7 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_08,  [vi], debug_temp%id_var_dp_2D_a_08,  long_name='2D dp a-grid (vertex) variable 08')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_09,  [vi], debug_temp%id_var_dp_2D_a_09,  long_name='2D dp a-grid (vertex) variable 09')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_a_10,  [vi], debug_temp%id_var_dp_2D_a_10,  long_name='2D dp a-grid (vertex) variable 10')
-     
+
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_01,  [ti], debug_temp%id_var_dp_2D_b_01,  long_name='2D dp b-grid (triangle) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_02,  [ti], debug_temp%id_var_dp_2D_b_02,  long_name='2D dp b-grid (triangle) variable 02')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_03,  [ti], debug_temp%id_var_dp_2D_b_03,  long_name='2D dp b-grid (triangle) variable 03')
@@ -2406,7 +4783,7 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_08,  [ti], debug_temp%id_var_dp_2D_b_08,  long_name='2D dp b-grid (triangle) variable 08')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_09,  [ti], debug_temp%id_var_dp_2D_b_09,  long_name='2D dp b-grid (triangle) variable 09')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_b_10,  [ti], debug_temp%id_var_dp_2D_b_10,  long_name='2D dp b-grid (triangle) variable 10')
-    
+
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_01, [aci], debug_temp%id_var_dp_2D_c_01,  long_name='2D dp c-grid (edge) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_02, [aci], debug_temp%id_var_dp_2D_c_02,  long_name='2D dp c-grid (edge) variable 02')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_03, [aci], debug_temp%id_var_dp_2D_c_03,  long_name='2D dp c-grid (edge) variable 03')
@@ -2417,7 +4794,7 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_08, [aci], debug_temp%id_var_dp_2D_c_08,  long_name='2D dp c-grid (edge) variable 08')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_09, [aci], debug_temp%id_var_dp_2D_c_09,  long_name='2D dp c-grid (edge) variable 09')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_c_10, [aci], debug_temp%id_var_dp_2D_c_10,  long_name='2D dp c-grid (edge) variable 10')
-    
+
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_01,  [vi, zeta], debug_temp%id_var_dp_3D_a_01,  long_name='3D dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_02,  [vi, zeta], debug_temp%id_var_dp_3D_a_02,  long_name='3D dp a-grid (vertex) variable 02')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_03,  [vi, zeta], debug_temp%id_var_dp_3D_a_03,  long_name='3D dp a-grid (vertex) variable 03')
@@ -2428,7 +4805,7 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_08,  [vi, zeta], debug_temp%id_var_dp_3D_a_08,  long_name='3D dp a-grid (vertex) variable 08')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_09,  [vi, zeta], debug_temp%id_var_dp_3D_a_09,  long_name='3D dp a-grid (vertex) variable 09')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_3D_a_10,  [vi, zeta], debug_temp%id_var_dp_3D_a_10,  long_name='3D dp a-grid (vertex) variable 10')
-    
+
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_01,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_01,  long_name='2D-monthly dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_02,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_02,  long_name='2D-monthly dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_03,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_03,  long_name='2D-monthly dp a-grid (vertex) variable 01')
@@ -2439,10 +4816,10 @@ CONTAINS
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_08,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_08,  long_name='2D-monthly dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_09,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_09,  long_name='2D-monthly dp a-grid (vertex) variable 01')
     CALL create_double_var( debug_temp%ncid, debug_temp%name_var_dp_2D_monthly_a_10,  [vi, month], debug_temp%id_var_dp_2D_monthly_a_10,  long_name='2D-monthly dp a-grid (vertex) variable 01')
-    
+
     ! Leave definition mode:
     CALL handle_error(nf90_enddef( debug_temp%ncid))
-    
+
     ! Write mesh data
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_V,               region%mesh%V             ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_Tri,             region%mesh%Tri           ))
@@ -2461,17 +4838,17 @@ CONTAINS
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_R,               region%mesh%R             ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_vi_transect,     region%mesh%vi_transect   ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_w_transect,      region%mesh%w_transect    ))
-    
+
     ! Write zeta and month dimension variables
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_zeta,     C%zeta                                   ))
     CALL handle_error( nf90_put_var( debug_temp%ncid, debug_temp%id_var_month,    (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12/)))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( debug_temp%ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file( debug_temp%ncid)
-    
+
     ! Copy NetCDF data to the relevant debug structure
     IF     (region%name == 'NAM') THEN
       debug_NAM%netcdf = debug_temp
@@ -2482,12 +4859,12 @@ CONTAINS
     ELSEIF (region%name == 'ANT') THEN
       debug_ANT%netcdf = debug_temp
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_debug_file
-  
+
   ! Manage memory for the debug data fields
   SUBROUTINE associate_debug_fields( region)
     ! Since the dimensions vary, each region needs its own set of debug fields. However, if
@@ -2496,12 +4873,12 @@ CONTAINS
     ! global variables of this module, where they can be accessed from anywhere. This is done
     ! via the "intermediary" set of pointers, which are bound to the region-specific debug structure
     ! with this here subroutine.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(IN)    :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'associate_debug_fields'
 
@@ -2521,10 +4898,10 @@ CONTAINS
       END IF
     END IF
     CALL sync
-    
+
     ! If necessary (i.e. every time except the first ever time this subroutine is called), de-associate the intermediary pointers first.
     IF (ASSOCIATED(debug%dp_2D_a_01)) THEN
-    
+
       NULLIFY( debug%int_2D_a_01)
       NULLIFY( debug%int_2D_a_02)
       NULLIFY( debug%int_2D_a_03)
@@ -2535,7 +4912,7 @@ CONTAINS
       NULLIFY( debug%int_2D_a_08)
       NULLIFY( debug%int_2D_a_09)
       NULLIFY( debug%int_2D_a_10)
-    
+
       NULLIFY( debug%int_2D_b_01)
       NULLIFY( debug%int_2D_b_02)
       NULLIFY( debug%int_2D_b_03)
@@ -2546,7 +4923,7 @@ CONTAINS
       NULLIFY( debug%int_2D_b_08)
       NULLIFY( debug%int_2D_b_09)
       NULLIFY( debug%int_2D_b_10)
-    
+
       NULLIFY( debug%int_2D_c_01)
       NULLIFY( debug%int_2D_c_02)
       NULLIFY( debug%int_2D_c_03)
@@ -2557,7 +4934,7 @@ CONTAINS
       NULLIFY( debug%int_2D_c_08)
       NULLIFY( debug%int_2D_c_09)
       NULLIFY( debug%int_2D_c_10)
-    
+
       NULLIFY( debug%dp_2D_a_01)
       NULLIFY( debug%dp_2D_a_02)
       NULLIFY( debug%dp_2D_a_03)
@@ -2568,7 +4945,7 @@ CONTAINS
       NULLIFY( debug%dp_2D_a_08)
       NULLIFY( debug%dp_2D_a_09)
       NULLIFY( debug%dp_2D_a_10)
-    
+
       NULLIFY( debug%dp_2D_b_01)
       NULLIFY( debug%dp_2D_b_02)
       NULLIFY( debug%dp_2D_b_03)
@@ -2579,7 +4956,7 @@ CONTAINS
       NULLIFY( debug%dp_2D_b_08)
       NULLIFY( debug%dp_2D_b_09)
       NULLIFY( debug%dp_2D_b_10)
-    
+
       NULLIFY( debug%dp_2D_c_01)
       NULLIFY( debug%dp_2D_c_02)
       NULLIFY( debug%dp_2D_c_03)
@@ -2590,7 +4967,7 @@ CONTAINS
       NULLIFY( debug%dp_2D_c_08)
       NULLIFY( debug%dp_2D_c_09)
       NULLIFY( debug%dp_2D_c_10)
-    
+
       NULLIFY( debug%dp_3D_a_01)
       NULLIFY( debug%dp_3D_a_02)
       NULLIFY( debug%dp_3D_a_03)
@@ -2601,7 +4978,7 @@ CONTAINS
       NULLIFY( debug%dp_3D_a_08)
       NULLIFY( debug%dp_3D_a_09)
       NULLIFY( debug%dp_3D_a_10)
-    
+
       NULLIFY( debug%dp_2D_monthly_a_01)
       NULLIFY( debug%dp_2D_monthly_a_02)
       NULLIFY( debug%dp_2D_monthly_a_03)
@@ -2612,12 +4989,12 @@ CONTAINS
       NULLIFY( debug%dp_2D_monthly_a_08)
       NULLIFY( debug%dp_2D_monthly_a_09)
       NULLIFY( debug%dp_2D_monthly_a_10)
-      
+
     END IF
-    
+
     ! Bind to the actual memory for this region
     IF (region%name == 'NAM') THEN
-    
+
       debug%int_2D_a_01 => debug_NAM%int_2D_a_01
       debug%int_2D_a_02 => debug_NAM%int_2D_a_02
       debug%int_2D_a_03 => debug_NAM%int_2D_a_03
@@ -2628,7 +5005,7 @@ CONTAINS
       debug%int_2D_a_08 => debug_NAM%int_2D_a_08
       debug%int_2D_a_09 => debug_NAM%int_2D_a_09
       debug%int_2D_a_10 => debug_NAM%int_2D_a_10
-    
+
       debug%int_2D_b_01 => debug_NAM%int_2D_b_01
       debug%int_2D_b_02 => debug_NAM%int_2D_b_02
       debug%int_2D_b_03 => debug_NAM%int_2D_b_03
@@ -2639,7 +5016,7 @@ CONTAINS
       debug%int_2D_b_08 => debug_NAM%int_2D_b_08
       debug%int_2D_b_09 => debug_NAM%int_2D_b_09
       debug%int_2D_b_10 => debug_NAM%int_2D_b_10
-    
+
       debug%int_2D_c_01 => debug_NAM%int_2D_c_01
       debug%int_2D_c_02 => debug_NAM%int_2D_c_02
       debug%int_2D_c_03 => debug_NAM%int_2D_c_03
@@ -2650,7 +5027,7 @@ CONTAINS
       debug%int_2D_c_08 => debug_NAM%int_2D_c_08
       debug%int_2D_c_09 => debug_NAM%int_2D_c_09
       debug%int_2D_c_10 => debug_NAM%int_2D_c_10
-    
+
       debug%dp_2D_a_01 => debug_NAM%dp_2D_a_01
       debug%dp_2D_a_02 => debug_NAM%dp_2D_a_02
       debug%dp_2D_a_03 => debug_NAM%dp_2D_a_03
@@ -2661,7 +5038,7 @@ CONTAINS
       debug%dp_2D_a_08 => debug_NAM%dp_2D_a_08
       debug%dp_2D_a_09 => debug_NAM%dp_2D_a_09
       debug%dp_2D_a_10 => debug_NAM%dp_2D_a_10
-    
+
       debug%dp_2D_b_01 => debug_NAM%dp_2D_b_01
       debug%dp_2D_b_02 => debug_NAM%dp_2D_b_02
       debug%dp_2D_b_03 => debug_NAM%dp_2D_b_03
@@ -2672,7 +5049,7 @@ CONTAINS
       debug%dp_2D_b_08 => debug_NAM%dp_2D_b_08
       debug%dp_2D_b_09 => debug_NAM%dp_2D_b_09
       debug%dp_2D_b_10 => debug_NAM%dp_2D_b_10
-    
+
       debug%dp_2D_c_01 => debug_NAM%dp_2D_c_01
       debug%dp_2D_c_02 => debug_NAM%dp_2D_c_02
       debug%dp_2D_c_03 => debug_NAM%dp_2D_c_03
@@ -2683,7 +5060,7 @@ CONTAINS
       debug%dp_2D_c_08 => debug_NAM%dp_2D_c_08
       debug%dp_2D_c_09 => debug_NAM%dp_2D_c_09
       debug%dp_2D_c_10 => debug_NAM%dp_2D_c_10
-    
+
       debug%dp_3D_a_01 => debug_NAM%dp_3D_a_01
       debug%dp_3D_a_02 => debug_NAM%dp_3D_a_02
       debug%dp_3D_a_03 => debug_NAM%dp_3D_a_03
@@ -2694,7 +5071,7 @@ CONTAINS
       debug%dp_3D_a_08 => debug_NAM%dp_3D_a_08
       debug%dp_3D_a_09 => debug_NAM%dp_3D_a_09
       debug%dp_3D_a_10 => debug_NAM%dp_3D_a_10
-    
+
       debug%dp_2D_monthly_a_01 => debug_NAM%dp_2D_monthly_a_01
       debug%dp_2D_monthly_a_02 => debug_NAM%dp_2D_monthly_a_02
       debug%dp_2D_monthly_a_03 => debug_NAM%dp_2D_monthly_a_03
@@ -2705,9 +5082,9 @@ CONTAINS
       debug%dp_2D_monthly_a_08 => debug_NAM%dp_2D_monthly_a_08
       debug%dp_2D_monthly_a_09 => debug_NAM%dp_2D_monthly_a_09
       debug%dp_2D_monthly_a_10 => debug_NAM%dp_2D_monthly_a_10
-      
+
     ELSEIF (region%name == 'EAS') THEN
-    
+
       debug%int_2D_a_01 => debug_EAS%int_2D_a_01
       debug%int_2D_a_02 => debug_EAS%int_2D_a_02
       debug%int_2D_a_03 => debug_EAS%int_2D_a_03
@@ -2718,7 +5095,7 @@ CONTAINS
       debug%int_2D_a_08 => debug_EAS%int_2D_a_08
       debug%int_2D_a_09 => debug_EAS%int_2D_a_09
       debug%int_2D_a_10 => debug_EAS%int_2D_a_10
-    
+
       debug%int_2D_b_01 => debug_EAS%int_2D_b_01
       debug%int_2D_b_02 => debug_EAS%int_2D_b_02
       debug%int_2D_b_03 => debug_EAS%int_2D_b_03
@@ -2729,7 +5106,7 @@ CONTAINS
       debug%int_2D_b_08 => debug_EAS%int_2D_b_08
       debug%int_2D_b_09 => debug_EAS%int_2D_b_09
       debug%int_2D_b_10 => debug_EAS%int_2D_b_10
-    
+
       debug%int_2D_c_01 => debug_EAS%int_2D_c_01
       debug%int_2D_c_02 => debug_EAS%int_2D_c_02
       debug%int_2D_c_03 => debug_EAS%int_2D_c_03
@@ -2740,7 +5117,7 @@ CONTAINS
       debug%int_2D_c_08 => debug_EAS%int_2D_c_08
       debug%int_2D_c_09 => debug_EAS%int_2D_c_09
       debug%int_2D_c_10 => debug_EAS%int_2D_c_10
-    
+
       debug%dp_2D_a_01 => debug_EAS%dp_2D_a_01
       debug%dp_2D_a_02 => debug_EAS%dp_2D_a_02
       debug%dp_2D_a_03 => debug_EAS%dp_2D_a_03
@@ -2751,7 +5128,7 @@ CONTAINS
       debug%dp_2D_a_08 => debug_EAS%dp_2D_a_08
       debug%dp_2D_a_09 => debug_EAS%dp_2D_a_09
       debug%dp_2D_a_10 => debug_EAS%dp_2D_a_10
-    
+
       debug%dp_2D_b_01 => debug_EAS%dp_2D_b_01
       debug%dp_2D_b_02 => debug_EAS%dp_2D_b_02
       debug%dp_2D_b_03 => debug_EAS%dp_2D_b_03
@@ -2762,7 +5139,7 @@ CONTAINS
       debug%dp_2D_b_08 => debug_EAS%dp_2D_b_08
       debug%dp_2D_b_09 => debug_EAS%dp_2D_b_09
       debug%dp_2D_b_10 => debug_EAS%dp_2D_b_10
-    
+
       debug%dp_2D_c_01 => debug_EAS%dp_2D_c_01
       debug%dp_2D_c_02 => debug_EAS%dp_2D_c_02
       debug%dp_2D_c_03 => debug_EAS%dp_2D_c_03
@@ -2773,7 +5150,7 @@ CONTAINS
       debug%dp_2D_c_08 => debug_EAS%dp_2D_c_08
       debug%dp_2D_c_09 => debug_EAS%dp_2D_c_09
       debug%dp_2D_c_10 => debug_EAS%dp_2D_c_10
-    
+
       debug%dp_3D_a_01 => debug_EAS%dp_3D_a_01
       debug%dp_3D_a_02 => debug_EAS%dp_3D_a_02
       debug%dp_3D_a_03 => debug_EAS%dp_3D_a_03
@@ -2784,7 +5161,7 @@ CONTAINS
       debug%dp_3D_a_08 => debug_EAS%dp_3D_a_08
       debug%dp_3D_a_09 => debug_EAS%dp_3D_a_09
       debug%dp_3D_a_10 => debug_EAS%dp_3D_a_10
-    
+
       debug%dp_2D_monthly_a_01 => debug_EAS%dp_2D_monthly_a_01
       debug%dp_2D_monthly_a_02 => debug_EAS%dp_2D_monthly_a_02
       debug%dp_2D_monthly_a_03 => debug_EAS%dp_2D_monthly_a_03
@@ -2795,9 +5172,9 @@ CONTAINS
       debug%dp_2D_monthly_a_08 => debug_EAS%dp_2D_monthly_a_08
       debug%dp_2D_monthly_a_09 => debug_EAS%dp_2D_monthly_a_09
       debug%dp_2D_monthly_a_10 => debug_EAS%dp_2D_monthly_a_10
-      
+
     ELSEIF (region%name == 'GRL') THEN
-    
+
       debug%int_2D_a_01 => debug_GRL%int_2D_a_01
       debug%int_2D_a_02 => debug_GRL%int_2D_a_02
       debug%int_2D_a_03 => debug_GRL%int_2D_a_03
@@ -2808,7 +5185,7 @@ CONTAINS
       debug%int_2D_a_08 => debug_GRL%int_2D_a_08
       debug%int_2D_a_09 => debug_GRL%int_2D_a_09
       debug%int_2D_a_10 => debug_GRL%int_2D_a_10
-    
+
       debug%int_2D_b_01 => debug_GRL%int_2D_b_01
       debug%int_2D_b_02 => debug_GRL%int_2D_b_02
       debug%int_2D_b_03 => debug_GRL%int_2D_b_03
@@ -2819,7 +5196,7 @@ CONTAINS
       debug%int_2D_b_08 => debug_GRL%int_2D_b_08
       debug%int_2D_b_09 => debug_GRL%int_2D_b_09
       debug%int_2D_b_10 => debug_GRL%int_2D_b_10
-    
+
       debug%int_2D_c_01 => debug_GRL%int_2D_c_01
       debug%int_2D_c_02 => debug_GRL%int_2D_c_02
       debug%int_2D_c_03 => debug_GRL%int_2D_c_03
@@ -2830,7 +5207,7 @@ CONTAINS
       debug%int_2D_c_08 => debug_GRL%int_2D_c_08
       debug%int_2D_c_09 => debug_GRL%int_2D_c_09
       debug%int_2D_c_10 => debug_GRL%int_2D_c_10
-    
+
       debug%dp_2D_a_01 => debug_GRL%dp_2D_a_01
       debug%dp_2D_a_02 => debug_GRL%dp_2D_a_02
       debug%dp_2D_a_03 => debug_GRL%dp_2D_a_03
@@ -2841,7 +5218,7 @@ CONTAINS
       debug%dp_2D_a_08 => debug_GRL%dp_2D_a_08
       debug%dp_2D_a_09 => debug_GRL%dp_2D_a_09
       debug%dp_2D_a_10 => debug_GRL%dp_2D_a_10
-    
+
       debug%dp_2D_b_01 => debug_GRL%dp_2D_b_01
       debug%dp_2D_b_02 => debug_GRL%dp_2D_b_02
       debug%dp_2D_b_03 => debug_GRL%dp_2D_b_03
@@ -2852,7 +5229,7 @@ CONTAINS
       debug%dp_2D_b_08 => debug_GRL%dp_2D_b_08
       debug%dp_2D_b_09 => debug_GRL%dp_2D_b_09
       debug%dp_2D_b_10 => debug_GRL%dp_2D_b_10
-    
+
       debug%dp_2D_c_01 => debug_GRL%dp_2D_c_01
       debug%dp_2D_c_02 => debug_GRL%dp_2D_c_02
       debug%dp_2D_c_03 => debug_GRL%dp_2D_c_03
@@ -2863,7 +5240,7 @@ CONTAINS
       debug%dp_2D_c_08 => debug_GRL%dp_2D_c_08
       debug%dp_2D_c_09 => debug_GRL%dp_2D_c_09
       debug%dp_2D_c_10 => debug_GRL%dp_2D_c_10
-    
+
       debug%dp_3D_a_01 => debug_GRL%dp_3D_a_01
       debug%dp_3D_a_02 => debug_GRL%dp_3D_a_02
       debug%dp_3D_a_03 => debug_GRL%dp_3D_a_03
@@ -2874,7 +5251,7 @@ CONTAINS
       debug%dp_3D_a_08 => debug_GRL%dp_3D_a_08
       debug%dp_3D_a_09 => debug_GRL%dp_3D_a_09
       debug%dp_3D_a_10 => debug_GRL%dp_3D_a_10
-    
+
       debug%dp_2D_monthly_a_01 => debug_GRL%dp_2D_monthly_a_01
       debug%dp_2D_monthly_a_02 => debug_GRL%dp_2D_monthly_a_02
       debug%dp_2D_monthly_a_03 => debug_GRL%dp_2D_monthly_a_03
@@ -2885,9 +5262,9 @@ CONTAINS
       debug%dp_2D_monthly_a_08 => debug_GRL%dp_2D_monthly_a_08
       debug%dp_2D_monthly_a_09 => debug_GRL%dp_2D_monthly_a_09
       debug%dp_2D_monthly_a_10 => debug_GRL%dp_2D_monthly_a_10
-      
+
     ELSEIF (region%name == 'ANT') THEN
-    
+
       debug%int_2D_a_01 => debug_ANT%int_2D_a_01
       debug%int_2D_a_02 => debug_ANT%int_2D_a_02
       debug%int_2D_a_03 => debug_ANT%int_2D_a_03
@@ -2898,7 +5275,7 @@ CONTAINS
       debug%int_2D_a_08 => debug_ANT%int_2D_a_08
       debug%int_2D_a_09 => debug_ANT%int_2D_a_09
       debug%int_2D_a_10 => debug_ANT%int_2D_a_10
-    
+
       debug%int_2D_b_01 => debug_ANT%int_2D_b_01
       debug%int_2D_b_02 => debug_ANT%int_2D_b_02
       debug%int_2D_b_03 => debug_ANT%int_2D_b_03
@@ -2909,7 +5286,7 @@ CONTAINS
       debug%int_2D_b_08 => debug_ANT%int_2D_b_08
       debug%int_2D_b_09 => debug_ANT%int_2D_b_09
       debug%int_2D_b_10 => debug_ANT%int_2D_b_10
-    
+
       debug%int_2D_c_01 => debug_ANT%int_2D_c_01
       debug%int_2D_c_02 => debug_ANT%int_2D_c_02
       debug%int_2D_c_03 => debug_ANT%int_2D_c_03
@@ -2920,7 +5297,7 @@ CONTAINS
       debug%int_2D_c_08 => debug_ANT%int_2D_c_08
       debug%int_2D_c_09 => debug_ANT%int_2D_c_09
       debug%int_2D_c_10 => debug_ANT%int_2D_c_10
-    
+
       debug%dp_2D_a_01 => debug_ANT%dp_2D_a_01
       debug%dp_2D_a_02 => debug_ANT%dp_2D_a_02
       debug%dp_2D_a_03 => debug_ANT%dp_2D_a_03
@@ -2931,7 +5308,7 @@ CONTAINS
       debug%dp_2D_a_08 => debug_ANT%dp_2D_a_08
       debug%dp_2D_a_09 => debug_ANT%dp_2D_a_09
       debug%dp_2D_a_10 => debug_ANT%dp_2D_a_10
-    
+
       debug%dp_2D_b_01 => debug_ANT%dp_2D_b_01
       debug%dp_2D_b_02 => debug_ANT%dp_2D_b_02
       debug%dp_2D_b_03 => debug_ANT%dp_2D_b_03
@@ -2942,7 +5319,7 @@ CONTAINS
       debug%dp_2D_b_08 => debug_ANT%dp_2D_b_08
       debug%dp_2D_b_09 => debug_ANT%dp_2D_b_09
       debug%dp_2D_b_10 => debug_ANT%dp_2D_b_10
-    
+
       debug%dp_2D_c_01 => debug_ANT%dp_2D_c_01
       debug%dp_2D_c_02 => debug_ANT%dp_2D_c_02
       debug%dp_2D_c_03 => debug_ANT%dp_2D_c_03
@@ -2953,7 +5330,7 @@ CONTAINS
       debug%dp_2D_c_08 => debug_ANT%dp_2D_c_08
       debug%dp_2D_c_09 => debug_ANT%dp_2D_c_09
       debug%dp_2D_c_10 => debug_ANT%dp_2D_c_10
-    
+
       debug%dp_3D_a_01 => debug_ANT%dp_3D_a_01
       debug%dp_3D_a_02 => debug_ANT%dp_3D_a_02
       debug%dp_3D_a_03 => debug_ANT%dp_3D_a_03
@@ -2964,7 +5341,7 @@ CONTAINS
       debug%dp_3D_a_08 => debug_ANT%dp_3D_a_08
       debug%dp_3D_a_09 => debug_ANT%dp_3D_a_09
       debug%dp_3D_a_10 => debug_ANT%dp_3D_a_10
-    
+
       debug%dp_2D_monthly_a_01 => debug_ANT%dp_2D_monthly_a_01
       debug%dp_2D_monthly_a_02 => debug_ANT%dp_2D_monthly_a_02
       debug%dp_2D_monthly_a_03 => debug_ANT%dp_2D_monthly_a_03
@@ -2975,26 +5352,27 @@ CONTAINS
       debug%dp_2D_monthly_a_08 => debug_ANT%dp_2D_monthly_a_08
       debug%dp_2D_monthly_a_09 => debug_ANT%dp_2D_monthly_a_09
       debug%dp_2D_monthly_a_10 => debug_ANT%dp_2D_monthly_a_10
-      
+
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE associate_debug_fields
+
   SUBROUTINE initialise_debug_fields( region)
-  
-    IMPLICIT NONE  
-    
+
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_debug_fields'
 
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF     (region%name == 'NAM') THEN
       CALL initialise_debug_fields_region( debug_NAM, region%mesh)
     ELSEIF (region%name == 'EAS') THEN
@@ -3004,19 +5382,20 @@ CONTAINS
     ELSEIF (region%name == 'ANT') THEN
       CALL initialise_debug_fields_region( debug_ANT, region%mesh)
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 80)
-    
+
   END SUBROUTINE initialise_debug_fields
+
   SUBROUTINE initialise_debug_fields_region( debug, mesh)
-  
-    IMPLICIT NONE  
-    
+
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
     TYPE(type_mesh),                 INTENT(IN)        :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_debug_fields_region'
 
@@ -3033,7 +5412,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_08, debug%wint_2D_a_08)
     CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_09, debug%wint_2D_a_09)
     CALL allocate_shared_int_1D( mesh%nV, debug%int_2D_a_10, debug%wint_2D_a_10)
-    
+
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_01, debug%wint_2D_b_01)
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_02, debug%wint_2D_b_02)
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_03, debug%wint_2D_b_03)
@@ -3044,7 +5423,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_08, debug%wint_2D_b_08)
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_09, debug%wint_2D_b_09)
     CALL allocate_shared_int_1D( mesh%nTri, debug%int_2D_b_10, debug%wint_2D_b_10)
-    
+
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_01, debug%wint_2D_c_01)
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_02, debug%wint_2D_c_02)
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_03, debug%wint_2D_c_03)
@@ -3055,7 +5434,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_08, debug%wint_2D_c_08)
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_09, debug%wint_2D_c_09)
     CALL allocate_shared_int_1D( mesh%nAc, debug%int_2D_c_10, debug%wint_2D_c_10)
-    
+
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_01, debug%wdp_2D_a_01)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_02, debug%wdp_2D_a_02)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_03, debug%wdp_2D_a_03)
@@ -3066,7 +5445,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_08, debug%wdp_2D_a_08)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_09, debug%wdp_2D_a_09)
     CALL allocate_shared_dp_1D( mesh%nV, debug%dp_2D_a_10, debug%wdp_2D_a_10)
-    
+
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_01, debug%wdp_2D_b_01)
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_02, debug%wdp_2D_b_02)
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_03, debug%wdp_2D_b_03)
@@ -3077,7 +5456,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_08, debug%wdp_2D_b_08)
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_09, debug%wdp_2D_b_09)
     CALL allocate_shared_dp_1D( mesh%nTri, debug%dp_2D_b_10, debug%wdp_2D_b_10)
-    
+
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_01, debug%wdp_2D_c_01)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_02, debug%wdp_2D_c_02)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_03, debug%wdp_2D_c_03)
@@ -3088,7 +5467,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_08, debug%wdp_2D_c_08)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_09, debug%wdp_2D_c_09)
     CALL allocate_shared_dp_1D( mesh%nAc, debug%dp_2D_c_10, debug%wdp_2D_c_10)
-    
+
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_01, debug%wdp_3D_a_01)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_02, debug%wdp_3D_a_02)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_03, debug%wdp_3D_a_03)
@@ -3099,7 +5478,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_08, debug%wdp_3D_a_08)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_09, debug%wdp_3D_a_09)
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, debug%dp_3D_a_10, debug%wdp_3D_a_10)
-    
+
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_01, debug%wdp_2D_monthly_a_01)
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_02, debug%wdp_2D_monthly_a_02)
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_03, debug%wdp_2D_monthly_a_03)
@@ -3110,18 +5489,19 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_08, debug%wdp_2D_monthly_a_08)
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_09, debug%wdp_2D_monthly_a_09)
     CALL allocate_shared_dp_2D( mesh%nV, 12, debug%dp_2D_monthly_a_10, debug%wdp_2D_monthly_a_10)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 80)
 
   END SUBROUTINE initialise_debug_fields_region
+
   SUBROUTINE reallocate_debug_fields( region)
-  
-    IMPLICIT NONE  
-    
+
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_model_region),         INTENT(INOUT)     :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'reallocate_debug_fields'
 
@@ -3142,18 +5522,19 @@ CONTAINS
       CALL initialise_debug_fields_region( debug_ANT, region%mesh)
     END IF
     CALL associate_debug_fields( region)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE reallocate_debug_fields
+
   SUBROUTINE deallocate_debug_fields_region( debug)
-  
-    IMPLICIT NONE  
-    
+
+    IMPLICIT NONE
+
     ! In/output variables:
     TYPE(type_debug_fields),         INTENT(INOUT)     :: debug
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_debug_fields_region'
 
@@ -3170,7 +5551,7 @@ CONTAINS
     CALL deallocate_shared( debug%wint_2D_a_08)
     CALL deallocate_shared( debug%wint_2D_a_09)
     CALL deallocate_shared( debug%wint_2D_a_10)
-    
+
     CALL deallocate_shared( debug%wint_2D_b_01)
     CALL deallocate_shared( debug%wint_2D_b_02)
     CALL deallocate_shared( debug%wint_2D_b_03)
@@ -3181,7 +5562,7 @@ CONTAINS
     CALL deallocate_shared( debug%wint_2D_b_08)
     CALL deallocate_shared( debug%wint_2D_b_09)
     CALL deallocate_shared( debug%wint_2D_b_10)
-    
+
     CALL deallocate_shared( debug%wint_2D_c_01)
     CALL deallocate_shared( debug%wint_2D_c_02)
     CALL deallocate_shared( debug%wint_2D_c_03)
@@ -3192,7 +5573,7 @@ CONTAINS
     CALL deallocate_shared( debug%wint_2D_c_08)
     CALL deallocate_shared( debug%wint_2D_c_09)
     CALL deallocate_shared( debug%wint_2D_c_10)
-    
+
     CALL deallocate_shared( debug%wdp_2D_a_01)
     CALL deallocate_shared( debug%wdp_2D_a_02)
     CALL deallocate_shared( debug%wdp_2D_a_03)
@@ -3203,7 +5584,7 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_a_08)
     CALL deallocate_shared( debug%wdp_2D_a_09)
     CALL deallocate_shared( debug%wdp_2D_a_10)
-    
+
     CALL deallocate_shared( debug%wdp_2D_b_01)
     CALL deallocate_shared( debug%wdp_2D_b_02)
     CALL deallocate_shared( debug%wdp_2D_b_03)
@@ -3214,7 +5595,7 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_b_08)
     CALL deallocate_shared( debug%wdp_2D_b_09)
     CALL deallocate_shared( debug%wdp_2D_b_10)
-    
+
     CALL deallocate_shared( debug%wdp_2D_c_01)
     CALL deallocate_shared( debug%wdp_2D_c_02)
     CALL deallocate_shared( debug%wdp_2D_c_03)
@@ -3225,7 +5606,7 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_c_08)
     CALL deallocate_shared( debug%wdp_2D_c_09)
     CALL deallocate_shared( debug%wdp_2D_c_10)
-    
+
     CALL deallocate_shared( debug%wdp_3D_a_01)
     CALL deallocate_shared( debug%wdp_3D_a_02)
     CALL deallocate_shared( debug%wdp_3D_a_03)
@@ -3236,7 +5617,7 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_3D_a_08)
     CALL deallocate_shared( debug%wdp_3D_a_09)
     CALL deallocate_shared( debug%wdp_3D_a_10)
-    
+
     CALL deallocate_shared( debug%wdp_2D_monthly_a_01)
     CALL deallocate_shared( debug%wdp_2D_monthly_a_02)
     CALL deallocate_shared( debug%wdp_2D_monthly_a_03)
@@ -3247,14 +5628,14 @@ CONTAINS
     CALL deallocate_shared( debug%wdp_2D_monthly_a_08)
     CALL deallocate_shared( debug%wdp_2D_monthly_a_09)
     CALL deallocate_shared( debug%wdp_2D_monthly_a_10)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE deallocate_debug_fields_region
-  
-! Create and write to resource tracking file
-! ==========================================
+
+! ===== Create and write to resource tracking file =====
+! ======================================================
 
   SUBROUTINE write_to_resource_tracking_file( netcdf, time, tcomp_tot)
     ! Write to the resource tracking output file
@@ -3313,6 +5694,7 @@ CONTAINS
     netcdf%ti = netcdf%ti + 1
 
   END SUBROUTINE write_to_resource_tracking_file
+
   SUBROUTINE create_resource_tracking_file( netcdf)
     ! Create the resource tracking output file
 
@@ -3460,6 +5842,7 @@ CONTAINS
     CALL close_netcdf_file(netcdf%ncid)
 
   END SUBROUTINE create_resource_tracking_file
+
   SUBROUTINE encode_subroutine_path_as_integer( subroutine_path, path_int_enc)
     ! Encode the current subroutine path as an integer array so it can be saved as a NetCDF variable
     !
@@ -3644,2289 +6027,5 @@ CONTAINS
     END DO
 
   END SUBROUTINE encode_subroutine_path_as_integer
-
-! Read all kinds of input files
-! =============================
-
-  ! A restart file produced by an earlier run
-  SUBROUTINE inquire_restart_file_mesh( netcdf, nV, nTri, nC_mem)
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    INTEGER,                   INTENT(OUT)   :: nV, nTri, nC_mem
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_restart_file_mesh'
-!    INTEGER                                  :: int_dummy
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL crash('FIXME!')
-
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_vi,    nV,        netcdf%id_dim_vi   )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ti,    nTri,      netcdf%id_dim_ti   )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_ci,    nC_mem,    netcdf%id_dim_ci   )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_two,   int_dummy, netcdf%id_dim_two  )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_three, int_dummy, netcdf%id_dim_three)
-!
-!    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_V,              (/ netcdf%id_dim_vi, netcdf%id_dim_two  /), netcdf%id_var_V             )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_nC,             (/ netcdf%id_dim_vi                     /), netcdf%id_var_nC            )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_C,              (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_C             )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_niTri,          (/ netcdf%id_dim_vi                     /), netcdf%id_var_niTri         )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_iTri,           (/ netcdf%id_dim_vi, netcdf%id_dim_ci   /), netcdf%id_var_iTri          )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_edge_index,     (/ netcdf%id_dim_vi                     /), netcdf%id_var_edge_index    )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri,            (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_Tri           )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Tricc,          (/ netcdf%id_dim_ti, netcdf%id_dim_two  /), netcdf%id_var_Tricc         )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_TriC,           (/ netcdf%id_dim_ti, netcdf%id_dim_three/), netcdf%id_var_TriC          )
-!    CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index, (/ netcdf%id_dim_ti                     /), netcdf%id_var_Tri_edge_index)
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE inquire_restart_file_mesh
-  SUBROUTINE inquire_restart_file_init( netcdf)
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_restart_file_init'
-!    INTEGER                                  :: nZ, nt, nm, k
-!    REAL(dp), DIMENSION(:    ), ALLOCATABLE  :: zeta
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL crash('FIXME!')
-
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_zeta,  nZ, netcdf%id_dim_zeta )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_month, nm, netcdf%id_dim_month)
-!    
-!    IF (nZ /= C%nZ) THEN
-!      WRITE(0,*) '   ERROR: nZ in restart file doesnt match nZ in config!'
-!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!    END IF
-!
-!    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_zeta,             (/ netcdf%id_dim_zeta                    /), netcdf%id_var_zeta            )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_time,             (/ netcdf%id_dim_time                    /), netcdf%id_var_time            )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_month,            (/ netcdf%id_dim_month                   /), netcdf%id_var_month           )
-!    
-!    ! Read zeta, check if it matches the config zeta
-!    ALLOCATE( zeta( nZ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_zeta, zeta, start = (/ 1 /) ))
-!    DO k = 1, C%nz
-!      IF (ABS(C%zeta(k) - zeta(k)) > 0.0001_dp) THEN
-!        WRITE(0,*) '  WARNING - vertical coordinate zeta in restart file doesnt match zeta in config!'
-!      END IF
-!      END DO
-!    DEALLOCATE( zeta)
-!    
-!    ! Inquire model data
-!    
-!    ! Geometry
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
-!    
-!    ! Temperature
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
-!    
-!    ! SMB
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
-!    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth       )
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE inquire_restart_file_init
-  SUBROUTINE read_restart_file_mesh( mesh, netcdf)
-    ! Read mesh data from a restart file
-   
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_mesh),           INTENT(INOUT) :: mesh
-    TYPE(type_netcdf_restart), INTENT(INOUT) :: netcdf
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_mesh'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL crash('FIXME!')
-    
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Read the data
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_V,              mesh%V,              start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_nC,             mesh%nC,             start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C,              mesh%C,              start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_niTri,          mesh%niTri,          start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_iTri,           mesh%iTri,           start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_edge_index,     mesh%edge_index,     start = (/ 1    /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri,            mesh%Tri,            start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tricc,          mesh%Tricc,          start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_TriC,           mesh%TriC,           start = (/ 1, 1 /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Tri_edge_index, mesh%Tri_edge_index, start = (/ 1    /) ))
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE read_restart_file_mesh
-  SUBROUTINE read_restart_file_init( refgeo_init, netcdf)
-    ! Read mesh data from a restart file
-   
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo_init
-    TYPE(type_netcdf_restart),   INTENT(INOUT) :: netcdf
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_restart_file_init'
-!    INTEGER                                    :: nt, ti, ti_min
-!    REAL(dp), DIMENSION(:    ), ALLOCATABLE    :: time
-!    REAL(dp)                                   :: dt_min, dt
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL crash('FIXME!')
-    
-!    ! Open the netcdf file
-!    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-!    
-!    ! Read time, determine which time frame to read
-!    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time,  nt, netcdf%id_dim_time )
-!    ALLOCATE( time( nt))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_time, time, start = (/ 1 /) ))
-!    
-!    IF (C%time_to_restart_from < MINVAL(time) .OR. C%time_to_restart_from > MAXVAL(time)) THEN
-!      WRITE(0,*) '  ERROR - time_to_restart_from ', C%time_to_restart_from, ' outside range of restart file! (range = [', MINVAL( time), ' - ', MAXVAL(time), '])'
-!      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!    END IF    
-!    
-!    ti_min = 0
-!    dt_min = 1E8_dp
-!    DO ti = 1, nt
-!      dt = ABS(time( ti) - C%time_to_restart_from)
-!      IF (dt < dt_min) THEN
-!        ti_min = ti
-!        dt_min = dt
-!      END IF
-!    END DO
-!    ti = ti_min
-!    
-!    DEALLOCATE( time)
-!    
-!    ! Read the data
-!    
-!    ! Geometry
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               init%Hi,               start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               init%Hb,               start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               init%Hs,               start = (/ 1,    ti /) ))
-!    
-!    ! Temperature
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               init%Ti,               start = (/ 1, 1, ti /) ))
-!    
-!    ! SMB
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, init%MeltPreviousYear, start = (/ 1,    ti /) ))
-!    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        init%FirnDepth,        start = (/ 1, 1, ti /) ))
-!        
-!    ! Close the netcdf file
-!    CALL close_netcdf_file( netcdf%ncid)
-!
-!    ! Finalise routine path
-!    CALL finalise_routine( routine_name)
-    
-  END SUBROUTINE read_restart_file_init 
-  
-  ! Reference ice-sheet geometry (ice thickness, bed topography, and surface elevation)
-  SUBROUTINE inquire_reference_geometry_file( refgeo)
-    ! Check if the right dimensions and variables are present in the file.
-   
-    IMPLICIT NONE
-    
-    ! Input variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_reference_geometry_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-        
-    ! Open the netcdf file
-    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
-    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
-    
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file( refgeo%netcdf%ncid)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_reference_geometry_file
-  SUBROUTINE read_reference_geometry_file(    refgeo)
-    ! Read reference geometry data from a NetCDF file
-   
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_reference_geometry_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file( refgeo%netcdf%ncid)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_reference_geometry_file
-  
-  ! Insolation solution (e.g. Laskar 2004)
-  SUBROUTINE inquire_insolation_data_file( forcing)
-
-    IMPLICIT NONE
-    
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
- 
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
-    INTEGER                                :: int_dummy
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-            
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)  
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
-    
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_insolation_data_file
-  SUBROUTINE read_insolation_data_file( forcing, ti0, ti1, ins_Q_TOA0, ins_Q_TOA1) 
-
-    IMPLICIT NONE
-    
-    ! In/output variables:
-    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-    INTEGER,                        INTENT(IN)    :: ti0, ti1
-    REAL(dp), DIMENSION(:,:),       INTENT(OUT)   :: ins_Q_TOA0, ins_Q_TOA1
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file'
-    INTEGER                                       :: mi, li
-    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
-    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
-        
-    ! Read data
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))    
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid) 
-    
-    ! Store the data in the shared memory structure
-    DO mi = 1, 12
-    DO li = 1, forcing%ins_nlat    
-      ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
-      ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
-    END DO
-    END DO
-        
-    ! Clean up temporary memory
-    DEALLOCATE(Q_temp0)
-    DEALLOCATE(Q_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-   
-  END SUBROUTINE read_insolation_data_file
-  SUBROUTINE read_insolation_data_file_time_lat( forcing) 
-
-    IMPLICIT NONE
-    
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
-        
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_insolation_data_file_time_lat
-  
-  ! Geothermal heat flux
-  SUBROUTINE inquire_geothermal_heat_flux_file( forcing)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_geothermal_heat_flux_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lon, forcing%grid_ghf%nlon, forcing%netcdf_ghf%id_dim_lon)
-    CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lat, forcing%grid_ghf%nlat, forcing%netcdf_ghf%id_dim_lat)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lon, (/ forcing%netcdf_ghf%id_dim_lon                                /), forcing%netcdf_ghf%id_var_lon)
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_lat, (/ forcing%netcdf_ghf%id_dim_lat                                /), forcing%netcdf_ghf%id_var_lat)
-    CALL inquire_double_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_var_ghf, (/ forcing%netcdf_ghf%id_dim_lon, forcing%netcdf_ghf%id_dim_lat /), forcing%netcdf_ghf%id_var_ghf)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_geothermal_heat_flux_file
-  SUBROUTINE read_geothermal_heat_flux_file( forcing)
-  
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_geothermal_heat_flux_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
-    
-    ! Read the data
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lon, forcing%grid_ghf%lon, start=(/1   /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lat, forcing%grid_ghf%lat, start=(/1   /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_ghf, forcing%ghf_ghf,      start=(/1, 1/) ))
-    
-    ! Close the NetCDF file
-    CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
-
-    ! Convert from W m-2 (J m-2 s-1) to J m-2 yr-1
-    forcing%ghf_ghf = forcing%ghf_ghf * sec_per_year
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_geothermal_heat_flux_file
-  
-  ! Write a sparse matrix to a NetCDF file
-  SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
-    ! Write a PETSc matrix to a NetCDF file
-      
-    IMPLICIT NONE
-    
-    ! In- and output variables:
-    TYPE(tMat),                          INTENT(IN)    :: A
-    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
-    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Get matrix in CSR format using native Fortran arrays
-    CALL mat_petsc2CSR( A, A_CSR)
-    
-    ! Write the CSR matrix to a file
-    CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
-    
-    ! Clean up after yourself
-    CALL deallocate_matrix_CSR( A_CSR)
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_PETSc_matrix_to_NetCDF
-  SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
-    ! Write a CSR matrix to a NetCDF file
-
-    IMPLICIT NONE
-    
-    ! In- and output variables:
-    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
-    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
-    LOGICAL                                            :: file_exists
-    INTEGER                                            :: ncid
-    INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
-    INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
-    
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (par%master) THEN
-
-      ! Safety
-      INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
-      IF (file_exists) THEN
-        CALL crash('file "' // TRIM( filename) // '" already exists!')
-      END IF
-
-      WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
-
-      ! Create netCDF file
-      CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
-
-      ! Define dimensions:
-      CALL create_dim( ncid, 'm',      A_CSR%m  , id_dim_m  )
-      CALL create_dim( ncid, 'mplus1', A_CSR%m+1, id_dim_mp1)
-      CALL create_dim( ncid, 'n',      A_CSR%n  , id_dim_n  )
-      CALL create_dim( ncid, 'nnz',    A_CSR%nnz, id_dim_nnz)
-
-      ! Define variables:
-      ! The order of the CALL statements for the different variables determines their
-      ! order of appearence in the netcdf file.
-
-      CALL create_int_var(    ncid, 'ptr',   [id_dim_mp1], id_var_ptr  , long_name = 'ptr'  )
-      CALL create_int_var(    ncid, 'index', [id_dim_nnz], id_var_index, long_name = 'index')
-      CALL create_double_var( ncid, 'val',   [id_dim_nnz], id_var_val  , long_name = 'val'  )
-
-      ! Leave definition mode
-      CALL handle_error( nf90_enddef( ncid))
-
-      ! Write data
-      CALL handle_error( nf90_put_var( ncid, id_var_ptr  , A_CSR%ptr  ))
-      CALL handle_error( nf90_put_var( ncid, id_var_index, A_CSR%index))
-      CALL handle_error( nf90_put_var( ncid, id_var_val  , A_CSR%val  ))
-
-      ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-      CALL handle_error(nf90_sync( ncid))
-
-      ! Close the file
-      CALL close_netcdf_file( ncid)
-
-    END IF ! IF (par%master) THEN
-    CALL sync
-    
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_CSR_matrix_to_NetCDF
-
-! Basic NetCDF wrapper functions
-! ==============================
-
-  SUBROUTINE open_netcdf_file( filename, ncid) 
-    IMPLICIT NONE
-    
-    CHARACTER(LEN=*), INTENT(IN)  :: filename
-    INTEGER,          INTENT(OUT) :: ncid
-    
-    ! Open netCDF file:
-    CALL handle_error(nf90_open(filename, IOR(nf90_write,nf90_share), ncid))
-
-  END SUBROUTINE open_netcdf_file
-  SUBROUTINE close_netcdf_file( ncid)
-    IMPLICIT NONE
-  
-    INTEGER, INTENT(INOUT) :: ncid
-
-    ! Close netCDF file:
-    CALL handle_error(nf90_close(ncid))
-   
-  END SUBROUTINE close_netcdf_file
-  SUBROUTINE create_dim( ncid, dim_name, length, id_dim)
-    ! Subroutine for creating netCDF dimensions more convenient:
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN) :: ncid
-    CHARACTER(LEN=*),           INTENT(IN) :: dim_name
-    INTEGER,                    INTENT(IN) :: length
-    
-    ! Output variables:
-    INTEGER, INTENT(OUT)               :: id_dim
-
-    CALL handle_error(nf90_def_dim(ncid,dim_name,length,id_dim))
-    
-  END SUBROUTINE create_dim
-  SUBROUTINE create_int_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
-    ! Subroutine for creating netCDF variables of type nf90_int more convenient:
-  
-    ! Input variables:
-    INTEGER,                      INTENT(IN)  :: ncid
-    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
-    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
-    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
-
-    ! Output variables:
-    INTEGER,                      INTENT(OUT) :: id_var
-
-    CALL handle_error(nf90_def_var(ncid,var_name,nf90_int,id_dims,id_var))
-    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
-    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
-    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
-    
-  END SUBROUTINE create_int_var
-  SUBROUTINE create_double_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
-    ! Subroutine for creating netCDF variables of type nf90_DOUBLE more convenient:
-  
-    ! Input variables:
-    INTEGER,                      INTENT(IN)  :: ncid
-    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
-    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
-    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
-    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
-
-    ! Output variables:
-    INTEGER,                      INTENT(OUT) :: id_var
-
-    CALL handle_error(nf90_def_var(ncid,var_name,nf90_double,id_dims,id_var))
-    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
-    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
-    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
-    
-  END SUBROUTINE create_double_var
-  SUBROUTINE inquire_dim( ncid, dim_name, dim_length, id_dim)
-    ! Inquire the id of a dimension and return its length.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)  :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)  :: dim_name
-
-    ! Output variables:
-    INTEGER,                    INTENT(OUT) :: dim_length
-    INTEGER,                    INTENT(OUT) :: id_dim
-
-    CALL handle_error(nf90_inq_dimid(ncid,dim_name,id_dim))
-    CALL handle_error(nf90_inquire_dimension(ncid, id_dim, len=dim_length))
-    
-  END SUBROUTINE inquire_dim
-  SUBROUTINE inquire_int_var( ncid, var_name, id_dims, id_var)
-    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
-    ! that the variable is of type nf90_int.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)    :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
-    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
-
-    ! Output variables:
-    INTEGER,                INTENT(OUT)   :: id_var
-
-    ! Local variables:
-    INTEGER                               :: xtype, ndims
-    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
-
-    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
-    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
-    IF (xtype /= nf90_int) THEN
-      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_int!')
-    END IF
-    IF (ndims /= SIZE( id_dims)) THEN
-      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
-        int_01 = ndims, int_02 = SIZE( id_dims))
-    END IF
-    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
-      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
-    END IF
-    
-  END SUBROUTINE inquire_int_var
-  SUBROUTINE inquire_single_var( ncid, var_name, id_dims, id_var)
-    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
-    ! that the variable is of type nf90_DOUBLE.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)    :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
-    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
-
-    ! Output variables:
-    INTEGER,                INTENT(OUT)   :: id_var
-
-    ! Local variables:
-    INTEGER                               :: xtype, ndims
-    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
-
-    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
-    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
-    IF (xtype /= nf90_float) THEN
-      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_float!')
-    END IF
-    IF (ndims /= SIZE( id_dims)) THEN
-      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
-        int_01 = ndims, int_02 = SIZE( id_dims))
-    END IF
-    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
-      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
-    END IF
-    
-  END SUBROUTINE inquire_single_var
-  SUBROUTINE inquire_double_var( ncid, var_name, id_dims, id_var)
-    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
-    ! that the variable is of type nf90_DOUBLE.
-    IMPLICIT NONE
-  
-    ! Input variables:
-    INTEGER,                    INTENT(IN)    :: ncid
-    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
-    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
-
-    ! Output variables:
-    INTEGER,                INTENT(OUT)   :: id_var
-
-    ! Local variables:
-    INTEGER                               :: xtype, ndims
-    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
-
-    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
-    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
-    IF(xtype /= nf90_double) THEN
-      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is not nf90_double!')
-    END IF
-    IF (ndims /= SIZE( id_dims)) THEN
-      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
-        int_01 = ndims, int_02 = SIZE( id_dims))
-    END IF
-    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
-      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
-    END IF
-    
-  END SUBROUTINE inquire_double_var
-  SUBROUTINE handle_error( stat, message)
-    USE netcdf, ONLY: nf90_noerr, nf90_strerror
-    IMPLICIT NONE
-    
-    ! Input variables:
-    INTEGER,                    INTENT(IN) :: stat
-    CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
-
-    IF (stat /= nf90_noerr) THEN
-      IF (PRESENT( message)) THEN
-        CALL crash( message)
-      ELSE
-        CALL crash( 'netcdf error')
-      END IF
-    END IF
-    
-  END SUBROUTINE handle_error
-
-
-
-  !==========================
-  !==========================
-
-
-
-  ! Present-day observed global climate (e.g. ERA-40)
-  SUBROUTINE inquire_PD_obs_global_climate_file( clim)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    INTEGER                               :: int_dummy
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,     clim%nlat,  clim%netcdf%id_dim_lat)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,     clim%nlon,  clim%netcdf%id_dim_lon)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /), clim%netcdf%id_var_lat)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /), clim%netcdf%id_var_lon)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Hs)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_T2m)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Precip)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_WE)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_SN)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-  END SUBROUTINE inquire_PD_obs_global_climate_file
-  SUBROUTINE read_PD_obs_global_climate_file(    clim)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-  END SUBROUTINE read_PD_obs_global_climate_file
-
-  ! GCM global climate (climate matrix snapshots)
-  SUBROUTINE inquire_GCM_global_climate_file( clim)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    INTEGER                                     :: int_dummy
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,     clim%nlat,  clim%netcdf%id_dim_lat)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,     clim%nlon,  clim%netcdf%id_dim_lon)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /),  clim%netcdf%id_var_lat)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /),  clim%netcdf%id_var_lon)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /),  clim%netcdf%id_var_Hs)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_T2m)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Precip)
-    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_WE)
-    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_SN)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(clim%netcdf%ncid)
-
-  END SUBROUTINE inquire_GCM_global_climate_file
-  SUBROUTINE read_GCM_global_climate_file(    clim)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
-    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
-    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(clim%netcdf%ncid)
-
-  END SUBROUTINE read_GCM_global_climate_file
-
-  ! Insolation solution (e.g. Laskar 2004)
-  SUBROUTINE inquire_insolation_file( forcing)
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    INTEGER                                :: int_dummy
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
-    CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
-    CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-  END SUBROUTINE inquire_insolation_file
-  SUBROUTINE read_insolation_file_timeframes( forcing, ti0, ti1)
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-    INTEGER,                        INTENT(IN)    :: ti0, ti1
-
-    ! Local variables:
-    INTEGER                                       :: mi, li
-    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
-
-    IF (.NOT. par%master) RETURN
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
-    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
-
-    ! Read data
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-    ! Store the data in the shared memory structure
-    DO mi = 1, 12
-    DO li = 1, forcing%ins_nlat
-      forcing%ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
-      forcing%ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
-    END DO
-    END DO
-
-    ! Clean up temporary memory
-    DEALLOCATE(Q_temp0)
-    DEALLOCATE(Q_temp1)
-
-  END SUBROUTINE read_insolation_file_timeframes
-  SUBROUTINE read_insolation_file_time_lat( forcing)
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-  END SUBROUTINE read_insolation_file_time_lat
-
-  SUBROUTINE inquire_restart_file_SMB( restart)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_restart_data), INTENT(INOUT) :: restart
-
-    ! Local variables:
-    INTEGER                                :: x, y, m, t, int_dummy
-
-    ! WIP wall
-    IF (par%master) WRITE(0,*) 'This subroutine (inquire_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
-    CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_x,     restart%grid%nx, restart%netcdf%id_dim_x    )
-    CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_y,     restart%grid%ny, restart%netcdf%id_dim_y    )
-    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_time,  restart%nt, restart%netcdf%id_dim_time )
-    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_month, int_dummy,  restart%netcdf%id_dim_month)
-
-    ! Abbreviations for shorter code
-    x = restart%netcdf%id_dim_x
-    y = restart%netcdf%id_dim_y
-    ! m = restart%netcdf%id_dim_month
-    ! t = restart%netcdf%id_dim_time
-
-    ! Inquire variable ID's; make sure that each variable has the correct dimensions.
-
-    ! Dimensions
-    CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_x,                (/ x             /), restart%netcdf%id_var_x   )
-    CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_y,                (/    y          /), restart%netcdf%id_var_y   )
-    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_time,             (/             t /), restart%netcdf%id_var_time)
-
-    ! Data
-    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_FirnDepth,        (/ x, y,    m, t /), restart%netcdf%id_var_FirnDepth)
-    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_MeltPreviousYear, (/ x, y,       t /), restart%netcdf%id_var_MeltPreviousYear)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( restart%netcdf%ncid)
-
-  END SUBROUTINE inquire_restart_file_SMB
-  SUBROUTINE read_restart_file_SMB( restart, time_to_restart_from)
-    ! Read the restart netcdf file
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_restart_data),        INTENT(INOUT) :: restart
-    REAL(dp),                       INTENT(IN)    :: time_to_restart_from
-
-    ! Local variables:
-    INTEGER                                       :: ti, ti_min
-    REAL(dp)                                      :: dt, dt_min
-
-    ! WIP wall
-    IF (par%master) WRITE(0,*) 'This subroutine (read_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
-
-    ! Read x,y
-    CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_x, restart%grid%x, start=(/1/) ))
-    CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_y, restart%grid%y, start=(/1/) ))
-
-    ! ! Read time, determine which time frame to read
-    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_time, restart%time, start=(/1/) ))
-
-    ! IF (time_to_restart_from < MINVAL(restart%time) .OR. time_to_restart_from > MAXVAL(restart%time)) THEN
-    !   WRITE(0,*) 'read_restart_file_SMB - ERROR: time_to_restart_from ', time_to_restart_from, ' outside range of restart file!'
-    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    ! END IF
-
-    ! ti_min = 0
-    ! dt_min = 1E8_dp
-    ! DO ti = 1, restart%nt
-    !   dt = ABS(restart%time( ti) - time_to_restart_from)
-    !   IF (dt < dt_min) THEN
-    !     ti_min = ti
-    !     dt_min = dt
-    !   END IF
-    ! END DO
-    ! ti = ti_min
-
-    ! IF (dt_min > 0._dp) THEN
-    !   WRITE(0,*) 'read_restart_file_SMB - WARNING: no exact match for time_to_restart_from ', time_to_restart_from, ' in restart file! Reading closest match ', restart%time( ti), ' instead.'
-    ! END IF
-    ! IF (time_to_restart_from /= C%start_time_of_run) THEN
-    !   WRITE(0,*) 'read_restart_file_SMB - WARNING: starting run at t = ', C%start_time_of_run, ' with restart data at t = ', time_to_restart_from
-    ! END IF
-
-    ! ! Read the data
-    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, 1, ti /), count = (/ restart%grid%nx, restart%grid%ny, 12,         1 /) ))
-    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1, 1,    ti /), count = (/ restart%grid%nx, restart%grid%ny,             1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( restart%netcdf%ncid)
-
-  END SUBROUTINE read_restart_file_SMB
-
-  ! Present-day observed global ocean (e.g. WOA18)
-  SUBROUTINE inquire_PD_obs_global_ocean_file( ocn)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
-
-    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_T_ocean)
-    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_S_ocean)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  END SUBROUTINE inquire_PD_obs_global_ocean_file
-  SUBROUTINE read_PD_obs_global_ocean_file(    ocn)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
-
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  END SUBROUTINE read_PD_obs_global_ocean_file
-
-  ! GCM global ocean (ocean matrix snapshots)
-  SUBROUTINE inquire_GCM_global_ocean_file( ocn)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
-    CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
-    CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
-
-    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_T_ocean)
-    CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_S_ocean)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  END SUBROUTINE inquire_GCM_global_ocean_file
-  SUBROUTINE read_GCM_global_ocean_file(    ocn)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
-
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  END SUBROUTINE read_GCM_global_ocean_file
-
-  ! High-resolution geometry used for extrapolating ocean data
-  SUBROUTINE inquire_hires_geometry_file( hires)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
-    CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
-    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
-    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
-    CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( hires%netcdf_geo%ncid)
-
-  END SUBROUTINE inquire_hires_geometry_file
-  SUBROUTINE read_hires_geometry_file(    hires)
-    ! Read the high-resolution geometry netcdf file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( hires%netcdf_geo%ncid)
-
-  END SUBROUTINE read_hires_geometry_file
-
-  ! Create/read an extrapolated ocean data file
-  SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)
-    ! Create a new folder extrapolated ocean data file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
-    CHARACTER(LEN=256),                  INTENT(IN)    :: hires_ocean_filename
-
-    ! Local variables:
-    LOGICAL                                            :: file_exists
-    INTEGER                                            :: x, y, z
-
-    IF (.NOT. par%master) RETURN
-
-    ! Create a new file and, to prevent loss of data,
-    ! stop with an error message if one already exists (not when differences are considered):
-
-    hires%netcdf%filename = hires_ocean_filename
-    INQUIRE(EXIST=file_exists, FILE = TRIM( hires%netcdf%filename))
-    IF (file_exists) THEN
-      WRITE(0,*) '  create_restart_file - ERROR: ', TRIM(hires%netcdf%filename), ' already exists!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-    ! Create hires%netcdf file
-    ! WRITE(0,*) '    Creating new hires%netcdf file at ', TRIM( hires%netcdf%filename)
-    CALL handle_error(nf90_create( hires%netcdf%filename, IOR(nf90_clobber,nf90_share), hires%netcdf%ncid))
-
-    ! Define dimensions:
-    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx, hires%netcdf%id_dim_x      )
-    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny, hires%netcdf%id_dim_y      )
-    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, C%nz_ocean,    hires%netcdf%id_dim_z_ocean)
-
-    ! Placeholders for the dimension ID's, for shorter code
-    x = hires%netcdf%id_dim_x
-    y = hires%netcdf%id_dim_y
-    z = hires%netcdf%id_dim_z_ocean
-
-    ! Define variables:
-    ! The order of the CALL statements for the different variables determines their
-    ! order of appearence in the hires%netcdf file.
-
-    ! Dimension variables
-    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       [x      ], hires%netcdf%id_var_x,       long_name='X-coordinate', units='m')
-    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       [   y   ], hires%netcdf%id_var_y,       long_name='Y-coordinate', units='m')
-    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, [      z], hires%netcdf%id_var_z_ocean, long_name='Depth in ocean', units='m')
-
-    ! Extrapolated ocean data
-    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, [x, y, z], hires%netcdf%id_var_T_ocean, long_name='3-D ocean temperature', units='K')
-    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, [x, y, z], hires%netcdf%id_var_S_ocean, long_name='3-D ocean salinity', units='PSU')
-
-    ! Leave definition mode:
-    CALL handle_error(nf90_enddef( hires%netcdf%ncid))
-
-    ! Write the data
-    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_x,        hires%grid%x ))
-    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_y,        hires%grid%y ))
-    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_z_ocean,  C%z_ocean    ))
-
-    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start=(/ 1,1,1 /)))
-    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start=(/ 1,1,1 /)))
-
-    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-    CALL handle_error(nf90_sync( hires%netcdf%ncid))
-
-    ! Close the file
-    CALL close_netcdf_file( hires%netcdf%ncid)
-
-  END SUBROUTINE create_extrapolated_ocean_file
-
-  SUBROUTINE inquire_extrapolated_ocean_file( hires)
-    ! Check if the right dimensions and variables are present in the file.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-    ! Local variables:
-    INTEGER                                      :: int_dummy
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
-    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx,   hires%netcdf%id_dim_x      )
-    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny,   hires%netcdf%id_dim_y      )
-    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, int_dummy,  hires%netcdf%id_dim_z_ocean)
-
-    ! Safety
-    IF (int_dummy /= C%nz_ocean) THEN
-      WRITE(0,*) 'inquire_extrapolated_ocean_file - ERROR: nz_ocean in file "', TRIM( hires%netcdf%filename), '" doesnt match ice model settings!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       (/ hires%netcdf%id_dim_x                                                     /), hires%netcdf%id_var_x      )
-    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       (/                        hires%netcdf%id_dim_y                              /), hires%netcdf%id_var_y      )
-    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, (/                                               hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_z_ocean)
-
-    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_T_ocean)
-    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_S_ocean)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( hires%netcdf%ncid)
-
-  END SUBROUTINE inquire_extrapolated_ocean_file
-
-  SUBROUTINE read_extrapolated_ocean_file(    hires)
-    ! Read the extrapolated ocean data netcdf file
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-    IF (.NOT. par%master) RETURN
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_x,       hires%grid%x,  start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_y,       hires%grid%y,  start = (/ 1       /) ))
-
-    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start = (/ 1, 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( hires%netcdf%ncid)
-
-  END SUBROUTINE read_extrapolated_ocean_file
-
-  ! Direct global SMB forcing
-  SUBROUTINE inquire_direct_global_SMB_forcing_file( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'inquire_direct_global_SMB_forcing_file'
-    INTEGER                                             :: lon,lat,t
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,   clim%nlon,   clim%netcdf%id_dim_lon  )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,   clim%nlat,   clim%netcdf%id_dim_lat  )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
-
-    ! Abbreviate dimension ID's for more readable code
-    lon = clim%netcdf%id_dim_lon
-    lat = clim%netcdf%id_dim_lat
-    t   = clim%netcdf%id_dim_time
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ lon         /), clim%netcdf%id_var_lon     )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/      lat    /), clim%netcdf%id_var_lat     )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,     (/           t /), clim%netcdf%id_var_time    )
-
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m_year, (/ lon, lat, t /), clim%netcdf%id_var_T2m_year)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_SMB_year, (/ lon, lat, t /), clim%netcdf%id_var_SMB_year)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_direct_global_SMB_forcing_file
-  SUBROUTINE read_direct_global_SMB_file_timeframes( clim, ti0, ti1)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
-    INTEGER,                        INTENT(IN)          :: ti0, ti1
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'read_direct_global_SMB_file_timeframes'
-    INTEGER                                             :: loni,lati
-    REAL(dp), DIMENSION(:,:,:  ), ALLOCATABLE           :: T2m_temp0, T2m_temp1, SMB_temp0, SMB_temp1
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
-    END IF
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE( T2m_temp0( clim%nlon, clim%nlat, 1))
-    ALLOCATE( T2m_temp1( clim%nlon, clim%nlat, 1))
-    ALLOCATE( SMB_temp0( clim%nlon, clim%nlat, 1))
-    ALLOCATE( SMB_temp1( clim%nlon, clim%nlat, 1))
-
-    ! Open netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 1 /), stride = (/ 1, 1, 1 /) ))
-
-     ! Close netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Store the data in the shared memory structure
-    DO loni = 1, clim%nlon
-    DO lati = 1, clim%nlat
-      clim%T2m_year0( loni,lati) = T2m_temp0( loni,lati,1)
-      clim%T2m_year1( loni,lati) = T2m_temp1( loni,lati,1)
-      clim%SMB_year0( loni,lati) = SMB_temp0( loni,lati,1)
-      clim%SMB_year1( loni,lati) = SMB_temp1( loni,lati,1)
-    END DO
-    END DO
-
-    ! Clean up after yourself
-    DEALLOCATE( T2m_temp0)
-    DEALLOCATE( T2m_temp1)
-    DEALLOCATE( SMB_temp0)
-    DEALLOCATE( SMB_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_global_SMB_file_timeframes
-  SUBROUTINE read_direct_global_SMB_file_time_latlon( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_SMB_forcing_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_global_SMB_file_time_latlon'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_global"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,  clim%lat,  start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,  clim%lon,  start = (/ 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_global_SMB_file_time_latlon
-
-  ! Direct global climate forcing
-  SUBROUTINE inquire_direct_global_climate_forcing_file( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER          :: routine_name = 'inquire_direct_global_climate_forcing_file'
-    INTEGER                                :: lon,lat,t,m
-    INTEGER                                :: int_dummy
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_global"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,   clim%nlon,   clim%netcdf%id_dim_lon  )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,   clim%nlat,   clim%netcdf%id_dim_lat  )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,   clim%netcdf%id_dim_month)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears, clim%netcdf%id_dim_time )
-
-    ! Abbreviate dimension ID's for more readable code
-    lon = clim%netcdf%id_dim_lon
-    lat = clim%netcdf%id_dim_lat
-    t   = clim%netcdf%id_dim_time
-    m   = clim%netcdf%id_dim_month
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,    (/ lon            /), clim%netcdf%id_var_lon   )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,    (/      lat       /), clim%netcdf%id_var_lat   )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_month,  (/           m    /), clim%netcdf%id_var_month )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,   (/              t /), clim%netcdf%id_var_time  )
-
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,    (/ lon, lat, m, t /), clim%netcdf%id_var_T2m   )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip, (/ lon, lat, m, t /), clim%netcdf%id_var_Precip)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_direct_global_climate_forcing_file
-  SUBROUTINE read_direct_global_climate_file_timeframes( clim, ti0, ti1)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
-    INTEGER,                        INTENT(IN)              :: ti0, ti1
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'read_direct_global_climate_file_timeframes'
-    INTEGER                                                 :: loni,lati,m
-    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE               :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_global"!')
-    END IF
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE(    T2m_temp0( clim%nlon, clim%nlat, 12, 1))
-    ALLOCATE(    T2m_temp1( clim%nlon, clim%nlat, 12, 1))
-    ALLOCATE( Precip_temp0( clim%nlon, clim%nlat, 12, 1))
-    ALLOCATE( Precip_temp1( clim%nlon, clim%nlat, 12, 1))
-
-    ! Open netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%nlon, clim%nlat, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-
-     ! Close netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Store the data in the shared memory structure
-    DO m    = 1, 12
-    DO loni = 1, clim%nlon
-    DO lati = 1, clim%nlat
-      clim%T2m0(    loni,lati,m) =    T2m_temp0( loni,lati,m,1)
-      clim%T2m1(    loni,lati,m) =    T2m_temp1( loni,lati,m,1)
-      clim%Precip0( loni,lati,m) = Precip_temp0( loni,lati,m,1)
-      clim%Precip1( loni,lati,m) = Precip_temp1( loni,lati,m,1)
-    END DO
-    END DO
-    END DO
-
-    ! Clean up after yourself
-    DEALLOCATE(    T2m_temp0)
-    DEALLOCATE(    T2m_temp1)
-    DEALLOCATE( Precip_temp0)
-    DEALLOCATE( Precip_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_global_climate_file_timeframes
-  SUBROUTINE read_direct_global_climate_file_time_latlon( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_climate_forcing_global), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_global_climate_file_time_latlon'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_global') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_global"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,  clim%lat,  start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,  clim%lon,  start = (/ 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_global_climate_file_time_latlon
-
-  ! Direct regional SMB forcing
-  SUBROUTINE inquire_direct_regional_SMB_forcing_file( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'inquire_direct_regional_SMB_forcing_file'
-    INTEGER                                               :: x,y,t
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x   )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y   )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time)
-
-    ! Abbreviate dimension ID's for more readable code
-    x = clim%netcdf%id_dim_x
-    y = clim%netcdf%id_dim_y
-    t = clim%netcdf%id_dim_time
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,        (/ x       /), clim%netcdf%id_var_x       )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,        (/    y    /), clim%netcdf%id_var_y       )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,     (/       t /), clim%netcdf%id_var_time    )
-
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m_year, (/ x, y, t /), clim%netcdf%id_var_T2m_year)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_SMB_year, (/ x, y, t /), clim%netcdf%id_var_SMB_year)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_direct_regional_SMB_forcing_file
-  SUBROUTINE read_direct_regional_SMB_file_timeframes( clim, ti0, ti1)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
-    INTEGER,                                INTENT(IN)    :: ti0, ti1
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_timeframes'
-    INTEGER                                               :: i,j
-    REAL(dp), DIMENSION(:,:,:  ), ALLOCATABLE             :: T2m_temp0, T2m_temp1, SMB_temp0, SMB_temp1
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
-    END IF
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE( T2m_temp0( clim%grid%nx, clim%grid%ny, 1))
-    ALLOCATE( T2m_temp1( clim%grid%nx, clim%grid%ny, 1))
-    ALLOCATE( SMB_temp0( clim%grid%nx, clim%grid%ny, 1))
-    ALLOCATE( SMB_temp1( clim%grid%nx, clim%grid%ny, 1))
-
-    ! Open netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m_year, T2m_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp0, start = (/ 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 1 /), stride = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_SMB_year, SMB_temp1, start = (/ 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 1 /), stride = (/ 1, 1, 1 /) ))
-
-     ! Close netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Store the data in the shared memory structure
-    DO i = 1, clim%grid%nx
-    DO j = 1, clim%grid%ny
-      clim%T2m_year0_raw( j,i) = T2m_temp0( i,j,1)
-      clim%T2m_year1_raw( j,i) = T2m_temp1( i,j,1)
-      clim%SMB_year0_raw( j,i) = SMB_temp0( i,j,1)
-      clim%SMB_year1_raw( j,i) = SMB_temp1( i,j,1)
-    END DO
-    END DO
-
-    ! Clean up after yourself
-    DEALLOCATE( T2m_temp0)
-    DEALLOCATE( T2m_temp1)
-    DEALLOCATE( SMB_temp0)
-    DEALLOCATE( SMB_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_regional_SMB_file_timeframes
-  SUBROUTINE read_direct_regional_SMB_file_time_xy( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_SMB_forcing_regional), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'read_direct_regional_SMB_file_time_xy'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_SMB_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_SMB_model = "direct_regional"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_regional_SMB_file_time_xy
-
-  ! Direct regional climate forcing
-  SUBROUTINE inquire_direct_regional_climate_forcing_file( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                             :: routine_name = 'inquire_direct_regional_climate_forcing_file'
-    INTEGER                                                   :: x,y,t,m
-    INTEGER                                                   :: int_dummy
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist, and return their lengths.
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_x,     clim%grid%nx, clim%netcdf%id_dim_x    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_y,     clim%grid%ny, clim%netcdf%id_dim_y    )
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month, int_dummy,    clim%netcdf%id_dim_month)
-    CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_time,  clim%nyears,  clim%netcdf%id_dim_time )
-
-    ! Abbreviate dimension ID's for more readable code
-    x = clim%netcdf%id_dim_x
-    y = clim%netcdf%id_dim_y
-    t = clim%netcdf%id_dim_time
-    m = clim%netcdf%id_dim_month
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions.
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_x,      (/ x          /), clim%netcdf%id_var_x     )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_y,      (/    y       /), clim%netcdf%id_var_y     )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_month,  (/       m    /), clim%netcdf%id_var_month )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_time,   (/          t /), clim%netcdf%id_var_time  )
-
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,    (/ x, y, m, t /), clim%netcdf%id_var_T2m   )
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip, (/ x, y, m, t /), clim%netcdf%id_var_Precip)
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_direct_regional_climate_forcing_file
-  SUBROUTINE read_direct_regional_climate_file_timeframes( clim, ti0, ti1)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
-    INTEGER,                        INTENT(IN)    :: ti0, ti1
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_timeframes'
-    INTEGER                                       :: i,j,m
-    REAL(dp), DIMENSION(:,:,:,:), ALLOCATABLE     :: T2m_temp0, T2m_temp1, Precip_temp0, Precip_temp1
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
-    END IF
-
-    ! Temporary memory to store the data read from the netCDF file
-    ALLOCATE(    T2m_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
-    ALLOCATE(    T2m_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
-    ALLOCATE( Precip_temp0( clim%grid%nx, clim%grid%ny, 12, 1))
-    ALLOCATE( Precip_temp1( clim%grid%nx, clim%grid%ny, 12, 1))
-
-    ! Open netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp0,    start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%ny, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,    T2m_temp1,    start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp0, start = (/ 1, 1, 1, ti0 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip, Precip_temp1, start = (/ 1, 1, 1, ti1 /), count = (/ clim%grid%nx, clim%grid%nx, 12, 1 /), stride = (/ 1, 1, 1, 1 /) ))
-
-     ! Close netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Store the data in the shared memory structure
-    DO m = 1, 12
-    DO i = 1, clim%grid%nx
-    DO j = 1, clim%grid%ny
-      clim%T2m0_raw(    m,j,i) =    T2m_temp0( i,j,m,1)
-      clim%T2m1_raw(    m,j,i) =    T2m_temp1( i,j,m,1)
-      clim%Precip0_raw( m,j,i) = Precip_temp0( i,j,m,1)
-      clim%Precip1_raw( m,j,i) = Precip_temp1( i,j,m,1)
-    END DO
-    END DO
-    END DO
-
-    ! Clean up after yourself
-    DEALLOCATE(    T2m_temp0)
-    DEALLOCATE(    T2m_temp1)
-    DEALLOCATE( Precip_temp0)
-    DEALLOCATE( Precip_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_regional_climate_file_timeframes
-  SUBROUTINE read_direct_regional_climate_file_time_xy( clim)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_direct_climate_forcing_regional), INTENT(INOUT) :: clim
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_direct_regional_climate_file_time_xy'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Safety
-    IF (.NOT. C%choice_climate_model == 'direct_regional') THEN
-      CALL crash('should only be called when choice_climate_model = "direct_regional"!')
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_time, clim%time,   start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_x,    clim%grid%x, start = (/ 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_y,    clim%grid%y, start = (/ 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( clim%netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_direct_regional_climate_file_time_xy
-
-  ! == SELEN ==
-  ! ===========
-
-  ! Global topography for SELEN
-  SUBROUTINE inquire_SELEN_global_topo_file( SELEN)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_SELEN_global_topo_file'
-    LOGICAL                                       :: file_exists
-    INTEGER                                       :: int_dummy
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Open the netcdf file
-    INQUIRE(EXIST=file_exists, FILE = TRIM( SELEN%netcdf_topo%filename))
-    IF (.NOT. file_exists) THEN
-      CALL crash('file "' // TRIM( SELEN%netcdf_topo%filename) // '" does not exist!')
-    ELSE
-      CALL open_netcdf_file( SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
-    END IF
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_vi,    SELEN%mesh%nV,     SELEN%netcdf_topo%id_dim_vi)
-    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ti,    SELEN%mesh%nTri,   SELEN%netcdf_topo%id_dim_ti)
-    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_ci,    SELEN%mesh%nC_mem, SELEN%netcdf_topo%id_dim_ci)
-    CALL inquire_dim( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_dim_three, int_dummy,         SELEN%netcdf_topo%id_dim_three)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_V,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_V       )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Tri,   (/ SELEN%netcdf_topo%id_dim_ti, SELEN%netcdf_topo%id_dim_three /),  SELEN%netcdf_topo%id_var_Tri     )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_nC,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_nC      )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_C,     (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_C       )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_niTri, (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_niTri   )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_iTri,  (/ SELEN%netcdf_topo%id_dim_vi, SELEN%netcdf_topo%id_dim_ci    /),  SELEN%netcdf_topo%id_var_iTri    )
-    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lat,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lat     )
-    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_lon,   (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_lon     )
-    CALL inquire_double_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_Hb,    (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_Hb      )
-    CALL inquire_int_var(    SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%name_var_ianc,  (/ SELEN%netcdf_topo%id_dim_vi                                 /),  SELEN%netcdf_topo%id_var_ianc    )
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_SELEN_global_topo_file
-  SUBROUTINE read_SELEN_global_topo_file( SELEN)
-    ! Read the init netcdf file
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_SELEN_global_topo_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file(SELEN%netcdf_topo%filename, SELEN%netcdf_topo%ncid)
-
-    ! Read the data
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_V,     SELEN%mesh%V,     start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Tri,   SELEN%mesh%Tri,   start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_nC,    SELEN%mesh%nC,    start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_C,     SELEN%mesh%C,     start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_niTri, SELEN%mesh%niTri, start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_iTri,  SELEN%mesh%iTri,  start = (/ 1, 1 /) ))
-
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lat,   SELEN%mesh%lat,   start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_lon,   SELEN%mesh%lon,   start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_Hb,    SELEN%topo_ref,   start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( SELEN%netcdf_topo%ncid, SELEN%netcdf_topo%id_var_ianc,  SELEN%mesh%ianc,  start = (/ 1    /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file(SELEN%netcdf_topo%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_SELEN_global_topo_file
-
-  ! SELEN output file
-  SUBROUTINE create_SELEN_output_file( SELEN)
-    ! Create a new NetCDF output file for SELEN (on the irregular global mesh)
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_SELEN_output_file'
-    LOGICAL                                       :: file_exists
-    INTEGER                                       :: vi, ti, ci, three, time, ki
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Set time frame index to 1
-    SELEN%output%ti = 1
-
-    ! Set output filename
-    SELEN%output%filename = TRIM(C%output_dir) // 'SELEN_output.nc'
-
-    ! Create a new restart file if none exists and, to prevent loss of data,
-    ! stop with an error message if one already exists (not when differences are considered):
-    INQUIRE(EXIST=file_exists, FILE = TRIM(SELEN%output%filename))
-    IF(file_exists) THEN
-      CALL crash('file "' // TRIM( SELEN%output%filename) // '" already exists!')
-    END IF
-
-    ! Create netCDF file
-    CALL handle_error(nf90_create(SELEN%output%filename,IOR(nf90_clobber,nf90_share),SELEN%output%ncid))
-
-    ! Mesh data
-    ! =========
-
-    ! Define dimensions
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_vi,           SELEN%mesh%nV,           SELEN%output%id_dim_vi          ) ! Vertex indices
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ti,           SELEN%mesh%nTri,         SELEN%output%id_dim_ti          ) ! Triangle indices
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ci,           SELEN%mesh%nC_mem,       SELEN%output%id_dim_ci          ) ! Connection indices
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_three,        3,                       SELEN%output%id_dim_three       ) ! 3 (each vertex has three coordinates, each triangle has three vertices)
-
-    ! Placeholders for the dimension ID's, for shorter code
-    vi        = SELEN%output%id_dim_vi
-    ti        = SELEN%output%id_dim_ti
-    ci        = SELEN%output%id_dim_ci
-    three     = SELEN%output%id_dim_three
-
-    ! Define variables
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_V,                [vi,  three], SELEN%output%id_var_V,                long_name='Vertex coordinates', units='m')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_Tri,              [ti,  three], SELEN%output%id_var_Tri,              long_name='Vertex indices')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_nC,               [vi        ], SELEN%output%id_var_nC,               long_name='Number of connected vertices')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_C,                [vi,  ci   ], SELEN%output%id_var_C,                long_name='Indices of connected vertices')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_niTri,            [vi        ], SELEN%output%id_var_niTri,            long_name='Number of inverse triangles')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_iTri,             [vi,  ci   ], SELEN%output%id_var_iTri,             long_name='Indices of inverse triangles')
-
-    ! Model output
-    ! ============
-
-    ! Define dimensions
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_time,  nf90_unlimited,         SELEN%output%id_dim_time ) ! Time frames
-    CALL create_dim( SELEN%output%ncid, SELEN%output%name_dim_ki,    C%SELEN_irreg_time_n+1, SELEN%output%id_dim_ki   ) ! Window frames
-
-    ! Placeholders for the dimension ID's, for shorter code
-    time  = SELEN%output%id_dim_time
-    ki    = SELEN%output%id_dim_ki
-
-    ! Define dimension variables
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_time,  [time  ], SELEN%output%id_var_time,  long_name='Time', units='years')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_ki,    [ki    ], SELEN%output%id_var_ki,    long_name='Window frames', units='years')
-
-    ! Define model data variables
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lat,              [vi             ], SELEN%output%id_var_lat,              long_name='Latitude', units='degrees north')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_lon,              [vi             ], SELEN%output%id_var_lon,              long_name='Longtitude', units='degrees east')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi,               [vi,        time], SELEN%output%id_var_Hi,               long_name='Surface load', units='mie')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_Hi_rel,           [vi,        time], SELEN%output%id_var_Hi_rel,           long_name='Relative surface load', units='mie')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_U,                [vi,        time], SELEN%output%id_var_U,                long_name='Land surface change', units='m')
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_N,                [vi,        time], SELEN%output%id_var_N,                long_name='Sea surface change', units='m')
-    CALL create_int_var(    SELEN%output%ncid, SELEN%output%name_var_ocean_function,   [vi,        time], SELEN%output%id_var_ocean_function,   long_name='Ocean function (1 = ocean)')
-
-    CALL create_double_var( SELEN%output%ncid, SELEN%output%name_var_load_history,     [vi,   ki,  time], SELEN%output%id_var_load_history,     long_name='Load history', units='mie')
-
-    ! Leave definition mode:
-    CALL handle_error(nf90_enddef( SELEN%output%ncid))
-
-    ! Write mesh data
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_V,               SELEN%mesh%V             ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Tri,             SELEN%mesh%Tri           ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_nC,              SELEN%mesh%nC            ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_C,               SELEN%mesh%C             ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_niTri,           SELEN%mesh%niTri         ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_iTri,            SELEN%mesh%iTri          ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lat,             SELEN%mesh%lat           ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_lon,             SELEN%mesh%lon           ))
-
-    ! Window frames
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ki, (/0._dp, C%SELEN_irreg_time_window/)))
-
-    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-    CALL handle_error(nf90_sync( SELEN%output%ncid))
-
-    ! Close the file
-    CALL close_netcdf_file(SELEN%output%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE create_SELEN_output_file
-  SUBROUTINE write_to_SELEN_output_file( SELEN, time)
-    ! Write the current model state to the existing output file
-
-    IMPLICIT NONE
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'write_to_SELEN_output_file'
-    TYPE(type_SELEN_global),        INTENT(INOUT) :: SELEN
-    REAL(dp),                       INTENT(IN)    :: time
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Open the file for writing
-    CALL open_netcdf_file( SELEN%output%filename, SELEN%output%ncid)
-
-    ! Time
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_time, time, start = (/ SELEN%output%ti /)))
-
-    ! Model data
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi,             SELEN%Hi_glob,                        start = (/ 1,    SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_Hi_rel,         SELEN%Hi_rel_glob,                    start = (/ 1,    SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_U,              SELEN%U_glob,                         start = (/ 1,    SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_N,              SELEN%N_glob,                         start = (/ 1,    SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_ocean_function, SELEN%of_glob,                        start = (/ 1,    SELEN%output%ti/) ))
-    CALL handle_error( nf90_put_var( SELEN%output%ncid, SELEN%output%id_var_load_history,   SELEN%ice_loading_history_irreg_glob, start = (/ 1, 1, SELEN%output%ti/) ))
-
-    ! Close the file
-    CALL close_netcdf_file(SELEN%output%ncid)
-
-    ! Increase time frame counter
-    SELEN%output%ti = SELEN%output%ti + 1
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_to_SELEN_output_file
 
 END MODULE netcdf_module

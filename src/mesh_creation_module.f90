@@ -2,8 +2,11 @@ MODULE mesh_creation_module
 
   ! Routines for creating the first mesh from a collection of forcing data on a Cartesian grid.
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -18,16 +21,14 @@ MODULE mesh_creation_module
                                              reallocate_shared_int_1D, reallocate_shared_dp_1D, &
                                              reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  
-  ! Import specific functionality
-  USE parallel_module,                 ONLY: allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
+                                             deallocate_shared, &
+                                             allocate_shared_dist_int_0D, allocate_shared_dist_dp_0D, &
                                              allocate_shared_dist_int_1D, allocate_shared_dist_dp_1D, &
                                              allocate_shared_dist_int_2D, allocate_shared_dist_dp_2D, &
                                              allocate_shared_dist_int_3D, allocate_shared_dist_dp_3D, &
                                              allocate_shared_dist_bool_1D
+  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_reference_geometry
   USE mesh_help_functions_module,      ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
                                              determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
@@ -42,24 +43,25 @@ MODULE mesh_creation_module
   USE mesh_Delaunay_module,            ONLY: split_triangle, split_segment, flip_triangle_pairs, move_vertex
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
-  
+
   IMPLICIT NONE
-  
+
   LOGICAL :: debug_mesh_creation = .FALSE.
-  
-  CONTAINS
-  
-  ! === Check whether or not a triangle meets all the fitness criteria.
-  ! If you want to change the rules for mesh creation, this is where to do it.
+
+CONTAINS
+
+  ! ===== Triangle fitness criteria =====
+  ! =====================================
+
   SUBROUTINE is_good_triangle( mesh, ti, refgeo_init, is_good)
-    ! Check if triangle ti of the mesh is Good
-    ! A triangle is not Good if:
+    ! Check if triangle ti of the mesh is Good. If you want to change the rules for
+    ! mesh creation, this is where to do it. A triangle is not Good if:
     !   - its smallest internal angle is too small
     !   - its 2nd order surface deviation (=max(curvature)*typical_length) is too large
     !   - its area exceeds the limits based on ice velocity, grounding line or calving front
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     INTEGER,                    INTENT(IN)        :: ti
@@ -75,30 +77,30 @@ MODULE mesh_creation_module
     REAL(dp)                                      :: trisumel, mean_curvature, dz
     INTEGER                                       :: trinel
     REAL(dp), PARAMETER                           :: Hb_lo = 500._dp
-    REAL(dp), PARAMETER                           :: Hb_hi = 1500._dp  
-    REAL(dp)                                      :: Hb_max, w_Hb, lr_lo, lr_hi, r_crit  
+    REAL(dp), PARAMETER                           :: Hb_hi = 1500._dp
+    REAL(dp)                                      :: Hb_max, w_Hb, lr_lo, lr_hi, r_crit
     INTEGER                                       :: min_mask_int, max_mask_int
     REAL(dp)                                      :: mean_mask_dp
     LOGICAL                                       :: contains_ice, contains_nonice, contains_margin, contains_gl, contains_cf, contains_coast
 
     is_good = .TRUE.
-    
+
     ! First check if the basic triangle geometry meets Ruppert's criteria
     ! ===================================================================
-    
+
     CALL is_good_triangle_geo_only( mesh, ti, isso)
     IF (.NOT. is_good) RETURN
 
     ! Find length of longest triangle leg (for resolution checks)
     ! ===========================================================
-    
+
     vp = mesh%Tri(ti,1)
     vq = mesh%Tri(ti,2)
     vr = mesh%Tri(ti,3)
-    
+
     p  = mesh%V(vp,:)
     q  = mesh%V(vq,:)
-    r  = mesh%V(vr,:) 
+    r  = mesh%V(vr,:)
 
     ! Triangle legs
     pq = p-q
@@ -107,26 +109,26 @@ MODULE mesh_creation_module
 
     ! Longest leg
     dmax = MAXVAL([NORM2(pq), NORM2(qr), NORM2(rp)])
-    
+
     ! Coarsest allowed resolution
     ! ===========================
-    
+
     IF (dmax > mesh%res_max * 1.5_dp * 1000._dp) THEN
       is_good = .FALSE.
       RETURN
     END IF
-    
+
     ! Finest allowed resolution
     ! =========================
-    
+
     IF (dmax < mesh%res_min * 1.5_dp * 1000._dp) THEN
       is_good = .TRUE.
       RETURN
     END IF
-    
+
     ! Resolution at points of interest
     ! ================================
-    
+
     DO n = 1, mesh%nPOI
       POI = mesh%POI_XY_coordinates(n,:)
       IF (is_in_triangle( p, q, r, POI) .AND. dmax > mesh%POI_resolutions(n) * 1.5_dp * 1000._dp) THEN
@@ -137,16 +139,16 @@ MODULE mesh_creation_module
 
     ! Determine what's inside the triangle
     ! ====================================
-    
+
     contains_ice    = .FALSE.
     contains_nonice = .FALSE.
     contains_margin = .FALSE.
     contains_gl     = .FALSE.
     contains_cf     = .FALSE.
     contains_coast  = .FALSE.
-    
+
     CALL min_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, min_mask_int, trinel)
-    CALL max_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
+    CALL max_cart_over_triangle_int( p, q, r, refgeo_init%mask_ice, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_ice    = .TRUE.
       IF (min_mask_int==0) contains_nonice = .TRUE.
@@ -156,24 +158,24 @@ MODULE mesh_creation_module
       IF (mean_mask_dp<0.9_dp) contains_nonice = .TRUE.
     END IF
     IF (contains_ice .AND. contains_nonice) contains_margin = .TRUE.
-    
-    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
+
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_gl = .TRUE.
     ELSE
       CALL cart_bilinear_int( refgeo_init%mask_gl, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_gl = .TRUE.
     END IF
-    
-    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_cf, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
+
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_cf, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_cf = .TRUE.
     ELSE
       CALL cart_bilinear_int( refgeo_init%mask_cf, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, mean_mask_dp)
       IF (mean_mask_dp>0.1_dp) contains_cf = .TRUE.
     END IF
-    
-    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_coast, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)    
+
+    CALL max_cart_over_triangle_int(p,q,r, refgeo_init%mask_coast, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, max_mask_int, trinel)
     IF (trinel>0) THEN
       IF (max_mask_int==1) contains_coast = .TRUE.
     ELSE
@@ -183,7 +185,7 @@ MODULE mesh_creation_module
 
     ! Second-order surface deviation (curvature times size)
     ! =====================================================
-    
+
     CALL sum_cart_over_triangle_dp(p,q,r, refgeo_init%surf_curv, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, trisumel, trinel)
     IF (trinel>4) THEN
       mean_curvature = trisumel / trinel
@@ -199,19 +201,19 @@ MODULE mesh_creation_module
 
     ! Special area resolution - ice margin, grounding line, calving front
     ! ===================================================================
-    
+
     ! Coastline
     IF (contains_coast .AND. dmax > mesh%res_max_coast * 2._dp * 1000._dp) THEN
       is_good = .FALSE.
       RETURN
     END IF
-    
+
     ! Ice margin
     IF (contains_margin .AND. dmax > mesh%res_max_margin * 2._dp * 1000._dp) THEN
       is_good = .FALSE.
       RETURN
     END IF
-    
+
     ! Grounding line
     IF (contains_gl .AND. dmax > mesh%res_max_gl * 2._dp * 1000._dp) THEN
       is_good = .FALSE.
@@ -223,34 +225,35 @@ MODULE mesh_creation_module
       is_good = .FALSE.
       RETURN
     END IF
-    
+
     ! Ice-free bed topography (higher res for mountains so inception is captured better)
     ! ==================================================================================
-    
+
     CALL max_cart_over_triangle_dp(p,q,r, refgeo_init%Hb_grid, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, Hb_max,trinel)
     IF (trinel==0) THEN
       CALL cart_bilinear_dp( refgeo_init%Hb_grid, refgeo_init%grid%x, refgeo_init%grid%y, refgeo_init%grid%nx, refgeo_init%grid%ny, (p+q+r)/3._dp, Hb_max)
     END IF
-    
+
     lr_lo = LOG( mesh%res_max)
     lr_hi = LOG( mesh%res_max_mountain)
-    
-    w_Hb = MIN(1._dp, MAX(0._dp, (Hb_max - Hb_lo) / (Hb_hi - Hb_lo)))    
+
+    w_Hb = MIN(1._dp, MAX(0._dp, (Hb_max - Hb_lo) / (Hb_hi - Hb_lo)))
     r_crit = EXP( (w_Hb * lr_hi) + ((1._dp - w_Hb) * lr_lo))
-    
+
     IF (contains_nonice .AND. dmax > r_crit * 2._dp * 1000._dp) THEN
       is_good = .FALSE.
-      RETURN      
+      RETURN
     END IF
 
   END SUBROUTINE is_good_triangle
+
   SUBROUTINE is_good_triangle_geo_only( mesh, ti, is_good)
     ! Check if triangle ti of the mesh is Good
     ! A triangle is not Good if:
     !   - its smallest internal angle is too small
     !   - its 2nd order surface deviation (=max(curvature)*typical_length) is too large
     !   - its area exceeds the limits based on ice velocity, grounding line or calving front
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),            INTENT(IN)        :: mesh
@@ -263,19 +266,19 @@ MODULE mesh_creation_module
     REAL(dp), DIMENSION(2)                        :: pq,qr,rp
     REAL(dp)                                      :: ap,aq,ar,alpha
     LOGICAL                                       :: isso
-    
+
     is_good = .TRUE.
 
     ! Triangle geometry (the basis of the original version of Rupperts Algorithm)
     ! ===========================================================================
-    
+
     vp = mesh%Tri(ti,1)
     vq = mesh%Tri(ti,2)
     vr = mesh%Tri(ti,3)
-    
+
     p  = mesh%V(vp,:)
     q  = mesh%V(vq,:)
-    r  = mesh%V(vr,:)  
+    r  = mesh%V(vr,:)
 
     ! Triangle legs
     pq = p-q
@@ -294,7 +297,7 @@ MODULE mesh_creation_module
       is_good = .FALSE.
       RETURN
     END IF
-    
+
     ! If its an edge triangle, check if the third vertex encroaches on the edge segment
     IF (is_boundary_segment( mesh, vp, vq)) THEN
       CALL is_encroached_upon( mesh, vp, vq, isso)
@@ -315,16 +318,18 @@ MODULE mesh_creation_module
         RETURN
       END IF
     END IF
-    
+
     ! Forbid "wall to wall" triangles (i.e. triangles with vertices lying on opposite domain boundaries)
     IF (is_walltowall( mesh, ti)) THEN
       is_good = .FALSE.
       RETURN
     END IF
-    
+
   END SUBROUTINE is_good_triangle_geo_only
 
-  ! == Mesh creation routines ==
+  ! ===== Mesh creation routines =====
+  ! ==================================
+
   SUBROUTINE create_mesh_from_cart_data( region)
     ! Create the first mesh, using the data from the initial file to force the resolution.
 
@@ -365,7 +370,7 @@ MODULE mesh_creation_module
     END IF
 
     ! Allocate memory and initialise a dummy mesh
-    CALL allocate_submesh_primary( submesh, region%name, 10, 20, C%nconmax)    
+    CALL allocate_submesh_primary( submesh, region%name, 10, 20, C%nconmax)
     CALL initialise_dummy_mesh(    submesh, xmin, xmax, ymin, ymax)
     CALL perturb_dummy_mesh(       submesh, 0)
 
@@ -458,30 +463,32 @@ MODULE mesh_creation_module
 
   END SUBROUTINE create_mesh_from_cart_data
 
-  ! == Extended and basic Ruppert's algorithm
+  ! ===== Extended and basic Ruppert's algorithm =====
+  ! ==================================================
+
   SUBROUTINE refine_mesh( mesh, refgeo_init)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     TYPE(type_reference_geometry),INTENT(IN)      :: refgeo_init
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     FinishedRefining = .FALSE.
     DoExtendMemory   = .FALSE.
-    
+
     CALL extend_submesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
-    
+
     mesh%RefMap    = 0
     mesh%RefStack  = 0
     mesh%RefStackN = 0
@@ -490,22 +497,22 @@ MODULE mesh_creation_module
       mesh%RefStackN                = mesh%RefStackN + 1
       mesh%RefStack(mesh%RefStackN) = ti
     END DO
-    
+
     DO WHILE (.NOT. FinishedRefining)
-    
+
       ! Refine the mesh until it's done, or until it's almost out of memory.
       ! ====================================================================
-      
+
       DoExtendMemory = .FALSE.
-          
+
       DO WHILE (mesh%RefStackN > 0)
-    
+
         ! Check the last triangle list in the RefineStack. If it's
         ! Bad, refine it and add the affected triangles to the RefineStack.
-      
-        ti = mesh%RefStack( mesh%RefStackN)       
+
+        ti = mesh%RefStack( mesh%RefStackN)
         CALL is_good_triangle( mesh, ti, refgeo_init, IsGood)
-              
+
         IF (IsGood) THEN
           ! Remove this triangle from the stack
           mesh%RefMap(ti) = 0
@@ -516,60 +523,61 @@ MODULE mesh_creation_module
           p = mesh%Tricc(ti,:)
           CALL split_triangle( mesh, ti, p)
         END IF
-        
+
         ! If we're reaching the memory limit, stop refining and extend the memory.
         IF (mesh%nV > mesh%nV_mem - 10) THEN
           DoExtendMemory = .TRUE.
           EXIT
         END IF
-        
-      END DO ! DO WHILE (mesh%RefStackN > 0)    
-      
+
+      END DO ! DO WHILE (mesh%RefStackN > 0)
+
       ! Check if all processes finished refining. If so, exit.
       ! ======================================================
-      
+
       FinishedRefining = .FALSE.
-      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.      
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)      
-      IF (FinishedRefining) EXIT  
-      
+      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
+      CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)
+      IF (FinishedRefining) EXIT
+
       ! Check if any process needs to extend their memory.
       ! ==================================================
-      
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr) 
-            
-      ! By extending the memory to mesh%nV + 1000, we ensure that processes that 
+
+      CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+
+      ! By extending the memory to mesh%nV + 1000, we ensure that processes that
       ! have already finished refining do not keep adding useless extra memory.
-      
+
       IF (DoExtendMemory) THEN
         CALL extend_submesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
       END IF
-    
+
     END DO ! DO WHILE (.NOT. FinishedRefining)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE refine_mesh
+
   SUBROUTINE refine_mesh_geo_only( mesh)
     ! Refine a mesh, using only triangle geometry as a condition (so really the original version of Ruppert's algorithm)
     ! Meant to be run on the final, merged mesh - called by all processes, but the work is only done by the Master.
     ! Must be called by all to be able to call ExtendMeshMemory if necessary.
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_mesh_geo_only'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! List all triangles for checking
     IF (par%master) THEN
       mesh%RefMap    = 0
@@ -582,25 +590,25 @@ MODULE mesh_creation_module
       END DO
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     FinishedRefining = .FALSE.
-    
+
     DO WHILE (.NOT. FinishedRefining)
-    
+
       ! Refine the mesh until it's done, or until it's almost out of memory.
       ! ====================================================================
-      
+
       DoExtendMemory = .FALSE.
-          
+
       IF (par%master) THEN
       DO WHILE (mesh%RefStackN > 0)
-    
+
         ! Check the last triangle list in the RefineStack. If it's
         ! Bad, refine it and add the affected triangles to the RefineStack.
-      
-        ti = mesh%RefStack( mesh%RefStackN)       
+
+        ti = mesh%RefStack( mesh%RefStackN)
         CALL is_good_triangle_geo_only( mesh, ti, IsGood)
-              
+
         IF (IsGood) THEN
           ! Remove this triangle from the stack
           mesh%RefMap(ti) = 0
@@ -611,59 +619,60 @@ MODULE mesh_creation_module
           p = mesh%Tricc(ti,:)
           CALL split_triangle( mesh, ti, p)
         END IF
-        
+
         ! If we're reaching the memory limit, stop refining and extend the memory.
         IF (mesh%nV > mesh%nV_mem - 10) THEN
           DoExtendMemory = .TRUE.
           EXIT
         END IF
-        
+
       END DO ! DO WHILE (mesh%RefStackN > 0)
       END IF ! IF (par%master)
-      
+
       FinishedRefining = .FALSE.
       IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
-      
+
       ! Check if all processes finished refining. If so, exit.
-      CALL MPI_BCAST( FinishedRefining, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)      
+      CALL MPI_BCAST( FinishedRefining, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
       IF (FinishedRefining) EXIT
-      
+
       ! Check if any process needs to extend their memory.
       CALL MPI_BCAST( DoExtendMemory, 1, MPI_LOGICAL, 0, MPI_COMM_WORLD, ierr)
       IF (DoExtendMemory) THEN
-        ! By extending the memory to mesh%nV + 1000, we ensure that processes that 
+        ! By extending the memory to mesh%nV + 1000, we ensure that processes that
         ! have already finished refining do not keep adding useless extra memory.
         CALL extend_mesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
       END IF
-    
+
     END DO !DO WHILE (.NOT. FinishedRefining)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE refine_mesh_geo_only
+
   SUBROUTINE refine_submesh_geo_only( mesh)
     ! Refine a mesh. Single-core, but multiple submeshes can be done in parallel on different cores.
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'refine_submesh_geo_only'
     INTEGER                                       :: ti
     REAL(dp), DIMENSION(2)                        :: p
     LOGICAL                                       :: IsGood, FinishedRefining, DoExtendMemory
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     FinishedRefining = .FALSE.
     DoExtendMemory   = .FALSE.
-    
+
     CALL extend_submesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
-    
+
     mesh%RefMap    = 0
     mesh%RefStack  = 0
     mesh%RefStackN = 0
@@ -672,22 +681,22 @@ MODULE mesh_creation_module
       mesh%RefStackN                = mesh%RefStackN + 1
       mesh%RefStack(mesh%RefStackN) = ti
     END DO
-    
+
     DO WHILE (.NOT. FinishedRefining)
-    
+
       ! Refine the mesh until it's done, or until it's almost out of memory.
       ! ====================================================================
-      
+
       DoExtendMemory = .FALSE.
-          
+
       DO WHILE (mesh%RefStackN > 0)
-    
+
         ! Check the last triangle list in the RefineStack. If it's
         ! Bad, refine it and add the affected triangles to the RefineStack.
-      
-        ti = mesh%RefStack( mesh%RefStackN)         
+
+        ti = mesh%RefStack( mesh%RefStackN)
         CALL is_good_triangle_geo_only( mesh, ti, IsGood)
-              
+
         IF (IsGood) THEN
           ! Remove this triangle from the stack
           mesh%RefMap(ti) = 0
@@ -698,109 +707,113 @@ MODULE mesh_creation_module
           p = mesh%Tricc(ti,:)
           CALL split_triangle( mesh, ti, p)
         END IF
-        
+
         ! If we're reaching the memory limit, stop refining and extend the memory.
         IF (mesh%nV > mesh%nV_mem - 10) THEN
           DoExtendMemory = .TRUE.
           EXIT
         END IF
-        
-      END DO ! DO WHILE (mesh%RefStackN > 0)  
-      
+
+      END DO ! DO WHILE (mesh%RefStackN > 0)
+
       ! Check if all processes finished refining. If so, exit.
       ! ======================================================
-      
+
       FinishedRefining = .FALSE.
-      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.      
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)      
-      IF (FinishedRefining) EXIT  
-      
+      IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
+      CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)
+      IF (FinishedRefining) EXIT
+
       ! Check if any process needs to extend their memory.
       ! ==================================================
-      
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr) 
-            
-      ! By extending the memory to mesh%nV + 1000, we ensure that processes that 
+
+      CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
+
+      ! By extending the memory to mesh%nV + 1000, we ensure that processes that
       ! have already finished refining do not keep adding useless extra memory.
-      
+
       IF (DoExtendMemory) THEN
         CALL extend_submesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
       END IF
-    
+
     END DO ! DO WHILE (.NOT. FinishedRefining)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE refine_submesh_geo_only
-  
-  ! == Lloyd's algorithm for "smoothing" a (sub)mesh
+
+  ! ===== Lloyd's algorithm for "smoothing" a (sub)mesh =====
+  ! =========================================================
+
   SUBROUTINE Lloyds_algorithm_single_iteration_submesh( mesh)
     ! Lloyd's algorithm: move all vertices to the geometric centers of their Voronoi cells, and update the triangulation.
     ! This "smooths" the mesh, reducing resolution gradients and widening internal angles, thus making it more
     ! suitable for numerical methods (particularly the SSA).
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'Lloyds_algorithm_single_iteration_submesh'
     INTEGER                                       :: vi, ci, cip1
     REAL(dp)                                      :: VorTriA, sumVorTriA
     REAL(dp), DIMENSION(2)                        :: pa, pb, pc, VorGC
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Move all non-boundary vertices to their Voronoi cell geometric centre
     DO vi = 1, mesh%nV
-    
+
       ! Leave boundary vertices where they are
       IF (mesh%edge_index( vi) > 0) CYCLE
-        
+
       ! Find the geometric centre of this vertex' Voronoi cell
       VorGC      = 0._dp
       sumVorTriA = 0._dp
-      
+
       DO ci = 1, mesh%nC( vi)
-      
+
         cip1 = ci + 1
         IF (cip1 > mesh%nC( vi)) cip1 = 1
-        
+
         pa = mesh%V( vi,:)
         pb = mesh%V( mesh%C( vi,ci  ),:)
         pc = mesh%V( mesh%C( vi,cip1),:)
-        
+
         VorTriA = cross2( pb - pa, pc - pa)
-        
+
         VorGC = VorGC + VorTriA * (pa + pb + pc) / 3._dp
         sumVorTriA   = sumVorTriA   + VorTriA
-        
+
       END DO ! DO ci = 1, mesh%nC( vi)
-      
+
       VorGC = VorGC / sumVorTriA
-        
+
       ! Move the vertex
       CALL move_vertex( mesh, vi, VorGC)
-    
+
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE Lloyds_algorithm_single_iteration_submesh
-  
-  ! == Align and merge submeshes created by parallel processes
+
+  ! ===== Align and merge submeshes created by parallel processes =====
+  ! ===================================================================
+
   SUBROUTINE align_all_submeshes( submesh, orientation)
     ! Align (= ensure all seam vertices are shared) all adjacent submeshes.
-  
+
     ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER,                    INTENT(IN)        :: orientation
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_all_submeshes'
     INTEGER, DIMENSION(:,:  ), ALLOCATABLE        :: alignlist
@@ -848,21 +861,21 @@ MODULE mesh_creation_module
       CALL align_submeshes( submesh, orientation, i_left, i_right, nVl_east, nVr_west)
     END IF
 
-  ! == Pass two: odd
-  ! ================
+    ! == Pass two: odd
+    ! ================
 
     alignlist = 0
     nalign    = 0
 
     DO i = 1, par%n-2, 2
-      
+
       nalign = nalign + 1
       alignlist(nalign,:) = [i, i+1]
-      
+
     END DO
-        
+
     ! Determine if we're participating as Left, Right or Passive
-    ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)    
+    ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)
     i_left  = -1
     i_right = -1
     DO i = 1, nalign
@@ -871,31 +884,32 @@ MODULE mesh_creation_module
         i_right = alignlist(i,2)
       END IF
     END DO
-    
+
     IF (nalign > 0) THEN
       CALL align_submeshes( submesh, orientation, i_left, i_right, nVl_east, nVr_west)
     END IF
-    
-  ! Clean up after yourself
-  ! =======================
-    
+
+    ! Clean up after yourself
+    ! =======================
+
     DEALLOCATE( alignlist)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE align_all_submeshes
+
   SUBROUTINE align_submeshes( submesh, orientation, p_left, p_right, nVl_east, nVr_west)
     ! Align: make sure two adjacent submeshes share all their boundary vertices
-    
+
     IMPLICIT NONE
-  
+
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER,                    INTENT(IN)        :: orientation  ! 0 = eastwest, 1 = northsouth
     INTEGER,                    INTENT(IN)        :: p_left, p_right
     INTEGER,                    INTENT(OUT)       :: nVl_east, nVr_west
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'align_submeshes'
     INTEGER                                       :: status(MPI_STATUS_SIZE)
@@ -911,10 +925,10 @@ MODULE mesh_creation_module
     REAL(dp), DIMENSION(2  )                      :: p_new, pc, pu, pl
     INTEGER                                       :: vilc, vilu, vill, virc, viru, virl
     INTEGER                                       :: vi2
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
    IF (debug_mesh_creation) THEN
      IF (par%i == p_left .OR. par% i == p_right) THEN
        WRITE(0,'(A,I2,A,I2,A,I2)') '  align_submeshes - process ', par%i, ': aligning mesh ', p_left, ' with mesh ', p_right
@@ -923,9 +937,9 @@ MODULE mesh_creation_module
      END IF
      CALL sync
    END IF
-        
-! Create the list of boundary vertices
-! ====================================
+
+    ! Create the list of boundary vertices
+    ! ====================================
 
     ! Allocate dummy memory in non-participating processes (to prevent compiler warnings only)
     IF (.NOT. (par%i == p_left .OR. par%i == p_right)) THEN
@@ -938,22 +952,22 @@ MODULE mesh_creation_module
       ALLOCATE( Vr_west(    1,1))
       nT = 0
     END IF
-    
+
     IF (par%i == p_left) THEN
-      
+
       ALLOCATE( Vi_dummy( submesh%nV   ))
       ALLOCATE( V_dummy(  submesh%nV, 2))
-      
+
       IF (orientation == 0) THEN
-      
+
         Vi_dummy(1)  = 2
         V_dummy(1,:) = submesh%V(2,:)
         nVl_east     = 1
         nVl_tot      = submesh%nV
-        
+
         FoundNorth = .FALSE.
         vi_prev    = 2
-        
+
         DO WHILE (.NOT. FoundNorth)
           vi = submesh%C(vi_prev,1)
           nVl_east = nVl_east + 1
@@ -962,17 +976,17 @@ MODULE mesh_creation_module
           vi_prev = vi
           IF ( vi == 3) FoundNorth = .TRUE.
         END DO ! DO WHILE (.NOT. FoundNorth)
-      
+
       ELSEIF (orientation == 1) THEN
-      
+
         Vi_dummy(1)  = 3
         V_dummy(1,:) = submesh%V(3,:)
         nVl_east     = 1
         nVl_tot      = submesh%nV
-        
+
         FoundNorth = .FALSE.
         vi_prev    = 3
-        
+
         DO WHILE (.NOT. FoundNorth)
           vi = submesh%C(vi_prev,1)
           nVl_east = nVl_east + 1
@@ -981,31 +995,31 @@ MODULE mesh_creation_module
           vi_prev = vi
           IF ( vi == 4) FoundNorth = .TRUE.
         END DO ! DO WHILE (.NOT. FoundNorth)
-        
+
       END IF
-      
+
       ALLOCATE( Vil_east( nVl_east   ))
       ALLOCATE( Vl_east(  nVl_east, 2))
       Vil_east = Vi_dummy( 1:nVl_east  )
       Vl_east  = V_dummy(  1:nVl_east,:)
       DEALLOCATE( Vi_dummy)
       DEALLOCATE( V_dummy)
-      
+
     ELSEIF (par%i == p_right) THEN
-      
+
       ALLOCATE( Vi_dummy( submesh%nV   ))
       ALLOCATE( V_dummy(  submesh%nV, 2))
-      
+
       IF (orientation == 0) THEN
-      
+
         Vi_dummy(1)  = 1
         V_dummy(1,:) = submesh%V(1,:)
         nVr_west     = 1
         nVr_tot      = submesh%nV
-        
+
         FoundNorth = .FALSE.
         vi_prev    = 1
-        
+
         DO WHILE (.NOT. FoundNorth)
           vi = submesh%C(vi_prev, submesh%nC(vi_prev))
           nVr_west = nVr_west + 1
@@ -1014,17 +1028,17 @@ MODULE mesh_creation_module
           vi_prev = vi
           IF ( vi == 4) FoundNorth = .TRUE.
         END DO ! DO WHILE (.NOT. FoundNorth)
-      
+
       ELSEIF (orientation == 1) THEN
-      
+
         Vi_dummy(1)  = 2
         V_dummy(1,:) = submesh%V(2,:)
         nVr_west     = 1
         nVr_tot      = submesh%nV
-        
+
         FoundNorth = .FALSE.
         vi_prev    = 2
-        
+
         DO WHILE (.NOT. FoundNorth)
           vi = submesh%C(vi_prev, submesh%nC(vi_prev))
           nVr_west = nVr_west + 1
@@ -1033,74 +1047,74 @@ MODULE mesh_creation_module
           vi_prev = vi
           IF ( vi == 1) FoundNorth = .TRUE.
         END DO ! DO WHILE (.NOT. FoundNorth)
-      
+
       END IF
-      
+
       ALLOCATE( Vir_west( nVr_west   ))
       ALLOCATE( Vr_west(  nVr_west, 2))
       Vir_west = Vi_dummy( 1:nVr_west  )
       Vr_west  = V_dummy(  1:nVr_west,:)
       DEALLOCATE( Vi_dummy)
       DEALLOCATE( V_dummy)
-      
+
     END IF ! IF (par%i == p_left) THEN
-    
-! Exchange lists of boundary vertices
-! ===================================
-    
+
+    ! Exchange lists of boundary vertices
+    ! ===================================
+
     IF (par%i == p_left) THEN
-    
+
       ! Receive list of boundary vertices from p_right
-      CALL MPI_RECV( nVr_west,  1,          MPI_INTEGER,          p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr) 
-      CALL MPI_RECV( nVr_tot,   1,          MPI_INTEGER,          p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)      
+      CALL MPI_RECV( nVr_west,  1,          MPI_INTEGER,          p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
+      CALL MPI_RECV( nVr_tot,   1,          MPI_INTEGER,          p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
       ALLOCATE( Vir_west( nVr_west   ))
       ALLOCATE( Vr_west(  nVr_west, 2))
       CALL MPI_RECV(  Vir_west, nVr_west,   MPI_INTEGER,          p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
       CALL MPI_RECV(  Vr_west,  nVr_west*2, MPI_DOUBLE_PRECISION, p_right, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
-    
+
       ! Send list of boundary vertices to p_left
       CALL MPI_SEND( nVl_east, 1,          MPI_INTEGER,          p_right, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( nVl_tot,  1,          MPI_INTEGER,          p_right, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( Vil_east, nVl_east,   MPI_INTEGER,          p_right, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( Vl_east,  nVl_east*2, MPI_DOUBLE_PRECISION, p_right, 0, MPI_COMM_WORLD, ierr)
-      
+
     ELSEIF (par%i == p_right) THEN
-    
+
       ! Send list of boundary vertices to p_left
       CALL MPI_SEND( nVr_west, 1,          MPI_INTEGER,          p_left, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( nVr_tot,  1,          MPI_INTEGER,          p_left, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( Vir_west, nVr_west,   MPI_INTEGER,          p_left, 0, MPI_COMM_WORLD, ierr)
       CALL MPI_SEND( Vr_west,  nVr_west*2, MPI_DOUBLE_PRECISION, p_left, 0, MPI_COMM_WORLD, ierr)
-      
+
       ! Receive list of boundary vertices from p_left
-      CALL MPI_RECV( nVl_east,  1,          MPI_INTEGER,          p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr) 
-      CALL MPI_RECV( nVl_tot,   1,          MPI_INTEGER,          p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)      
+      CALL MPI_RECV( nVl_east,  1,          MPI_INTEGER,          p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
+      CALL MPI_RECV( nVl_tot,   1,          MPI_INTEGER,          p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
       ALLOCATE( Vil_east( nVl_east   ))
       ALLOCATE( Vl_east(  nVl_east, 2))
       CALL MPI_RECV(  Vil_east, nVl_east,   MPI_INTEGER,          p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
       CALL MPI_RECV(  Vl_east,  nVl_east*2, MPI_DOUBLE_PRECISION, p_left, MPI_ANY_TAG, MPI_COMM_WORLD, status, ierr)
-      
+
     END IF ! IF (par%i == p_left) THEN
-    
-! Create the boundary translation table T
-! =======================================
-    
+
+    ! Create the boundary translation table T
+    ! =======================================
+
     IF (par%i == p_left .OR. par%i == p_right) THEN
-      
+
       ! Create T
       ALLOCATE( T( nVl_east + nVr_west, 2))
       ALLOCATE( FoundAsMatchl( nVl_east))
       ALLOCATE( FoundAsMatchr( nVr_west))
-      
+
       IF (orientation == 0) THEN
-      
+
         T(1,:) = [2, 1]
         T(2,:) = [3, 4]
         nT = 2
-        
+
         FoundAsMatchr = .FALSE.
         FoundAsMatchl = .FALSE.
-        
+
         DO vi = 2, nVl_east - 1
           vil = Vil_east( vi)
           DO vi2 = 2, nVr_west - 1
@@ -1129,16 +1143,16 @@ MODULE mesh_creation_module
             END IF
           END DO
         END DO
-      
+
       ELSEIF (orientation == 1) THEN
-      
+
         T(1,:) = [3, 2]
         T(2,:) = [4, 1]
         nT = 2
-        
+
         FoundAsMatchr = .FALSE.
         FoundAsMatchl = .FALSE.
-                
+
         DO vi = 2, nVl_east - 1
           vil = Vil_east( vi)
           DO vi2 = 2, nVr_west - 1
@@ -1167,29 +1181,29 @@ MODULE mesh_creation_module
             END IF
           END DO
         END DO
-      
+
       END IF ! IF (orientation == 0) THEN
-      
+
     END IF ! IF (par%i == p_left .OR. par%i == p_right) THEN
-    
-! Extend submesh memory to accomodate the extra vertices
-! ======================================================
-    
-    IF (par%i == p_left) THEN    
+
+    ! Extend submesh memory to accomodate the extra vertices
+    ! ======================================================
+
+    IF (par%i == p_left) THEN
       nV_extra = nVr_west - nT
     ELSEIF (par%i == p_right) THEN
       nV_extra = nVl_east - nT
     ELSE
       nV_extra = 0
     END IF
-    
-    CALL extend_submesh_primary( submesh, submesh%nV + nV_extra, submesh%nTri + 2 * nV_extra) 
-    
-! Add the extra vertices to the submesh
-! =====================================
-    
+
+    CALL extend_submesh_primary( submesh, submesh%nV + nV_extra, submesh%nTri + 2 * nV_extra)
+
+    ! Add the extra vertices to the submesh
+    ! =====================================
+
     IF (par%i == p_left) THEN
-      
+
       DO vi2 = 2, nVr_west-1
         IF (FoundAsMatchr(vi2)) CYCLE
 
@@ -1198,7 +1212,7 @@ MODULE mesh_creation_module
 
         ! Find the vertices spanning the segment that needs to be split
         p_new = Vr_west( vi2,:)
-        
+
         DO vi = 1, nVl_east
 
           vilc = Vil_east( vi)
@@ -1208,7 +1222,7 @@ MODULE mesh_creation_module
           pc   = submesh%V(vilc,:)
           pu   = submesh%V(vilu,:)
           pl   = submesh%V(vill,:)
-          
+
           IF (orientation == 0) THEN
 
             IF ( pu(2) > p_new(2) .AND. pc(2) < p_new(2)) THEN
@@ -1222,7 +1236,7 @@ MODULE mesh_creation_module
               CALL split_segment( submesh, vill, vilc, p_new)
               EXIT
             END IF
-          
+
           ELSEIF (orientation == 1) THEN
 
             IF ( pu(1) < p_new(1) .AND. pc(1) > p_new(1)) THEN
@@ -1236,14 +1250,14 @@ MODULE mesh_creation_module
               CALL split_segment( submesh, vill, vilc, p_new)
               EXIT
             END IF
-          
+
           END IF ! IF (orientation == 0) THEN
-                    
+
         END DO ! DO vi = 1:nVl_east
       END DO ! DO vi2 = 1, nVr_west
-      
+
     ELSEIF (par%i == p_right) THEN
-      
+
       DO vi = 2, nVl_east-1
         IF (FoundAsMatchl( vi)) CYCLE
 
@@ -1252,7 +1266,7 @@ MODULE mesh_creation_module
 
         ! Find the vertices spanning the segment that needs to be split
         p_new = Vl_east( vi,:)
-        
+
         DO vi2 = 1, nVr_west
 
           virc = Vir_west( vi2)
@@ -1262,7 +1276,7 @@ MODULE mesh_creation_module
           pc   = submesh%V(virc,:)
           pu   = submesh%V(viru,:)
           pl   = submesh%V(virl,:)
-          
+
           IF (orientation == 0) THEN
 
             IF ( pu(2) > p_new(2) .AND. pc(2) < p_new(2)) THEN
@@ -1276,7 +1290,7 @@ MODULE mesh_creation_module
               CALL split_segment( submesh, virl, virc, p_new)
               EXIT
             END IF
-          
+
           ELSEIF (orientation == 1) THEN
 
             IF ( pu(1) < p_new(1) .AND. pc(1) > p_new(1)) THEN
@@ -1290,39 +1304,40 @@ MODULE mesh_creation_module
               CALL split_segment( submesh, virl, virc, p_new)
               EXIT
             END IF
-          
+
           END IF ! IF (orientation == 0) THEN
-          
-        END DO ! DO vi2 = 1, nVr_west        
+
+        END DO ! DO vi2 = 1, nVr_west
       END DO ! DO vi = 1, nVl_east
-      
+
     END IF ! IF (par%i == p_left) THEN
-    
+
     ! Crop submesh memory
-    CALL crop_submesh_primary( submesh) 
-    
+    CALL crop_submesh_primary( submesh)
+
     ! Clean up after yourself!
     DEALLOCATE( Vil_east     )
-    DEALLOCATE( Vir_west     )   
+    DEALLOCATE( Vir_west     )
     DEALLOCATE( Vl_east      )
     DEALLOCATE( Vr_west      )
     DEALLOCATE( T            )
     DEALLOCATE( FoundAsMatchl)
     DEALLOCATE( FoundAsMatchr)
-    
-!    WRITE(0,'(A,I2,A)') '  align_submeshes - process ', par%i, ': finished'
-    
+
+    ! WRITE(0,'(A,I2,A)') '  align_submeshes - process ', par%i, ': finished'
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE align_submeshes
+
   SUBROUTINE merge_all_submeshes( submesh, orientation)
     ! Iteratively merge the submeshes created by the different processes.
-    
+
     ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER,                    INTENT(IN)        :: orientation
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_all_submeshes'
     INTEGER, DIMENSION(:,:), ALLOCATABLE          :: mergelist
@@ -1359,31 +1374,32 @@ MODULE mesh_creation_module
           mergelist(nmerge,:) = [i, i + (2**(merge_it-1))]
         END IF
       END DO
-      
+
       CALL merge_submeshes( submesh, mergelist, nmerge, orientation)
-    
+
     END DO
-    
-  ! Clean up after yourself
-  ! =======================
-    
+
+    ! Clean up after yourself
+    ! =======================
+
     DEALLOCATE( mergelist)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE merge_all_submeshes
+
   SUBROUTINE merge_submeshes( submesh, mergelist, nmerge, orientation)
     ! Merge the submeshes created by proc1 and proc2
-    
+
     IMPLICIT NONE
-  
+
     ! In/output variables
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     INTEGER, DIMENSION(:,:),    INTENT(IN)        :: mergelist
     INTEGER,                    INTENT(IN)        :: nmerge
     INTEGER,                    INTENT(IN)        :: orientation  ! 0 = eastwest, 1 = northsouth
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'merge_submeshes'
     TYPE(type_mesh)                               :: submesh_right
@@ -1399,13 +1415,13 @@ MODULE mesh_creation_module
     INTEGER                                       :: cip1
     REAL(dp)                                      :: VorTriA, sumVorTriA
     REAL(dp), DIMENSION(2)                        :: pa, pb, pc, VorGC
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-        
+
     ! Determine if we're participating as Left, Right or Passive
     ! (Passive still needs to run through the code, to participate in ExtendSubmesh calls)
-    
+
     p_left  = -1
     p_right = -1
     DO i = 1, nmerge
@@ -1414,21 +1430,21 @@ MODULE mesh_creation_module
         p_right = mergelist(i,2)
       END IF
     END DO
-    
+
     IF (par%i == p_left .OR. par%i == p_right) THEN
       IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': merging mesh ', p_left, ' with mesh ', p_right
     ELSE
       IF (debug_mesh_creation) WRITE(0,'(A,I2,A)')         ' merge_submeshes - process ', par%i, ': passively running merge_submeshes'
     END IF
     CALL sync
-   
-  ! Align the two submeshes (make sure all their shared boundary vertices match)
-  ! ============================================================================
-     
+
+    ! Align the two submeshes (make sure all their shared boundary vertices match)
+    ! ============================================================================
+
     CALL align_submeshes( submesh, orientation, p_left, p_right, nVl_east, nVr_west)
-    
-  ! Extend memory to accomodate data from submesh_right
-  ! ===================================================
+
+    ! Extend memory to accomodate data from submesh_right
+    ! ===================================================
 
     ! First communicate size of aligned meshes, so p_left can extend their memory to accomodate data from p_right
     ! (must be done before sharing memory access, since ExtendSubmesh realloates the memory, resulting in new addresses)
@@ -1450,40 +1466,40 @@ MODULE mesh_creation_module
     ELSE
       CALL extend_submesh_primary( submesh, submesh%nV, submesh%nTri)
     END IF
-    
-  ! Give p_left access to submesh memory from p_right
-  ! =================================================  
-    
+
+    ! Give p_left access to submesh memory from p_right
+    ! =================================================
+
     IF (par%i == p_left .OR. par%i == p_right) THEN
       IF (debug_mesh_creation .AND. par%i == p_left)  WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': gaining   access to submesh memory from process ', p_right
       IF (debug_mesh_creation .AND. par%i == p_right) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': providing access to submesh memory to   process ', p_left
       CALL share_submesh_access( p_left, p_right, submesh, submesh_right)
     END IF
-    
-  ! Merge the data
-  ! ==============
+
+    ! Merge the data
+    ! ==============
 
     IF (par%i == p_left) THEN
-    
-  ! Recalculate T with the extra vertices, again sorthed south-north
-  ! (must be done to know which vertices to merge. Can be done much
-  ! more easily now that we have access to the data from submesh_right)
-  ! ===================================================================
-  
+
+    ! Recalculate T with the extra vertices, again sorthed south-north
+    ! (must be done to know which vertices to merge. Can be done much
+    ! more easily now that we have access to the data from submesh_right)
+    ! ===================================================================
+
       IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': recalculating T'
-      
+
       ALLOCATE( T( nVl_east + nVr_west, 2))
-      
-      IF (orientation == 0) THEN 
-        
+
+      IF (orientation == 0) THEN
+
         T = 0
         T(1, :) = [2, 1]
         nT = 1
-        
+
         vil_prev = 2
         vir_prev = 1
         FoundNorth = .FALSE.
-        
+
         DO WHIlE (.NOT. FoundNorth)
           vil = submesh%C(       vil_prev, 1)
           vir = submesh_right%C( vir_prev, submesh_right%nC( vir_prev))
@@ -1493,17 +1509,17 @@ MODULE mesh_creation_module
           vir_prev = vir
           IF (vil == 3) FoundNorth = .TRUE.
         END DO
-      
+
       ELSEIF (orientation == 1) THEN
-        
+
         T = 0
         T(1, :) = [3, 2]
         nT = 1
-        
+
         vil_prev = 3
         vir_prev = 2
         FoundNorth = .FALSE.
-        
+
         DO WHIlE (.NOT. FoundNorth)
           vil = submesh%C(       vil_prev, 1)
           vir = submesh_right%C( vir_prev, submesh_right%nC( vir_prev))
@@ -1513,26 +1529,26 @@ MODULE mesh_creation_module
           vir_prev = vir
           IF (vil == 4) FoundNorth = .TRUE.
         END DO
-      
+
       END IF ! IF (orientation == 0) THEN
-      
+
     ! Add the data from submesh_right to this process' submesh
-    ! ======================================================== 
-  
-      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': adding data from p_right to p_left'     
-  
+    ! ========================================================
+
+      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': adding data from p_right to p_left'
+
       nVl          = submesh%nV
       nVr          = submesh_right%nV
       nVtot        = nVl + nVr
-      
+
       nTril        = submesh%nTri
       nTrir        = submesh_right%nTri
       nTritot      = nTril + nTrir
-      
+
       RefStackNl   = submesh%RefStackN
       RefStackNr   = submesh_right%RefStackN
       RefStackNtot = RefStackNl + RefStackNr
-      
+
       submesh%V(              nVl   +1:nVtot  ,:) = submesh_right%V(              1:nVr,  :)
       submesh%nC(             nVl   +1:nVtot    ) = submesh_right%nC(             1:nVr    )
       submesh%C(              nVl   +1:nVtot  ,:) = submesh_right%C(              1:nVr,  :)
@@ -1546,16 +1562,16 @@ MODULE mesh_creation_module
       submesh%Tri_edge_index( nTril +1:nTritot  ) = submesh_right%Tri_edge_index( 1:nTrir  )
 
       submesh%RefMap(         nTril +1:nTritot  ) = submesh_right%RefMap(         1:nTrir  )
-      
+
       submesh%RefStack(RefStackNl+1:RefStackNl+RefStackNr) = submesh_right%RefStack(1:RefStackNr)
       submesh%RefStackN = RefStackNl + RefStackNr
 
       submesh%nV   = nVtot
       submesh%nTri = nTritot
-            
+
     ! Increase the vertex and triangle count of data from submesh_right to start where submesh_left stops
     ! ===================================================================================================
-  
+
       DO vi = nVl+1, nVtot
         DO ci = 1, submesh%nC(vi)
           submesh%C(vi,ci) = submesh%C(vi,ci) + nVl
@@ -1583,181 +1599,183 @@ MODULE mesh_creation_module
 
     ! Merge the shared vertices
     ! =========================
-  
-      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': merging shared vertices'  
-  
+
+      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': merging shared vertices'
+
       DO ti = 1, nT
         vil = T(ti,1)
         vir = T(ti,2)
         CALL merge_vertices( submesh, nVl, nVr, nTril, nTrir, T, nT, vil, vir, orientation)
       END DO
-      
+
     ! Update domain boundaries
     ! ========================
-      
+
       IF (orientation == 0) THEN
         submesh%xmin = submesh%xmin
-        submesh%xmax = submesh_right%xmax        
+        submesh%xmax = submesh_right%xmax
       ELSEIF (orientation == 1) THEN
         submesh%ymin = submesh%ymin
-        submesh%ymax = submesh_right%ymax   
+        submesh%ymax = submesh_right%ymax
       END IF
 
     ! Update Tri_edge_index
     ! =====================
-  
-      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': redoing triangle edge indices'  
-    
+
+      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': redoing triangle edge indices'
+
       CALL redo_Tri_edge_indices( submesh)
 
     ! Make sure vertices 1, 2, 3, 4 are again at the corners
     ! ======================================================
-  
-      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': resetting corner vertices'  
-    
+
+      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': resetting corner vertices'
+
       IF (orientation == 0) THEN
-      
+
         vi1 = 2
         vi2 = nVl+1
         CALL switch_vertices( submesh, vi1, vi2)
         vi1 = 3
         vi2 = nVl+2
         CALL switch_vertices( submesh, vi1, vi2)
-      
+
       ELSEIF (orientation == 1) THEN
-      
+
         vi1 = 3
         vi2 = nVl+1
         CALL switch_vertices( submesh, vi1, vi2)
         vi1 = 4
         vi2 = nVl+2
         CALL switch_vertices( submesh, vi1, vi2)
-        
+
       END IF
-      
+
     ! Check if any seam triangles require flipping
     ! ============================================
-  
-      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': updating Delaunay triangulation'  
-    
+
+      IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': updating Delaunay triangulation'
+
       DO ti = 1, nT
-      
+
         vi = T( ti,1)
-        
+
         nf = 0
-  
+
         DO iti = 1, submesh%niTri( vi)
           ti1 = submesh%iTri( vi,iti)
           DO n = 1, 3
             ti2 = submesh%TriC( ti1,n)
-            IF (ti2 > 0) THEN              
-              nf = nf + 1          
+            IF (ti2 > 0) THEN
+              nf = nf + 1
               submesh%Triflip(nf,:) = [ti1,ti2]
             END IF
           END DO
         END DO
-  
+
         ! Flip triangle pairs
         DO WHILE (nf > 0)
           CALL flip_triangle_pairs( submesh, nf, did_flip)
         END DO
-        
+
       END DO ! DO ti = 1, nT
-      
+
     ! Lloyd's algorithm: move seam vertices to their Voronoi cell geometric centres
     ! =============================================================================
-  
+
       IF (debug_mesh_creation) WRITE(0,'(A,I2,A,I2)') ' merge_submeshes - process ', par%i, ': apply Lloyds algorithm to seam'
-      
+
       DO ti = 1, nT
-        
+
         vi = T( ti,1)
-        
+
         ! Skip the two boundary vertices
         IF (submesh%edge_index( vi) > 0) CYCLE
-        
+
         ! Find the geometric centre of this vertex' Voronoi cell
         VorGC      = 0._dp
         sumVorTriA = 0._dp
-        
+
         DO ci = 1, submesh%nC( vi)
-        
+
           cip1 = ci + 1
           IF (cip1 > submesh%nC( vi)) cip1 = 1
-          
+
           pa = submesh%V( vi,:)
           pb = submesh%V( submesh%C( vi,ci  ),:)
           pc = submesh%V( submesh%C( vi,cip1),:)
-          
+
           VorTriA = cross2( pb - pa, pc - pa)
-          
+
           VorGC = VorGC + VorTriA * (pa + pb + pc) / 3._dp
           sumVorTriA   = sumVorTriA   + VorTriA
-          
+
         END DO ! DO ci = 1, submesh%nC( vi)
-        
+
         VorGC = VorGC / sumVorTriA
-        
+
         ! Move the vertex
         CALL move_vertex( submesh, vi, VorGC)
-        
+
       END DO ! DO ti = 1, nT
-      
+
     ! Clean up after yourself
     ! =======================
-    
+
       DEALLOCATE(T)
-      
+
     END IF ! IF (par%i == p_left) THEN
-    
+
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE merge_submeshes
-  
-  ! == Once merging is finished, finalise the mesh
+
+  ! ===== Once merging is finished, finalise the mesh =====
+  ! =======================================================
+
   SUBROUTINE create_final_mesh_from_merged_submesh( submesh, mesh)
-    
+
     IMPLICIT NONE
-  
+
     ! In/output variables
     TYPE(type_mesh),            INTENT(INOUT)     :: submesh
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
     INTEGER                                       :: nV, nTri
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Communicate final merged mesh size to all processes
     ! ===================================================
-    
+
     nV = submesh%nV
     nTri = submesh%nTri
     CALL MPI_BCAST( nV,   1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_BCAST( nTri, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-  
+
     ! Copy data from the final merged submesh, deallocate all the submeshes,
     ! do one final refining pass for the new triangles that may be too sharp.
     ! =======================================================================
-    
+
     CALL allocate_mesh_primary( mesh, submesh%region_name, nV + 1000, nTri + 2000, submesh%nC_mem)
-    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)      
+    IF (par%master) CALL move_data_from_submesh_to_mesh( mesh, submesh)
     CALL deallocate_submesh_primary( submesh)
     CALL refine_mesh_geo_only( mesh)
     CALL crop_mesh_primary(    mesh)
 
     ! Finish up - mesh metadata and extra info
     ! ========================================
-                
+
     ! Determine vertex and triangle domains
     CALL partition_list( mesh%nV,   par%i, par%n, mesh%vi1, mesh%vi2)
     CALL partition_list( mesh%nTri, par%i, par%n, mesh%ti1, mesh%ti2)
-    
+
     ! Calculate extra mesh data
     CALL allocate_mesh_secondary(             mesh)    ! Adds  9 MPI windows
     CALL calc_triangle_geometric_centres(     mesh)
@@ -1773,24 +1791,26 @@ MODULE mesh_creation_module
     CALL find_POI_vertices_and_weights(       mesh)
     CALL find_Voronoi_cell_geometric_centres( mesh)
     CALL create_transect(                     mesh)
-    
+
     CALL check_mesh( mesh)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 58)
-    
+
   END SUBROUTINE create_final_mesh_from_merged_submesh
-  
-  ! == Create the list of vertex indices and weights used in making transects
+
+  ! ===== Create the list of vertex indices and weights used in making transects =====
+  ! ==================================================================================
+
   SUBROUTINE create_transect( mesh)
     ! Create a transect along the x-axis, through the centre of the model domain.
     ! Useful for benchmark experiments, not so much for realistic simulations.
-    
+
     IMPLICIT NONE
-  
+
     ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_transect'
     REAL(dp), DIMENSION(2)                        :: p_start, p_end
@@ -1802,10 +1822,10 @@ MODULE mesh_creation_module
     REAL(dp), DIMENSION(2)                        :: pi_next, pj_next, llis
     LOGICAL                                       :: do_cross
     INTEGER                                       :: iti, n2, n3
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Allocate temporary memory for the list of transect vertex pairs
     ! (since we don't know in advance how many there will be)
     nV_transect = CEILING( 2._dp * (mesh%xmax - mesh%xmin) / mesh%resolution_min)
@@ -1813,14 +1833,14 @@ MODULE mesh_creation_module
     ALLOCATE( w_transect(  nV_transect,2))
     nV_transect = 0
     vi_transect = 0
-    
+
     ! Done only by the Master
     IF (par%master) THEN
-      
+
       ! The start and end points of the transect
       p_start = [mesh%xmin, (mesh%ymin + mesh%ymax) / 2._dp]
       p_end   = [mesh%xmax, (mesh%ymin + mesh%ymax) / 2._dp]
-      
+
       ! Find the pair of vertices on whose connection p_start lies, and the
       ! triangle whose side is made up by that connection
       vi_cur = 0
@@ -1830,7 +1850,7 @@ MODULE mesh_creation_module
         vj_cur = mesh%C( vi_cur, mesh%nC( vi_cur))
       END DO
       ti_cur = mesh%iTri( vi_cur, mesh%niTri( vi_cur))
-      
+
       ! Exception for Greenland: sometimes the process domain border can intersect with the transect,
       ! so that it overlaps with lines everywhere. In this case, move it slightly.
       IF     (p_start(2) == mesh%V( vi_cur,2)) THEN
@@ -1840,12 +1860,12 @@ MODULE mesh_creation_module
         p_start(2) = p_start(2) - 100._dp
         p_end(  2) = p_end(  2) - 100._dp
       END IF
-      
+
       ! List this as the first pair of transect vertices
       nV_transect = 1
       vi_transect( 1,:) = [vi_cur,vj_cur]
       w_transect(1,:) = [NORM2( mesh%V( vj_cur,:) - p_start), NORM2( mesh%V( vi_cur,:) - p_start)] / NORM2( mesh%V( vj_cur,:) - mesh%V( vi_cur,:))
-      
+
       ! Find the pair of vertices on whose connection p_end lies, and the
       ! triangle whose side is made up by that connection
       vi_end = 0
@@ -1855,27 +1875,27 @@ MODULE mesh_creation_module
         vj_end = mesh%C( vi_end, 1)
       END DO
       ti_end = mesh%iTri( vi_end, 1)
-      
+
       ! Trace the transect through the mesh
       DO WHILE (ti_cur /= ti_end)
-        
+
         ! Find out where the transect exits the current triangle
         ti_next = 0
         DO n = 1, 3
-          
+
           n1 = n + 1
           IF (n1==4) n1 = 1
-          
+
           vi_next = mesh%Tri( ti_cur,n)
           vj_next = mesh%Tri( ti_cur,n1)
-          
+
           IF ((vi_next == vi_cur .AND. vj_next == vj_cur) .OR. (vi_next == vj_cur .AND. vj_next == vi_cur)) CYCLE
-          
+
           pi_next = mesh%V( vi_next,:)
           pj_next = mesh%V( vj_next,:)
-          
+
           CALL segment_intersection( p_start, p_end, pi_next, pj_next, llis, do_cross, mesh%tol_dist)
-          
+
           IF (do_cross) THEN
             ! Find the next triangle
             DO iti = 1, mesh%niTri( vi_next)
@@ -1891,12 +1911,12 @@ MODULE mesh_creation_module
                 END IF
               END DO
             END DO ! DO iti = 1, mesh%niTri( vi_next)
-          
+
             EXIT
           END IF ! IF (do_cross) THEN
-          
+
         END DO ! DO n = 1, 3
-        
+
         ! Check if we managed to find the crossing
         IF (ti_next == 0) THEN
 
@@ -1912,27 +1932,27 @@ MODULE mesh_creation_module
           END IF
 
         END IF
-        
+
         ! Add this new vertex pair to the list
         nV_transect = nV_transect + 1
         vi_transect( nV_transect,:) = [vi_next, vj_next]
         w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_next,:) - llis), NORM2( mesh%V( vi_next,:) - llis)] / NORM2( mesh%V( vj_next,:) - mesh%V( vi_next,:))
-        
+
         ! Cycle the vertex pairs
         vi_cur = vi_next
         vj_cur = vj_next
         ti_cur = ti_next
-        
+
       END DO ! DO WHILE (ti_cur /= ti_end)
-      
+
       ! Add the final pair of vertices to the transect
       nV_transect = nV_transect + 1
       vi_transect( nV_transect,:) = [vi_end, vj_end]
       w_transect(  nV_transect,:) = [NORM2( mesh%V( vj_end,:) - p_end), NORM2( mesh%V( vi_end,:) - p_end)] / NORM2( mesh%V( vj_end,:) - mesh%V( vi_end,:))
-    
+
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Allocate shared memory, copy list of transect vertex pairs
     CALl allocate_shared_int_0D( mesh%nV_transect, mesh%wnV_transect)
     IF (par%master) mesh%nV_transect = nV_transect
@@ -1942,17 +1962,19 @@ MODULE mesh_creation_module
     IF (par%master) mesh%vi_transect = vi_transect( 1:mesh%nV_transect,:)
     IF (par%master) mesh%w_transect  = w_transect(  1:mesh%nV_transect,:)
     CALL sync
-    
+
     ! Clean up after yourself
     DEALLOCATE( vi_transect)
     DEALLOCATE( w_transect)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
-    
+
   END SUBROUTINE create_transect
-  
-  ! == Initialise a five-vertex dummy mesh
+
+  ! ===== Initialise a five-vertex dummy mesh =====
+  ! ===============================================
+
   SUBROUTINE initialise_dummy_mesh( mesh, xmin, xmax, ymin, ymax)
     ! Initialises a 5-vertex, 4-triangle "dummy"  mesh:
     !
@@ -1973,7 +1995,7 @@ MODULE mesh_creation_module
     !   |  /            \  |
     !   | /              \ |
     !   v1 - - - - - - - - v2
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
@@ -1985,7 +2007,7 @@ MODULE mesh_creation_module
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_dummy_mesh'
     REAL(dp), PARAMETER                           :: tol = 1E-9_dp
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -2003,11 +2025,11 @@ MODULE mesh_creation_module
     mesh%res_max_mountain     = C%res_max_mountain
     mesh%res_max_coast        = C%res_max_coast
     mesh%res_min              = C%res_min
-    
+
     ! Horizontal distance of tolerance. Used for several small routines - points that lie within
     ! this distance of each other (vertices, triangle circumcenters, etc.) are treated as identical.
     mesh%tol_dist   = ((mesh%xmax - mesh%xmin) + (mesh%ymax-mesh%ymin)) * tol / 2._dp
-    
+
     ! Points of interest
     CALL find_POI_xy_coordinates( mesh)
 
@@ -2068,41 +2090,42 @@ MODULE mesh_creation_module
     CALL update_triangle_circumcenter( mesh, 2)
     CALL update_triangle_circumcenter( mesh, 3)
     CALL update_triangle_circumcenter( mesh, 4)
-  
+
     ! Map and stack used for refining
     mesh%RefMap    = 0
     mesh%RefStack  = 0
     mesh%RefStackN = 0
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_dummy_mesh
+
   SUBROUTINE perturb_dummy_mesh( mesh, perturb_dir_global)
     ! "Perturb" the five-vertex dummy mesh; slightly offset the centre vertex,
     ! and split the four edges just next to their midpoints. This ensures that
     ! any new triangles created during mesh refinement are never cocircular.
-    
+
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     INTEGER,                    INTENT(IN)        :: perturb_dir_global
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'perturb_dummy_mesh'
     INTEGER                                       :: perturb_dir_local, i, vi1, vi2
     REAL(dp), DIMENSION(2)                        :: p
     REAL(dp)                                      :: dx, dy
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     perturb_dir_local = perturb_dir_global
     DO i = 1, par%i
       perturb_dir_local = 1 - perturb_dir_local
     END DO
-    
+
     IF (perturb_dir_local == 0) THEN
       dx = (mesh%xmax - mesh%xmin) *  pi     / 1000._dp ! Offset in x-direction by ~0.3 % of domain width
       dy = (mesh%ymax - mesh%ymin) * (pi**2) / 1000._dp ! Offset in y-direction by ~1   % of domain width
@@ -2112,47 +2135,49 @@ MODULE mesh_creation_module
     ELSE
       CALL crash('mesh perturbation direction can only be 0 or 1!')
     END IF
-    
+
     ! Save perturbation direction
     mesh%perturb_dir = perturb_dir_local
-    
+
     ! Offset the center vertex
     mesh%V( 5,1) = mesh%V( 5,1) + dx / 2._dp
     mesh%V( 5,2) = mesh%V( 5,2) + dy / 2._dp
-    
+
     ! Update triangle circumcenters
     CALL update_triangle_circumcenter( mesh, 1)
     CALL update_triangle_circumcenter( mesh, 2)
     CALL update_triangle_circumcenter( mesh, 3)
     CALL update_triangle_circumcenter( mesh, 4)
-    
+
     ! Split the southern edge
     vi1 = 1
     vi2 = 2
     p = [(mesh%xmax + mesh%xmin) / 2._dp + dx, mesh%ymin]
     CALL split_segment( mesh, vi1, vi2, p)
-    
+
     ! Split the eastern edge
     vi1 = 2
     vi2 = 3
     p = [mesh%xmax, (mesh%ymax + mesh%ymin) / 2._dp + dy]
     CALL split_segment( mesh, vi1, vi2, p)
-    
+
     ! Split the northern edge
     vi1 = 3
     vi2 = 4
     p = [(mesh%xmax + mesh%xmin) / 2._dp - dx, mesh%ymax]
     CALL split_segment( mesh, vi1, vi2, p)
-    
+
     ! Split the western edge
     vi1 = 4
     vi2 = 1
     p = [mesh%xmin, (mesh%ymax + mesh%ymin) / 2._dp - dy]
     CALL split_segment( mesh, vi1, vi2, p)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE perturb_dummy_mesh
 
 END MODULE mesh_creation_module
+
+

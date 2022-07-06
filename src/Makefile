@@ -61,6 +61,8 @@ UFEMISM_program_objects = \
         ocean_module.o \
         climate_module.o \
         general_ice_model_data_module.o \
+        general_sea_level_module.o \
+        calving_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
         thermodynamics_module.o \
@@ -68,11 +70,11 @@ UFEMISM_program_objects = \
         isotopes_module.o \
         bedrock_ELRA_module.o \
         tests_and_checks_module.o \
+        text_output_module.o \
         UFEMISM_main_model.o \
-        global_text_output_module.o \
         UFEMISM_program.o
 
-# Bring these back when not on Mac M1.
+# Bring these back when not on a Mac M1.
 # Put them after bedrock_ELRA_module.f90
 #
 #         SELEN_mapping_module.o \

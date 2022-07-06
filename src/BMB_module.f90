@@ -1,9 +1,11 @@
 MODULE BMB_module
-
   ! Contains all the routines for calculating the basal mass balance.
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== Preamble =====
+! ====================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -23,8 +25,6 @@ MODULE BMB_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              interpolate_ocean_depth, is_floating
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-
-  ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
                                              type_remapping_mesh_mesh, type_reference_geometry
@@ -35,7 +35,7 @@ MODULE BMB_module
 
 CONTAINS
 
-! == The main routines that should be called from the main ice model/program
+! ===== The main routines that should be called from the main ice model/program =====
 ! ==========================================================================
 
   SUBROUTINE run_BMB_model( mesh, ice, ocean, BMB, region_name, time, refgeo)
@@ -60,17 +60,17 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Initialise at zero
+    ! Re-initialise total and grounded BMB
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
 
-    ! Initialise at zero only if not iteratively inverting
-    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      ! DO vi = mesh%vi1, mesh%vi2
-      !   IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
-      !      BMB%BMB_shelf = 0._dp
-      !   END IF
-      ! END DO
+    ! Re-initialise BMB over ice shelves
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      DO vi = mesh%vi1, mesh%vi2
+        IF ( ice%mask_sheet_a( vi) == 1 .AND. (.NOT. is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) ) THEN
+           BMB%BMB_shelf( vi) = 0._dp
+        END IF
+      END DO
     ELSE
       BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
     END IF
@@ -96,8 +96,8 @@ CONTAINS
       CALL run_BMB_model_PICO(                 mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
-    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
-      CALL run_BMB_model_melt_inv(             mesh, ice, BMB, refgeo)
+    ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL run_BMB_model_shelf_inversion(      mesh, ice, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -140,15 +140,23 @@ CONTAINS
     ! (see Leguy et al. 2021 for explanations of the three schemes)
     DO vi = mesh%vi1, mesh%vi2
 
-      ! No sub-grid scaling for sub-sheet melt yet
+      ! Add sub-sheet melt rates (no sub-grid scaling yet)
       BMB%BMB( vi) = 0._dp
-      IF (ice%mask_sheet_a( vi) == 1) BMB%BMB( vi) = BMB%BMB_sheet( vi)
+      IF (ice%mask_sheet_a( vi) == 1) THEN
+        BMB%BMB( vi) = BMB%BMB_sheet( vi)
+      END IF
 
-      ! For the inversion of melt rates, add inverted rates everywhere (i.e. shelf and ocean)
-      IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+      ! Add sub-shelf melt rates
+      IF (C%choice_BMB_shelf_model == 'inversion') THEN
+        ! For the inversion of melt rates, add inverted rates everywhere. BMB_shelf
+        ! can be non-zero only at points where the model OR the reference data is
+        ! shelf or ocean (this helps to account for 'unwanted' grounding line advance
+        ! or retreat, and to get an idea of the melt rates needed at ocean points).
+        ! Thus, no need for masks here.
         BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
-        ! Different sub-grid schemes for sub-shelf melt
+        ! Different sub-grid schemes for sub-shelf melt. BMB_shelf can be non-zero
+        ! only at ice shelf points, so no need for masks here.
         IF     (C%choice_BMB_subgrid == 'FCMP') THEN
           IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
@@ -179,6 +187,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model
+
   SUBROUTINE initialise_BMB_model( mesh, ice, BMB, region_name)
     ! Allocate memory for the data fields of the SMB model.
 
@@ -206,7 +215,7 @@ CONTAINS
     ! Shelf
     IF     (C%choice_BMB_shelf_model == 'uniform' .OR. &
             C%choice_BMB_shelf_model == 'idealised' .OR. &
-            C%choice_BMB_shelf_model == 'melt_inv') THEN
+            C%choice_BMB_shelf_model == 'inversion') THEN
       ! Nothing else needs to be done
     ELSEIF (C%choice_BMB_shelf_model == 'ANICE_legacy') THEN
       CALL initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
@@ -236,8 +245,8 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model
 
-! == Idealised BMB schemes
-! ========================
+! ===== Idealised BMB schemes =====
+! =================================
 
   SUBROUTINE run_BMB_model_idealised( mesh, ice, BMB, time)
     ! Idealised BMB schemes
@@ -269,6 +278,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_idealised
+
   SUBROUTINE run_BMB_model_MISMIPplus( mesh, ice, BMB, time)
     ! The schematic basal melt used in the MISMIPplus experiments
 
@@ -429,8 +439,8 @@ CONTAINS
 
   END SUBROUTINE run_BMB_model_MISMIPplus
 
-! == The ANICE_legacy sub-shelf melt model
-! ========================================
+! ===== The ANICE_legacy sub-shelf melt model =====
+! =================================================
 
   SUBROUTINE run_BMB_model_ANICE_legacy( mesh, ice, BMB, region_name, time)
     ! Calculate sub-shelf melt with the ANICE_legacy model, which is based on the glacial-interglacial
@@ -610,6 +620,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_ANICE_legacy
+
   SUBROUTINE initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
     ! Allocate memory for the data fields of the ANICE_legacy shelf BMB model.
 
@@ -698,8 +709,8 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_ANICE_legacy
 
-! == The Favier et al. (2019) sub-shelf melt parameterisations
-! ============================================================
+! ===== The Favier et al. (2019) sub-shelf melt parameterisations =====
+! =====================================================================
 
   SUBROUTINE run_BMB_model_Favier2019_linear( mesh, ice, ocean, BMB)
     ! Calculate sub-shelf melt with Favier et al. (2019) linear parameterisation
@@ -746,6 +757,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_Favier2019_linear
+
   SUBROUTINE run_BMB_model_Favier2019_quadratic( mesh, ice, ocean, BMB)
     ! Calculate sub-shelf melt with Favier et al. (2019) quadratic parameterisation
 
@@ -793,6 +805,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_Favier2019_quadratic
+
   SUBROUTINE run_BMB_model_Favier2019_Mplus( mesh, ice, ocean, BMB)
     ! Calculate sub-shelf melt with Favier et al. (2019) M+ parameterisation
 
@@ -872,6 +885,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_Favier2019_Mplus
+
   SUBROUTINE calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate ocean temperature at the base of the shelf by interpolating
     ! the 3-D ocean temperature field in the vertical column
@@ -914,6 +928,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_ocean_temperature_at_shelf_base
+
   SUBROUTINE calc_ocean_freezing_point_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate the ocean freezing point at the base of the shelf, needed to calculate
     ! basal melt in the different parameterisations from Favier et al. (2019)
@@ -963,6 +978,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_ocean_freezing_point_at_shelf_base
+
   SUBROUTINE initialise_BMB_model_Favier2019( mesh, BMB)
     ! Allocate memory for the data fields of the Favier et al. (2019) shelf BMB parameterisations.
 
@@ -983,12 +999,12 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_freeze_base, BMB%wT_ocean_freeze_base)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
 
   END SUBROUTINE initialise_BMB_model_Favier2019
 
-! == The Lazeroms et al. (2018) quasi-2-D plume parameterisation
-! ==============================================================
+! ===== The Lazeroms et al. (2018) quasi-2-D plume parameterisation =====
+! =======================================================================
 
   SUBROUTINE run_BMB_model_Lazeroms2018_plume( mesh, ice, ocean, BMB)
     ! Calculate basal melt using the quasi-2-D plume parameterisation by Lazeroms et al. (2018), following the equations in Appendix A
@@ -1108,6 +1124,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_Lazeroms2018_plume
+
   SUBROUTINE find_effective_plume_path( mesh, ice, BMB, vi, eff_plume_source_depth, eff_basal_slope)
     ! Find the effective plume source depth and basal slope for shelf grid cell [i,j]
 
@@ -1140,6 +1157,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_effective_plume_path
+
   SUBROUTINE find_effective_plume_path_GL_average( mesh, ice, BMB, vi, eff_plume_source_depth, eff_basal_slope)
     ! Find the effective plume source depth and basal slope for shelf grid cell [i,j], following
     ! the approach outlined in Lazeroms et al. (2018), Sect. 2.3
@@ -1298,6 +1316,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_effective_plume_path_GL_average
+
   SUBROUTINE find_effective_plume_path_along_ice_flow( mesh, ice, vi, eff_plume_source_depth, eff_basal_slope)
     ! Find the effective plume source depth and basal slope for shelf grid cell [i,j] by
     ! assuming plumes follow the same horizontal flow field as the ice shelf
@@ -1405,6 +1424,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE find_effective_plume_path_along_ice_flow
+
   FUNCTION Lazeroms2018_dimensionless_melt_curve( xhat) RESULT( Mhat)
     ! The dimensionless melt curve from Lazeroms et al. (2018), Appendix A, Eq. A13
 
@@ -1440,6 +1460,7 @@ CONTAINS
     !        p1  * xhat + p0
 
   END FUNCTION Lazeroms2018_dimensionless_melt_curve
+
   SUBROUTINE initialise_BMB_model_Lazeroms2018_plume( mesh, BMB)
     ! Allocate memory for the data fields of the Favier et al. (2019) shelf BMB parameterisations.
 
@@ -1490,8 +1511,8 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_Lazeroms2018_plume
 
-! == The PICO ocean box model
-! ===========================
+! ===== The PICO ocean box model =====
+! ====================================
 
   SUBROUTINE run_BMB_model_PICO( mesh, ice, ocean, BMB)
     ! Calculate basal melt using the PICO ocean box model
@@ -1526,6 +1547,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_PICO
+
   SUBROUTINE PICO_assign_ocean_boxes( mesh, ice, BMB)
     ! Assign PICO ocean boxes to shelf grid cells using the distance-to-grounding-line / distance-to-calving-front
     ! approach outlined in Reese et al. (2018)
@@ -1550,111 +1572,112 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! ! Determine number of PICO boxes to be used for each basin
-  ! ! ========================================================
+    ! ! Determine number of PICO boxes to be used for each basin
+    ! ! ========================================================
 
-  !   CALL allocate_shared_dp_1D(  ice%nbasins, d_GL_D, wd_GL_D)
+    !   CALL allocate_shared_dp_1D(  ice%nbasins, d_GL_D, wd_GL_D)
 
-  !   ! Determine relative distance to grounding line for all shelf grid cells in the entire model domain
-  !   DO i = grid%i1, grid%i2
-  !   DO j = 1, grid%ny
-  !     BMB%PICO_d_GL( j,i) = 0._dp
-  !     BMB%PICO_d_IF( j,i) = 0._dp
-  !     BMB%PICO_r(    j,i) = 0._dp
-  !     IF (ice%mask_shelf_a( j,i) == 1) CALL calc_dGL_dIF_r( grid, ice, BMB, i,j, BMB%PICO_d_GL( j,i), BMB%PICO_d_IF( j,i), BMB%PICO_r( j,i))
-  !   END DO
-  !   END DO
-  !   CALL sync
+    !   ! Determine relative distance to grounding line for all shelf grid cells in the entire model domain
+    !   DO i = grid%i1, grid%i2
+    !   DO j = 1, grid%ny
+    !     BMB%PICO_d_GL( j,i) = 0._dp
+    !     BMB%PICO_d_IF( j,i) = 0._dp
+    !     BMB%PICO_r(    j,i) = 0._dp
+    !     IF (ice%mask_shelf_a( j,i) == 1) CALL calc_dGL_dIF_r( grid, ice, BMB, i,j, BMB%PICO_d_GL( j,i), BMB%PICO_d_IF( j,i), BMB%PICO_r( j,i))
+    !   END DO
+    !   END DO
+    !   CALL sync
 
-  !   ! Calculate maximum distance to grounding line within each basin
-  !   DO basin_i = 1, ice%nbasins
-  !     d_max = 0._dp
-  !     DO i = grid%i1, grid%i2
-  !     DO j = 1, grid%ny
-  !       IF (ice%basin_ID( j,i) == basin_i) THEN
-  !         d_max = MAX( d_max, BMB%PICO_d_GL( j,i))
-  !       END IF
-  !     END DO
-  !     END DO
-  !     CALL MPI_ALLREDUCE( MPI_IN_PLACE, d_max, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-  !     IF (par%master) d_GL_D( basin_i) = d_max
-  !     CALL sync
-  !   END DO ! DO basin_i = 1, ice%nbasins
+    !   ! Calculate maximum distance to grounding line within each basin
+    !   DO basin_i = 1, ice%nbasins
+    !     d_max = 0._dp
+    !     DO i = grid%i1, grid%i2
+    !     DO j = 1, grid%ny
+    !       IF (ice%basin_ID( j,i) == basin_i) THEN
+    !         d_max = MAX( d_max, BMB%PICO_d_GL( j,i))
+    !       END IF
+    !     END DO
+    !     END DO
+    !     CALL MPI_ALLREDUCE( MPI_IN_PLACE, d_max, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    !     IF (par%master) d_GL_D( basin_i) = d_max
+    !     CALL sync
+    !   END DO ! DO basin_i = 1, ice%nbasins
 
-  !   ! Calculate maximum distance to grounding line within the entire model doman
-  !   IF (par%master) d_max = MAXVAL( d_GL_D)
-  !   CALL MPI_BCAST( d_max, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+    !   ! Calculate maximum distance to grounding line within the entire model doman
+    !   IF (par%master) d_max = MAXVAL( d_GL_D)
+    !   CALL MPI_BCAST( d_max, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
 
-  !   ! Determine number of PICO boxes for each basin
-  !   IF (par%master) THEN
-  !     DO basin_i = 1, ice%nbasins
-  !       ! Reese et al. (2018), Eq. 9
-  !       BMB%PICO_n_D( basin_i) = 1 + INT( SQRT( d_GL_D( basin_i) / d_max) * REAL( C%BMB_PICO_nboxes - 1,dp))
-  !     END DO
-  !   END IF
-  !   CALL sync
+    !   ! Determine number of PICO boxes for each basin
+    !   IF (par%master) THEN
+    !     DO basin_i = 1, ice%nbasins
+    !       ! Reese et al. (2018), Eq. 9
+    !       BMB%PICO_n_D( basin_i) = 1 + INT( SQRT( d_GL_D( basin_i) / d_max) * REAL( C%BMB_PICO_nboxes - 1,dp))
+    !     END DO
+    !   END IF
+    !   CALL sync
 
-  ! ! Assign PICO boxes to all shelf grid cells in all basins
-  ! ! =======================================================
+    ! ! Assign PICO boxes to all shelf grid cells in all basins
+    ! ! =======================================================
 
-  !   ALLOCATE( n_cells_per_box( C%BMB_PICO_nboxes))
+    !   ALLOCATE( n_cells_per_box( C%BMB_PICO_nboxes))
 
-  !   DO basin_i = 1, ice%nbasins
+    !   DO basin_i = 1, ice%nbasins
 
-  !     ! If necessary, reduce the maximum number of boxes for a basin
-  !     ! until every box is assigned at least one grid cell
+    !     ! If necessary, reduce the maximum number of boxes for a basin
+    !     ! until every box is assigned at least one grid cell
 
-  !     n_cells_per_box = 0
+    !     n_cells_per_box = 0
 
-  !     DO WHILE (.TRUE.)
+    !     DO WHILE (.TRUE.)
 
-  !       ! Assign ocean boxes according to Reese et al. (2018), Eq. 11
-  !       DO i = grid%i1, grid%i2
-  !       DO j = 1, grid%ny
-  !         IF (ice%basin_ID( j,i) == basin_i) THEN
-  !           BMB%PICO_k( j,i) = 0
-  !           IF (ice%mask_shelf_a( j,i) == 1) THEN
-  !             DO k = 1, BMB%PICO_n_D( basin_i)
-  !                 IF (1._dp - SQRT( REAL(BMB%PICO_n_D( basin_i) - k + 1, dp) / REAL( BMB%PICO_n_D( basin_i), dp)) <= BMB%PICO_r( j,i) .AND. &
-  !                     1._dp - SQRT( REAL(BMB%PICO_n_D( basin_i) - k    , dp) / REAL( BMB%PICO_n_D( basin_i), dp)) >= BMB%PICO_r( j,i)) THEN
-  !                 BMB%PICO_k( j,i) = k
-  !                 n_cells_per_box( k) = n_cells_per_box( k) + 1
-  !               END IF
-  !             END DO ! DO k = 1, BMB%PICO_n_D( basin_i)
-  !           END IF ! IF (ice%mask_shelf_a( j,i) == 1) THEN
-  !         END IF ! IF (ice%basin_ID( j,i) == basin_i) THEN
-  !       END DO
-  !       END DO
-  !       CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_cells_per_box, C%BMB_PICO_nboxes, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-  !       IF (par%master) BMB%PICO_A( basin_i,:) = n_cells_per_box * grid%dx**2
-  !       CALL sync
+    !       ! Assign ocean boxes according to Reese et al. (2018), Eq. 11
+    !       DO i = grid%i1, grid%i2
+    !       DO j = 1, grid%ny
+    !         IF (ice%basin_ID( j,i) == basin_i) THEN
+    !           BMB%PICO_k( j,i) = 0
+    !           IF (ice%mask_shelf_a( j,i) == 1) THEN
+    !             DO k = 1, BMB%PICO_n_D( basin_i)
+    !                 IF (1._dp - SQRT( REAL(BMB%PICO_n_D( basin_i) - k + 1, dp) / REAL( BMB%PICO_n_D( basin_i), dp)) <= BMB%PICO_r( j,i) .AND. &
+    !                     1._dp - SQRT( REAL(BMB%PICO_n_D( basin_i) - k    , dp) / REAL( BMB%PICO_n_D( basin_i), dp)) >= BMB%PICO_r( j,i)) THEN
+    !                 BMB%PICO_k( j,i) = k
+    !                 n_cells_per_box( k) = n_cells_per_box( k) + 1
+    !               END IF
+    !             END DO ! DO k = 1, BMB%PICO_n_D( basin_i)
+    !           END IF ! IF (ice%mask_shelf_a( j,i) == 1) THEN
+    !         END IF ! IF (ice%basin_ID( j,i) == basin_i) THEN
+    !       END DO
+    !       END DO
+    !       CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_cells_per_box, C%BMB_PICO_nboxes, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
+    !       IF (par%master) BMB%PICO_A( basin_i,:) = n_cells_per_box * grid%dx**2
+    !       CALL sync
 
-  !       ! If any of the boxes have zero grid cells assigned, reduce the maximum number of boxes and try again
-  !       do_reduce_n_D = .FALSE.
-  !       DO k = 1, BMB%PICO_n_D( basin_i)
-  !         IF (n_cells_per_box( k) == 0) THEN
-  !           do_reduce_n_D = .TRUE.
-  !         END IF
-  !       END DO
-  !       IF (do_reduce_n_D) THEN
-  !         IF (par%master) BMB%PICO_n_D( basin_i) = BMB%PICO_n_D( basin_i) - 1
-  !         CALL sync
-  !       ELSE
-  !         EXIT
-  !       END IF
+    !       ! If any of the boxes have zero grid cells assigned, reduce the maximum number of boxes and try again
+    !       do_reduce_n_D = .FALSE.
+    !       DO k = 1, BMB%PICO_n_D( basin_i)
+    !         IF (n_cells_per_box( k) == 0) THEN
+    !           do_reduce_n_D = .TRUE.
+    !         END IF
+    !       END DO
+    !       IF (do_reduce_n_D) THEN
+    !         IF (par%master) BMB%PICO_n_D( basin_i) = BMB%PICO_n_D( basin_i) - 1
+    !         CALL sync
+    !       ELSE
+    !         EXIT
+    !       END IF
 
-  !     END DO ! DO WHILE (.TRUE.)
+    !     END DO ! DO WHILE (.TRUE.)
 
-  !   END DO ! DO basin_i = 1, ice%nbasins
+    !   END DO ! DO basin_i = 1, ice%nbasins
 
-  !   ! Clean up after yourself
-  !   DEALLOCATE( n_cells_per_box)
-  !   CALL deallocate_shared( wd_GL_D)
+    !   ! Clean up after yourself
+    !   DEALLOCATE( n_cells_per_box)
+    !   CALL deallocate_shared( wd_GL_D)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE PICO_assign_ocean_boxes
+
   SUBROUTINE run_BMB_model_PICO_basin( mesh, ice, ocean, BMB, basin_i)
     ! Calculate basal melt for ice basin i using the PICO ocean box model
 
@@ -1687,129 +1710,130 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  !   ! Initialise
-  !   DO i = grid%i1, grid%i2
-  !   DO j = 1, grid%ny
-  !     IF (ice%basin_ID( j,i) == basin_i) THEN
-  !       BMB%PICO_T( j,i) = 0._dp
-  !       BMB%PICO_S( j,i) = 0._dp
-  !       BMB%PICO_m( j,i) = 0._dp
-  !     END IF
-  !   END DO
-  !   END DO
-  !   CALL sync
+    !   ! Initialise
+    !   DO i = grid%i1, grid%i2
+    !   DO j = 1, grid%ny
+    !     IF (ice%basin_ID( j,i) == basin_i) THEN
+    !       BMB%PICO_T( j,i) = 0._dp
+    !       BMB%PICO_S( j,i) = 0._dp
+    !       BMB%PICO_m( j,i) = 0._dp
+    !     END IF
+    !   END DO
+    !   END DO
+    !   CALL sync
 
-  !   ! Some intermediary constants (Reese et al. (2018), just after Eq. A2)
-  !   nu     = ice_density / seawater_density
-  !   lambda = L_fusion / cp_ocean
+    !   ! Some intermediary constants (Reese et al. (2018), just after Eq. A2)
+    !   nu     = ice_density / seawater_density
+    !   lambda = L_fusion / cp_ocean
 
-  !   ! Calculate temperature and salinity in box B0 for this basin
-  !   CALL PICO_calc_T0_S0( grid, ice, ocean, basin_i, Tk0, Sk0)
+    !   ! Calculate temperature and salinity in box B0 for this basin
+    !   CALL PICO_calc_T0_S0( grid, ice, ocean, basin_i, Tk0, Sk0)
 
-  !   ! Calculate 2-D + box-averaged basal pressures
-  !   BMB%PICO_p( :,grid%i1:grid%i2) = ice_density * grav * ice%Hi_a( :,grid%i1:grid%i2)
-  !   DO k = 1, BMB%PICO_n_D( basin_i)
-  !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_p, basin_i, k, BMB%PICO_pk( basin_i, k))
-  !   END DO
+    !   ! Calculate 2-D + box-averaged basal pressures
+    !   BMB%PICO_p( :,grid%i1:grid%i2) = ice_density * grav * ice%Hi_a( :,grid%i1:grid%i2)
+    !   DO k = 1, BMB%PICO_n_D( basin_i)
+    !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_p, basin_i, k, BMB%PICO_pk( basin_i, k))
+    !   END DO
 
-  ! ! Calculate solution for box 1
-  ! ! ============================
+    ! ! Calculate solution for box 1
+    ! ! ============================
 
-  !   DO i = grid%i1, grid%i2
-  !   DO j = 1, grid%ny
+    !   DO i = grid%i1, grid%i2
+    !   DO j = 1, grid%ny
 
-  !     IF (ice%basin_ID( j,i) == basin_i .AND. BMB%PICO_k( j,i) == 1) THEN
+    !     IF (ice%basin_ID( j,i) == basin_i .AND. BMB%PICO_k( j,i) == 1) THEN
 
-  !       ! Reese et al. (2018), just before Eq. A6
-  !       g1 = BMB%PICO_A( basin_i, 1) * C%BMB_PICO_GammaTstar
-  !       g2 = g1 / (nu * lambda)
-  !       Tstar = aa * Sk0 + bb - cc * BMB%PICO_pk( basin_i, 1) - Tk0
+    !       ! Reese et al. (2018), just before Eq. A6
+    !       g1 = BMB%PICO_A( basin_i, 1) * C%BMB_PICO_GammaTstar
+    !       g2 = g1 / (nu * lambda)
+    !       Tstar = aa * Sk0 + bb - cc * BMB%PICO_pk( basin_i, 1) - Tk0
 
-  !       ! Reese et al. (2018), just after Eq. A11
-  !       s = Sk0 / (nu * lambda)
+    !       ! Reese et al. (2018), just after Eq. A11
+    !       s = Sk0 / (nu * lambda)
 
-  !       ! Intermediary constants
-  !       Crbsa = C_overturn * rhostar * (beta * s - alpha)
+    !       ! Intermediary constants
+    !       Crbsa = C_overturn * rhostar * (beta * s - alpha)
 
-  !       ! Reese et al. (2018), Eq. A12
-  !       x = -g1 / (2._dp * Crbsa) + SQRT( (g1 / (2._dp * Crbsa))**2 - (g1 * Tstar / Crbsa))
+    !       ! Reese et al. (2018), Eq. A12
+    !       x = -g1 / (2._dp * Crbsa) + SQRT( (g1 / (2._dp * Crbsa))**2 - (g1 * Tstar / Crbsa))
 
-  !       ! Reese et al. (2018), Eq. A8
-  !       y = Sk0 * x / (nu * lambda)
+    !       ! Reese et al. (2018), Eq. A8
+    !       y = Sk0 * x / (nu * lambda)
 
-  !       BMB%PICO_T( j,i) = Tk0 - x
-  !       BMB%PICO_S( j,i) = Sk0 - y
+    !       BMB%PICO_T( j,i) = Tk0 - x
+    !       BMB%PICO_S( j,i) = Sk0 - y
 
-  !       ! Reese et al. (2019), Eq. 13
-  !       BMB%PICO_m( j,i) = sec_per_year * C%BMB_PICO_GammaTstar / (nu*lambda) * (aa * BMB%PICO_S( j,i) + bb - cc * BMB%PICO_p( j,i) - BMB%PICO_T( j,i))
+    !       ! Reese et al. (2019), Eq. 13
+    !       BMB%PICO_m( j,i) = sec_per_year * C%BMB_PICO_GammaTstar / (nu*lambda) * (aa * BMB%PICO_S( j,i) + bb - cc * BMB%PICO_p( j,i) - BMB%PICO_T( j,i))
 
-  !     END IF ! IF (BMB%PICO_k( j,i) == 1) THEN
+    !     END IF ! IF (BMB%PICO_k( j,i) == 1) THEN
 
-  !   END DO
-  !   END DO
-  !   CALL sync
+    !   END DO
+    !   END DO
+    !   CALL sync
 
-  !   ! Calculate box-averaged values
-  !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_T, basin_i, 1, BMB%PICO_Tk( basin_i, 1))
-  !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_S, basin_i, 1, BMB%PICO_Sk( basin_i, 1))
-  !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_m, basin_i, 1, BMB%PICO_mk( basin_i, 1))
+    !   ! Calculate box-averaged values
+    !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_T, basin_i, 1, BMB%PICO_Tk( basin_i, 1))
+    !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_S, basin_i, 1, BMB%PICO_Sk( basin_i, 1))
+    !   CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_m, basin_i, 1, BMB%PICO_mk( basin_i, 1))
 
-  !   ! Calculate overturning strength (Reese et al. (2018), Eq. A9)
-  !   q = C_overturn * rhostar * (beta * (Sk0 - BMB%PICO_Sk( basin_i, 1)) - alpha * (Tk0 - BMB%PICO_Tk( basin_i, 1)))
+    !   ! Calculate overturning strength (Reese et al. (2018), Eq. A9)
+    !   q = C_overturn * rhostar * (beta * (Sk0 - BMB%PICO_Sk( basin_i, 1)) - alpha * (Tk0 - BMB%PICO_Tk( basin_i, 1)))
 
-  ! ! Calculate solutions for subsequent boxes
-  ! ! ========================================
+    ! ! Calculate solutions for subsequent boxes
+    ! ! ========================================
 
-  !   DO k = 2, BMB%PICO_n_D( basin_i)
+    !   DO k = 2, BMB%PICO_n_D( basin_i)
 
-  !     DO i = grid%i1, grid%i2
-  !     DO j = 1, grid%ny
+    !     DO i = grid%i1, grid%i2
+    !     DO j = 1, grid%ny
 
-  !       IF (ice%basin_ID( j,i) == basin_i .AND. BMB%PICO_k( j,i) == k) THEN
+    !       IF (ice%basin_ID( j,i) == basin_i .AND. BMB%PICO_k( j,i) == k) THEN
 
-  !         ! Reese et al. (2018), just before Eq. A6
-  !         g1 = BMB%PICO_A( basin_i, k) * C%BMB_PICO_GammaTstar
-  !         g2 = g1 / (nu * lambda)
-  !         !Tstar = aa * Sk0 + bb - cc * BMB%PICO_pk( basin_i, k-1) - BMB%PICO_Tk( basin_i, k-1)
-  !         Tstar = aa * BMB%PICO_Sk( basin_i, k-1) + bb - cc * BMB%PICO_pk( basin_i, k) - BMB%PICO_Tk( basin_i, k-1)
+    !         ! Reese et al. (2018), just before Eq. A6
+    !         g1 = BMB%PICO_A( basin_i, k) * C%BMB_PICO_GammaTstar
+    !         g2 = g1 / (nu * lambda)
+    !         !Tstar = aa * Sk0 + bb - cc * BMB%PICO_pk( basin_i, k-1) - BMB%PICO_Tk( basin_i, k-1)
+    !         Tstar = aa * BMB%PICO_Sk( basin_i, k-1) + bb - cc * BMB%PICO_pk( basin_i, k) - BMB%PICO_Tk( basin_i, k-1)
 
-  !         ! Reese et al. (2018), Eq. A13
-  !         x = -g1 * Tstar / (q + g1 - g2 * aa * BMB%PICO_Sk( basin_i, k-1))
+    !         ! Reese et al. (2018), Eq. A13
+    !         x = -g1 * Tstar / (q + g1 - g2 * aa * BMB%PICO_Sk( basin_i, k-1))
 
-  !         ! Reese et al. (2018), Eq. A8
-  !         y = BMB%PICO_Sk( basin_i, k-1) * x / (nu * lambda)
+    !         ! Reese et al. (2018), Eq. A8
+    !         y = BMB%PICO_Sk( basin_i, k-1) * x / (nu * lambda)
 
-  !         BMB%PICO_T( j,i) = BMB%PICO_Tk( basin_i, k-1) - x
-  !         BMB%PICO_S( j,i) = BMB%PICO_Sk( basin_i, k-1) - y
+    !         BMB%PICO_T( j,i) = BMB%PICO_Tk( basin_i, k-1) - x
+    !         BMB%PICO_S( j,i) = BMB%PICO_Sk( basin_i, k-1) - y
 
-  !         ! Reese et al. (2019), Eq. 13
-  !         BMB%PICO_m( j,i) = sec_per_year * C%BMB_PICO_GammaTstar / (nu*lambda) * (aa * BMB%PICO_S( j,i) + bb - cc * BMB%PICO_p( j,i) - BMB%PICO_T( j,i))
+    !         ! Reese et al. (2019), Eq. 13
+    !         BMB%PICO_m( j,i) = sec_per_year * C%BMB_PICO_GammaTstar / (nu*lambda) * (aa * BMB%PICO_S( j,i) + bb - cc * BMB%PICO_p( j,i) - BMB%PICO_T( j,i))
 
-  !       END IF ! IF (BMB%PICO_k( j,i) == k) THEN
+    !       END IF ! IF (BMB%PICO_k( j,i) == k) THEN
 
-  !     END DO
-  !     END DO
-  !     CALL sync
+    !     END DO
+    !     END DO
+    !     CALL sync
 
-  !     ! Calculate box-averaged values
-  !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_T, basin_i, k, BMB%PICO_Tk( basin_i, k))
-  !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_S, basin_i, k, BMB%PICO_Sk( basin_i, k))
-  !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_m, basin_i, k, BMB%PICO_mk( basin_i, k))
+    !     ! Calculate box-averaged values
+    !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_T, basin_i, k, BMB%PICO_Tk( basin_i, k))
+    !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_S, basin_i, k, BMB%PICO_Sk( basin_i, k))
+    !     CALL PICO_calc_box_average( grid, ice, BMB, BMB%PICO_m, basin_i, k, BMB%PICO_mk( basin_i, k))
 
-  !   END DO ! DO k = 2, BMB%PICO_n_D( basin_i)
+    !   END DO ! DO k = 2, BMB%PICO_n_D( basin_i)
 
-  !   ! Copy melt rates to final data field
-  !   DO i = grid%i1, grid%i2
-  !   DO j = 1, grid%ny
-  !     IF (ice%basin_ID( j,i) == basin_i) BMB%BMB_shelf( j,i) = BMB%PICO_m( j,i)
-  !   END DO
-  !   END DO
-  !   CALL sync
+    !   ! Copy melt rates to final data field
+    !   DO i = grid%i1, grid%i2
+    !   DO j = 1, grid%ny
+    !     IF (ice%basin_ID( j,i) == basin_i) BMB%BMB_shelf( j,i) = BMB%PICO_m( j,i)
+    !   END DO
+    !   END DO
+    !   CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_PICO_basin
+
   SUBROUTINE calc_dGL_dIF_r( mesh, ice, BMB, vi, d_GL, d_IF, r)
     ! For each shelf grid cell, calculate the distance to the grounding line dGL,
     ! the distance to the ice front dIF, and the relative distance r (Reese et al. (2018), Eq. 10)
@@ -1908,6 +1932,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_dGL_dIF_r
+
   SUBROUTINE PICO_calc_T0_S0( mesh, ice, ocean, basin_i, Tk0, Sk0)
     ! Find temperature and salinity in box B0 (defined as mean ocean-floor value at the calving front)
 
@@ -2017,6 +2042,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE PICO_calc_T0_S0
+
   SUBROUTINE PICO_calc_box_average( mesh, ice, BMB, d, basin_i, k, d_av)
     ! Calculate the average d_av of field d over ocean box k in basin i
 
@@ -2058,6 +2084,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE PICO_calc_box_average
+
   SUBROUTINE initialise_BMB_model_PICO( mesh, ice, BMB)
     ! Allocate memory for the data fields of the PICO ocean box model
 
@@ -2122,8 +2149,8 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_PICO
 
-! == The PICOP ocean box + plume model
-! ====================================
+! ===== The PICOP ocean box + plume model =====
+! =============================================
 
   SUBROUTINE run_BMB_model_PICOP( mesh, ice, ocean, BMB)
     ! Calculate basal melt using the PICOP ocean box + plume model
@@ -2155,6 +2182,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_PICOP
+
   SUBROUTINE initialise_BMB_model_PICOP( mesh, ice, BMB)
     ! Allocate memory for the data fields of the PICOP ocean box + plume model
 
@@ -2223,11 +2251,10 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_PICOP
 
-! == Inversion of ice shelf basal melt rates
-! ==========================================
+! ===== Inversion of ice shelf basal melt rates =====
+! ===================================================
 
-
-  SUBROUTINE run_BMB_model_melt_inv( mesh, ice, BMB, refgeo)
+  SUBROUTINE run_BMB_model_shelf_inversion( mesh, ice, BMB, refgeo)
     ! Invert basal melt using the reference topography
 
     IMPLICIT NONE
@@ -2239,7 +2266,7 @@ CONTAINS
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_melt_inv'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_shelf_inversion'
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_delta, h_scale
 
@@ -2250,7 +2277,7 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
 
-      ! Invert only where the reference/model is shelf or ocean
+      ! Invert only where the reference or model is shelf or ocean
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
@@ -2275,13 +2302,20 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Limit basal melt
+    DO vi = mesh%vi1, mesh%vi2
+      BMB%BMB_shelf( vi) = MAX( BMB%BMB_shelf( vi), C%BMB_min)
+      BMB%BMB_shelf( vi) = MIN( BMB%BMB_shelf( vi), C%BMB_max)
+    END DO
+    CALL sync
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE run_BMB_model_melt_inv
+  END SUBROUTINE run_BMB_model_shelf_inversion
 
-! == Some generally useful tools
-! ==============================
+! ===== Some generally useful tools =====
+! =======================================
 
   SUBROUTINE calculate_sub_angle_dist_open( mesh, ice, vi, sub_angle, dist_open)
     ! Calculate the "subtended angle" (i.e. how many degrees of its horizon have
@@ -2341,6 +2375,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calculate_sub_angle_dist_open
+
   SUBROUTINE look_for_ocean( mesh, ice, vi, theta, sees_ocean, dist_ocean)
     ! Look outward from vertex vi in direction theta and check if we can "see"
     ! open ocean without any land or grounded ice in between, return true (and the distance to this ocean).
@@ -2428,8 +2463,7 @@ CONTAINS
 
   END SUBROUTINE look_for_ocean
 
-  ! Routine for extrapolating melt field from the regular (FCMP) mask
-  ! to the (extended) PMP mask
+  ! Extrapolate melt field from the regular (FCMP) mask to the extended (PMP) mask
   SUBROUTINE extrapolate_melt_from_FCMP_to_PMP( mesh, ice, BMB)
     ! All the BMB parameterisations are implicitly run using the FCMP sub-grid scheme
     ! (i.e. they are only applied to grid cells whose centre is floating).
@@ -2522,8 +2556,8 @@ CONTAINS
 
   END SUBROUTINE extrapolate_melt_from_FCMP_to_PMP
 
-!== Remapping after mesh update
-!==============================
+!===== Remapping after mesh update =====
+!=======================================
 
   SUBROUTINE remap_BMB_model( mesh_old, mesh_new, map, BMB)
     ! Remap or reallocate all the data fields
@@ -2551,7 +2585,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
 
     ! Exception for iterative inversion of ice shelf basal melt rates, to avoid resetting it.
-    IF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%BMB_shelf, BMB%wBMB_shelf, 'cons_2nd_order')
     ELSE
       CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
@@ -2629,7 +2663,7 @@ CONTAINS
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_p,                 BMB%wPICO_p )
       ! CALL reallocate_shared_dp_1D(  mesh_new%nV, BMB%PICO_m,                 BMB%wPICO_m )
 
-    ELSEIF (C%choice_BMB_shelf_model == 'melt_inv') THEN
+    ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
 
       ! Nothing else needs to be done for now. Main stuff was done at the start of this routine.
 
@@ -2642,231 +2676,232 @@ CONTAINS
 
   END SUBROUTINE remap_BMB_model
 
-!=========================
 !===== OLD routines ======
 !=========================
 
-  ! ! Run the SMB model on the region mesh
-  ! SUBROUTINE run_BMB_model_OLD( mesh, ice, climate, BMB, region_name)
-  !   ! Calculate mean ocean temperature (saved in "climate") and basal mass balance
+  ! The old routines. Useful as templates for new stuff.
 
-  !   IMPLICIT NONE
+    ! ! Run the SMB model on the region mesh
+    ! SUBROUTINE run_BMB_model_OLD( mesh, ice, climate, BMB, region_name)
+    !   ! Calculate mean ocean temperature (saved in "climate") and basal mass balance
 
-  !   ! In/output variables
-  !   TYPE(type_mesh),                      INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                 INTENT(IN)    :: ice
-  !   TYPE(type_climate_snapshot_regional), INTENT(INOUT) :: climate
-  !   TYPE(type_BMB_model),                 INTENT(INOUT) :: BMB
-  !   CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
+    !   IMPLICIT NONE
 
-  !   ! Local variables
-  !   CHARACTER(LEN=64), PARAMETER                        :: routine_name = 'run_BMB_model'
-  !   INTEGER                                             :: n1, n2
-  !   INTEGER                                             :: vi
-  !   REAL(dp)                                            :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
-  !   REAL(dp)                                            :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
-  !   REAL(dp)                                            :: BMB_deepocean                         ! Sub-shelf melt rate for deep-ocean areas   [m/year]
-  !   REAL(dp)                                            :: w_ins, w_PD, w_warm, w_cold, w_deep, w_expo, weight
-  !   REAL(dp)                                            :: T_freeze                              ! Freezing temperature at the base of the shelf (Celcius)
-  !   REAL(dp)                                            :: water_depth
-  !   REAL(dp), PARAMETER                                 :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1)
-  !   REAL(dp), PARAMETER                                 :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
+    !   ! In/output variables
+    !   TYPE(type_mesh),                      INTENT(IN)    :: mesh
+    !   TYPE(type_ice_model),                 INTENT(IN)    :: ice
+    !   TYPE(type_climate_snapshot_regional), INTENT(INOUT) :: climate
+    !   TYPE(type_BMB_model),                 INTENT(INOUT) :: BMB
+    !   CHARACTER(LEN=3),                     INTENT(IN)    :: region_name
 
-  !   n1 = par%mem%n
+    !   ! Local variables
+    !   CHARACTER(LEN=64), PARAMETER                        :: routine_name = 'run_BMB_model'
+    !   INTEGER                                             :: n1, n2
+    !   INTEGER                                             :: vi
+    !   REAL(dp)                                            :: BMB_shelf                             ! Sub-shelf melt rate for non-exposed shelf  [m/year]
+    !   REAL(dp)                                            :: BMB_shelf_exposed                     ! Sub-shelf melt rate for exposed shelf      [m/year]
+    !   REAL(dp)                                            :: BMB_deepocean                         ! Sub-shelf melt rate for deep-ocean areas   [m/year]
+    !   REAL(dp)                                            :: w_ins, w_PD, w_warm, w_cold, w_deep, w_expo, weight
+    !   REAL(dp)                                            :: T_freeze                              ! Freezing temperature at the base of the shelf (Celcius)
+    !   REAL(dp)                                            :: water_depth
+    !   REAL(dp), PARAMETER                                 :: cp0        = 3974._dp                 ! specific heat capacity of the ocean mixed layer (J kg-1 K-1)
+    !   REAL(dp), PARAMETER                                 :: gamma_T    = 1.0E-04_dp               ! Thermal exchange velocity (m s-1)
 
-  !   ! Exceptions for benchmark experiments
-  !   IF (C%do_benchmark_experiment) THEN
-  !     IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
-  !         C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
-  !         C%choice_benchmark_experiment == 'Halfar' .OR. &
-  !         C%choice_benchmark_experiment == 'Bueler' .OR. &
-  !         C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
-  !         C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
-  !         C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
-  !       BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
-  !       CALL sync
-  !       RETURN
-  !     ELSE
-  !       IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_BMB_model!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     END IF
-  !   END IF ! IF (C%do_benchmark_experiment) THEN
+    !   n1 = par%mem%n
 
-  !   ! Initialise everything at zero
-  !   BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
-  !   BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
-  !   BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
-  !   BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
-  !   BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
-  !   w_ins                             = 0._dp
-  !   weight                            = 0._dp
-  !   w_PD                              = 0._dp
-  !   w_warm                            = 0._dp
-  !   w_cold                            = 0._dp
-  !   w_deep                            = 0._dp
-  !   w_expo                            = 0._dp
-  !   BMB_shelf                         = 0._dp
-  !   BMB_shelf_exposed                 = 0._dp
-  !   BMB_deepocean                     = 0._dp
+    !   ! Exceptions for benchmark experiments
+    !   IF (C%do_benchmark_experiment) THEN
+    !     IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
+    !         C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
+    !         C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
+    !         C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
+    !         C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
+    !         C%choice_benchmark_experiment == 'EISMINT_6' .OR. &
+    !         C%choice_benchmark_experiment == 'Halfar' .OR. &
+    !         C%choice_benchmark_experiment == 'Bueler' .OR. &
+    !         C%choice_benchmark_experiment == 'SSA_icestream' .OR. &
+    !         C%choice_benchmark_experiment == 'MISMIP_mod' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+    !         C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+    !       BMB%BMB( mesh%vi1:mesh%vi2) = 0._dp
+    !       CALL sync
+    !       RETURN
+    !     ELSE
+    !       IF (par%master) WRITE(0,*) '  ERROR: benchmark experiment "', TRIM(C%choice_benchmark_experiment), '" not implemented in run_BMB_model!'
+    !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !     END IF
+    !   END IF ! IF (C%do_benchmark_experiment) THEN
 
-  !   ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
-  !   DO vi = mesh%vi1, mesh%vi2
-  !     CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
-  !   END DO
-  !   CALL sync
+    !   ! Initialise everything at zero
+    !   BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
+    !   BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
+    !   BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
+    !   BMB%sub_angle( mesh%vi1:mesh%vi2) = 360._dp
+    !   BMB%dist_open( mesh%vi1:mesh%vi2) = 0._dp
+    !   w_ins                             = 0._dp
+    !   weight                            = 0._dp
+    !   w_PD                              = 0._dp
+    !   w_warm                            = 0._dp
+    !   w_cold                            = 0._dp
+    !   w_deep                            = 0._dp
+    !   w_expo                            = 0._dp
+    !   BMB_shelf                         = 0._dp
+    !   BMB_shelf_exposed                 = 0._dp
+    !   BMB_deepocean                     = 0._dp
 
-  !   ! Find the weight from insolation
-  !   IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'GRL') THEN
-  !     w_ins = MAX(0._dp, (climate%Q_TOA_jun_65N - 462.29_dp) / 40._dp)
-  !   ELSEIF (region_name == 'ANT') THEN
-  !     w_ins = MAX(0._dp, (climate%Q_TOA_jan_80S - 532.19_dp) / 40._dp)
-  !   END IF
+    !   ! Find the "subtended angle" and distance-to-open-ocean of all shelf pixels
+    !   DO vi = mesh%vi1, mesh%vi2
+    !     CALL calculate_sub_angle_dist_open( mesh, ice, vi, BMB%sub_angle( vi), BMB%dist_open( vi))
+    !   END DO
+    !   CALL sync
 
-  !   ! Determine mean ocean temperature and basal melt rates for deep ocean and exposed shelves
-  !   ! ========================================================================================
+    !   ! Find the weight from insolation
+    !   IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'GRL') THEN
+    !     w_ins = MAX(0._dp, (climate%Q_TOA_jun_65N - 462.29_dp) / 40._dp)
+    !   ELSEIF (region_name == 'ANT') THEN
+    !     w_ins = MAX(0._dp, (climate%Q_TOA_jan_80S - 532.19_dp) / 40._dp)
+    !   END IF
 
-  !   IF (C%choice_ocean_temperature_model == 'fixed') THEN
-  !     ! Use present-day values
+    !   ! Determine mean ocean temperature and basal melt rates for deep ocean and exposed shelves
+    !   ! ========================================================================================
 
-  !     climate%T_ocean_mean = BMB%T_ocean_mean_PD
-  !     BMB_deepocean        = BMB%BMB_deepocean_PD
-  !     BMB_shelf_exposed    = BMB%BMB_shelf_exposed_PD
+    !   IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    !     ! Use present-day values
 
-  !   ELSEIF (C%choice_ocean_temperature_model == 'scaled') THEN
-  !     ! Scale between config values of mean ocean temperature and basal melt rates for PD, cold, and warm climates.
+    !     climate%T_ocean_mean = BMB%T_ocean_mean_PD
+    !     BMB_deepocean        = BMB%BMB_deepocean_PD
+    !     BMB_shelf_exposed    = BMB%BMB_shelf_exposed_PD
 
-  !     ! Determine weight for scaling between different ocean temperatures
-  !     IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !   ELSEIF (C%choice_ocean_temperature_model == 'scaled') THEN
+    !     ! Scale between config values of mean ocean temperature and basal melt rates for PD, cold, and warm climates.
 
-  !       ! Use the prescribed CO2 record as a glacial index
-  !       IF (forcing%CO2_obs > 280._dp) THEN
-  !         ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
-  !         weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_obs) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
-  !       ELSE
-  !         ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
-  !         weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_obs) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
-  !       END IF
+    !     ! Determine weight for scaling between different ocean temperatures
+    !     IF (C%choice_forcing_method == 'CO2_direct') THEN
 
-  !     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
+    !       ! Use the prescribed CO2 record as a glacial index
+    !       IF (forcing%CO2_obs > 280._dp) THEN
+    !         ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
+    !         weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_obs) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
+    !       ELSE
+    !         ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
+    !         weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_obs) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
+    !       END IF
 
-  !       ! Use modelled CO2 as a glacial index
-  !       IF (forcing%CO2_obs > 280._dp) THEN
-  !         ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
-  !         weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_mod) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
-  !       ELSE
-  !         ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
-  !         weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_mod) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
-  !       END IF
+    !     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
 
-  !     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
+    !       ! Use modelled CO2 as a glacial index
+    !       IF (forcing%CO2_obs > 280._dp) THEN
+    !         ! Warmer than present, interpolate between "PD" and "warm", assuming "warm" means 400 ppmv
+    !         weight = 2._dp - MAX( 0._dp,   MIN(1.25_dp, ((400._dp - forcing%CO2_mod) / (400._dp - 280._dp) + (3.00_dp - forcing%d18O_obs) / (3.00_dp - 3.23_dp)) / 2._dp )) + w_ins
+    !       ELSE
+    !         ! Colder than present, interpolate between "PD" and "cold", assuming "cold" means 190 ppmv
+    !         weight = 1._dp - MAX(-0.25_dp, MIN(1._dp,   ((280._dp - forcing%CO2_mod) / (280._dp - 190._dp) + (3.23_dp - forcing%d18O_obs) / (3.23_dp - 4.95_dp)) / 2._dp )) + w_ins
+    !       END IF
 
-  !       ! Use modelled global mean annual temperature change as a glacial index
-  !       weight = MAX(0._dp, MIN(2._dp, 1._dp + forcing%dT_glob/12._dp + w_ins))
+    !     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
 
-  !     ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
-  !       WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model!'
-  !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !     END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !       ! Use modelled global mean annual temperature change as a glacial index
+    !       weight = MAX(0._dp, MIN(2._dp, 1._dp + forcing%dT_glob/12._dp + w_ins))
 
-  !     IF (weight < 1._dp) THEN
-  !       w_PD   = weight
-  !       w_cold = 1._dp - w_PD
-  !       w_warm = 0._dp
-  !     ELSE
-  !       w_PD   = 2._dp - weight
-  !       w_warm = 1._dp - w_PD
-  !       w_cold = 0._dp
-  !     END IF
+    !     ELSE ! IF (C%choice_forcing_method == 'CO2_direct') THEN
+    !       WRITE(0,*) '  ERROR: forcing method "', TRIM(C%choice_forcing_method), '" not implemented in run_BMB_model!'
+    !       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !     END IF ! IF (C%choice_forcing_method == 'CO2_direct') THEN
 
-  !     climate%T_ocean_mean = w_PD * BMB%T_ocean_mean_PD      + w_warm * BMB%T_ocean_mean_warm      + w_cold * BMB%T_ocean_mean_cold
-  !     BMB_deepocean        = w_PD * BMB%BMB_deepocean_PD     + w_warm * BMB%BMB_deepocean_warm     + w_cold * BMB%BMB_deepocean_cold
-  !     BMB_shelf_exposed    = w_PD * BMB%BMB_shelf_exposed_PD + w_warm * BMB%BMB_shelf_exposed_warm + w_cold * BMB%BMB_shelf_exposed_cold
+    !     IF (weight < 1._dp) THEN
+    !       w_PD   = weight
+    !       w_cold = 1._dp - w_PD
+    !       w_warm = 0._dp
+    !     ELSE
+    !       w_PD   = 2._dp - weight
+    !       w_warm = 1._dp - w_PD
+    !       w_cold = 0._dp
+    !     END IF
 
-  !   ELSE ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
-  !     WRITE(0,*) '  ERROR: choice_ocean_temperature_model "', TRIM(C%choice_ocean_temperature_model), '" not implemented in run_BMB_model!'
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    !     climate%T_ocean_mean = w_PD * BMB%T_ocean_mean_PD      + w_warm * BMB%T_ocean_mean_warm      + w_cold * BMB%T_ocean_mean_cold
+    !     BMB_deepocean        = w_PD * BMB%BMB_deepocean_PD     + w_warm * BMB%BMB_deepocean_warm     + w_cold * BMB%BMB_deepocean_cold
+    !     BMB_shelf_exposed    = w_PD * BMB%BMB_shelf_exposed_PD + w_warm * BMB%BMB_shelf_exposed_warm + w_cold * BMB%BMB_shelf_exposed_cold
 
-  !   ! Use the (interpolated, spatially uniform) ocean temperature and the subtended angle + distance-to-open-ocean
-  !   ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
-  !   ! ====================================================================================
+    !   ELSE ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
+    !     WRITE(0,*) '  ERROR: choice_ocean_temperature_model "', TRIM(C%choice_ocean_temperature_model), '" not implemented in run_BMB_model!'
+    !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !   END IF ! IF (C%choice_ocean_temperature_model == 'fixed') THEN
 
-  !   DO vi = mesh%vi1, mesh%vi2
+    !   ! Use the (interpolated, spatially uniform) ocean temperature and the subtended angle + distance-to-open-ocean
+    !   ! to calculate sub-shelf melt rates using the parametrisation from Martin et al., 2011
+    !   ! ====================================================================================
 
-  !     IF (ice%mask_shelf_a( vi) == 1) THEN
-  !       ! Sub-shelf melt
+    !   DO vi = mesh%vi1, mesh%vi2
 
-  !       ! Freezing temperature at the bottom of the ice shelves, scaling with depth below water level
-  !       T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+    !     IF (ice%mask_shelf_a( vi) == 1) THEN
+    !       ! Sub-shelf melt
 
-  !       ! Sub-shelf melt rate for non-exposed shelves (Martin, TC, 2011) - melt values, when T_ocean > T_freeze.
-  !       BMB_shelf   = seawater_density * cp0 * sec_per_year * gamma_T * BMB%subshelf_melt_factor * &
-  !                  (climate%T_ocean_mean - T_freeze) / (L_fusion * ice_density)
+    !       ! Freezing temperature at the bottom of the ice shelves, scaling with depth below water level
+    !       T_freeze = 0.0939_dp - 0.057_dp * 35._dp - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-  !     ELSE
-  !       BMB_shelf = 0._dp
-  !     END IF
+    !       ! Sub-shelf melt rate for non-exposed shelves (Martin, TC, 2011) - melt values, when T_ocean > T_freeze.
+    !       BMB_shelf   = seawater_density * cp0 * sec_per_year * gamma_T * BMB%subshelf_melt_factor * &
+    !                  (climate%T_ocean_mean - T_freeze) / (L_fusion * ice_density)
 
-  !     IF (ice%mask_shelf_a( vi) == 1 .OR. ice%mask_ocean_a( vi) == 1) THEN
+    !     ELSE
+    !       BMB_shelf = 0._dp
+    !     END IF
 
-  !       water_depth = ice%SL_a( vi) - ice%Hb_a( vi)
-  !       w_deep = MAX(0._dp, MIN(1._dp, (water_depth - BMB%deep_ocean_threshold_depth) / 200._dp))
-  !       w_expo = MAX(0._dp, MIN(1._dp, (BMB%sub_angle( vi) - 80._dp)/30._dp)) * EXP(-BMB%dist_open( vi) / 100000._dp)
+    !     IF (ice%mask_shelf_a( vi) == 1 .OR. ice%mask_ocean_a( vi) == 1) THEN
 
-  !       BMB%BMB_shelf( vi) = (w_deep * BMB_deepocean) + (1._dp - w_deep) * (w_expo * BMB_shelf_exposed + (1._dp - w_expo) * BMB_shelf)
+    !       water_depth = ice%SL_a( vi) - ice%Hb_a( vi)
+    !       w_deep = MAX(0._dp, MIN(1._dp, (water_depth - BMB%deep_ocean_threshold_depth) / 200._dp))
+    !       w_expo = MAX(0._dp, MIN(1._dp, (BMB%sub_angle( vi) - 80._dp)/30._dp)) * EXP(-BMB%dist_open( vi) / 100000._dp)
 
-  !     ELSE
-  !       BMB%BMB_shelf( vi) = 0._dp
-  !     END IF
+    !       BMB%BMB_shelf( vi) = (w_deep * BMB_deepocean) + (1._dp - w_deep) * (w_expo * BMB_shelf_exposed + (1._dp - w_expo) * BMB_shelf)
 
-  !   END DO
-  !   CALL sync
+    !     ELSE
+    !       BMB%BMB_shelf( vi) = 0._dp
+    !     END IF
 
-  !   ! Add sheet and shelf melt together
-  !   BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
-  !   CALL sync
+    !   END DO
+    !   CALL sync
 
-  !   n2 = par%mem%n
-  !   !CALL write_to_memory_log( routine_name, n1, n2)
+    !   ! Add sheet and shelf melt together
+    !   BMB%BMB( mesh%vi1:mesh%vi2) = BMB%BMB_sheet( mesh%vi1:mesh%vi2) + BMB%BMB_shelf( mesh%vi1:mesh%vi2)
+    !   CALL sync
 
-  !   IF (par%master) WRITE(0,*) 'This subroutine (run_BMB_model) is empty. Feel free to fill it before running the model :)'
-  !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    !   n2 = par%mem%n
+    !   !CALL write_to_memory_log( routine_name, n1, n2)
 
-  ! END SUBROUTINE run_BMB_model_OLD
+    !   IF (par%master) WRITE(0,*) 'This subroutine (run_BMB_model) is empty. Feel free to fill it before running the model :)'
+    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-  ! SUBROUTINE remap_BMB_model_OLD( mesh_old, mesh_new, map, BMB)
-  !   ! Remap or reallocate all the data fields
+    ! END SUBROUTINE run_BMB_model_OLD
 
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-  !   TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
-  !   TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+    ! SUBROUTINE remap_BMB_model_OLD( mesh_old, mesh_new, map, BMB)
+    !   ! Remap or reallocate all the data fields
 
-  !   ! Local variables:
-  !   INTEGER                                            :: int_dummy
+    !   ! In/output variables:
+    !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    !   TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    !   TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
-  !   ! To prevent compiler warnings for unused variables
-  !   int_dummy = mesh_old%nV
-  !   int_dummy = mesh_new%nV
-  !   int_dummy = map%int_dummy
+    !   ! Local variables:
+    !   INTEGER                                            :: int_dummy
 
-  !   ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
-  !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB,       BMB%wBMB      )
-  !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
-  !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
-  !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%sub_angle, BMB%wsub_angle)
-  !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%dist_open, BMB%wdist_open)
+    !   ! To prevent compiler warnings for unused variables
+    !   int_dummy = mesh_old%nV
+    !   int_dummy = mesh_new%nV
+    !   int_dummy = map%int_dummy
 
-  ! END SUBROUTINE remap_BMB_model_OLD
+    !   ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
+    !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB,       BMB%wBMB      )
+    !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
+    !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
+    !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%sub_angle, BMB%wsub_angle)
+    !   CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%dist_open, BMB%wdist_open)
+
+    ! END SUBROUTINE remap_BMB_model_OLD
 
 END MODULE BMB_module

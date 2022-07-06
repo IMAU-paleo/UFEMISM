@@ -4,7 +4,7 @@
   ! ====================
 
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 100.0                            ! End   time (in years) of the simulations
+  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 2.0                              ! Maximum time step (in years) of the ice model
   dt_thermo_config                            = 4.0                              ! Time step (in years) for updating thermodynamics
@@ -148,7 +148,7 @@
   ! Basal roughness / friction
   choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 45.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
   slid_Tsai2015_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in the Tsai2015 sliding law
   slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law

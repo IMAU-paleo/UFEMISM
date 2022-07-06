@@ -24,7 +24,7 @@ MODULE basal_conditions_and_sliding_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_1D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             SSA_Schoof2006_analytical_solution
+                                             SSA_Schoof2006_analytical_solution, extrapolate_Gaussian_floodfill_mesh
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_reference_geometry, type_grid, type_restart_data
@@ -1647,7 +1647,8 @@ CONTAINS
 ! =====================
 
   SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo)
-    ! Iteratively invert for basal friction conditions under the grounded ice sheet
+    ! Iteratively invert for basal friction conditions under the grounded ice sheet,
+    ! and extrapolate the resulting field over the rest of the domain
 
     IMPLICIT NONE
 
@@ -1661,48 +1662,77 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val, w_smooth
-    REAL(dp),           DIMENSION(SIZE(ice%Hi_a))      :: rough_smoothed
+    REAL(dp), DIMENSION(SIZE(ice%Hi_a))                :: rough_smoothed
+    INTEGER,  DIMENSION(:    ), POINTER                ::  mask,  mask_filled
+    INTEGER                                            :: wmask, wmask_filled
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Allocate masks for extrapolation
+    CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
+    CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+
+    ! Define the ice thickness factor for scaling of inversion
     h_scale = 1.0_dp/C%basal_sliding_inv_scale
 
     DO vi = mesh%vi1, mesh%vi2
 
+      ! Ice thickness difference w.r.t. reference thickness
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      ! Ratio between this difference and the reference ice thickness
       h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
 
-      ! Invert only where the model is grounded ice
+      ! Invert only where the model has grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
 
+        ! Check if grounded vertex is marginal or interior ice.
+        ! If marginal, override its value during extrapolation.
+        IF (ice%mask_margin_a( vi) == 1 .OR. ice%mask_gl_a( vi) == 1) THEN
+          ! Mark this vertex as ice margin/grounding-line
+          mask( vi) = 1
+        ELSE
+          ! Mark this vertex as grounded ice
+          mask( vi) = 2
+        END IF
+
+        ! If the difference/fraction is outside the specified tolerance
         IF (ABS(h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
             ABS(h_dfrac) >= C%basal_sliding_inv_tol_frac) THEN
 
+          ! Scale the difference and restrict it to the [-1.5 1.5] range
           h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
           ! Further adjust only where the previous value is not significantly improving the result
           IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.1_dp) .OR. &
                (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.1_dp) ) THEN
 
+            ! Power-law-style sliding laws
             IF (C%choice_sliding_law == 'Weertman' .OR. &
                 C%choice_sliding_law == 'Tsai2015' .OR. &
                 C%choice_sliding_law == 'Schoof2005') THEN
 
+              ! Save bed roughness at this vertex in aux variable
               new_val = ice%beta_sq_inv_a( vi)
+              ! Adjust based on scaled ice thickness difference
               new_val = new_val * (10._dp ** h_delta)
+              ! Constrain adjusted value to roughness limits
               new_val = MIN(MAX(new_val, 1._dp), 10._dp)
-
+              ! Replace old bed roughness value with the adjusted one
               ice%beta_sq_inv_a( vi) = new_val
 
+            ! Coulomb-style sliding laws
             ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
                     C%choice_sliding_law == 'Coulomb_regularised' .OR. &
                     C%choice_sliding_law == 'Zoet-Iverson') THEN
 
+              ! Save bed roughness at this vertex in aux variable
               new_val = ice%phi_fric_inv_a( vi)
+              ! Adjust based on scaled ice thickness difference
               new_val = new_val * (10._dp ** (-h_delta))
+              ! Constrain adjusted value to roughness limits
               new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
-
+              ! Replace old bed roughness value with the adjusted one
               ice%phi_fric_inv_a( vi) = new_val
 
             ELSE
@@ -1713,7 +1743,12 @@ CONTAINS
 
         END IF ! else the difference is within the specified tolerance, so leave it alone
 
-      END IF ! else the model is not grounded ice sheet, so leave it alone
+      ELSE
+
+        ! This vertex is not grounded ice sheet, so mark it for later extrapolation
+        mask( vi) = 1
+
+      END IF ! (ice%mask_sheet_a( vi) == 1)
 
     END DO
     CALL sync
@@ -1773,26 +1808,35 @@ CONTAINS
           C%choice_sliding_law == 'Tsai2015' .OR. &
           C%choice_sliding_law == 'Schoof2005') THEN
 
+        ! Replace old bed roughness field with the adjusted one
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = ice%beta_sq_inv_a( mesh%vi1:mesh%vi2)
 
       ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
               C%choice_sliding_law == 'Coulomb_regularised' .OR. &
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
+        ! Replace old bed roughness field with the adjusted one
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
 
       ELSE
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
       END IF
 
-    END IF
+    END IF ! (C%do_basal_sliding_smoothing)
     CALL sync
 
     ! Extrapolate the resulting field
     ! ===============================
 
-    ! WIP. Not needed yet really, as the smoothing leaks over the entire domain. Kinda extrapolating.
-    ! CALL sync
+    ! Perform the extrapolation
+    IF (par%master) THEN
+      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_a, 10000._dp, mask_filled)
+    END IF
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wmask_filled)
+    CALL deallocate_shared( wmask)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

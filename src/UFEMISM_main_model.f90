@@ -71,7 +71,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256)                                   :: routine_name
-    INTEGER                                              :: it
     REAL(dp)                                             :: meshfitness
     REAL(dp)                                             :: t1, t2
 
@@ -101,9 +100,7 @@ CONTAINS
     ! ===== The main model time loop =====
     ! ====================================
 
-    it = 0
     DO WHILE (region%time < t_end)
-      it = it + 1
 
       ! == GIA
       ! ======
@@ -240,26 +237,11 @@ CONTAINS
       CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
       CALL sync
 
-      ! == Update initial mesh after first round
-      ! ========================================
-
-      ! ! If required, update the mesh
-      ! IF (region%time == C%start_time_of_run .AND. (.NOT. C%is_restart)) THEN
-      !   region%t_last_mesh = region%time
-      !   IF (par%master) t2 = MPI_WTIME()
-      !   CALL run_model_update_mesh( region, climate_matrix_global)
-      !   IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
-      !   CALL sync
-      ! END IF
-
       ! == Advance region time
       ! ======================
 
       IF (par%master) region%time = region%time + region%dt
       CALL sync
-
-      ! DENK DROM
-      !region%time = t_end
 
     END DO
 
@@ -409,33 +391,29 @@ CONTAINS
     ! Recalculate the reference precipitation isotope content (must be done after region%mesh has been cycled)
     CALL calculate_reference_isotopes( region)
 
-    IF (.NOT. region%time == C%start_time_of_run) THEN
-      ! If not an initial mesh update, run all model components again after updating the mesh
-      region%t_next_SIA     = region%time
-      region%t_next_SSA     = region%time
-      region%t_next_DIVA    = region%time
-      region%t_next_thermo  = region%time
-      region%t_next_climate = region%time
-      region%t_next_ocean   = region%time
-      region%t_next_SMB     = region%time
-      region%t_next_BMB     = region%time
-      region%t_next_ELRA    = region%time
-      region%t_next_basal   = region%time
-      region%t_next_SMB_inv = region%time
+    region%t_next_SIA     = region%time
+    region%t_next_SSA     = region%time
+    region%t_next_DIVA    = region%time
+    region%t_next_thermo  = region%time
+    region%t_next_climate = region%time
+    region%t_next_ocean   = region%time
+    region%t_next_SMB     = region%time
+    region%t_next_BMB     = region%time
+    region%t_next_ELRA    = region%time
+    region%t_next_basal   = region%time
+    region%t_next_SMB_inv = region%time
 
-      region%do_SIA         = .TRUE.
-      region%do_SSA         = .TRUE.
-      region%do_DIVA        = .TRUE.
-      region%do_thermo      = .TRUE.
-      region%do_climate     = .TRUE.
-      region%do_ocean       = .TRUE.
-      region%do_SMB         = .TRUE.
-      region%do_BMB         = .TRUE.
-      region%do_ELRA        = .TRUE.
-      region%do_basal       = .TRUE.
-      region%do_SMB_inv     = .TRUE.
-
-    END IF ! (.NOT. region%time == C%start_time_of_run)
+    region%do_SIA         = .TRUE.
+    region%do_SSA         = .TRUE.
+    region%do_DIVA        = .TRUE.
+    region%do_thermo      = .TRUE.
+    region%do_climate     = .TRUE.
+    region%do_ocean       = .TRUE.
+    region%do_SMB         = .TRUE.
+    region%do_BMB         = .TRUE.
+    region%do_ELRA        = .TRUE.
+    region%do_basal       = .TRUE.
+    region%do_SMB_inv     = .TRUE.
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
 

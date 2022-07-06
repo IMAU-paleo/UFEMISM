@@ -2235,7 +2235,7 @@ CONTAINS
 
   END SUBROUTINE extrapolate_Gaussian_floodfill
 
-  ! == Gaussian extrapolation (used for e.g. ocean data and basal roughness inversion)
+  ! == Gaussian extrapolation (used for e.g. basal roughness inversion)
   SUBROUTINE extrapolate_Gaussian_floodfill_mesh( mesh, mask, d, sigma, mask_filled)
     ! Extrapolate the data field d into the area designated by the mask,
     ! using Gaussian extrapolation of sigma

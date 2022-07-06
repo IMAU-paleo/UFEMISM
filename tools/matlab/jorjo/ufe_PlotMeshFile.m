@@ -77,7 +77,7 @@ if nargin < 7
    p_range = 0;
 end
 if nargin < 6
-   t_pau = 0.5;
+   t_pau = 0;
 end
 if nargin < 5
    n_fig = 0;
@@ -130,92 +130,100 @@ end
 % === Default settings ===
 % ========================
 
-   switch p_var
-       case {'Hi','Hs'}                % Ice thickness or surface elevation
-           if p_range == 0             % If no value range was specified
-              if p_diff == 0           % If showing normal values
-                 p_range = [0 3e3];    % Use default range
-              else                     % If showing differences 
-                 p_range = [-1e3 1e3]; % Use default range for differences
-              end
+switch p_var
+    case {'Hi','Hs'}                % Ice thickness or surface elevation
+        if p_range == 0             % If no value range was specified
+           if p_diff == 0           % If showing normal values
+              p_range = [0 3e3];    % Use default range
+           else                     % If showing differences
+              p_range = [-1e3 1e3]; % Use default range for differences
            end
+        end
            
-           if p_diff == 0              % If showing normal values
-              cmap = (parula(256));    % Use default colormap
-              mask_ice = 1;            % Only show where mask has ice
-              p_trans  = 0;            % Only show where data are not 0
-           else                        % If showing differences
-              cmap = turbo(20);        % Use custom colormap
-              mask_ice = 0;            % Show everywhere
-              p_trans  = 0;            % Only show where data are not 0
-           end
+        if p_diff == 0              % If showing normal values
+           cmap = (parula(256));    % Use default colormap
+           mask_ice = 1;            % Only show where mask has ice
+           p_trans  = 0;            % Only show where data are not 0
+        else                        % If showing differences
+           cmap = turbo(256);       % Use custom colormap
+           mask_ice = 0;            % Show everywhere
+           p_trans  = 0;            % Only show where data are not 0
+        end
 
-       case {'Hb'}                     % Bedrock elevation
-           if p_range == 0             % If no value range was specified
-              p_range = [-3e3 3e3];    % Use default range
-           end
-           mask_ice = 0;               % Show everywhere
-           p_trans  = 0;               % Only show where data are not 0
-           cmap = (parula(256));       % Use default colormap
+    case {'dHi','dHs'}              % Ice thickness diff w.r.t. PD
+        if p_range == 0             % If no value range was specified
+           p_range = [-1e3 1e3];    % Use default range for differences
+        end
+        cmap = turbo(256);          % Use custom colormap
+        mask_ice = 0;               % Show everywhere
+        p_trans  = 0;               % Only show where data are not 0
 
-       case {'SL'}                     % Sea level w.r.t present-day
-           if p_range == 0             % If no value range was specified
-              p_range = [-120 20];     % Use default range
-           end
-           mask_ice = -3;              % Only show where mask=ocean/shelves
-           p_trans  = Inf;             % No value-based transparency
-           cmap = (parula(256));       % Use default colormap
+    case {'Hb'}                     % Bedrock elevation
+        if p_range == 0             % If no value range was specified
+           p_range = [-3e3 3e3];    % Use default range
+        end
+        mask_ice = 0;               % Show everywhere
+        p_trans  = 0;               % Only show where data are not 0
+        cmap = (parula(256));       % Use default colormap
 
-       case {'dHb'}                    % Bedrock deformation w.r.t. PD
-           if p_range == 0             % If no value range was specified
-              p_range = [-5e2 5e2];    % Use default range
-           end
-           mask_ice = 0;               % Show everywhere
-           p_trans  = 0;               % Only show where data are not 0
-           cmap = (parula(256));       % Use default colormap
+    case {'SL'}                     % Sea level w.r.t present-day
+        if p_range == 0             % If no value range was specified
+           p_range = [-120 20];     % Use default range
+        end
+        mask_ice = -3;              % Only show where mask=ocean/shelves
+        p_trans  = Inf;             % No value-based transparency
+        cmap = (parula(256));       % Use default colormap
 
-       case {'phi_fric'}               % Till angle for sliding law
-           if p_range == 0             % If no value range was specified
-             %p_range = [-2.5 47.5];
-              p_range = [-1 1.5];      % Use default range
-           end
-           mask_ice = 2;               % Only show where ice is grounded
-           p_trans  = inf;             % No value-based transparency
-          %cmap = (flipud(jet(10)));
-           cmap = (flipud(jet(256)));  % Use custom colormap
+    case {'dHb'}                    % Bedrock deformation w.r.t. PD
+        if p_range == 0             % If no value range was specified
+           p_range = [-5e2 5e2];    % Use default range
+        end
+        mask_ice = 0;               % Show everywhere
+        p_trans  = 0;               % Only show where data are not 0
+        cmap = (parula(256));       % Use default colormap
 
-       case {'BMB','BMB_shelf'}        % Basal mass balance
-           if p_range == 0             % If no value range was specified
-              p_range = [-5 5];        % Use default range
-           end
-           mask_ice = 3;               % Only show where ice is floating
-           p_trans  = Inf;             % No value-based transparency
-           cmap = (flipud(jet(256)));  % Use custom colormap
+    case {'phi_fric'}               % Till angle for sliding law
+        if p_range == 0             % If no value range was specified
+          %p_range = [-2.5 47.5];
+           p_range = [-1 1.5];      % Use default range
+        end
+        mask_ice = 0;               % Only show where ice is grounded
+        p_trans  = inf;             % No value-based transparency
+       %cmap = (flipud(jet(10)));
+        cmap = (flipud(jet(256)));  % Use custom colormap
 
-       case {'C_abl_constant_inv', ... % Threshold ablation factor
-             'C_abl_Ts_inv' ...        % Temperature ablation factor
-             'C_abl_Q_inv', ...        % Insolation ablation factor
-             'C_refr_inv'}             % Refreezing factor
-           mask_ice = 2;               % Only show where ice is grounded
-           p_trans  = 0;               % Only show where data are not 0
-           cmap = (parula(256));       % Use default colormap
+    case {'BMB','BMB_shelf'}        % Basal mass balance
+        if p_range == 0             % If no value range was specified
+           p_range = [-5 5];        % Use default range
+        end
+        mask_ice = 3;               % Only show where ice is floating
+        p_trans  = Inf;             % No value-based transparency
+        cmap = (flipud(jet(256)));  % Use custom colormap
 
-       case {'uabs_surf','uabs_base'}  % Ice velocities
-           if p_range == 0             % If no value range was specified
-              p_range = [-1 3.5];      % Use default (log10) range
-           end
-           mask_ice = 1;               % Only show where mask has ice
-           p_trans  = 0;               % Only show where data are not 0
-           cmap = (turbo(256));        % Use custom colormap
+    case {'C_abl_constant_inv', ... % Threshold ablation factor
+          'C_abl_Ts_inv' ...        % Temperature ablation factor
+          'C_abl_Q_inv', ...        % Insolation ablation factor
+          'C_refr_inv'}             % Refreezing factor
+        mask_ice = 2;               % Only show where ice is grounded
+        p_trans  = 0;               % Only show where data are not 0
+        cmap = (parula(256));       % Use default colormap
+
+    case {'uabs_surf','uabs_base'}  % Ice velocities
+        if p_range == 0             % If no value range was specified
+           p_range = [-1 3.5];      % Use default (log10) range
+        end
+        mask_ice = 1;               % Only show where mask has ice
+        p_trans  = 0;               % Only show where data are not 0
+        cmap = (turbo(256));        % Use custom colormap
        
-       otherwise                       % All other variables
-           if p_range == 0             % If no value range was specified
-              p_range = [0 0];         % Let the min and max set the range
-           end
-           mask_ice = 0;               % Show everywhere
-           p_trans  = 0;               % Only show where data are not 0
-           cmap = (parula(256));       % Use default colormap
-   end
+    otherwise                       % All other variables
+        if p_range == 0             % If no value range was specified
+           p_range = [0 0];         % Let the min and max set the range
+        end
+        mask_ice = 0;               % Show everywhere
+        p_trans  = 0;               % Only show where data are not 0
+        cmap = (parula(256));       % Use default colormap
+end
 
 % === Plot meshes/masks/data ===
 % ==============================
@@ -406,9 +414,19 @@ for ii = ii_start : ii_end
            p_data = my_var(:,jj);
         end
 
-        % If so desired, get diffs of var w.r.t. first values for thi* mesh
-        if p_diff == 1 && ~any(strcmp(p_var,{'mask','mesh'}))
-           p_data = p_data - i_data;
+        % If so desired, get diffs of var w.r.t. first values for this mesh
+        if p_diff == 1
+           if any(strcmp(p_var,{'mask','mesh','phi_fric',                  ...
+                                'uabs_surf','uabs_base'}))
+              % For the mesh and the mask, ignore the differences
+              % For velocities and friction, same, as they are log10 stuff
+              disp(['->[W:] Plotting differences for this variable is '    ...
+                    'either not supported or does not make sense at all.'])
+              disp('       Plotting normal values...')
+
+           else
+             p_data = p_data - i_data;
+           end
         end
 
         % - Patch plot -
@@ -485,8 +503,8 @@ for ii = ii_start : ii_end
                         info.Attributes(2).Value '] at year: '             ...
                         num2str(time(jj))];
           end
-          if any(strcmp(p_var,{'uabs_surf','uabs_base'}))
-             p_title = [p_title '  (log10)'];                              %#ok<AGROW> 
+          if any(strcmp(p_var,{'uabs_surf','uabs_base','phi_fric'}))
+             p_title = [p_title ' (log10)'];                               %#ok<AGROW>
           end
 
           % Colormap
@@ -547,8 +565,18 @@ for ii = ii_start : ii_end
         tt.FontSize = 20;
 
         % Subtitle
-        st = subtitle(['Resolution: ' num2str(mesh.R_min)                  ...
-                                ' - ' num2str(mesh.R_max) ' km']);
+        if p_diff == 1 || any(strcmp(p_var,{'dHi','dHs','dHb'}))
+           % Add absolute mean difference and resolution range to subtitle
+           diff_avg = mean(abs(p_data(mask(:,jj)>=2 | p_data~=0)));
+           p_subtitle = ['Res: ' num2str(mesh.R_min) ' - '                 ...
+                          num2str(mesh.R_max) ' km / Abs mean: '           ...
+                          num2str(round(10*diff_avg)/10)];
+        else
+           % Just show resolution range
+           p_subtitle = ['Resolution: ' num2str(mesh.R_min)                ...
+                         ' - ' num2str(mesh.R_max) ' km'];
+        end
+        st = subtitle(p_subtitle);
         st.FontSize = 18;
         
         % Axes box

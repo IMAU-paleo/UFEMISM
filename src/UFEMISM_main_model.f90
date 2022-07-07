@@ -43,13 +43,17 @@ MODULE UFEMISM_main_model
   USE BMB_module,                          ONLY: initialise_BMB_model,                    remap_BMB_model,      run_BMB_model
   USE isotopes_module,                     ONLY: initialise_isotopes_model,               remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
-  ! USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
+
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
+
+# if (defined(DO_SELEN))
+  USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
+# endif
 
   IMPLICIT NONE
 
@@ -110,8 +114,10 @@ CONTAINS
         ! Nothing to be done
       ELSEIF (C%choice_GIA_model == 'ELRA') THEN
         CALL run_ELRA_model( region)
-      ! ELSEIF (C%choice_GIA_model == 'SELEN') THEN
-      !   CALL apply_SELEN_bed_geoid_deformation_rates( region)
+      ELSEIF (C%choice_GIA_model == 'SELEN') THEN
+#       if (defined(DO_SELEN))
+        CALL apply_SELEN_bed_geoid_deformation_rates( region)
+#       endif
       ELSE
         CALL crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
       END IF
@@ -356,12 +362,14 @@ CONTAINS
     END IF
 
     ! Remap the GIA submodel
-    IF (C%choice_GIA_model == 'SELEN') THEN
-      ! CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
+    IF (C%choice_GIA_model == 'none') THEN
+      ! Do nothing
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
       CALL remap_ELRA_model(   region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
-    ELSEIF (C%choice_GIA_model == 'none') THEN
-      ! Do nothing
+    ELSEIF (C%choice_GIA_model == 'SELEN') THEN
+#     if (defined(DO_SELEN))
+      CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
+#     endif
     ELSE
       CALL crash('unknown choice_GIA_model "' // TRIM( C%choice_GIA_model) // '"!')
     END IF

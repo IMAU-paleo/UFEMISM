@@ -308,12 +308,12 @@
   ! =================
 
   do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
-  choice_sealevel_model_config                = 'fixed'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
+  choice_sealevel_model_config                = 'SELEN'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
   filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl.dat'
   sealevel_record_length_config               = 30001
 
-  choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"
+  choice_GIA_model_config                     = 'SELEN'                          ! Can be "none", "ELRA", or "SELEN"
   ELRA_lithosphere_flex_rigidity_config       = 1.0E+25                          ! Lithospheric flexural rigidity [kg m^2 s^-2]
   ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
   ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]
@@ -321,12 +321,12 @@
   ! SELEN
   ! =====
 
-  SELEN_run_at_t_start_config                 = .FALSE.                          ! Whether or not to run SELEN in the first coupling loop (needed for some benchmark experiments)
+  SELEN_run_at_t_start_config                 = .TRUE.                           ! Whether or not to run SELEN in the first coupling loop (needed for some benchmark experiments)
   SELEN_n_TDOF_iterations_config              = 1                                ! Number of Time-Dependent Ocean Function iterations
   SELEN_n_recursion_iterations_config         = 1                                ! Number of recursion iterations
   SELEN_use_rotational_feedback_config        = .FALSE.                          ! If TRUE, rotational feedback is included
-  SELEN_n_harmonics_config                    = 128                              ! Maximum number of harmonic degrees
-  SELEN_display_progress_config               = .FALSE.                          ! Whether or not to display the progress of the big loops to the screen
+  SELEN_n_harmonics_config                    = 64                               ! Maximum number of harmonic degrees
+  SELEN_display_progress_config               = .TRUE.                           ! Whether or not to display the progress of the big loops to the screen
 
   SELEN_dir_config                            = 'data/SELEN'                     ! Directory where SELEN initial files and spherical harmonics are stored
   SELEN_global_topo_filename_config           = 'SELEN_global_topography.nc'     ! Filename for the SELEN global topography file (located in SELEN_dir)

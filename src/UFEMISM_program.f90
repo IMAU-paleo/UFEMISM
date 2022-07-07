@@ -9,8 +9,8 @@ PROGRAM UFEMISM_program
   ! copies of the ice-sheet model (North America, Eurasia, Greenland and Antarctica).
   ! These are all run individually for 100 years (the "coupling interval"), after which
   ! control is passed back to this program. At this point, the sea-level model SELEN will be
-  ! called (not implemented yet), some global output data is calculated and written to the
-  ! output file, and the coupling loop is run again.
+  ! called, some global output data is calculated and written to the output file, and the
+  ! coupling loop is run again.
   !
   ! The four ice-sheet models are four instances of the "model_region" data type (declared in
   ! the data_types module), which is accepted as an argument by the "run_model" subroutine.
@@ -48,12 +48,15 @@ PROGRAM UFEMISM_program
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
-  ! USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
   USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
   USE general_sea_level_module,    ONLY: determine_GMSL_contributions, update_regional_sea_level
+
+# if (defined(DO_SELEN))
+  USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
+# endif
 
 ! ===== Main variables =====
 ! ==========================
@@ -69,11 +72,6 @@ PROGRAM UFEMISM_program
   TYPE(type_climate_matrix_global)       :: climate_matrix_global
   TYPE(type_ocean_matrix_global)         :: ocean_matrix_global
 
-  ! SELEN
-  TYPE(type_SELEN_global)                :: SELEN
-  REAL(dp)                               :: ocean_area
-  REAL(dp)                               :: ocean_depth
-
   ! Coupling
   REAL(dp)                               :: t_coupling, t_end_models
   REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
@@ -81,6 +79,11 @@ PROGRAM UFEMISM_program
   ! Computation time tracking
   TYPE(type_netcdf_resource_tracker)     :: resources
   REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
+
+  ! SELEN
+  TYPE(type_SELEN_global)                :: SELEN
+  REAL(dp)                               :: ocean_area
+  REAL(dp)                               :: ocean_depth
 
 ! ===== START =====
 ! =================
@@ -156,18 +159,20 @@ PROGRAM UFEMISM_program
   ! == Initialise SELEN
   ! ===================
 
-  ! IF (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN') THEN
-  !   CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
-  ! END IF
+  IF (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN') THEN
+#   if (defined(DO_SELEN))
+    CALL initialise_SELEN( SELEN, NAM, EAS, GRL, ANT, version_number)
+#   endif
+  END IF
 
-  ! ! Timers and run-at-start switch
-  ! IF (C%SELEN_run_at_t_start) THEN
-  !   SELEN%t0_SLE = C%start_time_of_run - C%dt_SELEN
-  !   SELEN%t1_SLE = C%start_time_of_run
-  ! ELSE
-  !   SELEN%t0_SLE = C%start_time_of_run
-  !   SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
-  ! END IF
+  ! Timers and run-at-start switch
+  IF (C%SELEN_run_at_t_start) THEN
+    SELEN%t0_SLE = C%start_time_of_run - C%dt_SELEN
+    SELEN%t1_SLE = C%start_time_of_run
+  ELSE
+    SELEN%t0_SLE = C%start_time_of_run
+    SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
+  END IF
 
   ! == Initial global output
   ! ========================
@@ -197,12 +202,14 @@ PROGRAM UFEMISM_program
     ! == SELEN
     ! ========
 
-    ! ! Solve the SLE
-    ! IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
-    !   CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
-    !   SELEN%t0_SLE = t_coupling
-    !   SELEN%t1_SLE = t_coupling + C%dt_SELEN
-    ! END IF
+    ! Solve the SLE
+    IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
+#     if (defined(DO_SELEN))
+      CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
+#     endif
+      SELEN%t0_SLE = t_coupling
+      SELEN%t1_SLE = t_coupling + C%dt_SELEN
+    END IF
 
     ! == Regional sea level update
     ! ============================

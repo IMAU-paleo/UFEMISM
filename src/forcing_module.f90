@@ -986,7 +986,7 @@ CONTAINS
           forcing%ins_t0 = forcing%ins_time(ti0)
           forcing%ins_t1 = forcing%ins_time(ti1)
         ELSE
-          ! CALL warning('using constant PD insolation for future projections!')
+          CALL warning('using constant PD insolation for future projections!')
           ti0 = forcing%ins_nyears
           ti1 = forcing%ins_nyears
 

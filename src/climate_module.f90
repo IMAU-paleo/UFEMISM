@@ -452,7 +452,6 @@ CONTAINS
     CALL map_subclimate_to_mesh( mesh, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
 
     ! Initialise applied climate with present-day observations
-
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
@@ -460,6 +459,17 @@ CONTAINS
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
       climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
       climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
+    END DO
+    END DO
+    CALL sync
+
+    ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+    CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+    ! Initialise applied insolation with present-day values
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%Q_TOA( vi,m) = climate_matrix%PD_obs%Q_TOA( vi,m)
     END DO
     END DO
     CALL sync
@@ -2843,11 +2853,17 @@ CONTAINS
     ! =======================================
 
     IF (C%choice_climate_model == 'PD_obs' .OR. &
-        C%choice_climate_model == 'PD_dTglob' .OR. &
-        C%choice_climate_model == 'matrix_warm_cold') THEN
+        C%choice_climate_model == 'PD_dTglob') THEN
 
       CALL reallocate_subclimate(  mesh_new, climate_matrix%PD_obs)
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%PD_obs,  climate_matrix%PD_obs)
+
+      ! Re-initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+      CALL get_insolation_at_time( mesh_new, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+      ! Re-initialise applied insolation with present-day values
+      climate_matrix%applied%Q_TOA( mesh_new%vi1:mesh_new%vi2,:) = climate_matrix%PD_obs%Q_TOA( mesh_new%vi1:mesh_new%vi2,:)
+      CALL sync
 
     END IF
 
@@ -2857,11 +2873,13 @@ CONTAINS
     IF (C%choice_climate_model == 'matrix_warm_cold') THEN
 
       ! Reallocate memory
+      CALL reallocate_subclimate(  mesh_new, climate_matrix%PD_obs  )
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_PI  )
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_warm)
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_cold)
 
       ! Map GCM data from the global lat-lon grid to the model mesh
+      CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%PD_obs,   climate_matrix%PD_obs  )
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_PI,   climate_matrix%GCM_PI  )
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_warm, climate_matrix%GCM_warm)
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_cold, climate_matrix%GCM_cold)

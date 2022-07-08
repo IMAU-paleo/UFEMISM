@@ -425,7 +425,8 @@ MODULE configuration_module
   ! =========================
 
     CHARACTER(LEN=256)  :: choice_calving_law_config                   = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
-    REAL(dp)            :: calving_threshold_thickness_config          = 200._dp                          ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
+    REAL(dp)            :: calving_threshold_thickness_shelf_config    = 100._dp                          ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
+    REAL(dp)            :: calving_threshold_thickness_sheet_config    = 0._dp                            ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
     INTEGER             :: max_calving_rounds_config                   = 20                               ! Maximum number of calving loops during chain reaction
     LOGICAL             :: do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
     LOGICAL             :: remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
@@ -1127,7 +1128,8 @@ MODULE configuration_module
     ! ======================
 
     CHARACTER(LEN=256)                  :: choice_calving_law
-    REAL(dp)                            :: calving_threshold_thickness
+    REAL(dp)                            :: calving_threshold_thickness_shelf
+    REAL(dp)                            :: calving_threshold_thickness_sheet
     INTEGER                             :: max_calving_rounds
     LOGICAL                             :: do_remove_shelves
     LOGICAL                             :: remove_shelves_larger_than_PD
@@ -1974,7 +1976,8 @@ CONTAINS
                      basal_sliding_inv_tol_diff_config,               &
                      basal_sliding_inv_tol_frac_config,               &
                      choice_calving_law_config,                       &
-                     calving_threshold_thickness_config,              &
+                     calving_threshold_thickness_shelf_config,        &
+                     calving_threshold_thickness_sheet_config,        &
                      max_calving_rounds_config,                       &
                      do_remove_shelves_config,                        &
                      remove_shelves_larger_than_PD_config,            &
@@ -2623,7 +2626,8 @@ CONTAINS
     ! ======================
 
     C%choice_calving_law                       = choice_calving_law_config
-    C%calving_threshold_thickness              = calving_threshold_thickness_config
+    C%calving_threshold_thickness_shelf        = calving_threshold_thickness_shelf_config
+    C%calving_threshold_thickness_sheet        = calving_threshold_thickness_sheet_config
     C%max_calving_rounds                       = max_calving_rounds_config
     C%do_remove_shelves                        = do_remove_shelves_config
     C%remove_shelves_larger_than_PD            = remove_shelves_larger_than_PD_config

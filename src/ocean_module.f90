@@ -539,7 +539,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
     DO k = 1, C%nz_ocean
       ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
       ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
@@ -603,7 +603,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=14)
 
   END SUBROUTINE initialise_ocean_model_PD_obs_regional
 
@@ -2343,7 +2343,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE (0,*) '  Reallocating regional ocean model...'
+    IF (par%master) WRITE (0,*) '   Reallocating regional ocean model...'
 
     IF     (C%choice_ocean_model == 'none') THEN
       ! No ocean data is used at all

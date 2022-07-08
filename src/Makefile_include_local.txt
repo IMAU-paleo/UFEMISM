@@ -1,20 +1,27 @@
 # Compiler names:
   F90 = mpifort
 
-# Setting the path for the netcdf libraries:  
-  NCLIB     = $(shell nf-config --flibs)
-  NCINC     = $(shell nf-config --fflags)
-  PETSC_DIR = ${HOME}/projects/petsc
-  PETSC_ARCH= arch-linux-c-debug
+# Setting the path for the netcdf libraries:
+  NCLIB      = $(shell nf-config --flibs)
+  NCINC      = $(shell nf-config --fflags)
+  PETSC_DIR  = ${HOME}/projects/petsc
+  PETSC_ARCH = arch-linux-c-debug
+
+# Compile with SELEN: anything else than yes (no quotes) will skip all
+# SELEN-related stuff both in the Makefile and in the model code
+  DO_SELEN   = no
 
 # Compiler flags:
   COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
                             -Werror=implicit-interface -fimplicit-none
   COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries
 
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
-                            ${NCINC} -I${PETSC_DIR}/include \
-                            -I${PETSC_DIR}/${PETSC_ARCH}/include
+  ifeq ($(DO_SELEN),yes)
+    COMPILER_FLAGS_SELEN  = -DDO_SELEN
+  endif
+
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} ${COMPILER_FLAGS_SELEN} \
+                            ${NCINC} -I${PETSC_DIR}/include -I${PETSC_DIR}/${PETSC_ARCH}/include
 
 # Linking flags of libaries:
   LDFLAGS                 = -L/usr/local/lib ${NCLIB} \

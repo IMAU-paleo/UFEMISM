@@ -388,7 +388,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     DO m = 1, 12
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
       climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
@@ -452,9 +452,8 @@ CONTAINS
     CALL map_subclimate_to_mesh( mesh, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
 
     ! Initialise applied climate with present-day observations
-
     DO m = 1, 12
-    DO vi = mesh%vi2, mesh%vi2
+    DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
       climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
@@ -464,8 +463,19 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+    CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+    ! Initialise applied insolation with present-day values
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%Q_TOA( vi,m) = climate_matrix%PD_obs%Q_TOA( vi,m)
+    END DO
+    END DO
+    CALL sync
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=38)
 
   END SUBROUTINE initialise_climate_model_regional_PD_obs
 
@@ -2829,35 +2839,47 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! At present only the classic climate matrix method is supported, so abort the simulation for other options.
-    ! NOTE: This subroutine will have to be revamped to support other choices for choice_climate_model!
-    IF (.NOT. C%choice_climate_model == 'matrix_warm_cold') THEN
-      IF (par%master) WRITE(0,*) 'remap_climate_model - ERROR: choice_climate_model "', TRIM(C%choice_climate_model), '" is still WIP. Sorry!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
     int_dummy = map%int_dummy
 
-    ! Reallocate memory for the different subclimates
+    ! Reallocate memory for the 'applied' subclimate
+    ! ==============================================
+
     CALL reallocate_subclimate( mesh_new, climate_matrix%applied)
 
-    IF (.NOT. climate_matrix%PD_obs%name == 'none') THEN
+    ! Reallocate memory for the PD subclimate
+    ! =======================================
+
+    IF (C%choice_climate_model == 'PD_obs' .OR. &
+        C%choice_climate_model == 'PD_dTglob') THEN
+
       CALL reallocate_subclimate(  mesh_new, climate_matrix%PD_obs)
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%PD_obs,  climate_matrix%PD_obs)
+
+      ! Re-initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+      CALL get_insolation_at_time( mesh_new, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+      ! Re-initialise applied insolation with present-day values
+      climate_matrix%applied%Q_TOA( mesh_new%vi1:mesh_new%vi2,:) = climate_matrix%PD_obs%Q_TOA( mesh_new%vi1:mesh_new%vi2,:)
+      CALL sync
+
     END IF
 
-    IF (.NOT. climate_matrix%GCM_PI%name == 'none') THEN
-      ! Reallocate and reinitialise the two GCM snapshots
+    ! Reallocate and reinitialise the GCM snapshots
+    ! =============================================
+
+    IF (C%choice_climate_model == 'matrix_warm_cold') THEN
 
       ! Reallocate memory
+      CALL reallocate_subclimate(  mesh_new, climate_matrix%PD_obs  )
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_PI  )
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_warm)
       CALL reallocate_subclimate(  mesh_new, climate_matrix%GCM_cold)
 
       ! Map GCM data from the global lat-lon grid to the model mesh
+      CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%PD_obs,   climate_matrix%PD_obs  )
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_PI,   climate_matrix%GCM_PI  )
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_warm, climate_matrix%GCM_warm)
       CALL map_subclimate_to_mesh( mesh_new, climate_matrix_global%GCM_cold, climate_matrix%GCM_cold)
@@ -2871,12 +2893,12 @@ CONTAINS
       climate_matrix%GCM_cold%Wind_SN( mesh_new%vi1:mesh_new%vi2,:) = climate_matrix%PD_obs%Wind_SN( mesh_new%vi1:mesh_new%vi2,:)
 
       ! Calculate spatially variable lapse rate
-      climate_matrix%GCM_warm%lambda( mesh_new%vi1:mesh_new%vi2) = 0.008_dp
+      climate_matrix%GCM_warm%lambda( mesh_new%vi1:mesh_new%vi2) = C%constant_lapserate
       CALL sync
       IF     (region_name == 'NAM' .OR. region_name == 'EAS') THEN
         CALL initialise_snapshot_spatially_variable_lapserate( mesh_new, grid_smooth, climate_matrix%GCM_PI, climate_matrix%GCM_cold)
       ELSEIF (region_name == 'GLR' .OR. region_name == 'ANT') THEN
-        climate_matrix%GCM_cold%lambda( mesh_new%vi1:mesh_new%vi2) = 0.008_dp
+        climate_matrix%GCM_cold%lambda( mesh_new%vi1:mesh_new%vi2) = C%constant_lapserate
         CALL sync
       END IF
 
@@ -2891,7 +2913,35 @@ CONTAINS
       CALL initialise_snapshot_absorbed_insolation( mesh_new, climate_matrix%GCM_warm, region_name, mask_noice)
       CALL initialise_snapshot_absorbed_insolation( mesh_new, climate_matrix%GCM_cold, region_name, mask_noice)
 
-    END IF ! IF (.NOT. climate_matrix%GCM_PI%name == 'none') THEN
+    END IF
+
+    IF (C%choice_climate_model == 'direct_global' .OR. &
+        C%choice_climate_model == 'direct_regional') THEN
+
+      ! Reallocate shared memory
+      CALL reallocate_shared_dp_1D( mesh_new%nV,     climate_matrix%direct%Hs0,      climate_matrix%direct%wHs0     )
+      CALL reallocate_shared_dp_1D( mesh_new%nV,     climate_matrix%direct%Hs1,      climate_matrix%direct%wHs1     )
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%T2m0,     climate_matrix%direct%wT2m0    )
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%T2m1,     climate_matrix%direct%wT2m1    )
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Precip0,  climate_matrix%direct%wPrecip0 )
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Precip1,  climate_matrix%direct%wPrecip1 )
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Wind_WE0, climate_matrix%direct%wWind_WE0)
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Wind_WE1, climate_matrix%direct%wWind_WE1)
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Wind_SN0, climate_matrix%direct%wWind_SN0)
+      CALL reallocate_shared_dp_2D( mesh_new%nV, 12, climate_matrix%direct%Wind_SN1, climate_matrix%direct%wWind_SN1)
+
+    END IF
+
+    IF (C%choice_SMB_model == 'direct_global' .OR. &
+        C%choice_SMB_model == 'direct_reional') THEN
+
+       ! Allocate shared memory
+       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%SMB_direct%T2m_year0, climate_matrix%SMB_direct%wT2m_year0)
+       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%SMB_direct%T2m_year1, climate_matrix%SMB_direct%wT2m_year1)
+       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%SMB_direct%SMB_year0, climate_matrix%SMB_direct%wSMB_year0)
+       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%SMB_direct%SMB_year1, climate_matrix%SMB_direct%wSMB_year1)
+
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

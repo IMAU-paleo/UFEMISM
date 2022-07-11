@@ -3002,17 +3002,17 @@ CONTAINS
    ! ===========================================================================
 
     C%lambda_M_NAM                             = 265._dp
-    C%lambda_M_EAS                             = 40._dp
-    C%lambda_M_GRL                             = 320._dp
-    C%lambda_M_ANT                             = 0._dp
-    C%phi_M_NAM                                = 62._dp
-    C%phi_M_EAS                                = 70._dp
-    C%phi_M_GRL                                = 72._dp
+    C%lambda_M_EAS                             =  40._dp
+    C%lambda_M_GRL                             = 315._dp
+    C%lambda_M_ANT                             =   0._dp
+    C%phi_M_NAM                                =  62._dp
+    C%phi_M_EAS                                =  70._dp
+    C%phi_M_GRL                                =  90._dp
     C%phi_M_ANT                                = -90._dp
-    C%alpha_stereo_NAM                         = 165.0923_dp
-    C%alpha_stereo_EAS                         = 165.04_dp
-    C%alpha_stereo_GRL                         = 164.85_dp
-    C%alpha_stereo_ANT                         = 165.0263_dp
+    C%alpha_stereo_NAM                         =  19._dp
+    C%alpha_stereo_EAS                         =  19._dp
+    C%alpha_stereo_GRL                         =  20._dp
+    C%alpha_stereo_ANT                         =  19._dp
 
   END SUBROUTINE copy_variables_to_struct
 

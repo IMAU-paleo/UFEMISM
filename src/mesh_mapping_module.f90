@@ -1008,9 +1008,18 @@ CONTAINS
     
     CALL calc_matrix_operators_grid( grid, grid_M_ddx, grid_M_ddy)
     
+    ! Realize that A·B = C can be rewritten as B^T·A^T= (A·B)^T
+    call MatTranspose(w1x,MAT_INPLACE_MATRIX, w1x, perr)
+    call MatTranspose(grid_M_ddx,MAT_INPLACE_MATRIX, grid_M_ddx, perr)
+    call MatTranspose(w1y,MAT_INPLACE_MATRIX, w1y, perr)
+    call MatTranspose(grid_M_ddy,MAT_INPLACE_MATRIX, grid_M_ddy, perr)
+
     CALL MatDuplicate( w0, MAT_COPY_VALUES, grid%M_map_grid2mesh, perr)
-    CALL MatMatMult( w1x, grid_M_ddx, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
-    CALL MatMatMult( w1y, grid_M_ddy, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
+    CALL MatMatMult( grid_M_ddx, w1x, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
+    CALL MatMatMult( grid_M_ddy, w1y, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
+
+    call MatTranspose(M1,MAT_INPLACE_MATRIX, M1, perr)
+    call MatTranspose(M2,MAT_INPLACE_MATRIX, M2, perr)
     
     CALL MatDestroy( grid_M_ddx    , perr)
     CALL MatDestroy( grid_M_ddy    , perr)

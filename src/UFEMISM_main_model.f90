@@ -489,19 +489,11 @@ CONTAINS
     allocate ( grid%n2ij( grid%n , 2       ))
     n = 0
     DO i = 1, grid%nx
-      IF (MOD(i,2) == 1) THEN
         DO j = 1, grid%ny
           n = n+1
           grid%ij2n( i,j) = n
           grid%n2ij( n,:) = [i,j]
         END DO
-      ELSE
-        DO j = grid%ny, 1, -1
-          n = n+1
-          grid%ij2n( i,j) = n
-          grid%n2ij( n,:) = [i,j]
-        END DO
-      END IF
     END DO
 
     ! Assign range to each processor

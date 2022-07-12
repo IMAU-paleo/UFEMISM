@@ -981,7 +981,7 @@ CONTAINS
   
 #endif
   ! Sort the column entries in a CSR matrix in ascending order
-  SUBROUTINE sort_columns_in_CSR( AA)
+  SUBROUTINE sort_columns_in_CSR( AA, i1,i2)
     ! Sort the columns in each row of CSR-formatted matrix A in ascending order
       
     IMPLICIT NONE
@@ -991,16 +991,15 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'sort_columns_in_CSR'
-    INTEGER                                            :: i1,i2,i,k1,k2,k,kk,jk,jkk
+    INTEGER,                             intent(in)    :: i1,i2
+    INTEGER                                            :: i,k1,k2,k,kk,jk,jkk
     REAL(dp)                                           :: vk, vkk
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Partition rows over the processors
-    CALL partition_list( AA%m, par%i, par%n, i1, i2)
     
-    DO i = 1, AA%m !TODO if done before allgather, can be partitioned
+    DO i = i1,i2 
       
       k1 = AA%ptr( i)
       k2 = AA%ptr( i+1) - 1
@@ -1280,6 +1279,9 @@ CONTAINS
     call allgather_array(ptr,i1,i2)
     ptr( AA%m+1) = nnz_tot+1
     
+    
+    ! Sort the column entries in the assembled matrix
+    CALL sort_columns_in_CSR( AA, i1, i2)
 
     ! Send everything to all
     call mpi_allgatherv( AA%index, AA%nnz, MPI_INTEGER &
@@ -1294,10 +1296,6 @@ CONTAINS
 
     AA%nnz_max = nnz_tot
     AA%nnz     = nnz_tot
-    
-    ! Sort the column entries in the assembled matrix
-    !TODO if called before allgather, can be distributed
-    CALL sort_columns_in_CSR( AA)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 5)

@@ -90,6 +90,7 @@
   res_max_mountain_config                     = 600.0                            !                                 mountains             [km]
   res_max_coast_config                        = 40.0                             !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.99                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
+  use_submesh_config                          = .F.                              ! Use submeshes to generate final mesh
 
   ! Resolutions of the different square grids
   ! =========================================

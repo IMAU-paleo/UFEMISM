@@ -20,6 +20,7 @@ MODULE UFEMISM_main_model
                                              calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
                                              calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
+  use mesh_single_module,              only: create_new_mesh_single, create_single_mesh_from_cart_data
   USE netcdf_module,                   ONLY: initialise_debug_fields, create_output_files, associate_debug_fields, &
                                              write_to_output_files, create_debug_file, reallocate_debug_fields
   USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, determine_timesteps_and_actions
@@ -162,7 +163,11 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Create a new mesh
-    CALL create_new_mesh( region)
+    if (C%use_submesh) then
+      CALL create_new_mesh( region)
+    else
+      call create_new_mesh_single( region)
+    end if
 
     ! Update the mapping operators between the new mesh and the fixed square grids
     CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
@@ -295,7 +300,12 @@ CONTAINS
     ! ===== The mesh =====
     ! ====================
 
-    CALL create_mesh_from_cart_data( region)
+    if (C%use_submesh) then
+      CALL create_mesh_from_cart_data( region)
+    else
+      CALL create_single_mesh_from_cart_data( region)
+    endif
+    
 
     ! ===== Map reference geometries to the mesh =====
     ! ================================================

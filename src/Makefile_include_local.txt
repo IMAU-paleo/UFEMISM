@@ -4,7 +4,7 @@
 # Setting the path for the netcdf libraries:  
   NCLIB     = $(shell nf-config --flibs)
   NCINC     = $(shell nf-config --fflags)
-  PETSC_DIR = ${HOME}/projects/petsc
+  PETSC_DIR = ${HOME}/local_projects/petsc
   PETSC_ARCH= arch-linux-c-debug
 
 # Compiler flags:
@@ -12,7 +12,7 @@
                             -Werror=implicit-interface -fimplicit-none -g -march=native
   COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og
 
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC} \
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC}\
                             ${NCINC} -I${PETSC_DIR}/include \
                             -I${PETSC_DIR}/${PETSC_ARCH}/include
 

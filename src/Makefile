@@ -52,6 +52,7 @@ UFEMISM_program_objects = \
         mesh_mapping_module.o \
         mesh_creation_module.o \
         mesh_update_module.o \
+        mesh_single_module.o \
         zeta_module.o \
         netcdf_module.o \
         forcing_module.o \

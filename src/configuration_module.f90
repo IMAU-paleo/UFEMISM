@@ -400,6 +400,7 @@ MODULE configuration_module
   REAL(dp)            :: uniform_ice_heat_capacity_config            = 2009._dp                         ! Uniform ice heat capacity (applied when choice_ice_heat_capacity_config = "uniform")
   CHARACTER(LEN=256)  :: choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   REAL(dp)            :: uniform_ice_thermal_conductivity_config     = 6.626958E7_dp                    ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
+  logical             :: use_submesh                                 = .true. 
 
   ! Climate
   ! =======
@@ -1050,6 +1051,7 @@ MODULE configuration_module
     REAL(dp)                            :: uniform_ice_heat_capacity
     CHARACTER(LEN=256)                  :: choice_ice_thermal_conductivity
     REAL(dp)                            :: uniform_ice_thermal_conductivity
+    logical                             :: use_submesh
 
     ! Climate
     ! =======
@@ -1786,6 +1788,7 @@ CONTAINS
                      uniform_ice_heat_capacity_config,                &
                      choice_ice_thermal_conductivity_config,          &
                      uniform_ice_thermal_conductivity_config,         &
+                     use_submesh,                                     &
                      choice_climate_model_config,                     &
                      filename_climate_snapshot_PI_config,             &
                      filename_climate_snapshot_warm_config,           &
@@ -2373,6 +2376,7 @@ CONTAINS
     C%uniform_ice_heat_capacity                = uniform_ice_heat_capacity_config
     C%choice_ice_thermal_conductivity          = choice_ice_thermal_conductivity_config
     C%uniform_ice_thermal_conductivity         = uniform_ice_thermal_conductivity_config
+    C%use_submesh                              = use_submesh
 
     ! Climate
     ! =======

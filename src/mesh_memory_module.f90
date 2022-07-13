@@ -792,6 +792,7 @@ CONTAINS
   END SUBROUTINE share_submesh_access
   
   SUBROUTINE move_data_from_submesh_to_mesh( mesh, submesh)
+    use mpi_f08
     
     IMPLICIT NONE
   
@@ -801,8 +802,9 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'move_data_from_submesh_to_mesh'
-
+    type(mpi_request)                                  :: reqs(15)
     integer                                            :: nconmax
+
     nconmax = C%nconmax
     
     ! Add routine to path
@@ -830,20 +832,21 @@ CONTAINS
       mesh%perturb_dir = submesh%perturb_dir
     endif
 
-    ! This can be done in parallel (async)... TODO
-    call mpi_bcast( mesh%nV         , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nTri       , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nV_mem     , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nTri_mem   , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nC_mem     , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%nV         , 1, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 1), ierr )
+    call mpi_ibcast( mesh%nTri       , 1, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 2), ierr )
+    call mpi_ibcast( mesh%nV_mem     , 1, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 3), ierr )
+    call mpi_ibcast( mesh%nTri_mem   , 1, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 4), ierr )
+    call mpi_ibcast( mesh%nC_mem     , 1, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 5), ierr )
 
-    call mpi_bcast( mesh%xmin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%xmax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%ymin       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%ymax       , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%tol_dist   , 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%xmin       , 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 6), ierr )
+    call mpi_ibcast( mesh%xmax       , 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 7), ierr )
+    call mpi_ibcast( mesh%ymin       , 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 8), ierr )
+    call mpi_ibcast( mesh%ymax       , 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 9), ierr )
+    call mpi_ibcast( mesh%tol_dist   , 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs(10), ierr )
 
-    call mpi_bcast( mesh%perturb_dir, 1              , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%perturb_dir, 1, MPI_REAL8  , 0, MPI_COMM_WORLD, reqs(11), ierr )
+
+    call mpi_waitall( 11, reqs, MPI_STATUSES_IGNORE, ierr)
 
     CALL allocate_mesh_primary( mesh, submesh%region_name, mesh%nV, mesh%nTri, mesh%nC_mem)
 
@@ -869,23 +872,25 @@ CONTAINS
       mesh% RefStackN = submesh% RefStackN
     end if
 
-    call mpi_bcast( mesh%V          , mesh%nV*2      , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%nC         , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%C          , mesh%nV*nconmax, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%niTri      , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%iTri       , mesh%nV*nconmax, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%edge_index , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%mesh_old_ti_in, mesh%nV     , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%V          , mesh%nV*2      , MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 1), ierr )
+    call mpi_ibcast( mesh%nC         , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 2), ierr )
+    call mpi_ibcast( mesh%C          , mesh%nV*nconmax, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 3), ierr )
+    call mpi_ibcast( mesh%niTri      , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 4), ierr )
+    call mpi_ibcast( mesh%iTri       , mesh%nV*nconmax, MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 5), ierr )
+    call mpi_ibcast( mesh%edge_index , mesh%nV        , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 6), ierr )
+    call mpi_ibcast( mesh%mesh_old_ti_in, mesh%nV     , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 7), ierr )
 
-    call mpi_bcast( mesh%Tri        , mesh%nTri*3    , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%Tricc      , mesh%nTri*2    , MPI_REAL8  , 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%Tric       , mesh%nTri*3    , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%Tri_edge_index, mesh%nTri   , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%Tri        , mesh%nTri*3    , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs( 8), ierr )
+    call mpi_ibcast( mesh%Tricc      , mesh%nTri*2    , MPI_REAL8  , 0, MPI_COMM_WORLD, reqs( 9), ierr )
+    call mpi_ibcast( mesh%Tric       , mesh%nTri*3    , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(10), ierr )
+    call mpi_ibcast( mesh%Tri_edge_index, mesh%nTri   , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(11), ierr )
 
-    call mpi_bcast( mesh%Triflip    , mesh%nTri*2    , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%Refmap     , mesh%nTri      , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%RefStack   , mesh%nTri      , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
-    call mpi_bcast( mesh%RefStackN  , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr )
+    call mpi_ibcast( mesh%Triflip    , mesh%nTri*2    , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(12), ierr )
+    call mpi_ibcast( mesh%Refmap     , mesh%nTri      , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(13), ierr )
+    call mpi_ibcast( mesh%RefStack   , mesh%nTri      , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(14), ierr )
+    call mpi_ibcast( mesh%RefStackN  , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(15), ierr )
+
+    call mpi_waitall( 15, reqs, MPI_STATUSES_IGNORE, ierr)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -3107,8 +3107,8 @@ CONTAINS
     CALL MatSetFromOptions( M_ddy, perr)
     
     ! Tell PETSc how much memory needs to be allocated
-    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max, PETSC_NULL_INTEGER, 1, PETSC_NULL_INTEGER, perr)
-    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max, PETSC_NULL_INTEGER, 1, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddx, nnz_per_row_max, PETSC_NULL_INTEGER, nnz_per_row_max, PETSC_NULL_INTEGER, perr)
+    CALL MatMPIAIJSetPreallocation( M_ddy, nnz_per_row_max, PETSC_NULL_INTEGER, nnz_per_row_max, PETSC_NULL_INTEGER, perr)
     
     ! Get parallelisation domains ("ownership ranges")
     CALL MatGetOwnershipRange( M_ddx, istart, iend, perr)

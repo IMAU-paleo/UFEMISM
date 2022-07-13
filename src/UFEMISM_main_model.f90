@@ -907,9 +907,12 @@ CONTAINS
       nsx = FLOOR((region%mesh%xmax - xmid) / grid%dx)
       nsy = FLOOR((region%mesh%ymax - ymid) / grid%dx)
 
-      ! Determine total number of points per dimension
-      grid%nx = 2*nsx + 1
-      grid%ny = 2*nsy + 1
+      ! Determine total number of points per dimension as twice the
+      ! number per side, plus the middle point, plus 1 grid cell to
+      ! make sure the mesh lies completely inside the grid for any
+      ! grid resolution
+      grid%nx = (2*nsx + 1) + 1
+      grid%ny = (2*nsy + 1) + 1
 
       ! Determine total number of grid points
       grid%n  = grid%nx * grid%ny
@@ -999,6 +1002,8 @@ CONTAINS
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lat, grid%wlat)
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lon, grid%wlon)
 
+    ! Compute the lat/lon coordinate for each grid
+    ! point using the mesh projection parameters
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
       CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))

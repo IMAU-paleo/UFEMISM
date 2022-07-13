@@ -548,20 +548,20 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
     REAL(dp)            :: SMB_IMAUITM_initial_firn_thickness_config   = 1._dp                            ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
 
-    ! IMAU-ITM SMB model parameters
-    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_NAM_config       = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
-    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_EAS_config       = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
-    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_GRL_config       = -49._dp                          !            they used to in ANICE.)
-    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_ANT_config       = -49._dp
-    REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_NAM_config             = 10._dp                           ! 10._dp
+    ! IMAU-ITM SMB model parameters                                                                       ! Commented values are Tijn` calibration against RACMO
+    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_NAM_config       = 0._dp                            ! ??.? : Homogeneous-reduction factor during melt computation
+    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_EAS_config       = 0._dp
+    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_GRL_config       = 0._dp
+    REAL(dp)            :: SMB_IMAUITM_C_abl_constant_ANT_config       = 0._dp
+    REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_NAM_config             = 10._dp                           ! 10.0 : Temperature-based melt factor
     REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_EAS_config             = 10._dp
     REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_GRL_config             = 10._dp
     REAL(dp)            :: SMB_IMAUITM_C_abl_Ts_ANT_config             = 10._dp
-    REAL(dp)            :: SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227_dp                        ! 0.513_dp
+    REAL(dp)            :: SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227_dp                        ! 0.0227 : Insolation-based melt factor
     REAL(dp)            :: SMB_IMAUITM_C_abl_Q_EAS_config              = 0.0227_dp
     REAL(dp)            :: SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0227_dp
     REAL(dp)            :: SMB_IMAUITM_C_abl_Q_ANT_config              = 0.0227_dp
-    REAL(dp)            :: SMB_IMAUITM_C_refr_NAM_config               = 0.051_dp                         ! 0.012_dp
+    REAL(dp)            :: SMB_IMAUITM_C_refr_NAM_config               = 0.051_dp                         ! 0.051 : Temperature-meltwater-based refreezing factor
     REAL(dp)            :: SMB_IMAUITM_C_refr_EAS_config               = 0.051_dp
     REAL(dp)            :: SMB_IMAUITM_C_refr_GRL_config               = 0.051_dp
     REAL(dp)            :: SMB_IMAUITM_C_refr_ANT_config               = 0.051_dp

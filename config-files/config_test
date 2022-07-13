@@ -24,8 +24,8 @@
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .FALSE.                          ! Greenland
-  do_ANT_config                               = .TRUE.                           ! Antarctica
+  do_GRL_config                               = .TRUE.                           ! Greenland
+  do_ANT_config                               = .FALSE.                          ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
@@ -124,8 +124,8 @@
   ! =======================
 
   choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
-  m_enh_sheet_config                          = 0.5                              ! Ice flow enhancement factor for grounded ice
-  m_enh_shelf_config                          = 0.1                              ! Ice flow enhancement factor for floating ice
+  m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
+  m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice
 
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
@@ -245,20 +245,20 @@
   SMB_IMAUITM_choice_init_firn_ANT_config     = 'uniform'
   SMB_IMAUITM_initial_firn_thickness_config   = 1.0                              ! Initial firn thickness of the IMAU-ITEM SMB model [m] (used when SMB_IMAUITM_choice_init_firn = "uniform")
 
-  ! Tuning parameters for the IMAU-ITM SMB model
-  SMB_IMAUITM_C_abl_constant_NAM_config       = 0.0                              ! 34.0      (commented values are old ANICE defaults, but since refreezing
-  SMB_IMAUITM_C_abl_constant_EAS_config       = 0.0                              !           was not calculated right and this has since been fixed, these
-  SMB_IMAUITM_C_abl_constant_GRL_config       = 0.0                              !           values will still not give the same results as they used to
-  SMB_IMAUITM_C_abl_constant_ANT_config       = 0.0                              !           in ANICE.)
-  SMB_IMAUITM_C_abl_Ts_NAM_config             = 10.0                             ! 10._dp
+  ! Tuning parameters for the IMAU-ITM SMB model                                 ! Commented values are Tijn` calibration against RACMO
+  SMB_IMAUITM_C_abl_constant_NAM_config       = 0.0                              ! ??.? : Homogeneous-reduction factor during melt computation
+  SMB_IMAUITM_C_abl_constant_EAS_config       = 0.0
+  SMB_IMAUITM_C_abl_constant_GRL_config       = 0.0
+  SMB_IMAUITM_C_abl_constant_ANT_config       = 0.0
+  SMB_IMAUITM_C_abl_Ts_NAM_config             = 10.0                             ! 10.0 : Temperature-based melt factor
   SMB_IMAUITM_C_abl_Ts_EAS_config             = 10.0
   SMB_IMAUITM_C_abl_Ts_GRL_config             = 10.0
   SMB_IMAUITM_C_abl_Ts_ANT_config             = 10.0
-  SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227                           ! 0.513_dp
+  SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227                           ! 0.0227 : Insolation-based melt factor
   SMB_IMAUITM_C_abl_Q_EAS_config              = 0.0227
   SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0227
   SMB_IMAUITM_C_abl_Q_ANT_config              = 0.0227
-  SMB_IMAUITM_C_refr_NAM_config               = 0.051                            ! 0.012_dp
+  SMB_IMAUITM_C_refr_NAM_config               = 0.051                            ! 0.051 : Temperature-meltwater-based refreezing factor
   SMB_IMAUITM_C_refr_EAS_config               = 0.051
   SMB_IMAUITM_C_refr_GRL_config               = 0.051
   SMB_IMAUITM_C_refr_ANT_config               = 0.051
@@ -359,10 +359,7 @@
   help_field_20_config                        = 'Melt_year'
   help_field_21_config                        = 'Refreezing_year'
   help_field_22_config                        = 'Runoff_year'
-  help_field_23_config                        = 'C_abl_constant_inv'
-  help_field_24_config                        = 'C_abl_Ts_inv'
-  help_field_25_config                        = 'C_abl_Q_inv'
-  help_field_26_config                        = 'C_refr_inv'
-  help_field_27_config                        = 'SMB_year'
+  help_field_23_config                        = 'SMB_year'
+  help_field_24_config                        = 'SL'
 
 /

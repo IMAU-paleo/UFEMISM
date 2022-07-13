@@ -424,6 +424,7 @@ CONTAINS
     region%do_SMB_inv     = .TRUE.
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
+    IF (par%master) WRITE(0,*) '  Running again now...'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -4,10 +4,10 @@
   ! ====================
 
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 10.0                             ! End   time (in years) of the simulations
+  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 2.0                              ! Maximum time step (in years) of the ice model
-  dt_thermo_config                            = 4.0                              ! Time step (in years) for updating thermodynamics
+  dt_thermo_config                            = 2.0                              ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 2.0                              ! Time step (in years) for updating the SMB
@@ -24,8 +24,8 @@
 
   do_NAM_config                               = .FALSE.                          ! North America
   do_EAS_config                               = .FALSE.                          ! Eurasia
-  do_GRL_config                               = .TRUE.                           ! Greenland
-  do_ANT_config                               = .FALSE.                          ! Antarctica
+  do_GRL_config                               = .FALSE.                          ! Greenland
+  do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
@@ -46,9 +46,9 @@
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
   res_max_config                              = 500.0                            ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 15.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 15.0                             !                                 grounding line        [km]
-  res_max_cf_config                           = 15.0                             !                                 calving front         [km]
+  res_max_margin_config                       = 20.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 20.0                             !                                 grounding line        [km]
+  res_max_cf_config                           = 20.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 500.0                            !                                 mountains             [km]
   res_max_coast_config                        = 500.0                            !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.95                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
@@ -70,7 +70,7 @@
   choice_refgeo_init_ANT_config               = 'realistic'                      ! Choice of initial geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   filename_refgeo_init_NAM_config             = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_init_EAS_config             = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_init_GRL_config             = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  filename_refgeo_init_GRL_config             = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'
   filename_refgeo_init_ANT_config             = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   ! Present-day geometry
@@ -80,7 +80,7 @@
   choice_refgeo_PD_ANT_config                 = 'realistic'                      ! Choice of present-day geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   filename_refgeo_PD_NAM_config               = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_PD_EAS_config               = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_PD_GRL_config               = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  filename_refgeo_PD_GRL_config               = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'
   filename_refgeo_PD_ANT_config               = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   ! GIA equilibrium geometry
@@ -90,7 +90,7 @@
   choice_refgeo_GIAeq_ANT_config              = 'realistic'                      ! Choice of GIA equilibrium geometry for Antarctica   ; can be "idealised", "realistic", or "restart"
   filename_refgeo_GIAeq_NAM_config            = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'
   filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
-  filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'
+  filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'
   filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
 
   remove_Lake_Vostok_config                   = .TRUE.
@@ -148,7 +148,7 @@
   ! Basal roughness / friction
   choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 45.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
   slid_Tsai2015_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in the Tsai2015 sliding law
   slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
@@ -167,7 +167,7 @@
   basal_sliding_inv_scale_config              = 5000.0                           ! Scaling constant for inversion procedure [m]
   basal_sliding_inv_rsmooth_config            = 10000.0                          ! Smoothing radius for inversion procedure [m]
   basal_sliding_inv_wsmooth_config            = 1.0                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
-  basal_sliding_inv_phi_min_config            = 1.0                              ! Minimum value of phi_fric allowed during inversion
+  basal_sliding_inv_phi_min_config            = 0.1                              ! Minimum value of phi_fric allowed during inversion
   basal_sliding_inv_phi_max_config            = 45.0                             ! Maximum value of phi_fric allowed during inversion
   basal_sliding_inv_tol_diff_config           = 100.0                            ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
   basal_sliding_inv_tol_frac_config           = 1.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
@@ -264,7 +264,7 @@
   SMB_IMAUITM_C_refr_ANT_config               = 0.051
 
   ! IMAU-ITM SMB model inversion
-  do_SMB_IMAUITM_inversion_config             = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
+  do_SMB_IMAUITM_inversion_config             = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
   SMB_IMAUITM_inv_choice_init_C_config        = 'uniform'                        ! How to initialise the C parameters in the IMAU-ITM SMB inversion: "uniform", "restart"
   SMB_IMAUITM_inv_scale_config                = 5000.0                           ! Scaling constant for inversion procedure [m]
   SMB_IMAUITM_inv_C_abl_constant_min_config   = 0.0                              ! Minimum value of C_abl_constant allowed during inversion
@@ -309,12 +309,12 @@
   ! =================
 
   do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
-  choice_sealevel_model_config                = 'SELEN'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
+  choice_sealevel_model_config                = 'fixed'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
   filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl.dat'
   sealevel_record_length_config               = 30001
 
-  choice_GIA_model_config                     = 'SELEN'                          ! Can be "none", "ELRA", or "SELEN"
+  choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"
   ELRA_lithosphere_flex_rigidity_config       = 1.0E+25                          ! Lithospheric flexural rigidity [kg m^2 s^-2]
   ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
   ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]

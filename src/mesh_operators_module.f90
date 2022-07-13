@@ -3124,20 +3124,20 @@ CONTAINS
         v1 = -1._dp / grid%dx
         v2 =  1._dp / grid%dx
         CALL MatSetValues( M_ddx, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddx, 1, n-1, 1, n_ip1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n_ip1-1, 1, n-1, v2, INSERT_VALUES, perr)
       ELSEIF (i == grid%nx) THEN
         n_im1 = grid%ij2n( i-1,j)
         v1 =  1._dp / grid%dx
         v2 = -1._dp / grid%dx
         CALL MatSetValues( M_ddx, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddx, 1, n-1, 1, n_im1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n_im1-1, 1, n-1, v2, INSERT_VALUES, perr)
       ELSE
         n_im1 = grid%ij2n( i-1,j)
         n_ip1 = grid%ij2n( i+1,j)
         v1 = -0.5_dp / grid%dx
         v2 =  0.5_dp / grid%dx
-        CALL MatSetValues( M_ddx, 1, n-1, 1, n_im1-1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddx, 1, n-1, 1, n_ip1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n_im1-1, 1, n-1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddx, 1, n_ip1-1, 1, n-1, v2, INSERT_VALUES, perr)
       END IF
       
       ! d/dy
@@ -3146,20 +3146,20 @@ CONTAINS
         v1 = -1._dp / grid%dx
         v2 =  1._dp / grid%dx
         CALL MatSetValues( M_ddy, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jp1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n_jp1-1, 1, n-1, v2, INSERT_VALUES, perr)
       ELSEIF (j == grid%ny) THEN
         n_jm1 = grid%ij2n( i,j-1)
         v1 =  1._dp / grid%dx
         v2 = -1._dp / grid%dx
         CALL MatSetValues( M_ddy, 1, n-1, 1, n    -1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jm1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n_jm1-1, 1, n-1, v2, INSERT_VALUES, perr)
       ELSE
         n_jm1 = grid%ij2n( i,j-1)
         n_jp1 = grid%ij2n( i,j+1)
         v1 = -0.5_dp / grid%dx
         v2 =  0.5_dp / grid%dx
-        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jm1-1, v1, INSERT_VALUES, perr)
-        CALL MatSetValues( M_ddy, 1, n-1, 1, n_jp1-1, v2, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n_jm1-1, 1, n-1, v1, INSERT_VALUES, perr)
+        CALL MatSetValues( M_ddy, 1, n_jp1-1, 1, n-1, v2, INSERT_VALUES, perr)
       END IF
       
     END DO ! DO n = n1, n2

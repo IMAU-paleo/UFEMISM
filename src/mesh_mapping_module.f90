@@ -732,7 +732,7 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: cols
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: vals, w0_row, w1x_row, w1y_row
     REAL(dp)                                           :: A_overlap_tot
-    TYPE(tMat)                                         :: grid_M_ddx, grid_M_ddy
+    TYPE(tMat)                                         :: grid_M_ddx_T, grid_M_ddy_T
     TYPE(tMat)                                         :: M1, M2
     
     ! Add routine to path
@@ -1006,23 +1006,21 @@ CONTAINS
   
     !IF (par%master) WRITE(0,*) 'calc_remapping_operator_grid2mesh - calculating remapping matrix...'
     
-    CALL calc_matrix_operators_grid( grid, grid_M_ddx, grid_M_ddy)
+    CALL calc_matrix_operators_grid( grid, grid_M_ddx_T, grid_M_ddy_T)
     
     ! Realize that A·B = C can be rewritten as B^T·A^T= (A·B)^T
     call MatTranspose(w1x,MAT_INPLACE_MATRIX, w1x, perr)
-    call MatTranspose(grid_M_ddx,MAT_INPLACE_MATRIX, grid_M_ddx, perr)
     call MatTranspose(w1y,MAT_INPLACE_MATRIX, w1y, perr)
-    call MatTranspose(grid_M_ddy,MAT_INPLACE_MATRIX, grid_M_ddy, perr)
 
     CALL MatDuplicate( w0, MAT_COPY_VALUES, grid%M_map_grid2mesh, perr)
-    CALL MatMatMult( grid_M_ddx, w1x, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
-    CALL MatMatMult( grid_M_ddy, w1y, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
+    CALL MatMatMult( grid_M_ddx_T, w1x, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M1, perr)  ! This can be done more efficiently now that the non-zero structure is known...
+    CALL MatMatMult( grid_M_ddy_T, w1y, MAT_INITIAL_MATRIX, PETSC_DEFAULT_REAL, M2, perr)
 
     call MatTranspose(M1,MAT_INPLACE_MATRIX, M1, perr)
     call MatTranspose(M2,MAT_INPLACE_MATRIX, M2, perr)
     
-    CALL MatDestroy( grid_M_ddx    , perr)
-    CALL MatDestroy( grid_M_ddy    , perr)
+    CALL MatDestroy( grid_M_ddx_T  , perr)
+    CALL MatDestroy( grid_M_ddy_T  , perr)
     CALL MatDestroy( w0            , perr)
     CALL MatDestroy( w1x           , perr)
     CALL MatDestroy( w1y           , perr)

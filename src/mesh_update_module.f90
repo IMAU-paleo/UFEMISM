@@ -537,13 +537,13 @@ MODULE mesh_update_module
       
       FinishedRefining = .FALSE.
       IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.      
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)      
+      !CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)      
       IF (FinishedRefining) EXIT  
       
       ! Check if any process needs to extend their memory.
       ! ==================================================
       
-      CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr) 
+      !CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr) 
             
       ! By extending the memory to mesh%nV + 1000, we ensure that processes that 
       ! have already finished refining do not keep adding useless extra memory.

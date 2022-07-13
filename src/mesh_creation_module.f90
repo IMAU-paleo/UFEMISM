@@ -518,17 +518,8 @@ MODULE mesh_creation_module
       
       FinishedRefining = .FALSE.
       IF (mesh%RefStackN == 0) FinishedRefining = .TRUE.
-      !CALL MPI_ALLREDUCE( MPI_IN_PLACE, FinishedRefining, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_WORLD, ierr)
       IF (FinishedRefining) EXIT
-      
-      ! Check if any process needs to extend their memory.
-      ! ==================================================
-      
-      !CALL MPI_ALLREDUCE( MPI_IN_PLACE, DoExtendMemory, 1, MPI_LOGICAL, MPI_LOR, MPI_COMM_WORLD, ierr)
             
-      ! By extending the memory to mesh%nV + 1000, we ensure that processes that
-      ! have already finished refining do not keep adding useless extra memory.
-      
       IF (DoExtendMemory) THEN
         CALL extend_submesh_primary( mesh, mesh%nV + 1000, mesh%nTri + 2000)
       END IF
@@ -765,7 +756,6 @@ MODULE mesh_creation_module
       CALL move_vertex( mesh, vi, VorGC)
     
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

@@ -42,47 +42,50 @@ contains
     CALL perturb_dummy_mesh(       submesh, 0)
     
     
-    res_min_inc = C%res_max * 2._dp
-    
-    DO WHILE (res_min_inc > C%res_min)
+    if (par%master) then
+      res_min_inc = C%res_max * 2._dp
       
-      ! Increase resolution
-      res_min_inc = res_min_inc / 2._dp
-   
-      ! Determine resolutions
-      submesh%res_min          = MAX( C%res_min,          res_min_inc)
-      submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
-      submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
-      submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
-      submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
-      submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
+      DO WHILE (res_min_inc > C%res_min)
+        
+        ! Increase resolution
+        res_min_inc = res_min_inc / 2._dp
+     
+        ! Determine resolutions
+        submesh%res_min          = MAX( C%res_min,          res_min_inc)
+        submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
+        submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
+        submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
+        submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
+        submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
+        
+        IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
+        
+        ! Refine the process submesh
+        CALL refine_mesh( submesh, region%refgeo_init)
+        
+        ! Split any new triangles (added during alignment) that are too sharp
+        ! CALL refine_submesh_geo_only( submesh)
+        
+        ! Smooth the submesh using Lloyd' algorithm
+        CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+        
+        ! After the last refinement step, apply Lloyds algorithm two more times, because we can.
+        IF (res_min_inc <= C%res_min) THEN
+        CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+        CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+        END IF
+        
+        ! Write submesh to text file for debugging
+        WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
+        IF (debug_mesh_creation) CALL write_mesh_to_text_file( submesh, 'submesh_proc_' // TRIM(str_processid) // '.txt')
+        
+        ! Check if everything went correctly
+        CALL check_mesh( submesh)
       
-      IF (debug_mesh_creation) WRITE(0,*) '  Process ', par%i, ' refining submesh to ', submesh%res_max_gl, ' km...'
+      END DO
       
-      ! Refine the process submesh
-      CALL refine_mesh( submesh, region%refgeo_init)
-      
-      ! Split any new triangles (added during alignment) that are too sharp
-      !CALL refine_submesh_geo_only( submesh)
-      
-      ! ! Smooth the submesh using Lloyd' algorithm
-      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
-      
-      ! After the last refinement step, apply Lloyds algorithm two more times, because we can.
-      IF (res_min_inc <= C%res_min) THEN
-      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
-      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
-      END IF
-      
-      ! Write submesh to text file for debugging
-      WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
-      IF (debug_mesh_creation) CALL write_mesh_to_text_file( submesh, 'submesh_proc_' // TRIM(str_processid) // '.txt')
-      
-      ! Check if everything went correctly
-      CALL check_mesh( submesh)
-    
-    END DO
-    
+    end if
+
     IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Creating final mesh...'
     CALL create_final_mesh_from_merged_submesh( submesh, region%mesh)
 
@@ -160,40 +163,42 @@ contains
     CALL initialise_dummy_mesh(    submesh, xmin, xmax, ymin, ymax)
     CALL perturb_dummy_mesh(       submesh, 1 - region%mesh%perturb_dir)
     
-    res_min_inc = C%res_max * 2._dp
-    
-    it = 0
-    DO WHILE (res_min_inc > C%res_min)
-      it = it + 1
+    if (par%master) then
+      res_min_inc = C%res_max * 2._dp
       
-      ! Increase resolution
-      res_min_inc = res_min_inc / 2._dp
-   
-      ! Determine resolutions
-      submesh%res_min          = MAX( C%res_min,          res_min_inc)
-      submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
-      submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
-      submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
-      submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
-      submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
+      it = 0
+      DO WHILE (res_min_inc > C%res_min)
+        it = it + 1
+        
+        ! Increase resolution
+        res_min_inc = res_min_inc / 2._dp
+     
+        ! Determine resolutions
+        submesh%res_min          = MAX( C%res_min,          res_min_inc)
+        submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
+        submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
+        submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
+        submesh%res_max_mountain = MAX( C%res_max_mountain, res_min_inc)
+        submesh%res_max_coast    = MAX( C%res_max_coast,    res_min_inc)
+        
+        ! Refine the process submesh
+        CALL refine_mesh( submesh, region%mesh, region%ice, region%refgeo_PD) 
+        
+        ! Split any new triangles (added during alignment) that are too sharp
+        !CALL refine_submesh_geo_only( submesh)
+        
+        ! Smooth the submesh using Lloyd' algorithm
+        CALL Lloyds_algorithm_single_iteration_submesh( submesh)
+        
+        ! Write submesh to text file for debugging
+        WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
+        IF (debug_mesh_creation) CALL write_mesh_to_text_file( submesh, 'submesh_proc_' // TRIM(str_processid) // '.txt')
+        
+        ! Check if everything went correctly
+        CALL check_mesh( submesh)
       
-      ! Refine the process submesh
-      CALL refine_mesh( submesh, region%mesh, region%ice, region%refgeo_PD) 
-      
-      ! Split any new triangles (added during alignment) that are too sharp
-      !CALL refine_submesh_geo_only( submesh)
-      
-      ! Smooth the submesh using Lloyd' algorithm
-      CALL Lloyds_algorithm_single_iteration_submesh( submesh)
-      
-      ! Write submesh to text file for debugging
-      WRITE(str_processid,'(I2)') par%i;   str_processid = ADJUSTL(str_processid)
-      IF (debug_mesh_creation) CALL write_mesh_to_text_file( submesh, 'submesh_proc_' // TRIM(str_processid) // '.txt')
-      
-      ! Check if everything went correctly
-      CALL check_mesh( submesh)
-    
-    END DO
+      END DO
+    end if
     
     IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Creating final mesh...'
     CALL create_final_mesh_from_merged_submesh( submesh, region%mesh_new)

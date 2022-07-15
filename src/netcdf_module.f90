@@ -109,6 +109,27 @@ CONTAINS
 
   END SUBROUTINE create_int_var
 
+  SUBROUTINE create_single_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
+    ! Subroutine for creating netCDF variables of type nf90_FLOAT more convenient:
+
+    ! Input variables:
+    INTEGER,                      INTENT(IN)  :: ncid
+    CHARACTER(LEN=*),             INTENT(IN)  :: var_name
+    INTEGER, DIMENSION(:),        INTENT(IN)  :: id_dims
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: long_name
+    CHARACTER(LEN=*),   OPTIONAL, INTENT(IN)  :: units
+    REAL(dp),           OPTIONAL, INTENT(IN)  :: missing_value
+
+    ! Output variables:
+    INTEGER,                      INTENT(OUT) :: id_var
+
+    CALL handle_error(nf90_def_var(ncid,var_name,nf90_float,id_dims,id_var))
+    IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
+    IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
+    IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
+
+  END SUBROUTINE create_single_var
+
   SUBROUTINE create_double_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
     ! Subroutine for creating netCDF variables of type nf90_DOUBLE more convenient:
 
@@ -294,6 +315,11 @@ CONTAINS
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
+    
+    ! ISMIP6 output
+    IF (C%do_write_ISMIP_output) THEN
+      CALL create_ISMIP_output_files( region)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -320,6 +346,7 @@ CONTAINS
     CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
+    IF (C%do_write_ISMIP_output) CALL write_to_ISMIP_output_files( region)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2438,6 +2465,42 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D
+  
+  SUBROUTINE map_and_write_to_grid_netcdf_dp_2D_notime(  ncid, mesh, grid, d_mesh, id_var)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)        :: ncid
+    TYPE(type_mesh),            INTENT(IN)        :: mesh
+    TYPE(type_grid),            INTENT(IN)        :: grid
+    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
+    INTEGER,                    INTENT(IN)        :: id_var
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D_notime'
+    REAL(dp), DIMENSION(:,:  ), POINTER           :: d_grid
+    INTEGER                                       :: wd_grid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
+
+    ! Map data from the model mesh to the square grid
+    CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
+
+    ! Write grid data to NetCDF
+    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/ 1, 1/) ))
+
+    ! Deallocate shared memory
+    CALL deallocate_shared( wd_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D_notime
 
   SUBROUTINE map_and_write_to_grid_netcdf_dp_3D(  ncid, mesh, grid, d_mesh, id_var, ti, nz)
 
@@ -4494,6 +4557,818 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_SELEN_output_file
+  
+! ===== ISMIP-style output =====
+! ==============================
+  
+  SUBROUTINE create_ISMIP_output_files( region)
+    ! Create all the ISMIP output files
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_model_region), INTENT(IN)    :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_ISMIP_output_files'
+    CHARACTER(LEN=256)                                 :: icesheet_code, foldername
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Code for the ice sheet name in the ISMIP output file names
+    IF     (region%name == 'NAM') THEN
+      icesheet_code = 'NAIS'
+    ELSEIF (region%name == 'EAS') THEN
+      icesheet_code = 'EUIS'
+    ELSEIF (region%name == 'GRL') THEN
+      icesheet_code = 'GIS'
+    ELSEIF (region%name == 'ANT') THEN
+      icesheet_code = 'AIS'
+    ELSEIF (region%name == 'PAT') THEN
+      icesheet_code = 'PIS'
+    ELSE
+      icesheet_code = 'beep'
+      CALL crash('unknown region "' // TRIM( region%name) // '"!')
+    END IF
+    
+    ! Create a subdirectory within the output directory
+    foldername = TRIM( C%output_dir) // TRIM(                icesheet_code  ) // '_' // &
+                                        TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                        TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                        TRIM( C%ISMIP_output_experiment_code)
+    CALL system('mkdir ' // foldername)
+
+    ! Create all the ISMIP output files
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'lithk'                , 'land_ice_thickness'                                               , 'm'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'orog'                 , 'surface_altitude'                                                 , 'm'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'topg'                 , 'bedrock_altitude'                                                 , 'm'             )
+    CALL create_ISMIP_output_file_field_notime( foldername, icesheet_code, region%grid_output, 'hfgeoubed'            , 'upward_geothermal_heat_flux_at_ground_level'                      , 'W m-2'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'acabf'                , 'land_ice_surface_specific_mass_balance_flux'                      , 'kg m-2 s-1'    )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'libmassbfgr'          , 'land_ice_basal_specific_mass_balance_flux'                        , 'kg m-2 s-1'    )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'libmassbffl'          , 'land_ice_basal_specific_mass_balance_flux'                        , 'kg m-2 s-1'    )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'dlithkdt'             , 'tendency_of_land_ice_thickness'                                   , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'xvelsurf'             , 'land_ice_surface_x_velocity'                                      , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'yvelsurf'             , 'land_ice_surface_y_velocity'                                      , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'zvelsurf'             , 'land_ice_surface_upward_velocity'                                 , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'xvelbase'             , 'land_ice_basal_x_velocity'                                        , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'yvelbase'             , 'land_ice_basal_y_velocity'                                        , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'zvelbase'             , 'land_ice_basal_upward_velocity'                                   , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'xvelmean'             , 'land_ice_vertical_mean_x_velocity'                                , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'yvelmean'             , 'land_ice_vertical_mean_y_velocity'                                , 'm s-1'         )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'litemptop'            , 'temperature_at_top_of_ice_sheet_model'                            , 'K'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'litempbotgr'          , 'temperature_at_base_of_ice_sheet_model'                           , 'K'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'litempbotfl'          , 'temperature_at_base_of_ice_sheet_model'                           , 'K'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'strbasemag'           , 'land_ice_basal_drag'                                              , 'Pa'            )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'licalvf'              , 'land_ice_specific_mass_flux_due_to_calving'                       , 'kg m-2 s-1'    )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'lifmassbf'            , 'land_ice_specific_mass_flux_due_to_calving_and_ice_front_melting' , 'kg m-2 s-1'    )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'sftgif'               , 'land_ice_area_fraction'                                           , '1'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'sftgrf'               , 'grounded_ice_sheet_area_fraction'                                 , '1'             )
+    CALL create_ISMIP_output_file_field(        foldername, icesheet_code, region%grid_output, 'sftflf'               , 'floating_ice_shelf_area_fraction'                                 , '1'             )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'lim'                  , 'land_ice_mass'                                                    , 'kg'            )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'limnsw'               , 'land_ice_mass_not_displacing_sea_water'                           , 'kg'            )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'iareagr'              , 'grounded_ice_sheet_area'                                          , 'm2'            )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'iareafl'              , 'floating_ice_sheet_area'                                          , 'm2'            )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendacabf'            , 'tendency_of_land_ice_mass_due_to_surface_mass_balance'            , 'kg s-1'        )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlibmassbf'        , 'tendency_of_land_ice_mass_due_to_basal_mass_balance'              , 'kg s-1'        )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlibmassbffl'      , 'tendency_of_land_ice_mass_due_to_basal_mass_balance'              , 'kg s-1'        )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlicalvf'          , 'tendency_of_land_ice_mass_due_to_calving'                         , 'kg s-1'        )
+    CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlifmassbf'        , 'tendency_of_land_ice_mass_due_to_calving_and_ice_front_melting'   , 'kg s-1'        )
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE create_ISMIP_output_files
+  
+  SUBROUTINE create_ISMIP_output_file_scalar( foldername, icesheet_code, variable_name, standard_name, units)
+    ! Create a single ISMIP output file for a scalar
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_ISMIP_output_file_scalar'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_t
+    INTEGER                                            :: id_var_t, id_var_scalar
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+    
+    ! Check if a file by this name already exists; if so, crash the model.
+    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( filename) // '" already exists!')
+    END IF
+    
+    ! Create netcdf file
+    CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
+        
+    ! Define dimensions:
+    CALL create_dim( ncid, 'time',      nf90_unlimited,     id_dim_t      )
+    
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+    
+    ! time variable (needs some attributes that are not in the standard subroutine)
+    CALL handle_error( nf90_def_var( ncid, 'time', nf90_float, [id_dim_t], id_var_t))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'standard_name', 'time'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'long_name'    , 'time'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'units'        , 'days since ' // TRIM( C%ISMIP_output_basetime)))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'calendar'     , '360_day'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'axis'         , 'T'))
+    
+    ! Field variable (needs some attributes that are not in the standard subroutine)
+    CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_t], id_var_scalar))
+    CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'standard_name', standard_name))
+    CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'units'        , units))
+    CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'missing_value', 1.E20))
+    
+    ! Leave definition mode:
+    CALL handle_error( nf90_enddef( ncid))
+        
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( ncid))
+    
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE create_ISMIP_output_file_scalar
+  
+  SUBROUTINE create_ISMIP_output_file_field( foldername, icesheet_code, grid, variable_name, standard_name, units)
+    ! Create a single ISMIP output file for an [x,y,t] data field
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_ISMIP_output_file_field'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_x, id_dim_y, id_dim_t
+    INTEGER                                            :: id_var_x, id_var_y, id_var_t, id_var_field
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+    
+    ! Check if a file by this name already exists; if so, crash the model.
+    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( filename) // '" already exists!')
+    END IF
+    
+    ! Create netcdf file
+    CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
+        
+    ! Define dimensions:
+    CALL create_dim( ncid, 'x',         grid%nx,            id_dim_x      )
+    CALL create_dim( ncid, 'y',         grid%ny,            id_dim_y      )
+    CALL create_dim( ncid, 'time',      nf90_unlimited,     id_dim_t      )
+    
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+    
+    ! x,y variables
+    CALL create_single_var( ncid, 'x', [id_dim_x], id_var_x, long_name = 'x-coordinate', units = 'm')
+    CALL create_single_var( ncid, 'y', [id_dim_y], id_var_y, long_name = 'y-coordinate', units = 'm')
+    
+    ! time variable (needs some attributes that are not in the standard subroutine)
+    CALL handle_error( nf90_def_var( ncid, 'time', nf90_float, [id_dim_t], id_var_t))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'standard_name', 'time'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'long_name'    , 'time'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'units'        , 'days since ' // TRIM( C%ISMIP_output_basetime)))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'calendar'     , '360_day'))
+    CALL handle_error( nf90_put_att( ncid, id_var_t, 'axis'         , 'T'))
+    
+    ! Field variable (needs some attributes that are not in the standard subroutine)
+    CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_x, id_dim_y, id_dim_t], id_var_field))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'standard_name', standard_name))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'units'        , units))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'missing_value', 1.E20))
+    
+    ! Leave definition mode:
+    CALL handle_error( nf90_enddef( ncid))
+    
+    ! Write the x, y variable data
+    CALL handle_error( nf90_put_var( ncid, id_var_x, grid%x))
+    CALL handle_error( nf90_put_var( ncid, id_var_y, grid%y))
+        
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( ncid))
+    
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE create_ISMIP_output_file_field
+  
+  SUBROUTINE create_ISMIP_output_file_field_notime( foldername, icesheet_code, grid, variable_name, standard_name, units)
+    ! Create a single ISMIP output file for an [x,y] data field
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_ISMIP_output_file_field_notime'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_x, id_dim_y
+    INTEGER                                            :: id_var_x, id_var_y, id_var_field
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+    
+    ! Check if a file by this name already exists; if so, crash the model.
+    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( filename) // '" already exists!')
+    END IF
+    
+    ! Create netcdf file
+    CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
+        
+    ! Define dimensions:
+    CALL create_dim( ncid, 'x',         grid%nx,            id_dim_x      )
+    CALL create_dim( ncid, 'y',         grid%ny,            id_dim_y      )
+    
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+    
+    ! x,y variables
+    CALL create_single_var( ncid, 'x', [id_dim_x], id_var_x, long_name = 'x-coordinate', units = 'm')
+    CALL create_single_var( ncid, 'y', [id_dim_y], id_var_y, long_name = 'y-coordinate', units = 'm')
+    
+    ! Field variable (needs some attributes that are not in the standard subroutine)
+    CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_x, id_dim_y], id_var_field))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'standard_name', standard_name))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'units'        , units))
+    CALL handle_error( nf90_put_att( ncid, id_var_field, 'missing_value', 1.E20))
+    
+    ! Leave definition mode:
+    CALL handle_error( nf90_enddef( ncid))
+    
+    ! Write the x, y variable data
+    CALL handle_error( nf90_put_var( ncid, id_var_x, grid%x))
+    CALL handle_error( nf90_put_var( ncid, id_var_y, grid%y))
+        
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( ncid))
+    
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE create_ISMIP_output_file_field_notime
+  
+  SUBROUTINE write_to_ISMIP_output_files( region)
+    ! Write to all the ISMIP output files
+  
+    USE parameters_module, ONLY: ice_density, sec_per_year
+   
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_model_region), INTENT(IN)    :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                        :: routine_name = 'write_to_ISMIP_output_files'
+    INTEGER                                              :: vi
+    CHARACTER(LEN=256)                                   :: icesheet_code, foldername
+    REAL(dp), PARAMETER                                  :: missing_value = 1.E20
+    REAL(dp), DIMENSION( :    ), POINTER                 :: Ti_base_gr
+    REAL(dp), DIMENSION( :    ), POINTER                 :: Ti_base_fl
+    REAL(dp), DIMENSION( :    ), POINTER                 :: basal_drag
+    REAL(dp), DIMENSION( :    ), POINTER                 :: calving_flux
+    REAL(dp), DIMENSION( :    ), POINTER                 :: calving_and_front_melt_flux
+    REAL(dp), DIMENSION( :    ), POINTER                 :: land_ice_area_fraction
+    REAL(dp), DIMENSION( :    ), POINTER                 :: grounded_ice_sheet_area_fraction
+    REAL(dp), DIMENSION( :    ), POINTER                 :: floating_ice_shelf_area_fraction
+    INTEGER :: wTi_base_gr, wTi_base_fl, wbasal_drag, wcalving_flux, wcalving_and_front_melt_flux
+    INTEGER :: wland_ice_area_fraction, wgrounded_ice_sheet_area_fraction, wfloating_ice_shelf_area_fraction
+    REAL(dp)                                             :: land_ice_mass
+    REAL(dp)                                             :: mass_above_floatation
+    REAL(dp)                                             :: grounded_ice_sheet_area
+    REAL(dp)                                             :: floating_ice_sheet_area
+    REAL(dp)                                             :: total_SMB
+    REAL(dp)                                             :: total_BMB
+    REAL(dp)                                             :: total_BMB_shelf
+    REAL(dp)                                             :: total_calving_flux
+    REAL(dp)                                             :: total_calving_and_front_melt_flux
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Code for the ice sheet name in the ISMIP output file names
+    IF     (region%name == 'NAM') THEN
+      icesheet_code = 'NAIS'
+    ELSEIF (region%name == 'EAS') THEN
+      icesheet_code = 'EUIS'
+    ELSEIF (region%name == 'GRL') THEN
+      icesheet_code = 'GIS'
+    ELSEIF (region%name == 'ANT') THEN
+      icesheet_code = 'AIS'
+    ELSEIF (region%name == 'PAT') THEN
+      icesheet_code = 'PIS'
+    ELSE
+      icesheet_code = 'beep'
+      CALL crash('unknown region "' // TRIM( region%name) // '"!')
+    END IF
+    
+    ! The folder where the ISMIp6 output files are located
+    foldername = TRIM( C%output_dir) // TRIM(                icesheet_code  ) // '_' // &
+                                        TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                        TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                        TRIM( C%ISMIP_output_experiment_code)
+                                            
+    ! Calculate some quantities that are not natively in the ice model
+    
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( region%mesh%nV, Ti_base_gr                      , wTi_base_gr                      )
+    CALL allocate_shared_dp_1D( region%mesh%nV, Ti_base_fl                      , wTi_base_fl                      )
+    CALL allocate_shared_dp_1D( region%mesh%nV, basal_drag                      , wbasal_drag                      )
+    CALL allocate_shared_dp_1D( region%mesh%nV, calving_flux                    , wcalving_flux                    )
+    CALL allocate_shared_dp_1D( region%mesh%nV, calving_and_front_melt_flux     , wcalving_and_front_melt_flux     )
+    CALL allocate_shared_dp_1D( region%mesh%nV, land_ice_area_fraction          , wland_ice_area_fraction          )
+    CALL allocate_shared_dp_1D( region%mesh%nV, grounded_ice_sheet_area_fraction, wgrounded_ice_sheet_area_fraction)
+    CALL allocate_shared_dp_1D( region%mesh%nV, floating_ice_shelf_area_fraction, wfloating_ice_shelf_area_fraction)
+    
+    ! 2-D fields
+    Ti_base_gr(                       region%mesh%vi1:region%mesh%vi2) = missing_value
+    Ti_base_fl(                       region%mesh%vi1:region%mesh%vi2) = missing_value
+    basal_drag(                       region%mesh%vi1:region%mesh%vi2) = missing_value
+    calving_flux(                     region%mesh%vi1:region%mesh%vi2) = missing_value
+    calving_and_front_melt_flux(      region%mesh%vi1:region%mesh%vi2) = missing_value
+    land_ice_area_fraction(           region%mesh%vi1:region%mesh%vi2) = missing_value
+    grounded_ice_sheet_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
+    floating_ice_shelf_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
+    
+    ! Scalars (integrated values)
+    land_ice_mass                     = 0._dp
+    mass_above_floatation             = 0._dp
+    grounded_ice_sheet_area           = 0._dp
+    floating_ice_sheet_area           = 0._dp
+    total_SMB                         = 0._dp
+    total_BMB                         = 0._dp
+    total_BMB_shelf                   = 0._dp
+    total_calving_flux                = 0._dp
+    total_calving_and_front_melt_flux = 0._dp
+    
+    DO vi = 1, region%mesh%vi1, region%mesh%vi2
+      
+      ! Ice base temperature separate for sheet and shelf
+      ! =================================================
+      
+      IF (region%ice%mask_sheet_a( vi) == 1) THEN
+        Ti_base_gr( vi) = region%ice%Ti_a( vi,C%nz)
+      END IF
+      
+      IF (region%ice%mask_shelf_a( vi) == 1) THEN
+        Ti_base_fl( vi) = region%ice%Ti_a( vi,C%nz)
+      END IF
+      
+      ! Basal drag
+      ! ==========
+      
+      IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
+        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**2
+      END IF
+      
+      ! Calving and front melting fluxes
+      ! ================================
+      
+      calving_flux(                vi) = 0._dp ! FIXME
+      calving_and_front_melt_flux( vi) = 0._dp ! FIXME
+      
+      ! Ice fractions
+      ! =============
+      
+      IF (region%ice%mask_cf_a( vi) == 0) THEN
+        land_ice_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp)
+      ELSE
+        land_ice_area_fraction( vi) = region%ice%float_margin_frac_a( vi)
+      END IF
+      
+      IF (region%ice%mask_ice_a( vi) == 1) THEN
+        grounded_ice_sheet_area_fraction( vi) = region%ice%f_grnd_a( vi)
+      ELSE
+        grounded_ice_sheet_area_fraction( vi) = 0._dp
+      END IF
+      
+      floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
+      
+      ! Integrated values
+      ! =================
+      
+      land_ice_mass                     = land_ice_mass                     + (region%ice%Hi_a(                  vi) * region%mesh%A( vi) * ice_density)    ! kg
+      mass_above_floatation             = mass_above_floatation             + (region%ice%TAF_a(                 vi) * region%mesh%A( vi) * ice_density)    ! kg
+      grounded_ice_sheet_area           = grounded_ice_sheet_area           + (grounded_ice_sheet_area_fraction( vi) * region%mesh%A( vi))                  ! m2
+      floating_ice_sheet_area           = floating_ice_sheet_area           + (floating_ice_shelf_area_fraction( vi) * region%mesh%A( vi))                  ! m2
+      total_SMB                         = total_SMB                         + (land_ice_area_fraction( vi) * region%SMB%SMB_year(  vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+      total_BMB                         = total_BMB                         + (land_ice_area_fraction( vi) * region%BMB%BMB(       vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+      total_BMB_shelf                   = total_BMB_shelf                   + (land_ice_area_fraction( vi) * region%BMB%BMB_shelf( vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+      total_calving_flux                = total_calving_flux                + (calving_flux( vi)                                       * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+      total_calving_and_front_melt_flux = total_calving_and_front_melt_flux + (calving_and_front_melt_flux( vi)                        * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
+      
+    END DO
+    CALL sync
+    
+    ! Write to all the ISMIP output files
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hi_a                    , 'lithk'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hs_a                    , 'orog'                     )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hb_a                    , 'topg'                     )
+    CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,              region%ice%GHF_a                   , 'hfgeoubed'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%SMB%SMB_year                , 'acabf'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_sheet               , 'libmassbfgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_shelf               , 'libmassbffl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%dHs_dt_a                , 'dlithkdt'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_surf_a                , 'xvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_surf_a                , 'yvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_surf_a                , 'zvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_base_a                , 'xvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_base_a                , 'yvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_base_a                , 'zvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_vav_a                 , 'xvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_vav_a                 , 'yvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Ti_a( :,1)              , 'litemptop'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_gr                         , 'litempbotgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_fl                         , 'litempbotfl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, basal_drag                         , 'strbasemag'               )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_flux                       , 'licalvf'                  )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_and_front_melt_flux        , 'lifmassbf'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, land_ice_area_fraction             , 'sftgif'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, grounded_ice_sheet_area_fraction   , 'sftgrf'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, floating_ice_shelf_area_fraction   , 'sftflf'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, land_ice_mass                      , 'lim'                      )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, mass_above_floatation              , 'limnsw'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, grounded_ice_sheet_area            , 'iareagr'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, floating_ice_sheet_area            , 'iareafl'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_SMB                          , 'tendacabf'                )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB                          , 'tendlibmassbf'            )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB_shelf                    , 'tendlibmassbffl'          )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_flux                 , 'tendlicalvf'              )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
+    
+    ! Clean up after yourself
+    CALL deallocate_shared( wTi_base_gr                      )
+    CALL deallocate_shared( wTi_base_fl                      )
+    CALL deallocate_shared( wbasal_drag                      )
+    CALL deallocate_shared( wcalving_flux                    )
+    CALL deallocate_shared( wcalving_and_front_melt_flux     )
+    CALL deallocate_shared( wland_ice_area_fraction          )
+    CALL deallocate_shared( wgrounded_ice_sheet_area_fraction)
+    CALL deallocate_shared( wfloating_ice_shelf_area_fraction)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE write_to_ISMIP_output_files
+  
+  SUBROUTINE write_to_ISMIP_output_file_scalar( foldername, icesheet_code, time, d, variable_name)
+    ! Write a single scalar to the corresponding ISMIP output file
+   
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp),                            INTENT(IN)    :: d
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_ISMIP_output_file_scalar'
+    CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_t
+    INTEGER                                            :: id_var_t, id_var
+    INTEGER                                            :: nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( filename, ncid)
+ 
+    ! Inquire for dimension IDs
+    CALL inquire_dim( ncid, 'time', nt, id_dim_t)
+    
+    ! Inquire for variable IDs
+    CALL inquire_single_var( ncid, 'time'       , (/ id_dim_t /), id_var_t)
+    CALL inquire_single_var( ncid, variable_name, (/ id_dim_t /), id_var  )
+        
+    ! Write time
+    CALL handle_error( nf90_put_var( ncid, id_var_t, days_since_ISMIP_basetime( time), start = (/ nt+1 /)))
+      
+    ! Write data to the NetCDF file
+    CALL handle_error( nf90_put_var( ncid, id_var, d, start = (/ nt+1 /)))
+    
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE write_to_ISMIP_output_file_scalar
+  
+  SUBROUTINE write_to_ISMIP_output_file_field( mesh, grid, foldername, icesheet_code, time, d, variable_name)
+    ! Write a single [x,y,t] data field to the corresponding ISMIP output file
+   
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_ISMIP_output_file_field'
+    CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_x, id_dim_y, id_dim_t
+    INTEGER                                            :: id_var_t, id_var
+    INTEGER                                            :: nx, ny, nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+        
+    ! Open the netcdf file
+    IF (par%master) CALL open_netcdf_file( filename, ncid)
+ 
+    ! Inquire for dimension IDs
+    IF (par%master) CALL inquire_dim( ncid, 'x'   , nx, id_dim_x)
+    IF (par%master) CALL inquire_dim( ncid, 'y'   , ny, id_dim_y)
+    IF (par%master) CALL inquire_dim( ncid, 'time', nt, id_dim_t)
+    
+    ! Inquire for variable IDs
+    IF (par%master) CALL inquire_single_var( ncid, 'time'       , (/                     id_dim_t /), id_var_t)
+    IF (par%master) CALL inquire_single_var( ncid, variable_name, (/ id_dim_x, id_dim_y, id_dim_t /), id_var  )
+        
+    ! Write time
+    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var_t, days_since_ISMIP_basetime( time), start = (/ nt+1 /)))
+      
+    ! Write data to the NetCDF file
+    CALL map_and_write_to_grid_netcdf_dp_2D( ncid, mesh, grid, d, id_var, nt+1)
+    
+    ! Close the file
+    IF (par%master) CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE write_to_ISMIP_output_file_field
+  
+  SUBROUTINE write_to_ISMIP_output_file_field_notime( mesh, grid, foldername, icesheet_code, d, variable_name)
+    ! Write a single [x,y,t] data field to the corresponding ISMIP output file
+   
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
+    CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_ISMIP_output_file_field_notime'
+    CHARACTER(LEN=256)                                 :: filename
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_x, id_dim_y
+    INTEGER                                            :: id_var
+    INTEGER                                            :: nx, ny
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Filename
+    filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
+                                          TRIM(                icesheet_code  ) // '_' // &
+                                          TRIM( C%ISMIP_output_group_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_model_code     ) // '_' // &
+                                          TRIM( C%ISMIP_output_experiment_code) // '.nc'
+        
+    ! Open the netcdf file
+    IF (par%master) CALL open_netcdf_file( filename, ncid)
+ 
+    ! Inquire for dimension IDs
+    IF (par%master) CALL inquire_dim( ncid, 'x'   , nx, id_dim_x)
+    IF (par%master) CALL inquire_dim( ncid, 'y'   , ny, id_dim_y)
+    
+    ! Inquire for variable IDs
+    IF (par%master) CALL inquire_single_var( ncid, variable_name, (/ id_dim_x, id_dim_y /), id_var  )
+      
+    ! Write data to the NetCDF file
+    CALL map_and_write_to_grid_netcdf_dp_2D_notime( ncid, mesh, grid, d, id_var)
+    
+    ! Close the file
+    IF (par%master) CALL close_netcdf_file( ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE write_to_ISMIP_output_file_field_notime
+  
+  FUNCTION ISMIP_unit_conversion_field( d, variable_name) RESULT( d_conv)
+    ! Convert data fields from IMAU-ICE units to SI units
+  
+    USE parameters_module, ONLY: sec_per_year, ice_density
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
+    CHARACTER(LEN=*),                    INTENT(IN)    :: variable_name
+    REAL(dp), DIMENSION(SIZE(d,1))                     :: d_conv
+    
+    IF     (variable_name == 'lithk') THEN
+      ! land_ice_thickness
+      ! Ice model units: m
+      ! SI units: m
+      d_conv = d
+    ELSEIF (variable_name == 'orog') THEN
+      ! surface_altitude
+      ! Ice model units: m
+      ! SI units: m
+      d_conv = d
+    ELSEIF (variable_name == 'topg') THEN
+      ! bedrock_altitude
+      ! Ice model units: m
+      ! SI units: m
+      d_conv = d
+    ELSEIF (variable_name == 'hfgeoubed') THEN
+      ! upward_geothermal_heat_flux_at_ground_level
+      ! Ice model units: J m-2 yr-1
+      ! SI units: J m-2 s-1
+      d_conv = d / sec_per_year
+    ELSEIF (variable_name == 'acabf') THEN
+      ! land_ice_surface_specific_mass_balance_flux
+      ! Ice model units: m.i.e./yr
+      ! SI units: kg m-2 s-1
+      d_conv = d * ice_density / sec_per_year
+    ELSEIF (variable_name == 'libmassbfgr') THEN
+      ! land_ice_basal_specific_mass_balance_flux
+      ! Ice model units: m.i.e./yr
+      ! SI units: kg m-2 s-1
+      d_conv = d * ice_density / sec_per_year
+    ELSEIF (variable_name == 'libmassbffl') THEN
+      ! land_ice_basal_specific_mass_balance_flux
+      ! Ice model units: m.i.e./yr
+      ! SI units: kg m-2 s-1
+      d_conv = d * ice_density / sec_per_year
+    ELSEIF (variable_name == 'dlithkdt') THEN
+      ! tendency_of_land_ice_thickness
+      ! Ice model units: m/yr
+      ! SI units: m s-1
+      d_conv = d / sec_per_year
+    ELSEIF (variable_name == 'xvelsurf' .OR. &
+            variable_name == 'yvelsurf' .OR. &
+            variable_name == 'zvelsurf' .OR. &
+            variable_name == 'xvelbase' .OR. &
+            variable_name == 'yvelbase' .OR. &
+            variable_name == 'zvelbase' .OR. &
+            variable_name == 'xvelmean' .OR. &
+            variable_name == 'yvelmean') THEN
+      ! different ice velocities
+      ! Ice model units: m/yr
+      ! SI units: m s-1
+      d_conv = d / sec_per_year
+    ELSEIF (variable_name == 'litemptop') THEN
+      ! temperature_at_top_of_ice_sheet_model
+      ! Ice model units: K
+      ! SI units: K
+      d_conv = d
+    ELSEIF (variable_name == 'litempbotgr') THEN
+      ! temperature_at_base_of_ice_sheet_model
+      ! Ice model units: K
+      ! SI units: K
+      d_conv = d
+    ELSEIF (variable_name == 'litempbotfl') THEN
+      ! temperature_at_base_of_ice_sheet_model
+      ! Ice model units: K
+      ! SI units: K
+      d_conv = d
+    ELSEIF (variable_name == 'strbasemag') THEN
+      ! land_ice_basal_drag
+      ! Ice model units: Pa
+      ! SI units: Pa
+      d_conv = d
+    ELSEIF (variable_name == 'licalvf' .OR. &
+            variable_name == 'lifmassbf') THEN
+      ! land_ice_specific_mass_flux_due_to_calving (possibly also front melting)
+      ! Ice model units: m/yr
+      ! SI units: kg m-2 s-1
+      d_conv = d * ice_density / sec_per_year
+    ELSEIF (variable_name == 'sftgif' .OR. &
+            variable_name == 'sftgrf' .OR. &
+            variable_name == 'sftflf') THEN
+      ! ice fractions
+      ! Ice model units:
+      ! SI units:
+      d_conv = d
+    ELSE
+      ! Unknown variable name
+      CALL crash('ISMIP_unit_conversion: unknown variable name "' // TRIM( variable_name) // '"!')
+    END IF
+    
+  END FUNCTION ISMIP_unit_conversion_field
+  
+  FUNCTION days_since_ISMIP_basetime( time) RESULT( ndays)
+    ! Calculate the number of days since ISMIP basetime
+    !
+    ! Assume basetime equals t = 0
+  
+    USE parameters_module, ONLY: sec_per_year
+    
+    IMPLICIT NONE
+    
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp)                                           :: ndays
+    
+    ndays = time * 360._dp
+    
+  END FUNCTION days_since_ISMIP_basetime
 
 ! ===== Create and write to debug NetCDF file =====
 ! =================================================

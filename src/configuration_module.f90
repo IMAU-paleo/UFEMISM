@@ -171,6 +171,15 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)   :: POI_EAS_resolutions_config           = 0._dp
     REAL(dp), DIMENSION(100)   :: POI_GRL_resolutions_config           = 0._dp
     REAL(dp), DIMENSION(100)   :: POI_ANT_resolutions_config           = 0._dp
+  
+  ! ISMIP-style output
+  ! ==================
+    
+    LOGICAL             :: do_write_ISMIP_output_config                = .FALSE.                          ! Whether or not to create a set of ISMIP output files
+    CHARACTER(LEN=256)  :: ISMIP_output_group_code_config              = 'IMAU'                           ! Code for the group      name in the ISMIP output file names
+    CHARACTER(LEN=256)  :: ISMIP_output_model_code_config              = 'UFEMISM'                        ! Code for the model      name in the ISMIP output file names
+    CHARACTER(LEN=256)  :: ISMIP_output_experiment_code_config         = 'test'                           ! Code for the experiment name in the ISMIP output file names
+    CHARACTER(LEN=256)  :: ISMIP_output_basetime_config                = 'YYYY-MM-DD'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
 
   ! == The scaled vertical coordinate zeta, used mainly in thermodynamics
   ! =====================================================================
@@ -906,6 +915,15 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)            :: POI_EAS_resolutions
     REAL(dp), DIMENSION(100)            :: POI_GRL_resolutions
     REAL(dp), DIMENSION(100)            :: POI_ANT_resolutions
+  
+    ! ISMIP-style output
+    ! ==================
+    
+    LOGICAL                             :: do_write_ISMIP_output
+    CHARACTER(LEN=256)                  :: ISMIP_output_group_code
+    CHARACTER(LEN=256)                  :: ISMIP_output_model_code
+    CHARACTER(LEN=256)                  :: ISMIP_output_experiment_code
+    CHARACTER(LEN=256)                  :: ISMIP_output_basetime
 
     ! Scaled vertical coordinate zeta
     ! ===============================
@@ -2008,6 +2026,11 @@ CONTAINS
                      POI_EAS_resolutions_config,                      &
                      POI_GRL_resolutions_config,                      &
                      POI_ANT_resolutions_config,                      &
+                     do_write_ISMIP_output_config,                    &
+                     ISMIP_output_group_code_config,                  &
+                     ISMIP_output_model_code_config,                  &
+                     ISMIP_output_experiment_code_config,             &
+                     ISMIP_output_basetime_config,                    &
                      choice_initial_ice_temperature_config,           &
                      uniform_ice_temperature_config,                  &
                      choice_thermo_model_config,                      &
@@ -2405,6 +2428,15 @@ CONTAINS
     C%POI_EAS_resolutions                      = POI_EAS_resolutions_config
     C%POI_GRL_resolutions                      = POI_GRL_resolutions_config
     C%POI_ANT_resolutions                      = POI_ANT_resolutions_config
+  
+    ! ISMIP-style output
+    ! ==================
+    
+    C%do_write_ISMIP_output                    = do_write_ISMIP_output_config
+    C%ISMIP_output_group_code                  = ISMIP_output_group_code_config
+    C%ISMIP_output_model_code                  = ISMIP_output_model_code_config
+    C%ISMIP_output_experiment_code             = ISMIP_output_experiment_code_config
+    C%ISMIP_output_basetime                    = ISMIP_output_basetime_config
 
     ! Scaled vertical coordinate zeta
     ! ===============================

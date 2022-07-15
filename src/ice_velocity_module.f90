@@ -608,6 +608,16 @@ CONTAINS
     END DO ! DO vi = mesh%v1, mesh%v2
     CALL sync
     
+    ! Surface and basal vertical velocities
+    
+    DO vi = mesh%vi1, mesh%vi2
+      
+      ice%w_surf_a( vi) = ice%w_3D_a( vi,1   )
+      ice%w_base_a( vi) = ice%w_3D_a( vi,C%nz)
+      
+    END DO
+    CALL sync
+    
     ! Clean up after yourself
     CALL deallocate_shared( wdHi_dx_a  )
     CALL deallocate_shared( wdHi_dy_a  )
@@ -2468,6 +2478,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
         
@@ -2475,6 +2486,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     
@@ -2553,6 +2565,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
         
@@ -2560,6 +2573,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     
@@ -2668,6 +2682,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
         
@@ -2675,6 +2690,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     
@@ -2783,6 +2799,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
         
@@ -2790,6 +2807,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
     

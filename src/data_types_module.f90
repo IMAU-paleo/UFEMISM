@@ -76,17 +76,19 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_surf_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_surf_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: w_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_surf_b
-    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, wuabs_surf_a, wuabs_surf_b
+    INTEGER :: wu_surf_a, wv_surf_a, wu_surf_b, wv_surf_b, ww_surf_a, wuabs_surf_a, wuabs_surf_b
 
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: u_base_b
     REAL(dp), DIMENSION(:    ), POINTER     :: v_base_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: w_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_a
     REAL(dp), DIMENSION(:    ), POINTER     :: uabs_base_b
-    INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, wuabs_base_a, wuabs_base_b
+    INTEGER :: wu_base_a, wv_base_a, wu_base_b, wv_base_b, ww_base_a, wuabs_base_a, wuabs_base_b
 
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D_SIA_b
     REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D_SIA_b
@@ -179,8 +181,9 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_in
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dVi_out
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wHi_tplusdt_a
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a
 
     ! Ice dynamics - calving
     REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels

@@ -905,20 +905,23 @@ CONTAINS
     CALL allocate_shared_dp_1D( grid%nx, grid%x, grid%wx)
     CALL allocate_shared_dp_1D( grid%ny, grid%y, grid%wy)
 
+    ! Fill in x and y
     IF (par%master) THEN
-
+    
+      ! x
+      grid%xmin = xmid - nsx * grid%dx
+      grid%xmax = xmid + nsx * grid%dx
       DO i = 1, grid%nx
-        grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
+        grid%x( i) = grid%xmin + (i-1)*grid%dx
       END DO
+    
+      ! y
+      grid%ymin = ymid - nsy * grid%dx
+      grid%ymax = ymid + nsy * grid%dx
       DO j = 1, grid%ny
-        grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
+        grid%y( j) = grid%ymin + (j-1)*grid%dx
       END DO
-
-      grid%xmin = grid%x(1      )
-      grid%xmax = grid%x(grid%nx)
-      grid%ymin = grid%y(1      )
-      grid%ymax = grid%y(grid%ny)
-
+      
     END IF ! IF (par%master) THEN
     CALL sync
 

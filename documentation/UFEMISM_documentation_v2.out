@@ -1,0 +1,110 @@
+\BOOKMARK [0][-]{part.1}{I Overview}{}% 1
+\BOOKMARK [1][-]{section.1}{Instructions for new users}{part.1}% 2
+\BOOKMARK [1][-]{section.2}{Introduction}{part.1}% 3
+\BOOKMARK [2][-]{subsection.2.1}{Background}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.2}{Status quo}{section.2}% 5
+\BOOKMARK [3][-]{subsubsection.2.2.1}{Features}{subsection.2.2}% 6
+\BOOKMARK [3][-]{subsubsection.2.2.2}{Software}{subsection.2.2}% 7
+\BOOKMARK [3][-]{subsubsection.2.2.3}{Performance}{subsection.2.2}% 8
+\BOOKMARK [3][-]{subsubsection.2.2.4}{Development}{subsection.2.2}% 9
+\BOOKMARK [1][-]{section.3}{Benchmark experiments}{part.1}% 10
+\BOOKMARK [2][-]{subsection.3.1}{Halfar dome}{section.3}% 11
+\BOOKMARK [2][-]{subsection.3.2}{Bueler dome}{section.3}% 12
+\BOOKMARK [2][-]{subsection.3.3}{SSA ice stream}{section.3}% 13
+\BOOKMARK [2][-]{subsection.3.4}{EISMINT-1}{section.3}% 14
+\BOOKMARK [2][-]{subsection.3.5}{ISMIP-HOM}{section.3}% 15
+\BOOKMARK [2][-]{subsection.3.6}{MISMIP}{section.3}% 16
+\BOOKMARK [2][-]{subsection.3.7}{MISMIP+}{section.3}% 17
+\BOOKMARK [2][-]{subsection.3.8}{MISOMIP1}{section.3}% 18
+\BOOKMARK [1][-]{section.4}{Model structure}{part.1}% 19
+\BOOKMARK [2][-]{subsection.4.1}{General}{section.4}% 20
+\BOOKMARK [2][-]{subsection.4.2}{Data structure}{section.4}% 21
+\BOOKMARK [2][-]{subsection.4.3}{Code structure}{section.4}% 22
+\BOOKMARK [0][-]{part.2}{II Physics}{}% 23
+\BOOKMARK [1][-]{section.5}{Ice dynamics}{part.2}% 24
+\BOOKMARK [2][-]{subsection.5.1}{SIA}{section.5}% 25
+\BOOKMARK [2][-]{subsection.5.2}{SSA}{section.5}% 26
+\BOOKMARK [2][-]{subsection.5.3}{Hybrid SIA/SSA}{section.5}% 27
+\BOOKMARK [2][-]{subsection.5.4}{DIVA}{section.5}% 28
+\BOOKMARK [2][-]{subsection.5.5}{Blatter-Pattyn Approximation}{section.5}% 29
+\BOOKMARK [2][-]{subsection.5.6}{Thickness equation}{section.5}% 30
+\BOOKMARK [3][-]{subsubsection.5.6.1}{IMAU-ICE - explicit method}{subsection.5.6}% 31
+\BOOKMARK [3][-]{subsubsection.5.6.2}{IMAU-ICE - implicit method}{subsection.5.6}% 32
+\BOOKMARK [3][-]{subsubsection.5.6.3}{UFEMISM - explicit method}{subsection.5.6}% 33
+\BOOKMARK [2][-]{subsection.5.7}{Time-stepping}{section.5}% 34
+\BOOKMARK [3][-]{subsubsection.5.7.1}{Direct}{subsection.5.7}% 35
+\BOOKMARK [3][-]{subsubsection.5.7.2}{Predictor/corrector}{subsection.5.7}% 36
+\BOOKMARK [2][-]{subsection.5.8}{Sliding}{section.5}% 37
+\BOOKMARK [3][-]{subsubsection.5.8.1}{Sliding laws}{subsection.5.8}% 38
+\BOOKMARK [3][-]{subsubsection.5.8.2}{Sub-grid friction scaling}{subsection.5.8}% 39
+\BOOKMARK [3][-]{subsubsection.5.8.3}{Bed roughness}{subsection.5.8}% 40
+\BOOKMARK [3][-]{subsubsection.5.8.4}{Basal hydrology}{subsection.5.8}% 41
+\BOOKMARK [2][-]{subsection.5.9}{Basal inversion}{section.5}% 42
+\BOOKMARK [3][-]{subsubsection.5.9.1}{PDC2012}{subsection.5.9}% 43
+\BOOKMARK [3][-]{subsubsection.5.9.2}{Lipscomb2021}{subsection.5.9}% 44
+\BOOKMARK [3][-]{subsubsection.5.9.3}{CISM+}{subsection.5.9}% 45
+\BOOKMARK [3][-]{subsubsection.5.9.4}{Berends2022}{subsection.5.9}% 46
+\BOOKMARK [2][-]{subsection.5.10}{Calving}{section.5}% 47
+\BOOKMARK [1][-]{section.6}{Thermodynamics}{part.2}% 48
+\BOOKMARK [2][-]{subsection.6.1}{Heat equation}{section.6}% 49
+\BOOKMARK [2][-]{subsection.6.2}{Boundary conditions}{section.6}% 50
+\BOOKMARK [3][-]{subsubsection.6.2.1}{Ice surface}{subsection.6.2}% 51
+\BOOKMARK [3][-]{subsubsection.6.2.2}{Ice base}{subsection.6.2}% 52
+\BOOKMARK [3][-]{subsubsection.6.2.3}{Internal heating}{subsection.6.2}% 53
+\BOOKMARK [2][-]{subsection.6.3}{Material properties}{section.6}% 54
+\BOOKMARK [3][-]{subsubsection.6.3.1}{Viscosity}{subsection.6.3}% 55
+\BOOKMARK [3][-]{subsubsection.6.3.2}{Heat capacity}{subsection.6.3}% 56
+\BOOKMARK [3][-]{subsubsection.6.3.3}{Thermal conductivity}{subsection.6.3}% 57
+\BOOKMARK [3][-]{subsubsection.6.3.4}{Pressure melting point}{subsection.6.3}% 58
+\BOOKMARK [1][-]{section.7}{Climate}{part.2}% 59
+\BOOKMARK [2][-]{subsection.7.1}{Temperature}{section.7}% 60
+\BOOKMARK [2][-]{subsection.7.2}{Precipitation}{section.7}% 61
+\BOOKMARK [2][-]{subsection.7.3}{Data structure}{section.7}% 62
+\BOOKMARK [1][-]{section.8}{Ocean}{part.2}% 63
+\BOOKMARK [2][-]{subsection.8.1}{Matrix method}{section.8}% 64
+\BOOKMARK [2][-]{subsection.8.2}{Shelf cavity extrapolation}{section.8}% 65
+\BOOKMARK [2][-]{subsection.8.3}{Idealised options}{section.8}% 66
+\BOOKMARK [1][-]{section.9}{Surface mass balance}{part.2}% 67
+\BOOKMARK [2][-]{subsection.9.1}{IMAU-ITM}{section.9}% 68
+\BOOKMARK [2][-]{subsection.9.2}{Direct SMB forcing}{section.9}% 69
+\BOOKMARK [2][-]{subsection.9.3}{Idealised options}{section.9}% 70
+\BOOKMARK [1][-]{section.10}{Basal mass balance}{part.2}% 71
+\BOOKMARK [2][-]{subsection.10.1}{Local parameterisations}{section.10}% 72
+\BOOKMARK [2][-]{subsection.10.2}{PICO}{section.10}% 73
+\BOOKMARK [2][-]{subsection.10.3}{Plume model}{section.10}% 74
+\BOOKMARK [2][-]{subsection.10.4}{PICOP}{section.10}% 75
+\BOOKMARK [2][-]{subsection.10.5}{Idealised options}{section.10}% 76
+\BOOKMARK [1][-]{section.11}{GIA}{part.2}% 77
+\BOOKMARK [2][-]{subsection.11.1}{ELRA}{section.11}% 78
+\BOOKMARK [2][-]{subsection.11.2}{SELEN}{section.11}% 79
+\BOOKMARK [1][-]{section.12}{Isotopes}{part.2}% 80
+\BOOKMARK [1][-]{section.13}{Forcing}{part.2}% 81
+\BOOKMARK [2][-]{subsection.13.1}{Direct CO2}{section.13}% 82
+\BOOKMARK [2][-]{subsection.13.2}{Inverse method}{section.13}% 83
+\BOOKMARK [3][-]{subsubsection.13.2.1}{Global temperature offset}{subsection.13.2}% 84
+\BOOKMARK [3][-]{subsubsection.13.2.2}{Atmospheric CO2}{subsection.13.2}% 85
+\BOOKMARK [0][-]{part.3}{III Discretisation}{}% 86
+\BOOKMARK [1][-]{section.14}{IMAU-ICE}{part.3}% 87
+\BOOKMARK [2][-]{subsection.14.1}{Arakawa grids}{section.14}% 88
+\BOOKMARK [2][-]{subsection.14.2}{Discretising the DIVA}{section.14}% 89
+\BOOKMARK [1][-]{section.15}{UFEMISM}{part.3}% 90
+\BOOKMARK [2][-]{subsection.15.1}{Mesh}{section.15}% 91
+\BOOKMARK [3][-]{subsubsection.15.1.1}{Nomenclature}{subsection.15.1}% 92
+\BOOKMARK [3][-]{subsubsection.15.1.2}{Voronoi cells and Delaunay triangulation}{subsection.15.1}% 93
+\BOOKMARK [3][-]{subsubsection.15.1.3}{Data structure}{subsection.15.1}% 94
+\BOOKMARK [3][-]{subsubsection.15.1.4}{Arakawa C-mesh}{subsection.15.1}% 95
+\BOOKMARK [2][-]{subsection.15.2}{Discretisation}{section.15}% 96
+\BOOKMARK [3][-]{subsubsection.15.2.1}{First-order, regular grid}{subsection.15.2}% 97
+\BOOKMARK [3][-]{subsubsection.15.2.2}{First-order, staggered grid}{subsection.15.2}% 98
+\BOOKMARK [3][-]{subsubsection.15.2.3}{Second-order, regular grid}{subsection.15.2}% 99
+\BOOKMARK [3][-]{subsubsection.15.2.4}{Discretising the DIVA}{subsection.15.2}% 100
+\BOOKMARK [2][-]{subsection.15.3}{Mesh refinement}{section.15}% 101
+\BOOKMARK [2][-]{subsection.15.4}{Parallelised mesh generation}{section.15}% 102
+\BOOKMARK [2][-]{subsection.15.5}{Remapping}{section.15}% 103
+\BOOKMARK [3][-]{subsubsection.15.5.1}{Theory}{subsection.15.5}% 104
+\BOOKMARK [3][-]{subsubsection.15.5.2}{Implementation}{subsection.15.5}% 105
+\BOOKMARK [0][-]{part.4}{IV References}{}% 106
+\BOOKMARK [1][-]{section.16}{Publications using IMAU-ICE}{part.4}% 107
+\BOOKMARK [1][-]{section.17}{Publications using UFEMISM}{part.4}% 108
+\BOOKMARK [1][-]{section.18}{Publications using earlier versions \(ANICE\)}{part.4}% 109
+\BOOKMARK [1][-]{section.19}{Other}{part.4}% 110

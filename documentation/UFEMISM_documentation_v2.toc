@@ -1,0 +1,146 @@
+\contentsline {paragraph}{Abstract}{}
+\contentsline {part}{I\hspace {1em}Overview}{1}
+\contentsline {section}{\numberline {1}Instructions for new users}{1}
+\contentsline {section}{\numberline {2}Introduction}{2}
+\contentsline {subsection}{\numberline {2.1}Background}{2}
+\contentsline {subsection}{\numberline {2.2}Status quo}{3}
+\contentsline {subsubsection}{\numberline {2.2.1}Features}{3}
+\contentsline {paragraph}{Ice dynamics}{3}
+\contentsline {paragraph}{Sliding}{3}
+\contentsline {paragraph}{Calving}{3}
+\contentsline {paragraph}{Thermodynamics}{3}
+\contentsline {paragraph}{Climate}{3}
+\contentsline {paragraph}{Ocean}{3}
+\contentsline {paragraph}{Surface mass balance}{3}
+\contentsline {paragraph}{Basal mass balance}{3}
+\contentsline {paragraph}{GIA}{3}
+\contentsline {paragraph}{Isotopes}{3}
+\contentsline {paragraph}{Forcing}{3}
+\contentsline {subsubsection}{\numberline {2.2.2}Software}{4}
+\contentsline {paragraph}{Packages}{4}
+\contentsline {paragraph}{Data formats}{4}
+\contentsline {subsubsection}{\numberline {2.2.3}Performance}{4}
+\contentsline {paragraph}{Speed}{4}
+\contentsline {paragraph}{Memory}{4}
+\contentsline {subsubsection}{\numberline {2.2.4}Development}{5}
+\contentsline {paragraph}{Calving}{5}
+\contentsline {paragraph}{Isotopes}{5}
+\contentsline {paragraph}{Climate forcing}{5}
+\contentsline {paragraph}{Parallelisation}{5}
+\contentsline {section}{\numberline {3}Benchmark experiments}{6}
+\contentsline {subsection}{\numberline {3.1}Halfar dome}{6}
+\contentsline {subsection}{\numberline {3.2}Bueler dome}{6}
+\contentsline {subsection}{\numberline {3.3}SSA ice stream}{7}
+\contentsline {subsection}{\numberline {3.4}EISMINT-1}{8}
+\contentsline {subsection}{\numberline {3.5}ISMIP-HOM}{9}
+\contentsline {subsection}{\numberline {3.6}MISMIP}{12}
+\contentsline {subsection}{\numberline {3.7}MISMIP+}{13}
+\contentsline {subsection}{\numberline {3.8}MISOMIP1}{14}
+\contentsline {section}{\numberline {4}Model structure}{15}
+\contentsline {subsection}{\numberline {4.1}General}{15}
+\contentsline {subsection}{\numberline {4.2}Data structure}{15}
+\contentsline {subsection}{\numberline {4.3}Code structure}{15}
+\contentsline {part}{II\hspace {1em}Physics}{16}
+\contentsline {section}{\numberline {5}Ice dynamics}{16}
+\contentsline {subsection}{\numberline {5.1}SIA}{16}
+\contentsline {subsection}{\numberline {5.2}SSA}{16}
+\contentsline {subsection}{\numberline {5.3}Hybrid SIA/SSA}{17}
+\contentsline {subsection}{\numberline {5.4}DIVA}{17}
+\contentsline {subsection}{\numberline {5.5}Blatter-Pattyn Approximation}{18}
+\contentsline {subsubsection}{\numberline {5.5.1}Stress balance}{18}
+\contentsline {subsubsection}{\numberline {5.5.2}Coordinate transformation}{19}
+\contentsline {subsection}{\numberline {5.6}Thickness equation}{20}
+\contentsline {subsubsection}{\numberline {5.6.1}IMAU-ICE - explicit method}{20}
+\contentsline {subsubsection}{\numberline {5.6.2}IMAU-ICE - implicit method}{20}
+\contentsline {subsubsection}{\numberline {5.6.3}UFEMISM - explicit method}{21}
+\contentsline {subsection}{\numberline {5.7}Time-stepping}{23}
+\contentsline {subsubsection}{\numberline {5.7.1}Direct}{23}
+\contentsline {subsubsection}{\numberline {5.7.2}Predictor/corrector}{23}
+\contentsline {subsection}{\numberline {5.8}Sliding}{24}
+\contentsline {subsubsection}{\numberline {5.8.1}Sliding laws}{24}
+\contentsline {paragraph}{Weertman}{24}
+\contentsline {paragraph}{Coulomb}{24}
+\contentsline {paragraph}{regularised Coulomb}{24}
+\contentsline {paragraph}{Tsai 2015}{24}
+\contentsline {paragraph}{Schoof 2005}{24}
+\contentsline {paragraph}{Zoet-Iverson}{24}
+\contentsline {paragraph}{Idealised options}{24}
+\contentsline {subsubsection}{\numberline {5.8.2}Sub-grid friction scaling}{25}
+\contentsline {subsubsection}{\numberline {5.8.3}Bed roughness}{25}
+\contentsline {paragraph}{Uniform}{25}
+\contentsline {paragraph}{Martin 2011}{25}
+\contentsline {paragraph}{Idealised options}{25}
+\contentsline {subsubsection}{\numberline {5.8.4}Basal hydrology}{25}
+\contentsline {paragraph}{Saturated}{25}
+\contentsline {paragraph}{Martin2011}{26}
+\contentsline {subsection}{\numberline {5.9}Basal inversion}{27}
+\contentsline {subsubsection}{\numberline {5.9.1}PDC2012}{27}
+\contentsline {subsubsection}{\numberline {5.9.2}Lipscomb2021}{27}
+\contentsline {subsubsection}{\numberline {5.9.3}CISM+}{27}
+\contentsline {subsubsection}{\numberline {5.9.4}Berends2022}{27}
+\contentsline {subsection}{\numberline {5.10}Calving}{29}
+\contentsline {section}{\numberline {6}Thermodynamics}{30}
+\contentsline {subsection}{\numberline {6.1}Heat equation}{30}
+\contentsline {subsection}{\numberline {6.2}Boundary conditions}{31}
+\contentsline {subsubsection}{\numberline {6.2.1}Ice surface}{31}
+\contentsline {subsubsection}{\numberline {6.2.2}Ice base}{31}
+\contentsline {paragraph}{Geothermal heat flux}{32}
+\contentsline {paragraph}{Frictional heating}{32}
+\contentsline {subsubsection}{\numberline {6.2.3}Internal heating}{32}
+\contentsline {subsection}{\numberline {6.3}Material properties}{32}
+\contentsline {subsubsection}{\numberline {6.3.1}Viscosity}{32}
+\contentsline {subsubsection}{\numberline {6.3.2}Heat capacity}{32}
+\contentsline {subsubsection}{\numberline {6.3.3}Thermal conductivity}{32}
+\contentsline {subsubsection}{\numberline {6.3.4}Pressure melting point}{33}
+\contentsline {section}{\numberline {7}Climate}{34}
+\contentsline {subsection}{\numberline {7.1}Temperature}{34}
+\contentsline {subsection}{\numberline {7.2}Precipitation}{35}
+\contentsline {subsection}{\numberline {7.3}Data structure}{37}
+\contentsline {section}{\numberline {8}Ocean}{39}
+\contentsline {subsection}{\numberline {8.1}Matrix method}{39}
+\contentsline {subsection}{\numberline {8.2}Shelf cavity extrapolation}{39}
+\contentsline {subsection}{\numberline {8.3}Idealised options}{39}
+\contentsline {section}{\numberline {9}Surface mass balance}{40}
+\contentsline {subsection}{\numberline {9.1}IMAU-ITM}{40}
+\contentsline {subsection}{\numberline {9.2}Direct SMB forcing}{40}
+\contentsline {subsection}{\numberline {9.3}Idealised options}{40}
+\contentsline {section}{\numberline {10}Basal mass balance}{41}
+\contentsline {subsection}{\numberline {10.1}Local parameterisations}{41}
+\contentsline {subsection}{\numberline {10.2}PICO}{41}
+\contentsline {subsection}{\numberline {10.3}Plume model}{41}
+\contentsline {subsection}{\numberline {10.4}PICOP}{41}
+\contentsline {subsection}{\numberline {10.5}Idealised options}{41}
+\contentsline {section}{\numberline {11}GIA}{42}
+\contentsline {subsection}{\numberline {11.1}ELRA}{42}
+\contentsline {subsection}{\numberline {11.2}SELEN}{42}
+\contentsline {section}{\numberline {12}Isotopes}{43}
+\contentsline {section}{\numberline {13}Forcing}{44}
+\contentsline {subsection}{\numberline {13.1}Direct CO2}{44}
+\contentsline {subsection}{\numberline {13.2}Inverse method}{44}
+\contentsline {subsubsection}{\numberline {13.2.1}Global temperature offset}{44}
+\contentsline {subsubsection}{\numberline {13.2.2}Atmospheric CO2}{44}
+\contentsline {part}{III\hspace {1em}Discretisation}{45}
+\contentsline {section}{\numberline {14}IMAU-ICE}{45}
+\contentsline {subsection}{\numberline {14.1}Arakawa grids}{45}
+\contentsline {subsection}{\numberline {14.2}Discretising the DIVA}{45}
+\contentsline {section}{\numberline {15}UFEMISM}{47}
+\contentsline {subsection}{\numberline {15.1}Mesh}{47}
+\contentsline {subsubsection}{\numberline {15.1.1}Nomenclature}{47}
+\contentsline {subsubsection}{\numberline {15.1.2}Voronoi cells and Delaunay triangulation}{47}
+\contentsline {subsubsection}{\numberline {15.1.3}Data structure}{48}
+\contentsline {subsubsection}{\numberline {15.1.4}Arakawa C-mesh}{50}
+\contentsline {subsection}{\numberline {15.2}Discretisation}{53}
+\contentsline {subsubsection}{\numberline {15.2.1}First-order, regular grid}{53}
+\contentsline {subsubsection}{\numberline {15.2.2}First-order, staggered grid}{54}
+\contentsline {subsubsection}{\numberline {15.2.3}Second-order, regular grid}{55}
+\contentsline {subsubsection}{\numberline {15.2.4}Discretising the DIVA}{56}
+\contentsline {subsection}{\numberline {15.3}Mesh refinement}{57}
+\contentsline {subsection}{\numberline {15.4}Parallelised mesh generation}{60}
+\contentsline {subsection}{\numberline {15.5}Remapping}{62}
+\contentsline {subsubsection}{\numberline {15.5.1}Theory}{62}
+\contentsline {subsubsection}{\numberline {15.5.2}Implementation}{63}
+\contentsline {part}{IV\hspace {1em}References}{65}
+\contentsline {section}{\numberline {16}Publications using IMAU-ICE}{65}
+\contentsline {section}{\numberline {17}Publications using UFEMISM}{65}
+\contentsline {section}{\numberline {18}Publications using earlier versions (ANICE)}{65}
+\contentsline {section}{\numberline {19}Other}{66}

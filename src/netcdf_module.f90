@@ -25,7 +25,7 @@ MODULE netcdf_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE data_types_netcdf_module,        ONLY: type_netcdf_restart, type_netcdf_help_fields
+  USE data_types_netcdf_module
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
                                              type_debug_fields, &
                                              type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
@@ -39,7 +39,6 @@ MODULE netcdf_module
                                              nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
                                              nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
   USE mesh_mapping_module,             ONLY: map_mesh2grid_2D, map_mesh2grid_3D
-  USE mesh_operators_module,           ONLY: ddx_a_to_a_2D, ddy_a_to_a_2D
   USE sparse_matrix_module,            ONLY: deallocate_matrix_CSR
 
   IMPLICIT NONE
@@ -264,6 +263,38 @@ CONTAINS
 
   END SUBROUTINE inquire_double_var
 
+  SUBROUTINE inquire_single_or_double_var( ncid, var_name, id_dims, id_var)
+    ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
+    ! that the variable is of type nf90_FLOAT or nf90_DOUBLE.
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,                    INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),           INTENT(IN)    :: var_name
+    INTEGER, DIMENSION(:),      INTENT(IN)    :: id_dims
+
+    ! Output variables:
+    INTEGER,                INTENT(OUT)   :: id_var
+
+    ! Local variables:
+    INTEGER                               :: xtype, ndims
+    INTEGER, DIMENSION(nf90_max_var_dims) :: actual_id_dims
+
+    CALL handle_error(nf90_inq_varid(ncid, var_name, id_var))
+    CALL handle_error(nf90_inquire_variable(ncid, id_var, xtype=xtype,ndims=ndims,dimids=actual_id_dims))
+    IF (xtype /= nf90_double .AND. xtype /= nf90_float) THEN
+      CALL crash('Actual type of variable "' // TRIM( var_name) // '" is neither nf90_float nor nf90_double!')
+    END IF
+    IF (ndims /= SIZE( id_dims)) THEN
+      CALL crash('Actual number of dimensions = {int_01} of variable "' // TRIM( var_name) // '" does not match required number of dimensions = {int_02}', &
+        int_01 = ndims, int_02 = SIZE( id_dims))
+    END IF
+    IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
+      CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
+    END IF
+
+  END SUBROUTINE inquire_single_or_double_var
+
   SUBROUTINE handle_error( stat, message)
     USE netcdf, ONLY: nf90_noerr, nf90_strerror
     IMPLICIT NONE
@@ -281,6 +312,122 @@ CONTAINS
     END IF
 
   END SUBROUTINE handle_error
+  
+! ===== Useful tools =====
+! ========================
+  
+  SUBROUTINE get_grid_from_file( filename, grid)
+    ! Take an unallocated grid object and fill it with data from a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    CHARACTER(LEN=256),                  INTENT(IN)    :: filename
+    TYPE(type_grid),                     INTENT(INOUT) :: grid
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_grid_from_file'
+    TYPE(type_netcdf_grid)                             :: netcdf
+    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+    INTEGER                                            :: i,j,n, var_type
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Inquire if everything we need is present in the file, and obtain the grid size
+    CALL allocate_shared_int_0D( grid%nx, grid%wnx)
+    CALL allocate_shared_int_0D( grid%ny, grid%wny)
+    
+    IF (par%master) THEN
+      
+      ! Open the netcdf file
+      netcdf%filename = filename
+      CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+      
+      ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+      CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, grid%nx, netcdf%id_dim_x)
+      CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, grid%ny, netcdf%id_dim_y)
+      
+      ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+      CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_x, (/ netcdf%id_dim_x /), netcdf%id_var_x)
+      CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_y, (/ netcdf%id_dim_y /), netcdf%id_var_y)
+      
+    END IF ! IF (par%master) THEN
+    CALL sync
+    
+    ! Allocate memory
+    CALL allocate_shared_dp_1D( grid%nx,          grid%x, grid%wx)
+    CALL allocate_shared_dp_1D(          grid%ny, grid%y, grid%wy)
+    
+    ! Read x and y
+    IF (par%master) THEN
+      
+      ! Read the grid data
+      CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_x, grid%x, start = (/ 1 /) ))
+      CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_y, grid%y, start = (/ 1 /) ))
+          
+      ! Close the netcdf file
+      CALL close_netcdf_file( netcdf%ncid)
+      
+    END IF
+    CALL sync
+    
+    ! Allocate memory for secondary data
+    CALL allocate_shared_dp_0D(                    grid%dx      , grid%wdx      )
+    CALL allocate_shared_dp_0D(                    grid%xmin    , grid%wxmin    )
+    CALL allocate_shared_dp_0D(                    grid%xmax    , grid%wxmax    )
+    CALL allocate_shared_dp_0D(                    grid%ymin    , grid%wymin    )
+    CALL allocate_shared_dp_0D(                    grid%ymax    , grid%wymax    )
+    CALL allocate_shared_dp_0D(                    grid%tol_dist, grid%wtol_dist)
+    CALL allocate_shared_int_0D(                   grid%n       , grid%wn       )
+    grid%n = grid%nx * grid%ny
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n    , grid%wij2n    )
+    CALL allocate_shared_int_2D( grid%n , 2,       grid%n2ij    , grid%wn2ij    )
+      
+    ! Calculate secondary grid data
+    IF (par%master) THEN
+      
+      ! Resolution
+      grid%dx   = grid%x( 2) - grid%x( 1)
+      
+      ! Domain size
+      grid%xmin = grid%x( 1)
+      grid%xmax = grid%x( grid%nx)
+      grid%ymin = grid%y( 1)
+      grid%ymax = grid%y( grid%ny)
+
+      ! Tolerance; points lying within this distance of each other are treated as identical
+      grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
+
+      ! Conversion tables for grid-form vs. vector-form data
+      n = 0
+      DO i = 1, grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, grid%ny
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = grid%ny, 1, -1
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
+      
+    END IF
+    CALL sync
+    
+    ! Parallelisation domains
+    CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
+    CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 13)
+    
+  END SUBROUTINE get_grid_from_file
 
 ! ===== Main output functions =====
 ! =================================
@@ -4675,11 +4822,12 @@ CONTAINS
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-    
-    ! Check if a file by this name already exists; if so, crash the model.
-    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+
+    ! If the file already exists, return.
+    INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
     IF (file_exists) THEN
-      CALL crash('file "' // TRIM( filename) // '" already exists!')
+      CALL finalise_routine( routine_name)
+      RETURN
     END IF
     
     ! Create netcdf file
@@ -4751,11 +4899,12 @@ CONTAINS
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-    
-    ! Check if a file by this name already exists; if so, crash the model.
-    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+
+    ! If the file already exists, return.
+    INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
     IF (file_exists) THEN
-      CALL crash('file "' // TRIM( filename) // '" already exists!')
+      CALL finalise_routine( routine_name)
+      RETURN
     END IF
     
     ! Create netcdf file
@@ -4837,11 +4986,12 @@ CONTAINS
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-    
-    ! Check if a file by this name already exists; if so, crash the model.
-    INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
+
+    ! If the file already exists, return.
+    INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
     IF (file_exists) THEN
-      CALL crash('file "' // TRIM( filename) // '" already exists!')
+      CALL finalise_routine( routine_name)
+      RETURN
     END IF
     
     ! Create netcdf file
@@ -5369,6 +5519,433 @@ CONTAINS
     ndays = time * 360._dp
     
   END FUNCTION days_since_ISMIP_basetime
+  
+! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+! ============================================================
+
+  SUBROUTINE inquire_ISMIP_forcing_SMB_baseline_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_SMB_baseline_file'
+    INTEGER                                       :: nx,ny
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_SMB, (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_SMB)
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_SMB_baseline_file
+  
+  SUBROUTINE read_ISMIP_forcing_SMB_baseline_file( netcdf, SMB)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: SMB
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_SMB_baseline_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_SMB, SMB, start = (/ 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_SMB_baseline_file
+
+  SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_ST_baseline_file'
+    INTEGER                                       :: nx,ny
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_ST,  (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_ST )
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file
+  
+  SUBROUTINE read_ISMIP_forcing_ST_baseline_file( netcdf, ST)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: ST
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_ST_baseline_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_ST, ST, start = (/ 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_ST_baseline_file
+  
+  SUBROUTINE inquire_ISMIP_forcing_aSMB_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_aSMB_file'
+    INTEGER                                       :: nx, ny, nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,    (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,    (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_aSMB, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_aSMB)
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_aSMB_file
+  
+  SUBROUTINE read_ISMIP_forcing_aSMB_file( netcdf, aSMB)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: aSMB
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_aSMB_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_aSMB, aSMB, start = (/ 1, 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_aSMB_file
+  
+  SUBROUTINE inquire_ISMIP_forcing_dSMBdz_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_dSMBdz_file'
+    INTEGER                                       :: nx, ny, nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,      (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,      (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dSMBdz, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_dSMBdz)
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_dSMBdz_file
+  
+  SUBROUTINE read_ISMIP_forcing_dSMBdz_file( netcdf, dSMBdz)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: dSMBdz
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_dSMBdz_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_dSMBdz, dSMBdz, start = (/ 1, 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_dSMBdz_file
+  
+  SUBROUTINE inquire_ISMIP_forcing_aST_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_aST_file'
+    INTEGER                                       :: nx, ny, nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,    (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,    (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_aST, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_aST)
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_aST_file
+  
+  SUBROUTINE read_ISMIP_forcing_aST_file( netcdf, aST)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: aST
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_aST_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_aST, aST, start = (/ 1, 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_aST_file
+  
+  SUBROUTINE inquire_ISMIP_forcing_dSTdz_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_dSTdz_file'
+    INTEGER                                       :: nx, ny, nt
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+        
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
+    
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,     (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,     (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dSTdz, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_dSTdz)
+    
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE inquire_ISMIP_forcing_dSTdz_file
+  
+  SUBROUTINE read_ISMIP_forcing_dSTdz_file( netcdf, dSTdz)
+    ! Read grid and data from the NetCDF file
+
+    ! In/output variables:
+    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: dSTdz
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_dSTdz_file'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+    
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+    
+    ! Read the field data
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_dSTdz, dSTdz, start = (/ 1, 1, 1 /) ))
+        
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE read_ISMIP_forcing_dSTdz_file
 
 ! ===== Create and write to debug NetCDF file =====
 ! =================================================

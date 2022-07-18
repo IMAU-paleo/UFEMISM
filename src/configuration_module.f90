@@ -588,6 +588,20 @@ MODULE configuration_module
     REAL(dp)            :: SMB_IMAUITM_inv_C_refr_min_config           = 0._dp                            ! Minimum value of C_refr         allowed during inversion
     REAL(dp)            :: SMB_IMAUITM_inv_C_refr_max_config           = 0.1_dp                           ! Maximum value of C_refr         allowed during inversion
 
+  ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+  ! ==============================================================
+  
+    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_SMB_baseline_config  = ''                              ! NetCDF file containing the baseline SMB
+    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_ST_baseline_config   = ''                              ! NetCDF file containing the baseline temperature
+    CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aSMB_config        = ''                              ! Folder containing the single-year NetCDF files of the SMB anomaly
+    CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aSMB_config      = ''                              ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
+    CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSMBdz_config      = ''                              ! Folder containing the single-year NetCDF files of the SMB lapse rate
+    CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_dSMBdz_config    = ''                              ! Filename without the year (e.g. if the actual file is "dSMBdz_MARv3.12-yearly-CESM2-ssp585-1950.nc", then this variable should be "dSMBdz_MARv3.12-yearly-CESM2-ssp585-"
+    CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aST_config         = ''                              ! Folder containing the single-year NetCDF files of the temperature anomaly
+    CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aST_config       = ''                              ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
+    CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSTdz_config       = ''                              ! Folder containing the single-year NetCDF files of the temperature lapse rate
+    CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_dSTdz_config     = ''                              ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
+  
   ! == Basal mass balance
   ! =====================
 
@@ -1300,6 +1314,20 @@ MODULE configuration_module
     REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_min
     REAL(dp)                            :: SMB_IMAUITM_inv_C_refr_max
 
+    ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    ! ==============================================================
+  
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_SMB_baseline
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_ST_baseline
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aSMB
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aSMB
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSMBdz
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_dSMBdz
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aST
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aST
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSTdz
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_dSTdz
+    
     ! Basal mass balance - sub-shelf melt
     ! ===================================
 
@@ -2129,6 +2157,16 @@ CONTAINS
                      SMB_IMAUITM_inv_C_abl_Q_max_config,              &
                      SMB_IMAUITM_inv_C_refr_min_config,               &
                      SMB_IMAUITM_inv_C_refr_max_config,               &
+                     ISMIP_forcing_filename_SMB_baseline_config,      &
+                     ISMIP_forcing_filename_ST_baseline_config,       &
+                     ISMIP_forcing_foldername_aSMB_config,            &
+                     ISMIP_forcing_basefilename_aSMB_config,          &
+                     ISMIP_forcing_foldername_dSMBdz_config,          &
+                     ISMIP_forcing_basefilename_dSMBdz_config,        &
+                     ISMIP_forcing_foldername_aST_config,             &
+                     ISMIP_forcing_basefilename_aST_config,           &
+                     ISMIP_forcing_foldername_dSTdz_config,           &
+                     ISMIP_forcing_basefilename_dSTdz_config,         &
                      choice_BMB_shelf_model_config,                   &
                      choice_idealised_BMB_shelf_config,               &
                      choice_BMB_sheet_model_config,                   &
@@ -2810,6 +2848,20 @@ CONTAINS
     C%SMB_IMAUITM_inv_C_refr_min               = SMB_IMAUITM_inv_C_refr_min_config
     C%SMB_IMAUITM_inv_C_refr_max               = SMB_IMAUITM_inv_C_refr_max_config
 
+    ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    ! ==============================================================
+  
+    C%ISMIP_forcing_filename_SMB_baseline      = ISMIP_forcing_filename_SMB_baseline_config
+    C%ISMIP_forcing_filename_ST_baseline       = ISMIP_forcing_filename_ST_baseline_config
+    C%ISMIP_forcing_foldername_aSMB            = ISMIP_forcing_foldername_aSMB_config
+    C%ISMIP_forcing_basefilename_aSMB          = ISMIP_forcing_basefilename_aSMB_config
+    C%ISMIP_forcing_foldername_dSMBdz          = ISMIP_forcing_foldername_dSMBdz_config
+    C%ISMIP_forcing_basefilename_dSMBdz        = ISMIP_forcing_basefilename_dSMBdz_config
+    C%ISMIP_forcing_foldername_aST             = ISMIP_forcing_foldername_aST_config
+    C%ISMIP_forcing_basefilename_aST           = ISMIP_forcing_basefilename_aST_config
+    C%ISMIP_forcing_foldername_dSTdz           = ISMIP_forcing_foldername_dSTdz_config
+    C%ISMIP_forcing_basefilename_dSTdz         = ISMIP_forcing_basefilename_dSTdz_config
+
     ! Basal mass balance - sub-shelf melt
     ! ===================================
 
@@ -3378,7 +3430,8 @@ CONTAINS
     IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
     n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
 
-    IF (n_extra_windows_found > n_extra_windows_expected_loc) THEN
+    ii = INDEX( routine_path, 'UFEMISM_program/initialise_')
+    IF (ii == 0 .AND. n_extra_windows_found > n_extra_windows_expected_loc) THEN
       ! This subroutine has more memory allocated at the start than at the beginning.
       CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
         int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)

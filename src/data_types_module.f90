@@ -9,18 +9,10 @@ MODULE data_types_module
 ! ===== USE modules =====
 ! =======================
 
-  USE petscksp
   USE mpi
   USE petscksp
   USE configuration_module,        ONLY: dp, C
-  USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
-                                         type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
-                                         type_netcdf_debug, type_netcdf_ICE5G_data, type_netcdf_geothermal_heat_flux, &
-                                         type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
-                                         type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
-                                         type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data, &
-                                         type_netcdf_resource_tracker, &
-                                         type_netcdf_SELEN_output, type_netcdf_SELEN_global_topo
+  USE data_types_netcdf_module
 
   IMPLICIT NONE
 
@@ -879,6 +871,53 @@ MODULE data_types_module
     INTEGER :: wT2m_year0, wT2m_year1, wSMB_year0, wSMB_year1
 
   END TYPE type_direct_SMB_forcing_regional
+  
+  TYPE type_ISMIP_style_forcing
+    ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    
+    ! NetCDF files containing the baseline SMB and surface temperature
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_SMB_baseline
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_ST_baseline
+
+    ! The baseline SMB and surface temperature (on the model mesh)
+    REAL(dp), DIMENSION(:    ), POINTER     :: SMB_baseline
+    REAL(dp), DIMENSION(:    ), POINTER     :: ST_baseline
+    INTEGER :: wSMB_baseline, wST_baseline
+    
+    ! Timestamps of the two timeframes
+    REAL(dp),                   POINTER     :: t0, t1
+    INTEGER :: wt0, wt1
+    
+    ! NetCDF files containing the aSMB, dSMBdz, aST, and dTSdz for the two timeframes enveloping the current model time
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aSMB0  , netcdf_aSMB1
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSMBdz0, netcdf_dSMBdz1
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aST0   , netcdf_aST1
+    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSTdz0 , netcdf_dSTdz1
+    
+    ! The grid of the ISMIP forcing files
+    TYPE(type_grid)                         :: grid
+
+    ! The two timeframes enveloping the model time (on the model mesh)
+    REAL(dp), DIMENSION(:    ), POINTER     :: aSMB0  , aSMB1
+    REAL(dp), DIMENSION(:    ), POINTER     :: dSMBdz0, dSMBdz1
+    REAL(dp), DIMENSION(:    ), POINTER     :: aST0   , aST1
+    REAL(dp), DIMENSION(:    ), POINTER     :: dSTdz0 , dSTdz1
+    INTEGER :: waSMB0, waSMB1, wdSMBdz0, wdSMBdz1, waST0, waST1, wdSTdz0, wdSTdz1
+    
+    ! The time-interpolated values of aSMB, dSMBdz, ST, and dSTdz
+    REAL(dp), DIMENSION(:    ), POINTER     :: aSMB
+    REAL(dp), DIMENSION(:    ), POINTER     :: dSMBdz
+    REAL(dp), DIMENSION(:    ), POINTER     :: aST
+    REAL(dp), DIMENSION(:    ), POINTER     :: dSTdz
+    INTEGER :: waSMB, wdSMBdz, waST, wdSTdz
+    
+    ! The applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
+    REAL(dp), DIMENSION(:    ), POINTER     :: SMB
+    REAL(dp), DIMENSION(:    ), POINTER     :: ST
+    INTEGER :: wSMB, wST
+    
+  
+  END TYPE type_ISMIP_style_forcing
 
   TYPE type_climate_matrix_regional
     ! All the relevant climate data fields (PD observations, GCM snapshots, and final, applied climate) on the model region grid
@@ -900,6 +939,9 @@ MODULE data_types_module
     ! Direct climate/SMB forcing
     TYPE(type_direct_climate_forcing_regional) :: direct
     TYPE(type_direct_SMB_forcing_regional)     :: SMB_direct
+    
+    ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    TYPE(type_ISMIP_style_forcing)          :: ISMIP_forcing
 
   END TYPE type_climate_matrix_regional
 

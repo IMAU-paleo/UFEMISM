@@ -40,6 +40,8 @@ CONTAINS
 
   SUBROUTINE update_general_ice_model_data( mesh, ice)
     ! Update masks, surface elevation, and thickness above floatation
+    
+    USE parameters_module, ONLY: ice_density, seawater_density
 
     IMPLICIT NONE
 
@@ -58,6 +60,11 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
       ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      IF (ice%mask_land_a( vi) == 1) THEN
+        ice%dHs_dt_a( vi) = ice%dHb_dt_a( vi) + ice%dHi_dt_a( vi)
+      ELSE
+        ice%dHs_dt_a( vi) = ice%dHi_dt_a( vi) * (1._dp - ice_density / seawater_density)
+      END IF
     END DO
     CALL sync
 

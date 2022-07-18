@@ -659,7 +659,7 @@ CONTAINS
         
     ! In/output variables
     TYPE(type_grid),                     INTENT(INOUT) :: grid
-    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_grid2mesh'

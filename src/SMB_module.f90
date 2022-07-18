@@ -101,6 +101,11 @@ CONTAINS
       ! Use a directly prescribed global/regional SMB
 
       CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
+      
+    ELSEIF (C%choice_SMB_model == 'ISMIP_style_forcing') THEN
+      ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+      
+      CALL run_SMB_model_ISMIP_forcing( mesh, climate_matrix, SMB)
 
     ELSE
       CALL crash('unknown choice_SMB_model "' // TRIM( C%choice_SMB_model) // '"!')
@@ -134,7 +139,8 @@ CONTAINS
     IF     (C%choice_SMB_model == 'uniform' .OR. &
             C%choice_SMB_model == 'idealised' .OR. &
             C%choice_SMB_model == 'direct_global' .OR. &
-            C%choice_SMB_model == 'direct_regional') THEN
+            C%choice_SMB_model == 'direct_regional' .OR. &
+            C%choice_SMB_model == 'ISMIP_style_forcing') THEN
       ! Only need yearly total SMB in these cases
 
       CALL allocate_shared_dp_1D( mesh%nV, SMB%SMB_year, SMB%wSMB_year)
@@ -814,6 +820,38 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_SMB_model_direct
+
+! == ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+! =================================================================
+
+  SUBROUTINE run_SMB_model_ISMIP_forcing( mesh, climate_matrix, SMB)
+    ! Run the selected SMB model
+    !
+    ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+    
+    IMPLICIT NONE
+    
+    ! In/output variables
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_climate_matrix_regional),     INTENT(IN)    :: climate_matrix
+    TYPE(type_SMB_model),                   INTENT(INOUT) :: SMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_ISMIP_forcing'
+    INTEGER                                            :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    DO vi = mesh%vi1, mesh%vi2
+        SMB%SMB_year( vi) = climate_matrix%ISMIP_forcing%SMB( vi)
+    END DO
+    CALL sync
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+    
+  END SUBROUTINE run_SMB_model_ISMIP_forcing
 
 ! == Remapping after mesh update
 ! ==============================

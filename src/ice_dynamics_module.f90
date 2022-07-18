@@ -1024,6 +1024,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_surf_a              , ice%wv_surf_a             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_surf_b              , ice%wu_surf_b             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_surf_b              , ice%wv_surf_b             )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%w_surf_a              , ice%ww_surf_a             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_surf_a           , ice%wuabs_surf_a          )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_surf_b           , ice%wuabs_surf_b          )
 
@@ -1031,6 +1032,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%v_base_a              , ice%wv_base_a             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_b              , ice%wu_base_b             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_b              , ice%wv_base_b             )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%w_base_a              , ice%ww_base_a             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%uabs_base_a           , ice%wuabs_base_a          )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%uabs_base_b           , ice%wuabs_base_b          )
 
@@ -1066,6 +1068,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_in                , ice%wdVi_in               )
     CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_out               , ice%wdVi_out              )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHi_dt_a              , ice%wdHi_dt_a             )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHs_dt_a              , ice%wdHs_dt_a             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
 
     ! Ice dynamics - calving
@@ -1220,6 +1223,7 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
 
@@ -1227,6 +1231,7 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
    !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
 
@@ -1262,6 +1267,7 @@ CONTAINS
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_in                , ice%wdVi_in               )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_out               , ice%wdVi_out              )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHi_dt_a              , ice%wdHi_dt_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHs_dt_a              , ice%wdHs_dt_a             )
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
 
    ! Ice dynamics - calving

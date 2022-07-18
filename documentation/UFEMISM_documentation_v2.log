@@ -1,0 +1,1238 @@
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017) (preloaded format=pdflatex 2018.2.19)  4 JUL 2022 15:00
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**UFEMISM_documentation_v2.tex
+(./UFEMISM_documentation_v2.tex
+LaTeX2e <2017-04-15>
+Babel <3.18> and hyphenation patterns for 84 language(s) loaded.
+(/usr/local/texlive/2017/texmf-dist/tex/latex/base/article.cls
+Document Class: article 2014/09/29 v1.4h Standard LaTeX document class
+(/usr/local/texlive/2017/texmf-dist/tex/latex/base/size10.clo
+File: size10.clo 2014/09/29 v1.4h Standard LaTeX file (size option)
+)
+\c@part=\count79
+\c@section=\count80
+\c@subsection=\count81
+\c@subsubsection=\count82
+\c@paragraph=\count83
+\c@subparagraph=\count84
+\c@figure=\count85
+\c@table=\count86
+\abovecaptionskip=\skip41
+\belowcaptionskip=\skip42
+\bibindent=\dimen102
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics/graphicx.sty
+Package: graphicx 2017/06/01 v1.1a Enhanced LaTeX Graphics (DPC,SPQR)
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics/keyval.sty
+Package: keyval 2014/10/28 v1.15 key=value parser (DPC)
+\KV@toks@=\toks14
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics/graphics.sty
+Package: graphics 2017/06/25 v1.2c Standard LaTeX Graphics (DPC,SPQR)
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics/trig.sty
+Package: trig 2016/01/03 v1.10 sin cos tan (DPC)
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics-cfg/graphics.cfg
+File: graphics.cfg 2016/06/04 v1.11 sample graphics configuration
+)
+Package graphics Info: Driver file: pdftex.def on input line 99.
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/graphics-def/pdftex.def
+File: pdftex.def 2018/01/08 v1.0l Graphics/color driver for pdftex
+))
+\Gin@req@height=\dimen103
+\Gin@req@width=\dimen104
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsfonts/amssymb.sty
+Package: amssymb 2013/01/14 v3.01 AMS font symbols
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsfonts/amsfonts.sty
+Package: amsfonts 2013/01/14 v3.01 Basic AMSFonts support
+\@emptytoks=\toks15
+\symAMSa=\mathgroup4
+\symAMSb=\mathgroup5
+LaTeX Font Info:    Overwriting math alphabet `\mathfrak' in version `bold'
+(Font)                  U/euf/m/n --> U/euf/b/n on input line 106.
+))
+(/usr/local/texlive/2017/texmf-dist/tex/latex/caption/subcaption.sty
+Package: subcaption 2016/05/22 v1.1-161 Sub-captions (AR)
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/caption/caption.sty
+Package: caption 2016/02/21 v3.3-144 Customizing captions (AR)
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/caption/caption3.sty
+Package: caption3 2016/05/22 v1.7-166 caption3 kernel (AR)
+Package caption3 Info: TeX engine: e-TeX on input line 67.
+\captionmargin=\dimen105
+\captionmargin@=\dimen106
+\captionwidth=\dimen107
+\caption@tempdima=\dimen108
+\caption@indent=\dimen109
+\caption@parindent=\dimen110
+\caption@hangindent=\dimen111
+)
+\c@ContinuedFloat=\count87
+)
+\c@subfigure=\count88
+\c@subtable=\count89
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/float/float.sty
+Package: float 2001/11/08 v1.3d Float enhancements (AL)
+\c@float@type=\count90
+\float@exts=\toks16
+\float@box=\box26
+\@float@everytoks=\toks17
+\@floatcapt=\box27
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/was/gensymb.sty
+Package: gensymb 2003/07/02 v1.0 (WaS)
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsmath/amsmath.sty
+Package: amsmath 2017/09/02 v2.17a AMS math features
+\@mathmargin=\skip43
+
+For additional information on amsmath, use the `?' option.
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsmath/amstext.sty
+Package: amstext 2000/06/29 v2.01 AMS text
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsmath/amsgen.sty
+File: amsgen.sty 1999/11/30 v2.0 generic functions
+\@emptytoks=\toks18
+\ex@=\dimen112
+))
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsmath/amsbsy.sty
+Package: amsbsy 1999/11/29 v1.2d Bold Symbols
+\pmbraise@=\dimen113
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsmath/amsopn.sty
+Package: amsopn 2016/03/08 v2.02 operator names
+)
+\inf@bad=\count91
+LaTeX Info: Redefining \frac on input line 213.
+\uproot@=\count92
+\leftroot@=\count93
+LaTeX Info: Redefining \overline on input line 375.
+\classnum@=\count94
+\DOTSCASE@=\count95
+LaTeX Info: Redefining \ldots on input line 472.
+LaTeX Info: Redefining \dots on input line 475.
+LaTeX Info: Redefining \cdots on input line 596.
+\Mathstrutbox@=\box28
+\strutbox@=\box29
+\big@size=\dimen114
+LaTeX Font Info:    Redeclaring font encoding OML on input line 712.
+LaTeX Font Info:    Redeclaring font encoding OMS on input line 713.
+\macc@depth=\count96
+\c@MaxMatrixCols=\count97
+\dotsspace@=\muskip10
+\c@parentequation=\count98
+\dspbrk@lvl=\count99
+\tag@help=\toks19
+\row@=\count100
+\column@=\count101
+\maxfields@=\count102
+\andhelp@=\toks20
+\eqnshift@=\dimen115
+\alignsep@=\dimen116
+\tagshift@=\dimen117
+\tagwidth@=\dimen118
+\totwidth@=\dimen119
+\lineht@=\dimen120
+\@envbody=\toks21
+\multlinegap=\skip44
+\multlinetaggap=\skip45
+\mathdisplay@stack=\toks22
+LaTeX Info: Redefining \[ on input line 2817.
+LaTeX Info: Redefining \] on input line 2818.
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/tools/array.sty
+Package: array 2016/10/06 v2.4d Tabular extension package (FMi)
+\col@sep=\dimen121
+\extrarowheight=\dimen122
+\NC@list=\toks23
+\extratabsurround=\skip46
+\backup@length=\skip47
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/geometry/geometry.sty
+Package: geometry 2010/09/12 v5.6 Page Geometry
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/ifpdf.sty
+Package: ifpdf 2017/03/15 v3.2 Provides the ifpdf switch
+)
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/ifvtex.sty
+Package: ifvtex 2016/05/16 v1.6 Detect VTeX and its facilities (HO)
+Package ifvtex Info: VTeX not detected.
+)
+(/usr/local/texlive/2017/texmf-dist/tex/generic/ifxetex/ifxetex.sty
+Package: ifxetex 2010/09/12 v0.6 Provides ifxetex conditional
+)
+\Gm@cnth=\count103
+\Gm@cntv=\count104
+\c@Gm@tempcnt=\count105
+\Gm@bindingoffset=\dimen123
+\Gm@wd@mp=\dimen124
+\Gm@odd@mp=\dimen125
+\Gm@even@mp=\dimen126
+\Gm@layoutwidth=\dimen127
+\Gm@layoutheight=\dimen128
+\Gm@layouthoffset=\dimen129
+\Gm@layoutvoffset=\dimen130
+\Gm@dimlist=\toks24
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/listings/listings.sty
+\lst@mode=\count106
+\lst@gtempboxa=\box30
+\lst@token=\toks25
+\lst@length=\count107
+\lst@currlwidth=\dimen131
+\lst@column=\count108
+\lst@pos=\count109
+\lst@lostspace=\dimen132
+\lst@width=\dimen133
+\lst@newlines=\count110
+\lst@lineno=\count111
+\lst@maxwidth=\dimen134
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/listings/lstmisc.sty
+File: lstmisc.sty 2015/06/04 1.6 (Carsten Heinz)
+\c@lstnumber=\count112
+\lst@skipnumbers=\count113
+\lst@framebox=\box31
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/listings/listings.cfg
+File: listings.cfg 2015/06/04 1.6 listings configuration
+))
+Package: listings 2015/06/04 1.6 (Carsten Heinz)
+
+(./UFEMISM_documentation_v2.aux)
+\openout1 = `UFEMISM_documentation_v2.aux'.
+
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 23.
+LaTeX Font Info:    ... okay on input line 23.
+
+(/usr/local/texlive/2017/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+\scratchcounter=\count114
+\scratchdimen=\dimen135
+\scratchbox=\box32
+\nofMPsegments=\count115
+\nofMParguments=\count116
+\everyMPshowfont=\toks26
+\MPscratchCnt=\count117
+\MPscratchDim=\dimen136
+\MPnumerator=\count118
+\makeMPintoPDFobject=\count119
+\everyMPtoPDFconversion=\toks27
+) (/usr/local/texlive/2017/texmf-dist/tex/latex/oberdiek/epstopdf-base.sty
+Package: epstopdf-base 2016/05/15 v2.6 Base part for package epstopdf
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/infwarerr.sty
+Package: infwarerr 2016/05/16 v1.4 Providing info/warning/error messages (HO)
+)
+(/usr/local/texlive/2017/texmf-dist/tex/latex/oberdiek/grfext.sty
+Package: grfext 2016/05/16 v1.2 Manage graphics extensions (HO)
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/kvdefinekeys.sty
+Package: kvdefinekeys 2016/05/16 v1.4 Define keys (HO)
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/ltxcmds.sty
+Package: ltxcmds 2016/05/16 v1.23 LaTeX kernel commands for general use (HO)
+)))
+(/usr/local/texlive/2017/texmf-dist/tex/latex/oberdiek/kvoptions.sty
+Package: kvoptions 2016/05/16 v3.12 Key value format for package options (HO)
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/kvsetkeys.sty
+Package: kvsetkeys 2016/05/16 v1.17 Key value parser (HO)
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/etexcmds.sty
+Package: etexcmds 2016/05/16 v1.6 Avoid name clashes with e-TeX commands (HO)
+
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/ifluatex.sty
+Package: ifluatex 2016/05/16 v1.4 Provides the ifluatex switch (HO)
+Package ifluatex Info: LuaTeX not detected.
+)
+Package etexcmds Info: Could not find \expanded.
+(etexcmds)             That can mean that you are not using pdfTeX 1.50 or
+(etexcmds)             that some package has redefined \expanded.
+(etexcmds)             In the latter case, load this package earlier.
+)))
+(/usr/local/texlive/2017/texmf-dist/tex/generic/oberdiek/pdftexcmds.sty
+Package: pdftexcmds 2018/01/21 v0.26 Utility functions of pdfTeX for LuaTeX (HO
+)
+Package pdftexcmds Info: LuaTeX not detected.
+Package pdftexcmds Info: \pdf@primitive is available.
+Package pdftexcmds Info: \pdf@ifprimitive is available.
+Package pdftexcmds Info: \pdfdraftmode found.
+)
+Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
+38.
+Package grfext Info: Graphics extension search list:
+(grfext)             [.pdf,.png,.jpg,.mps,.jpeg,.jbig2,.jb2,.PDF,.PNG,.JPG,.JPE
+G,.JBIG2,.JB2,.eps]
+(grfext)             \AppendGraphicsExtensions on input line 456.
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
+File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
+e
+))
+Package caption Info: Begin \AtBeginDocument code.
+Package caption Info: float package is loaded.
+Package caption Info: listings package is loaded.
+Package caption Info: End \AtBeginDocument code.
+LaTeX Info: Redefining \celsius on input line 23.
+Package gensymb Info: Faking symbols for \degree and \celsius on input line 23.
+
+
+
+Package gensymb Warning: Not defining \perthousand.
+
+LaTeX Info: Redefining \ohm on input line 23.
+Package gensymb Info: Using \Omega for \ohm on input line 23.
+
+Package gensymb Warning: Not defining \micro.
+
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+*geometry* verbose mode - [ preamble ] result:
+* driver: pdftex
+* paper: a4paper
+* layout: <same size as paper>
+* layoutoffset:(h,v)=(0.0pt,0.0pt)
+* modes: 
+* h-part:(L,W,R)=(56.9055pt, 483.69684pt, 56.90553pt)
+* v-part:(T,H,B)=(56.9055pt, 731.23582pt, 56.90552pt)
+* \paperwidth=597.50787pt
+* \paperheight=845.04684pt
+* \textwidth=483.69684pt
+* \textheight=731.23582pt
+* \oddsidemargin=-15.36449pt
+* \evensidemargin=-15.36449pt
+* \topmargin=-52.36449pt
+* \headheight=12.0pt
+* \headsep=25.0pt
+* \topskip=10.0pt
+* \footskip=30.0pt
+* \marginparwidth=65.0pt
+* \marginparsep=11.0pt
+* \columnsep=10.0pt
+* \skip\footins=9.0pt plus 4.0pt minus 2.0pt
+* \hoffset=0.0pt
+* \voffset=0.0pt
+* \mag=1000
+* \@twocolumnfalse
+* \@twosidefalse
+* \@mparswitchfalse
+* \@reversemarginfalse
+* (1in=72.27pt=25.4mm, 1cm=28.453pt)
+
+\c@lstlisting=\count120
+LaTeX Font Info:    Try loading font information for U+msa on input line 25.
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsfonts/umsa.fd
+File: umsa.fd 2013/01/14 v3.01 AMS symbols A
+)
+LaTeX Font Info:    Try loading font information for U+msb on input line 25.
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/amsfonts/umsb.fd
+File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+)
+<Fig_UFEMISM.png, id=1, 853.1875pt x 853.1875pt>
+File: Fig_UFEMISM.png Graphic file (type png)
+<use Fig_UFEMISM.png>
+Package pdftex.def Info: Fig_UFEMISM.png  used on input line 29.
+(pdftex.def)             Requested size: 386.95894pt x 386.96416pt.
+ [1
+
+{/usr/local/texlive/2017/texmf-var/fonts/map/pdftex/updmap/pdftex.map} <./Fig_U
+FEMISM.png (PNG copy)>] (./UFEMISM_documentation_v2.toc [2] [3])
+\tf@toc=\write3
+\openout3 = `UFEMISM_documentation_v2.toc'.
+
+ [4] [1]
+Underfull \hbox (badness 10000) in paragraph at lines 52--57
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 52--57
+
+ []
+
+[2]
+Overfull \hbox (4.3594pt too wide) in paragraph at lines 69--70
+ \OT1/cmr/bx/n/10 Slid-ing[] \OT1/cmr/m/n/10 Cur-rently the fol-low-ing slid-in
+g laws are avail-able: Weert-man, Coulomb, reg-u-larised Coulomb, Tsai2015,
+ []
+
+[3]
+Underfull \hbox (badness 10000) in paragraph at lines 105--108
+
+ []
+
+[4] [5]
+<Fig_benchmark_Halfar1.png, id=39, 1380.15625pt x 431.6125pt>
+File: Fig_benchmark_Halfar1.png Graphic file (type png)
+<use Fig_benchmark_Halfar1.png>
+Package pdftex.def Info: Fig_benchmark_Halfar1.png  used on input line 143.
+(pdftex.def)             Requested size: 459.51051pt x 143.70363pt.
+<Fig_benchmark_Halfar2.png, id=40, 627.34375pt x 627.34375pt>
+File: Fig_benchmark_Halfar2.png Graphic file (type png)
+<use Fig_benchmark_Halfar2.png>
+Package pdftex.def Info: Fig_benchmark_Halfar2.png  used on input line 148.
+(pdftex.def)             Requested size: 193.47577pt x 193.479pt.
+<Fig_benchmark_Bueler1.png, id=41, 1380.15625pt x 782.925pt>
+File: Fig_benchmark_Bueler1.png Graphic file (type png)
+<use Fig_benchmark_Bueler1.png>
+Package pdftex.def Info: Fig_benchmark_Bueler1.png  used on input line 157.
+(pdftex.def)             Requested size: 459.51051pt x 260.6717pt.
+ [6 <./Fig_benchmark_Halfar1.png (PNG copy)> <./Fig_benchmark_Halfar2.png (PNG 
+copy)>]
+<Fig_benchmark_Bueler2.png, id=45, 627.34375pt x 627.34375pt>
+File: Fig_benchmark_Bueler2.png Graphic file (type png)
+<use Fig_benchmark_Bueler2.png>
+Package pdftex.def Info: Fig_benchmark_Bueler2.png  used on input line 162.
+(pdftex.def)             Requested size: 193.47577pt x 193.479pt.
+<Fig_benchmark_SSA_icestream.png, id=46, 828.09375pt x 652.4375pt>
+File: Fig_benchmark_SSA_icestream.png Graphic file (type png)
+<use Fig_benchmark_SSA_icestream.png>
+Package pdftex.def Info: Fig_benchmark_SSA_icestream.png  used on input line 17
+1.
+(pdftex.def)             Requested size: 241.84842pt x 190.546pt.
+ [7 <./Fig_benchmark_Bueler1.png (PNG copy)> <./Fig_benchmark_Bueler2.png (PNG 
+copy)>]
+<Fig_benchmark_EISMINT1.png, id=51, 1380.15625pt x 652.4375pt>
+File: Fig_benchmark_EISMINT1.png Graphic file (type png)
+<use Fig_benchmark_EISMINT1.png>
+Package pdftex.def Info: Fig_benchmark_EISMINT1.png  used on input line 180.
+(pdftex.def)             Requested size: 459.51051pt x 217.22643pt.
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+<Fig_benchmark_EISMINT2.png, id=52, 1380.15625pt x 652.4375pt>
+File: Fig_benchmark_EISMINT2.png Graphic file (type png)
+<use Fig_benchmark_EISMINT2.png>
+Package pdftex.def Info: Fig_benchmark_EISMINT2.png  used on input line 185.
+(pdftex.def)             Requested size: 459.51051pt x 217.22643pt.
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+ [8 <./Fig_benchmark_SSA_icestream.png (PNG copy)> <./Fig_benchmark_EISMINT1.pn
+g (PNG copy)>]
+<Fig_benchmark_ISMIP_HOM_A.png, id=56, 1480.53125pt x 792.9625pt>
+File: Fig_benchmark_ISMIP_HOM_A.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_A.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_A.png  used on input line 194.
+
+(pdftex.def)             Requested size: 459.51051pt x 246.10622pt.
+<Fig_benchmark_ISMIP_HOM_B.png, id=57, 1480.53125pt x 792.9625pt>
+File: Fig_benchmark_ISMIP_HOM_B.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_B.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_B.png  used on input line 199.
+
+(pdftex.def)             Requested size: 459.51051pt x 246.10622pt.
+ [9 <./Fig_benchmark_EISMINT2.png (PNG copy)> <./Fig_benchmark_ISMIP_HOM_A.png 
+(PNG copy)>]
+<Fig_benchmark_ISMIP_HOM_C.png, id=62, 1480.53125pt x 792.9625pt>
+File: Fig_benchmark_ISMIP_HOM_C.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_C.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_C.png  used on input line 204.
+
+(pdftex.def)             Requested size: 459.51051pt x 246.10622pt.
+<Fig_benchmark_ISMIP_HOM_D.png, id=63, 1480.53125pt x 792.9625pt>
+File: Fig_benchmark_ISMIP_HOM_D.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_D.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_D.png  used on input line 209.
+
+(pdftex.def)             Requested size: 459.51051pt x 246.10622pt.
+ [10 <./Fig_benchmark_ISMIP_HOM_B.png (PNG copy)> <./Fig_benchmark_ISMIP_HOM_C.
+png (PNG copy)>]
+<Fig_benchmark_ISMIP_HOM_E.png, id=67, 1008.76875pt x 431.6125pt>
+File: Fig_benchmark_ISMIP_HOM_E.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_E.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_E.png  used on input line 214.
+
+(pdftex.def)             Requested size: 338.5863pt x 144.86932pt.
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ô in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ô in font cmr10!
+<Fig_benchmark_ISMIP_HOM_F.png, id=68, 1008.76875pt x 803.0pt>
+File: Fig_benchmark_ISMIP_HOM_F.png Graphic file (type png)
+<use Fig_benchmark_ISMIP_HOM_F.png>
+Package pdftex.def Info: Fig_benchmark_ISMIP_HOM_F.png  used on input line 219.
+
+(pdftex.def)             Requested size: 338.5863pt x 269.52435pt.
+ [11 <./Fig_benchmark_ISMIP_HOM_D.png (PNG copy)> <./Fig_benchmark_ISMIP_HOM_E.
+png (PNG copy)>]
+<Fig_benchmark_MISMIP_mod_geometry.png, id=72, 777.90625pt x 552.0625pt>
+File: Fig_benchmark_MISMIP_mod_geometry.png Graphic file (type png)
+<use Fig_benchmark_MISMIP_mod_geometry.png>
+Package pdftex.def Info: Fig_benchmark_MISMIP_mod_geometry.png  used on input l
+ine 228.
+(pdftex.def)             Requested size: 290.22105pt x 205.96994pt.
+[12 <./Fig_benchmark_ISMIP_HOM_F.png (PNG copy)>]
+<Fig_benchmark_MISMIP_mod_GL.png, id=76, 1319.93124pt x 627.34375pt>
+File: Fig_benchmark_MISMIP_mod_GL.png Graphic file (type png)
+<use Fig_benchmark_MISMIP_mod_GL.png>
+Package pdftex.def Info: Fig_benchmark_MISMIP_mod_GL.png  used on input line 23
+3.
+(pdftex.def)             Requested size: 362.77263pt x 172.41954pt.
+<Fig_benchmark_MISMIPplus_geometry.png, id=77, 853.1875pt x 652.4375pt>
+File: Fig_benchmark_MISMIPplus_geometry.png Graphic file (type png)
+<use Fig_benchmark_MISMIPplus_geometry.png>
+Package pdftex.def Info: Fig_benchmark_MISMIPplus_geometry.png  used on input l
+ine 242.
+(pdftex.def)             Requested size: 290.22105pt x 221.93532pt.
+ [13 <./Fig_benchmark_MISMIP_mod_geometry.png (PNG copy)> <./Fig_benchmark_MISM
+IP_mod_GL.png (PNG copy)>]
+<Fig_benchmark_MISMIPplus_GL.png, id=81, 1038.88126pt x 421.575pt>
+File: Fig_benchmark_MISMIPplus_GL.png Graphic file (type png)
+<use Fig_benchmark_MISMIPplus_GL.png>
+Package pdftex.def Info: Fig_benchmark_MISMIPplus_GL.png  used on input line 24
+7.
+(pdftex.def)             Requested size: 386.95894pt x 157.0224pt.
+
+[14 <./Fig_benchmark_MISMIPplus_geometry.png (PNG copy)> <./Fig_benchmark_MISMI
+Pplus_GL.png (PNG copy)>] [15]
+Underfull \hbox (badness 10000) in paragraph at lines 287--292
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 287--292
+
+ []
+
+[16]
+Underfull \hbox (badness 10000) in paragraph at lines 316--319
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 327--330
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 333--336
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 352--355
+
+ []
+
+[17]
+Underfull \hbox (badness 10000) in paragraph at lines 381--386
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 381--386
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 408--411
+
+ []
+
+[18]
+Underfull \hbox (badness 10000) in paragraph at lines 442--445
+
+ []
+
+[19] [20]
+Underfull \hbox (badness 10000) in paragraph at lines 594--597
+
+ []
+
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no Ã in font cmr10!
+Missing character: There is no Ç in font cmr10!
+<Fig_masscontinuity.png, id=112, 156.585pt x 98.2872pt>
+File: Fig_masscontinuity.png Graphic file (type png)
+<use Fig_masscontinuity.png>
+Package pdftex.def Info: Fig_masscontinuity.png  used on input line 605.
+(pdftex.def)             Requested size: 145.11052pt x 91.08818pt.
+
+LaTeX Warning: `!h' float specifier changed to `!ht'.
+
+[21] [22 <./Fig_masscontinuity.png>]
+Underfull \hbox (badness 10000) in paragraph at lines 650--653
+
+ []
+
+LaTeX Font Info:    Try loading font information for OMS+cmr on input line 655.
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/base/omscmr.fd
+File: omscmr.fd 2014/09/29 v2.5h Standard LaTeX font definitions
+)
+LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10> not available
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 655.
+ [23]
+Underfull \hbox (badness 10000) in paragraph at lines 759--764
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 759--764
+
+ []
+
+[24]
+Overfull \hbox (66.49054pt too wide) in paragraph at lines 780--781
+\OT1/cmr/m/n/10 e-ter-i-sa-tion can be se-lected by set-ting \OT1/cmr/m/sc/10 c
+hoice[]basal[]roughness \OT1/cmr/m/n/10 to \OT1/cmr/m/sc/10 'pa-ram-e-terised'\
+OT1/cmr/m/n/10 , and \OT1/cmr/m/sc/10 choice[]param[]basal[]roughness
+ []
+
+[25] [26]
+Underfull \hbox (badness 10000) in paragraph at lines 809--814
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 809--814
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 823--826
+
+ []
+
+[27] [28] [29]
+Underfull \hbox (badness 10000) in paragraph at lines 904--907
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 922--925
+
+ []
+
+[30]
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ú in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+
+Underfull \hbox (badness 10000) in paragraph at lines 991--994
+
+ []
+
+[31]
+Underfull \hbox (badness 10000) in paragraph at lines 1044--1047
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1056--1059
+
+ []
+
+
+Overfull \hbox (50.44853pt too wide) in paragraph at lines 1068--1069
+[]\OT1/cmr/m/n/10 Optionally, a uni-form, con-stant ther-mal con-duc-tiv-ity ca
+n be pre-scribed by set-ting \OT1/cmr/m/sc/10 choice[]ice[]thermal[]conductivit
+y
+ []
+
+[32] [33]
+Underfull \hbox (badness 10000) in paragraph at lines 1083--1086
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1083--1086
+
+ []
+
+
+Overfull \hbox (16.05998pt too wide) in paragraph at lines 1089--1094
+\OT1/cmr/m/n/10 The equa-tions de-scribed here are con-tained in the sub-rou-ti
+ne \OT1/cmr/m/sc/10 run[]climate[]model[]matrix[]pi[]lgm[]temperature
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1089--1094
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1089--1094
+
+ []
+
+[34]
+Missing character: There is no Ù in font cmr10!
+Missing character: There is no è in font cmr10!
+Missing character: There is no ∞ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+
+Underfull \hbox (badness 10000) in paragraph at lines 1137--1138
+
+ []
+
+
+Overfull \hbox (17.65993pt too wide) in paragraph at lines 1141--1146
+\OT1/cmr/m/n/10 The equa-tions de-scribed here are con-tained in the sub-rou-ti
+ne \OT1/cmr/m/sc/10 run[]climate[]model[]matrix[]pi[]lgm[]precipitation
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1141--1146
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1141--1146
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1152--1155
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1160--1163
+
+ []
+
+[35]
+Missing character: There is no Ù in font cmr10!
+Missing character: There is no è in font cmr10!
+Missing character: There is no ∞ in font cmr10!
+Missing character: There is no Å in font cmr10!
+Missing character: There is no Ù in font cmr10!
+Missing character: There is no è in font cmr10!
+Missing character: There is no ∞ in font cmr10!
+Missing character: There is no Ç in font cmr10!
+ [36]
+<Fig_climate_ERA40.png, id=168, 1590.94376pt x 351.3125pt>
+File: Fig_climate_ERA40.png Graphic file (type png)
+<use Fig_climate_ERA40.png>
+Package pdftex.def Info: Fig_climate_ERA40.png  used on input line 1196.
+(pdftex.def)             Requested size: 459.51051pt x 101.46524pt.
+<Fig_climate_GCM_PI.png, id=169, 1590.94376pt x 351.3125pt>
+File: Fig_climate_GCM_PI.png Graphic file (type png)
+<use Fig_climate_GCM_PI.png>
+Package pdftex.def Info: Fig_climate_GCM_PI.png  used on input line 1201.
+(pdftex.def)             Requested size: 459.51051pt x 101.46524pt.
+<Fig_climate_GCM_LGM.png, id=170, 1590.94376pt x 351.3125pt>
+File: Fig_climate_GCM_LGM.png Graphic file (type png)
+<use Fig_climate_GCM_LGM.png>
+Package pdftex.def Info: Fig_climate_GCM_LGM.png  used on input line 1206.
+(pdftex.def)             Requested size: 459.51051pt x 101.46524pt.
+ [37 <./Fig_climate_ERA40.png (PNG copy)> <./Fig_climate_GCM_PI.png (PNG copy)>
+ <./Fig_climate_GCM_LGM.png (PNG copy)>] [38] [39]
+Underfull \hbox (badness 10000) in paragraph at lines 1265--1268
+
+ []
+
+[40] [41]
+Underfull \hbox (badness 10000) in paragraph at lines 1339--1340
+
+ []
+
+[42] [43] [44]
+<Fig_IMAUICE_grids.png, id=196, 476.78125pt x 401.5pt>
+File: Fig_IMAUICE_grids.png Graphic file (type png)
+<use Fig_IMAUICE_grids.png>
+Package pdftex.def Info: Fig_IMAUICE_grids.png  used on input line 1379.
+(pdftex.def)             Requested size: 241.84842pt x 203.66566pt.
+ [45 <./Fig_IMAUICE_grids.png (PNG copy)>]
+Underfull \hbox (badness 10000) in paragraph at lines 1428--1431
+
+ []
+
+[46]
+
+Package caption Warning: \label without proper reference on input line 1441.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `fig:dummymesh' on page 47 undefined on input line 143
+9.
+
+<Fig_dummymesh_02.png, id=205, 406.51875pt x 408.52625pt>
+File: Fig_dummymesh_02.png Graphic file (type png)
+<use Fig_dummymesh_02.png>
+Package pdftex.def Info: Fig_dummymesh_02.png  used on input line 1442.
+(pdftex.def)             Requested size: 145.11052pt x 145.82262pt.
+
+Package caption Warning: \label without proper reference on input line 1454.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `fig:VoronoiDelaunay' on page 47 undefined on input li
+ne 1452.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1450--1453
+
+ []
+
+<Fig_VoronoiDelaunay_01.png, id=206, 690.58pt x 700.6175pt>
+File: Fig_VoronoiDelaunay_01.png Graphic file (type png)
+<use Fig_VoronoiDelaunay_01.png>
+Package pdftex.def Info: Fig_VoronoiDelaunay_01.png  used on input line 1457.
+(pdftex.def)             Requested size: 120.92421pt x 122.67404pt.
+<Fig_VoronoiDelaunay_02.png, id=207, 692.5875pt x 699.61375pt>
+File: Fig_VoronoiDelaunay_02.png Graphic file (type png)
+<use Fig_VoronoiDelaunay_02.png>
+Package pdftex.def Info: Fig_VoronoiDelaunay_02.png  used on input line 1461.
+(pdftex.def)             Requested size: 120.92421pt x 122.14601pt.
+<Fig_VoronoiDelaunay_03.png, id=208, 691.58376pt x 699.61375pt>
+File: Fig_VoronoiDelaunay_03.png Graphic file (type png)
+<use Fig_VoronoiDelaunay_03.png>
+Package pdftex.def Info: Fig_VoronoiDelaunay_03.png  used on input line 1465.
+(pdftex.def)             Requested size: 120.92421pt x 122.32748pt.
+[47 <./Fig_dummymesh_02.png> <./Fig_VoronoiDelaunay_01.png> <./Fig_VoronoiDelau
+nay_02.png> <./Fig_VoronoiDelaunay_03.png>]
+
+Package caption Warning: \label without proper reference on input line 1482.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `fig:Delaunayflip' on page 48 undefined on input line 
+1480.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 1478--1481
+
+ []
+
+<Fig_Delaunayflip_01.png, id=218, 484.81125pt x 545.03625pt>
+File: Fig_Delaunayflip_01.png Graphic file (type png)
+<use Fig_Delaunayflip_01.png>
+Package pdftex.def Info: Fig_Delaunayflip_01.png  used on input line 1485.
+(pdftex.def)             Requested size: 145.11052pt x 163.1379pt.
+<Fig_Delaunayflip_02.png, id=219, 485.815pt x 546.04pt>
+File: Fig_Delaunayflip_02.png Graphic file (type png)
+<use Fig_Delaunayflip_02.png>
+Package pdftex.def Info: Fig_Delaunayflip_02.png  used on input line 1489.
+(pdftex.def)             Requested size: 145.11052pt x 163.09671pt.
+
+Underfull \hbox (badness 10000) in paragraph at lines 1497--1500
+
+ []
+
+[48 <./Fig_Delaunayflip_01.png> <./Fig_Delaunayflip_02.png>]
+
+Package caption Warning: \label without proper reference on input line 1548.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `fig:meshdata_02' on page 49 undefined on input line 1
+546.
+
+<Fig_meshdata_02.png, id=225, 692.5875pt x 700.6175pt>
+File: Fig_meshdata_02.png Graphic file (type png)
+<use Fig_meshdata_02.png>
+Package pdftex.def Info: Fig_meshdata_02.png  used on input line 1549.
+(pdftex.def)             Requested size: 241.84842pt x 244.6532pt.
+
+Package caption Warning: \label without proper reference on input line 1555.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `tab:table_vertexdata_01' on page 49 undefined on inpu
+t line 1553.
+
+
+Package caption Warning: \label without proper reference on input line 1578.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `tab:table_triangledata_01' on page 49 undefined on in
+put line 1553.
+
+[49 <./Fig_meshdata_02.png>]
+<Fig_staggeredmesh.png, id=230, 649.42625pt x 654.445pt>
+File: Fig_staggeredmesh.png Graphic file (type png)
+<use Fig_staggeredmesh.png>
+Package pdftex.def Info: Fig_staggeredmesh.png  used on input line 1607.
+(pdftex.def)             Requested size: 241.84842pt x 243.70866pt.
+ [50]
+Underfull \hbox (badness 10000) in paragraph at lines 1648--1649
+
+ []
+
+[51 <./Fig_staggeredmesh.png>] [52]
+Underfull \hbox (badness 10000) in paragraph at lines 1659--1662
+
+ []
+
+[53]
+Underfull \hbox (badness 10000) in paragraph at lines 1772--1775
+
+ []
+
+[54]
+Overfull \hbox (64.8899pt too wide) detected at line 1912
+\OML/cmm/m/it/10 M[] \OT1/cmr/m/n/10 = []
+ []
+
+
+Overfull \hbox (64.66191pt too wide) detected at line 1922
+\OML/cmm/m/it/10 M[] \OT1/cmr/m/n/10 = []
+ []
+
+
+Overfull \hbox (69.42462pt too wide) detected at line 1932
+\OML/cmm/m/it/10 M[] \OT1/cmr/m/n/10 = []
+ []
+
+
+Overfull \hbox (69.19664pt too wide) detected at line 1942
+\OML/cmm/m/it/10 M[] \OT1/cmr/m/n/10 = []
+ []
+
+
+Overfull \hbox (68.96866pt too wide) detected at line 1952
+\OML/cmm/m/it/10 M[] \OT1/cmr/m/n/10 = []
+ []
+
+[55] [56]
+
+Package caption Warning: \label without proper reference on input line 2013.
+See the caption package documentation for explanation.
+
+
+LaTeX Warning: Reference `fig:split_triangle' on page 57 undefined on input lin
+e 2011.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2009--2012
+
+ []
+
+<Fig_split_triangle_01.png, id=254, 692.5875pt x 700.6175pt>
+File: Fig_split_triangle_01.png Graphic file (type png)
+<use Fig_split_triangle_01.png>
+Package pdftex.def Info: Fig_split_triangle_01.png  used on input line 2016.
+(pdftex.def)             Requested size: 193.47577pt x 195.71187pt.
+<Fig_split_triangle_02.png, id=255, 692.5875pt x 700.6175pt>
+File: Fig_split_triangle_02.png Graphic file (type png)
+<use Fig_split_triangle_02.png>
+Package pdftex.def Info: Fig_split_triangle_02.png  used on input line 2020.
+(pdftex.def)             Requested size: 193.47577pt x 195.71187pt.
+<Fig_split_triangle_03.png, id=256, 692.5875pt x 700.6175pt>
+File: Fig_split_triangle_03.png Graphic file (type png)
+<use Fig_split_triangle_03.png>
+Package pdftex.def Info: Fig_split_triangle_03.png  used on input line 2024.
+(pdftex.def)             Requested size: 193.47577pt x 195.71187pt.
+<Fig_split_triangle_04.png, id=257, 691.58376pt x 699.61375pt>
+File: Fig_split_triangle_04.png Graphic file (type png)
+<use Fig_split_triangle_04.png>
+Package pdftex.def Info: Fig_split_triangle_04.png  used on input line 2028.
+(pdftex.def)             Requested size: 193.47577pt x 195.71971pt.
+[57 <./Fig_split_triangle_01.png> <./Fig_split_triangle_02.png> <./Fig_split_tr
+iangle_03.png> <./Fig_split_triangle_04.png>]
+Overfull \hbox (40.70392pt too wide) in paragraph at lines 2039--2050
+ [] 
+ []
+
+<Fig_mesh_step_01.png, id=266, 676.5275pt x 683.55376pt>
+File: Fig_mesh_step_01.png Graphic file (type png)
+<use Fig_mesh_step_01.png>
+Package pdftex.def Info: Fig_mesh_step_01.png  used on input line 2058.
+(pdftex.def)             Requested size: 145.11052pt x 146.61699pt.
+<Fig_mesh_step_02.png, id=267, 678.535pt x 683.55376pt>
+File: Fig_mesh_step_02.png Graphic file (type png)
+<use Fig_mesh_step_02.png>
+Package pdftex.def Info: Fig_mesh_step_02.png  used on input line 2062.
+(pdftex.def)             Requested size: 145.11052pt x 146.17892pt.
+<Fig_mesh_step_03.png, id=268, 678.535pt x 673.51625pt>
+File: Fig_mesh_step_03.png Graphic file (type png)
+<use Fig_mesh_step_03.png>
+Package pdftex.def Info: Fig_mesh_step_03.png  used on input line 2066.
+(pdftex.def)             Requested size: 145.11052pt x 144.0324pt.
+<Fig_mesh_step_04.png, id=269, 679.53876pt x 686.565pt>
+File: Fig_mesh_step_04.png Graphic file (type png)
+<use Fig_mesh_step_04.png>
+Package pdftex.def Info: Fig_mesh_step_04.png  used on input line 2070.
+(pdftex.def)             Requested size: 145.11052pt x 146.60289pt.
+<Fig_mesh_step_05.png, id=270, 676.5275pt x 684.5575pt>
+File: Fig_mesh_step_05.png Graphic file (type png)
+<use Fig_mesh_step_05.png>
+Package pdftex.def Info: Fig_mesh_step_05.png  used on input line 2074.
+(pdftex.def)             Requested size: 145.11052pt x 146.83229pt.
+[58 <./Fig_mesh_step_01.png> <./Fig_mesh_step_02.png> <./Fig_mesh_step_03.png> 
+<./Fig_mesh_step_04.png> <./Fig_mesh_step_05.png>]
+LaTeX Font Info:    Try loading font information for OML+cmr on input line 2089
+.
+
+(/usr/local/texlive/2017/texmf-dist/tex/latex/base/omlcmr.fd
+File: omlcmr.fd 2014/09/29 v2.5h Standard LaTeX font definitions
+)
+LaTeX Font Info:    Font shape `OML/cmr/m/n' in size <10> not available
+(Font)              Font shape `OML/cmm/m/it' tried instead on input line 2089.
+
+<Fig_mesh_Lloyd_01.png, id=279, 675.52374pt x 683.55376pt>
+File: Fig_mesh_Lloyd_01.png Graphic file (type png)
+<use Fig_mesh_Lloyd_01.png>
+Package pdftex.def Info: Fig_mesh_Lloyd_01.png  used on input line 2121.
+(pdftex.def)             Requested size: 145.11052pt x 146.83603pt.
+<Fig_mesh_Lloyd_02.png, id=280, 675.52374pt x 685.56125pt>
+File: Fig_mesh_Lloyd_02.png Graphic file (type png)
+<use Fig_mesh_Lloyd_02.png>
+Package pdftex.def Info: Fig_mesh_Lloyd_02.png  used on input line 2125.
+(pdftex.def)             Requested size: 145.11052pt x 147.26726pt.
+ [59 <./Fig_mesh_Lloyd_01.png> <./Fig_mesh_Lloyd_02.png>]
+<Fig_submesh1.png, id=286, 175.65625pt x 552.0625pt>
+File: Fig_submesh1.png Graphic file (type png)
+<use Fig_submesh1.png>
+Package pdftex.def Info: Fig_submesh1.png  used on input line 2141.
+(pdftex.def)             Requested size: 72.55156pt x 228.02342pt.
+<Fig_submesh2.png, id=287, 175.65625pt x 552.0625pt>
+File: Fig_submesh2.png Graphic file (type png)
+<use Fig_submesh2.png>
+Package pdftex.def Info: Fig_submesh2.png  used on input line 2145.
+(pdftex.def)             Requested size: 72.55156pt x 228.02342pt.
+<Fig_submesh3.png, id=288, 175.65625pt x 552.0625pt>
+File: Fig_submesh3.png Graphic file (type png)
+<use Fig_submesh3.png>
+Package pdftex.def Info: Fig_submesh3.png  used on input line 2149.
+(pdftex.def)             Requested size: 72.55156pt x 228.02342pt.
+<Fig_submesh4.png, id=289, 175.65625pt x 552.0625pt>
+File: Fig_submesh4.png Graphic file (type png)
+<use Fig_submesh4.png>
+Package pdftex.def Info: Fig_submesh4.png  used on input line 2153.
+(pdftex.def)             Requested size: 72.55156pt x 228.02342pt.
+<Fig_mesh_align_01.png, id=290, 706.64pt x 650.43pt>
+File: Fig_mesh_align_01.png Graphic file (type png)
+<use Fig_mesh_align_01.png>
+Package pdftex.def Info: Fig_mesh_align_01.png  used on input line 2164.
+(pdftex.def)             Requested size: 145.11052pt x 133.56728pt.
+<Fig_mesh_align_02.png, id=291, 707.64375pt x 650.43pt>
+File: Fig_mesh_align_02.png Graphic file (type png)
+<use Fig_mesh_align_02.png>
+Package pdftex.def Info: Fig_mesh_align_02.png  used on input line 2168.
+(pdftex.def)             Requested size: 145.11052pt x 133.36877pt.
+<Fig_mesh_align_03.png, id=292, 703.62875pt x 650.43pt>
+File: Fig_mesh_align_03.png Graphic file (type png)
+<use Fig_mesh_align_03.png>
+Package pdftex.def Info: Fig_mesh_align_03.png  used on input line 2172.
+(pdftex.def)             Requested size: 145.11052pt x 134.13298pt.
+<Fig_mesh_merge_01.png, id=293, 885.3075pt x 817.0525pt>
+File: Fig_mesh_merge_01.png Graphic file (type png)
+<use Fig_mesh_merge_01.png>
+Package pdftex.def Info: Fig_mesh_merge_01.png  used on input line 2183.
+(pdftex.def)             Requested size: 96.73788pt x 89.27762pt.
+<Fig_mesh_merge_02.png, id=294, 887.315pt x 818.05624pt>
+File: Fig_mesh_merge_02.png Graphic file (type png)
+<use Fig_mesh_merge_02.png>
+Package pdftex.def Info: Fig_mesh_merge_02.png  used on input line 2187.
+(pdftex.def)             Requested size: 96.73788pt x 89.1751pt.
+<Fig_mesh_merge_03.png, id=295, 884.30376pt x 818.05624pt>
+File: Fig_mesh_merge_03.png Graphic file (type png)
+<use Fig_mesh_merge_03.png>
+Package pdftex.def Info: Fig_mesh_merge_03.png  used on input line 2191.
+(pdftex.def)             Requested size: 96.73788pt x 89.48715pt.
+<Fig_mesh_merge_04.png, id=296, 887.315pt x 819.06pt>
+File: Fig_mesh_merge_04.png Graphic file (type png)
+<use Fig_mesh_merge_04.png>
+Package pdftex.def Info: Fig_mesh_merge_04.png  used on input line 2195.
+(pdftex.def)             Requested size: 96.73788pt x 89.28452pt.
+ [60 <./Fig_submesh1.png (PNG copy)> <./Fig_submesh2.png (PNG copy)> <./Fig_sub
+mesh3.png (PNG copy)> <./Fig_submesh4.png (PNG copy)> <./Fig_mesh_align_01.png>
+ <./Fig_mesh_align_02.png> <./Fig_mesh_align_03.png>]
+Underfull \hbox (badness 10000) in paragraph at lines 2201--2204
+
+ []
+
+[61 <./Fig_mesh_merge_01.png> <./Fig_mesh_merge_02.png> <./Fig_mesh_merge_03.pn
+g> <./Fig_mesh_merge_04.png>]
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+Missing character: There is no ‚ in font cmr10!
+Missing character: There is no Ä in font cmr10!
+Missing character: There is no ù in font cmr10!
+
+Underfull \hbox (badness 10000) in paragraph at lines 2218--2221
+
+ []
+
+
+Overfull \hbox (5.31961pt too wide) detected at line 2239
+[]
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2241--2244
+
+ []
+
+[62]
+Underfull \hbox (badness 10000) in paragraph at lines 2262--2265
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2272--2275
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2303--2308
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2303--2308
+
+ []
+
+[63] [64]
+Underfull \hbox (badness 10000) in paragraph at lines 2314--2317
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 2324--2345
+
+ []
+
+[65] [66] (./UFEMISM_documentation_v2.aux)
+
+LaTeX Warning: There were undefined references.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 5671 strings out of 492982
+ 87473 string characters out of 6132527
+ 165258 words of memory out of 5000000
+ 9100 multiletter control sequences out of 15000+600000
+ 13375 words of font info for 51 fonts, out of 8000000 for 9000
+ 1141 hyphenation exceptions out of 8191
+ 42i,20n,40p,1330b,1387s stack positions out of 5000i,500n,10000p,200000b,80000s
+</usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
+></usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
+</usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></
+usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmcsc10.pfb></
+usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></u
+sr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex7.pfb>
+</usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><
+/usr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></u
+sr/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr
+/local/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/l
+ocal/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/loc
+al/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/local
+/texlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local/te
+xlive/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texli
+ve/2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/
+2017/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2
+017/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local/texlive/201
+7/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2017/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/local/texlive/2017/t
+exmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on UFEMISM_documentation_v2.pdf (70 pages, 4393953 bytes).
+PDF statistics:
+ 392 PDF objects out of 1000 (max. 8388607)
+ 217 compressed objects within 3 object streams
+ 0 named destinations out of 1000 (max. 500000)
+ 266 words of extra memory for PDF output out of 10000 (max. 10000000)
+

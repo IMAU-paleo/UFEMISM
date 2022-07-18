@@ -1,0 +1,68 @@
+\contentsline {paragraph}{Abstract}{}
+\contentsline {section}{\numberline {1}How to get and run UFEMISM}{1}
+\contentsline {subsection}{\numberline {1.1}Code}{1}
+\contentsline {subsection}{\numberline {1.2}Data}{3}
+\contentsline {section}{\numberline {2}Introduction}{4}
+\contentsline {subsection}{\numberline {2.1}Background}{4}
+\contentsline {subsection}{\numberline {2.2}Objectives}{4}
+\contentsline {subsection}{\numberline {2.3}Status quo}{5}
+\contentsline {subsubsection}{\numberline {2.3.1}Features}{5}
+\contentsline {subsubsection}{\numberline {2.3.2}Performance}{5}
+\contentsline {subsubsection}{\numberline {2.3.3}Benchmark experiments}{5}
+\contentsline {paragraph}{Analytical solutions}{5}
+\contentsline {paragraph}{EISMINT-1}{5}
+\contentsline {paragraph}{MISMIP}{6}
+\contentsline {section}{\numberline {3}Model overview}{7}
+\contentsline {subsection}{\numberline {3.1}Code structure}{7}
+\contentsline {subsubsection}{\numberline {3.1.1}Coupler}{7}
+\contentsline {subsubsection}{\numberline {3.1.2}Ice model}{7}
+\contentsline {subsection}{\numberline {3.2}Data structure}{9}
+\contentsline {subsubsection}{\numberline {3.2.1}Type hierarchy}{9}
+\contentsline {subsubsection}{\numberline {3.2.2}Shared memory}{10}
+\contentsline {subsubsection}{\numberline {3.2.3}Parallelisation}{11}
+\contentsline {subsection}{\numberline {3.3}Output}{11}
+\contentsline {subsubsection}{\numberline {3.3.1}Text files}{11}
+\contentsline {subsubsection}{\numberline {3.3.2}NetCDF files}{12}
+\contentsline {subsection}{\numberline {3.4}Computer resources}{12}
+\contentsline {subsubsection}{\numberline {3.4.1}Computation time}{12}
+\contentsline {subsubsection}{\numberline {3.4.2}Memory}{13}
+\contentsline {subsubsection}{\numberline {3.4.3}Data}{13}
+\contentsline {section}{\numberline {4}Ice dynamics and thermodynamics}{14}
+\contentsline {subsection}{\numberline {4.1}Shallow Ice Approximation}{14}
+\contentsline {subsection}{\numberline {4.2}Shallow Shelf Approximation}{15}
+\contentsline {subsubsection}{\numberline {4.2.1}Discretisation and solution}{15}
+\contentsline {subsubsection}{\numberline {4.2.2}Grounding-line flux}{16}
+\contentsline {subsubsection}{\numberline {4.2.3}Parallelisation}{17}
+\contentsline {subsection}{\numberline {4.3}Mass continuity}{18}
+\contentsline {subsection}{\numberline {4.4}Thermodynamics}{19}
+\contentsline {subsection}{\numberline {4.5}Physical properties}{21}
+\contentsline {section}{\numberline {5}Climate}{22}
+\contentsline {subsection}{\numberline {5.1}Temperature}{22}
+\contentsline {subsection}{\numberline {5.2}Precipitation}{23}
+\contentsline {subsection}{\numberline {5.3}Data structure}{25}
+\contentsline {section}{\numberline {6}Mass balance}{27}
+\contentsline {subsection}{\numberline {6.1}Surface mass balance}{27}
+\contentsline {subsection}{\numberline {6.2}Basal mass balance}{28}
+\contentsline {section}{\numberline {7}Glacial isostatic adjustment}{29}
+\contentsline {subsection}{\numberline {7.1}ELRA}{29}
+\contentsline {subsubsection}{\numberline {7.1.1}Theory}{29}
+\contentsline {subsubsection}{\numberline {7.1.2}Implementation}{29}
+\contentsline {section}{\numberline {8}Unstructured grid}{30}
+\contentsline {subsection}{\numberline {8.1}Basic concepts}{30}
+\contentsline {subsubsection}{\numberline {8.1.1}Nomenclature}{30}
+\contentsline {subsubsection}{\numberline {8.1.2}Voronoi cells and Delaunay triangulation}{30}
+\contentsline {subsection}{\numberline {8.2}Data structure}{32}
+\contentsline {subsection}{\numberline {8.3}Staggered mesh}{35}
+\contentsline {subsection}{\numberline {8.4}Mesh refinement}{37}
+\contentsline {subsection}{\numberline {8.5}Paralellisation}{40}
+\contentsline {subsection}{\numberline {8.6}Discretisation}{42}
+\contentsline {subsubsection}{\numberline {8.6.1}First-order partial derivatives}{42}
+\contentsline {subsubsection}{\numberline {8.6.2}Second-order partial derivatives}{43}
+\contentsline {subsubsection}{\numberline {8.6.3}First-order derivatives on staggered vertices}{46}
+\contentsline {subsubsection}{\numberline {8.6.4}Least-squares discretisation scheme}{47}
+\contentsline {subsubsection}{\numberline {8.6.5}Convergence}{49}
+\contentsline {subsection}{\numberline {8.7}Remapping}{50}
+\contentsline {subsubsection}{\numberline {8.7.1}Theory}{50}
+\contentsline {subsubsection}{\numberline {8.7.2}Implementation}{51}
+\contentsline {section}{\numberline {9}Personal note}{55}
+\contentsline {section}{\numberline {10}References}{56}

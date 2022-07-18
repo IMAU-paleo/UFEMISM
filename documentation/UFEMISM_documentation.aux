@@ -1,0 +1,186 @@
+\relax 
+\@writefile{toc}{\contentsline {paragraph}{Abstract}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {1}How to get and run UFEMISM}{1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Code}{1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Data}{3}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Introduction}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Background}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Objectives}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Status quo}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.3.1}Features}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.3.2}Performance}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.3.3}Benchmark experiments}{5}}
+\@writefile{toc}{\contentsline {paragraph}{Analytical solutions}{5}}
+\@writefile{toc}{\contentsline {paragraph}{EISMINT-1}{5}}
+\@writefile{toc}{\contentsline {paragraph}{MISMIP}{6}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Model overview}{7}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Code structure}{7}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.1.1}Coupler}{7}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.1.2}Ice model}{7}}
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:timestep}{{\caption@xref {fig:timestep}{ on input line 270}}{8}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Asynchronous time stepping in UFEMISM.\relax }}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Data structure}{9}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.1}Type hierarchy}{9}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.2}Shared memory}{10}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.3}Parallelisation}{11}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Output}{11}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.1}Text files}{11}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.2}NetCDF files}{12}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Computer resources}{12}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.1}Computation time}{12}}
+\newlabel{fig:resources_time}{{\caption@xref {fig:resources_time}{ on input line 469}}{13}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Computation time used by the different model components.\relax }}{13}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.2}Memory}{13}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.4.3}Data}{13}}
+\newlabel{fig:resources_memory}{{\caption@xref {fig:resources_memory}{ on input line 482}}{14}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Memory used by UFEMISM during the simulation.\relax }}{14}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Ice dynamics and thermodynamics}{14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Shallow Ice Approximation}{14}}
+\newlabel{eq:SIA}{{1}{14}}
+\newlabel{eq:SIA_dt}{{4}{15}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Shallow Shelf Approximation}{15}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}Discretisation and solution}{15}}
+\newlabel{eq:SSA}{{5}{15}}
+\newlabel{eq:SSA_nu}{{7}{15}}
+\newlabel{eq:SSA_simple}{{8}{15}}
+\newlabel{eq:SSA_disc}{{10}{15}}
+\newlabel{eq:SSA_dt}{{17}{16}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.2}Grounding-line flux}{16}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.3}Parallelisation}{17}}
+\newlabel{fig:fivecolours}{{\caption@xref {fig:fivecolours}{ on input line 620}}{18}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Part of a mesh, showing the five-colouring scheme.\relax }}{18}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Mass continuity}{18}}
+\newlabel{iceconsvlaw}{{19}{18}}
+\newlabel{fig:masscontinuity}{{\caption@xref {fig:masscontinuity}{ on input line 676}}{19}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces The Voronoi cell (grey) of a vertex serves as the control volume in the finite volume approach. Ice flows through the vertical faces of the volume, while the surface and basal mass balance add or remove ice from the top and bottom faces, respectively\relax }}{19}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Thermodynamics}{19}}
+\newlabel{eq:zeta}{{27}{20}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Physical properties}{21}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Climate}{22}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Temperature}{22}}
+\newlabel{eq:matrix_Iabs}{{46}{22}}
+\newlabel{eq:matrix_wins_T2m}{{47}{22}}
+\newlabel{eq:matrix_wice_T2m}{{48}{22}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Precipitation}{23}}
+\newlabel{eq:matrix_wice_precip}{{55}{23}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Data structure}{25}}
+\newlabel{fig:climate_ERA40}{{\caption@xref {fig:climate_ERA40}{ on input line 938}}{25}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces The ERA-40 reanalysis data.\relax }}{25}}
+\newlabel{fig:climate_GCM_PI}{{\caption@xref {fig:climate_GCM_PI}{ on input line 943}}{25}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces The PI GCM snapshot by Singarayer and Valdes (2010).\relax }}{25}}
+\newlabel{fig:climate_GCM_LGM}{{\caption@xref {fig:climate_GCM_LGM}{ on input line 948}}{25}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces The LGM GCM snapshot by Singarayer and Valdes (2010).\relax }}{25}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Mass balance}{27}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Surface mass balance}{27}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Basal mass balance}{28}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Glacial isostatic adjustment}{29}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}ELRA}{29}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.1}Theory}{29}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.1.2}Implementation}{29}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Unstructured grid}{30}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Basic concepts}{30}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.1}Nomenclature}{30}}
+\newlabel{fig:dummymesh}{{\caption@xref {fig:dummymesh}{ on input line 1112}}{30}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces A simple mesh.\relax }}{30}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.2}Voronoi cells and Delaunay triangulation}{30}}
+\newlabel{fig:VoronoiDelaunay}{{\caption@xref {fig:VoronoiDelaunay}{ on input line 1124}}{31}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces (a) A collection of points in $\mathbb  {R}^{2}$, (b) the Voronoi cells of the points, (c) the Delaunay triangulation.\relax }}{31}}
+\newlabel{fig:Delaunayflip}{{\caption@xref {fig:Delaunayflip}{ on input line 1152}}{31}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces (a) This pair of triangles violates the local Delaunay criterion, (b) the pair has been "flipped", and now satisfies the criterion.\relax }}{31}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Data structure}{32}}
+\newlabel{tab:table_vertexdatademo}{{\caption@xref {tab:table_vertexdatademo}{ on input line 1172}}{32}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Vertex data\relax }}{32}}
+\newlabel{tab:table_triangledatademo}{{\caption@xref {tab:table_triangledatademo}{ on input line 1188}}{32}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces triangle data\relax }}{32}}
+\newlabel{fig:meshdata_02}{{\caption@xref {fig:meshdata_02}{ on input line 1219}}{33}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Another simple mesh.\relax }}{33}}
+\newlabel{tab:table_vertexdata_01}{{\caption@xref {tab:table_vertexdata_01}{ on input line 1226}}{33}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Vertex data\relax }}{33}}
+\newlabel{tab:table_triangledata_01}{{\caption@xref {tab:table_triangledata_01}{ on input line 1249}}{34}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Triangle data\relax }}{34}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Staggered mesh}{35}}
+\newlabel{fig:staggeredmesh}{{\caption@xref {fig:staggeredmesh}{ on input line 1279}}{35}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces The staggered vertices (green) correspond to the connections between the regular vertices (blue).\relax }}{35}}
+\newlabel{tab:table_Acmesh}{{\caption@xref {tab:table_Acmesh}{ on input line 1286}}{35}}
+\newlabel{fig:combinedAaAcmesh}{{\caption@xref {fig:combinedAaAcmesh}{ on input line 1325}}{36}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces The combined Aa-Ac mesh.\relax }}{36}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.4}Mesh refinement}{37}}
+\newlabel{fig:split_triangle}{{\caption@xref {fig:split_triangle}{ on input line 1350}}{37}}
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces (a) Triangle 8 is marked for splitting. (b) A new vertex is added at the circumcentre of triangle 8, replacing it by three new triangles. (c) New triangle pair 8-1 is found to violate the local Delaunay criterion, and is flipped. (d) New triangle pairs 15-11 and 16-9 were also flipped; the mesh now once again is a Delaunay triangulation.\relax }}{37}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces mesh refinement conditions\relax }}{38}}
+\newlabel{fig:stepwise_refinement}{{\caption@xref {fig:stepwise_refinement}{ on input line 1392}}{38}}
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Step-wise refinement of a mesh, with the maximum resolution decreasing from 200 km (a) to 12.5 km (e).\relax }}{38}}
+\newlabel{fig:mesh_Lloyds_algorithm}{{\caption@xref {fig:mesh_Lloyds_algorithm}{ on input line 1455}}{39}}
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces (a) An unsmoothed, 100 km resolution mesh. (b) The same mesh after applying one single iterations of Lloyd's algorithm.\relax }}{39}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.5}Paralellisation}{40}}
+\newlabel{fig:submeshes}{{\caption@xref {fig:submeshes}{ on input line 1475}}{40}}
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Four submeshes for Antarctica.\relax }}{40}}
+\newlabel{fig:submeshes_align}{{\caption@xref {fig:submeshes_align}{ on input line 1498}}{40}}
+\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces Aligning two simple submeshes: a) before, b) a single non-overlapping (red) vertex is detected, c) after.\relax }}{40}}
+\newlabel{fig:submeshes_merge}{{\caption@xref {fig:submeshes_merge}{ on input line 1517}}{41}}
+\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces Merging two simple submeshes. Note that no actual deformation is occurring; the vertices along the seam have the same x-ccordinate, and have only been moved apart for this illustration.\relax }}{41}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.6}Discretisation}{42}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.6.1}First-order partial derivatives}{42}}
+\newlabel{fig:mesh_disc_01}{{\caption@xref {fig:mesh_disc_01}{ on input line 1550}}{42}}
+\@writefile{lof}{\contentsline {figure}{\numberline {21}{\ignorespaces A simple mesh.\relax }}{42}}
+\newlabel{eq:disc_normvec}{{83}{42}}
+\newlabel{eq:disc_fxtri}{{84}{42}}
+\newlabel{eq:disc_fxtri2}{{85}{42}}
+\newlabel{eq:disc_fxi}{{86}{42}}
+\newlabel{eq:disc_fxi2}{{87}{43}}
+\newlabel{eq:disc_Nx}{{88}{43}}
+\newlabel{eq:disc_fxi3}{{89}{43}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.6.2}Second-order partial derivatives}{43}}
+\newlabel{fig:mesh_disc_02}{{\caption@xref {fig:mesh_disc_02}{ on input line 1625}}{43}}
+\@writefile{lof}{\contentsline {figure}{\numberline {22}{\ignorespaces A simple mesh, with the regular vertices shown in blue. The temporary "staggered" vertices, used to derive an expression for the second partial derivatives, are shown in red. They span a new set of "subtriangles", shown in green.\relax }}{43}}
+\newlabel{eq:disc_vxt}{{90}{43}}
+\newlabel{eq:disc_normvec2}{{91}{43}}
+\newlabel{eq:disc_fxxsub}{{92}{44}}
+\newlabel{eq:disc_Nxsub}{{93}{44}}
+\newlabel{eq:disc_fxxsub2}{{94}{44}}
+\newlabel{eq:disc_fxxsub3}{{95}{44}}
+\newlabel{eq:disc_fxxi}{{96}{44}}
+\newlabel{eq:disc_Nxxi}{{97}{45}}
+\newlabel{eq:disc_fxsp1}{{98}{45}}
+\newlabel{eq:disc_fxsp2}{{99}{45}}
+\newlabel{eq:disc_Nxxs_sum}{{100}{45}}
+\newlabel{eq:disc_fxxi2}{{101}{45}}
+\newlabel{eq:disc_fxxi3}{{102}{45}}
+\newlabel{eq:disc_Nxxi2}{{103}{46}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.6.3}First-order derivatives on staggered vertices}{46}}
+\newlabel{fig:mesh_staggeredvertex}{{\caption@xref {fig:mesh_staggeredvertex}{ on input line 1769}}{46}}
+\@writefile{lof}{\contentsline {figure}{\numberline {23}{\ignorespaces A very simple mesh, showing the staggered vertex $v_c$ (green) connecting regular vertices $v_i$ and $v_j$.\relax }}{46}}
+\newlabel{eq:disc_fxlfyl}{{109}{46}}
+\newlabel{eq:disc_fxcfyc}{{113}{47}}
+\newlabel{eq:disc_U}{{115}{47}}
+\newlabel{eq:disc_fparcfortc}{{116}{47}}
+\newlabel{eq:disc_fparc}{{118}{47}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.6.4}Least-squares discretisation scheme}{47}}
+\newlabel{eq:disc_taylor}{{119}{47}}
+\newlabel{eq:disc_LSmatrix}{{120}{47}}
+\newlabel{eq:disc_LSmatrix2}{{121}{47}}
+\newlabel{eq:disc_LSATWTWA}{{122}{48}}
+\newlabel{eq:disc_LSbetab}{{123}{48}}
+\newlabel{eq:disc_LSfxifyi}{{124}{48}}
+\newlabel{eq:disc_LSNxi}{{125}{48}}
+\newlabel{eq:disc_LSNxi2}{{126}{48}}
+\newlabel{eq:disc_LStxty}{{131}{48}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.6.5}Convergence}{49}}
+\newlabel{fig:disc_conv_maps}{{\caption@xref {fig:disc_conv_maps}{ on input line 1918}}{49}}
+\@writefile{lof}{\contentsline {figure}{\numberline {24}{\ignorespaces Panels a-e: discretisation errors for the averaged-gradients approach used in UFEMISM for, from left to right, $f_x$, $f_y$, $f_{xx}$, $f_{xy}$ and $f_{yy}$. Panels f-j: the same for the least-squares approach from Syrakos et al. (2017).\relax }}{49}}
+\newlabel{fig:disc_conv_order}{{\caption@xref {fig:disc_conv_order}{ on input line 1925}}{49}}
+\@writefile{lof}{\contentsline {figure}{\numberline {25}{\ignorespaces Panels a-e: discretisation errors vs. mesh resolution for the averaged-gradients approach used in UFEMISM for, from left to right, $f_x$, $f_y$, $f_{xx}$, $f_{xy}$ and $f_{yy}$. Panels f-j: the same for the least-squares approach from Syrakos et al. (2017). Logarithmic fits have been made for all graphs, with the order of convergence shown in the labels.\relax }}{49}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.7}Remapping}{50}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.7.1}Theory}{50}}
+\newlabel{eq:remap_sumint}{{136}{50}}
+\newlabel{eq:remap_Taylor}{{137}{50}}
+\newlabel{eq:remap_sumint2}{{138}{50}}
+\newlabel{eq:remap_lineints}{{140}{51}}
+\newlabel{eq:remap_remap}{{143}{51}}
+\newlabel{eq:remap_weights}{{144}{51}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.7.2}Implementation}{51}}
+\newlabel{fig:remapping}{{\caption@xref {fig:remapping}{ on input line 2043}}{52}}
+\@writefile{lof}{\contentsline {figure}{\numberline {26}{\ignorespaces A) the source mesh, B) the Voronoi cells of the source mesh, C) the destination mesh, D) the Voronoi cells of the destination mesh, E) two Voronoi cells of the destination mesh overlaid on the source mesh\relax }}{52}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Personal note}{55}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}References}{56}}

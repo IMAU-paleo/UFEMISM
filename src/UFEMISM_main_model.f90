@@ -424,6 +424,7 @@ CONTAINS
     region%do_SMB_inv     = .TRUE.
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
+    IF (par%master) WRITE(0,*) '  Running again now...'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -833,29 +834,32 @@ CONTAINS
 
   ! Initialise a regular grid
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
-    ! Initialise a regular square grid enveloping this model region
+    ! Initialise a regular square grid enveloping this model
+    ! region based on the mesh data and settings.
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: region
-    TYPE(type_grid),            INTENT(INOUT)     :: grid
-    REAL(dp),                   INTENT(IN)        :: dx
+    TYPE(type_model_region), INTENT(INOUT)  :: region
+    TYPE(type_grid),         INTENT(INOUT)  :: grid
+    REAL(dp),                INTENT(IN)     :: dx
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_model_square_grid'
-    REAL(dp)                                      :: xmid, ymid
-    INTEGER                                       :: nsx, nsy, i, j, n
-    REAL(dp), PARAMETER                           :: tol = 1E-9_dp
+    CHARACTER(LEN=256), PARAMETER           :: routine_name = 'initialise_model_square_grid'
+    REAL(dp)                                :: xmid, ymid
+    INTEGER                                 :: nsx, nsy, i, j, n
+    REAL(dp), PARAMETER                     :: tol = 1E-9_dp
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    nsx = 0
-    nsy = 0
-
+    ! Allocate basic grid data
     CALL allocate_shared_int_0D( grid%nx,           grid%wnx          )
     CALL allocate_shared_int_0D( grid%ny,           grid%wny          )
+    CALL allocate_shared_int_0D( grid%n,            grid%wn           )
     CALL allocate_shared_dp_0D(  grid%dx,           grid%wdx          )
     CALL allocate_shared_dp_0D(  grid%lambda_M,     grid%wlambda_M    )
     CALL allocate_shared_dp_0D(  grid%phi_M,        grid%wphi_M       )
@@ -864,13 +868,19 @@ CONTAINS
     CALL allocate_shared_dp_0D(  grid%xmax,         grid%wxmax        )
     CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
     CALL allocate_shared_dp_0D(  grid%ymax,         grid%wymax        )
+    CALL allocate_shared_dp_0D(  grid%tol_dist,     grid%wtol_dist    )
 
+
+    ! === Basic grid data ===
+    ! =======================
+
+    ! Let master do this
     IF (par%master) THEN
 
       ! Resolution
       grid%dx = dx
 
-      ! Projection parameters for this region (determined from the config)
+      ! Projection parameters for this region
       IF     (region%name == 'NAM') THEN
         grid%lambda_M     = C%lambda_M_NAM
         grid%phi_M        = C%phi_M_NAM
@@ -893,49 +903,71 @@ CONTAINS
       xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
       ymid = (region%mesh%ymin + region%mesh%ymax) / 2._dp
 
-      nsx = CEILING((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
-      nsy = CEILING((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
+      ! Number of points at each side of domain center
+      nsx = FLOOR((region%mesh%xmax - xmid) / grid%dx)
+      nsy = FLOOR((region%mesh%ymax - ymid) / grid%dx)
 
-      grid%nx = 2*nsx + 1
-      grid%ny = 2*nsy + 1
+      ! Determine total number of points per dimension as twice the
+      ! number per side, plus the middle point, plus 1 grid cell to
+      ! make sure the mesh lies completely inside the grid for any
+      ! grid resolution
+      grid%nx = (2*nsx + 1) + 1
+      grid%ny = (2*nsy + 1) + 1
 
-    END IF ! IF (par%master) THEN
+      ! Determine total number of grid points
+      grid%n  = grid%nx * grid%ny
+
+    END IF
     CALL sync
 
+    ! Assign range to each processor
+    CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
+    CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+
+    ! === Grid generation ===
+    ! =======================
+
+    ! Allocate x and y coordinates for square grid
     CALL allocate_shared_dp_1D( grid%nx, grid%x, grid%wx)
     CALL allocate_shared_dp_1D( grid%ny, grid%y, grid%wy)
 
-    ! Fill in x and y
+    ! Let master do this
     IF (par%master) THEN
-    
-      ! x
+
+      ! Compute corners of grid
+      grid%xmin = grid%x(1      )
+      grid%xmax = grid%x(grid%nx)
+      grid%ymin = grid%y(1      )
+      grid%ymax = grid%y(grid%ny)
+
+      ! Compute x coordinates
       grid%xmin = xmid - nsx * grid%dx
       grid%xmax = xmid + nsx * grid%dx
       DO i = 1, grid%nx
         grid%x( i) = grid%xmin + (i-1)*grid%dx
       END DO
-    
-      ! y
+
+      ! Compute y coordinates
       grid%ymin = ymid - nsy * grid%dx
       grid%ymax = ymid + nsy * grid%dx
       DO j = 1, grid%ny
         grid%y( j) = grid%ymin + (j-1)*grid%dx
       END DO
-      
-    END IF ! IF (par%master) THEN
+
+    END IF
     CALL sync
 
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( grid%tol_dist, grid%wtol_dist)
-    IF (par%master) grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
-    CALL sync
+    ! === Grid-to-vector tables ===
+    ! =============================
+
+    ! Allocate table data
+    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n, grid%wij2n)
+    CALL allocate_shared_int_2D( grid%n , 2      , grid%n2ij, grid%wn2ij)
+
+    ! Tolerance; points lying within this distance are treated as identical
+    grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
 
     ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                   grid%n           , grid%wn           )
-    IF (par%master) grid%n  = grid%nx * grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n        , grid%wij2n        )
-    CALL allocate_shared_int_2D( grid%n , 2      , grid%n2ij        , grid%wn2ij        )
     IF (par%master) THEN
       n = 0
       DO i = 1, grid%nx
@@ -956,14 +988,22 @@ CONTAINS
     END IF
     CALL sync
 
-    ! Assign range to each processor
-    CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
-    CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+    ! === Mappings between mesh and grid ===
+    ! ======================================
+
+    ! Calculate mapping arrays between the mesh and the grid
+    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
+    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
+
+    ! === Geographical coordinates ===
+    ! ================================
 
     ! Calculate lat-lon coordinates
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lat, grid%wlat)
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, grid%lon, grid%wlon)
 
+    ! Compute the lat/lon coordinate for each grid
+    ! point using the mesh projection parameters
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
       CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
@@ -971,9 +1011,8 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Calculate mapping arrays between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
-    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 18)

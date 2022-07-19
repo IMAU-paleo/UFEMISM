@@ -233,8 +233,10 @@ CONTAINS
       IF (region%do_output .OR. region%do_SMB .OR. region%do_BMB) THEN
         ! Determine total ice sheet area, volume, and volume-above-flotation,
         CALL calculate_icesheet_volume_and_area( region)
-        ! Write to regional text output file
-        CALL write_regional_text_output( region)
+        IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+          ! Write to regional text output file
+          CALL write_regional_text_output( region)
+        END IF
       END IF
 
       ! == Update ice geometry
@@ -264,7 +266,9 @@ CONTAINS
         region%output_file_exists = .TRUE.
       END IF
       CALL write_to_output_files( region)
-      CALL write_regional_text_output( region)
+      IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+        CALL write_regional_text_output( region)
+      END IF
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,

@@ -121,7 +121,7 @@ CONTAINS
     ELSEIF (C%choice_climate_model == 'ISMIP_style_forcing') THEN
       ! Use a directly prescribed regional climate
       ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-      
+
       CALL run_climate_model_ISMIP_forcing( region%mesh, region%climate_matrix, time, region%refgeo_PD, region%ice)
 
     ELSE
@@ -183,9 +183,14 @@ CONTAINS
 
     ELSEIF (C%choice_climate_model == 'direct_regional') THEN
       ! No need to initialise any global climate stuff
-      
+
     ELSEIF (C%choice_climate_model == 'ISMIP_style_forcing') THEN
       ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+
+      !Safety
+      IF (C%do_calculate_benthic_d18O) THEN
+        CALL crash('forcing option "do_calculate_benthic_d18O" collides with "ISMIP_style_forcing"!')
+      END IF
 
     ELSE
       CALL crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
@@ -252,10 +257,10 @@ CONTAINS
       ! Use a directly prescribed global climate
 
       CALL initialise_climate_model_direct_climate_regional( region%mesh, region%climate_matrix, region%name)
-      
+
     ELSEIF (C%choice_climate_model == 'ISMIP_style_forcing') THEN
       ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-      
+
       CALL initialise_climate_model_ISMIP_forcing( region%mesh, region%climate_matrix)
 
     ELSE
@@ -2767,15 +2772,15 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_climate_model_direct_SMB_regional
-  
+
 ! == ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
 ! ===============================================================
-  
+
   SUBROUTINE run_climate_model_ISMIP_forcing( mesh, climate_matrix, time, refgeo_PD, ice)
     ! Run the regional climate model
     !
     ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    
+
     IMPLICIT NONE
 
     ! In/output variables:
@@ -2790,26 +2795,26 @@ CONTAINS
     REAL(dp)                                                :: wt0, wt1
     INTEGER                                                 :: vi
     REAL(dp)                                                :: dz
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Check if the requested time is enveloped by the two timeframes;
     ! if not, read the two relevant timeframes from the NetCDF file
     IF (time < climate_matrix%ISMIP_forcing%t0 .OR. time > climate_matrix%ISMIP_forcing%t1) THEN
-      
+
       ! Find and read the two global time frames
       CALL sync
       CALL update_ISMIP_forcing_timeframes( mesh, climate_matrix, time)
-      
+
     END IF ! IF (time >= climate_matrix%SMB_direct%t0 .AND. time <= climate_matrix%SMB_direct%t1) THEN
 
     ! Interpolate the two timeframes in time
     wt0 = (climate_matrix%ISMIP_forcing%t1 - time) / (climate_matrix%ISMIP_forcing%t1 - climate_matrix%ISMIP_forcing%t0)
     wt1 = 1._dp - wt0
-    
+
     DO vi = mesh%vi1, mesh%vi2
-    
+
       climate_matrix%ISMIP_forcing%aSMB(   vi) = (wt0 * climate_matrix%ISMIP_forcing%aSMB0(   vi)) + &
                                                  (wt1 * climate_matrix%ISMIP_forcing%aSMB1(   vi))
       climate_matrix%ISMIP_forcing%dSMBdz( vi) = (wt0 * climate_matrix%ISMIP_forcing%dSMBdz0( vi)) + &
@@ -2818,53 +2823,53 @@ CONTAINS
                                                  (wt1 * climate_matrix%ISMIP_forcing%aST1(    vi))
       climate_matrix%ISMIP_forcing%dSTdz(  vi) = (wt0 * climate_matrix%ISMIP_forcing%dSTdz0(  vi)) + &
                                                  (wt1 * climate_matrix%ISMIP_forcing%dSTdz1(  vi))
-                                                    
+
     END DO
     CALL sync
-    
+
     ! Apply the anomaly and elevation correction to calculate the applied SMB and temperature
     DO vi = mesh%vi1, mesh%vi2
-      
+
       dz = ice%Hs_a( vi) - refgeo_PD%Hs( vi)
-      
+
       climate_matrix%ISMIP_forcing%SMB( vi) = climate_matrix%ISMIP_forcing%SMB_baseline( vi) + &
                                               climate_matrix%ISMIP_forcing%aSMB(         vi) + &
                                               climate_matrix%ISMIP_forcing%dSMBdz(       vi) * dz
-      
+
       climate_matrix%ISMIP_forcing%ST(  vi) = climate_matrix%ISMIP_forcing%ST_baseline(  vi) + &
                                               climate_matrix%ISMIP_forcing%aST(          vi) + &
                                               climate_matrix%ISMIP_forcing%dSTdz(        vi) * dz
-      
+
     END DO
     CALL sync
-    
+
     ! Set the final values in the "applied" climate snapshot
     DO vi = mesh%vi1, mesh%vi2
-      
+
       climate_matrix%applied%T2m( vi,:) = climate_matrix%ISMIP_forcing%ST( vi)
-      
+
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE run_climate_model_ISMIP_forcing
   SUBROUTINE update_ISMIP_forcing_timeframes( mesh, climate_matrix, time)
     ! Update the two timeframes of the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing data
     !
     ! This is where we deal with the fact that ISMIP supplies all these fields in separate NetCDF files
     ! for each year.
-    
+
     USE parameters_module, ONLY: sec_per_year, ice_density
-    
+
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                          INTENT(IN)    :: mesh
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
     REAL(dp),                                 INTENT(IN)    :: time
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'update_ISMIP_forcing_timeframes'
     INTEGER                                                 :: i,j,i1,i2
@@ -2873,352 +2878,352 @@ CONTAINS
     CHARACTER(LEN=256)                                      :: filename
     REAL(dp), DIMENSION(:,:  ), POINTER                     ::  aSMB_raw,  dSMBdz_raw,  aST_raw,  dSTdz_raw
     INTEGER                                                 :: waSMB_raw, wdSMBdz_raw, waST_raw, wdSTdz_raw
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Since ISMIP supplies NetCDF files for each individual year, determining
     ! which two files we need to read is simple enough.
-    
+
     year0 = FLOOR(        time)
     year1 = MAX( CEILING( time), year0+1)
-        
+
     WRITE( year0str,'(I4)') year0
     WRITE( year1str,'(I4)') year1
-    
+
     ! Update timestamps
     climate_matrix%ISMIP_forcing%t0 = REAL( year0,dp)
     climate_matrix%ISMIP_forcing%t1 = REAL( year1,dp)
-  
+
     ! If needed, recalculate the mapping operator between the square grid of the data files, and the model mesh
     IF (.NOT. ASSOCIATED( climate_matrix%ISMIP_forcing%grid%nx)) THEN
-      
+
       ! Read the grid from one of the files
       filename = TRIM( C%ISMIP_forcing_foldername_aSMB) // '/' // TRIM( C%ISMIP_forcing_basefilename_aSMB) // year0str // '.nc'
       CALL get_grid_from_file( filename, climate_matrix%ISMIP_forcing%grid)
-      
+
       ! Calculate the mapping operator between this grid and the mesh
       CALL calc_remapping_operator_grid2mesh( climate_matrix%ISMIP_forcing%grid, mesh)
-      
+
     END IF ! IF (.NOT. ASSOCIATED( climate_matrix%ISMIP_forcing%grid%nx)) THEN
-    
+
   ! ===== aSMB =====
   ! ================
-  
+
     ! Timeframe 0
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_aSMB0%filename = TRIM( C%ISMIP_forcing_foldername_aSMB) // '/' // TRIM( C%ISMIP_forcing_basefilename_aSMB) // year0str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_aSMB_file( climate_matrix%ISMIP_forcing%netcdf_aSMB0)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, aSMB_raw, waSMB_raw)
     CALL read_ISMIP_forcing_aSMB_file( climate_matrix%ISMIP_forcing%netcdf_aSMB0, aSMB_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-    
+
       ! Convert the data from SI units (kg m-2 s-1) to ice model units (m.i.e./yr)
       aSMB_raw( i,j) = aSMB_raw( i,j) * sec_per_year / ice_density
-      
+
       ! Replace NaN by zero
       IF (ISNAN( aSMB_raw( i,j))) THEN
         aSMB_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, aSMB_raw, climate_matrix%ISMIP_forcing%aSMB0)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( waSMB_raw)
-  
+
     ! Timeframe 1
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_aSMB1%filename = TRIM( C%ISMIP_forcing_foldername_aSMB) // '/' // TRIM( C%ISMIP_forcing_basefilename_aSMB) // year1str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_aSMB_file( climate_matrix%ISMIP_forcing%netcdf_aSMB1)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, aSMB_raw, waSMB_raw)
     CALL read_ISMIP_forcing_aSMB_file( climate_matrix%ISMIP_forcing%netcdf_aSMB1, aSMB_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-    
+
       ! Convert the data from SI units (kg m-2 s-1) to ice model units (m.i.e./yr)
       aSMB_raw( i,j) = aSMB_raw( i,j) * sec_per_year / ice_density
-      
+
       ! Replace NaN by zero
       IF (ISNAN( aSMB_raw( i,j))) THEN
         aSMB_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, aSMB_raw, climate_matrix%ISMIP_forcing%aSMB1)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( waSMB_raw)
-    
+
   ! ===== dSMBdz =====
   ! ================
-  
+
     ! Timeframe 0
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_dSMBdz0%filename = TRIM( C%ISMIP_forcing_foldername_dSMBdz) // '/' // TRIM( C%ISMIP_forcing_basefilename_dSMBdz) // year0str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_dSMBdz_file( climate_matrix%ISMIP_forcing%netcdf_dSMBdz0)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, dSMBdz_raw, wdSMBdz_raw)
     CALL read_ISMIP_forcing_dSMBdz_file( climate_matrix%ISMIP_forcing%netcdf_dSMBdz0, dSMBdz_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-    
+
       ! Convert the data from SI units (kg m-2 s-1) to ice model units (m.i.e./yr)
       dSMBdz_raw( i,j) = dSMBdz_raw( i,j) * sec_per_year / ice_density
-      
+
       ! Replace NaN by zero
       IF (ISNAN( dSMBdz_raw( i,j))) THEN
         dSMBdz_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, dSMBdz_raw, climate_matrix%ISMIP_forcing%dSMBdz0)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( wdSMBdz_raw)
-  
+
     ! Timeframe 1
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_dSMBdz1%filename = TRIM( C%ISMIP_forcing_foldername_dSMBdz) // '/' // TRIM( C%ISMIP_forcing_basefilename_dSMBdz) // year1str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_dSMBdz_file( climate_matrix%ISMIP_forcing%netcdf_dSMBdz1)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, dSMBdz_raw, wdSMBdz_raw)
     CALL read_ISMIP_forcing_dSMBdz_file( climate_matrix%ISMIP_forcing%netcdf_dSMBdz1, dSMBdz_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-    
+
       ! Convert the data from SI units (kg m-2 s-1) to ice model units (m.i.e./yr)
       dSMBdz_raw( i,j) = dSMBdz_raw( i,j) * sec_per_year / ice_density
-      
+
       ! Replace NaN by zero
       IF (ISNAN( dSMBdz_raw( i,j))) THEN
         dSMBdz_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, dSMBdz_raw, climate_matrix%ISMIP_forcing%dSMBdz1)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( wdSMBdz_raw)
-    
+
   ! ===== aST =====
   ! ================
-  
+
     ! Timeframe 0
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_aST0%filename = TRIM( C%ISMIP_forcing_foldername_aST) // '/' // TRIM( C%ISMIP_forcing_basefilename_aST) // year0str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_aST_file( climate_matrix%ISMIP_forcing%netcdf_aST0)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, aST_raw, waST_raw)
     CALL read_ISMIP_forcing_aST_file( climate_matrix%ISMIP_forcing%netcdf_aST0, aST_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-      
+
       ! Replace NaN by zero
       IF (ISNAN( aST_raw( i,j))) THEN
         aST_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, aST_raw, climate_matrix%ISMIP_forcing%aST0)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( waST_raw)
-  
+
     ! Timeframe 1
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_aST1%filename = TRIM( C%ISMIP_forcing_foldername_aST) // '/' // TRIM( C%ISMIP_forcing_basefilename_aST) // year1str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_aST_file( climate_matrix%ISMIP_forcing%netcdf_aST1)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, aST_raw, waST_raw)
     CALL read_ISMIP_forcing_aST_file( climate_matrix%ISMIP_forcing%netcdf_aST1, aST_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-      
+
       ! Replace NaN by zero
       IF (ISNAN( aST_raw( i,j))) THEN
         aST_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, aST_raw, climate_matrix%ISMIP_forcing%aST1)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( waST_raw)
-    
+
   ! ===== dSTdz =====
   ! ================
-  
+
     ! Timeframe 0
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_dSTdz0%filename = TRIM( C%ISMIP_forcing_foldername_dSTdz) // '/' // TRIM( C%ISMIP_forcing_basefilename_dSTdz) // year0str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_dSTdz_file( climate_matrix%ISMIP_forcing%netcdf_dSTdz0)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, dSTdz_raw, wdSTdz_raw)
     CALL read_ISMIP_forcing_dSTdz_file( climate_matrix%ISMIP_forcing%netcdf_dSTdz0, dSTdz_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-      
+
       ! Replace NaN by zero
       IF (ISNAN( dSTdz_raw( i,j))) THEN
         dSTdz_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, dSTdz_raw, climate_matrix%ISMIP_forcing%dSTdz0)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( wdSTdz_raw)
-  
+
     ! Timeframe 1
     ! ===========
-    
+
     ! Determine the name of the file containing the timeframe
     climate_matrix%ISMIP_forcing%netcdf_dSTdz1%filename = TRIM( C%ISMIP_forcing_foldername_dSTdz) // '/' // TRIM( C%ISMIP_forcing_basefilename_dSTdz) // year1str // '.nc'
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_dSTdz_file( climate_matrix%ISMIP_forcing%netcdf_dSTdz1)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( climate_matrix%ISMIP_forcing%grid%nx, climate_matrix%ISMIP_forcing%grid%ny, dSTdz_raw, wdSTdz_raw)
     CALL read_ISMIP_forcing_dSTdz_file( climate_matrix%ISMIP_forcing%netcdf_dSTdz1, dSTdz_raw)
     CALL sync
-    
+
     ! Clean up the raw data a bit
     DO i = climate_matrix%ISMIP_forcing%grid%i1, climate_matrix%ISMIP_forcing%grid%i2
     DO j = 1, climate_matrix%ISMIP_forcing%grid%ny
-      
+
       ! Replace NaN by zero
       IF (ISNAN( dSTdz_raw( i,j))) THEN
         dSTdz_raw( i,j) = 0._dp
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
     ! Map the data to the mesh
     CALL map_grid2mesh_2D( climate_matrix%ISMIP_forcing%grid, mesh, dSTdz_raw, climate_matrix%ISMIP_forcing%dSTdz1)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( wdSTdz_raw)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 13)
-    
+
   END SUBROUTINE update_ISMIP_forcing_timeframes
   SUBROUTINE initialise_climate_model_ISMIP_forcing( mesh, climate_matrix)
     ! Initialise the regional climate model
     !
     ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                          INTENT(IN)    :: mesh
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_ISMIP_forcing'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Initialise the baseline SMB and temperature
     CALL initialise_climate_model_ISMIP_forcing_SMB_baseline( mesh, climate_matrix)
     CALL initialise_climate_model_ISMIP_forcing_ST_baseline(  mesh, climate_matrix)
-        
+
     ! Allocate memory for the timestamps of the two timeframes
     CALL allocate_shared_dp_0D( climate_matrix%ISMIP_forcing%t0, climate_matrix%ISMIP_forcing%wt0)
     CALL allocate_shared_dp_0D( climate_matrix%ISMIP_forcing%t1, climate_matrix%ISMIP_forcing%wt1)
-    
+
     IF (par%master) THEN
       ! Give impossible values to timeframes, so that the first call to run_climate_model_ISMIP_forcing
       ! is guaranteed to first read two new timeframes from the NetCDF file
@@ -3226,74 +3231,74 @@ CONTAINS
       climate_matrix%ISMIP_forcing%t1 = C%start_time_of_run - 90._dp
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Allocate memory for the two timeframes
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aSMB0  , climate_matrix%ISMIP_forcing%waSMB0  )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSMBdz0, climate_matrix%ISMIP_forcing%wdSMBdz0)
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aST0   , climate_matrix%ISMIP_forcing%waST0   )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSTdz0 , climate_matrix%ISMIP_forcing%wdSTdz0 )
-    
+
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aSMB1  , climate_matrix%ISMIP_forcing%waSMB1  )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSMBdz1, climate_matrix%ISMIP_forcing%wdSMBdz1)
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aST1   , climate_matrix%ISMIP_forcing%waST1   )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSTdz1 , climate_matrix%ISMIP_forcing%wdSTdz1 )
-    
+
     ! Allocate memory for the time-interpolated values of aSMB, dSMBdz, ST, and dSTdz
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aSMB   , climate_matrix%ISMIP_forcing%waSMB   )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSMBdz , climate_matrix%ISMIP_forcing%wdSMBdz )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%aST    , climate_matrix%ISMIP_forcing%waST    )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%dSTdz  , climate_matrix%ISMIP_forcing%wdSTdz  )
-    
+
     ! Allocate memory for the applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%SMB    , climate_matrix%ISMIP_forcing%wSMB    )
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%ST     , climate_matrix%ISMIP_forcing%wST     )
-    
+
     ! Lastly, allocate memory for the "applied" snapshot
     CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, name = 'applied')
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 37)
-    
+
   END SUBROUTINE initialise_climate_model_ISMIP_forcing
   SUBROUTINE initialise_climate_model_ISMIP_forcing_SMB_baseline( mesh, climate_matrix)
     ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! Initialise the baseline SMB
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                          INTENT(IN)    :: mesh
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_ISMIP_forcing_SMB_baseline'
     TYPE(type_grid)                                         :: grid_raw
     REAL(dp), DIMENSION(:,:  ), POINTER                     ::  SMB_raw
     INTEGER                                                 :: wSMB_raw
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! The name of the file we're reading the data from
     climate_matrix%ISMIP_forcing%netcdf_SMB_baseline%filename = C%ISMIP_forcing_filename_SMB_baseline
-    
+
     ! First get the grid from the file
     CALL get_grid_from_file( climate_matrix%ISMIP_forcing%netcdf_SMB_baseline%filename, grid_raw)
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_SMB_baseline_file( climate_matrix%ISMIP_forcing%netcdf_SMB_baseline)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, SMB_raw, wSMB_raw)
     CALL read_ISMIP_forcing_SMB_baseline_file( climate_matrix%ISMIP_forcing%netcdf_SMB_baseline, SMB_raw)
-    
+
     ! Calculate the mapping operator between this grid and the mesh
     CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
-    
+
     ! Map the data to the mesh
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%SMB_baseline, climate_matrix%ISMIP_forcing%wSMB_baseline)
     CALL map_grid2mesh_2D( grid_raw, mesh, SMB_raw, climate_matrix%ISMIP_forcing%SMB_baseline)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( grid_raw%wnx      )
     CALL deallocate_shared( grid_raw%wny      )
@@ -3310,50 +3315,50 @@ CONTAINS
     CALL deallocate_shared( grid_raw%wtol_dist)
     CALL deallocate_remapping_operators_grid2mesh( grid_raw)
     CALL deallocate_shared( wSMB_raw          )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
-    
+
   END SUBROUTINE initialise_climate_model_ISMIP_forcing_SMB_baseline
   SUBROUTINE initialise_climate_model_ISMIP_forcing_ST_baseline( mesh, climate_matrix)
     ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! Initialise the baseline SMB
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                          INTENT(IN)    :: mesh
     TYPE(type_climate_matrix_regional),       INTENT(INOUT) :: climate_matrix
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                           :: routine_name = 'initialise_climate_model_ISMIP_forcing_ST_baseline'
     TYPE(type_grid)                                         :: grid_raw
     REAL(dp), DIMENSION(:,:  ), POINTER                     ::  ST_raw
     INTEGER                                                 :: wST_raw
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! The name of the file we're reading the data from
     climate_matrix%ISMIP_forcing%netcdf_ST_baseline%filename = C%ISMIP_forcing_filename_ST_baseline
-    
+
     ! First get the grid from the file
     CALL get_grid_from_file( climate_matrix%ISMIP_forcing%netcdf_ST_baseline%filename, grid_raw)
-    
+
     ! Inquire if everything we need is present in the file
     CALL inquire_ISMIP_forcing_ST_baseline_file( climate_matrix%ISMIP_forcing%netcdf_ST_baseline)
-    
+
     ! Allocate memory for, and read, the data
     CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, ST_raw, wST_raw)
     CALL read_ISMIP_forcing_ST_baseline_file( climate_matrix%ISMIP_forcing%netcdf_ST_baseline, ST_raw)
-    
+
     ! Calculate the mapping operator between this grid and the mesh
     CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
-    
+
     ! Map the data to the mesh
     CALL allocate_shared_dp_1D( mesh%nV, climate_matrix%ISMIP_forcing%ST_baseline, climate_matrix%ISMIP_forcing%wST_baseline)
     CALL map_grid2mesh_2D( grid_raw, mesh, ST_raw, climate_matrix%ISMIP_forcing%ST_baseline)
-      
+
     ! Clean up after yourself
     CALL deallocate_shared( grid_raw%wnx      )
     CALL deallocate_shared( grid_raw%wny      )
@@ -3370,10 +3375,10 @@ CONTAINS
     CALL deallocate_shared( grid_raw%wtol_dist)
     CALL deallocate_remapping_operators_grid2mesh( grid_raw)
     CALL deallocate_shared( wST_raw           )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
-    
+
   END SUBROUTINE initialise_climate_model_ISMIP_forcing_ST_baseline
 
 ! == Some generally useful tools
@@ -3570,39 +3575,39 @@ CONTAINS
        CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%SMB_direct%SMB_year1, climate_matrix%SMB_direct%wSMB_year1)
 
     END IF
-    
+
     IF (C%choice_climate_model == 'ISMIP_style_forcing') THEN
-      
+
       ! Reallocate shared memory
-      
+
       ! Baseline (deallocate, as new memory is allocated in the "initialise" routines)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%wSMB_baseline)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%wST_baseline )
-      
+
       ! The two timeframes
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aSMB0       , climate_matrix%ISMIP_forcing%waSMB0       )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSMBdz0     , climate_matrix%ISMIP_forcing%wdSMBdz0     )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aST0        , climate_matrix%ISMIP_forcing%waST0        )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSTdz0      , climate_matrix%ISMIP_forcing%wdSTdz0      )
-      
+
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aSMB1       , climate_matrix%ISMIP_forcing%waSMB1       )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSMBdz1     , climate_matrix%ISMIP_forcing%wdSMBdz1     )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aST1        , climate_matrix%ISMIP_forcing%waST1        )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSTdz1      , climate_matrix%ISMIP_forcing%wdSTdz1      )
-      
+
       ! Time-interpolated values of aSMB, dSMBdz, ST, and dSTdz
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aSMB        , climate_matrix%ISMIP_forcing%waSMB        )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSMBdz      , climate_matrix%ISMIP_forcing%wdSMBdz      )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%aST         , climate_matrix%ISMIP_forcing%waST         )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%dSTdz       , climate_matrix%ISMIP_forcing%wdSTdz       )
-      
+
       ! The applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%SMB         , climate_matrix%ISMIP_forcing%wSMB         )
       CALL reallocate_shared_dp_1D( mesh_new%nV, climate_matrix%ISMIP_forcing%ST          , climate_matrix%ISMIP_forcing%wST          )
-      
+
       ! Destroy the grid, and the mapping operator that applied to the old mesh
       CALL deallocate_remapping_operators_grid2mesh( climate_matrix%ISMIP_forcing%grid)
-      
+
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wnx)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wny)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wx)
@@ -3616,7 +3621,7 @@ CONTAINS
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wn)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wn2ij)
       CALL deallocate_shared( climate_matrix%ISMIP_forcing%grid%wij2n)
-      
+
       NULLIFY( climate_matrix%ISMIP_forcing%grid%nx)
       NULLIFY( climate_matrix%ISMIP_forcing%grid%ny)
       NULLIFY( climate_matrix%ISMIP_forcing%grid%x)
@@ -3630,14 +3635,14 @@ CONTAINS
       NULLIFY( climate_matrix%ISMIP_forcing%grid%n)
       NULLIFY( climate_matrix%ISMIP_forcing%grid%n2ij)
       NULLIFY( climate_matrix%ISMIP_forcing%grid%ij2n)
-    
+
       ! (re)Initialise the baseline SMB and temperature
       CALL initialise_climate_model_ISMIP_forcing_SMB_baseline( mesh_new, climate_matrix)
       CALL initialise_climate_model_ISMIP_forcing_ST_baseline(  mesh_new, climate_matrix)
-      
+
       ! Calculate a new mapping operator and reproject the timeframes to the new grid
       CALL update_ISMIP_forcing_timeframes( mesh_new, climate_matrix, time)
-      
+
     END IF
 
     ! Finalise routine path

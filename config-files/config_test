@@ -3,8 +3,8 @@
   ! Time steps and range
   ! ====================
 
-  start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
+  start_time_of_run_config                    = 1900.0                           ! Start time (in years) of the simulations
+  end_time_of_run_config                      = 2300.0                           ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 2.0                              ! Maximum time step (in years) of the ice model
   dt_thermo_config                            = 2.0                              ! Time step (in years) for updating thermodynamics
@@ -60,6 +60,15 @@
   dx_grid_GIA_config                          = 100000.0                         ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
   dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing in the climate matrix [m]
 
+  ! ISMIP-style output
+  ! ==================
+
+  do_write_ISMIP_output_config                = .FALSE.                          ! Whether or not to create a set of ISMIP output files
+  ISMIP_output_group_code_config              = 'IMAU'                           ! Code for the group      name in the ISMIP output file names
+  ISMIP_output_model_code_config              = 'UFEMISM'                        ! Code for the model      name in the ISMIP output file names
+  ISMIP_output_experiment_code_config         = 'test'                           ! Code for the experiment name in the ISMIP output file names
+  ISMIP_output_basetime_config                = 'YYYY-MM-DD'                     ! Basetime for the ISMIP output files (e.g. '1900-01-01')
+
   ! Reference geometries (initial, present-day, and GIA equilibrium)
   ! ================================================================
 
@@ -111,6 +120,38 @@
   filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
   filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
   filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+
+  ! == Global forcing (insolation, CO2, d18O, geothermal heat flux)
+  ! ===============================================================
+
+  ! Possible choice_forcing_method options:
+  ! 'none'                 : No global forcing used at all; climate or SMB are fully parameterised or directly prescribed
+  ! 'd18O_inverse_dT_glob' : Use the inverse routine with the specified d18O record to calculate a global temperature offset (e.g. de Boer et al., 2013)
+  ! 'CO2_direct'           : Use the specified CO2 record to force the climate matrix (e.g. Berends et al., 2018)
+  ! 'd18O_inverse_CO2'     : Use the inverse routine with the specified d18O record to calculate CO2 and then force the climate matrix (e.g. Berends et al., 2019)
+  choice_forcing_method_config                = 'CO2_direct'
+
+  ! Insolation forcing (NetCDF)
+  choice_insolation_forcing_config            = 'realistic'                      ! Choice of insolation forcing: "none", "static", "realistic"
+  static_insolation_time_config               = 0.0                              ! Keep insolation values fixed to this time when choice_insolation_forcing = 'static'
+  filename_insolation_config                  = 'data/Insolation/Laskar_etal_2004_insolation.nc'
+
+
+  ! CO2 record (ASCII text file, so the number of rows needs to be specified)
+  filename_CO2_record_config                  = 'data/CO2/EPICA_CO2_Bereiter_2015_100yr.dat'
+  CO2_record_length_config                    = 8001
+
+  ! d18O record (ASCII text file, so the number of rows needs to be specified)
+  filename_d18O_record_config                 = 'data/d18O/Ahn2017_d18O.dat'
+  d18O_record_length_config                   = 2051
+
+  ! Geothermal heat flux
+  choice_geothermal_heat_flux_config          = 'spatial'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
+  constant_geothermal_heat_flux_config        = 1.72E06                          ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
+  filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
+
+  ! Parameters for calculating modelled benthic d18O
+  do_calculate_benthic_d18O_config            = .TRUE.                           ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
 
   ! Ice dynamics - time integration
   ! ===============================
@@ -192,7 +233,7 @@
   ! Climate
   ! =======
 
-  choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+  choice_climate_model_config                 = 'ISMIP_style_forcing'            ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
   ! NetCDF file containing the present-day observed climate (e.g. ERA40)
   filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
@@ -275,6 +316,20 @@
   SMB_IMAUITM_inv_C_abl_Q_max_config          = 10.0                             ! Maximum value of C_abl_Q        allowed during inversion
   SMB_IMAUITM_inv_C_refr_min_config           = 0.0                              ! Minimum value of C_refr         allowed during inversion
   SMB_IMAUITM_inv_C_refr_max_config           = 10.0                             ! Maximum value of C_refr         allowed during inversion
+
+  ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
+  ! ==============================================================
+
+  ISMIP_forcing_filename_SMB_baseline_config  = 'data/ISMIP6/SMB_baseline/SMB_baseline_1900.nc' ! NetCDF file containing the baseline SMB
+  ISMIP_forcing_filename_ST_baseline_config   = 'data/ISMIP6/ST_baseline/ST_baseline_1900.nc'   ! NetCDF file containing the baseline temperature
+  ISMIP_forcing_foldername_aSMB_config        = 'data/ISMIP6/aSMB_unforced'           ! Folder containing the single-year NetCDF files of the SMB anomaly
+  ISMIP_forcing_basefilename_aSMB_config      = 'aSMB_unforced_'                 ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
+  ISMIP_forcing_foldername_dSMBdz_config      = 'data/ISMIP6/dSMBdz_unforced'         ! Folder containing the single-year NetCDF files of the SMB lapse rate
+  ISMIP_forcing_basefilename_dSMBdz_config    = 'dSMBdz_unforced_'               ! Filename without the year (e.g. if the actual file is "dSMBdz_MARv3.12-yearly-CESM2-ssp585-1950.nc", then this variable should be "dSMBdz_MARv3.12-yearly-CESM2-ssp585-"
+  ISMIP_forcing_foldername_aST_config         = 'data/ISMIP6/aST_unforced'            ! Folder containing the single-year NetCDF files of the temperature anomaly
+  ISMIP_forcing_basefilename_aST_config       = 'aST_unforced_'                  ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
+  ISMIP_forcing_foldername_dSTdz_config       = 'data/ISMIP6/dSTdz_unforced'          ! Folder containing the single-year NetCDF files of the temperature lapse rate
+  ISMIP_forcing_basefilename_dSTdz_config     = 'dSTdz_unforced_'                ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
 
   ! Basal mass balance
   ! ==================

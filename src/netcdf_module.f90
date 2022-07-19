@@ -312,10 +312,10 @@ CONTAINS
     END IF
 
   END SUBROUTINE handle_error
-  
+
 ! ===== Useful tools =====
 ! ========================
-  
+
   SUBROUTINE get_grid_from_file( filename, grid)
     ! Take an unallocated grid object and fill it with data from a NetCDF file
 
@@ -330,48 +330,48 @@ CONTAINS
     TYPE(type_netcdf_grid)                             :: netcdf
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
     INTEGER                                            :: i,j,n, var_type
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Inquire if everything we need is present in the file, and obtain the grid size
     CALL allocate_shared_int_0D( grid%nx, grid%wnx)
     CALL allocate_shared_int_0D( grid%ny, grid%wny)
-    
+
     IF (par%master) THEN
-      
+
       ! Open the netcdf file
       netcdf%filename = filename
       CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-      
+
       ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
       CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, grid%nx, netcdf%id_dim_x)
       CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, grid%ny, netcdf%id_dim_y)
-      
+
       ! Inquire variable id's. Make sure that each variable has the correct dimensions:
       CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_x, (/ netcdf%id_dim_x /), netcdf%id_var_x)
       CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_y, (/ netcdf%id_dim_y /), netcdf%id_var_y)
-      
+
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Allocate memory
     CALL allocate_shared_dp_1D( grid%nx,          grid%x, grid%wx)
     CALL allocate_shared_dp_1D(          grid%ny, grid%y, grid%wy)
-    
+
     ! Read x and y
     IF (par%master) THEN
-      
+
       ! Read the grid data
       CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_x, grid%x, start = (/ 1 /) ))
       CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_y, grid%y, start = (/ 1 /) ))
-          
+
       ! Close the netcdf file
       CALL close_netcdf_file( netcdf%ncid)
-      
+
     END IF
     CALL sync
-    
+
     ! Allocate memory for secondary data
     CALL allocate_shared_dp_0D(                    grid%dx      , grid%wdx      )
     CALL allocate_shared_dp_0D(                    grid%xmin    , grid%wxmin    )
@@ -383,13 +383,13 @@ CONTAINS
     grid%n = grid%nx * grid%ny
     CALL allocate_shared_int_2D( grid%nx, grid%ny, grid%ij2n    , grid%wij2n    )
     CALL allocate_shared_int_2D( grid%n , 2,       grid%n2ij    , grid%wn2ij    )
-      
+
     ! Calculate secondary grid data
     IF (par%master) THEN
-      
+
       ! Resolution
       grid%dx   = grid%x( 2) - grid%x( 1)
-      
+
       ! Domain size
       grid%xmin = grid%x( 1)
       grid%xmax = grid%x( grid%nx)
@@ -416,17 +416,17 @@ CONTAINS
           END DO
         END IF
       END DO
-      
+
     END IF
     CALL sync
-    
+
     ! Parallelisation domains
     CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
     CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 13)
-    
+
   END SUBROUTINE get_grid_from_file
 
 ! ===== Main output functions =====
@@ -462,7 +462,7 @@ CONTAINS
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
-    
+
     ! ISMIP6 output
     IF (C%do_write_ISMIP_output) THEN
       CALL create_ISMIP_output_files( region)
@@ -2612,7 +2612,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_and_write_to_grid_netcdf_dp_2D
-  
+
   SUBROUTINE map_and_write_to_grid_netcdf_dp_2D_notime(  ncid, mesh, grid, d_mesh, id_var)
 
     IMPLICIT NONE
@@ -4704,30 +4704,30 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_SELEN_output_file
-  
+
 ! ===== ISMIP-style output =====
 ! ==============================
-  
+
   SUBROUTINE create_ISMIP_output_files( region)
     ! Create all the ISMIP output files
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_model_region), INTENT(IN)    :: region
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_ISMIP_output_files'
     CHARACTER(LEN=256)                                 :: icesheet_code, foldername
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Code for the ice sheet name in the ISMIP output file names
     IF     (region%name == 'NAM') THEN
       icesheet_code = 'NAIS'
@@ -4743,7 +4743,7 @@ CONTAINS
       icesheet_code = 'beep'
       CALL crash('unknown region "' // TRIM( region%name) // '"!')
     END IF
-    
+
     ! Create a subdirectory within the output directory
     foldername = TRIM( C%output_dir) // TRIM(                icesheet_code  ) // '_' // &
                                         TRIM( C%ISMIP_output_group_code     ) // '_' // &
@@ -4786,17 +4786,17 @@ CONTAINS
     CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlibmassbffl'      , 'tendency_of_land_ice_mass_due_to_basal_mass_balance'              , 'kg s-1'        )
     CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlicalvf'          , 'tendency_of_land_ice_mass_due_to_calving'                         , 'kg s-1'        )
     CALL create_ISMIP_output_file_scalar(       foldername, icesheet_code,              'tendlifmassbf'        , 'tendency_of_land_ice_mass_due_to_calving_and_ice_front_melting'   , 'kg s-1'        )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE create_ISMIP_output_files
-  
+
   SUBROUTINE create_ISMIP_output_file_scalar( foldername, icesheet_code, variable_name, standard_name, units)
     ! Create a single ISMIP output file for a scalar
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
 
@@ -4807,15 +4807,15 @@ CONTAINS
     INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_t
     INTEGER                                            :: id_var_t, id_var_scalar
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
@@ -4829,17 +4829,17 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Create netcdf file
     CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
-        
+
     ! Define dimensions:
     CALL create_dim( ncid, 'time',      nf90_unlimited,     id_dim_t      )
-    
+
     ! Define variables:
     ! The order of the CALL statements for the different variables determines their
     ! order of appearence in the netcdf file.
-    
+
     ! time variable (needs some attributes that are not in the standard subroutine)
     CALL handle_error( nf90_def_var( ncid, 'time', nf90_float, [id_dim_t], id_var_t))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'standard_name', 'time'))
@@ -4847,32 +4847,32 @@ CONTAINS
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'units'        , 'days since ' // TRIM( C%ISMIP_output_basetime)))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'calendar'     , '360_day'))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'axis'         , 'T'))
-    
+
     ! Field variable (needs some attributes that are not in the standard subroutine)
     CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_t], id_var_scalar))
     CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'standard_name', standard_name))
     CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'units'        , units))
     CALL handle_error( nf90_put_att( ncid, id_var_scalar, 'missing_value', 1.E20))
-    
+
     ! Leave definition mode:
     CALL handle_error( nf90_enddef( ncid))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE create_ISMIP_output_file_scalar
-  
+
   SUBROUTINE create_ISMIP_output_file_field( foldername, icesheet_code, grid, variable_name, standard_name, units)
     ! Create a single ISMIP output file for an [x,y,t] data field
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_grid),                     INTENT(IN)    :: grid
     CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
@@ -4884,15 +4884,15 @@ CONTAINS
     INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_x, id_dim_y, id_dim_t
     INTEGER                                            :: id_var_x, id_var_y, id_var_t, id_var_field
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
@@ -4906,23 +4906,23 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Create netcdf file
     CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
-        
+
     ! Define dimensions:
     CALL create_dim( ncid, 'x',         grid%nx,            id_dim_x      )
     CALL create_dim( ncid, 'y',         grid%ny,            id_dim_y      )
     CALL create_dim( ncid, 'time',      nf90_unlimited,     id_dim_t      )
-    
+
     ! Define variables:
     ! The order of the CALL statements for the different variables determines their
     ! order of appearence in the netcdf file.
-    
+
     ! x,y variables
     CALL create_single_var( ncid, 'x', [id_dim_x], id_var_x, long_name = 'x-coordinate', units = 'm')
     CALL create_single_var( ncid, 'y', [id_dim_y], id_var_y, long_name = 'y-coordinate', units = 'm')
-    
+
     ! time variable (needs some attributes that are not in the standard subroutine)
     CALL handle_error( nf90_def_var( ncid, 'time', nf90_float, [id_dim_t], id_var_t))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'standard_name', 'time'))
@@ -4930,36 +4930,36 @@ CONTAINS
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'units'        , 'days since ' // TRIM( C%ISMIP_output_basetime)))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'calendar'     , '360_day'))
     CALL handle_error( nf90_put_att( ncid, id_var_t, 'axis'         , 'T'))
-    
+
     ! Field variable (needs some attributes that are not in the standard subroutine)
     CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_x, id_dim_y, id_dim_t], id_var_field))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'standard_name', standard_name))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'units'        , units))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'missing_value', 1.E20))
-    
+
     ! Leave definition mode:
     CALL handle_error( nf90_enddef( ncid))
-    
+
     ! Write the x, y variable data
     CALL handle_error( nf90_put_var( ncid, id_var_x, grid%x))
     CALL handle_error( nf90_put_var( ncid, id_var_y, grid%y))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE create_ISMIP_output_file_field
-  
+
   SUBROUTINE create_ISMIP_output_file_field_notime( foldername, icesheet_code, grid, variable_name, standard_name, units)
     ! Create a single ISMIP output file for an [x,y] data field
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_grid),                     INTENT(IN)    :: grid
     CHARACTER(LEN=*),                    INTENT(IN)    :: foldername, icesheet_code, variable_name, standard_name, units
@@ -4971,15 +4971,15 @@ CONTAINS
     INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_x, id_dim_y
     INTEGER                                            :: id_var_x, id_var_y, id_var_field
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
@@ -4993,53 +4993,53 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Create netcdf file
     CALL handle_error( nf90_create( filename, IOR( nf90_clobber,nf90_share), ncid))
-        
+
     ! Define dimensions:
     CALL create_dim( ncid, 'x',         grid%nx,            id_dim_x      )
     CALL create_dim( ncid, 'y',         grid%ny,            id_dim_y      )
-    
+
     ! Define variables:
     ! The order of the CALL statements for the different variables determines their
     ! order of appearence in the netcdf file.
-    
+
     ! x,y variables
     CALL create_single_var( ncid, 'x', [id_dim_x], id_var_x, long_name = 'x-coordinate', units = 'm')
     CALL create_single_var( ncid, 'y', [id_dim_y], id_var_y, long_name = 'y-coordinate', units = 'm')
-    
+
     ! Field variable (needs some attributes that are not in the standard subroutine)
     CALL handle_error( nf90_def_var( ncid, variable_name, nf90_float, [id_dim_x, id_dim_y], id_var_field))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'standard_name', standard_name))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'units'        , units))
     CALL handle_error( nf90_put_att( ncid, id_var_field, 'missing_value', 1.E20))
-    
+
     ! Leave definition mode:
     CALL handle_error( nf90_enddef( ncid))
-    
+
     ! Write the x, y variable data
     CALL handle_error( nf90_put_var( ncid, id_var_x, grid%x))
     CALL handle_error( nf90_put_var( ncid, id_var_y, grid%y))
-        
+
     ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
     CALL handle_error(nf90_sync( ncid))
-    
+
     ! Close the file
     CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE create_ISMIP_output_file_field_notime
-  
+
   SUBROUTINE write_to_ISMIP_output_files( region)
     ! Write to all the ISMIP output files
-  
+
     USE parameters_module, ONLY: ice_density, sec_per_year
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_model_region), INTENT(IN)    :: region
 
@@ -5067,10 +5067,10 @@ CONTAINS
     REAL(dp)                                             :: total_BMB_shelf
     REAL(dp)                                             :: total_calving_flux
     REAL(dp)                                             :: total_calving_and_front_melt_flux
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Code for the ice sheet name in the ISMIP output file names
     IF     (region%name == 'NAM') THEN
       icesheet_code = 'NAIS'
@@ -5086,15 +5086,15 @@ CONTAINS
       icesheet_code = 'beep'
       CALL crash('unknown region "' // TRIM( region%name) // '"!')
     END IF
-    
+
     ! The folder where the ISMIp6 output files are located
     foldername = TRIM( C%output_dir) // TRIM(                icesheet_code  ) // '_' // &
                                         TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                         TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                         TRIM( C%ISMIP_output_experiment_code)
-                                            
+
     ! Calculate some quantities that are not natively in the ice model
-    
+
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( region%mesh%nV, Ti_base_gr                      , wTi_base_gr                      )
     CALL allocate_shared_dp_1D( region%mesh%nV, Ti_base_fl                      , wTi_base_fl                      )
@@ -5104,7 +5104,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, land_ice_area_fraction          , wland_ice_area_fraction          )
     CALL allocate_shared_dp_1D( region%mesh%nV, grounded_ice_sheet_area_fraction, wgrounded_ice_sheet_area_fraction)
     CALL allocate_shared_dp_1D( region%mesh%nV, floating_ice_shelf_area_fraction, wfloating_ice_shelf_area_fraction)
-    
+
     ! 2-D fields
     Ti_base_gr(                       region%mesh%vi1:region%mesh%vi2) = missing_value
     Ti_base_fl(                       region%mesh%vi1:region%mesh%vi2) = missing_value
@@ -5114,7 +5114,7 @@ CONTAINS
     land_ice_area_fraction(           region%mesh%vi1:region%mesh%vi2) = missing_value
     grounded_ice_sheet_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
     floating_ice_shelf_area_fraction( region%mesh%vi1:region%mesh%vi2) = missing_value
-    
+
     ! Scalars (integrated values)
     land_ice_mass                     = 0._dp
     mass_above_floatation             = 0._dp
@@ -5125,53 +5125,53 @@ CONTAINS
     total_BMB_shelf                   = 0._dp
     total_calving_flux                = 0._dp
     total_calving_and_front_melt_flux = 0._dp
-    
+
     DO vi = 1, region%mesh%vi1, region%mesh%vi2
-      
+
       ! Ice base temperature separate for sheet and shelf
       ! =================================================
-      
+
       IF (region%ice%mask_sheet_a( vi) == 1) THEN
         Ti_base_gr( vi) = region%ice%Ti_a( vi,C%nz)
       END IF
-      
+
       IF (region%ice%mask_shelf_a( vi) == 1) THEN
         Ti_base_fl( vi) = region%ice%Ti_a( vi,C%nz)
       END IF
-      
+
       ! Basal drag
       ! ==========
-      
+
       IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
         basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**2
       END IF
-      
+
       ! Calving and front melting fluxes
       ! ================================
-      
+
       calving_flux(                vi) = 0._dp ! FIXME
       calving_and_front_melt_flux( vi) = 0._dp ! FIXME
-      
+
       ! Ice fractions
       ! =============
-      
+
       IF (region%ice%mask_cf_a( vi) == 0) THEN
         land_ice_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp)
       ELSE
         land_ice_area_fraction( vi) = region%ice%float_margin_frac_a( vi)
       END IF
-      
+
       IF (region%ice%mask_ice_a( vi) == 1) THEN
         grounded_ice_sheet_area_fraction( vi) = region%ice%f_grnd_a( vi)
       ELSE
         grounded_ice_sheet_area_fraction( vi) = 0._dp
       END IF
-      
+
       floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
-      
+
       ! Integrated values
       ! =================
-      
+
       land_ice_mass                     = land_ice_mass                     + (region%ice%Hi_a(                  vi) * region%mesh%A( vi) * ice_density)    ! kg
       mass_above_floatation             = mass_above_floatation             + (region%ice%TAF_a(                 vi) * region%mesh%A( vi) * ice_density)    ! kg
       grounded_ice_sheet_area           = grounded_ice_sheet_area           + (grounded_ice_sheet_area_fraction( vi) * region%mesh%A( vi))                  ! m2
@@ -5181,10 +5181,10 @@ CONTAINS
       total_BMB_shelf                   = total_BMB_shelf                   + (land_ice_area_fraction( vi) * region%BMB%BMB_shelf( vi) * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
       total_calving_flux                = total_calving_flux                + (calving_flux( vi)                                       * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
       total_calving_and_front_melt_flux = total_calving_and_front_melt_flux + (calving_and_front_melt_flux( vi)                        * region%mesh%A( vi) * ice_density / sec_per_year) ! kg s-1
-      
+
     END DO
     CALL sync
-    
+
     ! Write to all the ISMIP output files
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hi_a                    , 'lithk'                    )
     CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hs_a                    , 'orog'                     )
@@ -5220,7 +5220,7 @@ CONTAINS
     CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB_shelf                    , 'tendlibmassbffl'          )
     CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_flux                 , 'tendlicalvf'              )
     CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wTi_base_gr                      )
     CALL deallocate_shared( wTi_base_fl                      )
@@ -5230,17 +5230,17 @@ CONTAINS
     CALL deallocate_shared( wland_ice_area_fraction          )
     CALL deallocate_shared( wgrounded_ice_sheet_area_fraction)
     CALL deallocate_shared( wfloating_ice_shelf_area_fraction)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE write_to_ISMIP_output_files
-  
+
   SUBROUTINE write_to_ISMIP_output_file_scalar( foldername, icesheet_code, time, d, variable_name)
     ! Write a single scalar to the corresponding ISMIP output file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp),                            INTENT(IN)    :: time
     REAL(dp),                            INTENT(IN)    :: d
@@ -5253,51 +5253,51 @@ CONTAINS
     INTEGER                                            :: id_dim_t
     INTEGER                                            :: id_var_t, id_var
     INTEGER                                            :: nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( filename, ncid)
- 
+
     ! Inquire for dimension IDs
     CALL inquire_dim( ncid, 'time', nt, id_dim_t)
-    
+
     ! Inquire for variable IDs
     CALL inquire_single_var( ncid, 'time'       , (/ id_dim_t /), id_var_t)
     CALL inquire_single_var( ncid, variable_name, (/ id_dim_t /), id_var  )
-        
+
     ! Write time
     CALL handle_error( nf90_put_var( ncid, id_var_t, days_since_ISMIP_basetime( time), start = (/ nt+1 /)))
-      
+
     ! Write data to the NetCDF file
     CALL handle_error( nf90_put_var( ncid, id_var, d, start = (/ nt+1 /)))
-    
+
     ! Close the file
     CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE write_to_ISMIP_output_file_scalar
-  
+
   SUBROUTINE write_to_ISMIP_output_file_field( mesh, grid, foldername, icesheet_code, time, d, variable_name)
     ! Write a single [x,y,t] data field to the corresponding ISMIP output file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
@@ -5312,48 +5312,48 @@ CONTAINS
     INTEGER                                            :: id_dim_x, id_dim_y, id_dim_t
     INTEGER                                            :: id_var_t, id_var
     INTEGER                                            :: nx, ny, nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-        
+
     ! Open the netcdf file
     IF (par%master) CALL open_netcdf_file( filename, ncid)
- 
+
     ! Inquire for dimension IDs
     IF (par%master) CALL inquire_dim( ncid, 'x'   , nx, id_dim_x)
     IF (par%master) CALL inquire_dim( ncid, 'y'   , ny, id_dim_y)
     IF (par%master) CALL inquire_dim( ncid, 'time', nt, id_dim_t)
-    
+
     ! Inquire for variable IDs
     IF (par%master) CALL inquire_single_var( ncid, 'time'       , (/                     id_dim_t /), id_var_t)
     IF (par%master) CALL inquire_single_var( ncid, variable_name, (/ id_dim_x, id_dim_y, id_dim_t /), id_var  )
-        
+
     ! Write time
     IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var_t, days_since_ISMIP_basetime( time), start = (/ nt+1 /)))
-      
+
     ! Write data to the NetCDF file
     CALL map_and_write_to_grid_netcdf_dp_2D( ncid, mesh, grid, d, id_var, nt+1)
-    
+
     ! Close the file
     IF (par%master) CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE write_to_ISMIP_output_file_field
-  
+
   SUBROUTINE write_to_ISMIP_output_file_field_notime( mesh, grid, foldername, icesheet_code, d, variable_name)
     ! Write a single [x,y,t] data field to the corresponding ISMIP output file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
@@ -5367,50 +5367,50 @@ CONTAINS
     INTEGER                                            :: id_dim_x, id_dim_y
     INTEGER                                            :: id_var
     INTEGER                                            :: nx, ny
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Filename
     filename = TRIM(foldername) // '/' // TRIM( variable_name                 ) // '_' // &
                                           TRIM(                icesheet_code  ) // '_' // &
                                           TRIM( C%ISMIP_output_group_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_model_code     ) // '_' // &
                                           TRIM( C%ISMIP_output_experiment_code) // '.nc'
-        
+
     ! Open the netcdf file
     IF (par%master) CALL open_netcdf_file( filename, ncid)
- 
+
     ! Inquire for dimension IDs
     IF (par%master) CALL inquire_dim( ncid, 'x'   , nx, id_dim_x)
     IF (par%master) CALL inquire_dim( ncid, 'y'   , ny, id_dim_y)
-    
+
     ! Inquire for variable IDs
     IF (par%master) CALL inquire_single_var( ncid, variable_name, (/ id_dim_x, id_dim_y /), id_var  )
-      
+
     ! Write data to the NetCDF file
     CALL map_and_write_to_grid_netcdf_dp_2D_notime( ncid, mesh, grid, d, id_var)
-    
+
     ! Close the file
     IF (par%master) CALL close_netcdf_file( ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE write_to_ISMIP_output_file_field_notime
-  
+
   FUNCTION ISMIP_unit_conversion_field( d, variable_name) RESULT( d_conv)
     ! Convert data fields from IMAU-ICE units to SI units
-  
+
     USE parameters_module, ONLY: sec_per_year, ice_density
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
     CHARACTER(LEN=*),                    INTENT(IN)    :: variable_name
     REAL(dp), DIMENSION(SIZE(d,1))                     :: d_conv
-    
+
     IF     (variable_name == 'lithk') THEN
       ! land_ice_thickness
       ! Ice model units: m
@@ -5500,26 +5500,26 @@ CONTAINS
       ! Unknown variable name
       CALL crash('ISMIP_unit_conversion: unknown variable name "' // TRIM( variable_name) // '"!')
     END IF
-    
+
   END FUNCTION ISMIP_unit_conversion_field
-  
+
   FUNCTION days_since_ISMIP_basetime( time) RESULT( ndays)
     ! Calculate the number of days since ISMIP basetime
     !
     ! Assume basetime equals t = 0
-  
+
     USE parameters_module, ONLY: sec_per_year
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp),                            INTENT(IN)    :: time
     REAL(dp)                                           :: ndays
-    
+
     ndays = time * 360._dp
-    
+
   END FUNCTION days_since_ISMIP_basetime
-  
+
 ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
 ! ============================================================
 
@@ -5528,69 +5528,69 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_SMB_baseline_file'
     INTEGER                                       :: nx,ny
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_SMB, (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_SMB)
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_SMB_baseline_file
-  
+
   SUBROUTINE read_ISMIP_forcing_SMB_baseline_file( netcdf, SMB)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: SMB
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_SMB_baseline_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_SMB, SMB, start = (/ 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_SMB_baseline_file
 
   SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file( netcdf)
@@ -5598,353 +5598,353 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_ST_baseline_file'
     INTEGER                                       :: nx,ny
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_ST,  (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_ST )
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file
-  
+
   SUBROUTINE read_ISMIP_forcing_ST_baseline_file( netcdf, ST)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: ST
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_ST_baseline_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_ST, ST, start = (/ 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_ST_baseline_file
-  
+
   SUBROUTINE inquire_ISMIP_forcing_aSMB_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_aSMB_file'
     INTEGER                                       :: nx, ny, nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,    (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,    (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_aSMB, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_aSMB)
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_aSMB_file
-  
+
   SUBROUTINE read_ISMIP_forcing_aSMB_file( netcdf, aSMB)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: aSMB
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_aSMB_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_aSMB, aSMB, start = (/ 1, 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_aSMB_file
-  
+
   SUBROUTINE inquire_ISMIP_forcing_dSMBdz_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_dSMBdz_file'
     INTEGER                                       :: nx, ny, nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,      (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,      (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dSMBdz, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_dSMBdz)
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_dSMBdz_file
-  
+
   SUBROUTINE read_ISMIP_forcing_dSMBdz_file( netcdf, dSMBdz)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: dSMBdz
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_dSMBdz_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_dSMBdz, dSMBdz, start = (/ 1, 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_dSMBdz_file
-  
+
   SUBROUTINE inquire_ISMIP_forcing_aST_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_aST_file'
     INTEGER                                       :: nx, ny, nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,    (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,    (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_aST, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_aST)
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_aST_file
-  
+
   SUBROUTINE read_ISMIP_forcing_aST_file( netcdf, aST)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: aST
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_aST_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_aST, aST, start = (/ 1, 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_aST_file
-  
+
   SUBROUTINE inquire_ISMIP_forcing_dSTdz_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_dSTdz_file'
     INTEGER                                       :: nx, ny, nt
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x   , nx, netcdf%id_dim_x   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y   , ny, netcdf%id_dim_y   )
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_time, nt, netcdf%id_dim_time)
-    
+
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,     (/ netcdf%id_dim_x                                      /), netcdf%id_var_x   )
     CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,     (/                  netcdf%id_dim_y                     /), netcdf%id_var_y   )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dSTdz, (/ netcdf%id_dim_x, netcdf%id_dim_y, netcdf%id_dim_time /), netcdf%id_var_dSTdz)
-    
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE inquire_ISMIP_forcing_dSTdz_file
-  
+
   SUBROUTINE read_ISMIP_forcing_dSTdz_file( netcdf, dSTdz)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
     TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
     REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: dSTdz
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_dSTdz_file'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     IF (.NOT. par%master) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Open the netcdf file
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-    
+
     ! Read the field data
     CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_dSTdz, dSTdz, start = (/ 1, 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE read_ISMIP_forcing_dSTdz_file
 
 ! ===== Create and write to debug NetCDF file =====

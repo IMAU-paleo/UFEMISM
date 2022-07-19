@@ -171,10 +171,10 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)   :: POI_EAS_resolutions_config           = 0._dp
     REAL(dp), DIMENSION(100)   :: POI_GRL_resolutions_config           = 0._dp
     REAL(dp), DIMENSION(100)   :: POI_ANT_resolutions_config           = 0._dp
-  
+
   ! ISMIP-style output
   ! ==================
-    
+
     LOGICAL             :: do_write_ISMIP_output_config                = .FALSE.                          ! Whether or not to create a set of ISMIP output files
     CHARACTER(LEN=256)  :: ISMIP_output_group_code_config              = 'IMAU'                           ! Code for the group      name in the ISMIP output file names
     CHARACTER(LEN=256)  :: ISMIP_output_model_code_config              = 'UFEMISM'                        ! Code for the model      name in the ISMIP output file names
@@ -301,7 +301,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
     ! Parameters for calculating modelled benthic d18O
-    LOGICAL             :: do_calculate_benthic_d18O_config            = .TRUE.                           ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
+    LOGICAL             :: do_calculate_benthic_d18O_config            = .FALSE.                          ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
     REAL(dp)            :: dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
     REAL(dp)            :: dT_deepwater_dT_surf_ratio_config           = 0.25_dp                          ! Ratio between global mean surface temperature change and deep-water temperature change
     REAL(dp)            :: d18O_dT_deepwater_ratio_config              = -0.28_dp                         ! Ratio between deep-water temperature change and benthic d18O change
@@ -590,7 +590,7 @@ MODULE configuration_module
 
   ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
   ! ==============================================================
-  
+
     CHARACTER(LEN=256)  :: ISMIP_forcing_filename_SMB_baseline_config  = ''                              ! NetCDF file containing the baseline SMB
     CHARACTER(LEN=256)  :: ISMIP_forcing_filename_ST_baseline_config   = ''                              ! NetCDF file containing the baseline temperature
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aSMB_config        = ''                              ! Folder containing the single-year NetCDF files of the SMB anomaly
@@ -601,7 +601,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aST_config       = ''                              ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSTdz_config       = ''                              ! Folder containing the single-year NetCDF files of the temperature lapse rate
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_dSTdz_config     = ''                              ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
-  
+
   ! == Basal mass balance
   ! =====================
 
@@ -929,10 +929,10 @@ MODULE configuration_module
     REAL(dp), DIMENSION(100)            :: POI_EAS_resolutions
     REAL(dp), DIMENSION(100)            :: POI_GRL_resolutions
     REAL(dp), DIMENSION(100)            :: POI_ANT_resolutions
-  
+
     ! ISMIP-style output
     ! ==================
-    
+
     LOGICAL                             :: do_write_ISMIP_output
     CHARACTER(LEN=256)                  :: ISMIP_output_group_code
     CHARACTER(LEN=256)                  :: ISMIP_output_model_code
@@ -1316,7 +1316,7 @@ MODULE configuration_module
 
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
-  
+
     CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_SMB_baseline
     CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_ST_baseline
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aSMB
@@ -1327,7 +1327,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aST
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSTdz
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_dSTdz
-    
+
     ! Basal mass balance - sub-shelf melt
     ! ===================================
 
@@ -2466,10 +2466,10 @@ CONTAINS
     C%POI_EAS_resolutions                      = POI_EAS_resolutions_config
     C%POI_GRL_resolutions                      = POI_GRL_resolutions_config
     C%POI_ANT_resolutions                      = POI_ANT_resolutions_config
-  
+
     ! ISMIP-style output
     ! ==================
-    
+
     C%do_write_ISMIP_output                    = do_write_ISMIP_output_config
     C%ISMIP_output_group_code                  = ISMIP_output_group_code_config
     C%ISMIP_output_model_code                  = ISMIP_output_model_code_config
@@ -2850,7 +2850,7 @@ CONTAINS
 
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
-  
+
     C%ISMIP_forcing_filename_SMB_baseline      = ISMIP_forcing_filename_SMB_baseline_config
     C%ISMIP_forcing_filename_ST_baseline       = ISMIP_forcing_filename_ST_baseline_config
     C%ISMIP_forcing_foldername_aSMB            = ISMIP_forcing_foldername_aSMB_config

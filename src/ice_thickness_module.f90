@@ -8,20 +8,9 @@ MODULE ice_thickness_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
@@ -58,11 +47,12 @@ CONTAINS
     ! Use the specified time integration method to calculate the ice thickness at t+dt
     IF     (C%choice_ice_integration_method == 'none') THEN
       ice%dHi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
-      CALL sync
     ELSEIF (C%choice_ice_integration_method == 'explicit') THEN
-      CALL calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
+       call crash("not implemented")
+   !   CALL calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
     ELSEIF (C%choice_ice_integration_method == 'semi-implicit') THEN
-      CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
+       call crash("not implemented")
+   !   CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
       !CALL calc_dHi_dt_semiimplicit( mesh, ice, SMB, BMB, dt)
     ELSE
       CALL crash('unknown choice_ice_integration_method "' // TRIM( C%choice_ice_integration_method) // '"')
@@ -76,6 +66,7 @@ CONTAINS
     
   END SUBROUTINE calc_dHi_dt
   
+#if 0
   ! Different solvers for the ice thickness equation (explicit & semi-implicit)
   SUBROUTINE calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
     ! The explicit solver for the ice thickness equation
@@ -246,7 +237,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_dHi_dt_explicit
-    
+#endif    
   ! Some useful tools
   SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
     ! Apply ice thickness boundary conditions (at the domain boundary, and through the mask_noice)
@@ -350,7 +341,6 @@ CONTAINS
       END IF
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
     
     ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
     DO vi = mesh%vi1, mesh%vi2
@@ -359,7 +349,6 @@ CONTAINS
         ice%Hi_tplusdt_a( vi) = 0._dp
       END IF
     END DO
-    CALL sync
     
     ! If so specified, remove all floating ice
     IF (C%do_remove_shelves) THEN
@@ -369,7 +358,6 @@ CONTAINS
           ice%Hi_tplusdt_a( vi) = 0._dp
         END IF
       END DO
-      CALL sync
     END IF ! IF (C%do_remove_shelves) THEN
     
     ! If so specified, remove all floating ice beyond the present-day calving front
@@ -380,7 +368,6 @@ CONTAINS
           ice%Hi_tplusdt_a( vi) = 0._dp
         END IF
       END DO
-      CALL sync
     END IF ! IF (C%remove_shelves_larger_than_PD) THEN
     
     ! If so specified, remove all floating ice crossing the continental shelf edge

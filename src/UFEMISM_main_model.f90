@@ -23,7 +23,7 @@ MODULE UFEMISM_main_model
   use mesh_single_module,              only: create_new_mesh_single, create_single_mesh_from_cart_data
   USE netcdf_module,                   ONLY: initialise_debug_fields, create_output_files, associate_debug_fields, &
                                              write_to_output_files, create_debug_file, reallocate_debug_fields
-  USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, determine_timesteps_and_actions
+  USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, run_ice_model
   use reallocate_mod,                  only: reallocate
 
   IMPLICIT NONE
@@ -96,14 +96,15 @@ CONTAINS
         region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
 
-    ! Determine time step
-    ! ===================
-
-      ! Adjust the time step to prevent overshooting other model components
-      CALL determine_timesteps_and_actions( region, t_end)
-
-    ! Output
-    ! ======
+    ! Ice dynamics
+    ! ============
+    
+      ! Calculate ice velocities and the resulting change in ice geometry
+      ! NOTE: geometry is not updated yet; this happens at the end of the time loop
+      t1 = MPI_WTIME()
+      CALL run_ice_model( region, t_end)
+      t2 = MPI_WTIME()
+      region%tcomp_ice = region%tcomp_ice + t2 - t1
 
       ! Write output
       IF (region%do_output) THEN

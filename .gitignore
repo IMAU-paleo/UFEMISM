@@ -22,3 +22,9 @@ result*/
 
 # Ignore SLURM output on Snellius
 slurm-*.out
+
+/config-files
+
+!/config-files/config_test
+
+

@@ -240,7 +240,6 @@ MODULE mesh_help_functions_module
       pc = mesh%V( mesh%Tri( ti,3),:)
       CALL find_triangle_area( pa, pb, pc, mesh%TriA(ti))
     END DO ! DO ti = mesh%ti1, mesh%ti2
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

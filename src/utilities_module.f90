@@ -4,6 +4,7 @@ MODULE utilities_module
 
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: c_backspace
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -30,7 +31,7 @@ MODULE utilities_module
                                              adapt_shared_dist_int_2D,    adapt_shared_dist_dp_2D, &
                                              adapt_shared_dist_int_3D,    adapt_shared_dist_dp_3D, &
                                              adapt_shared_dist_bool_1D
-  USE data_types_module,               ONLY: type_mesh, type_grid
+  USE data_types_module,               ONLY: type_mesh, type_grid, type_model_region
 
   IMPLICIT NONE
   ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
@@ -2647,5 +2648,40 @@ CONTAINS
     z = (a(1)*b(2)) - (a(2)*b(1))
 
   END FUNCTION cross2
+
+  ! == Extras
+  SUBROUTINE time_display( region, t_end, dt_ave, it)
+    ! Little time display for the screen
+
+    implicit none
+
+    ! Input/Ouput variables
+    type(type_model_region), intent(in)  :: region
+    real(dp),                intent(in)  :: t_end
+    real(dp),                intent(in)  :: dt_ave
+    integer,                 intent(in)  :: it
+
+    ! Local variables
+    character(len=9)                     :: r_time, r_step, r_adv, r_ave
+
+    if (region%time + region%dt < t_end) then
+      r_adv = "no"
+      write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+      write(r_step,"(F6.3)") max(region%dt,0.001_dp)
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+              "   t = " // trim(r_time) // " kyr - dt = " // trim(r_step) // " yr"
+    else
+      r_adv = "yes"
+      write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+      write(r_step, "(F6.3)") dt_ave / real(it,dp)
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+            "   t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
+    end if
+    if (region%do_output) then
+      r_adv = "no"
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999)
+    end if
+
+  END SUBROUTINE time_display
 
 END MODULE utilities_module

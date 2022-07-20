@@ -6,7 +6,6 @@ MODULE UFEMISM_main_model
 ! ===== Preamble =====
 ! ====================
 
-  USE, INTRINSIC :: ISO_C_BINDING,         ONLY: c_backspace
   USE mpi
   USE configuration_module,                ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -51,6 +50,7 @@ MODULE UFEMISM_main_model
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
+  USE utilities_module,                    ONLY: time_display
 
 # if (defined(DO_SELEN))
   USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
@@ -170,23 +170,7 @@ CONTAINS
       ! ===============
 
       if (par%master .AND. C%do_time_display) then
-        if (region%time + region%dt < t_end) then
-          r_adv = "no"
-          write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
-          write(r_step,"(F6.3)") max(region%dt,0.001_dp)
-          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
-                  "   t = " // trim(r_time) // " kyr - dt = " // trim(r_step) // " yr"
-        else
-          r_adv = "yes"
-          write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
-          write(r_step, "(F6.3)") dt_ave / real(it,dp)
-          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
-                "   t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
-        end if
-        if (region%do_output) then
-          r_adv = "no"
-          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999)
-        end if
+        call time_display(region, t_end, dt_ave, it)
       end if
 
       ! == Climate, ocean, SMB and BMB

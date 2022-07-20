@@ -6,6 +6,7 @@ MODULE UFEMISM_main_model
 ! ===== Preamble =====
 ! ====================
 
+  USE, INTRINSIC :: ISO_C_BINDING,         ONLY: c_backspace
   USE mpi
   USE configuration_module,                ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
@@ -69,14 +70,16 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),           INTENT(INOUT)     :: region
-    TYPE(type_climate_matrix_global),  INTENT(INOUT)     :: climate_matrix_global
-    REAL(dp),                          INTENT(IN)        :: t_end
+    TYPE(type_model_region),           INTENT(INOUT)  :: region
+    TYPE(type_climate_matrix_global),  INTENT(INOUT)  :: climate_matrix_global
+    REAL(dp),                          INTENT(IN)     :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256)                                   :: routine_name
-    REAL(dp)                                             :: meshfitness
-    REAL(dp)                                             :: t1, t2
+    CHARACTER(LEN=256)                                :: routine_name
+    REAL(dp)                                          :: meshfitness
+    INTEGER                                           :: it
+    REAL(dp)                                          :: t1, t2, dt_ave
+    CHARACTER(LEN=9)                                  :: r_time, r_step, r_adv, r_ave
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
@@ -100,11 +103,19 @@ CONTAINS
     t1 = MPI_WTIME()
     t2 = 0._dp
 
+    ! Initialise iteration counter
+    it = 0
+    ! Initialise averaged time step
+    dt_ave = 0._dp
+
     ! ====================================
     ! ===== The main model time loop =====
     ! ====================================
 
     DO WHILE (region%time < t_end)
+
+      ! Update iteration counter
+      it = it + 1
 
       ! == GIA
       ! ======
@@ -154,6 +165,29 @@ CONTAINS
       CALL run_ice_model( region, t_end)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_ice = region%tcomp_ice + t2 - t1
+
+      ! == Time display
+      ! ===============
+
+      if (par%master .AND. C%do_time_display) then
+        if (region%time + region%dt < t_end) then
+          r_adv = "no"
+          write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+          write(r_step,"(F6.3)") max(region%dt,0.001_dp)
+          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+                  "   t = " // trim(r_time) // " kyr - dt = " // trim(r_step) // " yr"
+        else
+          r_adv = "yes"
+          write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+          write(r_step, "(F6.3)") dt_ave / real(it,dp)
+          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+                "   t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
+        end if
+        if (region%do_output) then
+          r_adv = "no"
+          write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999)
+        end if
+      end if
 
       ! == Climate, ocean, SMB and BMB
       ! ==============================
@@ -249,6 +283,7 @@ CONTAINS
       ! ======================
 
       IF (par%master) region%time = region%time + region%dt
+      IF (par%master) dt_ave = dt_ave + region%dt
       CALL sync
 
     END DO

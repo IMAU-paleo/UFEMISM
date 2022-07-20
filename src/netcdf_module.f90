@@ -451,7 +451,7 @@ CONTAINS
       RETURN
     END IF
 
-    IF (par%master) WRITE(0,*) '  Creating output files...'
+    IF (par%master) WRITE(0,*) '  Creating new output files based on new mesh...'
 
     ! Get output file names
     CALL get_output_filenames( region)

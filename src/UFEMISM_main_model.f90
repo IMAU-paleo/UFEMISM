@@ -50,6 +50,7 @@ MODULE UFEMISM_main_model
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
+  USE utilities_module,                    ONLY: time_display
 
 # if (defined(DO_SELEN))
   USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
@@ -69,14 +70,16 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),           INTENT(INOUT)     :: region
-    TYPE(type_climate_matrix_global),  INTENT(INOUT)     :: climate_matrix_global
-    REAL(dp),                          INTENT(IN)        :: t_end
+    TYPE(type_model_region),           INTENT(INOUT)  :: region
+    TYPE(type_climate_matrix_global),  INTENT(INOUT)  :: climate_matrix_global
+    REAL(dp),                          INTENT(IN)     :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256)                                   :: routine_name
-    REAL(dp)                                             :: meshfitness
-    REAL(dp)                                             :: t1, t2
+    CHARACTER(LEN=256)                                :: routine_name
+    REAL(dp)                                          :: meshfitness
+    INTEGER                                           :: it
+    REAL(dp)                                          :: t1, t2, dt_ave
+    CHARACTER(LEN=9)                                  :: r_time, r_step, r_adv, r_ave
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
@@ -100,11 +103,19 @@ CONTAINS
     t1 = MPI_WTIME()
     t2 = 0._dp
 
+    ! Initialise iteration counter
+    it = 0
+    ! Initialise averaged time step
+    dt_ave = 0._dp
+
     ! ====================================
     ! ===== The main model time loop =====
     ! ====================================
 
     DO WHILE (region%time < t_end)
+
+      ! Update iteration counter
+      it = it + 1
 
       ! == GIA
       ! ======
@@ -154,6 +165,13 @@ CONTAINS
       CALL run_ice_model( region, t_end)
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_ice = region%tcomp_ice + t2 - t1
+
+      ! == Time display
+      ! ===============
+
+      if (par%master .AND. C%do_time_display) then
+        call time_display(region, t_end, dt_ave, it)
+      end if
 
       ! == Climate, ocean, SMB and BMB
       ! ==============================
@@ -249,6 +267,7 @@ CONTAINS
       ! ======================
 
       IF (par%master) region%time = region%time + region%dt
+      IF (par%master) dt_ave = dt_ave + region%dt
       CALL sync
 
     END DO

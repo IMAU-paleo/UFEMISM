@@ -15,7 +15,6 @@ MODULE UFEMISM_main_model
   USE data_types_module,               ONLY: type_model_region, type_grid, type_remapping_mesh_mesh
   USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
-  USE mesh_help_functions_module,      ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
   USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
                                              calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
@@ -26,7 +25,7 @@ MODULE UFEMISM_main_model
                                              write_to_output_files, create_debug_file, reallocate_debug_fields
   USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, run_ice_model
   use reallocate_mod,                  only: reallocate
-  use utilities_module,                only: time_display
+  use utilities_module,                only: time_display, inverse_oblique_sg_projection
 
 ! ===== Preamble =====
 ! ====================

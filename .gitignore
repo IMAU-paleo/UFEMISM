@@ -27,4 +27,5 @@ slurm-*.out
 
 !/config-files/config_test
 
-
+# Ignore depend file
+.depend

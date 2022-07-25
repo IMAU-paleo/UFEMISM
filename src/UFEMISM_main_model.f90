@@ -1,16 +1,16 @@
 MODULE UFEMISM_main_model
-
   ! The main regional ice-sheet model
 
-  ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
+! ===== USEs =====
+! ================
+
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
-
-  ! ! Import specific functionality
   USE data_types_module,               ONLY: type_model_region, type_grid, type_remapping_mesh_mesh
   USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,              ONLY: deallocate_mesh_all
@@ -26,12 +26,18 @@ MODULE UFEMISM_main_model
   USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, run_ice_model
   use reallocate_mod,                  only: reallocate
 
+! ===== Preamble =====
+! ====================
+
   IMPLICIT NONE
 
 CONTAINS
 
+! ===== Main routines =====
+! =========================
+
   SUBROUTINE run_model( region, t_end)
-    ! Run the model until t_end (usually a 100 years further)
+    ! Run the model region until the next coupling time
 
     IMPLICIT NONE
 
@@ -67,16 +73,16 @@ CONTAINS
     t1 = MPI_WTIME()
     t2 = 0._dp
 
-  ! ====================================
-  ! ===== The main model time loop =====
-  ! ====================================
+    ! ====================================
+    ! ===== The main model time loop =====
+    ! ====================================
 
     it = 0
     DO WHILE (region%time < t_end)
       it = it + 1
 
-    ! Mesh update
-    ! ===========
+      ! Mesh update
+      ! ===========
 
       ! Check if the mesh needs to be updated
       t2 = MPI_WTIME()
@@ -88,17 +94,15 @@ CONTAINS
 
       ! If required, update the mesh
       IF (meshfitness < C%mesh_fitness_threshold) THEN
-      ! IF (.FALSE.) THEN
-      ! IF (.TRUE.) THEN
         region%t_last_mesh = region%time
         t2 = MPI_WTIME()
         CALL run_model_update_mesh( region)
         region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
       END IF
 
-    ! Ice dynamics
-    ! ============
-    
+      ! Ice dynamics
+      ! ============
+
       ! Calculate ice velocities and the resulting change in ice geometry
       ! NOTE: geometry is not updated yet; this happens at the end of the time loop
       t1 = MPI_WTIME()
@@ -117,17 +121,17 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
-    ! Advance region time
-    ! ===================
+      ! Advance region time
+      ! ===================
 
       region%time = region%time + region%dt
       CALL sync
 
     END DO ! DO WHILE (region%time < t_end)
 
-  ! ===========================================
-  ! ===== End of the main model time loop =====
-  ! ===========================================
+    ! ===========================================
+    ! ===== End of the main model time loop =====
+    ! ===========================================
 
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
@@ -145,7 +149,6 @@ CONTAINS
 
   END SUBROUTINE run_model
 
-  ! Update the mesh and everything else that needs it
   SUBROUTINE run_model_update_mesh( region)
     ! Perform a mesh update: create a new mesh based on the current modelled ice-sheet
     ! geometry, map all the model data from the old to the new mesh. Deallocate the
@@ -170,14 +173,16 @@ CONTAINS
       call create_new_mesh_single( region)
     end if
 
-    ! Update the mapping operators between the new mesh and the fixed square grids
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_GIA   )
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_smooth)
+    IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
 
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_output)
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_GIA   )
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_smooth)
+    ! Update the mapping operators between the new mesh and the fixed square grids
+    CALL deallocate_remapping_operators_mesh2grid( region%grid_output)
+    CALL deallocate_remapping_operators_mesh2grid( region%grid_GIA   )
+    CALL deallocate_remapping_operators_mesh2grid( region%grid_smooth)
+
+    CALL deallocate_remapping_operators_grid2mesh( region%grid_output)
+    CALL deallocate_remapping_operators_grid2mesh( region%grid_GIA   )
+    CALL deallocate_remapping_operators_grid2mesh( region%grid_smooth)
 
     CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
     CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
@@ -196,9 +201,9 @@ CONTAINS
       deallocate( region%refgeo_init%Hb )
       deallocate( region%refgeo_init%Hs )
 
-      deallocate( region%refgeo_PD%Hi   )
-      deallocate( region%refgeo_PD%Hb   )
-      deallocate( region%refgeo_PD%Hs   )
+      deallocate( region%refgeo_PD%Hi)
+      deallocate( region%refgeo_PD%Hb)
+      deallocate( region%refgeo_PD%Hs)
 
       deallocate( region%refgeo_GIAeq%Hi)
       deallocate( region%refgeo_GIAeq%Hb)
@@ -221,7 +226,7 @@ CONTAINS
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
     ! Remap all the submodels
-    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
+    CALL remap_ice_model( region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
 
     ! Deallocate shared memory for the mapping arrays
     CALL deallocate_remapping_operators_mesh_mesh( map)
@@ -248,14 +253,27 @@ CONTAINS
     region%t_next_BMB     = region%time
     region%t_next_ELRA    = region%time
 
+    region%do_SIA         = .TRUE.
+    region%do_SSA         = .TRUE.
+    region%do_DIVA        = .TRUE.
+    region%do_thermo      = .TRUE.
+    region%do_climate     = .TRUE.
+    region%do_ocean       = .TRUE.
+    region%do_SMB         = .TRUE.
+    region%do_BMB         = .TRUE.
+    region%do_ELRA        = .TRUE.
+
+    IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
+    IF (par%master) WRITE(0,*) '  Running again now...'
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_model_update_mesh
 
-  ! Initialise the entire model region - read initial and PD data, create the mesh,
-  ! initialise the ice dynamics, climate, ocean, and SMB sub models
   SUBROUTINE initialise_model( region, name)
+    ! Initialise the entire model region - read initial and PD data, create the mesh,
+    ! initialise the ice dynamics, climate, ocean, and SMB sub models
 
     IMPLICIT NONE
 
@@ -302,11 +320,10 @@ CONTAINS
     ! ====================
 
     if (C%use_submesh) then
-      CALL create_mesh_from_cart_data( region)
+      call create_mesh_from_cart_data( region)
     else
-      CALL create_single_mesh_from_cart_data( region)
+      call create_single_mesh_from_cart_data( region)
     endif
-    
 
     ! ===== Map reference geometries to the mesh =====
     ! ================================================
@@ -362,6 +379,10 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_model
+
+! ===== Auxiliary routines =====
+! ==============================
+
   SUBROUTINE allocate_region_timers_and_scalars( region)
     ! Allocate shared memory for this region's timers (used for the asynchronous coupling between the
     ! ice dynamics and the secondary model components), and for the scalars (integrated ice volume and
@@ -430,7 +451,9 @@ CONTAINS
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 65)
+
   END SUBROUTINE allocate_region_timers_and_scalars
+
   SUBROUTINE initialise_model_square_grid( region, grid, dx)
     ! Initialise a regular square grid enveloping this model region
 

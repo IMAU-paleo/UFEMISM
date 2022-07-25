@@ -1,12 +1,12 @@
 PROGRAM UFEMISM_program
-! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM),
+  ! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM),
   ! by Tijn Berends and Jorjo Bernales, 2019-2022.
   ! Institute for Marine and Atmospheric Research Utrecht (IMAU)
   !
   ! e-mail: c.j.berends@uu.nl / j.a.bernalesconcha@uu.nl
   !
   ! Model optimisation and distributed-memory version thanks
-  ! to Victor Azizi, at the Netherlands eScience Center.
+  ! to Victor Azizi at the Netherlands eScience Center.
   !
   ! After some initialisation work (e.g. starting the program on
   ! multiple cores using Open MPI, reading the config file, creating
@@ -44,6 +44,10 @@ PROGRAM UFEMISM_program
   !   component modules.
 
 #include <petsc/finclude/petscksp.h>
+
+! ===== USE modules =====
+! =======================
+
   USE mpi
   USE petscksp
   USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
@@ -58,6 +62,9 @@ PROGRAM UFEMISM_program
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
 
+! ===== Main variables =====
+! ==========================
+
   IMPLICIT NONE
 
   CHARACTER(LEN=256), PARAMETER          :: version_number = '0.1'
@@ -65,14 +72,15 @@ PROGRAM UFEMISM_program
   ! The four model regions
   TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
 
-  ! Coupling timer
+  ! Coupling
   REAL(dp)                               :: t_coupling, t_end_models
 
   ! Computation time tracking
   TYPE(type_netcdf_resource_tracker)     :: resources
   REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
 
-  ! ======================================================================================
+! ===== START =====
+! =================
 
   routine_path = 'UFEMISM_program'
 
@@ -89,36 +97,34 @@ PROGRAM UFEMISM_program
   tstart = MPI_WTIME()
   t1     = MPI_WTIME()
 
-  ! Set up the model configuration from the provided config file(s) and create an output directory
-  ! ==============================================================================================
+  ! == Model set-up
+  ! ===============
 
   CALL initialise_model_configuration( version_number)
 
-  ! ===== Initialise parameters for the vertical scaled coordinate transformation =====
-  ! (the same for all model regions, so stored in the "C" structure)
-  ! ===================================================================================
+  ! == Vertical scaled coordinate transformation
+  ! ============================================
 
   CALL initialise_zeta_discretisation
 
-  ! ===== Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux) =====
-  ! ========================================================================================
+  ! == Initialise global forcing data
+  ! =================================
 
   CALL initialise_global_forcing
 
-  ! ===== Create the resource tracking output file =====
-  ! ====================================================
+  ! == Create the resource tracking output file
+  ! ===========================================
 
   CALL create_resource_tracking_file( resources)
 
-  ! ===== Initialise the model regions ======
-  ! =========================================
+  ! == Initialise the model regions
+  ! ===============================
 
   IF (C%do_NAM) CALL initialise_model( NAM, 'NAM')
   IF (C%do_EAS) CALL initialise_model( EAS, 'EAS')
   IF (C%do_GRL) CALL initialise_model( GRL, 'GRL')
   IF (C%do_ANT) CALL initialise_model( ANT, 'ANT')
 
-! =============================
 ! ===== The big time loop =====
 ! =============================
 
@@ -128,6 +134,9 @@ PROGRAM UFEMISM_program
 
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
+
+    ! == Regional model runs
+    ! ======================
 
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
@@ -140,24 +149,30 @@ PROGRAM UFEMISM_program
     ! Advance coupling time
     t_coupling = t_end_models
 
+    ! == Resource tracking output
+    ! ===========================
+
     ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
     CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
     t1 = MPI_WTIME()
     CALL reset_resource_tracker
 
-  END DO ! DO WHILE (t_coupling < C%end_time_of_run)
+  END DO
 
-! ====================================
-! ===== End of the big time loop =====
-! ====================================
+! ===== END =====
+! ===============
 
-  ! Write total elapsed time to screen
+  ! == Total elapsed time
+  ! =====================
+
   tstop = MPI_WTIME()
   IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
   CALL sync
 
-  ! Finalise MPI and PETSc
+  !== Finalise MPI and PETSc
+  !=========================
+
   CALL PetscFinalize( perr)
   CALL MPI_FINALIZE( ierr)
 

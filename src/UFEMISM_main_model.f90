@@ -7,6 +7,7 @@ MODULE UFEMISM_main_model
 ! ================
 
   USE mpi
+  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: c_backspace
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
@@ -25,6 +26,7 @@ MODULE UFEMISM_main_model
                                              write_to_output_files, create_debug_file, reallocate_debug_fields
   USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, run_ice_model
   use reallocate_mod,                  only: reallocate
+  use utilities_module,                only: time_display
 
 ! ===== Preamble =====
 ! ====================
@@ -36,31 +38,34 @@ CONTAINS
 ! ===== Main routines =====
 ! =========================
 
-  SUBROUTINE run_model( region, t_end)
+  subroutine run_model( region, t_end)
     ! Run the model region until the next coupling time
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_model_region),           INTENT(INOUT)     :: region
-    REAL(dp),                          INTENT(IN)        :: t_end
+    type(type_model_region), intent(inout) :: region
+    real(dp),                intent(in)    :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256)                                   :: routine_name
-    INTEGER                                              :: it
-    REAL(dp)                                             :: meshfitness
-    REAL(dp)                                             :: t1, t2
+    character(len=256)                     :: routine_name
+    real(dp)                               :: meshfitness
+    integer                                :: it
+    real(dp)                               :: t1, t2, dt_ave
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
-                                                          ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    if (par%master) then
+      write(*,"(A)") ''
+      write(*,"(A,A,A,A,A,F9.3,A,F9.3,A)") &
+            ' Running model region ', region%name, ' (', TRIM(region%long_name), &
+            ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    end if
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
-    CALL associate_debug_fields(  region)
+    call associate_debug_fields(  region)
 
     ! Computation time tracking
     region%tcomp_total          = 0._dp
@@ -73,12 +78,18 @@ CONTAINS
     t1 = MPI_WTIME()
     t2 = 0._dp
 
+    ! Initialise iteration counter
+    it = 0
+    ! Initialise averaged time step
+    dt_ave = 0._dp
+
     ! ====================================
     ! ===== The main model time loop =====
     ! ====================================
 
-    it = 0
-    DO WHILE (region%time < t_end)
+    do while (region%time < t_end)
+
+      ! Update iteration counter
       it = it + 1
 
       ! Mesh update
@@ -87,18 +98,18 @@ CONTAINS
       ! Check if the mesh needs to be updated
       t2 = MPI_WTIME()
       meshfitness = 1._dp
-      IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
-        CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)
-      END IF
+      if (region%time > region%t_last_mesh + C%dt_mesh_min) then
+        call determine_mesh_fitness(region%mesh, region%ice, meshfitness)
+      end if
       region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
 
       ! If required, update the mesh
-      IF (meshfitness < C%mesh_fitness_threshold) THEN
+      if (meshfitness < C%mesh_fitness_threshold) then
         region%t_last_mesh = region%time
         t2 = MPI_WTIME()
-        CALL run_model_update_mesh( region)
+        call run_model_update_mesh( region)
         region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
-      END IF
+      end if
 
       ! Ice dynamics
       ! ============
@@ -106,94 +117,108 @@ CONTAINS
       ! Calculate ice velocities and the resulting change in ice geometry
       ! NOTE: geometry is not updated yet; this happens at the end of the time loop
       t1 = MPI_WTIME()
-      CALL run_ice_model( region, t_end)
+      call run_ice_model( region, t_end)
       t2 = MPI_WTIME()
       region%tcomp_ice = region%tcomp_ice + t2 - t1
 
-      ! Write output
-      IF (region%do_output) THEN
+      ! == Time display
+      ! ===============
+
+      if (par%master .AND. C%do_time_display) then
+        call time_display(region, t_end, dt_ave, it)
+      end if
+
+      ! == Output
+      ! =========
+
+      ! Write NetCDF output
+      if (region%do_output) then
         ! If the mesh has been updated, create a new NetCDF file
-        IF (.NOT. region%output_file_exists) THEN
-          CALL create_output_files( region)
-          CALL sync
-          region%output_file_exists = .TRUE.
-        END IF
-        CALL write_to_output_files( region)
-      END IF
+        if (.not. region%output_file_exists) then
+          call create_output_files( region)
+          call sync
+          region%output_file_exists = .true.
+        end if
+        ! Write to regional NetCDF output files
+        call write_to_output_files( region)
+      end if
 
       ! Advance region time
       ! ===================
 
       region%time = region%time + region%dt
-      CALL sync
+      dt_ave = dt_ave + region%dt
+      call sync
 
-    END DO ! DO WHILE (region%time < t_end)
+    end do ! while (region%time < t_end)
 
     ! ===========================================
     ! ===== End of the main model time loop =====
     ! ===========================================
 
     ! Write to NetCDF output one last time at the end of the simulation
-    IF (region%time == C%end_time_of_run) THEN
+    if (region%time == C%end_time_of_run) then
       ! If the mesh has been updated, create a new NetCDF file
-      IF (.NOT. region%output_file_exists) THEN
-        CALL create_output_files( region)
-        CALL sync
+      if (.not. region%output_file_exists) then
+        call create_output_files( region)
+        call sync
         region%output_file_exists = .TRUE.
-      END IF
-      CALL write_to_output_files( region)
-    END IF
+      end if
+      call write_to_output_files( region)
+    end if
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE run_model
+  end subroutine run_model
 
-  SUBROUTINE run_model_update_mesh( region)
+  subroutine run_model_update_mesh( region)
     ! Perform a mesh update: create a new mesh based on the current modelled ice-sheet
     ! geometry, map all the model data from the old to the new mesh. Deallocate the
     ! old mesh, update the output files and the square grid maps.
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_model_region),             INTENT(INOUT) :: region
+    type(type_model_region),             intent(inout) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_model_update_mesh'
-    TYPE(type_remapping_mesh_mesh)                     :: map
+    character(len=256), parameter                      :: routine_name = 'run_model_update_mesh'
+    type(type_remapping_mesh_mesh)                     :: map
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Create a new mesh
     if (C%use_submesh) then
-      CALL create_new_mesh( region)
+      call create_new_mesh( region)
     else
       call create_new_mesh_single( region)
     end if
 
-    IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
+    if (par%master) then
+      write(*,"(A)") '  Reallocating and remapping after mesh update...'
+    end if
 
     ! Update the mapping operators between the new mesh and the fixed square grids
-    CALL deallocate_remapping_operators_mesh2grid( region%grid_output)
-    CALL deallocate_remapping_operators_mesh2grid( region%grid_GIA   )
-    CALL deallocate_remapping_operators_mesh2grid( region%grid_smooth)
+    call deallocate_remapping_operators_mesh2grid( region%grid_output)
+    call deallocate_remapping_operators_mesh2grid( region%grid_GIA   )
+    call deallocate_remapping_operators_mesh2grid( region%grid_smooth)
 
-    CALL deallocate_remapping_operators_grid2mesh( region%grid_output)
-    CALL deallocate_remapping_operators_grid2mesh( region%grid_GIA   )
-    CALL deallocate_remapping_operators_grid2mesh( region%grid_smooth)
+    call deallocate_remapping_operators_grid2mesh( region%grid_output)
+    call deallocate_remapping_operators_grid2mesh( region%grid_GIA   )
+    call deallocate_remapping_operators_grid2mesh( region%grid_smooth)
 
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
+    call calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
+    call calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
+    call calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
 
-    CALL calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
-    CALL calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
-    CALL calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
+    call calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
+    call calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
+    call calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
 
     ! Calculate the mapping arrays
-    CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
+    call calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
 
     ! Reallocate memory for reference geometries
     if (allocated(region%refgeo_init%Hi)) then
@@ -223,24 +248,24 @@ CONTAINS
     allocate( region%refgeo_GIAeq%Hs(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
 
     ! Map reference geometries from the square grids to the mesh
-    CALL map_reference_geometries_to_mesh( region, region%mesh_new)
+    call map_reference_geometries_to_mesh( region, region%mesh_new)
 
     ! Remap all the submodels
-    CALL remap_ice_model( region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
+    call remap_ice_model( region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
 
     ! Deallocate shared memory for the mapping arrays
-    CALL deallocate_remapping_operators_mesh_mesh( map)
+    call deallocate_remapping_operators_mesh_mesh( map)
 
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
-    !CALL deallocate_mesh_all( region%mesh) TODO make this automatic, fix it
+    !call deallocate_mesh_all( region%mesh) TOdo make this automatic, fix it
     region%mesh = region%mesh_new
 
     ! When the next output is written, new output files must be created.
     region%output_file_exists = .FALSE.
 
     ! Reallocate the debug fields for the new mesh, create a new debug file
-    CALL reallocate_debug_fields( region)
-    CALL create_debug_file(       region)
+    call reallocate_debug_fields( region)
+    call create_debug_file(       region)
 
     ! Run all model components again after updating the mesh
     region%t_next_SIA     = region%time
@@ -253,23 +278,25 @@ CONTAINS
     region%t_next_BMB     = region%time
     region%t_next_ELRA    = region%time
 
-    region%do_SIA         = .TRUE.
-    region%do_SSA         = .TRUE.
-    region%do_DIVA        = .TRUE.
-    region%do_thermo      = .TRUE.
-    region%do_climate     = .TRUE.
-    region%do_ocean       = .TRUE.
-    region%do_SMB         = .TRUE.
-    region%do_BMB         = .TRUE.
-    region%do_ELRA        = .TRUE.
+    region%do_SIA         = .true.
+    region%do_SSA         = .true.
+    region%do_DIVA        = .true.
+    region%do_thermo      = .true.
+    region%do_climate     = .true.
+    region%do_ocean       = .true.
+    region%do_SMB         = .true.
+    region%do_BMB         = .true.
+    region%do_ELRA        = .true.
 
-    IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
-    IF (par%master) WRITE(0,*) '  Running again now...'
+    if (par%master) then
+      write(*,"(A)") '  Finished reallocating and remapping.'
+      write(*,"(A)") '  Running again now...'
+    end if
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE run_model_update_mesh
+  end subroutine run_model_update_mesh
 
   SUBROUTINE initialise_model( region, name)
     ! Initialise the entire model region - read initial and PD data, create the mesh,
@@ -286,35 +313,38 @@ CONTAINS
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! ===== Basic initialisation =====
     ! ================================
 
     ! Region name
     region%name      = name
-    IF (region%name == 'NAM') THEN
+    if (region%name == 'NAM') THEN
       region%long_name = 'North America'
-    ELSE IF (region%name == 'EAS') THEN
+    else if (region%name == 'EAS') THEN
       region%long_name = 'Eurasia'
-    ELSE IF (region%name == 'GRL') THEN
+    else if (region%name == 'GRL') THEN
       region%long_name = 'Greenland'
-    ELSE IF (region%name == 'ANT') THEN
+    else if (region%name == 'ANT') THEN
       region%long_name = 'Antarctica'
-    END IF
+    end if
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Initialising model region ', region%name, ' (', TRIM(region%long_name), ')...'
+    if (par%master) then
+      write(*,"(A)") ''
+      write(*,"(5A)") ' Initialising model region ', region%name, &
+                      ' (', TRIM(region%long_name), ')...'
+    end if
 
     ! ===== Allocate memory for timers and scalars =====
     ! ==================================================
 
-    CALL allocate_region_timers_and_scalars( region)
+    call allocate_region_timers_and_scalars( region)
 
     ! ===== PD and init reference data fields =====
     ! =============================================
 
-    CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
+    call initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
 
     ! ===== The mesh =====
     ! ====================
@@ -342,41 +372,47 @@ CONTAINS
     allocate( region%refgeo_GIAeq%Hs(region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
 
     ! Map data from the square grids to the mesh
-    CALL map_reference_geometries_to_mesh( region, region%mesh)
+    call map_reference_geometries_to_mesh( region, region%mesh)
 
     ! ===== The different square grids =====
     ! ======================================
 
-    IF (par%master) WRITE(0,*) '  Initialising square grids for output, GIA, and data smoothing...'
+    if (par%master) then
+      write(*,"(A)") '  Initialising square grids for output, GIA, and data smoothing...'
+    end if
 
-    CALL initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
-    CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
-    CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
+    call initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
+    call initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
+    call initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
 
     ! ===== Initialise dummy fields for debugging =====
     ! =================================================
 
-    IF (par%master) WRITE(0,*) '  Initialising debug fields...'
+    if (par%master) then
+      write(*,"(A)") '  Initialising debug fields...'
+    end if
 
-    CALL initialise_debug_fields( region)
+    call initialise_debug_fields( region)
 
     ! ===== Output files =====
     ! ========================
 
-    CALL create_output_files(    region)
-    CALL associate_debug_fields( region)
+    call create_output_files(    region)
+    call associate_debug_fields( region)
     region%output_file_exists = .TRUE.
-    CALL sync
+    call sync
 
     ! ===== The ice dynamics model =====
     ! ==================================
 
-    CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
+    call initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
 
-    IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
+    if (par%master) then
+      write(*,"(3A)") ' Finished initialising model region ', region%name, '.'
+    end if
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
+    call finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_model
 
@@ -397,7 +433,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_region_timers_and_scalars'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Timers and time steps
     ! =====================
@@ -450,7 +486,7 @@ CONTAINS
     region%do_output      = .TRUE.
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 65)
+    call finalise_routine( routine_name, n_extra_windows_expected = 65)
 
   END SUBROUTINE allocate_region_timers_and_scalars
 
@@ -471,7 +507,7 @@ CONTAINS
     REAL(dp), PARAMETER                           :: tol = 1E-9_dp
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     nsx = 0
     nsy = 0
@@ -492,12 +528,12 @@ CONTAINS
     allocate( grid%x ( grid%nx ))
     allocate( grid%y ( grid%ny ))
 
-    DO i = 1, grid%nx
+    do i = 1, grid%nx
       grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
-    END DO
-    DO j = 1, grid%ny
+    end do
+    do j = 1, grid%ny
       grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
-    END DO
+    end do
 
     grid%xmin = grid%x(1      )
     grid%xmax = grid%x(grid%nx)
@@ -512,34 +548,34 @@ CONTAINS
     allocate ( grid%ij2n( grid%nx, grid%ny ))
     allocate ( grid%n2ij( grid%n , 2       ))
     n = 0
-    DO i = 1, grid%nx
-        DO j = 1, grid%ny
+    do i = 1, grid%nx
+        do j = 1, grid%ny
           n = n+1
           grid%ij2n( i,j) = n
           grid%n2ij( n,:) = [i,j]
-        END DO
-    END DO
+        end do
+    end do
 
     ! Assign range to each processor
-    CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
-    CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+    call partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
+    call partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
 
     ! Calculate lat-lon coordinates
     allocate( grid%lat(grid%nx, grid%ny))
     allocate( grid%lon(grid%nx, grid%ny))
 
-    DO i = 1, grid%nx
-    DO j = 1, grid%ny
-      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
-    END DO
-    END DO
+    do i = 1, grid%nx
+    do j = 1, grid%ny
+      call inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
+    end do
+    end do
 
     ! Calculate mapping arrays between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
-    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
+    call calc_remapping_operator_mesh2grid( region%mesh, grid)
+    call calc_remapping_operator_grid2mesh( grid, region%mesh)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 15)
+    call finalise_routine( routine_name, n_extra_windows_expected = 15)
 
   END SUBROUTINE initialise_model_square_grid
 

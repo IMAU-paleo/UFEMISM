@@ -4,12 +4,14 @@ MODULE utilities_module
 
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
+
   USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE, INTRINSIC :: ISO_C_BINDING,   ONLY: c_backspace
+  USE configuration_module,          ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
-  USE data_types_module,               ONLY: type_mesh, type_grid
+  USE petsc_module,                  ONLY: perr
+  USE parallel_module,               ONLY: par, sync, ierr, cerr, partition_list
+  USE data_types_module,             ONLY: type_mesh, type_grid, type_model_region
 
   implicit none
   ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
@@ -18,7 +20,7 @@ MODULE utilities_module
   !  *  -- LAPACK routine (version 3.1) --
   !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
   !  *     November 2006
-  interface 
+  interface
     SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
       INTEGER            INFO, LDA, M, N
       INTEGER            IPIV( * )
@@ -47,13 +49,13 @@ CONTAINS
 !     ! is the average of f(k+1) and f(k):
 !     !  integral_f(k) = integral_f(k+1) + 0.5 * (f(k+1) + f(k)) * (-dzeta)
 !     ! with dzeta = C%zeta(k+1) - C%zeta(k). So for f > 0  integral_f < 0.
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variables:
 !     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
 !     REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
-    
+
 !     ! Local variables:
 !     INTEGER                                :: k
 
@@ -61,7 +63,7 @@ CONTAINS
 !     DO k = C%nz-1, 1, -1
 !       integral_f(k) = integral_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
 !     END DO
-    
+
 !   END SUBROUTINE vertical_integration_from_bottom_to_zeta
 !   SUBROUTINE vertical_integration_from_top_to_zeta(    f, integral_f)
 !     ! This subroutine integrates f from the top level at C%zeta(k=1) = 0 down to the level C%zeta(k): Eq. (12.2)
@@ -78,7 +80,7 @@ CONTAINS
 !     ! Input variables:
 !     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
 !     REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
-    
+
 !     ! Local variables:
 !     INTEGER                                :: k
 
@@ -86,11 +88,11 @@ CONTAINS
 !     DO k = 2, C%nz, 1
 !       integral_f(k) = integral_f(k-1) + 0.5_dp * (f(k) + f(k-1)) * (C%zeta(k) - C%zeta(k-1))
 !     END DO
-    
+
 !   END SUBROUTINE vertical_integration_from_top_to_zeta
 !   SUBROUTINE vertical_integrate(                       f, integral_f)
 !     ! Integrate f over the ice column (from the base to the surface)
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variable:
@@ -117,13 +119,13 @@ CONTAINS
 !     ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those
 !     ! layers k and k+1, which is imediately the weight factor for this contribution because de total layer distance
 !     ! is scaled to 1. The sum of all the weighted contribution gives average_f the vertical average of f.
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variables:
 !     REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
 !     REAL(dp),                  INTENT(OUT):: average_f
-    
+
 !     ! Local variables:
 !     INTEGER                               :: k
 
@@ -134,57 +136,57 @@ CONTAINS
 !     END DO
 
 !   END SUBROUTINE vertical_average
-  
+
 ! == Floatation criterion, surface elevation, and thickness above floatation
   FUNCTION is_floating( Hi, Hb, SL) RESULT( isso)
     ! The flotation criterion
-      
+
     IMPLICIT NONE
-    
+
     REAL(dp),                            INTENT(IN)    :: Hi, Hb, SL
     LOGICAL                                            :: isso
-    
+
     isso = .FALSE.
     IF (Hi < (SL - Hb) * seawater_density/ice_density) isso = .TRUE.
-    
+
   END FUNCTION is_floating
   FUNCTION surface_elevation( Hi, Hb, SL) RESULT( Hs)
     ! The surface elevation equation
-      
+
     IMPLICIT NONE
-    
+
     REAL(dp),                            INTENT(IN)    :: Hi, Hb, SL
     REAL(dp)                                           :: Hs
-    
+
     Hs = Hi + MAX( SL - ice_density / seawater_density * Hi, Hb)
-    
+
   END FUNCTION surface_elevation
   FUNCTION thickness_above_floatation( Hi, Hb, SL) RESULT( TAF)
     ! The thickness-above-floatation equation
-      
+
     IMPLICIT NONE
-    
+
     REAL(dp),                            INTENT(IN)    :: Hi, Hb, SL
     REAL(dp)                                           :: TAF
-    
+
     TAF = Hi - MAX(0._dp, (SL - Hb) * (seawater_density / ice_density))
-  
+
   END FUNCTION thickness_above_floatation
-  
+
 ! ! == The error function (used in the Roe&Lindzen precipitation model)
 !   SUBROUTINE error_function(X, ERR)
 !     ! Purpose: Compute error function erf(x)
 !     ! Input:   x   --- Argument of erf(x)
 !     ! Output:  ERR --- erf(x)
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variables:
 !     REAL(dp), INTENT(IN)  :: X
-    
+
 !     ! Output variables:
 !     REAL(dp), INTENT(OUT) :: ERR
-    
+
 !     ! Local variables:
 !     REAL(dp)              :: EPS
 !     REAL(dp)              :: X2
@@ -192,7 +194,7 @@ CONTAINS
 !     REAL(dp)              :: R
 !     REAL(dp)              :: C0
 !     INTEGER               :: k
-    
+
 !     EPS = 1.0E-15_dp
 !     X2  = X * X
 !     IF(ABS(X) < 3.5_dp) THEN
@@ -221,7 +223,7 @@ CONTAINS
 
 !     RETURN
 !   END SUBROUTINE error_function
-  
+
 ! ! == The oblique stereographic projection
 !   SUBROUTINE oblique_sg_projection( lambda, phi, lambda_M_deg, phi_M_deg, alpha_deg, x_IM_P_prime, y_IM_P_prime)
 !     ! This subroutine projects with an oblique stereographic projection the longitude-latitude
@@ -231,13 +233,13 @@ CONTAINS
 !     ! For more information about M, C%alpha_stereographic, the center of projection and the used
 !     ! projection method see:
 !     !  Reerink et al. (2010), Mapping technique of climate fields between GCM's and ice models, GMD
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variables:
 !     REAL(dp), INTENT(IN)            :: lambda        ! lon in degrees
 !     REAL(dp), INTENT(IN)            :: phi           ! lat in degrees
-    
+
 !     ! Polar stereographic projection parameters
 !     REAL(dp), INTENT(IN)            :: lambda_M_deg  ! in degrees
 !     REAL(dp), INTENT(IN)            :: phi_M_deg     ! in degrees
@@ -251,9 +253,9 @@ CONTAINS
 !     REAL(dp)                        :: phi_P         ! in radians
 !     REAL(dp)                        :: lambda_P      ! in radians
 !     REAL(dp)                        :: t_P_prime
-    
+
 !     REAL(dp)                        :: lambda_M, phi_M, alpha
-    
+
 !     lambda_M = (pi / 180._dp) * lambda_M_deg
 !     phi_M    = (pi / 180._dp) * phi_M_deg
 !     alpha    = (pi / 180._dp) * alpha_deg
@@ -271,8 +273,8 @@ CONTAINS
 !     ! See equations (2.4-2.5) or equations (A.54-A.55) in Reerink et al. (2010):
 !     x_IM_P_prime =  earth_radius * (COS(phi_P) * SIN(lambda_P - lambda_M)) * t_P_prime
 !     y_IM_P_prime =  earth_radius * (SIN(phi_P) * COS(phi_M) - (COS(phi_P) * SIN(phi_M)) * COS(lambda_P - lambda_M)) * t_P_prime
-    
-    
+
+
 !   END SUBROUTINE oblique_sg_projection
 !   SUBROUTINE inverse_oblique_sg_projection( x_IM_P_prime, y_IM_P_prime, lambda_M_deg, phi_M_deg, alpha_deg, lambda_P, phi_P)
 !     ! This subroutine projects with an inverse oblique stereographic projection the
@@ -282,13 +284,13 @@ CONTAINS
 !     ! For more information about M, alpha, the center of projection and the used
 !     ! projection method see:
 !     !  Reerink et al. (2010), Mapping technique of climate fields between GCM's and ice models, GMD
-    
+
 !     IMPLICIT NONE
 
 !     ! Input variables:
 !     REAL(dp), INTENT(IN)  :: x_IM_P_prime  ! in meter
 !     REAL(dp), INTENT(IN)  :: y_IM_P_prime  ! in meter
-    
+
 !     ! Polar stereographic projection parameters
 !     REAL(dp), INTENT(IN)  :: lambda_M_deg  ! in degrees
 !     REAL(dp), INTENT(IN)  :: phi_M_deg     ! in degrees
@@ -307,9 +309,9 @@ CONTAINS
 !     REAL(dp)              :: x_3D_P        ! in meter
 !     REAL(dp)              :: y_3D_P        ! in meter
 !     REAL(dp)              :: z_3D_P        ! in meter
-    
+
 !     REAL(dp)              :: lambda_M, phi_M, alpha
-    
+
 !     lambda_M = (pi / 180._dp) * lambda_M_deg
 !     phi_M    = (pi / 180._dp) * phi_M_deg
 !     alpha    = (pi / 180._dp) * alpha_deg
@@ -354,13 +356,13 @@ CONTAINS
 !       phi_P =  -90._dp
 !     END IF
 !   END SUBROUTINE inverse_oblique_sg_projection
-  
+
 ! ! == Map data between two square grids using 2nd-order conservative remapping
 !   SUBROUTINE map_square_to_square_cons_2nd_order_2D( nx_src, ny_src, x_src, y_src, nx_dst, ny_dst, x_dst, y_dst, d_src, d_dst)
 !     ! Map data from one square grid to another (e.g. PD ice thickness from the square grid in the input file to the model square grid)
-    
+
 !     IMPLICIT NONE
-  
+
 !     ! Input and output variables
 !     INTEGER,                            INTENT(IN)    :: nx_src
 !     INTEGER,                            INTENT(IN)    :: ny_src
@@ -372,7 +374,7 @@ CONTAINS
 !     REAL(dp), DIMENSION(:    ),         INTENT(IN)    :: y_dst
 !     REAL(dp), DIMENSION(:,:  ),         INTENT(IN)    :: d_src
 !     REAL(dp), DIMENSION(:,:  ),         INTENT(OUT)   :: d_dst
-    
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'map_square_to_square_cons_2nd_order_2D'
 !     INTEGER                                           :: i,j,i_src,j_src,i1,i2,igmin,igmax,jgmin,jgmax,j1,j2
@@ -387,19 +389,19 @@ CONTAINS
 !     INTEGER                                           :: wmask_dst_outside_src
 !     REAL(dp)                                          :: LI_mxydx1, LI_mxydx2, LI_mxydx3, LI_mxydx4
 !     REAL(dp)                                          :: LI_xydy1, LI_xydy2, LI_xydy3, LI_xydy4
-    
+
 !     ! Allocate shared memory
 !     CALL allocate_shared_dp_2D(  ny_src, nx_src, ddx_src,              wddx_src             )
 !     CALL allocate_shared_dp_2D(  ny_src, nx_src, ddy_src,              wddy_src             )
 !     CALL allocate_shared_int_2D( ny_dst, nx_dst, mask_dst_outside_src, wmask_dst_outside_src)
-    
+
 !     ! Find grid spacings
 !     dx_src = x_src(2) - x_src(1)
 !     dy_src = y_src(2) - y_src(1)
 !     dx_dst = x_dst(2) - x_dst(1)
 !     dy_dst = y_dst(2) - y_dst(1)
 !     Ad = dx_dst * dy_dst
-    
+
 !     ! If the grids are equal, the solution is trivial; just copy the data
 !     IF (dx_src == dx_dst .AND. dy_src == dy_dst .AND. nx_src == nx_dst .AND. ny_src == ny_dst) THEN
 !       CALL partition_list( nx_dst, par%i, par%n, i1, i2)
@@ -407,7 +409,7 @@ CONTAINS
 !       CALL sync
 !       RETURN
 !     END IF
-    
+
 !     ! Find overlaps between grids
 !     DO i = 1, nx_dst
 !       ! Dst cell i overlaps with src cells ir_src( i,1) to ir_src( i,2)
@@ -423,7 +425,7 @@ CONTAINS
 !       jr_src( j,:) = MAX( 1, MIN( ny_src, [CEILING(-1.5_dp + FLOOR(ny_src/2._dp) + ycmin / dy_src), &
 !                                            CEILING( 1.5_dp + FLOOR(ny_src/2._dp) + ycmax / dy_src)] ))
 !     END DO ! DO j = 1, ny_dst
-    
+
 !     ! Get derivatives of d_src
 !     CALL partition_list( nx_src, par%i, par%n, i1, i2)
 !     DO i = MAX(2,i1), MIN(nx_src-1,i2)
@@ -433,56 +435,56 @@ CONTAINS
 !     END DO
 !     END DO
 !     CALL sync
-    
+
 !     ! Find parallelisation domains
 !     CALL partition_list( nx_dst, par%i, par%n, i1, i2)
 !     CALL partition_list( ny_dst, par%i, par%n, j1, j2)
-    
+
 !     DO i = i1, i2
 !     DO j = 1, ny_dst
-      
+
 !       d_dst(                j,i) = 0._dp
 !       mask_dst_outside_src( j,i) = 0
 !       Asum                       = 0._dp
-      
+
 !       DO i_src = ir_src( i,1), ir_src( i,2)
 !       DO j_src = jr_src( j,1), jr_src( j,2)
-        
+
 !         xomin = MAX( x_dst( i) - dx_dst/2._dp, x_src( i_src) - dx_src/2._dp)
 !         xomax = MIN( x_dst( i) + dx_dst/2._dp, x_src( i_src) + dx_src/2._dp)
 !         yomin = MAX( y_dst( j) - dy_dst/2._dp, y_src( j_src) - dy_src/2._dp)
 !         yomax = MIN( y_dst( j) + dy_dst/2._dp, y_src( j_src) + dy_src/2._dp)
-        
+
 !         IF (xomax <= xomin .OR. yomax <= yomin) CYCLE
-        
+
 !         Asd  = (xomax - xomin) * (yomax - yomin)
 !         Asum = Asum + Asd
-        
+
 !         w0  = Asd / Ad
-        
+
 !         CALL line_integral_mxydx( [xomin,yomin], [xomax,yomin], 1E-9_dp, LI_mxydx1)
 !         CALL line_integral_mxydx( [xomax,yomin], [xomax,yomax], 1E-9_dp, LI_mxydx2)
 !         CALL line_integral_mxydx( [xomax,yomax], [xomin,yomax], 1E-9_dp, LI_mxydx3)
 !         CALL line_integral_mxydx( [xomin,yomax], [xomin,yomin], 1E-9_dp, LI_mxydx4)
-        
+
 !         w1x = 1._dp / Ad * (LI_mxydx1 + LI_mxydx2 + LI_mxydx3 + LI_mxydx4) - w0 * x_src( i_src)
-        
+
 !         CALL line_integral_xydy(  [xomin,yomin], [xomax,yomin], 1E-9_dp, LI_xydy1)
 !         CALL line_integral_xydy(  [xomax,yomin], [xomax,yomax], 1E-9_dp, LI_xydy2)
 !         CALL line_integral_xydy(  [xomax,yomax], [xomin,yomax], 1E-9_dp, LI_xydy3)
 !         CALL line_integral_xydy(  [xomin,yomax], [xomin,yomin], 1E-9_dp, LI_xydy4)
-        
+
 !         w1y = 1._dp / Ad * (LI_xydy1  + LI_xydy2  + LI_xydy3  + LI_xydy4 ) - w0 * y_src( j_src)
-        
+
 !         d_dst( j,i) = d_dst( j,i) + w0  * d_src(   j_src,i_src) + &
 !                                     w1x * ddx_src( j_src,i_src) + &
 !                                     w1y * ddy_src( j_src,i_src)
-        
+
 !       END DO ! DO j_src = jr_src( j,1), jr_src( j,2)
 !       END DO ! DO i_src = ir_src( i,1), ir_src( i,2)
-      
+
 !       IF (Asum < Ad) mask_dst_outside_src( j,i) = 1
-      
+
 !     END DO ! DO j = 1, ny_dst
 !     END DO ! DO i = i1, i2
 !     CALL sync
@@ -988,7 +990,7 @@ CONTAINS
 !   SUBROUTINE SSA_Schoof2006_analytical_solution( tantheta, h0, A_flow, y, U, tauc)
 
 !     IMPLICIT NONE
-    
+
 !     ! In/output variables:
 !     REAL(dp),                            INTENT(IN)    :: tantheta   ! Surface slope in the x-direction
 !     REAL(dp),                            INTENT(IN)    :: h0         ! Ice thickness
@@ -996,25 +998,25 @@ CONTAINS
 !     REAL(dp),                            INTENT(IN)    :: y          ! y-coordinate
 !     REAL(dp),                            INTENT(OUT)   :: U          ! Ice velocity in the x-direction
 !     REAL(dp),                            INTENT(OUT)   :: tauc       ! Till yield stress
-    
+
 !     ! Local variables:
 !     REAL(dp)                                           :: m, B, f, W, ua, ub, uc, ud, ue
 !     REAL(dp)                                           :: L = 40000._dp     ! Ice-stream width (m)
-    
+
 !     m = C%SSA_icestream_m
-    
+
 !     ! Calculate the gravitational driving stress f
 !     f = ice_density * grav * h0 * tantheta
 
 !     ! Calculate the ice hardness factor B
 !     B = A_flow**(-1._dp/C%n_flow)
-    
+
 !     ! Calculate the "ice stream half-width" W
 !     W = L * (m+1._dp)**(1._dp/m)
 
 !     ! Calculate the till yield stress across the stream
 !     tauc = f * ABS(y/L)**m
-    
+
 !     ! Calculate the analytical solution for u
 !     ua = -2._dp * f**3 * L**4 / (B**3 * h0**3)
 !     ub = ( 1._dp / 4._dp                           ) * (   (y/L)**     4._dp  - (m+1._dp)**(       4._dp/m) )
@@ -1255,43 +1257,43 @@ CONTAINS
 
     END DO
     CALL sync
-    
+
   END SUBROUTINE check_for_NaN_dp_1D
   SUBROUTINE check_for_NaN_dp_2D(  d, d_name)
     ! Check if NaN values occur in the 2-D dp data field d
     ! NOTE: parallelised!
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp), DIMENSION(:,:  ),              INTENT(IN)    :: d
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
-    
+
     ! Local variables:
     INTEGER                                                :: nx,ny,i,j,i1,i2
     CHARACTER(LEN=256)                                     :: d_name_loc
-    
+
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
-    
+
     ! Field size
     nx = SIZE(d,2)
     ny = SIZE(d,1)
-    
+
     ! Parallelisation range
     CALL partition_list( nx, par%i, par%n, i1, i2)
-    
+
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
     ELSE
       d_name_loc = '?'
     END IF
-    
+
     ! Inspect data field
     DO i = i1, i2
     DO j = 1, ny
-    
+
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
 
@@ -1302,52 +1304,52 @@ CONTAINS
       ELSEIF (d( j,i) < -HUGE( d( j,i))) THEN
         CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       END IF
-      
+
     END DO
     END DO
     CALL sync
-    
+
   END SUBROUTINE check_for_NaN_dp_2D
   SUBROUTINE check_for_NaN_dp_3D(  d, d_name)
     ! Check if NaN values occur in the 3-D dp data field d
     ! NOTE: parallelised!
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     REAL(dp), DIMENSION(:,:,:),              INTENT(IN)    :: d
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
-    
+
     ! Local variables:
     INTEGER                                                :: nx,ny,nz,i,j,k,i1,i2
     CHARACTER(LEN=256)                                     :: d_name_loc
-    
+
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
-    
+
     ! Field size
     nx = SIZE(d,3)
     ny = SIZE(d,2)
     nz = SIZE(d,1)
-    
+
     ! Parallelisation range
     CALL partition_list( nx, par%i, par%n, i1, i2)
-    
+
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
     ELSE
       d_name_loc = '?'
     END IF
-    
+
     ! Inspect data field
     DO i = i1, i2
     DO j = 1, ny
     DO k = 1, nz
-    
+
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
-      
+
       IF     (d( k,j,i) /= d( k,j,i)) THEN
         CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) > HUGE( d( k,j,i))) THEN
@@ -1355,46 +1357,46 @@ CONTAINS
       ELSEIF (d( k,j,i) < -HUGE( d( k,j,i))) THEN
         CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       END IF
-      
+
     END DO
     END DO
     END DO
     CALL sync
-    
+
   END SUBROUTINE check_for_NaN_dp_3D
   SUBROUTINE check_for_NaN_int_1D( d, d_name)
     ! Check if NaN values occur in the 1-D int data field d
     ! NOTE: parallelised!
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     INTEGER,  DIMENSION(:    ),              INTENT(IN)    :: d
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
-    
+
     ! Local variables:
     INTEGER                                                :: nx,i,i1,i2
     CHARACTER(LEN=256)                                     :: d_name_loc
-    
+
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
-    
+
     ! Field size
     nx = SIZE(d,1)
-    
+
     ! Parallelisation range
     CALL partition_list( nx, par%i, par%n, i1, i2)
-    
+
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
     ELSE
       d_name_loc = '?'
     END IF
-    
+
     ! Inspect data field
     DO i = i1, i2
-    
+
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
 
@@ -1408,46 +1410,46 @@ CONTAINS
 
     END DO
     CALL sync
-    
+
   END SUBROUTINE check_for_NaN_int_1D
   SUBROUTINE check_for_NaN_int_2D( d, d_name)
     ! Check if NaN values occur in the 2-D int data field d
     ! NOTE: parallelised!
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     INTEGER,  DIMENSION(:,:  ),              INTENT(IN)    :: d
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
-    
+
     ! Local variables:
     INTEGER                                                :: nx,ny,i,j,i1,i2
     CHARACTER(LEN=256)                                     :: d_name_loc
-    
+
     ! Only do this when so specified in the config
     IF (.NOT. C%do_check_for_NaN) RETURN
-    
+
     ! Field size
     nx = SIZE(d,2)
     ny = SIZE(d,1)
-    
+
     ! Parallelisation range
     CALL partition_list( nx, par%i, par%n, i1, i2)
-    
+
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
     ELSE
       d_name_loc = '?'
     END IF
-    
+
     ! Inspect data field
     DO i = i1, i2
     DO j = 1, ny
-    
+
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
-      
+
       IF     (d( j,i) /= d( j,i)) THEN
         CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       ELSEIF (d( j,i) > HUGE( d( j,i))) THEN
@@ -1455,7 +1457,7 @@ CONTAINS
       ELSEIF (d( j,i) < -HUGE( d( j,i))) THEN
         CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
       END IF
-      
+
     END DO
     END DO
     CALL sync
@@ -1500,7 +1502,7 @@ CONTAINS
 
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
-      
+
       IF     (d( k,j,i) /= d( k,j,i)) THEN
         CALL crash(  ('detected NaN in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       ELSEIF (d( k,j,i) > HUGE( d( k,j,i))) THEN
@@ -1508,12 +1510,12 @@ CONTAINS
       ELSEIF (d( k,j,i) < -HUGE( d( k,j,i))) THEN
         CALL crash( ('detected -Inf in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02},{int_03}]'), int_01 = k, int_02 = j, int_03 = i)
       END IF
-      
+
     END DO
     END DO
     END DO
     CALL sync
-    
+
   END SUBROUTINE check_for_NaN_int_3D
 
 !   ! == Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
@@ -2277,5 +2279,39 @@ CONTAINS
 !     f_query = w * f_ocean( k_hi) + (1._dp - w) * f_ocean( k_lo)
 
 !   END SUBROUTINE interpolate_ocean_depth
+
+  subroutine time_display( region, t_end, dt_ave, it)
+    ! Little time display for the screen
+
+    implicit none
+
+    ! Input/Ouput variables
+    type(type_model_region), intent(in)  :: region
+    real(dp),                intent(in)  :: t_end
+    real(dp),                intent(in)  :: dt_ave
+    integer,                 intent(in)  :: it
+
+    ! Local variables
+    character(len=9)                     :: r_time, r_step, r_adv, r_ave
+
+    if (region%time + region%dt < t_end) then
+      r_adv = "no"
+      write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+      write(r_step,"(F6.3)") max(region%dt,0.001_dp)
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+              "  t = " // trim(r_time) // " kyr - dt = " // trim(r_step) // " yr"
+    else
+      r_adv = "yes"
+      write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
+      write(r_step, "(F6.3)") dt_ave / real(it-1,dp)
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
+            "  t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
+    end if
+    if (region%do_output) then
+      r_adv = "no"
+      write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999)
+    end if
+
+  end subroutine time_display
 
 END MODULE utilities_module

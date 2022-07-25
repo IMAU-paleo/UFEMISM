@@ -710,7 +710,9 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) '  Initialising ice dynamics model...'
+    IF (par%master) then
+      write(*,"(A)") '  Initialising ice dynamics model...'
+    end if
 
     ! Allocate shared memory
     CALL allocate_ice_model( mesh, ice)

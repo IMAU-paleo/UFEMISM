@@ -1,4 +1,4 @@
-PROGRAM UFEMISM_program
+program UFEMISM_program
   ! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM),
   ! by Tijn Berends and Jorjo Bernales, 2019-2022.
   ! Institute for Marine and Atmospheric Research Utrecht (IMAU)
@@ -48,36 +48,37 @@ PROGRAM UFEMISM_program
 ! ===== USE modules =====
 ! =======================
 
-  USE mpi
-  USE petscksp
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-  USE petsc_module,                ONLY: perr
-  USE configuration_module,        ONLY: dp, routine_path, write_total_model_time_to_screen, initialise_model_configuration, &
-                                         C, crash, warning, reset_resource_tracker
-  USE parallel_module,             ONLY: initialise_parallelisation, par, sync, ierr
-  USE data_types_module,           ONLY: type_netcdf_resource_tracker, type_model_region
-  USE forcing_module,              ONLY: initialise_global_forcing
+  use mpi
+  use petscksp
+  use, INTRINSIC :: ISO_C_BINDING, only: C_PTR, C_F_POINTER
+  use petsc_module,                only: perr
+  use configuration_module,        only: dp, routine_path, write_total_model_time_to_screen, &
+                                          initialise_model_configuration, C, crash, warning, &
+                                          reset_resource_tracker
+  use parallel_module,             only: initialise_parallelisation, par, sync, ierr
+  use data_types_module,           only: type_netcdf_resource_tracker, type_model_region
+  use forcing_module,              only: initialise_global_forcing
 
-  USE zeta_module,                 ONLY: initialise_zeta_discretisation
-  USE UFEMISM_main_model,          ONLY: initialise_model, run_model
-  USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
+  use zeta_module,                 only: initialise_zeta_discretisation
+  use UFEMISM_main_model,          only: initialise_model, run_model
+  use netcdf_module,               only: create_resource_tracking_file, write_to_resource_tracking_file
 
 ! ===== Main variables =====
 ! ==========================
 
-  IMPLICIT NONE
+  implicit none
 
-  CHARACTER(LEN=256), PARAMETER          :: version_number = '0.1'
+  character(len=256), parameter        :: version_number = '0.1'
 
   ! The four model regions
-  TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
+  type(type_model_region)              :: NAM, EAS, GRL, ANT
 
   ! Coupling
-  REAL(dp)                               :: t_coupling, t_end_models
+  real(dp)                             :: t_coupling, t_end_models
 
   ! Computation time tracking
-  TYPE(type_netcdf_resource_tracker)     :: resources
-  REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
+  type(type_netcdf_resource_tracker)   :: resources
+  real(dp)                             :: tstart, tstop, t1, tcomp_loop
 
 ! ===== START =====
 ! =================
@@ -85,14 +86,17 @@ PROGRAM UFEMISM_program
   routine_path = 'UFEMISM_program'
 
   ! Initialise MPI and PETSc
-  CALL initialise_parallelisation
-  CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
+  call initialise_parallelisation
+  call PetscInitialize( PETSC_NULL_CHARACTER, perr)
 
-  IF (par%master) WRITE(0,*) ''
-  IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running MINIMISM v', TRIM(version_number), ' on ', par%n, ' cores ====='
-  IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,*) ''
+  if (par%master) then
+    write(*,"(A)") ''
+    write(*,"(A)") ' =============================================='
+    write(*,"(3A,I3,A)") ' ===== Running MINIMISM v', TRIM(version_number), &
+                         ' on ', par%n, ' cores ====='
+    write(*,"(A)") ' =============================================='
+    write(*,"(A)") ''
+  end if
 
   tstart = MPI_WTIME()
   t1     = MPI_WTIME()
@@ -100,40 +104,42 @@ PROGRAM UFEMISM_program
   ! == Model set-up
   ! ===============
 
-  CALL initialise_model_configuration( version_number)
+  call initialise_model_configuration( version_number)
 
   ! == Vertical scaled coordinate transformation
   ! ============================================
 
-  CALL initialise_zeta_discretisation
+  call initialise_zeta_discretisation
 
   ! == Initialise global forcing data
   ! =================================
 
-  CALL initialise_global_forcing
+  call initialise_global_forcing
 
   ! == Create the resource tracking output file
   ! ===========================================
 
-  CALL create_resource_tracking_file( resources)
+  call create_resource_tracking_file( resources)
 
   ! == Initialise the model regions
   ! ===============================
 
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM')
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS')
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL')
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT')
+  if (C%do_NAM) call initialise_model( NAM, 'NAM')
+  if (C%do_EAS) call initialise_model( EAS, 'EAS')
+  if (C%do_GRL) call initialise_model( GRL, 'GRL')
+  if (C%do_ANT) call initialise_model( ANT, 'ANT')
 
 ! ===== The big time loop =====
 ! =============================
 
   t_coupling = C%start_time_of_run
 
-  DO WHILE (t_coupling < C%end_time_of_run)
+  do while (t_coupling < C%end_time_of_run)
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
+    if (par%master) then
+      write(*,"(A)") ''
+      write(*,"(A,F9.3,A)") ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
+    end if
 
     ! == Regional model runs
     ! ======================
@@ -141,10 +147,10 @@ PROGRAM UFEMISM_program
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
 
-    IF (C%do_NAM) CALL run_model( NAM, t_end_models)
-    IF (C%do_EAS) CALL run_model( EAS, t_end_models)
-    IF (C%do_GRL) CALL run_model( GRL, t_end_models)
-    IF (C%do_ANT) CALL run_model( ANT, t_end_models)
+    if (C%do_NAM) call run_model( NAM, t_end_models)
+    if (C%do_EAS) call run_model( EAS, t_end_models)
+    if (C%do_GRL) call run_model( GRL, t_end_models)
+    if (C%do_ANT) call run_model( ANT, t_end_models)
 
     ! Advance coupling time
     t_coupling = t_end_models
@@ -154,11 +160,11 @@ PROGRAM UFEMISM_program
 
     ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
-    CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
+    call write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
     t1 = MPI_WTIME()
-    CALL reset_resource_tracker
+    call reset_resource_tracker
 
-  END DO
+  end do
 
 ! ===== END =====
 ! ===============
@@ -167,13 +173,15 @@ PROGRAM UFEMISM_program
   ! =====================
 
   tstop = MPI_WTIME()
-  IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
-  CALL sync
+  if (par%master) then
+    call write_total_model_time_to_screen( tstart, tstop)
+  end if
+  call sync
 
   !== Finalise MPI and PETSc
   !=========================
 
-  CALL PetscFinalize( perr)
-  CALL MPI_FINALIZE( ierr)
+  call PetscFinalize( perr)
+  call MPI_FINALIZE( ierr)
 
-END PROGRAM UFEMISM_program
+end program UFEMISM_program

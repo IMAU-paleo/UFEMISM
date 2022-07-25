@@ -616,14 +616,14 @@ CONTAINS
     ! and the number of rows being equal to C%CO2_record_length
     ! NOTE: assumes time is listed in kyr (so LGM would be -21.0)
 
-    IMPLICIT NONE
+    implicit none
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_CO2_record'
-    INTEGER                                            :: i,ios, fp
+    character(len=256), parameter   :: routine_name = 'initialise_CO2_record'
+    integer                         :: i,ios, fp
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! ! Safety
     ! IF     (C%choice_forcing_method == 'CO2_direct') THEN
@@ -636,25 +636,26 @@ CONTAINS
     ! Allocate shared memory to take the data
     allocate(forcing%CO2_time  ( C%CO2_record_length ))
     allocate(forcing%CO2_record( C%CO2_record_length ))
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
+    if (par%master) then
+      write(*,"(A)") ''
+      write(*,"(3A)") ' Initialising CO2 record from ', TRIM(C%filename_CO2_record), '...'
+    end if
 
     ! Read CO2 record (time and values) from specified text file
+    open(  newunit=fp, file=C%filename_CO2_record, action='READ')
+    do i = 1, C%CO2_record_length
+      read( unit=fp, fmt=*, iostat=ios) forcing%CO2_time(i), forcing%CO2_record(i)
+      if (ios /= 0) then
+        write(*,"(3A,I6)") ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
+        call MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      end if
+    end do
+    close( unit=fp)
 
-    OPEN(  newunit=fp, FILE=C%filename_CO2_record, ACTION='READ')
-    DO i = 1, C%CO2_record_length
-      READ( UNIT = fp, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
-      IF (ios /= 0) THEN
-        WRITE(0,*) ' read_CO2_record - ERROR: length of text file "', TRIM(C%filename_CO2_record), '" does not match C%CO2_record_length = ', C%CO2_record_length
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-    END DO
-    CLOSE( UNIT  = fp)
-
-    CALL sync
+    call sync
 
     ! Set the value for the current (starting) model time
-    CALL update_CO2_at_model_time( C%start_time_of_run)
+    call update_CO2_at_model_time( C%start_time_of_run)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 4)
@@ -989,8 +990,9 @@ CONTAINS
     !         C%choice_insolation_forcing == 'realistic') THEN
       ! Initialise insolation
 
-      IF (par%master) WRITE(0,*) ''
-      IF (par%master) WRITE(0,*) ' Initialising insolation data from ', TRIM(C%filename_insolation), '...'
+      if (par%master) then
+        write(*,"(3A)") ' Initialising insolation data from ', TRIM(C%filename_insolation), '...'
+      end if
 
       ! The times at which we have insolation fields from Laskar, between which we'll interpolate
       ! to find the insolation at model time (ins_t0 < model_time < ins_t1)
@@ -1004,7 +1006,7 @@ CONTAINS
       forcing%netcdf_ins%filename = C%filename_insolation
 
       CALL inquire_insolation_file( forcing)
-  
+
 
       ! Insolation
       allocate(forcing%ins_time(forcing%ins_nyears))

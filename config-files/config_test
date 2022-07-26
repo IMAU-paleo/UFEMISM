@@ -321,15 +321,15 @@
   ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
   ! ==============================================================
 
-  ISMIP_forcing_filename_SMB_baseline_config  = 'data/ISMIP6/SMB_baseline/SMB_baseline_1900.nc' ! NetCDF file containing the baseline SMB
-  ISMIP_forcing_filename_ST_baseline_config   = 'data/ISMIP6/ST_baseline/ST_baseline_1900.nc'   ! NetCDF file containing the baseline temperature
-  ISMIP_forcing_foldername_aSMB_config        = 'data/ISMIP6/aSMB_unforced'           ! Folder containing the single-year NetCDF files of the SMB anomaly
+  ISMIP_forcing_filename_SMB_baseline_config  = 'data/ISMIP6/unforced/SMB_baseline/SMB_baseline_1900.nc' ! NetCDF file containing the baseline SMB
+  ISMIP_forcing_filename_ST_baseline_config   = 'data/ISMIP6/unforced/ST_baseline/ST_baseline_1900.nc'   ! NetCDF file containing the baseline temperature
+  ISMIP_forcing_foldername_aSMB_config        = 'data/ISMIP6/unforced/aSMB_unforced' ! Folder containing the single-year NetCDF files of the SMB anomaly
   ISMIP_forcing_basefilename_aSMB_config      = 'aSMB_unforced_'                 ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_dSMBdz_config      = 'data/ISMIP6/dSMBdz_unforced'         ! Folder containing the single-year NetCDF files of the SMB lapse rate
+  ISMIP_forcing_foldername_dSMBdz_config      = 'data/ISMIP6/unforced/dSMBdz_unforced' ! Folder containing the single-year NetCDF files of the SMB lapse rate
   ISMIP_forcing_basefilename_dSMBdz_config    = 'dSMBdz_unforced_'               ! Filename without the year (e.g. if the actual file is "dSMBdz_MARv3.12-yearly-CESM2-ssp585-1950.nc", then this variable should be "dSMBdz_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_aST_config         = 'data/ISMIP6/aST_unforced'            ! Folder containing the single-year NetCDF files of the temperature anomaly
+  ISMIP_forcing_foldername_aST_config         = 'data/ISMIP6/unforced/aST_unforced'  ! Folder containing the single-year NetCDF files of the temperature anomaly
   ISMIP_forcing_basefilename_aST_config       = 'aST_unforced_'                  ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_dSTdz_config       = 'data/ISMIP6/dSTdz_unforced'          ! Folder containing the single-year NetCDF files of the temperature lapse rate
+  ISMIP_forcing_foldername_dSTdz_config       = 'data/ISMIP6/unforced/dSTdz_unforced' ! Folder containing the single-year NetCDF files of the temperature lapse rate
   ISMIP_forcing_basefilename_dSTdz_config     = 'dSTdz_unforced_'                ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
 
   ! Basal mass balance

@@ -1,33 +1,47 @@
 PROGRAM UFEMISM_program
-  ! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM), by Tijn Berends, 2019.
+  ! The Utrecht Finite Element Multi-Ice-Sheet Model (UFEMISM),
+  ! by Tijn Berends and Jorjo Bernales, 2019-2022.
   ! Institute for Marine and Atmospheric Research Utrecht (IMAU)
   !
-  ! e-mail: c.j.berends@uu.nl
+  ! e-mail: c.j.berends@uu.nl / j.a.bernalesconcha@uu.nl
   !
-  ! After some initialisation work (starting the program on multiple cores using MPI_INIT,
-  ! reading the config file, creating an output folder, etc.), this program runs the four
-  ! copies of the ice-sheet model (North America, Eurasia, Greenland and Antarctica).
-  ! These are all run individually for 100 years (the "coupling interval"), after which
-  ! control is passed back to this program. At this point, the sea-level model SELEN will be
-  ! called, some global output data is calculated and written to the output file, and the
-  ! coupling loop is run again.
+  ! Model optimisation and distributed-memory version thanks
+  ! to Victor Azizi at the Netherlands eScience Center.
   !
-  ! The four ice-sheet models are four instances of the "model_region" data type (declared in
-  ! the data_types module), which is accepted as an argument by the "run_model" subroutine.
+  ! After some initialisation work (e.g. starting the program on
+  ! multiple cores using Open MPI, reading the config file, creating
+  ! an output folder, etc.), this program runs up to five copies of
+  ! the ice-sheet model (North America, Eurasia, Greenland, Antarctica,
+  ! and Patagonia). These are all run individually for a prescribed
+  ! number of years (the "coupling interval") through the subroutines
+  ! in the UFEMISM_main_model module, after which control is passed
+  ! back to this program. At this point, the sea-level model SELEN is
+  ! optionally called, some global output data is calculated and
+  ! written to output files, and the coupling loop is run again.
+  !
+  ! The five ice-sheet models are five instances of the "model_region"
+  ! data type (declared in the data_types module), which is accepted
+  ! as an argument by the "run_model" subroutine.
   !
   ! Some general notes:
-  ! - Model data is arranged into several large structures, all of which are declared in the
-  !   data_types module, and USEd by the different model subroutines. This prevents dependency
-  !   problems during compiling, and makes the modules very clean and easy to read.
-  ! - The general rule is that any kind of data that is a property only of the adaptive mesh,
-  !   not of the ice-sheet model in particular (vertex coordinates, neighbour functions, etc.),
-  !   is stored in the "mesh" data type. Likewise, any subroutines that perform operations on
-  !   the mesh which are not exclusive to the ice-sheet model (such as calculation of derivatives
-  !   or remapping) are contained in the different "mesh_XXXX" modules.
-  ! - Because of the adaptive mesh, memory for the different model data fields needs to be
-  !   reallocated when the mesh is updated. Since this concerns data fields that are a property
-  !   of the ice-sheet model components, rather than the mesh itself, this is done in the
-  !   "remap_COMPONENT" routines contained in the different model component modules.
+  ! - Model data are arranged into several large structures, all of
+  !   which are declared in the data_types module, and USEd by the
+  !   different model subroutines. This prevents dependency problems
+  !   during compilation, and as a result the modules look very clean
+  !   and easy to read.
+  ! - The general rule is that any kind of data that is a property
+  !   only of, e.g., the adaptive mesh (vertex coordinates, cells,
+  !   etc.) and not of the ice-sheet model in particular, will be
+  !   stored in the "mesh" data type. Likewise, any subroutines that
+  !   perform operations on the mesh which are not exclusive to the
+  !   ice-sheet model (such as calculation of derivatives or remapping)
+  !   are contained in the different "mesh_XXXX" modules.
+  ! - Because of the adaptive mesh, memory for the different model data
+  !   fields needs to be reallocated when the mesh is updated. Since
+  !   this concerns data fields that are a property of the ice-sheet
+  !   model components, rather than the mesh itself, this is done in
+  !   the "remap_COMPONENT" routines contained in the different model
+  !   component modules.
 
 #include <petsc/finclude/petscksp.h>
 
@@ -36,7 +50,6 @@ PROGRAM UFEMISM_program
 
   USE mpi
   USE petscksp
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
   USE petsc_module,                ONLY: perr
   USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, write_total_model_time_to_screen, &
                                          reset_resource_tracker

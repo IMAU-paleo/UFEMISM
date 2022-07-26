@@ -236,15 +236,15 @@
   ! Climate
   ! =======
 
-  choice_climate_model_config                 = 'ISMIP_style_forcing'            ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+  choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
 
   ! NetCDF file containing the present-day observed climate (e.g. ERA40)
   filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
 
   ! GCM snapshots in the matrix_warm_cold option
-  filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/IPSL_PI.nc'
-  filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/IPSL_PI.nc'
-  filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/IPSL_LGM.nc'
+  filename_climate_snapshot_PI_config         = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+  filename_climate_snapshot_warm_config       = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+  filename_climate_snapshot_cold_config       = 'data/CMIP5/atm/CCSM_CMIP5_lgm_atmos.nc'
 
   constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
 
@@ -269,17 +269,48 @@
   ! Ocean
   ! =====
 
-  choice_ocean_model_config                   = 'none'                           ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
+  choice_ocean_model_config                   = 'matrix_warm_cold'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
 
   ! NetCDF file containing the present-day observed ocean (e.g WOA18)
   filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
-  name_ocean_temperature_config               = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
-  name_ocean_salinity_config                  = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+  name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+  name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+
+  ! GCM snapshots in the matrix_warm_cold option
+  filename_GCM_ocean_snapshot_PI_config       = 'data/CMIP5/ocn/CCSM_CMIP5_piControl_ocean.nc'
+  filename_GCM_ocean_snapshot_warm_config     = 'data/CMIP5/ocn/CCSM_CMIP5_piControl_ocean.nc'
+  filename_GCM_ocean_snapshot_cold_config     = 'data/CMIP5/ocn/CCSM_CMIP5_lgm_ocean.nc'
+  name_ocean_temperature_GCM_config           = 't_ocean'
+  name_ocean_salinity_GCM_config              = 's_ocean'
+
+  ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+  ocean_temperature_PD_config                 = 271.46                           ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
+  ocean_temperature_cold_config               = 268.16                           ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
+  ocean_temperature_warm_config               = 275.16                           ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
+
+  ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+  choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
+  ocean_vertical_grid_max_depth_config        = 1500.0                           ! Maximum depth           to be used for ocean data
+  ocean_regular_grid_dz_config                = 150.0                            ! Vertical grid spacing   to be used for ocean data when choice_ocean_vertical_grid_config = 'regular'
+  ocean_extrap_dir_config                     = 'data/extrapolated_ocean_files'  ! Directory where extrapolated ocean files are stored
+  ocean_extrap_res_config                     = 5000.0                           ! High resolution at which the ocean data extrapolation should be performed
+  ocean_extrap_Gauss_sigma_config             = 8000.0                           ! 1-sigma of the Gaussian smoothing operation used to extrapolate the ocean data
+  ocean_extrap_hires_geo_filename_NAM_config  = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'                     ! Path to a NetCDF file containing
+  ocean_extrap_hires_geo_filename_EAS_config  = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'                          ! (present-day) geometry at high
+  ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'      ! resolution, used for ocean
+  ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
+  ocean_w_tot_hist_averaging_window_config    = 1500.0                           ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
+
+  ! Scaling factor for CO2 vs ice weights
+  ocean_matrix_CO2vsice_NAM_config            = 0.5                              ! Weight factor for the influence of CO2 vs ice cover on ocean T and S
+  ocean_matrix_CO2vsice_EAS_config            = 0.5                              ! Can be set separately for different regions
+  ocean_matrix_CO2vsice_GRL_config            = 0.75
+  ocean_matrix_CO2vsice_ANT_config            = 0.75
 
   ! Surface mass balance
   ! ====================
 
-  choice_SMB_model_config                     = 'ISMIP_style_forcing'            ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
+  choice_SMB_model_config                     = 'IMAU-ITM'                       ! Choice of SMB model: "uniform", "idealised", "IMAU-ITM", "direct_global", "direct_regional"
   SMB_uniform_config                          = 0.0                              ! Uniform SMB, applied when choice_SMB_model = "uniform" [mie/yr]
 
   ! Firn layer

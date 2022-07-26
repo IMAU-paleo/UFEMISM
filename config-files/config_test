@@ -219,14 +219,14 @@
   ! Ice dynamics - calving
   ! =========================
 
-    choice_calving_law_config                 = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
-    calving_threshold_thickness_shelf_config  = 100.0                            ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
-    calving_threshold_thickness_sheet_config  = 0.0                              ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
-    max_calving_rounds_config                 = 5                                ! Maximum number of calving loops during chain reaction
-    do_remove_shelves_config                  = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-    remove_shelves_larger_than_PD_config      = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-    continental_shelf_calving_config          = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
-    continental_shelf_min_height_config       = -2000.0                          ! Maximum depth of the continental shelf
+  choice_calving_law_config                 = 'threshold_thickness'              ! Choice of calving law: "none", "threshold_thickness"
+  calving_threshold_thickness_shelf_config  = 100.0                              ! Threshold ice thickness for ice shelf calving front in the "threshold_thickness" calving law
+  calving_threshold_thickness_sheet_config  = 0.0                                ! Threshold ice thickness for ice sheet calving front in the "threshold_thickness" calving law
+  max_calving_rounds_config                 = 5                                  ! Maximum number of calving loops during chain reaction
+  do_remove_shelves_config                  = .FALSE.                            ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
+  remove_shelves_larger_than_PD_config      = .FALSE.                            ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
+  continental_shelf_calving_config          = .FALSE.                            ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
+  continental_shelf_min_height_config       = -2000.0                            ! Maximum depth of the continental shelf
 
   ! Thermodynamics and rheology
   ! ===========================
@@ -367,7 +367,7 @@
   ! =================
 
   do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
-  choice_sealevel_model_config                = 'fixed'                          ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
+  choice_sealevel_model_config                = 'prescribed'                     ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
   filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl.dat'
   sealevel_record_length_config               = 30001

@@ -5,14 +5,16 @@ MODULE mesh_help_functions_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, &
+                                             crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
 
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh
-  USE utilities_module,                ONLY: line_integral_mxydx, line_integral_xydy
+  USE utilities_module,                ONLY: line_integral_mxydx, line_integral_xydy, &
+                                             oblique_sg_projection, inverse_oblique_sg_projection
 
   IMPLICIT NONE
 
@@ -22,7 +24,7 @@ MODULE mesh_help_functions_module
   !  *  -- LAPACK routine (version 3.1) --
   !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
   !  *     November 2006
-  interface 
+  interface
     SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
       INTEGER            INFO, LDA, LDB, N, NRHS
       INTEGER            IPIV( * )
@@ -31,25 +33,25 @@ MODULE mesh_help_functions_module
   end interface
 
   CONTAINS
-    
+
 ! == Calculating some extra mesh data: Voronoi cell areas, connection widths,
 !    triangle areas, resolution, lat/lon-coordinates
   SUBROUTINE find_Voronoi_cell_areas( mesh)
     ! Find the areas of the Voronoi cells of all the vertices
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_Voronoi_cell_areas'
     INTEGER                                            :: vi, nVor, n
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE            :: Vor
     REAL(dp)                                           :: Aerr
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ALLOCATE(Vor(mesh%nC_mem+2,2))
 
     mesh%A(1:mesh%nV) = 0._dp
@@ -71,14 +73,14 @@ MODULE mesh_help_functions_module
       Aerr = ABS(1._dp - SUM(mesh%A ) / ((mesh%xmax-mesh%xmin)*(mesh%ymax-mesh%ymin))) / 100._dp
       IF (Aerr > 0.0001_dp) CALL warning('sum of Voronoi cell areas doesnt match square area of mesh! (error of {dp_01} %)', dp_01 = Aerr)
     END IF
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE find_Voronoi_cell_areas
   SUBROUTINE find_Voronoi_cell_geometric_centres( mesh)
     ! Find the geometric centres of the Voronoi cells of all the vertices
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
@@ -91,21 +93,21 @@ MODULE mesh_help_functions_module
     REAL(dp), DIMENSION(2)                        :: p, q
     REAL(dp)                                      :: LI_mxydx, LI_xydy
     REAL(dp)                                      :: LI_mxydx_seg, LI_xydy_seg
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-        
+
     mesh%VorGC( mesh%vi1:mesh%vi2,:) = 0._dp
-    
+
     ALLOCATE(Vor(mesh%nC_mem+2,2))
-    
+
     DO vi = mesh%vi1, mesh%vi2
-    
+
       CALL find_Voronoi_cell_vertices(mesh, vi, Vor, nVor)
-      
+
       LI_mxydx = 0._dp
       LI_xydy  = 0._dp
-      
+
       DO nvi = 2, nVor
         p = Vor( nvi-1,:)
         q = Vor( nvi,:)
@@ -114,34 +116,34 @@ MODULE mesh_help_functions_module
         LI_mxydx = LI_mxydx + LI_mxydx_seg
         LI_xydy  = LI_xydy  + LI_xydy_seg
       END DO
-      
+
       IF (mesh%edge_index( vi) > 0) THEN
-      
+
         p = Vor( nVor,:)
         q = mesh%V( vi,:)
         CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
         CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
         LI_mxydx = LI_mxydx + LI_mxydx_seg
         LI_xydy  = LI_xydy  + LI_xydy_seg
-        
+
         p = mesh%V( vi,:)
         q = Vor( 1,:)
         CALL line_integral_mxydx( p, q, mesh%tol_dist, LI_mxydx_seg)
         CALL line_integral_xydy(  p, q, mesh%tol_dist, LI_xydy_seg)
         LI_mxydx = LI_mxydx + LI_mxydx_seg
         LI_xydy  = LI_xydy  + LI_xydy_seg
-        
+
       END IF
-       
+
       mesh%VorGC( vi,:) = [LI_mxydx / mesh%A( vi), LI_xydy / mesh%A( vi)]
-      
+
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    
+
     DEALLOCATE(Vor)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE find_Voronoi_cell_geometric_centres
   SUBROUTINE find_connection_widths( mesh)
     ! Find the width of the line separating two connected vertices (equal to the distance
@@ -150,15 +152,15 @@ MODULE mesh_help_functions_module
     IMPLICIT NONE
 
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_connection_widths'
     INTEGER                                            :: v1, nv2, v2, t1, t2, iti, ti, n
     LOGICAL                                            :: hasv2
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     mesh%Cw(mesh%vi2:mesh%vi2,:) = 0._dp
     CALL sync
 
@@ -214,7 +216,7 @@ MODULE mesh_help_functions_module
 
       END DO ! DO nv2 = 1, mesh%nC(v1)
     END DO ! DO v1 = mesh%vi1, mesh%vi2
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -225,12 +227,12 @@ MODULE mesh_help_functions_module
     IMPLICIT NONE
 
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_triangle_areas'
     INTEGER                                            :: ti
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -240,7 +242,7 @@ MODULE mesh_help_functions_module
       pc = mesh%V( mesh%Tri( ti,3),:)
       CALL find_triangle_area( pa, pb, pc, mesh%TriA(ti))
     END DO ! DO ti = mesh%ti1, mesh%ti2
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -282,27 +284,27 @@ MODULE mesh_help_functions_module
   END SUBROUTINE determine_mesh_resolution
   SUBROUTINE calc_triangle_geometric_centres( mesh)
     ! Find the geometric centres of all the triangles
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_triangle_geometric_centres'
     INTEGER                                            :: ti
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     DO ti = 1, mesh%nTri ! Could be distributed, but this is easier.
       CALL update_triangle_geometric_center( mesh, ti)
     END DO
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_triangle_geometric_centres
-  
+
 ! == Finding the vertices of a vertex' Voronoi cell
   SUBROUTINE find_Voronoi_cell_vertices(        mesh, vi, Vor, nVor)
     ! Find the coordinates of the points making up a vertex's Voronoi cell
@@ -313,7 +315,7 @@ MODULE mesh_help_functions_module
     INTEGER,                  INTENT(IN)          :: vi
     REAL(dp), DIMENSION(:,:), INTENT(INOUT)       :: Vor
     INTEGER,                  INTENT(OUT)         :: nVor
-    
+
     ! Local variables
     INTEGER                                       :: vvi
 
@@ -324,7 +326,7 @@ MODULE mesh_help_functions_module
     ELSE
       CALL find_Voronoi_cell_vertices_edge(mesh, vi, Vor, nVor)
     END IF
-    
+
     DO vvi = 1, nVor
       IF (Vor(vvi,1) < mesh%xmin - mesh%tol_dist .OR. &
           Vor(vvi,1) > mesh%xmax + mesh%tol_dist .OR. &
@@ -494,12 +496,12 @@ MODULE mesh_help_functions_module
 
     Vor  = 0._dp
     nVor = 0
-    
+
     IF (mesh%niTri(vi) > 1) THEN
       ! This corner vertex has more than one triangle, can be handled by Edge version
-          
+
       CALL find_Voronoi_cell_vertices_edge(mesh, vi, Vor, nVor)
-      
+
       IF     (mesh%edge_index( vi) == 2) THEN
         ! Northeast corner
         nVor = nVor + 1
@@ -517,7 +519,7 @@ MODULE mesh_help_functions_module
         nVor = nVor + 1
         Vor( nVor,:) = [mesh%xmin, mesh%ymax]
       END IF
-      
+
     ELSE
       ! This corner vertex has only a single triangle, best handled manually
 
@@ -551,7 +553,7 @@ MODULE mesh_help_functions_module
         WRITE(0,*) 'A non-corner vertex has only one triangle? This cannot be!'
         STOP
       END IF ! IF (mesh%edge_index(vi)==2) THEN
-      
+
     END IF
 
   END SUBROUTINE find_Voronoi_cell_vertices_corner
@@ -593,23 +595,23 @@ MODULE mesh_help_functions_module
   END SUBROUTINE crop_circumcenter
   SUBROUTINE find_shared_Voronoi_boundary( mesh, aci, cc1, cc2)
     ! Return the endpoints of the shared Voronoi cell boundary represented by edge aci
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),          INTENT(IN)          :: mesh
     INTEGER,                  INTENT(IN)          :: aci
     REAL(dp), DIMENSION(2),   INTENT(OUT)         :: cc1, cc2
-    
+
     ! Local variables
     INTEGER                                       :: til,tir
-    
+
     til = mesh%Aci( aci,5)
     tir = mesh%Aci( aci,6)
-  
+
     IF (mesh%edge_index_Ac( aci) > 0) THEN
       ! Boundary segments have only one adjacent triangle
-      
+
       IF (til > 0) THEN
         cc1 = mesh%Tricc( til,:)
       ELSE
@@ -628,176 +630,20 @@ MODULE mesh_help_functions_module
         ! West
         cc2 = [mesh%xmin, cc1(2)]
       END IF
-      
+
     ELSE ! IF (mesh%edge_index_Ac( aci) > 0) THEN
-      
+
       cc1 = mesh%Tricc( til,:)
       cc2 = mesh%Tricc( tir,:)
-      
+
     END IF ! IF (mesh%edge_index_Ac( aci) > 0) THEN
-    
+
   END SUBROUTINE find_shared_Voronoi_boundary
-  
-! == The oblique stereographic projection
-  SUBROUTINE get_lat_lon_coordinates( mesh)
-   ! Use the inverse stereographic projection for the mesh model region to calculate
-   ! lat/lon coordinates for all the vertices
-    
-    IMPLICIT NONE
 
-    TYPE(type_mesh),          INTENT(INOUT)       :: mesh
-    
-    INTEGER                                       :: vi
-    
-    ! Calculate lat and lon directly from X and Y using inverse projection
-    DO vi = mesh%vi1, mesh%vi2
-      CALL inverse_oblique_sg_projection(mesh%V(vi,1), mesh%V(vi,2), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, mesh%lon(vi), mesh%lat(vi))
-    END DO
-    
-  END SUBROUTINE get_lat_lon_coordinates
-  SUBROUTINE oblique_sg_projection( lambda, phi, lambda_M_deg, phi_M_deg, alpha_deg, x_IM_P_prime, y_IM_P_prime)
-
-    ! lambda = lon, phi = lat
-
-    ! This subroutine projects with an oblique stereographic projection the longitude-latitude
-    ! coordinates which coincide with the GCM grid points to the rectangular IM coordinate
-    ! system, with coordinates (x,y).
-    !
-    ! For more information about M, C%alpha_stereographic, the center of projection and the used
-    ! projection method see:
-    !  Reerink et al. (2010), Mapping technique of climate fields between GCM's and ice models, GMD
-
-    USE parameters_module, ONLY: pi, earth_radius
-    
-    IMPLICIT NONE
-
-    ! Input variables:
-    REAL(dp), INTENT(IN)            :: lambda        ! lon in degrees
-    REAL(dp), INTENT(IN)            :: phi           ! lat in degrees
-    
-    ! Polar stereographic projection parameters
-    REAL(dp), INTENT(IN)  :: lambda_M_deg  ! in degrees
-    REAL(dp), INTENT(IN)  :: phi_M_deg     ! in degrees
-    REAL(dp), INTENT(IN)  :: alpha_deg     ! in degrees
-
-    ! Output variables:
-    REAL(dp), INTENT(OUT)           :: x_IM_P_prime  ! in meter
-    REAL(dp), INTENT(OUT)           :: y_IM_P_prime  ! in meter
-
-    ! Local variables:
-    REAL(dp)                        :: phi_P         ! in radians
-    REAL(dp)                        :: lambda_P      ! in radians
-    REAL(dp)                        :: t_P_prime
-
-    REAL(dp)                        :: lambda_M, phi_M, alpha
-
-    lambda_M = (pi / 180._dp) * lambda_M_deg
-    phi_M    = (pi / 180._dp) * phi_M_deg
-    alpha    = (pi / 180._dp) * alpha_deg
-
-    ! For North and South Pole: C%lambda_M = 0._dp, to generate the correct IM coordinate
-    ! system, see equation (2.3) or equation (A.53) in Reerink et al. (2010).
-
-    ! Convert longitude-latitude coordinates to radians:
-    phi_P    = (pi / 180._dp) * phi
-    lambda_P = (pi / 180._dp) * lambda
-
-    ! See equation (2.6) or equation (A.56) in Reerink et al. (2010):
-    t_P_prime = ((1._dp + COS(alpha)) / (1._dp + COS(phi_P) * COS(phi_M) * COS(lambda_P - lambda_M) + SIN(phi_P) * SIN(phi_M))) / (pi / 180._dp)
-
-    ! See equations (2.4-2.5) or equations (A.54-A.55) in Reerink et al. (2010):
-    x_IM_P_prime =  earth_radius * (COS(phi_P) * SIN(lambda_P - lambda_M)) * t_P_prime
-    y_IM_P_prime =  earth_radius * (SIN(phi_P) * COS(phi_M) - (COS(phi_P) * SIN(phi_M)) * COS(lambda_P - lambda_M)) * t_P_prime
-
-
-  END SUBROUTINE oblique_sg_projection
-  SUBROUTINE inverse_oblique_sg_projection( x_IM_P_prime, y_IM_P_prime, lambda_M_deg, phi_M_deg, alpha_deg, lambda_P, phi_P)
-    ! This subroutine projects with an inverse oblique stereographic projection the
-    ! (x,y) coordinates which coincide with the IM grid points to the longitude-latitude
-    ! coordinate system, with coordinates (lambda, phi) in degrees.
-    !
-    ! For more information about M, alpha, the center of projection and the used
-    ! projection method see:
-    !  Reerink et al. (2010), Mapping technique of climate fields between GCM's and ice models, GMD
-
-    USE parameters_module, ONLY: pi, earth_radius
-
-    IMPLICIT NONE
-
-    ! Input variables:
-    REAL(dp), INTENT(IN)  :: x_IM_P_prime  ! in meter
-    REAL(dp), INTENT(IN)  :: y_IM_P_prime  ! in meter
-
-    ! Polar stereographic projection parameters
-    REAL(dp), INTENT(IN)  :: lambda_M_deg  ! in degrees
-    REAL(dp), INTENT(IN)  :: phi_M_deg     ! in degrees
-    REAL(dp), INTENT(IN)  :: alpha_deg     ! in degrees
-
-    ! Output variables:
-    REAL(dp), INTENT(OUT) :: lambda_P      ! in degrees
-    REAL(dp), INTENT(OUT) :: phi_P         ! in degrees
-
-    ! Local variables:
-    REAL(dp)              :: x_3D_P_prime  ! in meter
-    REAL(dp)              :: y_3D_P_prime  ! in meter
-    REAL(dp)              :: z_3D_P_prime  ! in meter
-    REAL(dp)              :: a
-    REAL(dp)              :: t_P
-    REAL(dp)              :: x_3D_P        ! in meter
-    REAL(dp)              :: y_3D_P        ! in meter
-    REAL(dp)              :: z_3D_P        ! in meter
-
-    REAL(dp)              :: lambda_M, phi_M, alpha
-
-    lambda_M = (pi / 180._dp) * lambda_M_deg
-    phi_M    = (pi / 180._dp) * phi_M_deg
-    alpha    = (pi / 180._dp) * alpha_deg
-
-    ! See equations (2.14-2.16) or equations (B.21-B.23) in Reerink et al. (2010):
-    x_3D_P_prime = earth_radius * COS(alpha) * COS(lambda_M) * COS(phi_M) - SIN(lambda_M) * (x_IM_P_prime*(pi / 180._dp)) - COS(lambda_M) * SIN(phi_M) * (y_IM_P_prime*(pi / 180._dp))
-    y_3D_P_prime = earth_radius * COS(alpha) * SIN(lambda_M) * COS(phi_M) + COS(lambda_M) * (x_IM_P_prime*(pi / 180._dp)) - SIN(lambda_M) * SIN(phi_M) * (y_IM_P_prime*(pi / 180._dp))
-    z_3D_P_prime = earth_radius * COS(alpha) *                 SIN(phi_M)                                          +                   COS(phi_M) * (y_IM_P_prime*(pi / 180._dp))
-
-    ! See equation (2.13) or equation (B.20) in Reerink et al. (2010):
-    a = COS(lambda_M) * COS(phi_M) * x_3D_P_prime  +  SIN(lambda_M) * COS(phi_M) * y_3D_P_prime  +  SIN(phi_M) * z_3D_P_prime
-
-    ! See equation (2.12) or equation (B.19) in Reerink et al. (2010):
-    t_P = (2._dp * earth_radius**2 + 2._dp * earth_radius * a) / (earth_radius**2 + 2._dp * earth_radius * a + x_3D_P_prime**2 + y_3D_P_prime**2 + z_3D_P_prime**2)
-
-    ! See equations (2.9-2.11) or equations (B.16-B.18) in Reerink et al. (2010):
-    x_3D_P =  earth_radius * COS(lambda_M) * COS(phi_M) * (t_P - 1._dp) + x_3D_P_prime * t_P
-    y_3D_P =  earth_radius * SIN(lambda_M) * COS(phi_M) * (t_P - 1._dp) + y_3D_P_prime * t_P
-    z_3D_P =  earth_radius *                   SIN(phi_M) * (t_P - 1._dp) + z_3D_P_prime * t_P
-
-    ! See equation (2.7) or equation (B.24) in Reerink et al. (2010):
-    IF(x_3D_P <  0._dp                      ) THEN
-      lambda_P = 180._dp + (180._dp / pi) * ATAN(y_3D_P / x_3D_P)
-    ELSE IF(x_3D_P >  0._dp .AND. y_3D_P >= 0._dp) THEN
-      lambda_P =           (180._dp / pi) * ATAN(y_3D_P / x_3D_P)
-    ELSE IF(x_3D_P >  0._dp .AND. y_3D_P <  0._dp) THEN
-      lambda_P = 360._dp + (180._dp / pi) * ATAN(y_3D_P / x_3D_P)
-    ELSE IF(x_3D_P == 0._dp .AND. y_3D_P >  0._dp) THEN
-      lambda_P =  90._dp
-    ELSE IF(x_3D_P == 0._dp .AND. y_3D_P <  0._dp) THEN
-      lambda_P = 270._dp
-    ELSE IF(x_3D_P == 0._dp .AND. y_3D_P == 0._dp) THEN
-      lambda_P =   0._dp
-    END IF
-
-    ! See equation (2.8) or equation (B.25) in Reerink et al. (2010):
-    IF(x_3D_P /= 0._dp .OR. y_3D_P /= 0._dp) THEN
-      phi_P = (180._dp / pi) * ATAN(z_3D_P / sqrt(x_3D_P**2 + y_3D_P**2))
-    ELSE IF(z_3D_P >  0._dp) THEN
-      phi_P =   90._dp
-    ELSE IF(z_3D_P <  0._dp) THEN
-      phi_P =  -90._dp
-    END IF
-  END SUBROUTINE inverse_oblique_sg_projection
-     
 ! == Some basic geometrical operations
   FUNCTION   is_in_triangle( pa, pb, pc, p) RESULT(isso)
     ! Check if the point p lies inside the triangle abc, or within distance tol_dist of its edges
-    
+
     IMPLICIT NONE
 
     REAL(dp), DIMENSION(2),   INTENT(IN)          :: pa, pb, pc, p
@@ -812,14 +658,14 @@ MODULE mesh_help_functions_module
     s1 = ((pb(1)-pa(1))*as_y-(pb(2)-pa(2))*as_x)
     s2 = ((pc(1)-pa(1))*as_y-(pc(2)-pa(2))*as_x)
     s3 = ((pc(1)-pb(1))*(p(2)-pb(2))-(pc(2)-pb(2))*(p(1)-pb(1)))
-   
+
     isso = .FALSE.
 
     IF (s1 > -tol .AND. s2 < tol .AND. s3 > -tol) THEN
       isso = .TRUE.
       RETURN
     END IF
-   
+
   END FUNCTION is_in_triangle
   FUNCTION   is_boundary_segment( mesh, v1, v2) RESULT(isso)
    ! Determine whether or not the line between two vertices is an Edge segment
@@ -974,21 +820,21 @@ MODULE mesh_help_functions_module
   FUNCTION is_walltowall( mesh, ti) RESULT(isso)
    ! Determine whether or not a triangle is "wall to wall"
    ! (i.e. contains vertices lying on opposite domain boundaries)
-    
+
     IMPLICIT NONE
 
    TYPE(type_mesh),          INTENT(IN)          :: mesh
    INTEGER,                  INTENT(IN)          :: ti
    LOGICAL                                       :: isso
-   
+
    LOGICAL                                       :: has_north, has_south, has_east, has_west
    INTEGER                                       :: n, vi
-   
+
    has_north = .FALSE.
    has_south = .FALSE.
    has_east  = .FALSE.
    has_west  = .FALSE.
-   
+
    DO n = 1, 3
      vi = mesh%Tri( ti,n)
      IF (mesh%edge_index( vi) == 1) has_north = .TRUE.
@@ -996,33 +842,33 @@ MODULE mesh_help_functions_module
      IF (mesh%edge_index( vi) == 5) has_south = .TRUE.
      IF (mesh%edge_index( vi) == 7) has_west  = .TRUE.
    END DO
-   
+
    isso = .FALSE.
    IF (has_north .AND. has_south) isso = .TRUE.
    IF (has_west  .AND. has_east ) isso = .TRUE.
-   
+
   END FUNCTION is_walltowall
   SUBROUTINE update_triangle_circumcenter( mesh, ti)
     ! Calculate the circumcenter of mesh triangle ti
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
     INTEGER,                    INTENT(IN)        :: ti
-    
+
     ! Local variables:
     REAL(dp), DIMENSION(2)                        :: v1, v2, v3, cc
-    
+
     v1 = mesh%V( mesh%Tri( ti,1),:)
     v2 = mesh%V( mesh%Tri( ti,2),:)
     v3 = mesh%V( mesh%Tri( ti,3),:)
     CALL find_circumcenter( v1, v2, v3, cc)
-    
+
     ! If find_circumcenter yields infinity, it's because p and q have the
     ! same y-coordinate. Rearrange vertices in triangle matrix (maintaining
     ! counter-clockwise orientation) and try again.
-    
+
     IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*10000._dp) THEN
       mesh%Tri(ti,:) = [mesh%Tri(ti,2), mesh%Tri(ti,3), mesh%Tri(ti,1)]
       v1 = mesh%V( mesh%Tri( ti,1),:)
@@ -1030,7 +876,7 @@ MODULE mesh_help_functions_module
       v3 = mesh%V( mesh%Tri( ti,3),:)
       CALL find_circumcenter( v1, v2, v3, cc)
     END IF
-    
+
     IF (cc(1) > (mesh%xmax-mesh%xmin)*100000._dp .OR. cc(2) > (mesh%ymax-mesh%ymin)*100000._dp) THEN
       mesh%Tri(ti,:) = [mesh%Tri(ti,2), mesh%Tri(ti,3), mesh%Tri(ti,1)]
       v1 = mesh%V( mesh%Tri( ti,1),:)
@@ -1044,7 +890,7 @@ MODULE mesh_help_functions_module
     END IF
 
     mesh%Tricc(ti,:) = cc
-    
+
   END SUBROUTINE update_triangle_circumcenter
   SUBROUTINE update_triangle_geometric_center( mesh, ti)
     ! Calculate the geometric centre of mesh triangle ti
@@ -1496,15 +1342,15 @@ MODULE mesh_help_functions_module
 ! == Routines for partitioning a domain or list, either regularly or load-balanced
   SUBROUTINE partition_domain_regular( xmin, xmax, i, n, xl, xr)
     ! Given the domain [xmin,xmax], partition it into n equally-sized parts, and return the range [xl,xr] for the i-th part
-    
+
     ! In/output variables:
     REAL(dp),                   INTENT(IN)        :: xmin, xmax
     INTEGER,                    INTENT(IN)        :: i, n
     REAL(dp),                   INTENT(OUT)       :: xl, xr
-    
+
     xl = xmin + REAL(i  ) * (xmax - xmin) / REAL(n)
     xr = xmin + REAL(i+1) * (xmax - xmin) / REAL(n)
-    
+
   END SUBROUTINE partition_domain_regular
   SUBROUTINE partition_domain_x_balanced( mesh, ymin, ymax, i, n, xmin, xmax)
     ! Given a mesh, divide the region between ymin and ymax into n parts with
@@ -1648,16 +1494,16 @@ MODULE mesh_help_functions_module
 ! == Subroutines for creating Points of Interest (POI)
   SUBROUTINE find_POI_xy_coordinates( mesh)
     ! Use the stereographic projection parameters for the relevant model region
-    
+
     IMPLICIT NONE
 
     ! Input variables
     TYPE(type_mesh),            INTENT(INOUT)     :: mesh
-    
+
     ! Local variables
     INTEGER                                       :: POIi
     REAL(dp)                                      :: lat, lon, x, y
-    
+
     IF (mesh%region_name == 'NAM') THEN
       DO POIi = 1, mesh%nPOI
         mesh%POI_coordinates(POIi,1) = C%POI_NAM_coordinates((POIi*2)-1)
@@ -1688,12 +1534,12 @@ MODULE mesh_help_functions_module
     END IF
 
     DO POIi = 1, mesh%nPOI
-    
+
       lat = mesh%POI_coordinates(POIi,1)
       lon = mesh%POI_coordinates(POIi,2)
 
       CALL oblique_sg_projection( lon, lat, mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, x, y)
-    
+
       mesh%POI_XY_coordinates(POIi,1) = x
       mesh%POI_XY_coordinates(POIi,2) = y
 
@@ -2047,7 +1893,7 @@ MODULE mesh_help_functions_module
     END IF
 
   END SUBROUTINE segment_intersection
-    
+
 ! == Some very basic geometry, mainly used for determining triangle circumcenters
   SUBROUTINE line_from_points( p, q, la, lb, lc)
 
@@ -2063,7 +1909,7 @@ MODULE mesh_help_functions_module
 
   END SUBROUTINE line_from_points
   SUBROUTINE perpendicular_bisector_from_line( p, q, la1, lb1, la2, lb2, lc2)
-    
+
     IMPLICIT NONE
 
     REAL(dp), DIMENSION(2),     INTENT(IN)        :: p, q
@@ -2096,11 +1942,11 @@ MODULE mesh_help_functions_module
     ELSE
       llis = [(lb2*lc1 - lb1*lc2), (la1*lc2 - la2*lc1)]/d
     END IF
-    
+
   END SUBROUTINE line_line_intersection
   SUBROUTINE find_circumcenter( p, q, r, cc)
     ! Find the circumcenter cc of the triangle pqr
-    
+
     IMPLICIT NONE
 
     ! Some basic vector operations
@@ -2131,9 +1977,9 @@ MODULE mesh_help_functions_module
   END SUBROUTINE find_circumcenter
   FUNCTION cross2( a,b) RESULT(z)
     ! Vector product z between 2-dimensional vectors a and b
-    
+
     IMPLICIT NONE
-    
+
     REAL(dp), DIMENSION(2),     INTENT(IN)        :: a, b
     REAL(dp)                                      :: z
 
@@ -2142,14 +1988,14 @@ MODULE mesh_help_functions_module
   END FUNCTION cross2
   SUBROUTINE find_triangle_area( pq, pr, ps, TriA)
     ! Find the area of the triangle [pq,pr,ps]
-    
+
     IMPLICIT NONE
-    
+
     REAL(dp), DIMENSION(2), INTENT(IN)  :: pq, pr, ps
     REAL(dp),               INTENT(OUT) :: TriA
-    
+
     TriA = ABS( cross2( [pr(1)-pq(1), pr(2)-pq(2)], [ps(1)-pq(1), ps(2)-pq(2)] )) / 2._dp
-    
+
   END SUBROUTINE find_triangle_area
 
 ! == Help routines for use in mesh updating
@@ -2671,64 +2517,64 @@ MODULE mesh_help_functions_module
       pia = mesh%V( via,:)
       pib = mesh%V( vib,:)
       pic = mesh%V( vic,:)
-      
+
       CALL find_triangle_area( pia, pib, gc, Atri_abp)
       CALL find_triangle_area( pib, pic, gc, Atri_bcp)
       CALL find_triangle_area( pic, pia, gc, Atri_cap)
       Atri_abc = Atri_abp + Atri_bcp + Atri_cap
-    
+
       mdpgc = (REAL(mask( via),dp) * Atri_bcp + REAL(mask( vib),dp) * Atri_cap + REAL(mask( vic),dp) * Atri_abp) / Atri_abc
-      
+
       IF (mdpgc > 0.1_dp) THEN
         isso = .TRUE.
       ELSE
         isso = .FALSE.
       END IF
-      
+
       RETURN
-    
+
     END IF
-    
+
     ! That (old) mesh vertex lies inside the (new mesh) triangle. Use a FloodFill search to find all
     ! the (old) mesh vertices that lie inside the (new mesh) triangle. If any of them have a mask value of 1, return immediately.
-    
+
     IF (mask(vi_closest_to_gc)==1) THEN
       isso = .TRUE.
       RETURN
     END IF
-    
+
     mesh%VMap    = 0
     mesh%VStack1 = 0
     mesh%VStack2 = 0
-    
+
     mesh%VMap( vi_closest_to_gc) = 1
     mesh%VStack1( 1) = vi_closest_to_gc
     mesh%VStackN1 = 1
-    
+
     DO WHILE (mesh%VStackN1 > 0)
-    
+
       ! Clean up the new stack
       mesh%VStack2  = 0
       mesh%VStackN2 = 0
-    
+
       ! Go over the entire old stack. Add any non-checked neighbours of these stack elements
       ! to the new stack. When finished, cycle the stacks.
       DO nvi = 1, mesh%VStackN1
         vi = mesh%VStack1( nvi)
-        
+
         DO ci = 1, mesh%nC( vi)
-        
+
           vc = mesh%C( vi,ci)
           p  = mesh%V( vc,:)
-          
+
           IF (mesh%VMap( vc)==1) CYCLE ! This neighbour has already been checked.
-          
+
           ! Mark this neighbour as checked
           mesh%VMap( vc) = 1
-          
+
           ! If it lies inside the triangle, add it to the new stack.
           IF (is_in_triangle( pa, pb, pc, p)) THEN
-          
+
             ! If it has what we're looking for, stop the search.
             IF (mask( vc) == 1) THEN
               isso = .TRUE.
@@ -2737,51 +2583,51 @@ MODULE mesh_help_functions_module
             mesh%VStackN2 = mesh%VStackN2 + 1
             mesh%VStack2( mesh%VStackN2) = vc
           END IF
-          
+
         END DO ! DO ci = 1, mesh%nC(vi)
-        
+
       END DO ! DO nvi = 1, mesh%VStackN1
-      
+
       ! Cycle the stacks
       mesh%VStack1  = mesh%VStack2
       mesh%VStackN1 = mesh%VStackN2
-    
+
     END DO ! DO WHILE (mesh%VStackN1) > 0
-    
+
   END SUBROUTINE new_triangle_contains_old_mask
-  
+
 ! == Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
   SUBROUTINE rotate_xy_to_po_stag( mesh, u_c, v_c, p_c, o_c)
     ! Rotate a vector field [u,v] to local [p,o] components on the staggered c (edge) grid
-    
+
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),            INTENT(IN)        :: mesh
     REAL(dp), DIMENSION(:    ), INTENT(IN)        :: u_c, v_c
     REAL(dp), DIMENSION(:    ), INTENT(OUT)       :: p_c, o_c
-    
+
     ! Local variables:
     INTEGER                                       :: ci, vi, vj
     REAL(dp)                                      :: Dx, Dy, D
-    
+
     DO ci = mesh%ci1, mesh%ci2
-    
+
       vi = mesh%Aci( ci,1)
       vj = mesh%Aci( ci,2)
-      
+
       Dx = mesh%V( vj,1) - mesh%V( vi,1)
       Dy = mesh%V( vj,2) - mesh%V( vi,2)
       D  = SQRT(Dx**2 + Dy**2)
-      
+
       p_c( ci) = u_c( ci) * Dx/D + v_c( ci) * Dy/D
       o_c( ci) = v_c( ci) * Dx/D - u_c( ci) * Dy/D
-      
+
     END DO ! DO ci = mesh%ci1, mesh%ci2
     CALL sync
-    
+
   END SUBROUTINE rotate_xy_to_po_stag
-  
+
 ! == Diagnostic tools: write a (small) mesh to the screen, and check if mesh data is self-consistent
   SUBROUTINE write_mesh_to_screen( mesh)
 
@@ -2789,7 +2635,7 @@ MODULE mesh_help_functions_module
 
     TYPE(type_mesh),          INTENT(IN)          :: mesh
     INTEGER                                       :: vi, ti
-    
+
     WRITE(0,*) '============================================================================'
     WRITE(0,*) ' xmin = ', mesh%xmin
     WRITE(0,*) ' xmax = ', mesh%xmax
@@ -2801,26 +2647,26 @@ MODULE mesh_help_functions_module
       ' ', vi, '   ', mesh%nC(vi), '    ', mesh%C(vi,1:6), '    ', mesh%niTri(vi), '    ', mesh%iTri(vi,1:6), '    ', mesh%edge_index(vi), &
       '    ', mesh%V(vi,1), '    ', mesh%V(vi,2)
     END DO
-    
+
     WRITE(0,*) ' ti       Tri         TriC     Tri_edge_index'
     DO ti = 1, mesh%nTri
       WRITE(0,'(A,I3,A,3I3,A,3I3,A,I3)') &
       ' ', ti, '   ', mesh%Tri(ti,:), '    ', mesh%TriC(ti,:), '    ', mesh%Tri_edge_index(ti)
     END DO
     WRITE(0,*) '============================================================================'
-  
+
   END SUBROUTINE write_mesh_to_screen
   SUBROUTINE write_mesh_to_text_file( mesh, filename)
-    
+
     IMPLICIT NONE
 
     TYPE(type_mesh),          INTENT(IN)          :: mesh
     CHARACTER(LEN=*),         INTENT(IN)          :: filename
     INTEGER                                       :: vi, ci, ti, fp
-       
+
     ! Create a new text file
     OPEN(newUNIT  = fp, FILE = (TRIM(C%output_dir) // filename), STATUS = 'REPLACE')
-    
+
     ! Header
     WRITE(UNIT = fp, FMT = '(A)')       ' Mesh data'
     WRITE(UNIT = fp, FMT = '(A,F14.4)') '  xmin    = ', mesh%xmin
@@ -2833,7 +2679,7 @@ MODULE mesh_help_functions_module
     WRITE(UNIT = fp, FMT = '(A)')       ''
     WRITE(UNIT = fp, FMT = '(A,I6,A,I3,A)')       'Vertex data: ', mesh%nV, ' rows, ', 2 + 1 + mesh%nC_mem + 1 + mesh%nC_mem + 1, ' columns'
     WRITE(UNIT = fp, FMT = '(A)')       ''
-    
+
     ! Vertex data
     WRITE(UNIT = fp, FMT = '(A)')       'V  nC  C  niTri  iTri  edge_index'
     DO vi = 1, mesh%nV
@@ -2849,16 +2695,16 @@ MODULE mesh_help_functions_module
       WRITE(UNIT = fp, FMT = '(A)') ''
     END DO
     WRITE(UNIT = fp, FMT = '(A)')       ''
-    
+
     ! Triangle data
     WRITE(UNIT = fp, FMT = '(A)')       'Tri  TriC  Tri_edge_index'
     DO ti = 1, mesh%nTri
       WRITE(UNIT = fp, FMT = '(6I6,I3)') mesh%Tri(ti,1), mesh%Tri(ti,2), mesh%Tri(ti,3), mesh%TriC(ti,1), mesh%TriC(ti,2), mesh%TriC(ti,3), mesh%Tri_edge_index(ti)
     END DO
-    
+
     ! Close the text file
     CLOSE(UNIT = fp)
-    
+
   END SUBROUTINE write_mesh_to_text_file
   SUBROUTINE check_mesh( mesh)
     ! Check if the mesh data is self-consistent
@@ -2868,9 +2714,9 @@ MODULE mesh_help_functions_module
     TYPE(type_mesh),          INTENT(IN)          :: mesh
     INTEGER                                       :: vi, ci, vc, ci2, vc2, iti, iti2, ti, n, v1, v2, v3, ti2, n2
     LOGICAL                                       :: FoundIt
-    
+
    ! IF (.NOT. par%master) RETURN
-        
+
     ! == V
     ! =============================================================
     DO vi = 1, mesh%nV
@@ -2880,7 +2726,7 @@ MODULE mesh_help_functions_module
           mesh%xmin, ', ', mesh%V(vi,1), ',', mesh%xmax, '], y = [', mesh%ymin, ', ', mesh%V(vi,2), ',', mesh%ymax, ']'
       END IF
     END DO
-    
+
     ! == nC
     ! =============================================================
     DO vi = 1, mesh%nV
@@ -2891,7 +2737,7 @@ MODULE mesh_help_functions_module
         IF (mesh%C(vi,ci) > 0)  WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has more connections than nC says!'
       END DO
     END DO
-    
+
     ! == C
     ! =============================================================
     DO vi = 1, mesh%nV
@@ -2908,7 +2754,7 @@ MODULE mesh_help_functions_module
         IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' is connected to ', vc, ', but not the other way round!'
       END DO
     END DO
-    
+
     ! == niTri
     ! =============================================================
     DO vi = 1, mesh%nV
@@ -2919,7 +2765,7 @@ MODULE mesh_help_functions_module
         IF (mesh%iTri(vi,iti) > 0)  WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has more iTriangles than nC says!'
       END DO
     END DO
-    
+
     ! == iTri
     ! =============================================================
     DO vi = 1, mesh%nV
@@ -2934,9 +2780,9 @@ MODULE mesh_help_functions_module
         END DO
         IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' lists triangle ', ti, ' in iTri, but that triangle ', ti, ' doesnt contain vertex ', vi, '!'
       END DO
-      
+
       IF (mesh%edge_index(vi) == 0) THEN
-      
+
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C(vi,ci)
           n = 0
@@ -2952,13 +2798,13 @@ MODULE mesh_help_functions_module
           END DO
           IF (.NOT. (n==2)) WRITE(0,*) ' check_mesh - ERROR: non-edge vertices ', vi, ' and ', vc, ' share ', n, ' triangles'
         END DO
-        
+
       ELSE ! IF (mesh%edge_index(vi) == 0) THEN
-      
+
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C(vi,ci)
           IF (mesh%edge_index(vc)==0) THEN
-                
+
             n = 0
             DO iti = 1, mesh%niTri(vi)
               ti = mesh%iTri(vi,iti)
@@ -2971,9 +2817,9 @@ MODULE mesh_help_functions_module
               END DO
             END DO
             IF (.NOT. (n==2)) WRITE(0,*) ' check_mesh - ERROR: edge vertex ', vi, ' and non-edge vertex ', vc, ' share ', n, ' triangles'
-          
+
           ELSE ! IF (mesh%edge_index(vc)==0) THEN
-                
+
             n = 0
             DO iti = 1, mesh%niTri(vi)
               ti = mesh%iTri(vi,iti)
@@ -2987,27 +2833,27 @@ MODULE mesh_help_functions_module
             END DO
             IF (.NOT. is_boundary_segment( mesh, vi, vc)) CYCLE
             IF (.NOT. (n==1)) WRITE(0,*) ' check_mesh - ERROR: edge vertices ', vi, ' and ', vc, ' share ', n, ' triangles'
-            
+
           END IF
         END DO
-        
+
       END IF
     END DO
-    
+
     ! == edge_index
     ! =============================================================
     DO vi = 1, mesh%nV
-    
+
       IF (mesh%edge_index(vi) == 0) THEN
-      
+
         IF (mesh%V(vi,1) <= mesh%xmin .OR. mesh%V(vi,1) >= mesh%xmax .OR. mesh%V(vi,2) <= mesh%ymin .OR. mesh%V(vi,2) >= mesh%ymax) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 0 but lies on or beyond the mesh domain boundary!'
         END IF
-        
+
         ! First and last neighbours must be connected
         vc  = mesh%C(vi,1)
         vc2 = mesh%C(vi,mesh%nC(vi))
-        
+
         FoundIt = .FALSE.
         DO ci = 1, mesh%nC(vc)
           IF (mesh%C(vc,ci)==vc2) THEN
@@ -3016,9 +2862,9 @@ MODULE mesh_help_functions_module
           END IF
         END DO
         IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 0, but its first and last neighbours are not connected!'
-        
+
       ELSEIF (mesh%edge_index(vi) == 1) THEN
-      
+
         IF (ABS(mesh%V(vi,2) - mesh%ymax) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 1 but does not lie on the N boundary!'
         END IF
@@ -3038,11 +2884,11 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==1 .OR. mesh%Tri_edge_index(ti)==2 .OR. mesh%Tri_edge_index(ti)==3)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 1 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 2) THEN
-      
+
         IF (.NOT. vi==3) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' is listed as NE corner!'
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmax) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymax) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 2 but does not lie on the NE corner!'
         END IF
@@ -3062,9 +2908,9 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==1 .OR. mesh%Tri_edge_index(ti)==2 .OR. mesh%Tri_edge_index(ti)==3)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 2 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 3) THEN
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmax) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 3 but does not lie on the E boundary!'
         END IF
@@ -3084,11 +2930,11 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==3 .OR. mesh%Tri_edge_index(ti)==4 .OR. mesh%Tri_edge_index(ti)==5)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 3 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 4) THEN
-      
+
         IF (.NOT. vi==2) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' is listed as SE corner!'
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmax) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymin) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 4 but does not lie on the SE corner!'
         END IF
@@ -3108,9 +2954,9 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==3 .OR. mesh%Tri_edge_index(ti)==4 .OR. mesh%Tri_edge_index(ti)==5)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 4 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 5) THEN
-      
+
         IF (ABS(mesh%V(vi,2) - mesh%ymin) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 5 but does not lie on the S boundary!'
         END IF
@@ -3130,11 +2976,11 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==5 .OR. mesh%Tri_edge_index(ti)==6 .OR. mesh%Tri_edge_index(ti)==7)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 5 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 6) THEN
-      
+
         IF (.NOT. vi==1) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' is listed as SW corner!'
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmin) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymin) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 6 but does not lie on the SW corner!'
         END IF
@@ -3154,9 +3000,9 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==5 .OR. mesh%Tri_edge_index(ti)==6 .OR. mesh%Tri_edge_index(ti)==7)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 6 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 7) THEN
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmin) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 7 but does not lie on the W boundary!'
         END IF
@@ -3176,11 +3022,11 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==7 .OR. mesh%Tri_edge_index(ti)==8 .OR. mesh%Tri_edge_index(ti)==1)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 7 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       ELSEIF (mesh%edge_index(vi) == 8) THEN
-      
+
         IF (.NOT. vi==4) WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' is listed as NW corner!'
-      
+
         IF (ABS(mesh%V(vi,1) - mesh%xmin) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymax) > mesh%tol_dist) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 8 but does not lie on the NW corner!'
         END IF
@@ -3200,14 +3046,14 @@ MODULE mesh_help_functions_module
         IF (.NOT. (mesh%Tri_edge_index(ti)==7 .OR. mesh%Tri_edge_index(ti)==8 .OR. mesh%Tri_edge_index(ti)==1)) THEN
           WRITE(0,*) ' check_mesh - ERROR: vertex ', vi, ' has edge_index 8 but its last iTri doesnt have a matching Tri_edge_index!'
         END IF
-        
+
       END IF
-      
+
     END DO
-    
+
     ! == Tri
     ! =============================================================
-    
+
     DO ti = 1, mesh%nTri
       DO n = 1, 3
         vi = mesh%Tri(ti,n)
@@ -3220,11 +3066,11 @@ MODULE mesh_help_functions_module
         END DO
         IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: triangle ', ti, ' contains vertex ', vi, ', but that vertex doesnt list ti as an iTri!'
       END DO
-      
+
       v1 = mesh%Tri(ti,1)
       v2 = mesh%Tri(ti,2)
       v3 = mesh%Tri(ti,3)
-      
+
       FoundIt = .FALSE.
       DO ci = 1, mesh%nC(v1)
         vc = mesh%C(v1,ci)
@@ -3234,7 +3080,7 @@ MODULE mesh_help_functions_module
         END IF
       END DO
       IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: triangle ', ti, ' contains unconnected vertices ', v1, ' and ', v2, '!'
-      
+
       FoundIt = .FALSE.
       DO ci = 1, mesh%nC(v1)
         vc = mesh%C(v1,ci)
@@ -3244,7 +3090,7 @@ MODULE mesh_help_functions_module
         END IF
       END DO
       IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: triangle ', ti, ' contains unconnected vertices ', v1, ' and ', v3, '!'
-      
+
       FoundIt = .FALSE.
       DO ci = 1, mesh%nC(v2)
         vc = mesh%C(v2,ci)
@@ -3255,10 +3101,10 @@ MODULE mesh_help_functions_module
       END DO
       IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: triangle ', ti, ' contains unconnected vertices ', v2, ' and ', v3, '!'
     END DO
-    
+
     ! == TriC
     ! =============================================================
-    
+
     DO ti = 1, mesh%nTri
       DO n = 1, 3
         ti2 = mesh%TriC(ti,n)
@@ -3276,8 +3122,8 @@ MODULE mesh_help_functions_module
         IF (.NOT. FoundIt) WRITE(0,*) ' check_mesh - ERROR: triangle ', ti, ' is connected to ', ti2, ', but not the other way round!'
       END DO
     END DO
-        
-    
+
+
   END SUBROUTINE check_mesh
 
 END MODULE mesh_help_functions_module

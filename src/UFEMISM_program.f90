@@ -1,150 +1,187 @@
-PROGRAM UFEMISM_program
-! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM), by Tijn Berends, 2019.
-! Institute for Marine and Atmospheric Research Utrecht (IMAU)
-!
-! e-mail: c.j.berends@uu.nl
-!
-! After some initialisation work (starting the program on multiple cores using MPI_INIT,
-! reading the config file, creating an output folder, etc.), this program runs the four
-! copies of the ice-sheet model (North America, Eurasia, Greenland and Antarctica).
-! These are all run individually for 100 years (the "coupling interval"), after which
-! control is passed back to this program. At this point, the sea-level model SELEN will be
-! called (not implemented yet), some global output data is calculated and written to the
-! output file, and the coupling loop is run again.
-!
-! The four ice-sheet models are four instances of the "model_region" data type (declared in
-! the data_types module), which is accepted as an argument by the "run_model" subroutine.
-!
-! Some general notes:
-! - Model data is arranged into several large structures, all of which are declared in the 
-!   data_types module, and USEd by the different model subroutines. This prevents dependency
-!   problems during compiling, and makes the modules very clean and easy to read.
-! - The general rule is that any kind of data that is a property only of the adaptive mesh,
-!   not of the ice-sheet model in particular (vertex coordinates, neighbour functions, etc.),
-!   is stored in the "mesh" data type. Likewise, any subroutines that perform operations on
-!   the mesh which are not exclusive to the ice-sheet model (such as calculation of derivatives
-!   or remapping) are contained in the different "mesh_XXXX" modules.
-! - Because of the adaptive mesh, memory for the different model data fields needs to be
-!   reallocated when the mesh is updated. Since this concerns data fields that are a property
-!   of the ice-sheet model components, rather than the mesh itself, this is done in the
-!   "remap_COMPONENT" routines contained in the different model component modules.
+program UFEMISM_program
+  ! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM),
+  ! by Tijn Berends and Jorjo Bernales, 2019-2022.
+  ! Institute for Marine and Atmospheric Research Utrecht (IMAU)
+  !
+  ! e-mail: c.j.berends@uu.nl / j.a.bernalesconcha@uu.nl
+  !
+  ! Model optimisation and distributed-memory version thanks
+  ! to Victor Azizi at the Netherlands eScience Center.
+  !
+  ! After some initialisation work (e.g. starting the program on
+  ! multiple cores using Open MPI, reading the config file, creating
+  ! an output folder, etc.), this program runs up to five copies of
+  ! the ice-sheet model (North America, Eurasia, Greenland, Antarctica,
+  ! and Patagonia). These are all run individually for a prescribed
+  ! number of years (the "coupling interval") through the subroutines
+  ! in the UFEMISM_main_model module, after which control is passed
+  ! back to this program. At this point, the sea-level model SELEN is
+  ! optionally called, some global output data is calculated and
+  ! written to output files, and the coupling loop is run again.
+  !
+  ! The five ice-sheet models are five instances of the "model_region"
+  ! data type (declared in the data_types module), which is accepted
+  ! as an argument by the "run_model" subroutine.
+  !
+  ! Some general notes:
+  ! - Model data are arranged into several large structures, all of
+  !   which are declared in the data_types module, and USEd by the
+  !   different model subroutines. This prevents dependency problems
+  !   during compilation, and as a result the modules look very clean
+  !   and easy to read.
+  ! - The general rule is that any kind of data that is a property
+  !   only of, e.g., the adaptive mesh (vertex coordinates, cells,
+  !   etc.) and not of the ice-sheet model in particular, will be
+  !   stored in the "mesh" data type. Likewise, any subroutines that
+  !   perform operations on the mesh which are not exclusive to the
+  !   ice-sheet model (such as calculation of derivatives or remapping)
+  !   are contained in the different "mesh_XXXX" modules.
+  ! - Because of the adaptive mesh, memory for the different model data
+  !   fields needs to be reallocated when the mesh is updated. Since
+  !   this concerns data fields that are a property of the ice-sheet
+  !   model components, rather than the mesh itself, this is done in
+  !   the "remap_COMPONENT" routines contained in the different model
+  !   component modules.
 
 #include <petsc/finclude/petscksp.h>
-  USE mpi
-  USE petscksp
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-  USE petsc_module,                ONLY: perr
-  USE configuration_module,        ONLY: dp, routine_path, write_total_model_time_to_screen, initialise_model_configuration, &
-                                         C, crash, warning, reset_resource_tracker
-  USE parallel_module,             ONLY: initialise_parallelisation, par, sync, ierr
-  USE data_types_module,           ONLY: type_netcdf_resource_tracker, type_model_region
-  USE forcing_module,              ONLY: initialise_global_forcing
 
-  USE zeta_module,                 ONLY: initialise_zeta_discretisation
-  USE UFEMISM_main_model,          ONLY: initialise_model, run_model
-  USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
+! ===== USE modules =====
+! =======================
 
-  IMPLICIT NONE
+  use mpi
+  use petscksp
+  use, INTRINSIC :: ISO_C_BINDING, only: C_PTR, C_F_POINTER
+  use petsc_module,                only: perr
+  use configuration_module,        only: dp, routine_path, write_total_model_time_to_screen, &
+                                          initialise_model_configuration, C, crash, warning, &
+                                          reset_resource_tracker
+  use parallel_module,             only: initialise_parallelisation, par, sync, ierr
+  use data_types_module,           only: type_netcdf_resource_tracker, type_model_region
+  use forcing_module,              only: initialise_global_forcing
 
-  CHARACTER(LEN=256), PARAMETER          :: version_number = '0.1'
+  use zeta_module,                 only: initialise_zeta_discretisation
+  use UFEMISM_main_model,          only: initialise_model, run_model
+  use netcdf_module,               only: create_resource_tracking_file, write_to_resource_tracking_file
+
+! ===== Main variables =====
+! ==========================
+
+  implicit none
+
+  character(len=256), parameter        :: version_number = '0.1'
 
   ! The four model regions
-  TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
+  type(type_model_region)              :: NAM, EAS, GRL, ANT
 
-  ! Coupling timer
-  REAL(dp)                               :: t_coupling, t_end_models
+  ! Coupling
+  real(dp)                             :: t_coupling, t_end_models
 
   ! Computation time tracking
-  TYPE(type_netcdf_resource_tracker)     :: resources
-  REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
+  type(type_netcdf_resource_tracker)   :: resources
+  real(dp)                             :: tstart, tstop, t1, tcomp_loop
 
-  ! ======================================================================================
+! ===== START =====
+! =================
 
   routine_path = 'UFEMISM_program'
 
   ! Initialise MPI and PETSc
-  CALL initialise_parallelisation
-  CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
+  call initialise_parallelisation
+  call PetscInitialize( PETSC_NULL_CHARACTER, perr)
 
-  IF (par%master) WRITE(0,*) ''
-  IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running MINIMISM v', TRIM(version_number), ' on ', par%n, ' cores ====='
-  IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,*) ''
+  if (par%master) then
+    write(*,"(A)") ''
+    write(*,"(A)") ' =============================================='
+    write(*,"(3A,I3,A)") ' ===== Running MINIMISM v', TRIM(version_number), &
+                         ' on ', par%n, ' cores ====='
+    write(*,"(A)") ' =============================================='
+    write(*,"(A)") ''
+  end if
 
   tstart = MPI_WTIME()
   t1     = MPI_WTIME()
 
-  ! Set up the model configuration from the provided config file(s) and create an output directory
-  ! ==============================================================================================
+  ! == Model set-up
+  ! ===============
 
-  CALL initialise_model_configuration( version_number)
+  call initialise_model_configuration( version_number)
 
-  ! ===== Initialise parameters for the vertical scaled coordinate transformation =====
-  ! (the same for all model regions, so stored in the "C" structure)
-  ! ===================================================================================
+  ! == Vertical scaled coordinate transformation
+  ! ============================================
 
-  CALL initialise_zeta_discretisation
+  call initialise_zeta_discretisation
 
-  ! ===== Initialise global forcing data (d18O, CO2, insolation, geothermal heat flux) =====
-  ! ========================================================================================
+  ! == Initialise global forcing data
+  ! =================================
 
-  CALL initialise_global_forcing
+  call initialise_global_forcing
 
-  ! ===== Create the resource tracking output file =====
-  ! ====================================================
+  ! == Create the resource tracking output file
+  ! ===========================================
 
-  CALL create_resource_tracking_file( resources)
+  call create_resource_tracking_file( resources)
 
-  ! ===== Initialise the model regions ======
-  ! =========================================
+  ! == Initialise the model regions
+  ! ===============================
 
-  IF (C%do_NAM) CALL initialise_model( NAM, 'NAM')
-  IF (C%do_EAS) CALL initialise_model( EAS, 'EAS')
-  IF (C%do_GRL) CALL initialise_model( GRL, 'GRL')
-  IF (C%do_ANT) CALL initialise_model( ANT, 'ANT')
+  if (C%do_NAM) call initialise_model( NAM, 'NAM')
+  if (C%do_EAS) call initialise_model( EAS, 'EAS')
+  if (C%do_GRL) call initialise_model( GRL, 'GRL')
+  if (C%do_ANT) call initialise_model( ANT, 'ANT')
 
-! =============================
 ! ===== The big time loop =====
 ! =============================
 
   t_coupling = C%start_time_of_run
 
-  DO WHILE (t_coupling < C%end_time_of_run)
+  do while (t_coupling < C%end_time_of_run)
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
+    if (par%master) then
+      write(*,"(A)") ''
+      write(*,"(A,F9.3,A)") ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
+    end if
+
+    ! == Regional model runs
+    ! ======================
 
     ! Run all four model regions for 100 years
     t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
 
-    IF (C%do_NAM) CALL run_model( NAM, t_end_models)
-    IF (C%do_EAS) CALL run_model( EAS, t_end_models)
-    IF (C%do_GRL) CALL run_model( GRL, t_end_models)
-    IF (C%do_ANT) CALL run_model( ANT, t_end_models)
+    if (C%do_NAM) call run_model( NAM, t_end_models)
+    if (C%do_EAS) call run_model( EAS, t_end_models)
+    if (C%do_GRL) call run_model( GRL, t_end_models)
+    if (C%do_ANT) call run_model( ANT, t_end_models)
 
     ! Advance coupling time
     t_coupling = t_end_models
 
+    ! == Resource tracking output
+    ! ===========================
+
     ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
-    CALL write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
+    call write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
     t1 = MPI_WTIME()
-    CALL reset_resource_tracker
+    call reset_resource_tracker
 
-  END DO ! DO WHILE (t_coupling < C%end_time_of_run)
+  end do
 
-! ====================================
-! ===== End of the big time loop =====
-! ====================================
+! ===== END =====
+! ===============
 
-  ! Write total elapsed time to screen
+  ! == Total elapsed time
+  ! =====================
+
   tstop = MPI_WTIME()
-  IF (par%master) CALL write_total_model_time_to_screen( tstart, tstop)
-  CALL sync
+  if (par%master) then
+    call write_total_model_time_to_screen( tstart, tstop)
+  end if
+  call sync
 
-  ! Finalise MPI and PETSc
-  CALL PetscFinalize( perr)
-  CALL MPI_FINALIZE( ierr)
+  !== Finalise MPI and PETSc
+  !=========================
 
-END PROGRAM UFEMISM_program
+  call PetscFinalize( perr)
+  call MPI_FINALIZE( ierr)
+
+end program UFEMISM_program

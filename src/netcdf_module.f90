@@ -27,9 +27,9 @@ MODULE netcdf_module
   use mpi_module,                    only: allgather_array
   ! USE petsc_module,                  ONLY: mat_petsc2CSR
   ! USE sparse_matrix_module,          ONLY: deallocate_matrix_CSR
-  
+
   ! IMPLICIT NONE
-  
+
   TYPE(type_debug_fields) :: debug_NAM, debug_EAS, debug_GRL, debug_ANT, debug
 
   interface gather_and_put_var
@@ -45,12 +45,12 @@ CONTAINS
 
   SUBROUTINE create_output_files( region)
     ! Create a new set of output NetCDF files (restart + help_fields + debug)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region),        INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_output_files'
 
@@ -61,52 +61,56 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
-    IF (par%master) WRITE(0,*) '  Creating output files...'
-    
+
+    IF (par%master) then
+      write(*,"(A)") '  Creating output files...'
+    end if
+
     ! Get output file names
     CALL get_output_filenames( region)
-    
+
     ! Create the files
     CALL create_restart_file_mesh(     region, region%restart_mesh)
     CALL create_restart_file_grid(     region, region%restart_grid)
     CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL create_help_fields_file_grid( region, region%help_fields_grid)
     CALL create_debug_file(            region)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_output_files
   SUBROUTINE write_to_output_files( region)
     ! Write the current model state to the existing output files
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_output_files'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,'(A,F8.2,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
-    
+    IF (par%master) then
+      write(*,'(A,F8.3,A)') '  t = ', region%time/1e3, ' kyr - writing output...'
+    end if
+
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_output_files
   SUBROUTINE get_output_filenames( region)
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_model_region), INTENT(INOUT) :: region
 
@@ -116,7 +120,7 @@ CONTAINS
     LOGICAL                     :: ex
     INTEGER                     :: n
     CHARACTER(LEN=256)          :: ns
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -127,7 +131,7 @@ CONTAINS
 
     ! restart file (mesh)
     ! ===================
-    
+
     short_filename = 'restart_NAM_00001.nc'
     short_filename(9:11) = region%name
     n = 1
@@ -135,7 +139,7 @@ CONTAINS
     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     DO WHILE (ex)
-    
+
      n=n+1
 
      WRITE(ns,*) n
@@ -156,7 +160,7 @@ CONTAINS
      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     END DO
-    
+
     DO n = 1, 256
       region%restart_mesh%filename(n:n) = ' '
     END DO
@@ -164,7 +168,7 @@ CONTAINS
 
     ! help_fields file (mesh)
     ! =======================
-    
+
     short_filename = 'help_fields_NAM_00001.nc'
     short_filename(13:15) = region%name
     n = 1
@@ -172,7 +176,7 @@ CONTAINS
     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     DO WHILE (ex)
-    
+
      n=n+1
 
      WRITE(ns,*) n
@@ -193,7 +197,7 @@ CONTAINS
      INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
 
     END DO
-    
+
     DO n = 1, 256
       region%help_fields_mesh%filename(n:n) = ' '
     END DO
@@ -201,7 +205,7 @@ CONTAINS
 
     ! restart file (grid)
     ! ===================
-    
+
     short_filename = 'restart_grid_NAM.nc'
     short_filename(14:16) = region%name
     DO n = 1, 256
@@ -211,7 +215,7 @@ CONTAINS
 
     ! help_fields file (grid)
     ! =======================
-    
+
     short_filename = 'help_fields_grid_NAM.nc'
     short_filename(18:20) = region%name
     DO n = 1, 256
@@ -345,7 +349,7 @@ CONTAINS
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
-      
+
     ! Send everything to master
     call mpi_gatherv( partial_array, i2-i1+1, MPI_REAL8 &
                     , output, counts, displs, MPI_REAL8, 0, MPI_COMM_WORLD, err)
@@ -386,7 +390,7 @@ CONTAINS
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
-      
+
     ! Send everything to master
     call mpi_gatherv( partial_array, i2-i1+1, MPI_INTEGER &
                     , output, counts, displs, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
@@ -428,7 +432,7 @@ CONTAINS
       do n=2,size(displs)
         displs(n) = displs(n-1) + counts(n-1)
       end do
-        
+
       ! Send everything to master
       call mpi_gatherv( partial_array(:,m), i2-i1+1, MPI_REAL8 &
                       , output(:,m), counts, displs, MPI_REAL8, 0, MPI_COMM_WORLD, err)
@@ -1989,7 +1993,7 @@ CONTAINS
 
     ! Map data from the model mesh to the square grid
     CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid(j1:j2,:))
- 
+
     ! TODO it only needs to be gathered to master node
     call allgather_array(d_grid)
 
@@ -3791,13 +3795,13 @@ CONTAINS
 ! !    CALL finalise_routine( routine_name)
 
 !   END SUBROUTINE read_restart_file_init
-  
+
   ! Reference ice-sheet geometry (ice thickness, bed topography, and surface elevation)
   SUBROUTINE inquire_reference_geometry_file( refgeo)
     ! Check if the right dimensions and variables are present in the file.
-   
+
     IMPLICIT NONE
-    
+
     ! Input variables:
     TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
 
@@ -3806,10 +3810,10 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-        
+
     ! Open the netcdf file
     CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
-    
+
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
     CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
@@ -3817,26 +3821,26 @@ CONTAINS
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
     CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
     CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
-    
+
     CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
     CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
     CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( refgeo%netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE inquire_reference_geometry_file
   SUBROUTINE read_reference_geometry_file(    refgeo)
     ! Read reference geometry data from a NetCDF file
-   
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_reference_geometry_file'
 
@@ -3845,54 +3849,54 @@ CONTAINS
 
     ! Open the netcdf file
     CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
-    
+
     ! Read the data
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
-        
+
     ! Close the netcdf file
     CALL close_netcdf_file( refgeo%netcdf%ncid)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_reference_geometry_file
-  
+
 !   ! Insolation solution (e.g. Laskar 2004)
 !   SUBROUTINE inquire_insolation_data_file( forcing)
 
 !     IMPLICIT NONE
-    
+
 !     ! Output variable
 !     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
- 
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
 !     INTEGER                                :: int_dummy
 
 !     ! Add routine to path
 !     CALL init_routine( routine_name)
-            
+
 !     ! Open the netcdf file
 !     CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    
+
 !     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
 !     CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
 !     CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
 !     CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
-    
+
 !     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
 !     CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
 !     CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
 !     CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
 !     CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
-        
+
 !     ! Close the netcdf file
 !     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-    
+
 !     ! Finalise routine path
 !     CALL finalise_routine( routine_name)
 
@@ -3900,24 +3904,24 @@ CONTAINS
 !   SUBROUTINE read_insolation_data_file( forcing, ti0, ti1, ins_Q_TOA0, ins_Q_TOA1)
 
 !     IMPLICIT NONE
-    
+
 !     ! In/output variables:
 !     TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
 !     INTEGER,                        INTENT(IN)    :: ti0, ti1
 !     REAL(dp), DIMENSION(:,:),       INTENT(OUT)   :: ins_Q_TOA0, ins_Q_TOA1
-    
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file'
 !     INTEGER                                       :: mi, li
 !     REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
-    
+
 !     ! Add routine to path
 !     CALL init_routine( routine_name)
 
 !     ! Temporary memory to store the data read from the netCDF file
 !     ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
 !     ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
-        
+
 !     ! Read data
 !     CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
@@ -3931,22 +3935,22 @@ CONTAINS
 !       ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
 !     END DO
 !     END DO
-        
+
 !     ! Clean up temporary memory
 !     DEALLOCATE(Q_temp0)
 !     DEALLOCATE(Q_temp1)
 
 !     ! Finalise routine path
 !     CALL finalise_routine( routine_name)
-   
+
 !   END SUBROUTINE read_insolation_data_file
 !   SUBROUTINE read_insolation_data_file_time_lat( forcing)
 
 !     IMPLICIT NONE
-    
+
 !     ! Output variable
 !     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-    
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
 
@@ -3955,19 +3959,19 @@ CONTAINS
 
 !     ! Open the netcdf file
 !     CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    
+
 !     ! Read the data
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
-        
+
 !     ! Close the netcdf file
 !     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-    
+
 !     ! Finalise routine path
 !     CALL finalise_routine( routine_name)
 
 !   END SUBROUTINE read_insolation_data_file_time_lat
-  
+
 !   ! Geothermal heat flux
 !   SUBROUTINE inquire_geothermal_heat_flux_file( forcing)
 
@@ -4002,7 +4006,7 @@ CONTAINS
 
 !   END SUBROUTINE inquire_geothermal_heat_flux_file
 !   SUBROUTINE read_geothermal_heat_flux_file( forcing)
-  
+
 !     IMPLICIT NONE
 
 !     ! In/output variables:
@@ -4016,12 +4020,12 @@ CONTAINS
 
 !     ! Open the netcdf file
 !     CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
-    
+
 !     ! Read the data
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lon, forcing%grid_ghf%lon, start=(/1   /) ))
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lat, forcing%grid_ghf%lat, start=(/1   /) ))
 !     CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_ghf, forcing%ghf_ghf,      start=(/1, 1/) ))
-    
+
 !     ! Close the NetCDF file
 !     CALL close_netcdf_file(forcing%netcdf_ghf%ncid)
 
@@ -4032,33 +4036,33 @@ CONTAINS
 !     CALL finalise_routine( routine_name)
 
 !   END SUBROUTINE read_geothermal_heat_flux_file
-  
+
 !   ! Write a sparse matrix to a NetCDF file
 !   SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
 !     ! Write a PETSc matrix to a NetCDF file
-      
+
 !     IMPLICIT NONE
-    
+
 !     ! In- and output variables:
 !     TYPE(tMat),                          INTENT(IN)    :: A
 !     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
 !     TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
-    
+
 !     ! Add routine to path
 !     CALL init_routine( routine_name)
 
 !     ! Get matrix in CSR format using native Fortran arrays
 !     CALL mat_petsc2CSR( A, A_CSR)
-    
+
 !     ! Write the CSR matrix to a file
 !     CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
-    
+
 !     ! Clean up after yourself
 !     CALL deallocate_matrix_CSR( A_CSR)
-    
+
 !     ! Finalise routine path
 !     CALL finalise_routine( routine_name)
 
@@ -4067,18 +4071,18 @@ CONTAINS
 !     ! Write a CSR matrix to a NetCDF file
 
 !     IMPLICIT NONE
-    
+
 !     ! In- and output variables:
 !     TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
 !     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    
+
 !     ! Local variables:
 !     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
 !     LOGICAL                                            :: file_exists
 !     INTEGER                                            :: ncid
 !     INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
 !     INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
-    
+
 !     ! Add routine to path
 !     CALL init_routine( routine_name)
 
@@ -4125,7 +4129,7 @@ CONTAINS
 
 !     END IF ! IF (par%master) THEN
 !     CALL sync
-    
+
 !     ! Finalise routine path
 !     CALL finalise_routine( routine_name)
 
@@ -4136,41 +4140,41 @@ CONTAINS
 
   SUBROUTINE open_netcdf_file( filename, ncid)
     IMPLICIT NONE
-    
+
     CHARACTER(LEN=*), INTENT(IN)  :: filename
     INTEGER,          INTENT(OUT) :: ncid
-    
+
     ! Open netCDF file:
     CALL handle_error(nf90_open(filename, IOR(nf90_write,nf90_share), ncid))
 
   END SUBROUTINE open_netcdf_file
   SUBROUTINE close_netcdf_file( ncid)
     IMPLICIT NONE
-  
+
     INTEGER, INTENT(INOUT) :: ncid
 
     ! Close netCDF file:
     CALL handle_error(nf90_close(ncid))
-   
+
   END SUBROUTINE close_netcdf_file
   SUBROUTINE create_dim( ncid, dim_name, length, id_dim)
     ! Subroutine for creating netCDF dimensions more convenient:
     IMPLICIT NONE
-  
+
     ! Input variables:
     INTEGER,                    INTENT(IN) :: ncid
     CHARACTER(LEN=*),           INTENT(IN) :: dim_name
     INTEGER,                    INTENT(IN) :: length
-    
+
     ! Output variables:
     INTEGER, INTENT(OUT)               :: id_dim
 
     CALL handle_error(nf90_def_dim(ncid,dim_name,length,id_dim))
-    
+
   END SUBROUTINE create_dim
   SUBROUTINE create_int_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
     ! Subroutine for creating netCDF variables of type nf90_int more convenient:
-  
+
     ! Input variables:
     INTEGER,                      INTENT(IN)  :: ncid
     CHARACTER(LEN=*),             INTENT(IN)  :: var_name
@@ -4186,11 +4190,11 @@ CONTAINS
     IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
     IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
     IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
-    
+
   END SUBROUTINE create_int_var
   SUBROUTINE create_double_var( ncid, var_name, id_dims, id_var, long_name, units, missing_value)
     ! Subroutine for creating netCDF variables of type nf90_DOUBLE more convenient:
-  
+
     ! Input variables:
     INTEGER,                      INTENT(IN)  :: ncid
     CHARACTER(LEN=*),             INTENT(IN)  :: var_name
@@ -4206,12 +4210,12 @@ CONTAINS
     IF(PRESENT(long_name))     CALL handle_error(nf90_put_att(ncid,id_var,'long_name',long_name))
     IF(PRESENT(units))         CALL handle_error(nf90_put_att(ncid,id_var,'units',units))
     IF(PRESENT(missing_value)) CALL handle_error(nf90_put_att(ncid,id_var,'missing_value',missing_value))
-    
+
   END SUBROUTINE create_double_var
   SUBROUTINE inquire_dim( ncid, dim_name, dim_length, id_dim)
     ! Inquire the id of a dimension and return its length.
     IMPLICIT NONE
-  
+
     ! Input variables:
     INTEGER,                    INTENT(IN)  :: ncid
     CHARACTER(LEN=*),           INTENT(IN)  :: dim_name
@@ -4222,13 +4226,13 @@ CONTAINS
 
     CALL handle_error(nf90_inq_dimid(ncid,dim_name,id_dim))
     CALL handle_error(nf90_inquire_dimension(ncid, id_dim, len=dim_length))
-    
+
   END SUBROUTINE inquire_dim
   SUBROUTINE inquire_int_var( ncid, var_name, id_dims, id_var)
     ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
     ! that the variable is of type nf90_int.
     IMPLICIT NONE
-  
+
     ! Input variables:
     INTEGER,                    INTENT(IN)    :: ncid
     CHARACTER(LEN=*),           INTENT(IN)    :: var_name
@@ -4253,13 +4257,13 @@ CONTAINS
     IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
       CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
     END IF
-    
+
   END SUBROUTINE inquire_int_var
   SUBROUTINE inquire_single_var( ncid, var_name, id_dims, id_var)
     ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
     ! that the variable is of type nf90_DOUBLE.
     IMPLICIT NONE
-  
+
     ! Input variables:
     INTEGER,                    INTENT(IN)    :: ncid
     CHARACTER(LEN=*),           INTENT(IN)    :: var_name
@@ -4284,13 +4288,13 @@ CONTAINS
     IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
       CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
     END IF
-    
+
   END SUBROUTINE inquire_single_var
   SUBROUTINE inquire_double_var( ncid, var_name, id_dims, id_var)
     ! Inquire the id of a variable and check that the dimensions of the variable match the dimensions given by the user and
     ! that the variable is of type nf90_DOUBLE.
     IMPLICIT NONE
-  
+
     ! Input variables:
     INTEGER,                    INTENT(IN)    :: ncid
     CHARACTER(LEN=*),           INTENT(IN)    :: var_name
@@ -4315,7 +4319,7 @@ CONTAINS
     IF (ANY( actual_id_dims( 1:ndims) /= id_dims)) THEN
       CALL crash('Actual dimensions of variable "' // TRIM( var_name) // '" does not match required dimensions!')
     END IF
-    
+
   END SUBROUTINE inquire_double_var
   SUBROUTINE handle_error( stat, message)
     USE netcdf, ONLY: nf90_noerr, nf90_strerror
@@ -4332,7 +4336,7 @@ CONTAINS
         CALL crash( 'netcdf error')
       END IF
     END IF
-    
+
   END SUBROUTINE handle_error
 
 

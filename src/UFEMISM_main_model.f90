@@ -1,38 +1,38 @@
-MODULE UFEMISM_main_model
+module UFEMISM_main_model
   ! The main regional ice-sheet model
 
 #include <petsc/finclude/petscksp.h>
 
-! ===== USEs =====
+! ===== uses =====
 ! ================
 
-  USE mpi
-  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: c_backspace
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
-  USE data_types_module,               ONLY: type_model_region, type_grid, type_remapping_mesh_mesh
-  USE reference_fields_module,         ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
-  USE mesh_memory_module,              ONLY: deallocate_mesh_all
-  USE mesh_creation_module,            ONLY: create_mesh_from_cart_data
-  USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                             calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
-                                             calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
-  USE mesh_update_module,              ONLY: determine_mesh_fitness, create_new_mesh
-  use mesh_single_module,              only: create_new_mesh_single, create_single_mesh_from_cart_data
-  USE netcdf_module,                   ONLY: initialise_debug_fields, create_output_files, associate_debug_fields, &
-                                             write_to_output_files, create_debug_file, reallocate_debug_fields
-  USE ice_dynamics_module,             ONLY: initialise_ice_model, remap_ice_model, run_ice_model
-  use reallocate_mod,                  only: reallocate
-  use utilities_module,                only: time_display, inverse_oblique_sg_projection
+  use mpi
+  use, intrinsic :: iso_c_binding,  only: c_backspace
+  use configuration_module,         only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  use parameters_module
+  use petsc_module,                 only: perr
+  use parallel_module,              only: par, sync, ierr, cerr, partition_list
+  use data_types_module,            only: type_model_region, type_grid, type_remapping_mesh_mesh
+  use reference_fields_module,      only: initialise_reference_geometries, map_reference_geometries_to_mesh
+  use mesh_memory_module,           only: deallocate_mesh_all
+  use mesh_creation_module,         only: create_mesh_from_cart_data
+  use mesh_mapping_module,          only: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+                                           calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                           calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
+  use mesh_update_module,           only: determine_mesh_fitness, create_new_mesh
+  use mesh_single_module,           only: create_new_mesh_single, create_single_mesh_from_cart_data
+  use netcdf_module,                only: initialise_debug_fields, create_output_files, associate_debug_fields, &
+                                           write_to_output_files, create_debug_file, reallocate_debug_fields
+  use ice_dynamics_module,          only: initialise_ice_model, remap_ice_model, run_ice_model
+  use reallocate_mod,               only: reallocate
+  use utilities_module,             only: time_display, inverse_oblique_sg_projection
 
 ! ===== Preamble =====
 ! ====================
 
-  IMPLICIT NONE
+  implicit none
 
-CONTAINS
+contains
 
 ! ===== Main routines =====
 ! =========================
@@ -58,8 +58,8 @@ CONTAINS
 
     if (par%master) then
       write(*,"(A)") ''
-      write(*,"(A,A,A,A,A,F9.3,A,F9.3,A)") &
-            ' Running model region ', region%name, ' (', TRIM(region%long_name), &
+      write(*,"(5A,F9.3,A,F9.3,A)") &
+            ' Running model region ', region%name, ' (', trim(region%long_name), &
             ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
     end if
 
@@ -67,12 +67,12 @@ CONTAINS
     call associate_debug_fields(  region)
 
     ! Computation time tracking
-    region%tcomp_total          = 0._dp
-    region%tcomp_ice            = 0._dp
-    region%tcomp_thermo         = 0._dp
-    region%tcomp_climate        = 0._dp
-    region%tcomp_GIA            = 0._dp
-    region%tcomp_mesh           = 0._dp
+    region%tcomp_total   = 0._dp
+    region%tcomp_ice     = 0._dp
+    region%tcomp_thermo  = 0._dp
+    region%tcomp_climate = 0._dp
+    region%tcomp_GIA     = 0._dp
+    region%tcomp_mesh    = 0._dp
 
     t1 = MPI_WTIME()
     t2 = 0._dp
@@ -123,7 +123,7 @@ CONTAINS
       ! == Time display
       ! ===============
 
-      if (par%master .AND. C%do_time_display) then
+      if (par%master .and. C%do_time_display) then
         call time_display(region, t_end, dt_ave, it)
       end if
 
@@ -161,7 +161,7 @@ CONTAINS
       if (.not. region%output_file_exists) then
         call create_output_files( region)
         call sync
-        region%output_file_exists = .TRUE.
+        region%output_file_exists = .true.
       end if
       call write_to_output_files( region)
     end if
@@ -179,11 +179,11 @@ CONTAINS
     implicit none
 
     ! In- and output variables
-    type(type_model_region),             intent(inout) :: region
+    type(type_model_region),        intent(inout) :: region
 
     ! Local variables:
-    character(len=256), parameter                      :: routine_name = 'run_model_update_mesh'
-    type(type_remapping_mesh_mesh)                     :: map
+    character(len=256), parameter                 :: routine_name = 'run_model_update_mesh'
+    type(type_remapping_mesh_mesh)                :: map
 
     ! Add routine to path
     call init_routine( routine_name)
@@ -260,7 +260,7 @@ CONTAINS
     region%mesh = region%mesh_new
 
     ! When the next output is written, new output files must be created.
-    region%output_file_exists = .FALSE.
+    region%output_file_exists = .false.
 
     ! Reallocate the debug fields for the new mesh, create a new debug file
     call reallocate_debug_fields( region)
@@ -297,18 +297,18 @@ CONTAINS
 
   end subroutine run_model_update_mesh
 
-  SUBROUTINE initialise_model( region, name)
+  subroutine initialise_model( region, name)
     ! Initialise the entire model region - read initial and PD data, create the mesh,
     ! initialise the ice dynamics, climate, ocean, and SMB sub models
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_model_region),          INTENT(INOUT)     :: region
-    CHARACTER(LEN=3),                 INTENT(IN)        :: name
+    type(type_model_region), intent(inout) :: region
+    character(len=3),        intent(in)    :: name
 
     ! Local variables:
-    CHARACTER(LEN=256)                                  :: routine_name
+    character(len=256)                     :: routine_name
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
@@ -319,20 +319,20 @@ CONTAINS
 
     ! Region name
     region%name      = name
-    if (region%name == 'NAM') THEN
+    if (region%name == 'NAM') then
       region%long_name = 'North America'
-    else if (region%name == 'EAS') THEN
+    else if (region%name == 'EAS') then
       region%long_name = 'Eurasia'
-    else if (region%name == 'GRL') THEN
+    else if (region%name == 'GRL') then
       region%long_name = 'Greenland'
-    else if (region%name == 'ANT') THEN
+    else if (region%name == 'ANT') then
       region%long_name = 'Antarctica'
     end if
 
     if (par%master) then
       write(*,"(A)") ''
       write(*,"(5A)") ' Initialising model region ', region%name, &
-                      ' (', TRIM(region%long_name), ')...'
+                      ' (', trim(region%long_name), ')...'
     end if
 
     ! ===== Allocate memory for timers and scalars =====
@@ -398,7 +398,7 @@ CONTAINS
 
     call create_output_files(    region)
     call associate_debug_fields( region)
-    region%output_file_exists = .TRUE.
+    region%output_file_exists = .true.
     call sync
 
     ! ===== The ice dynamics model =====
@@ -411,25 +411,25 @@ CONTAINS
     end if
 
     ! Finalise routine path
-    call finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
+    call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
 
-  END SUBROUTINE initialise_model
+  end subroutine initialise_model
 
 ! ===== Auxiliary routines =====
 ! ==============================
 
-  SUBROUTINE allocate_region_timers_and_scalars( region)
+  subroutine allocate_region_timers_and_scalars( region)
     ! Allocate shared memory for this region's timers (used for the asynchronous coupling between the
     ! ice dynamics and the secondary model components), and for the scalars (integrated ice volume and
     ! area, SMB components, computation times, etc.)
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_model_region),         INTENT(INOUT)     :: region
+    type(type_model_region),      intent(inout) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_region_timers_and_scalars'
+    character(len=256), parameter               :: routine_name = 'allocate_region_timers_and_scalars'
 
     ! Add routine to path
     call init_routine( routine_name)
@@ -442,68 +442,68 @@ CONTAINS
 
     region%t_last_mesh    = C%start_time_of_run
     region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
-    region%do_mesh        = .FALSE.
+    region%do_mesh        = .false.
 
     region%t_last_SIA     = C%start_time_of_run
     region%t_next_SIA     = C%start_time_of_run
-    region%do_SIA         = .TRUE.
+    region%do_SIA         = .true.
 
     region%t_last_SSA     = C%start_time_of_run
     region%t_next_SSA     = C%start_time_of_run
-    region%do_SSA         = .TRUE.
+    region%do_SSA         = .true.
 
     region%t_last_DIVA    = C%start_time_of_run
     region%t_next_DIVA    = C%start_time_of_run
-    region%do_DIVA        = .TRUE.
+    region%do_DIVA        = .true.
 
     region%t_last_thermo  = C%start_time_of_run
     region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
-    region%do_thermo      = .FALSE.
+    region%do_thermo      = .false.
 
     region%t_last_climate = C%start_time_of_run
     region%t_next_climate = C%start_time_of_run
-    region%do_climate     = .TRUE.
+    region%do_climate     = .true.
 
     region%t_last_ocean   = C%start_time_of_run
     region%t_next_ocean   = C%start_time_of_run
-    region%do_ocean       = .TRUE.
+    region%do_ocean       = .true.
 
     region%t_last_SMB     = C%start_time_of_run
     region%t_next_SMB     = C%start_time_of_run
-    region%do_SMB         = .TRUE.
+    region%do_SMB         = .true.
 
     region%t_last_BMB     = C%start_time_of_run
     region%t_next_BMB     = C%start_time_of_run
-    region%do_BMB         = .TRUE.
+    region%do_BMB         = .true.
 
     region%t_last_ELRA    = C%start_time_of_run
     region%t_next_ELRA    = C%start_time_of_run
-    region%do_ELRA        = .TRUE.
+    region%do_ELRA        = .true.
 
     region%t_last_output  = C%start_time_of_run
     region%t_next_output  = C%start_time_of_run
-    region%do_output      = .TRUE.
+    region%do_output      = .true.
 
     ! Finalise routine path
     call finalise_routine( routine_name, n_extra_windows_expected = 65)
 
-  END SUBROUTINE allocate_region_timers_and_scalars
+  end subroutine allocate_region_timers_and_scalars
 
-  SUBROUTINE initialise_model_square_grid( region, grid, dx)
+  subroutine initialise_model_square_grid( region, grid, dx)
     ! Initialise a regular square grid enveloping this model region
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: region
-    TYPE(type_grid),            INTENT(INOUT)     :: grid
-    REAL(dp),                   INTENT(IN)        :: dx
+    type(type_model_region),      intent(inout) :: region
+    type(type_grid),              intent(inout) :: grid
+    real(dp),                     intent(in)    :: dx
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_model_square_grid'
-    REAL(dp)                                      :: xmid, ymid
-    INTEGER                                       :: nsx, nsy, i, j, n
-    REAL(dp), PARAMETER                           :: tol = 1E-9_dp
+    character(len=256), parameter               :: routine_name = 'initialise_model_square_grid'
+    real(dp)                                    :: xmid, ymid
+    integer                                     :: nsx, nsy, i, j, n
+    real(dp), parameter                         :: tol = 1E-9_dp
 
     ! Add routine to path
     call init_routine( routine_name)
@@ -518,8 +518,8 @@ CONTAINS
     xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
     ymid = (region%mesh%ymin + region%mesh%ymax) / 2._dp
 
-    nsx = CEILING((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
-    nsy = CEILING((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
+    nsx = ceiling((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
+    nsy = ceiling((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
 
     grid%nx = 2*nsx + 1
     grid%ny = 2*nsy + 1
@@ -565,7 +565,9 @@ CONTAINS
 
     do i = 1, grid%nx
     do j = 1, grid%ny
-      call inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
+      call inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, &
+                                          region%mesh%phi_M, region%mesh%alpha_stereo, &
+                                          grid%lon( i,j), grid%lat( i,j))
     end do
     end do
 
@@ -576,6 +578,6 @@ CONTAINS
     ! Finalise routine path
     call finalise_routine( routine_name, n_extra_windows_expected = 15)
 
-  END SUBROUTINE initialise_model_square_grid
+  end subroutine initialise_model_square_grid
 
-END MODULE UFEMISM_main_model
+end module UFEMISM_main_model

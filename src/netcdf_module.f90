@@ -63,7 +63,7 @@ CONTAINS
     END IF
 
     IF (par%master) then
-      write(*,"(A)") '  Creating output files...'
+      write(*,"(A)") '  Creating new output files based on new mesh...'
     end if
 
     ! Get output file names

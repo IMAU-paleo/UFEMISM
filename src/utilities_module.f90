@@ -2673,7 +2673,7 @@ CONTAINS
     else
       r_adv = "yes"
       write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
-      write(r_step, "(F6.3)") dt_ave / real(it,dp)
+      write(r_step, "(F6.3)") dt_ave / real(it-1,dp)
       write(*,"(A)",advance=trim(r_adv)) repeat(c_backspace,999) // &
             "   t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
     end if

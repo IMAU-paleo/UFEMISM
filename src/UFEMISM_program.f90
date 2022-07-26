@@ -1,5 +1,5 @@
 program UFEMISM_program
-  ! The Utrecht FinitE voluMe Ice Sheet Model (UFEMISM),
+  ! The Utrecht Finite Element Multi-Ice-Sheet Model (UFEMISM),
   ! by Tijn Berends and Jorjo Bernales, 2019-2022.
   ! Institute for Marine and Atmospheric Research Utrecht (IMAU)
   !
@@ -50,35 +50,34 @@ program UFEMISM_program
 
   use mpi
   use petscksp
-  use, INTRINSIC :: ISO_C_BINDING, only: C_PTR, C_F_POINTER
-  use petsc_module,                only: perr
-  use configuration_module,        only: dp, routine_path, write_total_model_time_to_screen, &
-                                          initialise_model_configuration, C, crash, warning, &
-                                          reset_resource_tracker
-  use parallel_module,             only: initialise_parallelisation, par, sync, ierr
-  use data_types_module,           only: type_netcdf_resource_tracker, type_model_region
-  use forcing_module,              only: initialise_global_forcing
+  use petsc_module,          only: perr
+  use configuration_module,  only: dp, routine_path, write_total_model_time_to_screen, &
+                                   initialise_model_configuration, C, crash, warning, &
+                                   reset_resource_tracker
+  use parallel_module,       only: initialise_parallelisation, par, sync, ierr
+  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region
+  use forcing_module,        only: initialise_global_forcing
 
-  use zeta_module,                 only: initialise_zeta_discretisation
-  use UFEMISM_main_model,          only: initialise_model, run_model
-  use netcdf_module,               only: create_resource_tracking_file, write_to_resource_tracking_file
+  use zeta_module,           only: initialise_zeta_discretisation
+  use UFEMISM_main_model,    only: initialise_model, run_model
+  use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
 
 ! ===== Main variables =====
 ! ==========================
 
   implicit none
 
-  character(len=256), parameter        :: version_number = '0.1'
+  character(len=256), parameter      :: version_number = '0.1'
 
   ! The four model regions
-  type(type_model_region)              :: NAM, EAS, GRL, ANT
+  type(type_model_region)            :: NAM, EAS, GRL, ANT
 
   ! Coupling
-  real(dp)                             :: t_coupling, t_end_models
+  real(dp)                           :: t_coupling, t_end_models
 
   ! Computation time tracking
-  type(type_netcdf_resource_tracker)   :: resources
-  real(dp)                             :: tstart, tstop, t1, tcomp_loop
+  type(type_netcdf_resource_tracker) :: resources
+  real(dp)                           :: tstart, tstop, t1, tcomp_loop
 
 ! ===== START =====
 ! =================
@@ -145,7 +144,7 @@ program UFEMISM_program
     ! ======================
 
     ! Run all four model regions for 100 years
-    t_end_models = MIN(C%end_time_of_run, t_coupling + C%dt_coupling)
+    t_end_models = min(C%end_time_of_run, t_coupling + C%dt_coupling)
 
     if (C%do_NAM) call run_model( NAM, t_end_models)
     if (C%do_EAS) call run_model( EAS, t_end_models)

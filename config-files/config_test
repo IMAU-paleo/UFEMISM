@@ -3,8 +3,8 @@
   ! Time steps and range
   ! ====================
 
-  start_time_of_run_config                    = 1900.0                           ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 2300.0                           ! End   time (in years) of the simulations
+  start_time_of_run_config                    = -500.0                           ! Start time (in years) of the simulations
+  end_time_of_run_config                      = 200.0                            ! End   time (in years) of the simulations
   dt_mesh_min_config                          = 50.0                             ! Minimum amount of time (in years) between mesh updates
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
@@ -400,7 +400,7 @@
   do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
   choice_sealevel_model_config                = 'prescribed'                     ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
   fixed_sealevel_config                       = 0.0
-  filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl.dat'
+  filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl_PD00.dat'
   sealevel_record_length_config               = 30001
 
   choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"

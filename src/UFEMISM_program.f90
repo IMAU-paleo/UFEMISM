@@ -56,16 +56,17 @@ PROGRAM UFEMISM_program
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation
   USE data_types_module,           ONLY: type_model_region, type_netcdf_resource_tracker, &
                                          type_climate_matrix_global, type_ocean_matrix_global, &
-                                         type_SELEN_global
+                                         type_SELEN_global, type_global_scalar_data
   USE forcing_module,              ONLY: forcing, initialise_global_forcing, update_global_forcing, &
                                          update_global_mean_temperature_change_history, calculate_modelled_d18O
   USE climate_module,              ONLY: initialise_climate_model_global
   USE ocean_module,                ONLY: initialise_ocean_model_global, initialise_ocean_vertical_grid
   USE zeta_module,                 ONLY: initialise_zeta_discretisation
-  USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
   USE general_sea_level_module,    ONLY: determine_GMSL_contributions, update_regional_sea_level
+  USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
+  USE scalar_data_output_module,   ONLY: initialise_global_scalar_data, write_global_scalar_data
 
 # if (defined(DO_SELEN))
   USE SELEN_main_module,           ONLY: initialise_SELEN, run_SELEN
@@ -97,6 +98,9 @@ PROGRAM UFEMISM_program
   TYPE(type_SELEN_global)                :: SELEN
   REAL(dp)                               :: ocean_area
   REAL(dp)                               :: ocean_depth
+
+  ! Global scalar data
+  TYPE(type_global_scalar_data)          :: global_data
 
 ! ===== START =====
 ! =================
@@ -131,6 +135,17 @@ PROGRAM UFEMISM_program
 
   CALL initialise_global_forcing
 
+  ! == Create the global scalar output file (text version)
+  ! =======================================
+
+  ! Create file and header
+  CALL create_global_text_output
+
+  ! == Create the global scalar output file (NetCDF version)
+  ! =======================================
+
+  CALL initialise_global_scalar_data( global_data)
+
   ! == Create the resource tracking output file
   ! ===========================================
 
@@ -158,7 +173,7 @@ PROGRAM UFEMISM_program
   ! == Initial GMSL contribution
   ! ============================
 
-  CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT)
+  CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
 
   ! == Initial d18O contribution
   ! ============================
@@ -187,14 +202,17 @@ PROGRAM UFEMISM_program
     SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
   END IF
 
-  ! == Initial global output
+  ! == Initial global output (text version)
   ! ========================
-
-  ! Create file and header
-  CALL create_global_text_output
 
   ! Write global data at t=0 to output file
   CALL write_global_text_output( C%start_time_of_run, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
+
+  ! == Initial global output (NetCDF version)
+  ! ========================
+
+  ! Write global data at t=0 to output file
+  CALL write_global_scalar_data( global_data, NAM, EAS, GRL, ANT, forcing, C%start_time_of_run)
 
 ! ===== The big time loop =====
 ! =============================
@@ -247,7 +265,7 @@ PROGRAM UFEMISM_program
     ! ==========================
 
     ! Determine GMSL contributions from all simulated ice sheets
-    CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT)
+    CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
 
     ! == Global forcing update (post regional runs)
     ! =============================================
@@ -256,11 +274,17 @@ PROGRAM UFEMISM_program
     ! if applicable, call the inverse routine to update the climate forcing parameter
     CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
 
-    ! == Global output
+    ! == Global output (text version)
     ! ================
 
     ! Write global data to output file
     CALL write_global_text_output( t_coupling, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
+
+    ! == Global output (NetCDF version)
+    ! ================
+
+    ! Write global data to output file
+    CALL write_global_scalar_data( global_data, NAM, EAS, GRL, ANT, forcing, t_coupling)
 
     ! == Resource tracking output
     ! ===========================

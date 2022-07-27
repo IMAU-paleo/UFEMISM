@@ -23,7 +23,7 @@ MODULE UFEMISM_main_model
                                                  deallocate_shared
   USE netcdf_module,                       ONLY: debug, write_to_debug_file, create_output_files, write_to_output_files, &
                                                  initialise_debug_fields, associate_debug_fields, reallocate_debug_fields, &
-                                                 create_debug_file, write_PETSc_matrix_to_NetCDF
+                                                 create_debug_file, write_PETSc_matrix_to_NetCDF, create_regional_scalar_output_file
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
   USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
@@ -49,8 +49,9 @@ MODULE UFEMISM_main_model
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
-  USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
   USE utilities_module,                    ONLY: time_display
+  USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
+  USE scalar_data_output_module,           ONLY: write_regional_scalar_data
 
 # if (defined(DO_SELEN))
   USE SELEN_main_module,                   ONLY: apply_SELEN_bed_geoid_deformation_rates, remap_SELEN_model
@@ -78,7 +79,7 @@ CONTAINS
     CHARACTER(LEN=256)                                :: routine_name
     REAL(dp)                                          :: meshfitness
     INTEGER                                           :: it
-    REAL(dp)                                          :: t1, t2, dt_ave
+    REAL(dp)                                          :: tstart, tstop, t1, t2, dt_ave
     CHARACTER(LEN=9)                                  :: r_time, r_step, r_adv, r_ave
 
     ! Add routine to path
@@ -100,6 +101,10 @@ CONTAINS
     region%tcomp_GIA            = 0._dp
     region%tcomp_mesh           = 0._dp
 
+    ! Initialise coupling-interval timer
+    tstart = MPI_WTIME()
+
+    ! Initialise sub-model timers
     t1 = MPI_WTIME()
     t2 = 0._dp
 
@@ -295,6 +300,12 @@ CONTAINS
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
     ! used for writing to global text output and in the inverse routine
     CALL calculate_icesheet_volume_and_area( region)
+
+    tstop = MPI_WTIME()
+    region%tcomp_total = tstop - tstart
+
+    ! Write to regional scalar output
+    CALL write_regional_scalar_data( region, region%time)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -648,10 +659,14 @@ CONTAINS
     CALL calculate_PD_sealevel_contribution( region)
     CALL calculate_icesheet_volume_and_area( region)
 
-    ! ===== Regional ASCII output (Scalar data, POIs) =====
-    ! =====================================================
+    ! ===== Regional scalar output =====
+    ! ==================================
 
+    ! Create output file (text version)
     CALL create_regional_text_output( region)
+
+    ! Create output file (NetCDF version)
+    CALL create_regional_scalar_output_file( region)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================

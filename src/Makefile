@@ -92,6 +92,7 @@ UFEMISM_program_objects = \
         SELEN_main_module.o \
         tests_and_checks_module.o \
         text_output_module.o \
+        scalar_data_output_module.o \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 else
@@ -133,6 +134,7 @@ UFEMISM_program_objects = \
         bedrock_ELRA_module.o \
         tests_and_checks_module.o \
         text_output_module.o \
+        scalar_data_output_module.o \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 endif

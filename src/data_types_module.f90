@@ -871,10 +871,10 @@ MODULE data_types_module
     INTEGER :: wT2m_year0, wT2m_year1, wSMB_year0, wSMB_year1
 
   END TYPE type_direct_SMB_forcing_regional
-  
+
   TYPE type_ISMIP_style_forcing
     ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    
+
     ! NetCDF files containing the baseline SMB and surface temperature
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_SMB_baseline
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_ST_baseline
@@ -883,17 +883,17 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: SMB_baseline
     REAL(dp), DIMENSION(:    ), POINTER     :: ST_baseline
     INTEGER :: wSMB_baseline, wST_baseline
-    
+
     ! Timestamps of the two timeframes
     REAL(dp),                   POINTER     :: t0, t1
     INTEGER :: wt0, wt1
-    
+
     ! NetCDF files containing the aSMB, dSMBdz, aST, and dTSdz for the two timeframes enveloping the current model time
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aSMB0  , netcdf_aSMB1
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSMBdz0, netcdf_dSMBdz1
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aST0   , netcdf_aST1
     TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSTdz0 , netcdf_dSTdz1
-    
+
     ! The grid of the ISMIP forcing files
     TYPE(type_grid)                         :: grid
 
@@ -903,20 +903,20 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: aST0   , aST1
     REAL(dp), DIMENSION(:    ), POINTER     :: dSTdz0 , dSTdz1
     INTEGER :: waSMB0, waSMB1, wdSMBdz0, wdSMBdz1, waST0, waST1, wdSTdz0, wdSTdz1
-    
+
     ! The time-interpolated values of aSMB, dSMBdz, ST, and dSTdz
     REAL(dp), DIMENSION(:    ), POINTER     :: aSMB
     REAL(dp), DIMENSION(:    ), POINTER     :: dSMBdz
     REAL(dp), DIMENSION(:    ), POINTER     :: aST
     REAL(dp), DIMENSION(:    ), POINTER     :: dSTdz
     INTEGER :: waSMB, wdSMBdz, waST, wdSTdz
-    
+
     ! The applied values of SMB and ST (i.e. after applying the anomaly and elevation correction)
     REAL(dp), DIMENSION(:    ), POINTER     :: SMB
     REAL(dp), DIMENSION(:    ), POINTER     :: ST
     INTEGER :: wSMB, wST
-    
-  
+
+
   END TYPE type_ISMIP_style_forcing
 
   TYPE type_climate_matrix_regional
@@ -939,7 +939,7 @@ MODULE data_types_module
     ! Direct climate/SMB forcing
     TYPE(type_direct_climate_forcing_regional) :: direct
     TYPE(type_direct_SMB_forcing_regional)     :: SMB_direct
-    
+
     ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     TYPE(type_ISMIP_style_forcing)          :: ISMIP_forcing
 
@@ -1483,6 +1483,7 @@ MODULE data_types_module
     TYPE(type_netcdf_restart)               :: restart_grid
     TYPE(type_netcdf_help_fields)           :: help_fields_mesh
     TYPE(type_netcdf_help_fields)           :: help_fields_grid
+    TYPE(type_netcdf_scalars_regional)      :: scalars
 
     ! Different square grids
     TYPE(type_grid)                         :: grid_output                               ! For the "_grid" output files
@@ -1627,6 +1628,51 @@ MODULE data_types_module
     INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
 
   END TYPE type_memory_use_tracker
+
+  TYPE type_global_scalar_data
+    ! Structure containing some global scalar values: sea level, CO2, d18O components, computation times, etc.
+
+    ! Netcdf file
+    TYPE(type_netcdf_scalars_global)        :: netcdf
+
+    ! Sea level
+    REAL(dp), POINTER                       :: GMSL                                      ! Global mean sea level change
+    REAL(dp), POINTER                       :: GMSL_NAM                                  ! Global mean sea level change (contribution from ice in North America)
+    REAL(dp), POINTER                       :: GMSL_EAS                                  ! Global mean sea level change (contribution from ice in Eurasia)
+    REAL(dp), POINTER                       :: GMSL_GRL                                  ! Global mean sea level change (contribution from ice in Greenland)
+    REAL(dp), POINTER                       :: GMSL_ANT                                  ! Global mean sea level change (contribution from ice in Antarctica)
+    INTEGER :: wGMSL, wGMSL_NAM, wGMSL_EAS, wGMSL_GRL, wGMSL_ANT
+
+    ! CO2
+    REAL(dp), POINTER                       :: CO2_obs                                   ! Observed atmospheric CO2
+    REAL(dp), POINTER                       :: CO2_mod                                   ! Modelled atmospheric CO2
+    INTEGER :: wCO2_obs, wCO2_mod
+
+    ! d18O
+    REAL(dp), POINTER                       :: d18O_obs                                  ! Observed benthic d18O
+    REAL(dp), POINTER                       :: d18O_mod                                  ! Modelled benthic d18O
+    REAL(dp), POINTER                       :: d18O_ice                                  ! Contribution to benthic d18O from global ice volume
+    REAL(dp), POINTER                       :: d18O_Tdw                                  ! Contribution to benthic d18O from deep-water temperature
+    REAL(dp), POINTER                       :: d18O_NAM                                  ! Contribution to benthic d18O from ice in North America
+    REAL(dp), POINTER                       :: d18O_EAS                                  ! Contribution to benthic d18O from ice in Eurasia
+    REAL(dp), POINTER                       :: d18O_GRL                                  ! Contribution to benthic d18O from ice in Greenland
+    REAL(dp), POINTER                       :: d18O_ANT                                  ! Contribution to benthic d18O from ice in Antarctica
+    INTEGER :: wd18O_obs, wd18O_mod, wd18O_ice, wd18O_Tdw, wd18O_NAM, wd18O_EAS, wd18O_GRL, wd18O_ANT
+
+    ! Temperature
+    REAL(dp), POINTER                       :: dT_glob                                   ! Global mean annual surface temperature change
+    REAL(dp), POINTER                       :: dT_dw                                     ! Deep-water temperature change
+    INTEGER :: wdT_glob, wdT_dw
+
+    ! Computation times for all regions combined
+    REAL(dp), POINTER                       :: tcomp_total
+    REAL(dp), POINTER                       :: tcomp_ice
+    REAL(dp), POINTER                       :: tcomp_thermo
+    REAL(dp), POINTER                       :: tcomp_climate
+    REAL(dp), POINTER                       :: tcomp_GIA
+    INTEGER :: wtcomp_total, wtcomp_ice, wtcomp_thermo, wtcomp_climate, wtcomp_GIA
+
+  END TYPE type_global_scalar_data
 
 CONTAINS
 

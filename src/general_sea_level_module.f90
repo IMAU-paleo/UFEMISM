@@ -7,7 +7,7 @@ MODULE general_sea_level_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module,               ONLY: ice_density, ocean_area, seawater_density
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, allocate_shared_dp_0D, allocate_shared_dp_1D
-  USE data_types_module,               ONLY: type_model_region
+  USE data_types_module,               ONLY: type_model_region, type_global_scalar_data
   USE forcing_module,                  ONLY: forcing, update_sealevel_record_at_model_time
 
   IMPLICIT NONE
@@ -119,13 +119,14 @@ CONTAINS
   END SUBROUTINE calculate_PD_sealevel_contribution
 
   ! Determine current GMSL contributions from all simulated ice sheets
-  SUBROUTINE determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT)
+  SUBROUTINE determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(IN)        :: NAM, EAS, GRL, ANT
-    REAL(dp),                   INTENT(INOUT)     :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
+    TYPE(type_model_region),       INTENT(IN)     :: NAM, EAS, GRL, ANT
+    REAL(dp),                      INTENT(INOUT)  :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
+    TYPE(type_global_scalar_data), INTENT(INOUT)  :: global_data
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_GMSL_contributions'
@@ -135,6 +136,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Set GMSL contributions of all simulated ice sheets (text version)
     GMSL_NAM = 0._dp
     GMSL_EAS = 0._dp
     GMSL_GRL = 0._dp
@@ -145,7 +147,30 @@ CONTAINS
     IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
     IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
 
+    ! Determine global mean sea level (text version)
     GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
+
+    ! Set GMSL contributions of all simulated ice sheets (NetCDF version)
+    global_data%GMSL_NAM = 0._dp
+    global_data%GMSL_EAS = 0._dp
+    global_data%GMSL_GRL = 0._dp
+    global_data%GMSL_ANT = 0._dp
+
+    IF (C%do_NAM) global_data%GMSL_NAM = NAM%GMSL_contribution
+    IF (C%do_EAS) global_data%GMSL_EAS = EAS%GMSL_contribution
+    IF (C%do_GRL) global_data%GMSL_GRL = GRL%GMSL_contribution
+    IF (C%do_ANT) global_data%GMSL_ANT = ANT%GMSL_contribution
+
+    ! Determine global mean sea level (NetCDF version)
+    IF     (C%choice_sealevel_model == 'fixed') THEN
+      global_data%GMSL = C%fixed_sealevel
+    ELSEIF (C%choice_sealevel_model == 'eustatic' .OR. C%choice_sealevel_model == 'SELEN') THEN
+      global_data%GMSL = global_data%GMSL_NAM + global_data%GMSL_EAS + global_data%GMSL_GRL + global_data%GMSL_ANT
+    ELSEIF (C%choice_sealevel_model == 'prescribed') THEN
+      global_data%GMSL = forcing%sealevel_obs
+    ELSE
+      CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

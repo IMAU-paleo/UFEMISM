@@ -153,7 +153,7 @@ MODULE data_types_module
     REAL(dp)                                :: pc_zeta
     REAL(dp), DIMENSION(:    ), allocatable :: pc_tau
     REAL(dp), DIMENSION(:    ), allocatable :: pc_fcb
-    REAL(dp)                                :: pc_eta
+    REAL(dp)                                :: pc_eta = 1.
     REAL(dp)                                :: pc_eta_prev
     REAL(dp)                                :: pc_beta1
     REAL(dp)                                :: pc_beta2

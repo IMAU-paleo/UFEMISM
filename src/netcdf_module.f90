@@ -14,10 +14,10 @@ MODULE netcdf_module
   USE data_types_netcdf_module,      ONLY: type_netcdf_restart, type_netcdf_help_fields
   USE data_types_module,             ONLY: type_forcing_data, type_netcdf_resource_tracker, type_reference_geometry, &
                                            type_model_region, type_debug_fields, &
-                                           type_mesh, type_grid!, &
+                                           type_mesh, type_grid, &
+                                           type_restart_data
   !                                          type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
   !                                          type_ocean_snapshot_global, type_highres_ocean_data, &
-  !                                          type_restart_data
   ! USE petscksp
   USE netcdf,                        ONLY: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                            nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
@@ -4498,42 +4498,40 @@ CONTAINS
     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
 
   END SUBROUTINE inquire_insolation_file
-  ! SUBROUTINE read_insolation_file_timeframes( forcing, ti0, ti1)
-  !   IMPLICIT NONE
+  SUBROUTINE read_insolation_file_timeframes( forcing, ti0, ti1)
+    IMPLICIT NONE
 
-  !   ! In/output variables:
-  !   TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-  !   INTEGER,                        INTENT(IN)    :: ti0, ti1
+    ! In/output variables:
+    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
+    INTEGER,                        INTENT(IN)    :: ti0, ti1
 
-  !   ! Local variables:
-  !   INTEGER                                       :: mi, li
-  !   REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
+    ! Local variables:
+    INTEGER                                       :: mi, li
+    REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
 
-  !   IF (.NOT. par%master) RETURN
+    ! Temporary memory to store the data read from the netCDF file
+    ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
+    ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
 
-  !   ! Temporary memory to store the data read from the netCDF file
-  !   ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
-  !   ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
+    ! Read data
+    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
+    CALL close_netcdf_file(forcing%netcdf_ins%ncid)
 
-  !   ! Read data
-  !   CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-  !   CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-  !   CALL close_netcdf_file(forcing%netcdf_ins%ncid)
+    ! Store the data in the shared memory structure
+    DO mi = 1, 12
+    DO li = 1, forcing%ins_nlat
+      forcing%ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
+      forcing%ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
+    END DO
+    END DO
 
-  !   ! Store the data in the shared memory structure
-  !   DO mi = 1, 12
-  !   DO li = 1, forcing%ins_nlat
-  !     forcing%ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
-  !     forcing%ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
-  !   END DO
-  !   END DO
+    ! Clean up temporary memory
+    DEALLOCATE(Q_temp0)
+    DEALLOCATE(Q_temp1)
 
-  !   ! Clean up temporary memory
-  !   DEALLOCATE(Q_temp0)
-  !   DEALLOCATE(Q_temp1)
-
-  ! END SUBROUTINE read_insolation_file_timeframes
+  END SUBROUTINE read_insolation_file_timeframes
   SUBROUTINE read_insolation_file_time_lat( forcing)
     IMPLICIT NONE
 
@@ -4554,113 +4552,110 @@ CONTAINS
 
   END SUBROUTINE read_insolation_file_time_lat
 
-!   SUBROUTINE inquire_restart_file_SMB( restart)
-!     ! Check if the right dimensions and variables are present in the file.
+  SUBROUTINE inquire_restart_file_SMB( restart)
+    ! Check if the right dimensions and variables are present in the file.
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! Input variables:
-!     TYPE(type_restart_data), INTENT(INOUT) :: restart
+    ! Input variables:
+    TYPE(type_restart_data), INTENT(INOUT) :: restart
 
-!     ! Local variables:
-!     INTEGER                                :: x, y, m, t, int_dummy
+    ! Local variables:
+    INTEGER                                :: x, y, m, t, int_dummy
 
-!     ! WIP wall
-!     IF (par%master) WRITE(0,*) 'This subroutine (inquire_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-!     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! WIP wall
+    IF (par%master) WRITE(0,*) 'This subroutine (inquire_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-!     IF (.NOT. par%master) RETURN
+    ! Open the netcdf file
+    CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
 
-!     ! Open the netcdf file
-!     CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
+    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
+    CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_x,     restart%grid%nx, restart%netcdf%id_dim_x    )
+    CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_y,     restart%grid%ny, restart%netcdf%id_dim_y    )
+    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_time,  restart%nt, restart%netcdf%id_dim_time )
+    ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_month, int_dummy,  restart%netcdf%id_dim_month)
 
-!     ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
-!     CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_x,     restart%grid%nx, restart%netcdf%id_dim_x    )
-!     CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_y,     restart%grid%ny, restart%netcdf%id_dim_y    )
-!     ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_time,  restart%nt, restart%netcdf%id_dim_time )
-!     ! CALL inquire_dim( restart%netcdf%ncid, restart%netcdf%name_dim_month, int_dummy,  restart%netcdf%id_dim_month)
+    ! Abbreviations for shorter code
+    x = restart%netcdf%id_dim_x
+    y = restart%netcdf%id_dim_y
+    ! m = restart%netcdf%id_dim_month
+    ! t = restart%netcdf%id_dim_time
 
-!     ! Abbreviations for shorter code
-!     x = restart%netcdf%id_dim_x
-!     y = restart%netcdf%id_dim_y
-!     ! m = restart%netcdf%id_dim_month
-!     ! t = restart%netcdf%id_dim_time
+    ! Inquire variable ID's; make sure that each variable has the correct dimensions.
 
-!     ! Inquire variable ID's; make sure that each variable has the correct dimensions.
+    ! Dimensions
+    CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_x,                (/ x             /), restart%netcdf%id_var_x   )
+    CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_y,                (/    y          /), restart%netcdf%id_var_y   )
+    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_time,             (/             t /), restart%netcdf%id_var_time)
 
-!     ! Dimensions
-!     CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_x,                (/ x             /), restart%netcdf%id_var_x   )
-!     CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_y,                (/    y          /), restart%netcdf%id_var_y   )
-!     ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_time,             (/             t /), restart%netcdf%id_var_time)
+    ! Data
+    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_FirnDepth,        (/ x, y,    m, t /), restart%netcdf%id_var_FirnDepth)
+    ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_MeltPreviousYear, (/ x, y,       t /), restart%netcdf%id_var_MeltPreviousYear)
 
-!     ! Data
-!     ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_FirnDepth,        (/ x, y,    m, t /), restart%netcdf%id_var_FirnDepth)
-!     ! CALL inquire_double_var( restart%netcdf%ncid, restart%netcdf%name_var_MeltPreviousYear, (/ x, y,       t /), restart%netcdf%id_var_MeltPreviousYear)
+    ! Close the netcdf file
+    CALL close_netcdf_file( restart%netcdf%ncid)
 
-!     ! Close the netcdf file
-!     CALL close_netcdf_file( restart%netcdf%ncid)
+  END SUBROUTINE inquire_restart_file_SMB
+  SUBROUTINE read_restart_file_SMB( restart, time_to_restart_from)
+    ! Read the restart netcdf file
 
-!   END SUBROUTINE inquire_restart_file_SMB
-!   SUBROUTINE read_restart_file_SMB( restart, time_to_restart_from)
-!     ! Read the restart netcdf file
+    IMPLICIT NONE
 
-!     IMPLICIT NONE
+    ! Input variables:
+    TYPE(type_restart_data),        INTENT(INOUT) :: restart
+    REAL(dp),                       INTENT(IN)    :: time_to_restart_from
 
-!     ! Input variables:
-!     TYPE(type_restart_data),        INTENT(INOUT) :: restart
-!     REAL(dp),                       INTENT(IN)    :: time_to_restart_from
+    ! Local variables:
+    INTEGER                                       :: ti, ti_min
+    REAL(dp)                                      :: dt, dt_min
 
-!     ! Local variables:
-!     INTEGER                                       :: ti, ti_min
-!     REAL(dp)                                      :: dt, dt_min
+    ! WIP wall
+    IF (par%master) WRITE(0,*) 'This subroutine (read_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
+    CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-!     ! WIP wall
-!     IF (par%master) WRITE(0,*) 'This subroutine (read_restart_file_SMB) needs testing. Feel free to do it before running the model :)'
-!     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
-!     IF (.NOT. par%master) RETURN
+    ! Open the netcdf file
+    CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
 
-!     ! Open the netcdf file
-!     CALL open_netcdf_file( restart%netcdf%filename, restart%netcdf%ncid)
+    ! Read x,y
+    CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_x, restart%grid%x, start=(/1/) ))
+    CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_y, restart%grid%y, start=(/1/) ))
 
-!     ! Read x,y
-!     CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_x, restart%grid%x, start=(/1/) ))
-!     CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_y, restart%grid%y, start=(/1/) ))
+    ! ! Read time, determine which time frame to read
+    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_time, restart%time, start=(/1/) ))
 
-!     ! ! Read time, determine which time frame to read
-!     ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_time, restart%time, start=(/1/) ))
+    ! IF (time_to_restart_from < MINVAL(restart%time) .OR. time_to_restart_from > MAXVAL(restart%time)) THEN
+    !   WRITE(0,*) 'read_restart_file_SMB - ERROR: time_to_restart_from ', time_to_restart_from, ' outside range of restart file!'
+    !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ! END IF
 
-!     ! IF (time_to_restart_from < MINVAL(restart%time) .OR. time_to_restart_from > MAXVAL(restart%time)) THEN
-!     !   WRITE(0,*) 'read_restart_file_SMB - ERROR: time_to_restart_from ', time_to_restart_from, ' outside range of restart file!'
-!     !   CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     ! END IF
+    ! ti_min = 0
+    ! dt_min = 1E8_dp
+    ! DO ti = 1, restart%nt
+    !   dt = ABS(restart%time( ti) - time_to_restart_from)
+    !   IF (dt < dt_min) THEN
+    !     ti_min = ti
+    !     dt_min = dt
+    !   END IF
+    ! END DO
+    ! ti = ti_min
 
-!     ! ti_min = 0
-!     ! dt_min = 1E8_dp
-!     ! DO ti = 1, restart%nt
-!     !   dt = ABS(restart%time( ti) - time_to_restart_from)
-!     !   IF (dt < dt_min) THEN
-!     !     ti_min = ti
-!     !     dt_min = dt
-!     !   END IF
-!     ! END DO
-!     ! ti = ti_min
+    ! IF (dt_min > 0._dp) THEN
+    !   WRITE(0,*) 'read_restart_file_SMB - WARNING: no exact match for time_to_restart_from ', time_to_restart_from, ' in restart file! Reading closest match ', restart%time( ti), ' instead.'
+    ! END IF
+    ! IF (time_to_restart_from /= C%start_time_of_run) THEN
+    !   WRITE(0,*) 'read_restart_file_SMB - WARNING: starting run at t = ', C%start_time_of_run, ' with restart data at t = ', time_to_restart_from
+    ! END IF
 
-!     ! IF (dt_min > 0._dp) THEN
-!     !   WRITE(0,*) 'read_restart_file_SMB - WARNING: no exact match for time_to_restart_from ', time_to_restart_from, ' in restart file! Reading closest match ', restart%time( ti), ' instead.'
-!     ! END IF
-!     ! IF (time_to_restart_from /= C%start_time_of_run) THEN
-!     !   WRITE(0,*) 'read_restart_file_SMB - WARNING: starting run at t = ', C%start_time_of_run, ' with restart data at t = ', time_to_restart_from
-!     ! END IF
+    ! ! Read the data
+    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, 1, ti /), count = (/ restart%grid%nx, restart%grid%ny, 12,         1 /) ))
+    ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1, 1,    ti /), count = (/ restart%grid%nx, restart%grid%ny,             1 /) ))
 
-!     ! ! Read the data
-!     ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, 1, ti /), count = (/ restart%grid%nx, restart%grid%ny, 12,         1 /) ))
-!     ! CALL handle_error(nf90_get_var( restart%netcdf%ncid, restart%netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1, 1,    ti /), count = (/ restart%grid%nx, restart%grid%ny,             1 /) ))
+    ! Close the netcdf file
+    CALL close_netcdf_file( restart%netcdf%ncid)
 
-!     ! Close the netcdf file
-!     CALL close_netcdf_file( restart%netcdf%ncid)
-
-!   END SUBROUTINE read_restart_file_SMB
+  END SUBROUTINE read_restart_file_SMB
 
 !   ! Present-day observed global ocean (e.g. WOA18)
 !   SUBROUTINE inquire_PD_obs_global_ocean_file( ocn)

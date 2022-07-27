@@ -648,8 +648,6 @@ CONTAINS
     ! Give process p_left access to the submesh memory of p_right
     ! Used in submesh merging
     
-    USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER, C_LOC
-    
     IMPLICIT NONE
  
     ! In/output variables:

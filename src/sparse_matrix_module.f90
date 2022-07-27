@@ -1126,9 +1126,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    deallocate( AA%ptr)
-    deallocate( AA%index)
-    deallocate( AA%val)
+    if (allocated(AA%ptr)) deallocate( AA%ptr)
+    if (allocated(AA%index)) deallocate( AA%index)
+    if (allocated(AA%val))deallocate( AA%val)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1234,8 +1234,6 @@ CONTAINS
     !
     ! NOTE: each process has data for rows i1-i2
     
-    USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-      
     IMPLICIT NONE
     
     ! In- and output variables:

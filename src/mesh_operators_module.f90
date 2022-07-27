@@ -20,7 +20,6 @@ MODULE mesh_operators_module
 
 CONTAINS
   
-#if 0
 ! == Mapping
 
   ! 2-D
@@ -52,6 +51,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_b_2D
+#if 0
   SUBROUTINE map_a_to_c_2D( mesh, d_a, d_c)
     ! Map a 2-D data field from the a (vertex) to the c (edge) grid
       
@@ -80,6 +80,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_c_2D
+#endif
   SUBROUTINE map_b_to_a_2D( mesh, d_b, d_a)
     ! Map a 2-D data field from the b (triangle) to the a (vertex) grid
       
@@ -108,6 +109,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_a_2D
+#if 0
   SUBROUTINE map_b_to_c_2D( mesh, d_b, d_c)
     ! Map a 2-D data field from the b (triangle) to the c (edge) grid
       

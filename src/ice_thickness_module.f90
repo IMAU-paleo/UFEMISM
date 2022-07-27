@@ -18,6 +18,7 @@ MODULE ice_thickness_module
   USE utilities_module,                ONLY: is_floating
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex
   USE ice_velocity_module,             ONLY: map_velocities_b_to_c_2D
+  use mpi_module,                      only: allgather_array
 
   IMPLICIT NONE
   
@@ -48,8 +49,7 @@ CONTAINS
     IF     (C%choice_ice_integration_method == 'none') THEN
       ice%dHi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
     ELSEIF (C%choice_ice_integration_method == 'explicit') THEN
-       call crash("not implemented")
-   !   CALL calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
+       call calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
     ELSEIF (C%choice_ice_integration_method == 'semi-implicit') THEN
        call crash("not implemented")
    !   CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
@@ -66,7 +66,6 @@ CONTAINS
     
   END SUBROUTINE calc_dHi_dt
   
-#if 0
   ! Different solvers for the ice thickness equation (explicit & semi-implicit)
   SUBROUTINE calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
     ! The explicit solver for the ice thickness equation
@@ -82,8 +81,8 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  up_c,  uo_c
-    INTEGER                                            :: wu_c, wv_c, wup_c, wuo_c
+    REAL(dp), DIMENSION(:    ), allocatable            ::  u_c,  v_c,  up_c,  uo_c
+    real(dp), dimension(:    ), allocatable            :: v_vav_b, u_vav_b
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_SMB
@@ -102,12 +101,19 @@ CONTAINS
     Vi_SMB         = 0._dp
     
     ! Calculate vertically averaged ice velocities along vertex connections
-    CALL allocate_shared_dp_1D( mesh%nAc, u_c , wu_c )
-    CALL allocate_shared_dp_1D( mesh%nAc, v_c , wv_c )
-    CALL allocate_shared_dp_1D( mesh%nAc, up_c, wup_c)
-    CALL allocate_shared_dp_1D( mesh%nAc, uo_c, wuo_c)
+    allocate(u_c ( mesh%ci1:mesh%ci2))
+    allocate(v_c ( mesh%ci1:mesh%ci2)) 
+    allocate(up_c( mesh%ci1:mesh%ci2))
+    allocate(uo_c( mesh%ci1:mesh%ci2))
+
+    allocate(u_vav_b(mesh%nTri))
+    allocate(v_vav_b(mesh%nTri))
+    u_vav_b(mesh%ti1:mesh%ti2) = ice%u_vav_b
+    v_vav_b(mesh%ti1:mesh%ti2) = ice%v_vav_b
+    call allgather_array(u_vav_b)
+    call allgather_array(v_vav_b)
     
-    CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
+    CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
     CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
         
     ! Calculate ice fluxes across all Aa vertex connections
@@ -153,14 +159,11 @@ CONTAINS
       ice%dVi_in( vj, cj) =  dVi ! m3
            
     END DO ! DO aci = mesh%ci1, mesh%ci2
-    CALL sync
-           
     
     ! Correct outfluxes for possible resulting negative ice thicknesses
     ! =================================================================
     
     Vi_SMB( mesh%vi1:mesh%vi2) = (SMB%SMB_year( mesh%vi1:mesh%vi2) + BMB%BMB( mesh%vi1:mesh%vi2))  * mesh%A( mesh%vi1:mesh%vi2) * dt
-    CALL sync
     
     DO vi = mesh%vi1, mesh%vi2
     
@@ -228,16 +231,15 @@ CONTAINS
     CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wu_c )
-    CALL deallocate_shared( wv_c )
-    CALL deallocate_shared( wup_c)
-    CALL deallocate_shared( wuo_c)
+    deallocate( u_c )
+    deallocate( v_c )
+    deallocate( up_c)
+    deallocate( uo_c)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_dHi_dt_explicit
-#endif    
   ! Some useful tools
   SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
     ! Apply ice thickness boundary conditions (at the domain boundary, and through the mask_noice)

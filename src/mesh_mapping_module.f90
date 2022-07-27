@@ -140,7 +140,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_grid2mesh_2D_partial
-#if 0
   SUBROUTINE map_grid2mesh_3D( grid, mesh, d_grid, d_mesh)
     ! Map a 3-D data field from the grid to the mesh using 2nd-order conservative remapping.
     
@@ -155,45 +154,50 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_grid2mesh_3D'
     INTEGER                                            :: n1,n2,n,i,j,nz
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid_vec
-    INTEGER                                            :: wd_grid_vec
+    REAL(dp), DIMENSION(:,:  ), allocatable            ::  d_grid_vec
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_mesh_vec
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_mesh,1) /= mesh%nV .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_grid,3) /= SIZE( d_mesh,2)) THEN
+    IF (SIZE( d_mesh,1) /= mesh%vi2-mesh%vi1+1 .OR. SIZE( d_grid,1) /= grid%nx .OR. SIZE( d_grid,2) /= grid%ny .OR. SIZE( d_grid,3) /= SIZE( d_mesh,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
     nz = SIZE( d_mesh,2)
     
+    CALL partition_list( grid%n, par%i, par%n, n1, n2)
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( grid%n, nz, d_grid_vec, wd_grid_vec)
+    allocate(d_grid_vec( n1:n2     , nz))
+    allocate(d_mesh_vec(  1:mesh%nV, nz))
     
     ! Reshape data from vector form to grid form
-    CALL partition_list( grid%n, par%i, par%n, n1, n2)
     DO n = n1, n2
       i = grid%n2ij( n,1)
       j = grid%n2ij( n,2)
       d_grid_vec( n,:) = d_grid( i,j,:)
     END DO
-    CALL sync
     
     ! Perform the mapping operation as a matrix multiplication
-    CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_grid2mesh, d_grid_vec, d_mesh)
+    CALL multiply_PETSc_matrix_with_vector_2D( grid%M_map_grid2mesh, d_grid_vec, d_mesh_vec(mesh%vi1:mesh%vi2,:))
+
+    ! Make accessible on all cores
+    call allgather_array(d_mesh_vec)
     
     ! Fix border elements because the remapping often is inaccurate there
     CALL apply_Neumann_BC_direct_a_3D( mesh, d_mesh)
+
+    d_mesh = d_mesh_vec(mesh%vi1:mesh%vi2,:)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wd_grid_vec)
+    deallocate( d_grid_vec)
+    deallocate( d_mesh_vec)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_grid2mesh_3D
-#endif
   SUBROUTINE map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
     ! Map a 2-D data field from the mesh to the grid using 2nd-order conservative remapping.
     
@@ -533,8 +537,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_2D
-#if 0
-  SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, map, d, w, method)
+  SUBROUTINE remap_field_dp_3D( mesh_src, mesh_dst, map, d, method)
     ! Remap a 3-D data field from mesh_src to mesh_dst using the specified remapping method. Includes memory reallocation.
     
     IMPLICIT NONE
@@ -543,36 +546,31 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_src
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_dst
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map          ! Remapping matrices
-    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(INOUT) :: d            ! Pointer to the data
-    INTEGER,                             INTENT(INOUT) :: w            ! MPI window to the shared memory space containing that data
+    REAL(dp), DIMENSION(:,:), allocatable, INTENT(INOUT) :: d            ! Pointer to the data
     CHARACTER(LEN=*),                    INTENT(IN)    :: method
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_field_dp_3D'
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: d_temp
+    REAL(dp), DIMENSION(:,:  ), allocatable            :: d_temp
     INTEGER                                            :: w_temp, nz
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d,1) /= mesh_src%nV) THEN
+    IF (SIZE( d,1) /= mesh_src%vi2-mesh_src%vi1+1) THEN
       CALL crash('data field is the wrong size!')
     END IF
     
     nz = SIZE( d,2)
     
     ! Allocate temporary memory
-    CALL allocate_shared_dp_2D( mesh_src%nV, nz, d_temp, w_temp)
     
     ! Copy data to temporary memory
-    d_temp( mesh_src%vi1: mesh_src%vi2,:) = d( mesh_src%vi1: mesh_src%vi2,:)
-    
-    ! Deallocate memory
-    CALL deallocate_shared( w)
+    call move_alloc(d, d_temp)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( mesh_dst%nV, nz, d, w)
+    allocate( d(mesh_dst%vi1: mesh_dst%vi2, nz))
     
     ! Map data field from source mesh to new mesh
     IF     (method == 'trilin') THEN
@@ -588,13 +586,12 @@ CONTAINS
     END IF
     
     ! Deallocate temporary memory
-    CALL deallocate_shared( w_temp)
+    deallocate( d_temp)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_field_dp_3D
-#endif
   
 ! == Smoothing operations on the mesh
   SUBROUTINE smooth_Gaussian_2D( mesh, grid, d_mesh, r)

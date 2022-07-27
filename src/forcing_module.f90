@@ -17,9 +17,9 @@ MODULE forcing_module
 
   ! ! Import specific functionality
   USE data_types_module,               ONLY: type_forcing_data!, type_mesh, type_model_region
-  USE netcdf_module,                   ONLY: inquire_insolation_file, read_insolation_file_time_lat!, &
+  USE netcdf_module,                   ONLY: inquire_insolation_file, read_insolation_file_time_lat, &
+                                             read_insolation_file_timeframes
   !                                            inquire_insolation_data_file, read_insolation_data_file_time_lat, &
-  !                                            read_insolation_file_timeframes, &
   !                                            read_insolation_data_file, inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
 
   IMPLICIT NONE
@@ -848,131 +848,127 @@ CONTAINS
 !     CALL finalise_routine( routine_name)
 
 !   END SUBROUTINE get_insolation_at_time
-!   SUBROUTINE get_insolation_at_time_month_and_lat( time, month, lat, Q_TOA)
-!     ! Get monthly insolation at time t, month m and latitude l on the regional grid
+  SUBROUTINE get_insolation_at_time_month_and_lat( time, month, lat, Q_TOA)
+    ! Get monthly insolation at time t, month m and latitude l on the regional grid
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! In/output variables:
-!     REAL(dp),                            INTENT(IN)    :: time
-!     INTEGER,                             INTENT(IN)    :: month
-!     REAL(dp),                            INTENT(IN)    :: lat
-!     REAL(dp),                            INTENT(OUT)   :: Q_TOA
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+    INTEGER,                             INTENT(IN)    :: month
+    REAL(dp),                            INTENT(IN)    :: lat
+    REAL(dp),                            INTENT(OUT)   :: Q_TOA
 
-!     ! Local variables:
-!     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_insolation_at_time_month_and_lat'
-!     REAL(dp)                                           :: time_applied
-!     INTEGER                                            :: ilat_l,ilat_u
-!     REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_insolation_at_time_month_and_lat'
+    REAL(dp)                                           :: time_applied
+    INTEGER                                            :: ilat_l,ilat_u
+    REAL(dp)                                           :: wt0, wt1, wlat_l, wlat_u
 
-!     ! Add routine to path
-!     CALL init_routine( routine_name)
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
-!     time_applied = 0._dp
+    time_applied = 0._dp
 
-!     IF     (C%choice_insolation_forcing == 'none') THEN
-!       IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: choice_insolation_forcing = "none"!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     ELSEIF (C%choice_insolation_forcing == 'static') THEN
-!       time_applied = C%static_insolation_time
-!     ELSEIF (C%choice_insolation_forcing == 'realistic') THEN
-!       time_applied = time
-!     ELSE
-!       IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: choice_insolation_forcing = "none"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_insolation_forcing == 'static') THEN
+      time_applied = C%static_insolation_time
+    ELSEIF (C%choice_insolation_forcing == 'realistic') THEN
+      time_applied = time
+    ELSE
+      IF (par%master) WRITE(0,*) 'get_insolation_at_time_month_and_lat - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
 
-!     ! Check if the requested time is enveloped by the two timeframes;
-!     ! if not, read the two relevant timeframes from the NetCDF file
-!     IF (time_applied < forcing%ins_t0 .AND. time_applied > forcing%ins_t1) THEN
-!       CALL update_insolation_timeframes_from_file( time_applied)
-!     END IF
+    ! Check if the requested time is enveloped by the two timeframes;
+    ! if not, read the two relevant timeframes from the NetCDF file
+    IF (time_applied < forcing%ins_t0 .AND. time_applied > forcing%ins_t1) THEN
+      CALL update_insolation_timeframes_from_file( time_applied)
+    END IF
 
-!     ! Calculate timeframe interpolation weights
-!     wt0 = (forcing%ins_t1 - time) / (forcing%ins_t1 - forcing%ins_t0)
-!     wt1 = 1._dp - wt0
+    ! Calculate timeframe interpolation weights
+    wt0 = (forcing%ins_t1 - time) / (forcing%ins_t1 - forcing%ins_t0)
+    wt1 = 1._dp - wt0
 
-!     ! Get value at month m and latitude l
-!     ilat_l = FLOOR(lat + 91)
-!     ilat_u = ilat_l + 1
+    ! Get value at month m and latitude l
+    ilat_l = FLOOR(lat + 91)
+    ilat_u = ilat_l + 1
 
-!     wlat_l = (forcing%ins_lat( ilat_u) - lat) / (forcing%ins_lat( ilat_u) - forcing%ins_lat( ilat_l))
-!     wlat_u = 1._dp - wlat_l
+    wlat_l = (forcing%ins_lat( ilat_u) - lat) / (forcing%ins_lat( ilat_u) - forcing%ins_lat( ilat_l))
+    wlat_u = 1._dp - wlat_l
 
-!     IF (par%master) Q_TOA = wt0 * wlat_l * forcing%ins_Q_TOA0( ilat_l,month) + &
-!                             wt0 * wlat_u * forcing%ins_Q_TOA0( ilat_u,month) + &
-!                             wt1 * wlat_l * forcing%ins_Q_TOA1( ilat_l,month) + &
-!                             wt1 * wlat_u * forcing%ins_Q_TOA1( ilat_u,month)
-!     CALL sync
+    Q_TOA = wt0 * wlat_l * forcing%ins_Q_TOA0( ilat_l,month) + &
+            wt0 * wlat_u * forcing%ins_Q_TOA0( ilat_u,month) + &
+            wt1 * wlat_l * forcing%ins_Q_TOA1( ilat_l,month) + &
+            wt1 * wlat_u * forcing%ins_Q_TOA1( ilat_u,month)
 
-!     ! Finalise routine path
-!     CALL finalise_routine( routine_name)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
-!   END SUBROUTINE get_insolation_at_time_month_and_lat
-!   SUBROUTINE update_insolation_timeframes_from_file( time)
-!     ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
-!     ! coupling timestep to save on memory usage. Only done by master.
+  END SUBROUTINE get_insolation_at_time_month_and_lat
+  SUBROUTINE update_insolation_timeframes_from_file( time)
+    ! Read the NetCDF file containing the insolation forcing data. Only read the time frames enveloping the current
+    ! coupling timestep to save on memory usage. Only done by master.
 
-!     ! NOTE: assumes time in forcing file is in kyr
+    ! NOTE: assumes time in forcing file is in kyr
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     REAL(dp),                            INTENT(IN)    :: time
+    REAL(dp),                            INTENT(IN)    :: time
 
-!     ! Local variables:
-!     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_insolation_timeframes_from_file'
-!     INTEGER                                            :: ti0, ti1
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_insolation_timeframes_from_file'
+    INTEGER                                            :: ti0, ti1
 
-!     ! Add routine to path
-!     CALL init_routine( routine_name)
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
-!     IF     (C%choice_insolation_forcing == 'none') THEN
-!       IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: choice_insolation_forcing = "none"!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     ELSEIF (C%choice_insolation_forcing == 'static' .OR. &
-!             C%choice_insolation_forcing == 'realistic') THEN
-!       ! Update insolation
+    IF     (C%choice_insolation_forcing == 'none') THEN
+      IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: choice_insolation_forcing = "none"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_insolation_forcing == 'static' .OR. &
+            C%choice_insolation_forcing == 'realistic') THEN
+      ! Update insolation
 
-!       ! Check if data for model time is available
-!       IF (time < forcing%ins_time(1)) THEN
-!         WRITE(0,*) '  update_insolation_timeframes_from_file - ERROR: insolation data only available between ', MINVAL(forcing%ins_time), ' y and ', MAXVAL(forcing%ins_time), ' y'
-!         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!       END IF
+      ! Check if data for model time is available
+      IF (time < forcing%ins_time(1)) THEN
+        WRITE(0,*) '  update_insolation_timeframes_from_file - ERROR: insolation data only available between ', MINVAL(forcing%ins_time), ' y and ', MAXVAL(forcing%ins_time), ' y'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
 
-!       ! Find time indices to be read
-!       IF (par%master) THEN
-!         IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
-!           ti1 = 1
-!           DO WHILE (forcing%ins_time(ti1) < time)
-!             ti1 = ti1 + 1
-!           END DO
-!           ti0 = ti1 - 1
+      ! Find time indices to be read
+      IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
+        ti1 = 1
+        DO WHILE (forcing%ins_time(ti1) < time)
+          ti1 = ti1 + 1
+        END DO
+        ti0 = ti1 - 1
 
-!           forcing%ins_t0 = forcing%ins_time(ti0)
-!           forcing%ins_t1 = forcing%ins_time(ti1)
-!         ELSE
-!           IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
-!           ti0 = forcing%ins_nyears
-!           ti1 = forcing%ins_nyears
+        forcing%ins_t0 = forcing%ins_time(ti0)
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      ELSE
+        IF (par%master) WRITE(0,*) '  WARNING: using constant PD insolation for future projections!'
+        ti0 = forcing%ins_nyears
+        ti1 = forcing%ins_nyears
 
-!           forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
-!           forcing%ins_t1 = forcing%ins_time(ti1)
-!         END IF
-!       END IF ! IF (par%master) THEN
+        forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      END IF
 
-!       ! Read new insolation fields from the NetCDF file
-!       IF (par%master) CALL read_insolation_file_timeframes( forcing, ti0, ti1)
-!       CALL sync
+      ! Read new insolation fields from the NetCDF file
+      CALL read_insolation_file_timeframes( forcing, ti0, ti1)
 
-!     ELSE
-!       IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
+    ELSE
+      IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
 
-!     ! Finalise routine path
-!     CALL finalise_routine( routine_name)
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
 
-!   END SUBROUTINE update_insolation_timeframes_from_file
+  END SUBROUTINE update_insolation_timeframes_from_file
   SUBROUTINE initialise_insolation_data
     ! Allocate shared memory for the forcing data fields
 

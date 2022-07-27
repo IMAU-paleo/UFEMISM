@@ -8,27 +8,18 @@ MODULE BMB_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              interpolate_ocean_depth
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_module,                   ONLY: debug
 
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
                                              type_remapping_mesh_mesh
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
+  use reallocate_mod,                  only: reallocate_bounds
 
   IMPLICIT NONE
 
@@ -62,7 +53,6 @@ CONTAINS
     BMB%BMB(       mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_sheet( mesh%vi1:mesh%vi2) = 0._dp
     BMB%BMB_shelf( mesh%vi1:mesh%vi2) = 0._dp
-    CALL sync
 
     ! Run the selected shelf BMB model
     IF     (C%choice_BMB_shelf_model == 'uniform') THEN
@@ -123,7 +113,6 @@ CONTAINS
       BMB%BMB_shelf( vi) = amplification_factor * BMB%BMB_shelf( vi)
 
     END DO
-    CALL sync
 
     ! Add sheet and shelf melt rates together, applying the selected scheme for sub-grid shelf melt
     ! (see Leguy et al. 2021 for explanations of the three schemes)
@@ -146,7 +135,6 @@ CONTAINS
       END IF
 
     END DO
-    CALL sync
 
     ! Safety
     CALL check_for_NaN_dp_1D( BMB%BMB_sheet, 'BMB%BMB_sheet')
@@ -177,9 +165,9 @@ CONTAINS
     IF (par%master) WRITE (0,*) '  Initialising BMB model: sheet = "', TRIM(C%choice_BMB_sheet_model), '", shelf = "', TRIM(C%choice_BMB_shelf_model), '"...'
 
     ! General
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%BMB      , BMB%wBMB      )
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
+    allocate(BMB%BMB      (mesh%vi1:mesh%vi2))
+    allocate(BMB%BMB_shelf(mesh%vi1:mesh%vi2))
+    allocate(BMB%BMB_sheet(mesh%vi1:mesh%vi2))
 
     ! Shelf
     IF     (C%choice_BMB_shelf_model == 'uniform' .OR. &
@@ -602,21 +590,21 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Variables
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%sub_angle, BMB%wsub_angle)
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%dist_open, BMB%wdist_open)
+    ! CALL allocate_shared_dp_1D( mesh%nV, BMB%sub_angle, BMB%wsub_angle)
+    ! CALL allocate_shared_dp_1D( mesh%nV, BMB%dist_open, BMB%wdist_open)
 
     ! Tuning parameters
-    CALL allocate_shared_dp_0D( BMB%T_ocean_mean_PD,            BMB%wT_ocean_mean_PD           )
-    CALL allocate_shared_dp_0D( BMB%T_ocean_mean_cold,          BMB%wT_ocean_mean_cold         )
-    CALL allocate_shared_dp_0D( BMB%T_ocean_mean_warm,          BMB%wT_ocean_mean_warm         )
-    CALL allocate_shared_dp_0D( BMB%BMB_deepocean_PD,           BMB%wBMB_deepocean_PD          )
-    CALL allocate_shared_dp_0D( BMB%BMB_deepocean_cold,         BMB%wBMB_deepocean_cold        )
-    CALL allocate_shared_dp_0D( BMB%BMB_deepocean_warm,         BMB%wBMB_deepocean_warm        )
-    CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_PD,       BMB%wBMB_shelf_exposed_PD      )
-    CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_cold,     BMB%wBMB_shelf_exposed_cold    )
-    CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_warm,     BMB%wBMB_shelf_exposed_warm    )
-    CALL allocate_shared_dp_0D( BMB%subshelf_melt_factor,       BMB%wsubshelf_melt_factor      )
-    CALL allocate_shared_dp_0D( BMB%deep_ocean_threshold_depth, BMB%wdeep_ocean_threshold_depth)
+    ! CALL allocate_shared_dp_0D( BMB%T_ocean_mean_PD,            BMB%wT_ocean_mean_PD           )
+    ! CALL allocate_shared_dp_0D( BMB%T_ocean_mean_cold,          BMB%wT_ocean_mean_cold         )
+    ! CALL allocate_shared_dp_0D( BMB%T_ocean_mean_warm,          BMB%wT_ocean_mean_warm         )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_deepocean_PD,           BMB%wBMB_deepocean_PD          )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_deepocean_cold,         BMB%wBMB_deepocean_cold        )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_deepocean_warm,         BMB%wBMB_deepocean_warm        )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_PD,       BMB%wBMB_shelf_exposed_PD      )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_cold,     BMB%wBMB_shelf_exposed_cold    )
+    ! CALL allocate_shared_dp_0D( BMB%BMB_shelf_exposed_warm,     BMB%wBMB_shelf_exposed_warm    )
+    ! CALL allocate_shared_dp_0D( BMB%subshelf_melt_factor,       BMB%wsubshelf_melt_factor      )
+    ! CALL allocate_shared_dp_0D( BMB%deep_ocean_threshold_depth, BMB%wdeep_ocean_threshold_depth)
 
     IF (region_name == 'NAM') THEN
       BMB%T_ocean_mean_PD            = C%T_ocean_mean_PD_NAM
@@ -954,8 +942,8 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Variables
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_base,        BMB%wT_ocean_base       )
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_freeze_base, BMB%wT_ocean_freeze_base)
+    allocate( BMB%T_ocean_base       (mesh%vi1:mesh%vi2))
+    allocate( BMB%T_ocean_freeze_base(mesh%vi1:mesh%vi2))
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2529,9 +2517,9 @@ CONTAINS
     int_dummy = map%int_dummy
 
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
-    CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB,       BMB%wBMB      )
-    CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_sheet, BMB%wBMB_sheet)
-    CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
+    CALL reallocate_bounds( BMB%BMB      , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds( BMB%BMB_sheet, mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds( BMB%BMB_shelf, mesh_new%vi1, mesh_new%vi2 )
 
     ! Sheet
     ! =====
@@ -2553,15 +2541,15 @@ CONTAINS
 
     ELSEIF (C%choice_BMB_shelf_model == 'ANICE_legacy') THEN
 
-      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%sub_angle, BMB%wsub_angle)
-      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%dist_open, BMB%wdist_open)
+      CALL reallocate_bounds( BMB%sub_angle, mesh_new%vi1, mesh_new%vi2)
+      CALL reallocate_bounds( BMB%dist_open, mesh_new%vi1, mesh_new%vi2)
 
     ELSEIF (C%choice_BMB_shelf_model == 'Favier2019_lin' .OR. &
             C%choice_BMB_shelf_model == 'Favier2019_quad' .OR. &
             C%choice_BMB_shelf_model == 'Favier2019_Mplus') THEN
 
-      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%T_ocean_base,        BMB%wT_ocean_base       )
-      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%T_ocean_freeze_base, BMB%wT_ocean_freeze_base)
+      CALL reallocate_bounds( BMB%T_ocean_base, mesh_new%vi1, mesh_new%vi2 )
+      CALL reallocate_bounds( BMB%T_ocean_freeze_base, mesh_new%vi1, mesh_new%vi2)
 
     ELSEIF (C%choice_BMB_shelf_model == 'Lazeroms2018_plume') THEN
 

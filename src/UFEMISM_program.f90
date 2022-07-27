@@ -65,7 +65,6 @@ PROGRAM UFEMISM_program
   USE UFEMISM_main_model,          ONLY: initialise_model, run_model
   USE netcdf_module,               ONLY: create_resource_tracking_file, write_to_resource_tracking_file
   USE general_sea_level_module,    ONLY: determine_GMSL_contributions, update_regional_sea_level
-  USE text_output_module,          ONLY: create_global_text_output, write_global_text_output
   USE scalar_data_output_module,   ONLY: initialise_global_scalar_data, write_global_scalar_data
 
 # if (defined(DO_SELEN))
@@ -135,13 +134,7 @@ PROGRAM UFEMISM_program
 
   CALL initialise_global_forcing
 
-  ! == Create the global scalar output file (text version)
-  ! =======================================
-
-  ! Create file and header
-  CALL create_global_text_output
-
-  ! == Create the global scalar output file (NetCDF version)
+  ! == Create the global scalar output file
   ! =======================================
 
   CALL initialise_global_scalar_data( global_data)
@@ -202,13 +195,7 @@ PROGRAM UFEMISM_program
     SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
   END IF
 
-  ! == Initial global output (text version)
-  ! ========================
-
-  ! Write global data at t=0 to output file
-  CALL write_global_text_output( C%start_time_of_run, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
-
-  ! == Initial global output (NetCDF version)
+  ! == Initial global output
   ! ========================
 
   ! Write global data at t=0 to output file
@@ -274,13 +261,7 @@ PROGRAM UFEMISM_program
     ! if applicable, call the inverse routine to update the climate forcing parameter
     CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
 
-    ! == Global output (text version)
-    ! ================
-
-    ! Write global data to output file
-    CALL write_global_text_output( t_coupling, GMSL_glob, GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, forcing)
-
-    ! == Global output (NetCDF version)
+    ! == Global output
     ! ================
 
     ! Write global data to output file

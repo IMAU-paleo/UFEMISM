@@ -50,7 +50,6 @@ MODULE UFEMISM_main_model
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE utilities_module,                    ONLY: time_display
-  USE text_output_module,                  ONLY: create_regional_text_output, write_regional_text_output
   USE scalar_data_output_module,           ONLY: write_regional_scalar_data
 
 # if (defined(DO_SELEN))
@@ -254,16 +253,6 @@ CONTAINS
         CALL write_to_output_files( region)
       END IF
 
-      ! Write scalar text output
-      IF (region%do_output .OR. region%do_SMB .OR. region%do_BMB) THEN
-        ! Determine total ice sheet area, volume, and volume-above-flotation,
-        CALL calculate_icesheet_volume_and_area( region)
-        IF (C%choice_SMB_model == 'IMAU-ITM') THEN
-          ! Write to regional text output file
-          CALL write_regional_text_output( region)
-        END IF
-      END IF
-
       ! == Update ice geometry
       ! ======================
 
@@ -292,9 +281,6 @@ CONTAINS
         region%output_file_exists = .TRUE.
       END IF
       CALL write_to_output_files( region)
-      IF (C%choice_SMB_model == 'IMAU-ITM') THEN
-        CALL write_regional_text_output( region)
-      END IF
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
@@ -662,10 +648,7 @@ CONTAINS
     ! ===== Regional scalar output =====
     ! ==================================
 
-    ! Create output file (text version)
-    CALL create_regional_text_output( region)
-
-    ! Create output file (NetCDF version)
+    ! Create output file
     CALL create_regional_scalar_output_file( region)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====

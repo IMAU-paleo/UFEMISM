@@ -41,21 +41,20 @@ MODULE forcing_module
 
 CONTAINS
 
-! ===== Main routines (called from IMAU_ICE_program) =====
-! ========================================================
+! ===== Main routines =====
+! =========================
 
-  SUBROUTINE update_global_forcing( NAM, EAS, GRL, ANT, time, switch)
+  SUBROUTINE update_global_forcing( NAM, EAS, GRL, ANT, time)
     ! Update global forcing data (d18O, CO2, insolation, geothermal heat flux)
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),             INTENT(IN)    :: NAM, EAS, GRL, ANT
-    REAL(dp),                            INTENT(IN)    :: time
-    CHARACTER(LEN=*),                    INTENT(IN)    :: switch
+    TYPE(type_model_region),      INTENT(IN)    :: NAM, EAS, GRL, ANT
+    REAL(dp),                     INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_global_forcing'
+    CHARACTER(LEN=256), PARAMETER               :: routine_name = 'update_global_forcing'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -68,51 +67,26 @@ CONTAINS
       ! The global climate is calculated based on a prescribed CO2 record (e.g. from ice cores),
       ! either using a glacial-index method or a climate-matrix method, following Berends et al. (2018)
 
-      IF (switch == 'pre') THEN
-        ! Not really needed, as this is done regionally. But since the other methods still seem to
-        ! need this, let's do it here to keep the symmetry, as computing it does not hurt the run.
-        CALL update_CO2_at_model_time( time)
-      ELSEIF (switch == 'post') THEN
-        IF (C%do_calculate_benthic_d18O) THEN
-          CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-          CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-        END IF
-      ELSE
-        CALL crash('the switch input argument should be either "pre" or "post"!')
+      ! Not really needed, as this is done regionally. But since the other methods still seem to
+      ! need this, let's do it here to keep the symmetry, as computing it does not hurt the run.
+      CALL update_CO2_at_model_time( time)
+
+      IF (C%do_calculate_benthic_d18O) THEN
+        CALL crash('do_calculate_benthic_d18O has not been tested yet. TBD!')
       END IF
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       ! The global climate is calculated using the observed present-day climate plus a global
       ! temperature offset, which is calculated using the inverse routine, following de Boer et al. (2014)
 
-      IF (switch == 'pre') THEN
-        CALL update_d18O_at_model_time( time)
-      ELSEIF (switch == 'post') THEN
-        IF (C%do_calculate_benthic_d18O) THEN
-          CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-          CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-        END IF
-        CALL inverse_routine_global_temperature_offset
-      ELSE
-        CALL crash('the switch input argument should be either "pre" or "post"!')
-      END IF
+      CALL crash('choice_forcing_method "d18O_inverse_dT_glob" has not been tested yet. TBD!')
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! The global climate is calculated based on modelled CO2, which follows from the inverse routine
       ! (following Berends et al., 2019). The climate itself can then be calculated using either a
       ! glacial-index method or a climate-matrix method
 
-      IF (switch == 'pre') THEN
-        CALL update_CO2_at_model_time( time)
-      ELSEIF (switch == 'post') THEN
-        IF (C%do_calculate_benthic_d18O) THEN
-          CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-          CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-        END IF
-        CALL inverse_routine_CO2
-      ELSE
-        CALL crash('the switch input argument should be either "pre" or "post"!')
-      END IF
+      CALL crash('choice_forcing_method "d18O_inverse_CO2" has not been tested yet. TBD!')
 
     ELSE
       CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
@@ -145,25 +119,21 @@ CONTAINS
       CALL initialise_CO2_record
 
       IF (C%do_calculate_benthic_d18O) THEN
-        CALL initialise_modelled_benthic_d18O_data
+        CALL crash('do_calculate_benthic_d18O has not been tested yet. TBD!')
       END IF
 
       ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       ! The global climate is calculated using the observed present-day climate plus a global
       ! temperature offset, which is calculated using the inverse routine, following de Boer et al. (2014)
 
-      CALL initialise_modelled_benthic_d18O_data
-      CALL initialise_d18O_record
-      CALL initialise_inverse_routine_data
+      CALL crash('choice_forcing_method "d18O_inverse_dT_glob" has not been tested yet. TBD!')
 
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! The global climate is calculated based on modelled CO2, which follows from the inverse routine
       ! (following Berends et al., 2019). The climate itself can then be calculated using either a
       ! glacial-index method or a climate-matrix method
 
-      CALL initialise_modelled_benthic_d18O_data
-      CALL initialise_CO2_record
-      CALL initialise_inverse_routine_data
+      CALL crash('choice_forcing_method "d18O_inverse_CO2" has not been tested yet. TBD!')
 
     ELSE
       CALL crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
@@ -185,6 +155,122 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=33)
 
   END SUBROUTINE initialise_global_forcing
+
+! ===== Prescribed CO2 record =====
+! =================================
+
+  SUBROUTINE update_CO2_at_model_time( time)
+    ! Interpolate the data in forcing%CO2 to find the value at the queried time.
+    ! If time lies outside the range of forcing%CO2_time, return the first/last value
+    !
+    ! NOTE: assumes time is listed in kyr (so LGM would be -21000.0)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_CO2_at_model_time'
+    INTEGER                                            :: il, iu
+    REAL(dp)                                           :: wl, wu
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF     (C%choice_forcing_method == 'CO2_direct') THEN
+      ! Observed CO2 is needed for these forcing methods.
+    ELSE
+      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
+    END IF
+
+    IF (par%master) THEN
+      IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
+        ! Model time before start of CO2 record; using constant extrapolation
+        forcing%CO2_obs = forcing%CO2_record( 1)
+      ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
+        ! Model time beyond end of CO2 record; using constant extrapolation
+        forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
+      ELSE
+        iu = 1
+        DO WHILE (forcing%CO2_time(iu) * 1000._dp < time)
+          iu = iu+1
+        END DO
+        il = iu-1
+
+        wl = (forcing%CO2_time(iu)*1000._dp - time) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
+        wu = 1._dp - wl
+
+        forcing%CO2_obs = forcing%CO2_record(il) * wl + forcing%CO2_record(iu) * wu
+
+      END IF
+    END IF
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE update_CO2_at_model_time
+
+  SUBROUTINE initialise_CO2_record
+    ! Read the CO2 record specified in C%filename_CO2_record. Assumes this is an ASCII text file with at least two columns (time in kyr and CO2 in ppmv)
+    ! and the number of rows being equal to C%CO2_record_length
+    ! NOTE: assumes time is listed in kyr (so LGM would be -21.0)
+
+    IMPLICIT NONE
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_CO2_record'
+    INTEGER                                            :: i,ios
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Safety
+    IF     (C%choice_forcing_method == 'CO2_direct') THEN
+      ! Observed CO2 is needed for these forcing methods.
+    ELSE
+      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
+    END IF
+
+    ! Allocate shared memory to take the data
+    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_time,   forcing%wCO2_time  )
+    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_record, forcing%wCO2_record)
+    CALL allocate_shared_dp_0D(                      forcing%CO2_obs,    forcing%wCO2_obs   )
+    CALL allocate_shared_dp_0D(                      forcing%CO2_mod,    forcing%wCO2_mod   )
+
+    ! Read CO2 record (time and values) from specified text file
+    IF (par%master) THEN
+
+      WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
+
+      OPEN(   UNIT = 1337, FILE=C%filename_CO2_record, ACTION='READ')
+      DO i = 1, C%CO2_record_length
+        READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
+        IF (ios /= 0) THEN
+          CALL crash('length of text file "' // TRIM(C%filename_CO2_record) // '" does not match C%CO2_record_length!')
+        END IF
+      END DO
+      CLOSE( UNIT  = 1337)
+
+      IF (C%start_time_of_run/1000._dp < forcing%CO2_time(1)) THEN
+         CALL warning(' Model time starts before start of CO2 record; constant extrapolation will be used in that case!')
+      END IF
+      IF (C%end_time_of_run/1000._dp > forcing%CO2_time(C%CO2_record_length)) THEN
+         CALL warning(' Model time will reach beyond end of CO2 record; constant extrapolation will be used in that case!')
+      END IF
+
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Set the value for the current (starting) model time
+    CALL update_CO2_at_model_time( C%start_time_of_run)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=4)
+
+  END SUBROUTINE initialise_CO2_record
 
 ! ===== Modelled benthic d18O =====
 ! =================================
@@ -581,122 +667,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_inverse_routine_data
-
-! ===== Prescribed CO2 record =====
-! =================================
-
-  SUBROUTINE update_CO2_at_model_time( time)
-    ! Interpolate the data in forcing%CO2 to find the value at the queried time.
-    ! If time lies outside the range of forcing%CO2_time, return the first/last value
-    !
-    ! NOTE: assumes time is listed in kyr (so LGM would be -21000.0)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    REAL(dp),                            INTENT(IN)    :: time
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_CO2_at_model_time'
-    INTEGER                                            :: il, iu
-    REAL(dp)                                           :: wl, wu
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Safety
-    IF     (C%choice_forcing_method == 'CO2_direct') THEN
-      ! Observed CO2 is needed for these forcing methods.
-    ELSE
-      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
-    END IF
-
-    IF (par%master) THEN
-      IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
-        ! Model time before start of CO2 record; using constant extrapolation
-        forcing%CO2_obs = forcing%CO2_record( 1)
-      ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
-        ! Model time beyond end of CO2 record; using constant extrapolation
-        forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
-      ELSE
-        iu = 1
-        DO WHILE (forcing%CO2_time(iu) * 1000._dp < time)
-          iu = iu+1
-        END DO
-        il = iu-1
-
-        wl = (forcing%CO2_time(iu)*1000._dp - time) / ((forcing%CO2_time(iu)-forcing%CO2_time(il))*1000._dp)
-        wu = 1._dp - wl
-
-        forcing%CO2_obs = forcing%CO2_record(il) * wl + forcing%CO2_record(iu) * wu
-
-      END IF
-    END IF
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE update_CO2_at_model_time
-
-  SUBROUTINE initialise_CO2_record
-    ! Read the CO2 record specified in C%filename_CO2_record. Assumes this is an ASCII text file with at least two columns (time in kyr and CO2 in ppmv)
-    ! and the number of rows being equal to C%CO2_record_length
-    ! NOTE: assumes time is listed in kyr (so LGM would be -21.0)
-
-    IMPLICIT NONE
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_CO2_record'
-    INTEGER                                            :: i,ios
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Safety
-    IF     (C%choice_forcing_method == 'CO2_direct') THEN
-      ! Observed CO2 is needed for these forcing methods.
-    ELSE
-      CALL crash('should only be called when choice_forcing_method = "CO2_direct"!')
-    END IF
-
-    ! Allocate shared memory to take the data
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_time,   forcing%wCO2_time  )
-    CALL allocate_shared_dp_1D( C%CO2_record_length, forcing%CO2_record, forcing%wCO2_record)
-    CALL allocate_shared_dp_0D(                      forcing%CO2_obs,    forcing%wCO2_obs   )
-    CALL allocate_shared_dp_0D(                      forcing%CO2_mod,    forcing%wCO2_mod   )
-
-    ! Read CO2 record (time and values) from specified text file
-    IF (par%master) THEN
-
-      WRITE(0,*) ' Reading CO2 record from ', TRIM(C%filename_CO2_record), '...'
-
-      OPEN(   UNIT = 1337, FILE=C%filename_CO2_record, ACTION='READ')
-      DO i = 1, C%CO2_record_length
-        READ( UNIT = 1337, FMT=*, IOSTAT=ios) forcing%CO2_time(i), forcing%CO2_record(i)
-        IF (ios /= 0) THEN
-          CALL crash('length of text file "' // TRIM(C%filename_CO2_record) // '" does not match C%CO2_record_length!')
-        END IF
-      END DO
-      CLOSE( UNIT  = 1337)
-
-      IF (C%start_time_of_run/1000._dp < forcing%CO2_time(1)) THEN
-         CALL warning(' Model time starts before start of CO2 record; constant extrapolation will be used in that case!')
-      END IF
-      IF (C%end_time_of_run/1000._dp > forcing%CO2_time(C%CO2_record_length)) THEN
-         CALL warning(' Model time will reach beyond end of CO2 record; constant extrapolation will be used in that case!')
-      END IF
-
-    END IF ! IF (par%master) THEN
-    CALL sync
-
-    ! Set the value for the current (starting) model time
-    CALL update_CO2_at_model_time( C%start_time_of_run)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=4)
-
-  END SUBROUTINE initialise_CO2_record
 
 ! ===== Prescribed d18O record =====
 ! ==================================
@@ -1139,7 +1109,6 @@ CONTAINS
 ! ===== Sea level records =====
 ! =============================
 
-  ! Read in a sea level record from a file
   SUBROUTINE initialise_sealevel_record
     ! Read the sea level record specified in C%filename_sealevel_record. Assumes
     ! this is an ASCII text file with at least two columns (time in kyr and sea level in m)

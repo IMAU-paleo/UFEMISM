@@ -473,8 +473,8 @@ CONTAINS
     routine_name = 'initialise_model('  //  name  //  ')'
     CALL init_routine( routine_name)
 
-    ! ===== Basic initialisation =====
-    ! ================================
+    ! ===== Region name =====
+    ! =======================
 
     ! Region name
     region%name        = name
@@ -491,13 +491,13 @@ CONTAINS
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,*) ' Initialising model region ', region%name, ' (', TRIM(region%long_name), ')...'
 
-    ! ===== Allocate memory for timers and scalars =====
-    ! ==================================================
+    ! ===== Timers and scalars =====
+    ! ==============================
 
     CALL allocate_region_timers_and_scalars( region)
 
-    ! ===== PD, GIAeq, and init reference data fields =====
-    ! =====================================================
+    ! ===== Reference topographic data fields =====
+    ! =============================================
 
     CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
 
@@ -513,8 +513,8 @@ CONTAINS
       CALL create_mesh_from_cart_data( region)
     END IF
 
-    ! ===== Map reference geometries to the mesh =====
-    ! ================================================
+    ! ===== Reference geometries -> mesh =====
+    ! ========================================
 
     IF (par%master) WRITE(0,*) '  Mapping reference geometries onto the initial model mesh...'
 
@@ -536,8 +536,8 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '  Finished mapping reference geometries.'
 
-    ! ===== The different square grids =====
-    ! ======================================
+    ! ===== Square grids =====
+    ! ========================
 
     IF (par%master) WRITE(0,*) '  Initialising square grids for output, GIA, and data smoothing...'
 
@@ -545,8 +545,8 @@ CONTAINS
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
 
-    ! ===== Initialise dummy fields for debugging =====
-    ! =================================================
+    ! ===== Debug fields =====
+    ! ========================
 
     IF (par%master) WRITE(0,*) '  Initialising debug fields...'
 
@@ -571,8 +571,8 @@ CONTAINS
 
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD, region%restart)
 
-    ! ===== Define ice basins =====
-    ! =============================
+    ! ===== Ice basins =====
+    ! ======================
 
     ! Allocate shared memory
     CALL allocate_shared_int_1D( region%mesh%nV, region%ice%basin_ID, region%ice%wbasin_ID)
@@ -625,8 +625,8 @@ CONTAINS
     ! This (init regional GHF) is currently done in the ice dynamics module (initialise_ice_model).
     ! Might be good to move it to the forcing module later, a la IMAU-ICE.
 
-    ! ===== Initialise the ice temperature profile =====
-    ! ==================================================
+    ! ===== Ice temperature profile =====
+    ! ===================================
 
     ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
     CALL run_climate_model( region, climate_matrix_global, C%start_time_of_run)
@@ -638,17 +638,18 @@ CONTAINS
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
 
-    ! ===== Scalar output (regionally integrated ice volume, SMB components, etc.) =====
-    ! ==================================================================================
+    ! ===== Scalar output  =====
+    ! ==========================
 
-    ! Calculate ice sheet metadata (volume, area, GMSL contribution) for writing to the first line of the output file
+    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
+    ! for writing to the first time point of the output file
     CALL calculate_PD_sealevel_contribution( region)
     CALL calculate_icesheet_volume_and_area( region)
 
     ! ===== Regional scalar output =====
     ! ==================================
 
-    ! Create output file
+    ! Create output file for regional scalar data
     CALL create_regional_scalar_output_file( region)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====

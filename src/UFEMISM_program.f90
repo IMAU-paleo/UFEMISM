@@ -51,8 +51,8 @@ PROGRAM UFEMISM_program
   USE mpi
   USE petscksp
   USE petsc_module,                ONLY: perr
-  USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, write_total_model_time_to_screen, &
-                                         reset_resource_tracker
+  USE configuration_module,        ONLY: dp, C, routine_path, crash, warning, initialise_model_configuration, &
+                                         write_total_model_time_to_screen, reset_resource_tracker
   USE parallel_module,             ONLY: par, sync, ierr, cerr, initialise_parallelisation
   USE data_types_module,           ONLY: type_model_region, type_netcdf_resource_tracker, &
                                          type_climate_matrix_global, type_ocean_matrix_global, &
@@ -76,30 +76,29 @@ PROGRAM UFEMISM_program
 
   IMPLICIT NONE
 
-  CHARACTER(LEN=256), PARAMETER          :: version_number = '1.2'
+  CHARACTER(LEN=256), PARAMETER       :: version_number = '1.2'
 
   ! The four model regions
-  TYPE(type_model_region)                :: NAM, EAS, GRL, ANT
+  TYPE(type_model_region)             :: NAM, EAS, GRL, ANT
 
-  ! The global climate and ocean matrices
-  TYPE(type_climate_matrix_global)       :: climate_matrix_global
-  TYPE(type_ocean_matrix_global)         :: ocean_matrix_global
+  ! The global climate/ocean matrices
+  TYPE(type_climate_matrix_global)    :: climate_matrix_global
+  TYPE(type_ocean_matrix_global)      :: ocean_matrix_global
 
   ! Coupling
-  REAL(dp)                               :: t_coupling, t_end_models
-  REAL(dp)                               :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
+  REAL(dp)                            :: t_coupling, t_end_models
 
   ! Computation time tracking
-  TYPE(type_netcdf_resource_tracker)     :: resources
-  REAL(dp)                               :: tstart, tstop, t1, tcomp_loop
+  TYPE(type_netcdf_resource_tracker)  :: resources
+  REAL(dp)                            :: tstart, tstop, t1, tcomp_loop
 
   ! SELEN
-  TYPE(type_SELEN_global)                :: SELEN
-  REAL(dp)                               :: ocean_area
-  REAL(dp)                               :: ocean_depth
+  TYPE(type_SELEN_global)             :: SELEN
+  REAL(dp)                            :: ocean_area
+  REAL(dp)                            :: ocean_depth
 
   ! Global scalar data
-  TYPE(type_global_scalar_data)          :: global_data
+  TYPE(type_global_scalar_data)       :: global_data
 
 ! ===== START =====
 ! =================
@@ -112,7 +111,9 @@ PROGRAM UFEMISM_program
 
   IF (par%master) WRITE(0,*) ''
   IF (par%master) WRITE(0,*) '=================================================='
-  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', TRIM(version_number), ' on ', par%n, ' cores ====='
+  IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', &
+                                          TRIM(version_number), ' on ', &
+                                          par%n, ' cores ====='
   IF (par%master) WRITE(0,*) '=================================================='
   IF (par%master) WRITE(0,*) ''
 
@@ -163,20 +164,6 @@ PROGRAM UFEMISM_program
   IF (C%do_GRL) CALL initialise_model( GRL, 'GRL', climate_matrix_global, ocean_matrix_global)
   IF (C%do_ANT) CALL initialise_model( ANT, 'ANT', climate_matrix_global, ocean_matrix_global)
 
-  ! == Initial GMSL contribution
-  ! ============================
-
-  CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
-
-  ! == Initial d18O contribution
-  ! ============================
-
-  IF ( (.NOT. C%choice_forcing_method == 'none') .AND. &
-              C%do_calculate_benthic_d18O ) THEN
-      CALL update_global_mean_temperature_change_history( NAM, EAS, GRL, ANT)
-      CALL calculate_modelled_d18O( NAM, EAS, GRL, ANT)
-  END IF
-
   ! == Initialise SELEN
   ! ===================
 
@@ -195,12 +182,6 @@ PROGRAM UFEMISM_program
     SELEN%t1_SLE = C%start_time_of_run + C%dt_SELEN
   END IF
 
-  ! == Initial global output
-  ! ========================
-
-  ! Write global data at t=0 to output file
-  CALL write_global_scalar_data( global_data, NAM, EAS, GRL, ANT, forcing, C%start_time_of_run)
-
 ! ===== The big time loop =====
 ! =============================
 
@@ -211,17 +192,12 @@ PROGRAM UFEMISM_program
     IF (par%master) WRITE(0,*) ''
     IF (par%master) WRITE(0,'(A,F9.3,A)') ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
 
-    ! == Global forcing update (pre regional runs)
-    ! ============================================
-
-    ! Update global insolation forcing, CO2, and d18O at the current model time
-    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'pre')
-
     ! == SELEN
     ! ========
 
     ! Solve the SLE
-    IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. C%choice_sealevel_model == 'SELEN')) THEN
+    IF (t_coupling >= SELEN%t1_SLE .AND. (C%choice_GIA_model == 'SELEN' .OR. &
+                                          C%choice_sealevel_model == 'SELEN')) THEN
 #     if (defined(DO_SELEN))
       CALL run_SELEN( SELEN, NAM, EAS, GRL, ANT, t_coupling, ocean_area, ocean_depth)
 #     endif
@@ -229,10 +205,29 @@ PROGRAM UFEMISM_program
       SELEN%t1_SLE = t_coupling + C%dt_SELEN
     END IF
 
+    ! == Global forcing update
+    ! ========================
+
+    ! Update global insolation forcing, CO2, and d18O at the current model time
+    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling)
+
     ! == Regional sea level update
     ! ============================
 
-    CALL update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob, t_coupling)
+    ! Update regional sea level
+    CALL update_regional_sea_level( NAM, EAS, GRL, ANT, global_data, t_coupling)
+
+    ! == Global sea level update
+    ! ==========================
+
+    ! Determine ice sheets GMSL contributions and new global sea level
+    CALL determine_GMSL_contributions( NAM, EAS, GRL, ANT, global_data, t_coupling)
+
+    ! == Global output
+    ! ================
+
+    ! Write global data to output file
+    CALL write_global_scalar_data( global_data, NAM, EAS, GRL, ANT, forcing, t_coupling)
 
     ! == Regional model runs
     ! ======================
@@ -245,27 +240,10 @@ PROGRAM UFEMISM_program
     IF (C%do_GRL) CALL run_model( GRL, climate_matrix_global, t_end_models)
     IF (C%do_ANT) CALL run_model( ANT, climate_matrix_global, t_end_models)
 
-    ! Advance coupling time
+    ! == Advance coupling time
+    ! ========================
+
     t_coupling = t_end_models
-
-    ! == Global sea level update
-    ! ==========================
-
-    ! Determine GMSL contributions from all simulated ice sheets
-    CALL determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
-
-    ! == Global forcing update (post regional runs)
-    ! =============================================
-
-    ! Calculate contributions to benthic d18O from the different ice sheets and,
-    ! if applicable, call the inverse routine to update the climate forcing parameter
-    CALL update_global_forcing( NAM, EAS, GRL, ANT, t_coupling, switch = 'post')
-
-    ! == Global output
-    ! ================
-
-    ! Write global data to output file
-    CALL write_global_scalar_data( global_data, NAM, EAS, GRL, ANT, forcing, t_coupling)
 
     ! == Resource tracking output
     ! ===========================

@@ -6,7 +6,7 @@ MODULE general_sea_level_module
   USE mpi
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module,               ONLY: ice_density, ocean_area, seawater_density
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, allocate_shared_dp_0D, allocate_shared_dp_1D
+  USE parallel_module,                 ONLY: par, sync, ierr
   USE data_types_module,               ONLY: type_model_region, type_global_scalar_data
   USE forcing_module,                  ONLY: forcing, update_sealevel_record_at_model_time
 
@@ -18,14 +18,14 @@ CONTAINS
 ! ==============================
 
   ! Update regional sea level
-  SUBROUTINE update_regional_sea_level( NAM, EAS, GRL, ANT, GMSL_glob, time)
+  SUBROUTINE update_regional_sea_level( NAM, EAS, GRL, ANT, global_data, time)
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: NAM, EAS, GRL, ANT
-    REAL(dp),                   INTENT(IN)        :: GMSL_glob
-    REAL(dp),                   INTENT(IN)        :: time
+    TYPE(type_model_region),       INTENT(INOUT)  :: NAM, EAS, GRL, ANT
+    TYPE(type_global_scalar_data), INTENT(INOUT)  :: global_data
+    REAL(dp),                      INTENT(IN)     :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'update_regional_sea_level'
@@ -42,10 +42,10 @@ CONTAINS
 
     ELSEIF (C%choice_sealevel_model == 'eustatic') THEN
 
-      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = GMSL_glob
-      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = GMSL_glob
-      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = GMSL_glob
-      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = GMSL_glob
+      IF (C%do_NAM) NAM%ice%SL_a( NAM%mesh%vi1:NAM%mesh%vi2) = global_data%GMSL
+      IF (C%do_EAS) EAS%ice%SL_a( EAS%mesh%vi1:EAS%mesh%vi2) = global_data%GMSL
+      IF (C%do_GRL) GRL%ice%SL_a( GRL%mesh%vi1:GRL%mesh%vi2) = global_data%GMSL
+      IF (C%do_ANT) ANT%ice%SL_a( ANT%mesh%vi1:ANT%mesh%vi2) = global_data%GMSL
 
     ELSEIF (C%choice_sealevel_model == 'prescribed') THEN
 
@@ -119,14 +119,14 @@ CONTAINS
   END SUBROUTINE calculate_PD_sealevel_contribution
 
   ! Determine current GMSL contributions from all simulated ice sheets
-  SUBROUTINE determine_GMSL_contributions( GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob, NAM, EAS, GRL, ANT, global_data)
+  SUBROUTINE determine_GMSL_contributions( NAM, EAS, GRL, ANT, global_data, time)
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_model_region),       INTENT(IN)     :: NAM, EAS, GRL, ANT
-    REAL(dp),                      INTENT(INOUT)  :: GMSL_NAM, GMSL_EAS, GMSL_GRL, GMSL_ANT, GMSL_glob
     TYPE(type_global_scalar_data), INTENT(INOUT)  :: global_data
+    REAL(dp),                      INTENT(IN)     :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_GMSL_contributions'
@@ -135,20 +135,6 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Set GMSL contributions of all simulated ice sheets (text version)
-    GMSL_NAM = 0._dp
-    GMSL_EAS = 0._dp
-    GMSL_GRL = 0._dp
-    GMSL_ANT = 0._dp
-
-    IF (C%do_NAM) GMSL_NAM = NAM%GMSL_contribution
-    IF (C%do_EAS) GMSL_EAS = EAS%GMSL_contribution
-    IF (C%do_GRL) GMSL_GRL = GRL%GMSL_contribution
-    IF (C%do_ANT) GMSL_ANT = ANT%GMSL_contribution
-
-    ! Determine global mean sea level (text version)
-    GMSL_glob = GMSL_NAM + GMSL_EAS + GMSL_GRL + GMSL_ANT
 
     ! Set GMSL contributions of all simulated ice sheets (NetCDF version)
     global_data%GMSL_NAM = 0._dp
@@ -164,10 +150,14 @@ CONTAINS
     ! Determine global mean sea level (NetCDF version)
     IF     (C%choice_sealevel_model == 'fixed') THEN
       global_data%GMSL = C%fixed_sealevel
+
     ELSEIF (C%choice_sealevel_model == 'eustatic' .OR. C%choice_sealevel_model == 'SELEN') THEN
       global_data%GMSL = global_data%GMSL_NAM + global_data%GMSL_EAS + global_data%GMSL_GRL + global_data%GMSL_ANT
+
     ELSEIF (C%choice_sealevel_model == 'prescribed') THEN
+      CALL update_sealevel_record_at_model_time( time)
       global_data%GMSL = forcing%sealevel_obs
+
     ELSE
       CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
     END IF

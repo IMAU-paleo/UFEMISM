@@ -283,8 +283,8 @@ CONTAINS
       CALL write_to_output_files( region)
     END IF
 
-    ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
-    ! used for writing to global text output and in the inverse routine
+    ! Determine total ice sheet area, volume, volume-above-flotation
+    ! and GMSL contribution, used for global scalar output
     CALL calculate_icesheet_volume_and_area( region)
 
     tstop = MPI_WTIME()
@@ -420,6 +420,9 @@ CONTAINS
 
     ! Recalculate the reference precipitation isotope content (must be done after region%mesh has been cycled)
     CALL calculate_reference_isotopes( region)
+
+    ! Recompute the PD sea level contribution on the new mesh
+    CALL calculate_PD_sealevel_contribution( region)
 
     region%t_next_SIA     = region%time
     region%t_next_SSA     = region%time

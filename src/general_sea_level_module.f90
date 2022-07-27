@@ -74,6 +74,56 @@ CONTAINS
 ! ===== Sea-level contributions =====
 ! ===================================
 
+  ! Calculate regional ice volume and area
+  SUBROUTINE calculate_icesheet_volume_and_area( region)
+    ! Calculate this region's ice sheet's volume and area
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),      INTENT(INOUT)  :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'calculate_icesheet_volume_and_area'
+    INTEGER                                      :: vi
+    REAL(dp)                                     :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ice_area                   = 0._dp
+    ice_volume                 = 0._dp
+    ice_volume_above_flotation = 0._dp
+
+    ! Calculate ice area and volume for process domain
+    DO vi = region%mesh%vi1, region%mesh%vi2
+
+      IF (region%ice%mask_ice_a( vi) == 1) THEN
+        ice_volume = ice_volume + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
+        ice_area   = ice_area   + region%mesh%A( vi) * 1.0E-06_dp ! [km^3]
+
+        ! Thickness above flotation
+        thickness_above_flotation = MAX(0._dp, region%ice%Hi_a( vi) - MAX(0._dp, (region%ice%SL_a( vi) - region%ice%Hb_a( vi)) * (seawater_density / ice_density)))
+
+        ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
+      END IF
+
+    END DO
+    CALL sync
+
+    CALL MPI_REDUCE( ice_area,                   region%ice_area,                   1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_REDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+
+    ! Calculate GMSL contribution
+    IF (par%master) region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calculate_icesheet_volume_and_area
+
   ! Calculate present-day sea level contribution
   SUBROUTINE calculate_PD_sealevel_contribution( region)
 
@@ -84,7 +134,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'calculate_PD_sealevel_contribution'
-    INTEGER                                       :: i, j
+    INTEGER                                       :: vi
     REAL(dp)                                      :: ice_volume, thickness_above_flotation, ice_volume_above_flotation
 
     ! Add routine to path
@@ -93,22 +143,21 @@ CONTAINS
     ice_volume                 = 0._dp
     ice_volume_above_flotation = 0._dp
 
-    DO i = region%refgeo_PD%grid%i1, region%refgeo_PD%grid%i2
-    DO j = 1, region%refgeo_PD%grid%ny
+    DO vi = region%mesh%vi1, region%mesh%vi2
 
       ! Thickness above flotation
-      IF (region%refgeo_PD%Hi_grid( i,j) > 0._dp) THEN
-        thickness_above_flotation = MAX(0._dp, region%refgeo_PD%Hi_grid( i,j) - MAX(0._dp, (0._dp - region%refgeo_PD%Hb_grid( i,j)) * (seawater_density / ice_density)))
+      IF (region%refgeo_PD%Hi( vi) > 0._dp) THEN
+        thickness_above_flotation = MAX(0._dp, region%refgeo_PD%Hi( vi) - MAX(0._dp, (0._dp - region%refgeo_PD%Hb( vi)) * (seawater_density / ice_density)))
       ELSE
         thickness_above_flotation = 0._dp
       END IF
 
       ! Ice volume (above flotation) in m.s.l.e
-      ice_volume                 = ice_volume                 + region%refgeo_PD%Hi_grid( i,j)   * region%refgeo_PD%grid%dx * region%refgeo_PD%grid%dx * ice_density / (seawater_density * ocean_area)
-      ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation        * region%refgeo_PD%grid%dx * region%refgeo_PD%grid%dx * ice_density / (seawater_density * ocean_area)
+      ice_volume                 = ice_volume                 + region%refgeo_PD%Hi( vi)   * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
+      ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation  * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
 
     END DO
-    END DO
+    CALL sync
 
     CALL MPI_REDUCE( ice_volume                , region%ice_volume_PD,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
     CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation_PD, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)

@@ -47,7 +47,7 @@ MODULE UFEMISM_main_model
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
-  USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
+  USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE utilities_module,                    ONLY: time_display
   USE scalar_data_output_module,           ONLY: write_regional_scalar_data
@@ -70,24 +70,24 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),           INTENT(INOUT)  :: region
-    TYPE(type_climate_matrix_global),  INTENT(INOUT)  :: climate_matrix_global
-    REAL(dp),                          INTENT(IN)     :: t_end
+    TYPE(type_model_region),          INTENT(INOUT)  :: region
+    TYPE(type_climate_matrix_global), INTENT(INOUT)  :: climate_matrix_global
+    REAL(dp),                         INTENT(IN)     :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256)                                :: routine_name
-    REAL(dp)                                          :: meshfitness
-    INTEGER                                           :: it
-    REAL(dp)                                          :: tstart, tstop, t1, t2, dt_ave
-    CHARACTER(LEN=9)                                  :: r_time, r_step, r_adv, r_ave
+    CHARACTER(LEN=256)                               :: routine_name
+    REAL(dp)                                         :: meshfitness
+    INTEGER                                          :: it
+    REAL(dp)                                         :: tstart, tstop, t1, t2, dt_ave
+    CHARACTER(LEN=9)                                 :: r_time, r_step, r_adv, r_ave
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
     CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE (0,'(A,A,A,A,A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
-                                                          ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    IF (par%master) WRITE (0,'(5A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
+                                                   ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
     CALL associate_debug_fields(  region)
@@ -682,10 +682,10 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),         INTENT(INOUT)     :: region
+    TYPE(type_model_region),       INTENT(INOUT)  :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_region_timers_and_scalars'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'allocate_region_timers_and_scalars'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1042,55 +1042,5 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 18)
 
   END SUBROUTINE initialise_model_square_grid
-
-  ! Calculate regional ice volume and area
-  SUBROUTINE calculate_icesheet_volume_and_area( region)
-    ! Calculate this region's ice sheet's volume and area
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_model_region),    INTENT(INOUT)     :: region
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'calculate_icesheet_volume_and_area'
-    INTEGER                                       :: vi
-    REAL(dp)                                      :: ice_area, ice_volume, thickness_above_flotation, ice_volume_above_flotation
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ice_area                   = 0._dp
-    ice_volume                 = 0._dp
-    ice_volume_above_flotation = 0._dp
-
-    ! Calculate ice area and volume for processor domain
-    DO vi = region%mesh%vi1, region%mesh%vi2
-
-      IF (region%ice%mask_ice_a( vi) == 1) THEN
-        ice_volume = ice_volume + (region%ice%Hi_a( vi) * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area))
-        ice_area   = ice_area   + region%mesh%A( vi) * 1.0E-06_dp ! [km^3]
-
-        ! Thickness above flotation
-        thickness_above_flotation = MAX(0._dp, region%ice%Hi_a( vi) - MAX(0._dp, (region%ice%SL_a( vi) - region%ice%Hb_a( vi)) * (seawater_density / ice_density)))
-
-        ice_volume_above_flotation = ice_volume_above_flotation + thickness_above_flotation * region%mesh%A( vi) * ice_density / (seawater_density * ocean_area)
-      END IF
-
-    END DO
-    CALL sync
-
-    CALL MPI_REDUCE( ice_area,                   region%ice_area,                   1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_REDUCE( ice_volume,                 region%ice_volume,                 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-    CALL MPI_REDUCE( ice_volume_above_flotation, region%ice_volume_above_flotation, 1, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
-
-    ! Calculate GMSL contribution
-    IF (par%master) region%GMSL_contribution = -1._dp * (region%ice_volume_above_flotation - region%ice_volume_above_flotation_PD)
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calculate_icesheet_volume_and_area
 
 END MODULE UFEMISM_main_model

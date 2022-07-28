@@ -12,7 +12,7 @@
                             -Werror=implicit-interface -fimplicit-none -g -march=native
   COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og
 
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC}\
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK}\
                             ${NCINC} -I${PETSC_DIR}/include \
                             -I${PETSC_DIR}/${PETSC_ARCH}/include
 

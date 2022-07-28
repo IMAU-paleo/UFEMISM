@@ -38,103 +38,103 @@ MODULE utilities_module
 
 CONTAINS
 
-! ! == Some operations on the scaled vertical coordinate
-!   SUBROUTINE vertical_integration_from_bottom_to_zeta( f, integral_f)
-!     ! This subroutine integrates f from the bottom level at C%zeta(k=C%nz) = 1 up to the level C%zeta(k):
-!     !  See Eq. (12.1)
-!     ! If the integrand f is positive (our case) the integral is negative because the integration is in
-!     ! the opposite zeta direction. A 1D array which contains for each k-layer the integrated value from
-!     ! the bottom up to that k-layer is returned. The value of the integrand f at some integration step k
-!     ! is the average of f(k+1) and f(k):
-!     !  integral_f(k) = integral_f(k+1) + 0.5 * (f(k+1) + f(k)) * (-dzeta)
-!     ! with dzeta = C%zeta(k+1) - C%zeta(k). So for f > 0  integral_f < 0.
+! == Some operations on the scaled vertical coordinate
+  SUBROUTINE vertical_integration_from_bottom_to_zeta( f, integral_f)
+    ! This subroutine integrates f from the bottom level at C%zeta(k=C%nz) = 1 up to the level C%zeta(k):
+    !  See Eq. (12.1)
+    ! If the integrand f is positive (our case) the integral is negative because the integration is in
+    ! the opposite zeta direction. A 1D array which contains for each k-layer the integrated value from
+    ! the bottom up to that k-layer is returned. The value of the integrand f at some integration step k
+    ! is the average of f(k+1) and f(k):
+    !  integral_f(k) = integral_f(k+1) + 0.5 * (f(k+1) + f(k)) * (-dzeta)
+    ! with dzeta = C%zeta(k+1) - C%zeta(k). So for f > 0  integral_f < 0.
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! Input variables:
-!     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-!     REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
+    ! Input variables:
+    REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
+    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
 
-!     ! Local variables:
-!     INTEGER                                :: k
+    ! Local variables:
+    INTEGER                                :: k
 
-!     integral_f(C%nz) = 0._dp
-!     DO k = C%nz-1, 1, -1
-!       integral_f(k) = integral_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-!     END DO
+    integral_f(C%nz) = 0._dp
+    DO k = C%nz-1, 1, -1
+      integral_f(k) = integral_f(k+1) - 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
+    END DO
 
-!   END SUBROUTINE vertical_integration_from_bottom_to_zeta
-!   SUBROUTINE vertical_integration_from_top_to_zeta(    f, integral_f)
-!     ! This subroutine integrates f from the top level at C%zeta(k=1) = 0 down to the level C%zeta(k): Eq. (12.2)
-!     ! Similar to Eq. (12.1) but in the other direction.
-!     ! If the integrand f is positive (our case) the integral is positive because the integration is in
-!     ! the zeta direction. A 1D array which contains for each k-layer the integrated value from
-!     ! the top down to that k-layer is returned. The value of the integrand f at some integration step k
-!     ! is the average of f(k) and f(k-1):
-!     ! integral_f(k) = integral_f(k-1) + 0.5 * (f(k) + f(k-1)) * (dzeta); with dzeta = C%zeta(k+1) - C%zeta(k).
-!     ! Heiko Goelzer (h.goelzer@uu.nl) Jan 2016
+  END SUBROUTINE vertical_integration_from_bottom_to_zeta
+  SUBROUTINE vertical_integration_from_top_to_zeta(    f, integral_f)
+    ! This subroutine integrates f from the top level at C%zeta(k=1) = 0 down to the level C%zeta(k): Eq. (12.2)
+    ! Similar to Eq. (12.1) but in the other direction.
+    ! If the integrand f is positive (our case) the integral is positive because the integration is in
+    ! the zeta direction. A 1D array which contains for each k-layer the integrated value from
+    ! the top down to that k-layer is returned. The value of the integrand f at some integration step k
+    ! is the average of f(k) and f(k-1):
+    ! integral_f(k) = integral_f(k-1) + 0.5 * (f(k) + f(k-1)) * (dzeta); with dzeta = C%zeta(k+1) - C%zeta(k).
+    ! Heiko Goelzer (h.goelzer@uu.nl) Jan 2016
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! Input variables:
-!     REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
-!     REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
+    ! Input variables:
+    REAL(dp), DIMENSION(C%nz), INTENT(IN)  :: f
+    REAL(dp), DIMENSION(C%nz), INTENT(OUT) :: integral_f
 
-!     ! Local variables:
-!     INTEGER                                :: k
+    ! Local variables:
+    INTEGER                                :: k
 
-!     integral_f(1) = 0._dp
-!     DO k = 2, C%nz, 1
-!       integral_f(k) = integral_f(k-1) + 0.5_dp * (f(k) + f(k-1)) * (C%zeta(k) - C%zeta(k-1))
-!     END DO
+    integral_f(1) = 0._dp
+    DO k = 2, C%nz, 1
+      integral_f(k) = integral_f(k-1) + 0.5_dp * (f(k) + f(k-1)) * (C%zeta(k) - C%zeta(k-1))
+    END DO
 
-!   END SUBROUTINE vertical_integration_from_top_to_zeta
-!   SUBROUTINE vertical_integrate(                       f, integral_f)
-!     ! Integrate f over the ice column (from the base to the surface)
+  END SUBROUTINE vertical_integration_from_top_to_zeta
+  SUBROUTINE vertical_integrate(                       f, integral_f)
+    ! Integrate f over the ice column (from the base to the surface)
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! Input variable:
-!     REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-!     REAL(dp),                  INTENT(OUT):: integral_f
+    ! Input variable:
+    REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
+    REAL(dp),                  INTENT(OUT):: integral_f
 
-!     ! Local variable:
-!     INTEGER                               :: k
+    ! Local variable:
+    INTEGER                               :: k
 
-!     ! Initial value is zero
-!     integral_f = 0.0_dp
+    ! Initial value is zero
+    integral_f = 0.0_dp
 
-!     ! Intermediate values include sum of all previous values
-!     ! Take current value as average between points
-!     DO k = 2, C%nz
-!        integral_f = integral_f + 0.5_dp*(f(k)+f(k-1))*(C%zeta(k) - C%zeta(k-1))
-!     END DO
+    ! Intermediate values include sum of all previous values
+    ! Take current value as average between points
+    DO k = 2, C%nz
+       integral_f = integral_f + 0.5_dp*(f(k)+f(k-1))*(C%zeta(k) - C%zeta(k-1))
+    END DO
 
-!   END SUBROUTINE vertical_integrate
-!   SUBROUTINE vertical_average(                         f, average_f)
-!     ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
-!     !  See Eq. (11.3) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf.
-!     ! The integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%nz) = 1.
-!     ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those
-!     ! layers k and k+1, which is imediately the weight factor for this contribution because de total layer distance
-!     ! is scaled to 1. The sum of all the weighted contribution gives average_f the vertical average of f.
+  END SUBROUTINE vertical_integrate
+  SUBROUTINE vertical_average(                         f, average_f)
+    ! Calculate the vertical average of any given function f defined at the vertical zeta grid.
+    !  See Eq. (11.3) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf.
+    ! The integration is in the direction of the positive zeta-axis from C%zeta(k=1) = 0 up to C%zeta(k=C%nz) = 1.
+    ! Numerically: de average between layer k and k+1 is calculated and multiplied by the distance between those
+    ! layers k and k+1, which is imediately the weight factor for this contribution because de total layer distance
+    ! is scaled to 1. The sum of all the weighted contribution gives average_f the vertical average of f.
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! Input variables:
-!     REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
-!     REAL(dp),                  INTENT(OUT):: average_f
+    ! Input variables:
+    REAL(dp), DIMENSION(C%nz), INTENT(IN) :: f
+    REAL(dp),                  INTENT(OUT):: average_f
 
-!     ! Local variables:
-!     INTEGER                               :: k
+    ! Local variables:
+    INTEGER                               :: k
 
-!     !  See Eq. (11.4) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf
-!     average_f = 0._dp
-!     DO k = 1, C%nz-1
-!       average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
-!     END DO
+    !  See Eq. (11.4) in DOCUMENTATION/icedyn-documentation/icedyn-documentation.pdf
+    average_f = 0._dp
+    DO k = 1, C%nz-1
+      average_f = average_f + 0.5_dp * (f(k+1) + f(k)) * (C%zeta(k+1) - C%zeta(k))
+    END DO
 
-!   END SUBROUTINE vertical_average
+  END SUBROUTINE vertical_average
 
 ! == Floatation criterion, surface elevation, and thickness above floatation
   FUNCTION is_floating( Hi, Hb, SL) RESULT( isso)
@@ -1011,49 +1011,49 @@ CONTAINS
 
   END SUBROUTINE remove_Lake_Vostok
 
-! ! == Analytical solution by Schoof 2006 for the "SSA_icestream" benchmark experiment
-!   SUBROUTINE SSA_Schoof2006_analytical_solution( tantheta, h0, A_flow, y, U, tauc)
+! == Analytical solution by Schoof 2006 for the "SSA_icestream" benchmark experiment
+  SUBROUTINE SSA_Schoof2006_analytical_solution( tantheta, h0, A_flow, y, U, tauc)
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! In/output variables:
-!     REAL(dp),                            INTENT(IN)    :: tantheta   ! Surface slope in the x-direction
-!     REAL(dp),                            INTENT(IN)    :: h0         ! Ice thickness
-!     REAL(dp),                            INTENT(IN)    :: A_flow     ! Ice flow factor
-!     REAL(dp),                            INTENT(IN)    :: y          ! y-coordinate
-!     REAL(dp),                            INTENT(OUT)   :: U          ! Ice velocity in the x-direction
-!     REAL(dp),                            INTENT(OUT)   :: tauc       ! Till yield stress
+    ! In/output variables:
+    REAL(dp),                            INTENT(IN)    :: tantheta   ! Surface slope in the x-direction
+    REAL(dp),                            INTENT(IN)    :: h0         ! Ice thickness
+    REAL(dp),                            INTENT(IN)    :: A_flow     ! Ice flow factor
+    REAL(dp),                            INTENT(IN)    :: y          ! y-coordinate
+    REAL(dp),                            INTENT(OUT)   :: U          ! Ice velocity in the x-direction
+    REAL(dp),                            INTENT(OUT)   :: tauc       ! Till yield stress
 
-!     ! Local variables:
-!     REAL(dp)                                           :: m, B, f, W, ua, ub, uc, ud, ue
-!     REAL(dp)                                           :: L = 40000._dp     ! Ice-stream width (m)
+    ! Local variables:
+    REAL(dp)                                           :: m, B, f, W, ua, ub, uc, ud, ue
+    REAL(dp)                                           :: L = 40000._dp     ! Ice-stream width (m)
 
-!     m = C%SSA_icestream_m
+    m = C%SSA_icestream_m
 
-!     ! Calculate the gravitational driving stress f
-!     f = ice_density * grav * h0 * tantheta
+    ! Calculate the gravitational driving stress f
+    f = ice_density * grav * h0 * tantheta
 
-!     ! Calculate the ice hardness factor B
-!     B = A_flow**(-1._dp/C%n_flow)
+    ! Calculate the ice hardness factor B
+    B = A_flow**(-1._dp/C%n_flow)
 
-!     ! Calculate the "ice stream half-width" W
-!     W = L * (m+1._dp)**(1._dp/m)
+    ! Calculate the "ice stream half-width" W
+    W = L * (m+1._dp)**(1._dp/m)
 
-!     ! Calculate the till yield stress across the stream
-!     tauc = f * ABS(y/L)**m
+    ! Calculate the till yield stress across the stream
+    tauc = f * ABS(y/L)**m
 
-!     ! Calculate the analytical solution for u
-!     ua = -2._dp * f**3 * L**4 / (B**3 * h0**3)
-!     ub = ( 1._dp / 4._dp                           ) * (   (y/L)**     4._dp  - (m+1._dp)**(       4._dp/m) )
-!     uc = (-3._dp / ((m+1._dp)    * (      m+4._dp))) * (ABS(y/L)**(  m+4._dp) - (m+1._dp)**(1._dp+(4._dp/m)))
-!     ud = ( 3._dp / ((m+1._dp)**2 * (2._dp*m+4._dp))) * (ABS(y/L)**(2*m+4._dp) - (m+1._dp)**(2._dp+(4._dp/m)))
-!     ue = (-1._dp / ((m+1._dp)**3 * (3._dp*m+4._dp))) * (ABS(y/L)**(3*m+4._dp) - (m+1._dp)**(3._dp+(4._dp/m)))
-!     u = ua * (ub + uc + ud + ue)
+    ! Calculate the analytical solution for u
+    ua = -2._dp * f**3 * L**4 / (B**3 * h0**3)
+    ub = ( 1._dp / 4._dp                           ) * (   (y/L)**     4._dp  - (m+1._dp)**(       4._dp/m) )
+    uc = (-3._dp / ((m+1._dp)    * (      m+4._dp))) * (ABS(y/L)**(  m+4._dp) - (m+1._dp)**(1._dp+(4._dp/m)))
+    ud = ( 3._dp / ((m+1._dp)**2 * (2._dp*m+4._dp))) * (ABS(y/L)**(2*m+4._dp) - (m+1._dp)**(2._dp+(4._dp/m)))
+    ue = (-1._dp / ((m+1._dp)**3 * (3._dp*m+4._dp))) * (ABS(y/L)**(3*m+4._dp) - (m+1._dp)**(3._dp+(4._dp/m)))
+    u = ua * (ub + uc + ud + ue)
 
-!     ! Outside the ice-stream, velocity is zero
-!     IF (ABS(y) > w) U = 0._dp
+    ! Outside the ice-stream, velocity is zero
+    IF (ABS(y) > w) U = 0._dp
 
-!   END SUBROUTINE SSA_Schoof2006_analytical_solution
+  END SUBROUTINE SSA_Schoof2006_analytical_solution
 
 ! ! == Some wrappers for LAPACK matrix functionality
 !   FUNCTION tridiagonal_solve( ldiag, diag, udiag, rhs) RESULT(x)

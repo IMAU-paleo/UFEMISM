@@ -195,6 +195,7 @@ CONTAINS
     
   END SUBROUTINE map_c_to_b_2D
   
+#endif
   ! 3-D
   SUBROUTINE map_a_to_b_3D( mesh, d_a, d_b)
     ! Map a 3-D data field from the a (vertex) to the b (triangle) grid
@@ -224,6 +225,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_b_3D
+#if 0
   SUBROUTINE map_a_to_c_3D( mesh, d_a, d_c)
     ! Map a 3-D data field from the a (vertex) to the c (edge) grid
       
@@ -252,6 +254,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_a_to_c_3D
+#endif
   SUBROUTINE map_b_to_a_3D( mesh, d_b, d_a)
     ! Map a 3-D data field from the b (triangle) to the a (vertex) grid
       
@@ -280,6 +283,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_b_to_a_3D
+#if 0
   SUBROUTINE map_b_to_c_3D( mesh, d_b, d_c)
     ! Map a 3-D data field from the b (triangle) to the c (edge) grid
       
@@ -368,6 +372,7 @@ CONTAINS
 ! == d/dx
 
   ! 2-D
+#endif
   SUBROUTINE ddx_a_to_a_2D( mesh, d_a, ddx_a)
     ! ddx a 2-D data field from the a (vertex) to the a (vertex) grid
       
@@ -424,6 +429,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_b_2D
+#if 0
   SUBROUTINE ddx_a_to_c_2D( mesh, d_a, ddx_c)
     ! ddx a 2-D data field from the a (vertex) to the c (edge) grid
       
@@ -452,6 +458,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_c_2D
+#endif
   SUBROUTINE ddx_b_to_a_2D( mesh, d_b, ddx_a)
     ! ddx a 2-D data field from the b (triangle) to the a (vertex) grid
       
@@ -480,6 +487,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_a_2D
+#if 0
   SUBROUTINE ddx_b_to_b_2D( mesh, d_b, ddx_b)
     ! ddx a 2-D data field from the b (triangle) to the b (triangle) grid
       
@@ -706,6 +714,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_a_to_c_3D
+#endif
   SUBROUTINE ddx_b_to_a_3D( mesh, d_b, ddx_a)
     ! ddx a 3-D data field from the b (triangle) to the a (vertex) grid
       
@@ -734,6 +743,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddx_b_to_a_3D
+#if 0
   SUBROUTINE ddx_b_to_b_3D( mesh, d_b, ddx_b)
     ! ddx a 3-D data field from the b (triangle) to the b (triangle) grid
       
@@ -878,6 +888,7 @@ CONTAINS
 ! == d/dy
 
   ! 2-D
+#endif
   SUBROUTINE ddy_a_to_a_2D( mesh, d_a, ddy_a)
     ! ddy a 2-D data field from the a (vertex) to the a (vertex) grid
       
@@ -934,6 +945,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_b_2D
+#if 0
   SUBROUTINE ddy_a_to_c_2D( mesh, d_a, ddy_c)
     ! ddy a 2-D data field from the a (vertex) to the c (edge) grid
       
@@ -962,6 +974,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_c_2D
+#endif
   SUBROUTINE ddy_b_to_a_2D( mesh, d_b, ddy_a)
     ! ddy a 2-D data field from the b (triangle) to the a (vertex) grid
       
@@ -990,6 +1003,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_a_2D
+#if 0
   SUBROUTINE ddy_b_to_b_2D( mesh, d_b, ddy_b)
     ! ddy a 2-D data field from the b (triangle) to the b (triangle) grid
       
@@ -1216,6 +1230,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_a_to_c_3D
+#endif
   SUBROUTINE ddy_b_to_a_3D( mesh, d_b, ddy_a)
     ! ddy a 3-D data field from the b (triangle) to the a (vertex) grid
       
@@ -1244,6 +1259,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_b_to_a_3D
+#if 0
   SUBROUTINE ddy_b_to_b_3D( mesh, d_b, ddy_b)
     ! ddy a 3-D data field from the b (triangle) to the b (triangle) grid
       

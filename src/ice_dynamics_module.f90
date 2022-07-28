@@ -23,8 +23,8 @@ MODULE ice_dynamics_module
   use mesh_mapping_module,                 only: remap_field_dp_2D
   use general_ice_model_data_module,       only: update_general_ice_model_data
   ! use mesh_operators_module,               only: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  ! use ice_velocity_module,                 only: solve_SIA, solve_SSA, solve_DIVA
-  use ice_velocity_module,                 only: map_velocities_b_to_c_2D, remap_velocities
+  use ice_velocity_module,                 only: solve_DIVA
+  use ice_velocity_module,                 only: map_velocities_b_to_c_2D, remap_velocities, initialise_velocity_solver
   use ice_thickness_module,                only: calc_dHi_dt
   use basal_conditions_and_sliding_module, only: initialise_basal_conditions, remap_basal_conditions
   ! use thermodynamics_module,               only: calc_ice_rheology, remap_ice_temperature
@@ -250,74 +250,77 @@ contains
       region%ice%pc_f1 = region%ice%dHi_dt_a
       region%ice%Hi_pred = MAX(0._dp, region%ice%Hi_a + region%dt_crit_ice * region%ice%dHi_dt_a)
 
-    !   ! Update step
-    !   ! ===========
+      ! Update step
+      ! ===========
 
-    !   ! Calculate velocities for predicted geometry
-    !   region%ice%Hi_old = region%ice%Hi_a
-    !   region%ice%Hi_a   = region%ice%Hi_pred
-    !   CALL update_general_ice_model_data( region%mesh, region%ice)
+      ! Calculate velocities for predicted geometry
+      region%ice%Hi_old = region%ice%Hi_a
+      region%ice%Hi_a   = region%ice%Hi_pred
+      CALL update_general_ice_model_data( region%mesh, region%ice)
 
-    !   IF     (C%choice_ice_dynamics == 'SIA') THEN
+      IF     (C%choice_ice_dynamics == 'SIA') THEN
 
-    !     ! Calculate velocities
-    !     CALL solve_SIA(  region%mesh, region%ice)
+        call crash('todo, implement'//C%choice_ice_dynamics)
+        ! Calculate velocities
+      !  CALL solve_SIA(  region%mesh, region%ice)
 
-    !     ! Update timer
-    !     region%t_last_SIA = region%time
-    !     region%t_next_SIA = region%time + region%dt_crit_ice
+      !  ! Update timer
+      !  region%t_last_SIA = region%time
+      !  region%t_next_SIA = region%time + region%dt_crit_ice
 
-    !   ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
  
-    !     ! Calculate velocities
-    !     CALL solve_SSA(  region%mesh, region%ice)
+        call crash('todo, implement'//C%choice_ice_dynamics)
+        ! Calculate velocities
+      !  CALL solve_SSA(  region%mesh, region%ice)
 
-    !     ! Update timer
-    !     region%t_last_SSA = region%time
-    !     region%t_next_SSA = region%time + region%dt_crit_ice
+      !  ! Update timer
+      !  region%t_last_SSA = region%time
+      !  region%t_next_SSA = region%time + region%dt_crit_ice
 
 
-    !   ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
 
-    !     ! Calculate velocities
-    !     CALL solve_SIA(  region%mesh, region%ice)
-    !     CALL solve_SSA(  region%mesh, region%ice)
+        call crash('todo, implement'//C%choice_ice_dynamics)
+        ! Calculate velocities
+      !  CALL solve_SIA(  region%mesh, region%ice)
+      !  CALL solve_SSA(  region%mesh, region%ice)
 
-    !     ! Update timer
-    !     region%t_last_SIA = region%time
-    !     region%t_last_SSA = region%time
-    !     region%t_next_SIA = region%time + region%dt_crit_ice
-    !     region%t_next_SSA = region%time + region%dt_crit_ice
+      !  ! Update timer
+      !  region%t_last_SIA = region%time
+      !  region%t_last_SSA = region%time
+      !  region%t_next_SIA = region%time + region%dt_crit_ice
+      !  region%t_next_SSA = region%time + region%dt_crit_ice
 
-    !   ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
 
-    !     ! Calculate velocities
-    !     CALL solve_DIVA( region%mesh, region%ice)
+        ! Calculate velocities
+        CALL solve_DIVA( region%mesh, region%ice)
 
-    !     ! Update timer
-    !     region%t_last_DIVA = region%time
-    !     region%t_next_DIVA = region%time + region%dt_crit_ice
+        ! Update timer
+        region%t_last_DIVA = region%time
+        region%t_next_DIVA = region%time + region%dt_crit_ice
 
-    !   ELSE
-    !     CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-    !   END IF
+      ELSE
+        CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
+      END IF
 
-    !   ! Corrector step
-    !   ! ==============
+      ! Corrector step
+      ! ==============
 
-    !   ! Go back to old ice thickness. Run all the other modules (climate, SMB, BMB, thermodynamics, etc.)
-    !   ! and only go to new (corrected) ice thickness at the end of this time loop.
-    !   region%ice%Hi_a = region%ice%Hi_old
-    !   CALL update_general_ice_model_data( region%mesh, region%ice)
+      ! Go back to old ice thickness. Run all the other modules (climate, SMB, BMB, thermodynamics, etc.)
+      ! and only go to new (corrected) ice thickness at the end of this time loop.
+      region%ice%Hi_a = region%ice%Hi_old
+      CALL update_general_ice_model_data( region%mesh, region%ice)
 
-    !   ! Calculate "corrected" ice thickness based on new velocities
-    !   CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
-    !   region%ice%pc_f3 = region%ice%dHi_dt_a
-    !   region%ice%pc_f4 = region%ice%pc_f1
-    !   region%ice%Hi_corr = MAX(0._dp, region%ice%Hi_a + 0.5_dp * region%dt_crit_ice * (region%ice%pc_f3 + region%ice%pc_f4))
+      ! Calculate "corrected" ice thickness based on new velocities
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
+      region%ice%pc_f3 = region%ice%dHi_dt_a
+      region%ice%pc_f4 = region%ice%pc_f1
+      region%ice%Hi_corr = MAX(0._dp, region%ice%Hi_a + 0.5_dp * region%dt_crit_ice * (region%ice%pc_f3 + region%ice%pc_f4))
 
-    !   ! Determine truncation error
-    !   CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice, region%dt_prev)
+      ! Determine truncation error
+      CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice, region%dt_prev)
 
     END IF ! IF (do_update_ice_velocity) THEN
 
@@ -743,7 +746,7 @@ contains
     END IF
 
     ! ! Initialise data and matrices for the velocity solver(s)
-    ! CALL initialise_velocity_solver( mesh, ice)
+    CALL initialise_velocity_solver( mesh, ice)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))

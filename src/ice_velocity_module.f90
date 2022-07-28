@@ -1099,11 +1099,11 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    allocate( N_b    (   mesh%vi1:mesh%vi2))
-    allocate( dN_dx_b(   mesh%vi1:mesh%vi2))
-    allocate( dN_dy_b(   mesh%vi1:mesh%vi2))
-    allocate( b_buv  (2*(mesh%vi1-1)+1:2*mesh%vi2))
-    allocate( uv_buv (2*(mesh%vi1-1)+1:2*mesh%vi2))
+    allocate( N_b    (   mesh%ti1:mesh%ti2))
+    allocate( dN_dx_b(   mesh%ti1:mesh%ti2))
+    allocate( dN_dy_b(   mesh%ti1:mesh%ti2))
+    allocate( b_buv  (2*(mesh%ti1-1)+1:2*mesh%ti2))
+    allocate( uv_buv (2*(mesh%ti1-1)+1:2*mesh%ti2))
     
     ! Calculate N, dN/dx, and dN/dy on the b-grid
     CALL map_a_to_b_2D( mesh, ice%N_a, N_b    )

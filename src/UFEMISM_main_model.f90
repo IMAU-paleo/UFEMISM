@@ -641,8 +641,8 @@ CONTAINS
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
 
-    ! ===== Scalar output  =====
-    ! ==========================
+    ! ===== Scalar ice data =====
+    ! ===========================
 
     ! Calculate ice sheet metadata (volume, area, GMSL contribution),
     ! for writing to the first time point of the output file
@@ -654,6 +654,9 @@ CONTAINS
 
     ! Create output file for regional scalar data
     CALL create_regional_scalar_output_file( region)
+
+    ! Write scalar data at time t=0
+    CALL write_regional_scalar_data( region, C%start_time_of_run)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================

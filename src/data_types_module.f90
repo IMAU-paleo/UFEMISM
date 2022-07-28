@@ -796,7 +796,8 @@ MODULE data_types_module
     ! Bias-corrected GCM data
     REAL(dp), DIMENSION(:,:  ), POINTER     :: T2m_corr                      ! Bias-corrected monthly mean 2m air temperature (K)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Precip_corr                   ! Bias-corrected monthly mean precipitation (m)
-    INTEGER :: wT2m_corr, wPrecip_corr
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hs_corr                       ! Bias-corrected surface elevation (m)
+    INTEGER :: wT2m_corr, wPrecip_corr, wHs_corr
 
     ! Reference absorbed insolation (for GCM snapshots), or insolation at model time for the applied climate
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Q_TOA                         ! Monthly mean insolation at the top of the atmosphere (W/m2) (taken from the prescribed insolation solution at orbit_time)
@@ -934,7 +935,8 @@ MODULE data_types_module
     ! GCM bias
     REAL(dp), DIMENSION(:,:  ), POINTER     :: GCM_bias_T2m                  ! GCM temperature   bias (= [modelled PI temperature  ] - [observed PI temperature  ])
     REAL(dp), DIMENSION(:,:  ), POINTER     :: GCM_bias_Precip               ! GCM precipitation bias (= [modelled PI precipitation] / [observed PI precipitation])
-    INTEGER :: wGCM_bias_T2m, wGCM_bias_Precip
+    REAL(dp), DIMENSION(:    ), POINTER     :: GCM_bias_Hs                   ! GCM elsevation    bias (= [modelled PI elevation    ] - [observed PI elevation    ])
+    INTEGER :: wGCM_bias_T2m, wGCM_bias_Precip, wGCM_bias_Hs
 
     ! Direct climate/SMB forcing
     TYPE(type_direct_climate_forcing_regional) :: direct

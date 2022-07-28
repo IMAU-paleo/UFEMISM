@@ -145,7 +145,7 @@ MODULE data_types_module
     
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_in
-    REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_out
+    ! REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_out ! Unused
     REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
     

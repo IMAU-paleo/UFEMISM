@@ -2604,8 +2604,8 @@ MODULE mesh_help_functions_module
 
     ! In/output variables:
     TYPE(type_mesh),            INTENT(IN)        :: mesh
-    REAL(dp), DIMENSION(:    ), INTENT(IN)        :: u_c, v_c
-    REAL(dp), DIMENSION(:    ), INTENT(OUT)       :: p_c, o_c
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(IN)        :: u_c, v_c
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)       :: p_c, o_c
 
     ! Local variables:
     INTEGER                                       :: ci, vi, vj

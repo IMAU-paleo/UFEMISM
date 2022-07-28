@@ -82,7 +82,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
     REAL(dp), DIMENSION(:    ), allocatable            ::  u_c,  v_c,  up_c,  uo_c
-    real(dp), dimension(:    ), allocatable            :: v_vav_b, u_vav_b
+    real(dp), dimension(:    ), allocatable            :: v_vav_b, u_vav_b, Hi_a
+    real(dp), dimension(:,:  ), allocatable            :: Cw
     INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
     REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
     REAL(dp), DIMENSION(mesh%nV)                       :: Vi_SMB
@@ -91,9 +92,8 @@ CONTAINS
     CALL init_routine( routine_name)
             
     ! Initialise at zero
-    ice%dVi_in(  mesh%vi1:mesh%vi2, :) = 0._dp
-    ice%dVi_out( mesh%vi1:mesh%vi2, :) = 0._dp
-    CALL sync
+    ice%dVi_in     = 0._dp
+    !ice%dVi_out( mesh%vi1:mesh%vi2, :) = 0._dp ! Unused?
     
     Vi_in          = 0._dp
     Vi_available   = 0._dp
@@ -101,10 +101,10 @@ CONTAINS
     Vi_SMB         = 0._dp
     
     ! Calculate vertically averaged ice velocities along vertex connections
-    allocate(u_c ( mesh%ci1:mesh%ci2))
-    allocate(v_c ( mesh%ci1:mesh%ci2)) 
-    allocate(up_c( mesh%ci1:mesh%ci2))
-    allocate(uo_c( mesh%ci1:mesh%ci2))
+    allocate(u_c ( 1:mesh%nAc))
+    allocate(v_c ( 1:mesh%nAc)) 
+    allocate(up_c( 1:mesh%nAc))
+    allocate(uo_c( 1:mesh%nAc))
 
     allocate(u_vav_b(mesh%nTri))
     allocate(v_vav_b(mesh%nTri))
@@ -112,6 +112,14 @@ CONTAINS
     v_vav_b(mesh%ti1:mesh%ti2) = ice%v_vav_b
     call allgather_array(u_vav_b)
     call allgather_array(v_vav_b)
+
+    allocate(Hi_a( 1:mesh%nV))
+    allocate(Cw  ( 1:mesh%nV, mesh%nC_mem))
+    Hi_a(mesh%vi1:mesh%vi2) = ice%Hi_a
+    Cw  (mesh%vi1:mesh%vi2,:) = mesh%Cw
+    call allgather_array(Hi_a)
+    call allgather_array(Cw)
+
     
     CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
     CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
@@ -120,7 +128,7 @@ CONTAINS
     ! based on ice velocities calculated on Ac mesh
     ! =============================================
     
-    DO aci = mesh%ci1, mesh%ci2
+    DO aci = 1, mesh%nAc
     
       ! The two Aa vertices connected by the Ac vertex
       vi = mesh%Aci( aci,1)
@@ -148,13 +156,14 @@ CONTAINS
       ! - ice velocity   (m/y - calculated at midpoint, using surface slope along connection)
       ! - time step      (y)
       IF (up_c( aci) > 0._dp) THEN
-        dVi = ice%Hi_a( vi) * up_c( aci) * mesh%Cw( vi,ci) * dt ! m3
+        dVi = Hi_a( vi) * up_c( aci) * Cw( vi,ci) * dt ! m3
       ELSE
-        dVi = ice%Hi_a( vj) * up_c( aci) * mesh%Cw( vi,ci) * dt ! m3
+        dVi = Hi_a( vj) * up_c( aci) * Cw( vi,ci) * dt ! m3 
       END IF
       
       ! Keep track of ice fluxes across individual connections, to correct for
       ! negative ice thicknesses if necessary         
+      !TODO because of this indexing, its not straightforward to parallelize (and therefore we don't parallelize, currently)
       ice%dVi_in( vi, ci) = -dVi ! m3
       ice%dVi_in( vj, cj) =  dVi ! m3
            
@@ -217,7 +226,6 @@ CONTAINS
       END IF ! IF (rescale_factor < 1._dp) THEN
       
     END DO ! DO vi = mesh%vi1, mesh%vi2
-    CALL sync
     
     ! Calculate change in ice thickness over time at every vertex
     ! ===========================================================
@@ -228,13 +236,14 @@ CONTAINS
       ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi) * dt)
       ice%dHi_dt_a(     vi) = (ice%Hi_tplusdt_a( vi) - ice%Hi_a( vi)) / dt
     END DO    
-    CALL sync
     
     ! Clean up after yourself
     deallocate( u_c )
     deallocate( v_c )
     deallocate( up_c)
     deallocate( uo_c)
+    deallocate( Hi_a)
+    deallocate( Cw  )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

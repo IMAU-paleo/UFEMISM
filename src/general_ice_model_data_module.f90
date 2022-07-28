@@ -233,7 +233,7 @@ CONTAINS
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_a'
-    REAL(dp), DIMENSION(:    ), allocatable            ::  TAF_b
+    REAL(dp), DIMENSION(:    ), allocatable            :: TAF_a, TAF_b
     INTEGER                                            :: vi, ci, vj, iti, iti2, ti1, ti2
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, ccb1, ccb2
@@ -242,9 +242,15 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
   
+    ! Make neighbours of TAF_a available
+    allocate(TAF_a(1:mesh%nV))
+    TAF_a(mesh%vi1:mesh%vi2) = ice%TAF_a
+    call allgather_array(TAF_a)
+
     ! Map thickness-above-floatation to the b-grid
-    allocate(TAF_b(mesh%ti1:mesh%ti2))
-    CALL map_a_to_b_2D(  mesh, ice%TAF_a, TAF_b)
+    allocate(TAF_b(1:mesh%nTri))
+    CALL map_a_to_b_2D(  mesh, ice%TAF_a, TAF_b(mesh%ti1:mesh%ti2))
+    call allgather_array(TAF_b)
 
     DO vi = mesh%vi1, mesh%vi2
     
@@ -258,13 +264,13 @@ CONTAINS
       TAF_max = -1E6_dp
       TAF_min =  1E6_dp
     
-      TAF_max = MAX( TAF_max, ice%TAF_a( vi))
-      TAF_min = MIN( TAF_min, ice%TAF_a( vi))
+      TAF_max = MAX( TAF_max, TAF_a( vi))
+      TAF_min = MIN( TAF_min, TAF_a( vi))
     
       DO ci = 1, mesh%nC( vi)
         vj = mesh%C( vi,ci)
-        TAF_max = MAX( TAF_max, ice%TAF_a( vj))
-        TAF_min = MIN( TAF_min, ice%TAF_a( vj))
+        TAF_max = MAX( TAF_max, TAF_a( vj))
+        TAF_min = MIN( TAF_min, TAF_a( vj))
       END DO
     
       ! If the entire local neighbourhood is grounded, the answer is trivial
@@ -314,6 +320,7 @@ CONTAINS
     END DO
   
     ! Clean up after yourself
+    deallocate( TAF_a )
     deallocate( TAF_b )
   
     ! Finalise routine path
@@ -332,12 +339,17 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_b'
     INTEGER                                            :: ti, via, vib, vic
+    REAL(dp), DIMENSION(:    ), allocatable            :: TAF_a
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, vb, vc
     REAL(dp)                                           :: TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd
   
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(TAF_a(1:mesh%nV))
+    TAF_a(mesh%vi1:mesh%vi2) = ice%TAF_a
+    call allgather_array(TAF_a)
 
     DO ti = mesh%ti1, mesh%ti2
     
@@ -346,8 +358,8 @@ CONTAINS
       vic = mesh%Tri( ti,3)
     
       ! Determine maximum and minimum TAF of the local neighbourhood
-      TAF_max = MAXVAL([ ice%TAF_a( via), ice%TAF_a( vib), ice%TAF_a( vic)])
-      TAF_min = MINVAL([ ice%TAF_a( via), ice%TAF_a( vib), ice%TAF_a( vic)])
+      TAF_max = MAXVAL([ TAF_a( via), TAF_a( vib), TAF_a( vic)])
+      TAF_min = MINVAL([ TAF_a( via), TAF_a( vib), TAF_a( vic)])
     
       ! If the entire local neighbourhood is grounded, the answer is trivial
       IF (TAF_min >= 0._dp) THEN
@@ -367,9 +379,9 @@ CONTAINS
       vb   = mesh%V( vib,:)
       vc   = mesh%V( vic,:)
       
-      TAFa = ice%TAF_a( via)
-      TAFb = ice%TAF_a( vib)
-      TAFc = ice%TAF_a( vic)
+      TAFa = TAF_a( via)
+      TAFb = TAF_a( vib)
+      TAFc = TAF_a( vic)
       
       ! Determine total area of, and grounded area within, this subtriangle
       CALL determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
@@ -378,6 +390,8 @@ CONTAINS
       ice%f_grnd_b( ti) = A_tri_grnd / A_tri_tot
     
     END DO
+
+    deallocate( TAF_a )
   
     ! Finalise routine path
     CALL finalise_routine( routine_name)

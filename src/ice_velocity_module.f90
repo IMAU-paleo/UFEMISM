@@ -200,7 +200,6 @@ CONTAINS
       
       ! Set beta_eff equal to beta; this turns the DIVA into the SSA
       ice%beta_eff_a( mesh%vi1:mesh%vi2) = ice%beta_a( mesh%vi1:mesh%vi2)
-      CALL sync
     
       ! Map beta_eff from the a-grid to the cx/cy-grids
       CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
@@ -209,12 +208,10 @@ CONTAINS
       DO ti = mesh%ti1, mesh%ti2
         ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grnd_b( ti)**2
       END DO
-      CALL sync
       
       ! Store the previous solution so we can check for convergence later
       ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
       ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
-      CALL sync
       
       ! Solve the linearised SSA
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
@@ -303,12 +300,12 @@ CONTAINS
     CALL determine_grounded_fractions( mesh, ice)
     
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
-    CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
+    CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( mesh%vi1), 0._dp, umax_analytical, tauc_analytical)
     
     ! The viscosity iteration
     viscosity_iteration_i = 0
     has_converged         = .FALSE.
-    viscosity_iteration: DO WHILE (.NOT. has_converged)
+    DO WHILE (.NOT. has_converged)
       viscosity_iteration_i = viscosity_iteration_i + 1
       
       ! Calculate the vertical shear strain rates
@@ -329,7 +326,6 @@ CONTAINS
       ! Store the previous solution so we can check for convergence later
       ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_vav_b( mesh%ti1:mesh%ti2)
       ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_vav_b( mesh%ti1:mesh%ti2)
-      CALL sync
       
       ! Solve the linearised DIVA
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
@@ -357,7 +353,7 @@ CONTAINS
       ! Calculate basal stress 
       CALL calc_basal_stress_DIVA( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
-    END DO viscosity_iteration
+    END DO
     
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
@@ -923,7 +919,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN) :: u_b, v_b
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_basal_stress_DIVA'
@@ -1086,12 +1082,12 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSADIVA_linearised'
-    INTEGER                                            :: ti, nu, nv
+    INTEGER                                            :: ti, nu, nv, t21,t22, pti1, pti2
     REAL(dp), DIMENSION(:    ), allocatable            ::  N_b,  dN_dx_b,  dN_dy_b
     REAL(dp), DIMENSION(:    ), allocatable            ::  b_buv,  uv_buv
     
@@ -1102,9 +1098,16 @@ CONTAINS
     allocate( N_b    (   mesh%ti1:mesh%ti2))
     allocate( dN_dx_b(   mesh%ti1:mesh%ti2))
     allocate( dN_dy_b(   mesh%ti1:mesh%ti2))
-    allocate( b_buv  (2*(mesh%ti1-1)+1:2*mesh%ti2))
-    allocate( uv_buv (2*(mesh%ti1-1)+1:2*mesh%ti2))
-    
+    allocate( b_buv  (          1:mesh%nTri*2))
+    allocate( uv_buv (          1:mesh%nTri*2))
+
+    !(dividable by 2) ranges for b_buv,uv_buv
+    t21 = 1+2*(mesh%ti1-1)
+    t22 =   2*(mesh%ti2)
+
+    ! PETSc ranges for b_buv,uv_buv
+    call partition_list(mesh%nTri*2, par%i, par%n, pti1, pti2)
+
     ! Calculate N, dN/dx, and dN/dy on the b-grid
     CALL map_a_to_b_2D( mesh, ice%N_a, N_b    )
     CALL ddx_a_to_b_2D( mesh, ice%N_a, dN_dx_b)
@@ -1118,24 +1121,30 @@ CONTAINS
       IF (mesh%Tri_edge_index( ti) == 0) THEN
         ! Free triangle: fill in matrix row for the SSA/DIVA
         IF (C%include_SSADIVA_crossterms) THEN
-          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
         ELSE
-          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
         END IF
       ELSE
         ! Border triangle: apply boundary conditions
-        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
-        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
       END IF
 
     END DO
     
   ! Solve the matrix equation
   ! =========================
+
+    ! TODO: The problem: b_buv and uv_buv are divideable by two but, petsc doesnt know that and
+    ! will divide 6 into 3:3 for two procs for example, whereas the division should be 2:4 here in that case.
+    ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
+    call allgather_array(b_buv,t21,t22)
+    call allgather_array(uv_buv,t21,t22)
     
-    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
+    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
       C%DIVA_SOR_nit             , &
       C%DIVA_SOR_tol             , &
@@ -1177,11 +1186,11 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
-    
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
+   
     ! Local variables:
     INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
     
@@ -1230,10 +1239,10 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
@@ -1283,10 +1292,10 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
@@ -1331,10 +1340,10 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
@@ -1377,9 +1386,9 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: edge_index
@@ -1500,9 +1509,9 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: edge_index
@@ -1624,7 +1633,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2),          INTENT(INOUT) :: u_b, v_b
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_velocity_limits'
@@ -1664,10 +1673,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: u_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: v_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
     REAL(dp),                            INTENT(IN)    :: rel
         
     ! Local variables:
@@ -1694,10 +1703,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: u_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: v_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
     REAL(dp),                            INTENT(OUT)   :: resid_UV
     
     ! Local variables:
@@ -1761,15 +1770,23 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_a, v_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN) :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT):: u_a, v_a
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_a_2D'
+    real(dp), dimension(:), allocatable                :: l_u_b, l_v_b !local
     INTEGER                                            :: vi, vti, ti
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(l_u_b(1:mesh%nTri))
+    allocate(l_v_b(1:mesh%nTri))
+    l_u_b(mesh%ti1:mesh%ti2) = u_b
+    l_v_b(mesh%ti1:mesh%ti2) = v_b
+    call allgather_array(l_u_b)
+    call allgather_array(l_v_b)
     
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1778,12 +1795,11 @@ CONTAINS
       
       DO vti = 1, mesh%niTri( vi)
         ti = mesh%iTri( vi,vti)
-        u_a( vi) = u_a( vi) + (u_b( ti) / REAL( mesh%niTri( vi),dp))
-        v_a( vi) = v_a( vi) + (v_b( ti) / REAL( mesh%niTri( vi),dp))
+        u_a( vi) = u_a( vi) + (l_u_b( ti) / REAL( mesh%niTri( vi),dp))
+        v_a( vi) = v_a( vi) + (l_v_b( ti) / REAL( mesh%niTri( vi),dp))
       END DO
       
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1796,15 +1812,24 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_a, v_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2,C%nz ), INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2,C%nz ), INTENT(OUT)   :: u_a, v_a
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_a_3D'
+    real(dp), dimension(:,:), allocatable              :: l_u_b, l_v_b !local
     INTEGER                                            :: vi, vti, ti
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(l_u_b(1:mesh%nTri,C%nz))
+    allocate(l_v_b(1:mesh%nTri,C%nz))
+    l_u_b(mesh%ti1:mesh%ti2,:) = u_b
+    l_v_b(mesh%ti1:mesh%ti2,:) = v_b
+    call allgather_array(l_u_b)
+    call allgather_array(l_v_b)
+
     
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1813,13 +1838,15 @@ CONTAINS
       
       DO vti = 1, mesh%niTri( vi)
         ti = mesh%iTri( vi,vti)
-        u_a( vi,:) = u_a( vi,:) + (u_b( ti,:) / REAL( mesh%niTri( vi),dp))
-        v_a( vi,:) = v_a( vi,:) + (v_b( ti,:) / REAL( mesh%niTri( vi),dp))
+        u_a( vi,:) = u_a( vi,:) + (l_u_b( ti,:) / REAL( mesh%niTri( vi),dp))
+        v_a( vi,:) = v_a( vi,:) + (l_v_b( ti,:) / REAL( mesh%niTri( vi),dp))
       END DO
       
     END DO
-    CALL sync
     
+    deallocate(l_u_b)
+    deallocate(l_v_b)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
@@ -1832,7 +1859,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c, v_c
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)   :: u_c, v_c
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_c_2D'
@@ -2221,6 +2248,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SSADIVA_stiffness_matrix'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
     INTEGER                                            :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
+    integer, dimension(:), allocatable                 :: ti2n_u, ti2n_v
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2234,8 +2262,16 @@ CONTAINS
     CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
     
     ! Fill in matrix rows, right-hand side, and initial guess
-    CALL partition_list( 2*mesh%nTri, par%i, par%n, n1, n2)
-    DO n = n1, n2
+    CALL partition_list( mesh%nTri, par%i, par%n, n1, n2)
+
+    allocate(ti2n_u( 1:mesh%nTri))
+    allocate(ti2n_v( 1:mesh%nTri))
+    ti2n_u(mesh%ti1:mesh%ti2) = ice%ti2n_u
+    ti2n_v(mesh%ti1:mesh%ti2) = ice%ti2n_v
+    call allgather_array(ti2n_u)
+    call allgather_array(ti2n_v)
+
+    DO n = 1+2*(n1-1), n2*2
       
       ! Fill matrix coefficients
       IF (ice%n2ti_uv( n,1) > 0) THEN
@@ -2252,8 +2288,8 @@ CONTAINS
           DO k = k1, k2
             
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ! u-part
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
@@ -2275,8 +2311,8 @@ CONTAINS
           DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
@@ -2299,8 +2335,8 @@ CONTAINS
           DO k = k1, k2
             
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ! u-part
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
@@ -2322,8 +2358,8 @@ CONTAINS
           DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
@@ -2340,7 +2376,7 @@ CONTAINS
     END DO ! DO n = n1, n2
     
     ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, n1, n2)
+    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, 1+2*(n1-1), n2*2)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)

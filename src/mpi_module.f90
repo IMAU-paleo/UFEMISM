@@ -4,7 +4,7 @@
 ! A lot of thing are copied from the parallel_module.f90 file which uses shared memory paradigm
 module mpi_module
   use mpi_f08
-  use configuration_module, only: dp
+  use configuration_module, only: dp, crash
   use parallel_module, only: par, partition_list ! port it here finally
   
   implicit none
@@ -48,6 +48,11 @@ contains
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
+
+    ! Safety
+    if (sum(counts) /= size(array)) then
+      call crash("sizes dont match")
+    end if
       
     ! Send everything to master
     call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &
@@ -61,9 +66,16 @@ contains
     integer                                            :: i1,i2, err, n
     integer, dimension(1:par%n)                        :: counts, displs
 
-    do n = 1, size(array,2)
-      call allgather_array_dp ( array(:,n) )
-    end do
+    if (present(i1_) .and. present(i2_)) then
+      do n = 1, size(array,2)
+        call allgather_array_dp ( array(:,n), i1_, i2_ )
+      end do
+    else
+      do n = 1, size(array,2)
+        call allgather_array_dp ( array(:,n) )
+      end do
+
+    end if
   end subroutine allgather_array_dp_2d
   subroutine allgather_array_int(array,i1_,i2_)
     implicit none
@@ -87,6 +99,11 @@ contains
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
+
+    ! Safety
+    if (sum(counts) /= size(array)) then
+      call crash("sizes dont match")
+    end if
       
     ! Send everything to master
     call mpi_allgatherv( MPI_IN_PLACE, 0, MPI_DATATYPE_NULL &

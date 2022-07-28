@@ -870,8 +870,8 @@ contains
     allocate(  ice%dzeta_dz_a          (mesh%vi1:mesh%vi2               ))
 
     ! Ice dynamics - ice thickness calculation
-    allocate(  ice%dVi_in              (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
-    allocate(  ice%dVi_out             (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
+    allocate(  ice%dVi_in              (       1:mesh%nV  , mesh%nC_mem ))
+    ! allocate(  ice%dVi_out             (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
     allocate(  ice%dHi_dt_a            (mesh%vi1:mesh%vi2               ))
     allocate(  ice%Hi_tplusdt_a        (mesh%vi1:mesh%vi2               ))
 
@@ -1004,8 +1004,8 @@ contains
     CALL reallocate_bounds ( ice%dzeta_dz_a   , mesh_new%vi1, mesh_new%vi2       )
 
     ! Ice dynamics - ice thickness calculation
-    CALL reallocate_bounds ( ice%dVi_in       , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
-    CALL reallocate_bounds ( ice%dVi_out      , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
+    CALL reallocate_bounds ( ice%dVi_in       ,            1, mesh_new%nV , mesh_new%nC_mem )
+    ! CALL reallocate_bounds ( ice%dVi_out      , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
 
     ! Ice dynamics - predictor/corrector ice thickness update
     CALL reallocate_bounds ( ice%pc_tau       , mesh_new%vi1, mesh_new%vi2       )

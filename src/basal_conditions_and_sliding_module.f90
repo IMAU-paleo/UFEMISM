@@ -1004,9 +1004,9 @@ END SUBROUTINE initialise_bed_roughness
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(IN) :: u_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(IN) :: v_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT):: beta_a
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb_regularised'

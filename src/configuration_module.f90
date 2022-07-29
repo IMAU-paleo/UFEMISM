@@ -481,12 +481,6 @@ MODULE configuration_module
 
     REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)            :: climate_matrix_CO2vsice_NAM_config          = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on temperature
-    REAL(dp)            :: climate_matrix_CO2vsice_EAS_config          = 0.5_dp                           ! Can be set separately for different regions
-    REAL(dp)            :: climate_matrix_CO2vsice_GRL_config          = 0.75_dp                          ! Default values are from Berends et al, 2018
-    REAL(dp)            :: climate_matrix_CO2vsice_ANT_config          = 0.75_dp                          ! 1.0_dp equals glacial index method
-
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
     REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
@@ -1211,12 +1205,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_climate_snapshot_cold
 
     REAL(dp)                            :: constant_lapserate
-
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: climate_matrix_CO2vsice_NAM
-    REAL(dp)                            :: climate_matrix_CO2vsice_EAS
-    REAL(dp)                            :: climate_matrix_CO2vsice_GRL
-    REAL(dp)                            :: climate_matrix_CO2vsice_ANT
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)                            :: matrix_high_CO2_level
@@ -2096,10 +2084,6 @@ CONTAINS
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
                      constant_lapserate_config,                       &
-                     climate_matrix_CO2vsice_NAM_config,              &
-                     climate_matrix_CO2vsice_EAS_config,              &
-                     climate_matrix_CO2vsice_GRL_config,              &
-                     climate_matrix_CO2vsice_ANT_config,              &
                      matrix_high_CO2_level_config,                    &
                      matrix_low_CO2_level_config,                     &
                      matrix_warm_orbit_time_config,                   &
@@ -2914,12 +2898,6 @@ CONTAINS
     C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
 
     C%constant_lapserate                       = constant_lapserate_config
-
-    ! Scaling factor for CO2 vs ice weights
-    C%climate_matrix_CO2vsice_NAM              = climate_matrix_CO2vsice_NAM_config
-    C%climate_matrix_CO2vsice_EAS              = climate_matrix_CO2vsice_EAS_config
-    C%climate_matrix_CO2vsice_GRL              = climate_matrix_CO2vsice_GRL_config
-    C%climate_matrix_CO2vsice_ANT              = climate_matrix_CO2vsice_ANT_config
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     C%matrix_high_CO2_level                    = matrix_high_CO2_level_config

@@ -248,12 +248,6 @@
 
   constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
 
-  ! Scaling factor for CO2 vs ice weights
-  climate_matrix_CO2vsice_NAM_config          = 0.5                              ! Weight factor for the influence of CO2 vs ice cover on temperature
-  climate_matrix_CO2vsice_EAS_config          = 0.5                              ! Can be set separately for different regions
-  climate_matrix_CO2vsice_GRL_config          = 1.0                              ! Default values are from Berends et al, 2018
-  climate_matrix_CO2vsice_ANT_config          = 1.0                              ! 1.0_dp equals glacial index method
-
   ! Orbit time and CO2 concentration of the warm and cold snapshots
   matrix_high_CO2_level_config                = 280.0                            ! CO2 level  pertaining to the warm climate (PI  level default)
   matrix_low_CO2_level_config                 = 190.0                            ! CO2 level  pertaining to the cold climate (LGM level default)

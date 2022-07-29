@@ -666,21 +666,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Update forcing at model time + safety net for future projections:
-    ! The constant Q_TOA extrapolation does not work that well...
-    IF (time < 0.0_dp) THEN
-      ! Get it from the data
-      CALL get_insolation_at_time( mesh, time, climate_matrix%applied%Q_TOA)
-      CALL update_CO2_at_model_time( time)
-    ELSE
-      ! Use the value at t=0 into the future, yeah!
-      CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%applied%Q_TOA)
-      CALL update_CO2_at_model_time( 0.0_dp)
-    END IF
-
-    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ! THAT SAFETY NET NEEDS TO BE MOVED TO THE FORCING MODULE (EXTRAPOLATION PART) TO ALLOW FOR SYNTHETIC FUTURE CO2 AND INSOLATION DATA
-    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Update forcing at model time
+    CALL get_insolation_at_time( mesh, time, climate_matrix%applied%Q_TOA)
+    CALL update_CO2_at_model_time( time)
 
     ! Use the (CO2 + absorbed insolation)-based interpolation scheme for temperature
     CALL run_climate_model_matrix_warm_cold_temperature( mesh, grid, ice, SMB, climate_matrix, region_name)

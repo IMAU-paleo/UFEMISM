@@ -291,15 +291,9 @@
   ocean_extrap_Gauss_sigma_config             = 8000.0                           ! 1-sigma of the Gaussian smoothing operation used to extrapolate the ocean data
   ocean_extrap_hires_geo_filename_NAM_config  = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'                     ! Path to a NetCDF file containing
   ocean_extrap_hires_geo_filename_EAS_config  = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'                          ! (present-day) geometry at high
-  ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'      ! resolution, used for ocean
+  ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'   ! resolution, used for ocean
   ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
   ocean_w_tot_hist_averaging_window_config    = 1500.0                           ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
-
-  ! Scaling factor for CO2 vs ice weights
-  ocean_matrix_CO2vsice_NAM_config            = 0.5                              ! Weight factor for the influence of CO2 vs ice cover on ocean T and S
-  ocean_matrix_CO2vsice_EAS_config            = 0.5                              ! Can be set separately for different regions
-  ocean_matrix_CO2vsice_GRL_config            = 0.75
-  ocean_matrix_CO2vsice_ANT_config            = 0.75
 
   ! Surface mass balance
   ! ====================

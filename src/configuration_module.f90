@@ -529,12 +529,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
     REAL(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)            :: ocean_matrix_CO2vsice_NAM_config            = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on ocean T and S
-    REAL(dp)            :: ocean_matrix_CO2vsice_EAS_config            = 0.5_dp                           ! Can be set separately for different regions
-    REAL(dp)            :: ocean_matrix_CO2vsice_GRL_config            = 0.75_dp
-    REAL(dp)            :: ocean_matrix_CO2vsice_ANT_config            = 0.75_dp
-
   ! == Surface mass balance
   ! =======================
 
@@ -1255,12 +1249,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_GRL
     CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_ANT
     REAL(dp)                            :: ocean_w_tot_hist_averaging_window
-
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: ocean_matrix_CO2vsice_NAM
-    REAL(dp)                            :: ocean_matrix_CO2vsice_EAS
-    REAL(dp)                            :: ocean_matrix_CO2vsice_GRL
-    REAL(dp)                            :: ocean_matrix_CO2vsice_ANT
 
     ! Surface mass balance
     ! ====================
@@ -2115,10 +2103,6 @@ CONTAINS
                      ocean_extrap_hires_geo_filename_GRL_config,      &
                      ocean_extrap_hires_geo_filename_ANT_config,      &
                      ocean_w_tot_hist_averaging_window_config,        &
-                     ocean_matrix_CO2vsice_NAM_config,                &
-                     ocean_matrix_CO2vsice_EAS_config,                &
-                     ocean_matrix_CO2vsice_GRL_config,                &
-                     ocean_matrix_CO2vsice_ANT_config,                &
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
@@ -2946,12 +2930,6 @@ CONTAINS
     C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
     C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
     C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
-
-    ! Scaling factor for CO2 vs ice weights
-    C%ocean_matrix_CO2vsice_NAM                = ocean_matrix_CO2vsice_NAM_config
-    C%ocean_matrix_CO2vsice_EAS                = ocean_matrix_CO2vsice_EAS_config
-    C%ocean_matrix_CO2vsice_GRL                = ocean_matrix_CO2vsice_GRL_config
-    C%ocean_matrix_CO2vsice_ANT                = ocean_matrix_CO2vsice_ANT_config
 
     ! Surface mass balance
     ! ====================

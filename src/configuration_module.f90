@@ -481,12 +481,6 @@ MODULE configuration_module
 
     REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)            :: climate_matrix_CO2vsice_NAM_config          = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on temperature
-    REAL(dp)            :: climate_matrix_CO2vsice_EAS_config          = 0.5_dp                           ! Can be set separately for different regions
-    REAL(dp)            :: climate_matrix_CO2vsice_GRL_config          = 0.75_dp                          ! Default values are from Berends et al, 2018
-    REAL(dp)            :: climate_matrix_CO2vsice_ANT_config          = 0.75_dp                          ! 1.0_dp equals glacial index method
-
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
     REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
@@ -497,7 +491,7 @@ MODULE configuration_module
     LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
     LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
-    LOGICAL             :: switch_glacial_index_precip_config          = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+    LOGICAL             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
   ! == Ocean
   ! ========
@@ -534,12 +528,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'      ! resolution, used for ocean
     CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
     REAL(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
-
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)            :: ocean_matrix_CO2vsice_NAM_config            = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on ocean T and S
-    REAL(dp)            :: ocean_matrix_CO2vsice_EAS_config            = 0.5_dp                           ! Can be set separately for different regions
-    REAL(dp)            :: ocean_matrix_CO2vsice_GRL_config            = 0.75_dp
-    REAL(dp)            :: ocean_matrix_CO2vsice_ANT_config            = 0.75_dp
 
   ! == Surface mass balance
   ! =======================
@@ -1212,12 +1200,6 @@ MODULE configuration_module
 
     REAL(dp)                            :: constant_lapserate
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: climate_matrix_CO2vsice_NAM
-    REAL(dp)                            :: climate_matrix_CO2vsice_EAS
-    REAL(dp)                            :: climate_matrix_CO2vsice_GRL
-    REAL(dp)                            :: climate_matrix_CO2vsice_ANT
-
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     REAL(dp)                            :: matrix_high_CO2_level
     REAL(dp)                            :: matrix_low_CO2_level
@@ -1228,7 +1210,7 @@ MODULE configuration_module
     LOGICAL                             :: climate_matrix_biascorrect_warm
     LOGICAL                             :: climate_matrix_biascorrect_cold
 
-    LOGICAL                             :: switch_glacial_index_precip
+    LOGICAL                             :: switch_glacial_index
 
     ! Ocean
     ! =====
@@ -1267,12 +1249,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_GRL
     CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_ANT
     REAL(dp)                            :: ocean_w_tot_hist_averaging_window
-
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: ocean_matrix_CO2vsice_NAM
-    REAL(dp)                            :: ocean_matrix_CO2vsice_EAS
-    REAL(dp)                            :: ocean_matrix_CO2vsice_GRL
-    REAL(dp)                            :: ocean_matrix_CO2vsice_ANT
 
     ! Surface mass balance
     ! ====================
@@ -2096,17 +2072,13 @@ CONTAINS
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
                      constant_lapserate_config,                       &
-                     climate_matrix_CO2vsice_NAM_config,              &
-                     climate_matrix_CO2vsice_EAS_config,              &
-                     climate_matrix_CO2vsice_GRL_config,              &
-                     climate_matrix_CO2vsice_ANT_config,              &
                      matrix_high_CO2_level_config,                    &
                      matrix_low_CO2_level_config,                     &
                      matrix_warm_orbit_time_config,                   &
                      matrix_cold_orbit_time_config,                   &
                      climate_matrix_biascorrect_warm_config,          &
                      climate_matrix_biascorrect_cold_config,          &
-                     switch_glacial_index_precip_config,              &
+                     switch_glacial_index_config,                     &
                      choice_ocean_model_config,                       &
                      choice_idealised_ocean_config,                   &
                      filename_PD_obs_ocean_config,                    &
@@ -2131,10 +2103,6 @@ CONTAINS
                      ocean_extrap_hires_geo_filename_GRL_config,      &
                      ocean_extrap_hires_geo_filename_ANT_config,      &
                      ocean_w_tot_hist_averaging_window_config,        &
-                     ocean_matrix_CO2vsice_NAM_config,                &
-                     ocean_matrix_CO2vsice_EAS_config,                &
-                     ocean_matrix_CO2vsice_GRL_config,                &
-                     ocean_matrix_CO2vsice_ANT_config,                &
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
@@ -2915,12 +2883,6 @@ CONTAINS
 
     C%constant_lapserate                       = constant_lapserate_config
 
-    ! Scaling factor for CO2 vs ice weights
-    C%climate_matrix_CO2vsice_NAM              = climate_matrix_CO2vsice_NAM_config
-    C%climate_matrix_CO2vsice_EAS              = climate_matrix_CO2vsice_EAS_config
-    C%climate_matrix_CO2vsice_GRL              = climate_matrix_CO2vsice_GRL_config
-    C%climate_matrix_CO2vsice_ANT              = climate_matrix_CO2vsice_ANT_config
-
     ! Orbit time and CO2 concentration of the warm and cold snapshots
     C%matrix_high_CO2_level                    = matrix_high_CO2_level_config
     C%matrix_low_CO2_level                     = matrix_low_CO2_level_config
@@ -2931,7 +2893,7 @@ CONTAINS
     C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
     C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
 
-    C%switch_glacial_index_precip              = switch_glacial_index_precip_config
+    C%switch_glacial_index                     = switch_glacial_index_config
 
     ! Ocean
     ! =====
@@ -2968,12 +2930,6 @@ CONTAINS
     C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
     C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
     C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
-
-    ! Scaling factor for CO2 vs ice weights
-    C%ocean_matrix_CO2vsice_NAM                = ocean_matrix_CO2vsice_NAM_config
-    C%ocean_matrix_CO2vsice_EAS                = ocean_matrix_CO2vsice_EAS_config
-    C%ocean_matrix_CO2vsice_GRL                = ocean_matrix_CO2vsice_GRL_config
-    C%ocean_matrix_CO2vsice_ANT                = ocean_matrix_CO2vsice_ANT_config
 
     ! Surface mass balance
     ! ====================

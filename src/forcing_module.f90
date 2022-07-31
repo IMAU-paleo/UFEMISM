@@ -824,9 +824,20 @@ CONTAINS
     ! Allocate shared memory for timeframe-interpolated lat-month-only insolation
     CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, Q_TOA_int, wQ_TOA_int)
 
-    ! Calculate timeframe interpolation weights
-    wt0 = (forcing%ins_t1 - time_applied) / (forcing%ins_t1 - forcing%ins_t0)
-    wt1 = 1._dp - wt0
+    ! Calculate timeframe interpolation weights + safety net
+    IF (time_applied < forcing%ins_t0) THEN
+      ! If applied time is still before the first timeframe (out of data record)
+      wt0 = 1.0_dp
+      wt1 = 0.0_dp
+    ELSEIF (time_applied > forcing%ins_t1) THEN
+      ! If applied time is still after the second timeframe (out of data record)
+      wt0 = 0.0_dp
+      wt1 = 1.0_dp
+    ELSE
+      ! If applied time is within the timeframes (within total record)
+      wt0 = (forcing%ins_t1 - time_applied) / (forcing%ins_t1 - forcing%ins_t0)
+      wt1 = 1._dp - wt0
+    END IF
 
     ! Interpolate the two timeframes
     IF (par%master) THEN

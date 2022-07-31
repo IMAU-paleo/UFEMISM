@@ -837,20 +837,24 @@ CONTAINS
       END IF
 
       region%do_basal    = .FALSE.
-      IF (region%time == region%t_next_basal) THEN
-        region%do_basal       = .TRUE.
-        region%t_last_basal   = region%time
-        region%t_next_basal   = region%t_last_basal + C%dt_basal
+      IF (C%do_basal_sliding_inversion) THEN
+        IF (region%time == region%t_next_basal) THEN
+          region%do_basal       = .TRUE.
+          region%t_last_basal   = region%time
+          region%t_next_basal   = region%t_last_basal + C%dt_basal
+        END IF
+        t_next = MIN( t_next, region%t_next_basal)
       END IF
-      t_next = MIN( t_next, region%t_next_basal)
 
       region%do_SMB_inv = .FALSE.
-      IF (region%time == region%t_next_SMB_inv) THEN
-        region%do_SMB_inv       = .TRUE.
-        region%t_last_SMB_inv   = region%time
-        region%t_next_SMB_inv   = region%t_last_SMB_inv + C%dt_SMB_inv
+      IF (C%do_SMB_IMAUITM_inversion) THEN
+        IF (region%time == region%t_next_SMB_inv) THEN
+          region%do_SMB_inv       = .TRUE.
+          region%t_last_SMB_inv   = region%time
+          region%t_next_SMB_inv   = region%t_last_SMB_inv + C%dt_SMB_inv
+        END IF
+        t_next = MIN( t_next, region%t_next_SMB_inv)
       END IF
-      t_next = MIN( t_next, region%t_next_SMB_inv)
 
       region%do_output  = .FALSE.
       IF (region%time == region%t_next_output) THEN

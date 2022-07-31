@@ -23,7 +23,7 @@ MODULE ocean_module
   USE forcing_module,                  ONLY: forcing, update_CO2_at_model_time
   USE utilities_module,                ONLY: remap_cons_2nd_order_1D, inverse_oblique_sg_projection, &
                                              map_glob_to_grid_3D, surface_elevation, &
-                                             extrapolate_Gaussian_floodfill
+                                             extrapolate_Gaussian_floodfill, check_for_NaN_dp_2D
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
                                              calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
                                              deallocate_remapping_operators_mesh2grid, &
@@ -611,9 +611,7 @@ CONTAINS
 ! ============================================
 
   SUBROUTINE run_ocean_model_matrix_warm_cold( mesh, grid, ocean_matrix, climate_matrix, region_name, time)
-    ! Run the regional ocean model
-    !
-    ! Run the warm/cold ocean matrix
+    ! Run the regional warm/cold ocean matrix
 
     IMPLICIT NONE
 
@@ -629,14 +627,13 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_matrix_warm_cold'
     INTEGER                                            :: vi,k
     REAL(dp)                                           :: a
-    REAL(dp)                                           :: CO2
-    REAL(dp)                                           :: w_CO2
-    REAL(dp), DIMENSION(:    ), POINTER                :: w_ins, w_ins_smooth,  w_ice,  w_tot
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: w_tot_final
-    INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot, ww_tot_final
+    REAL(dp)                                           :: CO2, w_CO2, w_CO2aux, w_CO2ocn
+    REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
+    INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  w_tot_delay,  w_tot_final
+    INTEGER                                            :: ww_tot_delay, ww_tot_final
     REAL(dp)                                           :: w_ins_av
-    REAL(dp), PARAMETER                                :: w_cutoff = 0.25_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
-    REAL(dp)                                           :: ocean_matrix_CO2vsice
+    REAL(dp), PARAMETER                                :: w_cutoff = 0.05_dp ! Crop weights to [-w_cutoff, 1 + w_cutoff]
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -646,101 +643,183 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV,             w_ins_smooth, ww_ins_smooth)
     CALL allocate_shared_dp_1D( mesh%nV,             w_ice,        ww_ice       )
     CALL allocate_shared_dp_1D( mesh%nV,             w_tot,        ww_tot       )
+    CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, w_tot_delay,  ww_tot_delay )
     CALL allocate_shared_dp_2D( mesh%nV, C%nz_ocean, w_tot_final,  ww_tot_final )
 
-    ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
-    ! =====================================================================
-
-    CALL update_CO2_at_model_time( time)
+    ! Find CO2-based interpolation weight (use either prescribed or modelled CO2)
+    ! ===========================================================================
 
     IF     (C%choice_forcing_method == 'CO2_direct') THEN
+      ! Use observed record
       CO2 = forcing%CO2_obs
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
+      ! Use inverted record
       CO2 = forcing%CO2_mod
     ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
-      CO2 = 0._dp
+      ! lol what you thinking
       CALL crash('must only be called with the correct forcing method, check your code!')
     ELSE
-      CO2 = 0._dp
+      ! Not implemented yet
       CALL crash('unknown choice_forcing_method "' // TRIM( C%choice_forcing_method) // '"!')
     END IF
 
-    w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
+    ! If CO2 ~= warm snap -> weight is 1. If ~= cold snap -> weight is 0.
+    ! Otherwise interpolate. Berends et al., 2018 - Eq. 1
+    w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
+                               (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
 
-    ! Find ice interpolation weight
-    ! =============================
+    ! Find ice albedo-based interpolation weight
+    ! ==========================================
 
-    IF         (region_name == 'NAM') THEN
-      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_NAM
-    ELSEIF     (region_name == 'EAS') THEN
-      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_EAS
-    ELSEIF     (region_name == 'GRL') THEN
-      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_GRL
-    ELSEIF     (region_name == 'ANT') THEN
-      ocean_matrix_CO2vsice = C%ocean_matrix_CO2vsice_ANT
-    ELSE
-      ocean_matrix_CO2vsice = 0._dp
-      CALL crash('unkown region_name "' // TRIM( region_name) // '"!')
+    ! Modelled absorbed insolation computed in the climate routines
+
+    ! Calculate a "direct" weighing field
+    ! Berends et al., 2018 - Eq. 3
+    DO vi = mesh%vi1, mesh%vi2
+      ! If absorbed insolation ~= warm snap -> weight is 1.
+      ! If ~= cold snap -> weight is 0. Otherwise interpolate
+      w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, &
+                      ( climate_matrix%applied%I_abs(  vi) - climate_matrix%GCM_cold%I_abs( vi) ) / &
+                      ( climate_matrix%GCM_warm%I_abs( vi) - climate_matrix%GCM_cold%I_abs( vi) ) ))
+    END DO
+    CALL sync
+
+    ! Calculate an "averaged" weighing field
+    w_ins_av     = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, &
+                      ( SUM(climate_matrix%applied%I_abs ) - SUM(climate_matrix%GCM_cold%I_abs) ) / &
+                      ( SUM(climate_matrix%GCM_warm%I_abs) - SUM(climate_matrix%GCM_cold%I_abs) ) ))
+
+    ! Calculate a "smoothed" weighing field
+    w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
+    CALL smooth_Gaussian_2D( mesh, grid, w_ins_smooth, 200000._dp)
+
+    ! Combine direct, averaged, and smoothed average weighing fields
+    ! Berends et al., 2018, Eq. 4
+    IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
+
+      ! Use all weights
+      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins(        mesh%vi1:mesh%vi2) + &
+                                   3._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
+                                   3._dp * w_ins_av) / 7._dp
+
+    ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
+
+      ! Use only the regional (averaged) and smoothed weights
+      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + &
+                                   6._dp * w_ins_av) / 7._dp
+
     END IF
 
-    IF (ocean_matrix_CO2vsice == 1._dp) THEN
-      w_ice( mesh%vi1:mesh%vi2) = w_CO2 ! Dummy value, not actually used
-    ELSE
-      ! Calculate weighting field
-      DO vi = mesh%vi1, mesh%vi2
-        w_ins( vi) = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, ( climate_matrix%applied%I_abs(  vi) - climate_matrix%GCM_cold%I_abs( vi)) / &  ! Berends et al., 2018 - Eq. 3
-                                                            ( climate_matrix%GCM_warm%I_abs( vi) - climate_matrix%GCM_cold%I_abs( vi)) ))
-      END DO
-      CALL sync
-      w_ins_av     = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, ( SUM(climate_matrix%applied%I_abs ) - SUM(climate_matrix%GCM_cold%I_abs)) / &
-                                                            ( SUM(climate_matrix%GCM_warm%I_abs) - SUM(climate_matrix%GCM_cold%I_abs)) ))
+    ! Modifier CO2-based weight for w_ice, so it smoothly vanishes during full warm conditions
+    ! ========================================================================================
 
-      ! Smooth the weighting field
-      w_ins_smooth( mesh%vi1:mesh%vi2) = w_ins( mesh%vi1:mesh%vi2)
-      CALL smooth_Gaussian_2D( mesh, grid, w_ins_smooth, 200000._dp)
+    ! Initialise to the CO2 weight, but limited to [0,1] interval
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
 
-      ! Combine unsmoothed, smoothed, and regional average weighting fields (Berends et al., 2018, Eq. 4)
-      w_ice( mesh%vi1:mesh%vi2) = (1._dp * w_ins_smooth( mesh%vi1:mesh%vi2) + 6._dp * w_ins_av) / 7._dp
-    END IF
+    ! Compute a middle-weight that is mostly 0 except when w_CO2 is close to 1
+    w_CO2aux = w_CO2aux**69._dp
 
-    ! Combine weigths CO2 and ice
-    ! ===========================
+    ! Limit the resulting weight to [0,1], just in case
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
-    w_tot( mesh%vi1:mesh%vi2) = (ocean_matrix_CO2vsice * w_CO2) + ((1._dp - ocean_matrix_CO2vsice) * w_ice( mesh%vi1:mesh%vi2))
+    ! Final combined weight (Glacial Matrix)
+    ! ======================================
+
+    ! Combine interpolation weights from absorbed insolation and CO2
+    ! into the final weights fields, modifiying the insolation weight
+    ! so for full warm periods CO2 is dominant
+    ! Bernales et al., 2022, Eq. 5
+    w_tot(mesh%vi1:mesh%vi2) = (w_CO2 + w_ice(mesh%vi1:mesh%vi2) * &
+                               (1._dp - w_CO2aux)) / (2._dp - w_CO2aux)
+
+    ! Ocean delay
+    ! ===========
 
     ! Update the history of the weighing fields
-    ! =========================================
-
+    ! 1st entry is the current value, 2nd is 1*dt_ocean ago, 3d is 2*dt_ocean ago, etc.
     IF (ocean_matrix%applied%nw_tot_history > 1) THEN
-      ! 1st entry is the current value, 2nd is 1*dt_ocean ago, 3d is 2*dt_ocean ago, etc.
-      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 2:ocean_matrix%applied%nw_tot_history) = ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1:ocean_matrix%applied%nw_tot_history-1)
-      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1                                    ) =                      w_tot(         mesh%vi1:mesh%vi2                                         )
+
+      ! Move all values one dt back in time. Discard last value.
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 2:ocean_matrix%applied%nw_tot_history) = &
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1:ocean_matrix%applied%nw_tot_history-1)
+
+      ! Fill the newly empty first dt (i.e. most recent) with the current value
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1) = w_tot( mesh%vi1:mesh%vi2)
+
     ELSE
-      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1                                    ) =                      w_tot(         mesh%vi1:mesh%vi2                                         )
+
+      ! If the history only has one entry, put the current weight in it
+      ocean_matrix%applied%w_tot_history( mesh%vi1:mesh%vi2, 1) = w_tot( mesh%vi1:mesh%vi2)
+
     END IF
+
+    ! For each ocean depth layer
+    DO k = 1, C%nz_ocean
+    ! For each vertex
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Compute how far in the past the layer is looking at (the deeper the further)
+      a = ( ( C%z_ocean (k) / C%z_ocean (C%nz_ocean) ) * &
+            (ocean_matrix%applied%nw_tot_history - 1) ) + 1
+
+      ! The total weight will be the average of all weights
+      ! for that location up to that point in the past
+      w_tot_delay (vi,k) = ( SUM( ocean_matrix%applied%w_tot_history( vi,1:FLOOR( a))) + &
+                           ( (a - FLOOR( a)) * ocean_matrix%applied%w_tot_history( vi,CEILING( a)) ) ) &
+                           * (1._dp / a)
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Modifier CO2-based weight for w_tot_history, so it smoothly approaches full cold or warm conditions
+    ! ===================================================================================================
+
+    ! Initialise to the CO2 weight, but limited to the [0,1] interval
+    w_CO2ocn = max( 0._dp, min( 1._dp, w_CO2))
+
+    ! Compute a middle-weight that is mostly 0 except when w_CO2 is close to 0 or 1
+    w_CO2ocn = (w_CO2ocn - .5_dp)**10._dp / .5_dp**10._dp
+
+    ! Limit the resulting weight to [0,1], just in case
+    w_CO2ocn = max( 0._dp, min( 1._dp, w_CO2ocn))
 
     ! Interpolate the GCM ocean snapshots
     ! ===================================
 
     DO k = 1, C%nz_ocean
     DO vi = mesh%vi1, mesh%vi2
-      a = ( ( C%z_ocean (k) / C%z_ocean (C%nz_ocean) ) * (ocean_matrix%applied%nw_tot_history-1) ) + 1
 
-      w_tot_final (vi,k) = ( SUM(ocean_matrix%applied%w_tot_history(vi,1:FLOOR(a))) + ( (a - FLOOR(a)) * ocean_matrix%applied%w_tot_history(vi,CEILING(a)) ) ) * (1._dp / a)
+      ! Combine interpolation weights from weight history and CO2 into the final weight fields,
+      ! so it perfectly matches full warm or cold snapshots (Bernales et al., 2022, Eq. 7)
+      w_tot_final( vi,k) = (w_CO2ocn *  w_CO2) +  (1._dp - w_CO2ocn) * w_tot_delay( vi,k)
 
-      ocean_matrix%applied%T_ocean_corr_ext (vi,k) = (           w_tot_final( vi,k)  * ocean_matrix%GCM_warm%T_ocean_corr_ext( vi,k)  ) + &
-                                                     (  (1._dp - w_tot_final( vi,k)) * ocean_matrix%GCM_cold%T_ocean_corr_ext( vi,k)  )
-      ocean_matrix%applied%S_ocean_corr_ext (vi,k) = (           w_tot_final( vi,k)  * ocean_matrix%GCM_warm%S_ocean_corr_ext( vi,k)  ) + &
-                                                     (  (1._dp - w_tot_final( vi,k)) * ocean_matrix%GCM_cold%S_ocean_corr_ext( vi,k)  )
+      ! Compute the weighed avergage between the warm and cold snapshots based on the final weight
+      ocean_matrix%applied%T_ocean_corr_ext (vi,k) = &
+      (          w_tot_final( vi,k)  * ocean_matrix%GCM_warm%T_ocean_corr_ext( vi,k) ) + &
+      ( (1._dp - w_tot_final( vi,k)) * ocean_matrix%GCM_cold%T_ocean_corr_ext( vi,k) )
+
+      ocean_matrix%applied%S_ocean_corr_ext (vi,k) = &
+      (          w_tot_final( vi,k)  * ocean_matrix%GCM_warm%S_ocean_corr_ext( vi,k) ) + &
+      ( (1._dp - w_tot_final( vi,k)) * ocean_matrix%GCM_cold%S_ocean_corr_ext( vi,k) )
+
     END DO
     END DO
     CALL sync
 
+    ! Clean after yourself!
     CALL deallocate_shared( ww_ins)
     CALL deallocate_shared( ww_ins_smooth)
     CALL deallocate_shared( ww_ice)
     CALL deallocate_shared( ww_tot)
+    CALL deallocate_shared( ww_tot_delay)
     CALL deallocate_shared( ww_tot_final)
+
+    ! Safety
+    CALL check_for_NaN_dp_2D( ocean_matrix%applied%T_ocean_corr_ext, &
+                             'ocean_matrix%applied%T_ocean_corr_ext')
+    CALL check_for_NaN_dp_2D( ocean_matrix%applied%S_ocean_corr_ext, &
+                             'ocean_matrix%applied%S_ocean_corr_ext')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -959,7 +1038,7 @@ CONTAINS
     CALL allocate_shared_int_0D( region%ocean_matrix%applied%nw_tot_history, region%ocean_matrix%applied%wnw_tot_history)
     region%ocean_matrix%applied%nw_tot_history = CEILING( C%ocean_w_tot_hist_averaging_window / C%dt_ocean) + 1
     CALL allocate_shared_dp_2D(  region%mesh%nV, region%ocean_matrix%applied%nw_tot_history, region%ocean_matrix%applied%w_tot_history, region%ocean_matrix%applied%ww_tot_history)
-    region%ocean_matrix%applied%w_tot_history = 0._dp ! Initiate at cold conditions
+    region%ocean_matrix%applied%w_tot_history = 1._dp ! Initiate at warm conditions (to allow for future projections starting at PD)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=37)

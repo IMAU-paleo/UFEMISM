@@ -769,14 +769,14 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_warm_cold_temperature'
     INTEGER                                            :: vi,m
-    REAL(dp)                                           :: CO2, w_CO2, w_CO2ins
+    REAL(dp)                                           :: CO2, w_CO2, w_CO2aux
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
     INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot
     REAL(dp)                                           :: w_ins_av
     REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM
     REAL(dp), DIMENSION(:    ), POINTER                :: Hs_GCM, lambda_GCM
     INTEGER                                            :: wT_ref_GCM, wHs_GCM, wlambda_GCM
-    REAL(dp), PARAMETER                                :: w_cutoff = 0.05_dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+    REAL(dp), PARAMETER                                :: w_cutoff = 0._dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -810,7 +810,7 @@ CONTAINS
     ! If CO2 ~= warm snap -> weight is 1. If ~= cold snap -> weight is 0.
     ! Otherwise interpolate. Berends et al., 2018 - Eq. 1
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
-                              (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
+                               (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
 
     ! Find ice albedo-based interpolation weight
     ! ==========================================
@@ -870,13 +870,13 @@ CONTAINS
     ! ========================================================================================
 
     ! Initialise to the CO2 weight, but limited to [0,1] interval
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
 
     ! Compute a middle-weight that is mostly 0 except when w_CO2 is close to 1
-    w_CO2ins = (exp( w_CO2ins)**69._dp - 1._dp) / (exp( 1._dp) - 1._dp)
+    w_CO2aux = w_CO2aux**69._dp
 
     ! Limit the resulting weight to [0,1], just in case
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2ins))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
     ! Final combined weight (Glacial Matrix)
     ! ======================================
@@ -886,7 +886,15 @@ CONTAINS
     ! so for full warm periods CO2 is dominant
     ! Bernales et al., 2022, Eq. 5
     w_tot(mesh%vi1:mesh%vi2) = (w_CO2 + w_ice(mesh%vi1:mesh%vi2) * &
-                               (1._dp - w_CO2ins)) / (2._dp - w_CO2ins)
+                               (1._dp - w_CO2aux)) / (2._dp - w_CO2aux)
+
+    ! Overwrite everything if pure glacial index method is wanted
+    ! ===========================================================
+
+    ! If a glacial index is used, weight will depend only on CO2
+    IF (C%switch_glacial_index) THEN
+      w_tot = w_CO2
+    END IF
 
     ! Interpolate between the GCM snapshots
     ! =====================================
@@ -952,25 +960,26 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_warm_cold_precipitation'
     INTEGER                                            :: vi, m
-    REAL(dp)                                           :: CO2, w_CO2, w_CO2ins
+    REAL(dp)                                           :: CO2, w_CO2, w_CO2aux
     REAL(dp)                                           :: w_vol
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_thk,  w_ice,  w_tot
     INTEGER                                            :: ww_thk, ww_ice, ww_tot
     REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM, P_ref_GCM
-    REAL(dp), DIMENSION(:    ), POINTER                :: Hs_GCM
-    INTEGER                                            :: wT_ref_GCM, wP_ref_GCM, wHs_GCM
-    REAL(dp), PARAMETER                                :: w_cutoff = 0.05_dp  ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+    REAL(dp), DIMENSION(:    ), POINTER                :: Hs_GCM, lambda_GCM
+    INTEGER                                            :: wT_ref_GCM, wP_ref_GCM, wHs_GCM, wlambda_GCM
+    REAL(dp), PARAMETER                                :: w_cutoff = 0._dp  ! Crop weights to [-w_cutoff, 1 + w_cutoff]
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,     w_thk,     ww_thk    )
-    CALL allocate_shared_dp_1D( mesh%nV,     w_ice,     ww_ice    )
-    CALL allocate_shared_dp_1D( mesh%nV,     w_tot,     ww_tot    )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM, wT_ref_GCM)
-    CALL allocate_shared_dp_2D( mesh%nV, 12, P_ref_GCM, wP_ref_GCM)
-    CALL allocate_shared_dp_1D( mesh%nV,     Hs_GCM,    wHs_GCM   )
+    CALL allocate_shared_dp_1D( mesh%nV,     w_thk,      ww_thk     )
+    CALL allocate_shared_dp_1D( mesh%nV,     w_ice,      ww_ice     )
+    CALL allocate_shared_dp_1D( mesh%nV,     w_tot,      ww_tot     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM,  wT_ref_GCM )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, P_ref_GCM,  wP_ref_GCM )
+    CALL allocate_shared_dp_1D( mesh%nV,     Hs_GCM,     wHs_GCM    )
+    CALL allocate_shared_dp_1D( mesh%nV,     lambda_GCM, wlambda_GCM)
 
     ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
     ! =====================================================================
@@ -992,7 +1001,7 @@ CONTAINS
     ! If CO2 ~= warm snap -> weight is 1. If ~= cold snap -> weight is 0.
     ! Otherwise interpolate. Berends et al., 2018 - Eq. 1
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
-                              (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
+                               (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
 
     ! Calculate interpolation weights based on ice geometry
     ! =====================================================
@@ -1052,32 +1061,31 @@ CONTAINS
     ! ========================================================================================
 
     ! Initialise to the CO2 weight, but limited to [0,1] interval
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
 
     ! Compute a middle-weight that is mostly 0 except when w_CO2 is close to 1
-    w_CO2ins = (exp( w_CO2ins)**69._dp - 1._dp) / (exp( 1._dp) - 1._dp)
+    w_CO2aux = w_CO2aux**69._dp
 
     ! Limit the resulting weight to [0,1], just in case
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2ins))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
     ! Final combined weight (Glacial Matrix)
     ! ======================================
 
     ! Combine interpolation weights from geometry and CO2 into
     ! the final weights fields, modifiying the geometry weight
-    ! so for full warm periods CO2 is dominant
-    ! Bernales et al., 2022, Eq. 5
-    w_tot(mesh%vi1:mesh%vi2) = (w_CO2 + w_ice(mesh%vi1:mesh%vi2) * &
-                               (1._dp - w_CO2ins)) / (2._dp - w_CO2ins)
+    ! so for full warm periods CO2 is dominant, but for any
+    ! other period w_ice is dominant
+    ! Bernales et al., 2022, Eq. 6
+    w_tot(mesh%vi1:mesh%vi2) =          w_CO2aux  * w_CO2 + &
+                               (1._dp - w_CO2aux) * w_ice(mesh%vi1:mesh%vi2)
 
-    ! Overwrite everything if pure glacial index method is wanted for precipitation
-    ! =============================================================================
+    ! Overwrite everything if pure glacial index method is wanted
+    ! ===========================================================
 
-    ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
-    IF (C%switch_glacial_index_precip) THEN
-
-      w_tot = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
-                                 (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
+    ! If a glacial index is used, weight will depend only on CO2
+    IF (C%switch_glacial_index) THEN
+      w_tot = w_CO2
     END IF
 
     ! Interpolate the GCM snapshots
@@ -1086,12 +1094,25 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Use the bias corrected fields here
-      T_ref_GCM( vi,:) =          (w_tot( vi)  * climate_matrix%GCM_warm%T2m_corr(    vi,:)) + &
-                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%T2m_corr(    vi,:))
-      P_ref_GCM( vi,:) =          (w_tot( vi)  * climate_matrix%GCM_warm%Precip_corr( vi,:)) + &
-                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Precip_corr( vi,:))
-      Hs_GCM(    vi  ) =          (w_tot( vi)  * climate_matrix%GCM_warm%Hs_corr(     vi  )) + &
+      Hs_GCM(     vi  ) =         (w_tot( vi)  * climate_matrix%GCM_warm%Hs_corr(     vi  )) + &
                          ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Hs_corr(     vi  ))
+
+      lambda_GCM( vi )  =         (w_tot( vi)  * climate_matrix%GCM_warm%lambda(      vi  )) + &
+                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%lambda(      vi  ))
+
+      T_ref_GCM(  vi,:) =         (w_tot( vi)  * climate_matrix%GCM_warm%T2m_corr(    vi,:)) + &
+                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%T2m_corr(    vi,:))
+
+      P_ref_GCM(  vi,:) =         (w_tot( vi)  * climate_matrix%GCM_warm%Precip_corr( vi,:)) + &
+                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Precip_corr( vi,:))
+
+      ! Adapt temperature to model orography using matrix-derived lapse-rate
+      ! Berends et al., 2018 - Eq. 11
+      DO m = 1, 12
+        T_ref_GCM( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * &
+                                              (ice%Hs_a( vi) - Hs_GCM( vi))
+      END DO
+
 
       ! Safety net in case resulting precipitation is negative
       DO m = 1, 12
@@ -1108,18 +1129,28 @@ CONTAINS
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
 
       ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
-      CALL adapt_precip_Roe( mesh, Hs_GCM, T_ref_GCM, climate_matrix%PD_obs%Wind_LR, &
-                             climate_matrix%PD_obs%Wind_DU, P_ref_GCM, ice%Hs_a, &
-                             climate_matrix%applied%T2m, climate_matrix%PD_obs%Wind_LR, &
+      CALL adapt_precip_Roe( mesh, &
+                             Hs_GCM, T_ref_GCM, climate_matrix%PD_obs%Wind_LR, &
+                             climate_matrix%PD_obs%Wind_DU, P_ref_GCM, &
+                             ice%Hs_a, climate_matrix%applied%T2m, climate_matrix%PD_obs%Wind_LR, &
                              climate_matrix%PD_obs%Wind_DU, climate_matrix%applied%Precip)
 
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
 
       ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
-      CALL adapt_precip_CC( mesh, ice%Hs_a, Hs_GCM, T_ref_GCM, P_ref_GCM, &
+      CALL adapt_precip_CC( mesh, &
+                            ice%Hs_a, Hs_GCM, T_ref_GCM, P_ref_GCM, &
                             climate_matrix%applied%Precip, region_name)
 
     END IF
+
+    DO vi = mesh%vi1, mesh%vi2
+      ! Safety net in case resulting precipitation is negative
+      DO m = 1, 12
+        climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+      END DO
+    END DO
+    CALL sync
 
     ! Clean up after yourself
     CALL deallocate_shared( ww_thk)
@@ -1128,6 +1159,7 @@ CONTAINS
     CALL deallocate_shared( wT_ref_GCM)
     CALL deallocate_shared( wP_ref_GCM)
     CALL deallocate_shared( wHs_GCM)
+    CALL deallocate_shared( wlambda_GCM)
 
     ! Safety
     CALL check_for_NaN_dp_2D( climate_matrix%applied%Precip, &
@@ -1406,7 +1438,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_GCM_bias'
     INTEGER                                            :: vi,m
-    REAL(dp)                                           :: T2m_SL_GCM, T2m_SL_obs, T2m_GCM_obsHs
+    REAL(dp)                                           :: T2m_SL_GCM, T2m_SL_obs
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1414,6 +1446,7 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%GCM_bias_T2m,    climate_matrix%wGCM_bias_T2m   )
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate_matrix%GCM_bias_Precip, climate_matrix%wGCM_bias_Precip)
+    CALL allocate_shared_dp_1D( mesh%nV,     climate_matrix%GCM_bias_Hs,     climate_matrix%wGCM_bias_Hs    )
 
     ! Calculate bias
     DO vi = mesh%vi1, mesh%vi2
@@ -1428,6 +1461,9 @@ CONTAINS
 
       ! Calculate precipitation bias
       climate_matrix%GCM_bias_Precip( vi,m) = climate_matrix%GCM_PI%Precip( vi,m) / climate_matrix%PD_obs%Precip( vi,m)
+
+      ! Calculate elevation bias
+      climate_matrix%GCM_bias_Hs( vi) = climate_matrix%GCM_PI%Hs( vi) - climate_matrix%PD_obs%Hs( vi)
 
     END DO
     END DO
@@ -1514,7 +1550,7 @@ CONTAINS
       climate%Precip_corr( vi,m) = climate%Precip( vi,m) / climate_matrix%GCM_bias_Precip( vi,m)
 
       ! Surface elevation (just keep it)
-      climate%Hs_corr(     vi  ) = climate%Hs(     vi  )
+      climate%Hs_corr(     vi  ) = climate%Hs(     vi  ) - climate_matrix%GCM_bias_Hs(    vi   )
 
     END DO
     END DO
@@ -3757,6 +3793,7 @@ CONTAINS
       ! Calculate GCM climate bias
       CALL deallocate_shared( climate_matrix%wGCM_bias_T2m   )
       CALL deallocate_shared( climate_matrix%wGCM_bias_Precip)
+      CALL deallocate_shared( climate_matrix%wGCM_bias_Hs)
       CALL calculate_GCM_bias( mesh_new, climate_matrix)
       CALL correct_GCM_bias_warm( mesh_new, climate_matrix, climate_matrix%GCM_warm, do_correct_bias = C%climate_matrix_biascorrect_warm)
       CALL correct_GCM_bias_cold( mesh_new, climate_matrix, climate_matrix%GCM_cold, do_correct_bias = C%climate_matrix_biascorrect_cold)

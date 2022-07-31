@@ -491,7 +491,7 @@ MODULE configuration_module
     LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
     LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
-    LOGICAL             :: switch_glacial_index_precip_config          = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+    LOGICAL             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
   ! == Ocean
   ! ========
@@ -1210,7 +1210,7 @@ MODULE configuration_module
     LOGICAL                             :: climate_matrix_biascorrect_warm
     LOGICAL                             :: climate_matrix_biascorrect_cold
 
-    LOGICAL                             :: switch_glacial_index_precip
+    LOGICAL                             :: switch_glacial_index
 
     ! Ocean
     ! =====
@@ -2078,7 +2078,7 @@ CONTAINS
                      matrix_cold_orbit_time_config,                   &
                      climate_matrix_biascorrect_warm_config,          &
                      climate_matrix_biascorrect_cold_config,          &
-                     switch_glacial_index_precip_config,              &
+                     switch_glacial_index_config,                     &
                      choice_ocean_model_config,                       &
                      choice_idealised_ocean_config,                   &
                      filename_PD_obs_ocean_config,                    &
@@ -2893,7 +2893,7 @@ CONTAINS
     C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
     C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
 
-    C%switch_glacial_index_precip              = switch_glacial_index_precip_config
+    C%switch_glacial_index                     = switch_glacial_index_config
 
     ! Ocean
     ! =====

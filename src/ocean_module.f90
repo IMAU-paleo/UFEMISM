@@ -627,7 +627,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ocean_model_matrix_warm_cold'
     INTEGER                                            :: vi,k
     REAL(dp)                                           :: a
-    REAL(dp)                                           :: CO2, w_CO2, w_CO2ins, w_CO2ocn
+    REAL(dp)                                           :: CO2, w_CO2, w_CO2aux, w_CO2ocn
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_ins,  w_ins_smooth,  w_ice,  w_tot
     INTEGER                                            :: ww_ins, ww_ins_smooth, ww_ice, ww_tot
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  w_tot_delay,  w_tot_final
@@ -714,13 +714,13 @@ CONTAINS
     ! ========================================================================================
 
     ! Initialise to the CO2 weight, but limited to [0,1] interval
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
 
     ! Compute a middle-weight that is mostly 0 except when w_CO2 is close to 1
-    w_CO2ins = (exp( w_CO2ins)**69._dp - 1._dp) / (exp( 1._dp) - 1._dp)
+    w_CO2aux = w_CO2aux**69._dp
 
     ! Limit the resulting weight to [0,1], just in case
-    w_CO2ins = max( 0._dp, min( 1._dp, w_CO2ins))
+    w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
     ! Final combined weight (Glacial Matrix)
     ! ======================================
@@ -730,7 +730,7 @@ CONTAINS
     ! so for full warm periods CO2 is dominant
     ! Bernales et al., 2022, Eq. 5
     w_tot(mesh%vi1:mesh%vi2) = (w_CO2 + w_ice(mesh%vi1:mesh%vi2) * &
-                               (1._dp - w_CO2ins)) / (2._dp - w_CO2ins)
+                               (1._dp - w_CO2aux)) / (2._dp - w_CO2aux)
 
     ! Ocean delay
     ! ===========
@@ -791,7 +791,7 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Combine interpolation weights from weight history and CO2 into the final weight fields,
-      ! so it perfectly matches full warm or cold snapshots (Bernales et al., 2022, Eq. 6)
+      ! so it perfectly matches full warm or cold snapshots (Bernales et al., 2022, Eq. 7)
       w_tot_final( vi,k) = (w_CO2ocn *  w_CO2) +  (1._dp - w_CO2ocn) * w_tot_delay( vi,k)
 
       ! Compute the weighed avergage between the warm and cold snapshots based on the final weight

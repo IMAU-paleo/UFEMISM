@@ -258,7 +258,7 @@
   climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
   climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
-  switch_glacial_index_precip_config          = .TRUE.                           ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+  switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
   ! Ocean
   ! =====

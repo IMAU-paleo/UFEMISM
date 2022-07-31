@@ -110,11 +110,11 @@ PROGRAM UFEMISM_program
   CALL PetscInitialize( PETSC_NULL_CHARACTER, perr)
 
   IF (par%master) WRITE(0,*) ''
-  IF (par%master) WRITE(0,*) '=================================================='
+  IF (par%master) WRITE(0,*) '============================================='
   IF (par%master) WRITE(0,'(A,A,A,I3,A)') ' ===== Running UFEMISM v', &
                                           TRIM(version_number), ' on ', &
                                           par%n, ' cores ====='
-  IF (par%master) WRITE(0,*) '=================================================='
+  IF (par%master) WRITE(0,*) '============================================='
   IF (par%master) WRITE(0,*) ''
 
   tstart = MPI_WTIME()

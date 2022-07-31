@@ -128,10 +128,10 @@ CONTAINS
     CALL check_mesh( region%mesh)
 
     IF (par%master) THEN
-      WRITE(0,'(A)')                '    Finished restarting mesh.'
-      WRITE(0,'(A,I6)')             '     Vertices  : ', region%mesh%nV
-      WRITE(0,'(A,I6)')             '     Triangles : ', region%mesh%nTri
-      WRITE(0,'(A,F7.1,A,F7.1,A)')  '     Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
+      WRITE(0,'(A,I6)')             '    Vertices  : ', region%mesh%nV
+      WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh%nTri
+      WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
+      WRITE(0,'(A)')                '   Finished restarting mesh.'
     END IF
 
     ! Finalise routine path

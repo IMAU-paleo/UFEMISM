@@ -26,7 +26,7 @@ MODULE UFEMISM_main_model
                                                  create_debug_file, write_PETSc_matrix_to_NetCDF, create_regional_scalar_output_file
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
-  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
+  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,                  ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
@@ -378,11 +378,6 @@ CONTAINS
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
-    IF (C%is_restart) THEN
-      ! Map restart initial geometry from old to new mesh (if needed)
-      CALL remap_restart_init_topo( region, region%mesh, region%mesh_new, map)
-    END IF
-
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'none') THEN
       ! Do nothing
@@ -499,25 +494,29 @@ CONTAINS
 
     CALL allocate_region_timers_and_scalars( region)
 
-    ! ===== Reference topographic data fields =====
-    ! =============================================
-
-    CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
-
-    ! ===== The mesh =====
-    ! ====================
+    ! ===== Initial geometry =====
+    ! ============================
 
     IF (C%is_restart) THEN
-      ! Read mesh and data (on the mesh) from a restart file
+
+      ! Read mesh from a restart file
       CALL read_mesh_from_restart_file( region)
+      ! Read data (on the mesh) from a restart file
       CALL read_init_data_from_restart_file( region)
+      ! Initialise topographic data fields (on a square grid), mapping the initial topo from the mesh onto the grid
+      CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name, region%mesh, region%restart)
+
     ELSE
+
+      ! Initialise topographic data fields (on a square grid)
+      CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
       ! Create a new mesh from the reference initial geometry
       CALL create_mesh_from_cart_data( region)
+
     END IF
 
-    ! ===== Reference geometries -> mesh =====
-    ! ========================================
+    ! ===== Reference geometries: grid to mesh =====
+    ! ==============================================
 
     IF (par%master) WRITE(0,*) '  Mapping reference geometries onto the initial model mesh...'
 
@@ -526,9 +525,9 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
 
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi,    region%refgeo_PD%wHi   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb,    region%refgeo_PD%wHb   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs,    region%refgeo_PD%wHs   )
 
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)

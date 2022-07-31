@@ -29,9 +29,13 @@ MODULE reference_fields_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              is_floating, surface_elevation, remove_Lake_Vostok
   USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_reference_geometry_file, read_reference_geometry_file
-  USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, &
+                                             type_mesh, type_remapping_mesh_mesh, type_restart_data
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, &
-                                             deallocate_remapping_operators_grid2mesh, remap_field_dp_2D
+                                             deallocate_remapping_operators_grid2mesh, &
+                                             calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
+                                             deallocate_remapping_operators_mesh2grid, &
+                                             remap_field_dp_2D
 
   IMPLICIT NONE
 
@@ -40,16 +44,18 @@ CONTAINS
 ! ===== Initialise all three reference geometries =====
 ! =====================================================
 
-  SUBROUTINE initialise_reference_geometries( refgeo_init, refgeo_PD, refgeo_GIAeq, region_name)
+  SUBROUTINE initialise_reference_geometries( refgeo_init, refgeo_PD, refgeo_GIAeq, region_name, mesh, restart)
     ! Initialise all three reference geometries
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_init
-    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_PD
-    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo_GIAeq
-    CHARACTER(LEN=3),               INTENT(IN)    :: region_name
+    TYPE(type_reference_geometry),     INTENT(INOUT) :: refgeo_init
+    TYPE(type_reference_geometry),     INTENT(INOUT) :: refgeo_PD
+    TYPE(type_reference_geometry),     INTENT(INOUT) :: refgeo_GIAeq
+    CHARACTER(LEN=3),                  INTENT(IN)    :: region_name
+    TYPE(type_mesh),         OPTIONAL, INTENT(INOUT) :: mesh
+    TYPE(type_restart_data), OPTIONAL, INTENT(IN)    :: restart
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometries'
@@ -95,30 +101,19 @@ CONTAINS
       time_to_restart_from  = C%time_to_restart_from_ANT
     END IF
 
-    ! Initial ice-sheet geometry
-    ! ==========================
-
-    IF     (choice_refgeo_init == 'idealised') THEN
-      IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from idealised case "', TRIM(C%choice_refgeo_init_idealised), '"...'
-      CALL initialise_reference_geometry_idealised_grid( refgeo_init, C%choice_refgeo_init_idealised, region_name, C%dx_refgeo_init_idealised)
-    ELSEIF (choice_refgeo_init == 'realistic') THEN
-      IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from file ', TRIM( filename_refgeo_init), '...'
-      CALL initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
-    ELSEIF (choice_refgeo_init == 'restart') THEN
-      ! Initial reference geometry will be later read from a restart file.
-    ELSE
-      CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
-    END IF
-
     ! Present-day ice-sheet geometry
     ! ==============================
 
-    IF     (choice_refgeo_PD == 'idealised') THEN
+    IF (choice_refgeo_PD == 'idealised') THEN
+
       IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from idealised case "', TRIM(C%choice_refgeo_PD_idealised), '"...'
       CALL initialise_reference_geometry_idealised_grid( refgeo_PD, C%choice_refgeo_PD_idealised, region_name, C%dx_refgeo_PD_idealised)
+
     ELSEIF (choice_refgeo_PD == 'realistic') THEN
+
       IF (par%master) WRITE(0,*) '  Initialising present-day     reference geometry from file ', TRIM( filename_refgeo_PD), '...'
       CALL initialise_reference_geometry_from_file( refgeo_PD, filename_refgeo_PD, region_name)
+
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
     END IF
@@ -126,22 +121,43 @@ CONTAINS
     ! GIA equilibrium ice-sheet geometry
     ! ==================================
 
-    IF     (choice_refgeo_GIAeq == 'idealised') THEN
+    IF (choice_refgeo_GIAeq == 'idealised') THEN
+
       IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from idealised case "', TRIM(C%choice_refgeo_GIAeq_idealised), '"...'
       CALL initialise_reference_geometry_idealised_grid( refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised, region_name, C%dx_refgeo_GIAeq_idealised)
+
     ELSEIF (choice_refgeo_GIAeq == 'realistic') THEN
+
       IF (par%master) WRITE(0,*) '  Initialising GIA equilibrium reference geometry from file ', TRIM( filename_refgeo_GIAeq), '...'
       CALL initialise_reference_geometry_from_file( refgeo_GIAeq, filename_refgeo_GIAeq, region_name)
+
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
 
-    ! Fill in secondary data for the reference initial geometry (used to force mesh creation)
-    IF (.NOT. choice_refgeo_init == 'restart') THEN
-      CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
+    ! Initial ice-sheet geometry
+    ! ==========================
+
+    IF (choice_refgeo_init == 'idealised') THEN
+
+      IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from idealised case "', TRIM(C%choice_refgeo_init_idealised), '"...'
+      CALL initialise_reference_geometry_idealised_grid( refgeo_init, C%choice_refgeo_init_idealised, region_name, C%dx_refgeo_init_idealised)
+
+    ELSEIF (choice_refgeo_init == 'realistic') THEN
+
+      IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from file ', TRIM( filename_refgeo_init), '...'
+      CALL initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
+
+    ELSEIF (choice_refgeo_init == 'restart') THEN
+
+      CALL initialise_reference_geometry_from_mesh( refgeo_init, refgeo_PD, mesh, restart, region_name)
+
+    ELSE
+      CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
 
-    ! Fill in secondary data for the reference PD and equilibrium GIA geometries
+    ! Fill in secondary data for the reference geometries (used during mesh creation)
+    CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
     CALL calc_reference_geometry_secondary_data( refgeo_PD%grid   , refgeo_PD   )
     CALL calc_reference_geometry_secondary_data( refgeo_GIAeq%grid, refgeo_GIAeq)
 
@@ -260,6 +276,148 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
 
   END SUBROUTINE initialise_reference_geometry_from_file
+
+  ! Initialise a reference geometry with data from a (restart) mesh
+  SUBROUTINE initialise_reference_geometry_from_mesh( refgeo, refgeo_PD, mesh, restart, region_name)
+    ! Initialise a reference geometry with data from a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    TYPE(type_reference_geometry), INTENT(IN)    :: refgeo_PD
+    TYPE(type_mesh),               INTENT(INOUT) :: mesh
+    TYPE(type_restart_data),       INTENT(IN)    :: restart
+    CHARACTER(LEN=3),              INTENT(IN)    :: region_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'initialise_reference_geometry_from_mesh'
+    INTEGER                                      :: i,j,n
+    REAL(dp), PARAMETER                          :: tol = 1E-9_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! == Get grid structure from PD grid
+    ! ==================================
+
+    ! Allocate memory for grid size
+    CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
+    CALL allocate_shared_int_0D( refgeo%grid%ny, refgeo%grid%wny)
+
+    IF (par%master) THEN
+      ! Copy grid size from the PD reference geometry
+      refgeo%grid%nx = refgeo_PD%grid%nx
+      refgeo%grid%ny = refgeo_PD%grid%ny
+    END IF
+    CALL sync
+
+    ! Assign range to each processor
+    CALL partition_list( refgeo%grid%nx, par%i, par%n, refgeo%grid%i1, refgeo%grid%i2)
+    CALL partition_list( refgeo%grid%ny, par%i, par%n, refgeo%grid%j1, refgeo%grid%j2)
+
+    ! Allocate memory for grid coordinates
+    CALL allocate_shared_dp_1D( refgeo%grid%nx,                 refgeo%grid%x,  refgeo%grid%wx)
+    CALL allocate_shared_dp_1D(                 refgeo%grid%ny, refgeo%grid%y,  refgeo%grid%wy)
+
+    IF (par%master) THEN
+      ! Copy grid coordinates from the PD reference geometry
+      refgeo%grid%x = refgeo_PD%grid%x
+      refgeo%grid%y = refgeo_PD%grid%y
+    END IF
+    CALL sync
+
+    ! Fill in secondary grid parameters
+    CALL allocate_shared_dp_0D( refgeo%grid%dx,   refgeo%grid%wdx  )
+    CALL allocate_shared_dp_0D( refgeo%grid%xmin, refgeo%grid%wxmin)
+    CALL allocate_shared_dp_0D( refgeo%grid%xmax, refgeo%grid%wxmax)
+    CALL allocate_shared_dp_0D( refgeo%grid%ymin, refgeo%grid%wymin)
+    CALL allocate_shared_dp_0D( refgeo%grid%ymax, refgeo%grid%wymax)
+    IF (par%master) THEN
+      refgeo%grid%dx = refgeo%grid%x( 2) - refgeo%grid%x( 1)
+      refgeo%grid%xmin = refgeo%grid%x( 1)
+      refgeo%grid%xmax = refgeo%grid%x( refgeo%grid%nx)
+      refgeo%grid%ymin = refgeo%grid%y( 1)
+      refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
+    END IF
+    CALL sync
+
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( refgeo%grid%tol_dist, refgeo%grid%wtol_dist)
+
+    IF (par%master) THEN
+      refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
+    END IF
+
+    ! == Set up grid-to-vector translation tables
+    ! ===========================================
+
+    CALL allocate_shared_int_0D( refgeo%grid%n, refgeo%grid%wn)
+
+    IF (par%master) THEN
+      refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
+    END IF
+    CALL sync
+
+    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n, refgeo%grid%wij2n)
+    CALL allocate_shared_int_2D( refgeo%grid%n , 2, refgeo%grid%n2ij, refgeo%grid%wn2ij)
+
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, refgeo%grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, refgeo%grid%ny
+            n = n+1
+            refgeo%grid%ij2n( i,j) = n
+            refgeo%grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = refgeo%grid%ny, 1, -1
+            n = n+1
+            refgeo%grid%ij2n( i,j) = n
+            refgeo%grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
+    END IF
+    CALL sync
+
+    ! == Map the restart mesh data onto the grid
+    ! ==========================================
+
+    ! Allocate memory for topographic data
+    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hi_grid, refgeo%wHi_grid)
+    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hb_grid, refgeo%wHb_grid)
+    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hs_grid, refgeo%wHs_grid)
+
+    IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from restart data...'
+
+    CALL calc_remapping_operator_mesh2grid( mesh, refgeo%grid)
+
+    CALL map_reference_geometry_to_grid( mesh, restart, refgeo)
+
+    CALL deallocate_remapping_operators_mesh2grid( refgeo%grid)
+
+    ! == Final touches
+    ! ================
+
+    ! Safety
+    CALL check_for_NaN_dp_2D( refgeo%Hi_grid, 'refgeo%Hi_grid')
+    CALL check_for_NaN_dp_2D( refgeo%Hb_grid, 'refgeo%Hb_grid')
+    CALL check_for_NaN_dp_2D( refgeo%Hs_grid, 'refgeo%Hs_grid')
+
+    ! Remove Lake Vostok from Antarctica (because it's annoying)
+    IF (region_name == 'ANT'.AND. C%remove_Lake_Vostok) THEN
+      CALL remove_Lake_Vostok( refgeo%grid%x, refgeo%grid%y, refgeo%Hi_grid, refgeo%Hb_grid, refgeo%Hs_grid)
+    END IF
+
+    ! Remove ice based on the no-ice masks (grid versions)
+    CALL apply_mask_noice_grid( refgeo, region_name)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
+
+  END SUBROUTINE initialise_reference_geometry_from_mesh
 
 ! ===== Clean-up of realistic geometries (grid) =====
 ! ===================================================
@@ -1727,24 +1885,35 @@ CONTAINS
     did_remap_init = .FALSE.
 
     IF     (choice_refgeo_init == 'idealised') THEN
-      ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
+      ! For idealised geometries, calculate the exact solution directly
+      ! on the mesh instead of remapping it from the grid
 
       CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
 
     ELSEIF (choice_refgeo_init == 'realistic') THEN
-      ! For realistic geometries, remap the data from the grid
+      ! For realistic geometries, remap the data from the grid,
+      ! which has been read from an external data file
 
       IF (par%master) WRITE(0,*) '   Mapping initial reference geometry to the mesh...'
+
+      ! Remap initial geometry data from the grid
       CALL calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
       CALL map_reference_geometry_to_mesh( mesh, region%refgeo_init)
       did_remap_init = .TRUE.
 
     ELSEIF (choice_refgeo_init == 'restart') THEN
-      ! For initial geometries from a restart file, just assing to them the already read data
+      ! During initialisation, a grid version of the restart initial geometry
+      ! was created from the same data of the model, but since we already have
+      ! that data on the restart mesh, simply copy them from the restart data.
+      ! If this routine is called during a mesh update, use the already gridded
+      ! initial geomtery data to do the usual mapping from grid to mesh.
 
       IF (region%time == C%start_time_of_run) THEN
         ! Initialisation of the model
 
+        IF (par%master) WRITE(0,*) '   Copying initial reference geometry from the restart mesh...'
+
+        ! Get initial geometry from restart data
         DO vi = mesh%vi1, mesh%vi2
           region%refgeo_init%Hi( vi) = region%restart%Hi( vi)
           region%refgeo_init%Hb( vi) = region%restart%Hb( vi)
@@ -1753,8 +1922,15 @@ CONTAINS
         CALL sync
 
       ELSE
-        ! The initial restart topo needs to be remapped onto a new mesh.
-        ! This will be done in the remap_restart_init_topo subroutine.
+        ! Mesh update
+
+        IF (par%master) WRITE(0,*) '   Mapping initial reference geometry to the mesh...'
+
+        ! Remap initial geometry data from the grid
+        CALL calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
+        CALL map_reference_geometry_to_mesh( mesh, region%refgeo_init)
+        did_remap_init = .TRUE.
+
       END IF
 
     ELSE
@@ -1897,55 +2073,38 @@ CONTAINS
 
   END SUBROUTINE map_reference_geometry_to_mesh
 
-  SUBROUTINE remap_restart_init_topo( region, mesh_old, mesh_new, map)
+  SUBROUTINE map_reference_geometry_to_grid( mesh, restart, refgeo)
+    ! Map data for a single reference geometry from a restart mesh onto a square grid.
 
     IMPLICIT NONE
 
     ! Input and output variables
-    TYPE(type_model_region),        INTENT(INOUT) :: region
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh_old
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh_new
-    TYPE(type_remapping_mesh_mesh), INTENT(IN)    :: map
+    TYPE(type_mesh),               INTENT(IN)    :: mesh
+    TYPE(type_restart_data),       INTENT(IN)    :: restart
+    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'remap_restart_init_topo'
-    INTEGER                                       :: int_dummy, vi
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'map_reference_geometry_to_grid'
+    INTEGER                                      :: i,j
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! To prevent compiler warnings for unused variables
-    int_dummy = mesh_old%nV
-    int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
+    ! Map PD data to the mesh
+    CALL map_mesh2grid_2D( mesh, refgeo%grid, restart%Hi, refgeo%Hi_grid)
+    CALL map_mesh2grid_2D( mesh, refgeo%grid, restart%Hb, refgeo%Hb_grid)
 
-    ! Determine whether we actually need to remap the restart init topo
-    IF ( (region%name == 'NAM' .AND. C%choice_refgeo_init_NAM == 'restart') .OR. &
-         (region%name == 'EAS' .AND. C%choice_refgeo_init_EAS == 'restart') .OR. &
-         (region%name == 'GRL' .AND. C%choice_refgeo_init_GRL == 'restart') .OR. &
-         (region%name == 'ANT' .AND. C%choice_refgeo_init_ANT == 'restart') ) THEN
-
-      IF (par%master) WRITE(0,*) '   Mapping (restart) initial reference geometry to the new mesh...'
-
-      ! Remap restart topo
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hi, region%restart%wHi, 'cons_2nd_order')
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hb, region%restart%wHb, 'cons_2nd_order')
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hs, region%restart%wHs, 'cons_2nd_order')
-
-      ! Assing the (potentially remapped) restart data
-      DO vi = mesh_new%vi1, mesh_new%vi2
-        region%refgeo_init%Hi( vi) = region%restart%Hi( vi)
-        region%refgeo_init%Hb( vi) = region%restart%Hb( vi)
-        region%refgeo_init%Hs( vi) = region%restart%Hs( vi)
-      END DO
-      CALL sync
-
-    END IF
+    DO j = 1, refgeo%grid%ny
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      refgeo%Hs_grid( i,j) = surface_elevation( refgeo%Hi_grid( i,j), refgeo%Hb_grid( i,j), 0._dp)
+    END DO
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE remap_restart_init_topo
+  END SUBROUTINE map_reference_geometry_to_grid
 
 ! ===== Analytical solutions used to initialise some benchmark experiments =====
 ! ==============================================================================

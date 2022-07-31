@@ -242,14 +242,14 @@ CONTAINS
 
       ! Calculate time step based on the truncation error in ice thickness (Robinson et al., 2020, Eq. 33)
       CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_adv)
+
       IF (par%master) THEN
-        region%dt_crit_ice_prev = region%dt_crit_ice
-        region%ice%pc_eta_prev  = region%ice%pc_eta
+
+        region%dt_crit_ice_prev = MAX(C%dt_min, MIN(C%dt_max, region%dt_crit_ice))
         dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
-        region%dt_crit_ice      = MAX(C%dt_min, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc]))
+        region%dt_crit_ice      = MAX( C%dt_min, MAX( 0.5_dp * region%dt_crit_ice_prev, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc])))
         region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
-        region%ice%pc_beta1     = 1._dp + region%ice%pc_zeta / 2._dp
-        region%ice%pc_beta2     =       - region%ice%pc_zeta / 2._dp
+
       END IF
       CALL sync
 
@@ -258,9 +258,14 @@ CONTAINS
 
       ! Calculate new ice geometry
       region%ice%pc_f2(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
+
       CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
       region%ice%pc_f1(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
-      region%ice%Hi_pred( vi1:vi2) = MAX(0._dp, region%ice%Hi_a(     vi1:vi2) + region%dt_crit_ice * region%ice%dHi_dt_a( vi1:vi2))
+
+      ! Robinson et al. (2020), Eq. 30)
+      region%ice%Hi_pred( vi1:vi2) = MAX(0._dp, region%ice%Hi_a( vi1:vi2)   + region%dt_crit_ice * &
+                                      ((1._dp + region%ice%pc_zeta / 2._dp) * region%ice%pc_f1( vi1:vi2) - &
+                                               (region%ice%pc_zeta / 2._dp) * region%ice%pc_f2( vi1:vi2)))
       CALL sync
 
       ! Update step
@@ -321,20 +326,30 @@ CONTAINS
       ! Corrector step
       ! ==============
 
-      ! Go back to old ice thickness. Run all the other modules (climate, SMB, BMB, thermodynamics, etc.)
-      ! and only go to new (corrected) ice thickness at the end of this time loop.
-      region%ice%Hi_a(    vi1:vi2) = region%ice%Hi_old(   vi1:vi2)
-      CALL update_general_ice_model_data( region%mesh, region%ice)
-
-      ! Calculate "corrected" ice thickness based on new velocities
+      ! Calculate dHi_dt for the predicted ice thickness and updated velocity
       CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
       region%ice%pc_f3(   vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2)
       region%ice%pc_f4(   vi1:vi2) = region%ice%pc_f1(    vi1:vi2)
-      region%ice%Hi_corr( vi1:vi2) = MAX(0._dp, region%ice%Hi_a( vi1:vi2) + 0.5_dp * region%dt_crit_ice * (region%ice%pc_f3( vi1:vi2) + region%ice%pc_f4( vi1:vi2)))
+
+      ! Go back to old ice thickness. Run all the other modules (climate, SMB, BMB, thermodynamics, etc.)
+      ! and only go to new (corrected) ice thickness at the end of this time loop.
+      region%ice%Hi_a(    vi1:vi2) = region%ice%Hi_old(   vi1:vi2)
+
+      CALL sync
+
+      CALL update_general_ice_model_data( region%mesh, region%ice)
+
+      ! Calculate "corrected" ice thickness (Robinson et al. (2020), Eq. 31)
+      region%ice%Hi_corr( vi1:vi2) = MAX(0._dp, region%ice%Hi_old( vi1:vi2) + 0.5_dp * region%dt_crit_ice * &
+                                               (region%ice%pc_f4( vi1:vi2) + region%ice%pc_f3( vi1:vi2)))
+
+      ! Calculate applied ice thickness rate of change
+      region%ice%dHi_dt_a( vi1:vi2) = (region%ice%Hi_corr( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt_crit_ice
+
       CALL sync
 
       ! Determine truncation error
-      CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice, region%dt_prev)
+      CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice)
 
     END IF ! IF (do_update_ice_velocity) THEN
 
@@ -654,7 +669,7 @@ CONTAINS
     INTEGER                                            :: aci, vi, vj
     REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c
     INTEGER                                            :: wu_c, wv_c
-    REAL(dp)                                           :: dist, dt
+    REAL(dp)                                           :: dist, dt, uv_c
     REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
     ! Add routine to path
@@ -674,7 +689,12 @@ CONTAINS
       vi = mesh%Aci( aci,1)
       vj = mesh%Aci( aci,2)
       dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
-      dt = dist / (ABS( u_c( aci)) + ABS( v_c( aci)))
+      uv_c = (ABS( u_c( aci)) + ABS( v_c( aci)))
+      IF (uv_c > 0._dp) THEN
+        dt = dist / uv_c
+      ELSE
+        dt = 2._dp * C%dt_max
+      END IF
       dt_crit_adv = MIN( dt_crit_adv, dt)
 
     END DO
@@ -691,7 +711,7 @@ CONTAINS
 
   END SUBROUTINE calc_critical_timestep_adv
 
-  SUBROUTINE calc_pc_truncation_error( mesh, ice, dt, dt_prev)
+  SUBROUTINE calc_pc_truncation_error( mesh, ice, dt)
     ! Calculate the truncation error in the ice thickness rate of change (Robinson et al., 2020, Eq. 32)
 
     IMPLICIT NONE
@@ -699,19 +719,19 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp),                            INTENT(IN)    :: dt, dt_prev
+    REAL(dp),                            INTENT(IN)    :: dt
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pc_truncation_error'
     INTEGER                                            :: vi, ci, vc
     LOGICAL                                            :: has_GL_neighbour
-    REAL(dp)                                           :: zeta, eta_proc
+    REAL(dp)                                           :: eta_proc
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Ratio of time steps
-    zeta = dt / dt_prev
+    ! Save previous value of eta
+    ice%pc_eta_prev  = ice%pc_eta
 
     ! Find maximum truncation error
     eta_proc = C%pc_eta_min
@@ -719,7 +739,8 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Calculate truncation error (Robinson et al., 2020, Eq. 32)
-      ice%pc_tau( vi) = ABS( zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / ((3._dp * zeta + 3._dp) * dt))
+      ice%pc_tau( vi) = ABS( ice%pc_zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / &
+                             ((3._dp * ice%pc_zeta + 3._dp) * dt))
 
       IF (ice%mask_sheet_a( vi) == 1) THEN
 
@@ -732,7 +753,9 @@ CONTAINS
           END IF
         END DO
 
-        IF (.NOT.has_GL_neighbour) eta_proc = MAX( eta_proc, ice%pc_tau( vi))
+        IF (.NOT.has_GL_neighbour) THEN
+          eta_proc = MAX( eta_proc, ice%pc_tau( vi))
+        END IF
 
       END IF
 
@@ -932,15 +955,21 @@ CONTAINS
     ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
     DO vi = mesh%vi1, mesh%vi2
       ! Main quantities
-      ice%Hi_a( vi)  = refgeo_init%Hi( vi)
-      ice%Hb_a( vi)  = refgeo_init%Hb( vi)
-      ice%Hs_a( vi)  = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
-      ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      ice%Hi_a( vi)   = refgeo_init%Hi( vi)
+      ice%Hb_a( vi)   = refgeo_init%Hb( vi)
+
+      IF (C%is_restart) THEN
+        ice%Hs_a( vi) = refgeo_init%Hs( vi)
+      ELSE
+        ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      END IF
+
+      ice%TAF_a( vi)  = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
 
       ! Differences w.r.t. present-day
-      ice%dHi_a( vi) = ice%Hi_a( vi) - refgeo_PD%Hi( vi)
-      ice%dHb_a( vi) = ice%Hb_a( vi) - refgeo_PD%Hb( vi)
-      ice%dHs_a( vi) = ice%Hs_a( vi) - refgeo_PD%Hs( vi)
+      ice%dHi_a( vi)  = ice%Hi_a( vi) - refgeo_PD%Hi( vi)
+      ice%dHb_a( vi)  = ice%Hb_a( vi) - refgeo_PD%Hb( vi)
+      ice%dHs_a( vi)  = ice%Hs_a( vi) - refgeo_PD%Hs( vi)
     END DO
     CALL sync
 
@@ -967,6 +996,18 @@ CONTAINS
       ice%dHs_dt_a = 0._dp
 
     END IF
+
+    ! Initialise the "previous ice mask", so that the first call to thermodynamics works correctly
+    ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
+    CALL sync
+
+    ! Initialise some numbers for the predictor/corrector ice thickness update method
+    IF (par%master) THEN
+      ice%pc_zeta        = 1._dp
+      ice%pc_eta         = C%pc_epsilon
+      ice%pc_eta_prev    = C%pc_epsilon
+    END IF
+    CALL sync
 
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice, restart)
@@ -1133,8 +1174,6 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_fcb                , ice%wpc_fcb               )
     CALL allocate_shared_dp_0D(                           ice%pc_eta                , ice%wpc_eta               )
     CALL allocate_shared_dp_0D(                           ice%pc_eta_prev           , ice%wpc_eta_prev          )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta1              , ice%wpc_beta1             )
-    CALL allocate_shared_dp_0D(                           ice%pc_beta2              , ice%wpc_beta2             )
     CALL allocate_shared_dp_0D(                           ice%pc_beta3              , ice%wpc_beta3             )
     CALL allocate_shared_dp_0D(                           ice%pc_beta4              , ice%wpc_beta4             )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%pc_f1                 , ice%wpc_f1                )
@@ -1332,8 +1371,6 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_fcb                , ice%wpc_fcb               )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_eta                , ice%wpc_eta               )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_eta_prev           , ice%wpc_eta_prev          )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_beta1              , ice%wpc_beta1             )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_beta2              , ice%wpc_beta2             )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta3              , ice%wpc_beta3             )
    !CALL reallocate_shared_dp_0D(                                   ice%pc_beta4              , ice%wpc_beta4             )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f1                 , ice%wpc_f1                )

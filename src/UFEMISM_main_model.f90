@@ -657,6 +657,12 @@ CONTAINS
     ! Write scalar data at time t=0
     CALL write_regional_scalar_data( region, C%start_time_of_run)
 
+    ! ===== Initial output after initialisation =====
+    ! ===============================================
+
+    ! Write to regional NetCDF output files
+    CALL write_to_output_files( region)
+
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================
 
@@ -759,65 +765,69 @@ CONTAINS
     CALL allocate_shared_bool_0D( region%do_output,        region%wdo_output       )
 
     IF (par%master) THEN
-      region%time           = C%start_time_of_run
-      region%dt             = C%dt_min
-      region%dt_prev        = C%dt_min
+      region%time             = C%start_time_of_run
+      region%dt               = C%dt_min
+      region%dt_prev          = C%dt_min
+      region%dt_crit_SIA      = C%dt_min
+      region%dt_crit_SSA      = C%dt_min
+      region%dt_crit_ice      = C%dt_min
+      region%dt_crit_ice_prev = C%dt_min
 
-      region%t_last_mesh    = C%start_time_of_run
-      region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
-      region%do_mesh        = .FALSE.
+      region%t_last_mesh      = C%start_time_of_run
+      region%t_next_mesh      = C%start_time_of_run + C%dt_mesh_min
+      region%do_mesh          = .FALSE.
 
-      region%t_last_SIA     = C%start_time_of_run
-      region%t_next_SIA     = C%start_time_of_run
-      region%do_SIA         = .TRUE.
+      region%t_last_SIA       = C%start_time_of_run
+      region%t_next_SIA       = C%start_time_of_run
+      region%do_SIA           = .TRUE.
 
-      region%t_last_SSA     = C%start_time_of_run
-      region%t_next_SSA     = C%start_time_of_run
-      region%do_SSA         = .TRUE.
+      region%t_last_SSA       = C%start_time_of_run
+      region%t_next_SSA       = C%start_time_of_run
+      region%do_SSA           = .TRUE.
 
-      region%t_last_DIVA    = C%start_time_of_run
-      region%t_next_DIVA    = C%start_time_of_run
-      region%do_DIVA        = .TRUE.
+      region%t_last_DIVA      = C%start_time_of_run
+      region%t_next_DIVA      = C%start_time_of_run
+      region%do_DIVA          = .TRUE.
 
-      region%t_last_thermo  = C%start_time_of_run
-      region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
-      region%do_thermo      = .FALSE.
+      region%t_last_thermo    = C%start_time_of_run
+      region%t_next_thermo    = C%start_time_of_run + C%dt_thermo
+      region%do_thermo        = .FALSE.
 
-      region%t_last_climate = C%start_time_of_run
-      region%t_next_climate = C%start_time_of_run
-      region%do_climate     = .TRUE.
+      region%t_last_climate   = C%start_time_of_run
+      region%t_next_climate   = C%start_time_of_run
+      region%do_climate       = .TRUE.
 
-      region%t_last_ocean   = C%start_time_of_run
-      region%t_next_ocean   = C%start_time_of_run
-      region%do_ocean       = .TRUE.
+      region%t_last_ocean     = C%start_time_of_run
+      region%t_next_ocean     = C%start_time_of_run
+      region%do_ocean         = .TRUE.
 
-      region%t_last_SMB     = C%start_time_of_run
-      region%t_next_SMB     = C%start_time_of_run
-      region%do_SMB         = .TRUE.
+      region%t_last_SMB       = C%start_time_of_run
+      region%t_next_SMB       = C%start_time_of_run
+      region%do_SMB           = .TRUE.
 
-      region%t_last_BMB     = C%start_time_of_run
-      region%t_next_BMB     = C%start_time_of_run
-      region%do_BMB         = .TRUE.
+      region%t_last_BMB       = C%start_time_of_run
+      region%t_next_BMB       = C%start_time_of_run
+      region%do_BMB           = .TRUE.
 
-      region%t_last_ELRA    = C%start_time_of_run
-      region%t_next_ELRA    = C%start_time_of_run
+      region%t_last_ELRA      = C%start_time_of_run
+      region%t_next_ELRA      = C%start_time_of_run
       IF (C%choice_GIA_model == 'ELRA') THEN
-        region%do_ELRA      = .TRUE.
+        region%do_ELRA        = .TRUE.
       ELSE
-        region%do_ELRA      = .FALSE.
+        region%do_ELRA        = .FALSE.
       END IF
 
-      region%t_last_basal   = C%start_time_of_run
-      region%t_next_basal   = C%start_time_of_run + C%dt_basal
-      region%do_basal       = .FALSE.
+      region%t_last_basal     = C%start_time_of_run
+      region%t_next_basal     = C%start_time_of_run + C%dt_basal
+      region%do_basal         = .FALSE.
 
-      region%t_last_SMB_inv = C%start_time_of_run
-      region%t_next_SMB_inv = C%start_time_of_run + C%dt_SMB_inv
-      region%do_SMB_inv     = .FALSE.
+      region%t_last_SMB_inv   = C%start_time_of_run
+      region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv
+      region%do_SMB_inv       = .FALSE.
 
-      region%t_last_output  = C%start_time_of_run
-      region%t_next_output  = C%start_time_of_run
-      region%do_output      = .TRUE.
+      region%t_last_output    = C%start_time_of_run
+      region%t_next_output    = C%start_time_of_run
+      region%do_output        = .TRUE.
     END IF
 
     ! ===== Scalars =====

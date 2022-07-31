@@ -20,7 +20,6 @@ MODULE mesh_operators_module
 
 CONTAINS
   
-#if 0
 ! == Mapping
 
   ! 2-D
@@ -41,7 +40,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -69,7 +68,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -97,7 +96,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -125,7 +124,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -153,7 +152,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -181,7 +180,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -211,7 +210,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,2) /= SIZE( d_b,2)) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_a,2) /= SIZE( d_b,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -239,7 +238,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,2) /= SIZE( d_c,2)) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_a,2) /= SIZE( d_c,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -267,7 +266,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_b,2) /= SIZE( d_a,2)) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_b,2) /= SIZE( d_a,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -295,7 +294,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,2) /= SIZE( d_c,2)) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_b,2) /= SIZE( d_c,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -323,7 +322,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_a,1) /= mesh%nV .OR. SIZE( d_c,2) /= SIZE( d_a,2)) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( d_c,2) /= SIZE( d_a,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -351,7 +350,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( d_b,1) /= mesh%nTri .OR. SIZE( d_c,2) /= SIZE( d_b,2)) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( d_c,2) /= SIZE( d_b,2)) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -383,7 +382,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -411,7 +410,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -439,7 +438,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -467,7 +466,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -495,7 +494,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -523,7 +522,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -551,7 +550,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -579,7 +578,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -607,7 +606,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -637,7 +636,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -665,7 +664,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -693,7 +692,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -721,7 +720,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -749,7 +748,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -777,7 +776,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -805,7 +804,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -833,7 +832,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -861,7 +860,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddx_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddx_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -893,7 +892,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -921,7 +920,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -949,7 +948,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -977,7 +976,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1005,7 +1004,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1033,7 +1032,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1061,7 +1060,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1089,7 +1088,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1117,7 +1116,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1147,7 +1146,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1175,7 +1174,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1203,7 +1202,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_a,1) /= mesh%nV .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_a,1) /= mesh%vi2-mesh%vi1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1231,7 +1230,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1259,7 +1258,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1287,7 +1286,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_b,1) /= mesh%nTri .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_b,1) /= mesh%ti2-mesh%ti1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1315,7 +1314,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_a,1) /= mesh%nV) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_a,1) /= mesh%vi2-mesh%vi1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1343,7 +1342,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_b,1) /= mesh%nTri) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_b,1) /= mesh%ti2-mesh%ti1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1371,7 +1370,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (SIZE( d_c,1) /= mesh%nAc .OR. SIZE( ddy_c,1) /= mesh%nAc) THEN
+    IF (SIZE( d_c,1) /= mesh%ci2-mesh%ci1+1   .OR. SIZE( ddy_c,1) /= mesh%ci2-mesh%ci1+1  ) THEN
       CALL crash('data fields are the wrong size!')
     END IF
     
@@ -1382,7 +1381,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE ddy_c_to_c_3D
-#endif  
 ! == d2/dx2, d2/dxdy, d2/dy2 on the a-grid
 
   SUBROUTINE d2dx2_a_to_a_2D(  mesh, d_a, d2dx2_a)

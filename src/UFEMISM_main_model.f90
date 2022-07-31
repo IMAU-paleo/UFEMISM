@@ -7,7 +7,6 @@ module UFEMISM_main_model
 ! ================
 
   use mpi
-  use, intrinsic :: iso_c_binding,  only: c_backspace
   use configuration_module,         only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   use parameters_module
   use petsc_module,                 only: perr
@@ -24,6 +23,9 @@ module UFEMISM_main_model
   use netcdf_module,                only: initialise_debug_fields, create_output_files, associate_debug_fields, &
                                            write_to_output_files, create_debug_file, reallocate_debug_fields
   use ice_dynamics_module,          only: initialise_ice_model, remap_ice_model, run_ice_model
+  use BMB_module,                   only: initialise_BMB_model, remap_bmb_model
+  use SMB_module,                   only: initialise_SMB_model, remap_smb_model
+  use general_ice_model_data_module,only: initialise_mask_noice
   use reallocate_mod,               only: reallocate
   use utilities_module,             only: time_display, inverse_oblique_sg_projection
 
@@ -251,6 +253,8 @@ contains
 
     ! Remap all the submodels
     call remap_ice_model( region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
+    call remap_SMB_model( region%mesh, region%mesh_new, map, region%SMB)
+    call remap_BMB_model( region%mesh, region%mesh_new, map, region%BMB)
 
     ! Deallocate shared memory for the mapping arrays
     call deallocate_remapping_operators_mesh_mesh( map)
@@ -400,11 +404,29 @@ contains
     call associate_debug_fields( region)
     region%output_file_exists = .true.
     call sync
+    
+    ! ===== The "no ice" mask
+    ! =======================
+
+    allocate(region%mask_noice(region%mesh%vi1:region%mesh%vi2))
+    call initialise_mask_noice(region, region%mesh)
 
     ! ===== The ice dynamics model =====
     ! ==================================
 
     call initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
+
+    ! ===== The SMB model =====
+    ! =========================    
+    
+    CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
+    
+    ! ===== The BMB model =====
+    ! =========================    
+    
+    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name) 
+    
+ 
 
     if (par%master) then
       write(*,"(3A)") ' Finished initialising model region ', region%name, '.'

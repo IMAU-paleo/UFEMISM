@@ -70,7 +70,7 @@ program UFEMISM_program
   character(len=256), parameter      :: version_number = '0.1'
 
   ! The four model regions
-  type(type_model_region)            :: NAM, EAS, GRL, ANT
+  type(type_model_region), allocatable :: NAM, EAS, GRL, ANT
 
   ! Coupling
   real(dp)                           :: t_coupling, t_end_models
@@ -81,6 +81,8 @@ program UFEMISM_program
 
 ! ===== START =====
 ! =================
+
+  allocate(NAM,EAS,GRL,ANT)
 
   routine_path = 'UFEMISM_program'
 

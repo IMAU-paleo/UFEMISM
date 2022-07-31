@@ -9,19 +9,28 @@ MODULE ice_velocity_module
   USE parameters_module
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+                                             vertical_average, vertical_integration_from_bottom_to_zeta, vertical_integrate, &
+                                             SSA_Schoof2006_analytical_solution
   
   ! Import specific functionality 
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, type_remapping_mesh_mesh             
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
+  use mesh_operators_module,           only: map_a_to_b_2d, map_b_to_a_2d, map_a_to_b_3d, map_b_to_a_3D
+  use mesh_operators_module,           only: ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D
+  use mesh_operators_module,           only: ddx_a_to_b_2D, ddx_b_to_a_2D, ddy_a_to_b_2D, ddy_b_to_a_2D
+  use mesh_operators_module,           only: apply_Neumann_BC_direct_a_2D
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
-  !USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
-  !USE general_ice_model_data_module,   ONLY: determine_grounded_fractions
+  USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
+  USE general_ice_model_data_module,   ONLY: determine_grounded_fractions
+  use reallocate_mod,                  only: reallocate_bounds
+  use mpi_module,                      only: allgather_array
 
   IMPLICIT NONE
   
 CONTAINS
   ! The different velocity equation solvers that can be called from run_ice_model
+#if 0
   SUBROUTINE solve_SIA(  mesh, ice)
     ! Calculate ice velocities using the SIA.
       
@@ -191,7 +200,6 @@ CONTAINS
       
       ! Set beta_eff equal to beta; this turns the DIVA into the SSA
       ice%beta_eff_a( mesh%vi1:mesh%vi2) = ice%beta_a( mesh%vi1:mesh%vi2)
-      CALL sync
     
       ! Map beta_eff from the a-grid to the cx/cy-grids
       CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
@@ -200,12 +208,10 @@ CONTAINS
       DO ti = mesh%ti1, mesh%ti2
         ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grnd_b( ti)**2
       END DO
-      CALL sync
       
       ! Store the previous solution so we can check for convergence later
       ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
       ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
-      CALL sync
       
       ! Solve the linearised SSA
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
@@ -239,6 +245,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE solve_SSA
+#endif
   SUBROUTINE solve_DIVA(  mesh, ice)
     ! Calculate ice velocities using the DIVA
       
@@ -270,11 +277,11 @@ CONTAINS
     ! If there's no grounded ice anywhere, don't bother
     set_velocities_to_zero = .FALSE.
     IF (SUM( ice%mask_sheet_a) == 0) set_velocities_to_zero = .TRUE.
+    call mpi_allreduce(mpi_in_place,set_velocities_to_zero,1,mpi_logical,mpi_lor,mpi_comm_world,ierr)
     
     IF (set_velocities_to_zero) THEN
       ice%u_vav_b( mesh%ti1:mesh%ti2) = 0._dp
       ice%v_vav_b( mesh%ti1:mesh%ti2) = 0._dp
-      CALL sync
       CALL calc_secondary_velocities( mesh, ice)
       CALL finalise_routine( routine_name)
       RETURN
@@ -293,12 +300,12 @@ CONTAINS
     CALL determine_grounded_fractions( mesh, ice)
     
     ! Find analytical solution for the SSA icestream experiment (used only to print numerical error to screen)
-    CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( 1), 0._dp, umax_analytical, tauc_analytical)
+    CALL SSA_Schoof2006_analytical_solution( 0.001_dp, 2000._dp, ice%A_flow_vav_a( mesh%vi1), 0._dp, umax_analytical, tauc_analytical)
     
     ! The viscosity iteration
     viscosity_iteration_i = 0
     has_converged         = .FALSE.
-    viscosity_iteration: DO WHILE (.NOT. has_converged)
+    DO WHILE (.NOT. has_converged)
       viscosity_iteration_i = viscosity_iteration_i + 1
       
       ! Calculate the vertical shear strain rates
@@ -319,7 +326,6 @@ CONTAINS
       ! Store the previous solution so we can check for convergence later
       ice%u_prev_b( mesh%ti1:mesh%ti2) = ice%u_vav_b( mesh%ti1:mesh%ti2)
       ice%v_prev_b( mesh%ti1:mesh%ti2) = ice%v_vav_b( mesh%ti1:mesh%ti2)
-      CALL sync
       
       ! Solve the linearised DIVA
       CALL solve_SSADIVA_linearised( mesh, ice, ice%u_vav_b, ice%v_vav_b)
@@ -347,7 +353,7 @@ CONTAINS
       ! Calculate basal stress 
       CALL calc_basal_stress_DIVA( mesh, ice, ice%u_vav_b, ice%v_vav_b)
       
-    END DO viscosity_iteration
+    END DO
     
     ! Calculate secondary velocities (surface, base, etc.)
     CALL calc_secondary_velocities( mesh, ice)
@@ -380,12 +386,10 @@ CONTAINS
       ! Set 3D velocity field equal to SIA answer
       ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
       ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
-      CALL sync
       
       ! Basal velocity is zero
       ice%u_base_b( mesh%ti1:mesh%ti2) = 0._dp
       ice%v_base_b( mesh%ti1:mesh%ti2) = 0._dp
-      CALL sync
     
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
@@ -393,7 +397,6 @@ CONTAINS
       ! Copy surface velocity from the 3D fields
       ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
       ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
-      CALL sync
       
       ! Calculate vertically averaged velocities
       DO ti = mesh%ti1, mesh%ti2
@@ -402,7 +405,6 @@ CONTAINS
         prof = ice%v_3D_b( ti,:)
         CALL vertical_average( prof, ice%v_vav_b( ti))
       END DO
-      CALL sync
       
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
       ! No SIA, just the SSA
@@ -418,11 +420,9 @@ CONTAINS
         ice%u_base_b( ti  ) = ice%u_base_SSA_b( ti)
         ice%v_base_b( ti  ) = ice%v_base_SSA_b( ti)
       END DO
-      CALL sync
       
       ! No vertical velocity
       ice%w_3D_a( mesh%vi1:mesh%vi2,:) = 0._dp
-      CALL sync
       
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Hybrid SIA/SSA
@@ -430,19 +430,16 @@ CONTAINS
       ! Set basal velocity equal to SSA answer
       ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
       ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
-      CALL sync
       
       ! Set 3-D velocities equal to the SIA solution
       ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
       ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
-      CALL sync
       
       ! Add the SSA contributions to the 3-D velocities
       DO k = 1, C%nz
         ice%u_3D_b( mesh%ti1:mesh%ti2,k) = ice%u_3D_b( mesh%ti1:mesh%ti2,k) + ice%u_base_b( mesh%ti1:mesh%ti2)
         ice%v_3D_b( mesh%ti1:mesh%ti2,k) = ice%v_3D_b( mesh%ti1:mesh%ti2,k) + ice%v_base_b( mesh%ti1:mesh%ti2)
       END DO
-      CALL sync
       
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
@@ -450,7 +447,6 @@ CONTAINS
       ! Copy surface velocity from the 3D fields
       ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
       ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
-      CALL sync
       
       ! Calculate vertically averaged velocities
       DO ti = mesh%ti1, mesh%ti2
@@ -459,7 +455,6 @@ CONTAINS
         prof = ice%v_3D_b( ti,:)
         CALL vertical_average( prof, ice%v_vav_b( ti))
       END DO
-      CALL sync
     
     ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
       ! DIVA
@@ -473,7 +468,6 @@ CONTAINS
       ! Copy surface velocity from the 3D fields
       ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
       ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
-      CALL sync
       
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
@@ -499,7 +493,6 @@ CONTAINS
       ice%uabs_surf_a( vi) = SQRT( ice%u_surf_a( vi)**2 + ice%v_surf_a( vi)**2)
       ice%uabs_base_a( vi) = SQRT( ice%u_base_a( vi)**2 + ice%v_base_a( vi)**2)
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -517,10 +510,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_3D_vertical_velocities'
     INTEGER                                            :: vi, k
-    REAL(dp), DIMENSION(:    ), POINTER                ::  dHi_dx_a,  dHi_dy_a,  dHs_dx_a,  dHs_dy_a
-    INTEGER                                            :: wdHi_dx_a, wdHi_dy_a, wdHs_dx_a, wdHs_dy_a
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  du_dx_3D_a,  dv_dy_3D_a
-    INTEGER                                            :: wdu_dx_3D_a, wdv_dy_3D_a
+    REAL(dp), DIMENSION(:    ), allocatable                ::  dHi_dx_a,  dHi_dy_a,  dHs_dx_a,  dHs_dy_a
+    REAL(dp), DIMENSION(:,:  ), allocatable            ::  du_dx_3D_a,  dv_dy_3D_a
     REAL(dp)                                           :: dHbase_dx, dHbase_dy
     REAL(dp)                                           :: du_dx_k,   dv_dy_k
     REAL(dp)                                           :: du_dx_kp1, dv_dy_kp1
@@ -530,12 +521,12 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,       dHi_dx_a  , wdHi_dx_a  )
-    CALL allocate_shared_dp_1D( mesh%nV,       dHi_dy_a  , wdHi_dy_a  )
-    CALL allocate_shared_dp_1D( mesh%nV,       dHs_dx_a  , wdHs_dx_a  )
-    CALL allocate_shared_dp_1D( mesh%nV,       dHs_dy_a  , wdHs_dy_a  )
-    CALL allocate_shared_dp_2D( mesh%nV, C%nz, du_dx_3D_a, wdu_dx_3D_a)
-    CALL allocate_shared_dp_2D( mesh%nV, C%nz, dv_dy_3D_a, wdv_dy_3D_a)
+    allocate( dHi_dx_a  (mesh%vi1:mesh%vi2      )) 
+    allocate( dHi_dy_a  (mesh%vi1:mesh%vi2      )) 
+    allocate( dHs_dx_a  (mesh%vi1:mesh%vi2      )) 
+    allocate( dHs_dy_a  (mesh%vi1:mesh%vi2      )) 
+    allocate( du_dx_3D_a(mesh%vi1:mesh%vi2, C%nz))
+    allocate( dv_dy_3D_a(mesh%vi1:mesh%vi2, C%nz))
     
     ! Calculate surface & ice thickness gradients
     CALL ddx_a_to_a_2D( mesh, ice%Hs_a  , dHs_dx_a  )
@@ -585,15 +576,14 @@ CONTAINS
       END DO ! DO k = C%nZ - 1, 1, -1
 
     END DO ! DO vi = mesh%v1, mesh%v2
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wdHi_dx_a  )
-    CALL deallocate_shared( wdHi_dy_a  )
-    CALL deallocate_shared( wdHs_dx_a  )
-    CALL deallocate_shared( wdHs_dy_a  )
-    CALL deallocate_shared( wdu_dx_3D_a)
-    CALL deallocate_shared( wdv_dy_3D_a)
+    deallocate( dHi_dx_a  )
+    deallocate( dHi_dy_a  )
+    deallocate( dHs_dx_a  )
+    deallocate( dHs_dy_a  )
+    deallocate( du_dx_3D_a)
+    deallocate( dv_dy_3D_a)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -608,7 +598,7 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calculate_driving_stress'
@@ -620,9 +610,9 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, dHs_dx_b, wdHs_dx_b)
-    CALL allocate_shared_dp_1D( mesh%nTri, dHs_dy_b, wdHs_dy_b)
-    CALL allocate_shared_dp_1D( mesh%nTri, Hi_b    , wHi_b    )
+    allocate( dHs_dx_b(mesh%ti1:mesh%ti2))
+    allocate( dHs_dy_b(mesh%ti1:mesh%ti2))
+    allocate( Hi_b    (mesh%ti1:mesh%ti2))
     
     ! Map ice thickness to the b-grid
     CALL map_a_to_b_2D( mesh, ice%Hi_a, Hi_b)
@@ -636,12 +626,11 @@ CONTAINS
       ice%taudx_b( ti) = -ice_density * grav * Hi_b( ti) * dHs_dx_b( ti)
       ice%taudy_b( ti) = -ice_density * grav * Hi_b( ti) * dHs_dy_b( ti)
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wdHs_dx_b)
-    CALL deallocate_shared( wdHs_dy_b)
-    CALL deallocate_shared( wHi_b    )
+    deallocate( dHs_dx_b)
+    deallocate( dHs_dy_b)
+    deallocate( Hi_b    )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -659,14 +648,13 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_vertical_shear_strain_rates'
     INTEGER                                            :: ti,k
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  visc_eff_3D_b
-    INTEGER                                            :: wvisc_eff_3D_b
+    REAL(dp), DIMENSION(:,:  ), allocatable            ::  visc_eff_3D_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, visc_eff_3D_b, wvisc_eff_3D_b)
+    allocate( visc_eff_3D_b( mesh%ti1:mesh%ti2, C%nz))
     
     ! Map 3-D effective viscosity to the b-grid
     CALL map_a_to_b_3D( mesh, ice%visc_eff_3D_a, visc_eff_3D_b)
@@ -678,10 +666,9 @@ CONTAINS
         ice%dv_dz_3D_b( ti,k) = (ice%tauby_b( ti) / visc_eff_3D_b( ti,k)) * C%zeta( k)
       END DO
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wvisc_eff_3D_b)
+    deallocate( visc_eff_3D_b)
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%du_dz_3D_b, 'ice%du_dz_3D_b')
@@ -707,8 +694,8 @@ CONTAINS
     INTEGER                                            :: vi, k
     REAL(dp)                                           :: eps_sq
     REAL(dp), DIMENSION(C%nz)                          :: prof
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  du_dz_3D_a,  dv_dz_3D_a
-    INTEGER                                            :: wdu_dz_3D_a, wdv_dz_3D_a
+    REAL(dp), DIMENSION(:,:  ), allocatable            :: du_dz_3D_a,  dv_dz_3D_a
+    REAL(dp), DIMENSION(  :  ), allocatable            :: N_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -720,8 +707,8 @@ CONTAINS
     CALL ddy_b_to_a_2D( mesh, v_b, ice%dv_dy_a)
     
     ! Map vertical shear strain rates to the a-grid
-    CALL allocate_shared_dp_2D( mesh%nV, C%nz, du_dz_3D_a, wdu_dz_3D_a)
-    CALL allocate_shared_dp_2D( mesh%nV, C%nz, dv_dz_3D_a, wdv_dz_3D_a)
+    allocate( du_dz_3D_a(mesh%vi1:mesh%vi2, C%nz))
+    allocate( dv_dz_3D_a(mesh%vi1:mesh%vi2, C%nz))
     CALL map_b_to_a_3D( mesh, ice%du_dz_3D_b, du_dz_3D_a)
     CALL map_b_to_a_3D( mesh, ice%dv_dz_3D_b, dv_dz_3D_a)
 
@@ -753,14 +740,20 @@ CONTAINS
       ice%N_a( vi) = ice%visc_eff_int_a( vi) * MAX( 0.1_dp, ice%Hi_a( vi))
 
     END DO  
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wdu_dz_3D_a)
-    CALL deallocate_shared( wdv_dz_3D_a)
+    deallocate( du_dz_3D_a)
+    deallocate( dv_dz_3D_a)
     
     ! Apply Neumann boundary conditions to correct inaccurate solutions at the domain border
-    CALL apply_Neumann_BC_direct_a_2D( mesh, ice%N_a)
+    allocate(N_a(mesh%nV))
+    N_a(mesh%vi1:mesh%vi2) = ice%N_a
+    call allgather_array(N_a)
+
+    CALL apply_Neumann_BC_direct_a_2D( mesh, N_a)
+
+    ice%N_a = N_a(mesh%vi1:mesh%vi2)
+    deallocate(N_a)
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
@@ -785,15 +778,14 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_term_beta'
     INTEGER                                            :: vi
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
-    INTEGER                                            :: wu_a, wv_a
+    REAL(dp), DIMENSION(:    ), allocatable            ::  u_a,  v_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
       
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV, u_a, wu_a)
-    CALL allocate_shared_dp_1D( mesh%nV, v_a, wv_a)
+    allocate( u_a(mesh%vi1:mesh%vi2))
+    allocate( v_a(mesh%vi1:mesh%vi2))
   
     ! Get velocities on the a-grid
     CALL map_b_to_a_2D( mesh, u_b, u_a)
@@ -806,20 +798,18 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
       ice%beta_a( vi) = MIN( C%DIVA_beta_max, ice%beta_a( vi))
     END DO
-    CALL sync
     
     ! LEGACY - Apply the flotation mask (this is how we did it before we introduced the PISM/CISM-style sub-grid grounded fraction)
     IF (.NOT. C%do_GL_subgrid_friction) THEN
       DO vi = mesh%vi1, mesh%vi2
         IF (ice%mask_ocean_a( vi) == 1) ice%beta_a( vi) = 0._dp
       END DO
-      CALL sync
     END IF
         
     ! Clean up after yourself
-    CALl deallocate_shared( wu_a)
-    CALl deallocate_shared( wv_a)
-    
+    deallocate( u_a)
+    deallocate( v_a)
+   
     ! Safety
     CALL check_for_NaN_dp_1D( ice%beta_a, 'ice%beta_a')
     
@@ -929,7 +919,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN) :: u_b, v_b
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_basal_stress_DIVA'
@@ -965,8 +955,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_basal_velocities_DIVA'
     INTEGER                                            :: ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  F2_b
-    INTEGER                                            :: wF2_b
+    REAL(dp), DIMENSION(:    ), allocatable            ::  F2_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -982,7 +971,7 @@ CONTAINS
     END IF
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, F2_b    , wF2_b    )
+    allocate( F2_b(mesh%ti1:mesh%ti2))
     
     ! Map F2 to the b-grid
     CALL map_a_to_b_2D( mesh, ice%F2_a, F2_b)
@@ -992,10 +981,9 @@ CONTAINS
       ice%u_base_b( ti) = ice%u_vav_b( ti) - ice%taubx_b( ti) * F2_b( ti)
       ice%v_base_b( ti) = ice%v_vav_b( ti) - ice%tauby_b( ti) * F2_b( ti)
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wF2_b    )
+    deallocate( F2_b )
     
     ! Safety
     CALL check_for_NaN_dp_1D( ice%u_base_b, 'ice%u_base_b')
@@ -1017,19 +1005,17 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_3D_horizontal_velocities_DIVA'
     INTEGER                                            :: ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_b
-    INTEGER                                            :: wHi_b
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  visc_eff_3D_b,  F1_3D_b
-    INTEGER                                            :: wvisc_eff_3D_b, wF1_3D_b
+    REAL(dp), DIMENSION(:    ), allocatable            ::  Hi_b
+    REAL(dp), DIMENSION(:,:  ), allocatable            ::  visc_eff_3D_b,  F1_3D_b
     REAL(dp), DIMENSION( C%nz)                         :: prof, F1_3D
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri,       Hi_b         , wHi_b         )
-    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, visc_eff_3D_b, wvisc_eff_3D_b)
-    CALL allocate_shared_dp_2D( mesh%nTri, C%nz, F1_3D_b      , wF1_3D_b      )
+    allocate( Hi_b          ( mesh%ti1:mesh%ti2      ))
+    allocate( visc_eff_3D_b ( mesh%ti1:mesh%ti2, C%nz))
+    allocate( F1_3D_b       ( mesh%ti1:mesh%ti2, C%nz))
     
     ! Map ice thickness and 3-D effective viscosity to the b-grid
     CALL map_a_to_b_2D( mesh, ice%Hi_a         , Hi_b         )
@@ -1048,16 +1034,15 @@ CONTAINS
       ice%u_3D_b( ti,:) = ice%u_base_b( ti) + ice%taubx_b( ti) * F1_3D_b( ti,:)
       ice%v_3D_b( ti,:) = ice%v_base_b( ti) + ice%tauby_b( ti) * F1_3D_b( ti,:)
     END DO
-    CALL sync
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%u_3D_b, 'ice%u_3D_b')
     CALL check_for_NaN_dp_2D( ice%v_3D_b, 'ice%v_3D_b')
     
     ! Clean up after yourself
-    CALL deallocate_shared( wHi_b         )
-    CALL deallocate_shared( wvisc_eff_3D_b)
-    CALL deallocate_shared( wF1_3D_b      )
+    deallocate( Hi_b         )
+    deallocate( visc_eff_3D_b)
+    deallocate( F1_3D_b      )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1097,27 +1082,32 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSADIVA_linearised'
-    INTEGER                                            :: ti, nu, nv
-    REAL(dp), DIMENSION(:    ), POINTER                ::  N_b,  dN_dx_b,  dN_dy_b
-    INTEGER                                            :: wN_b, wdN_dx_b, wdN_dy_b
-    REAL(dp), DIMENSION(:    ), POINTER                ::  b_buv,  uv_buv
-    INTEGER                                            :: wb_buv, wuv_buv
+    INTEGER                                            :: ti, nu, nv, t21,t22, pti1, pti2
+    REAL(dp), DIMENSION(:    ), allocatable            ::  N_b,  dN_dx_b,  dN_dy_b
+    REAL(dp), DIMENSION(:    ), allocatable            ::  b_buv,  uv_buv
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D(   mesh%nTri, N_b    , wN_b    )
-    CALL allocate_shared_dp_1D(   mesh%nTri, dN_dx_b, wdN_dx_b)
-    CALL allocate_shared_dp_1D(   mesh%nTri, dN_dy_b, wdN_dy_b)
-    CALL allocate_shared_dp_1D( 2*mesh%nTri, b_buv  , wb_buv  )
-    CALL allocate_shared_dp_1D( 2*mesh%nTri, uv_buv , wuv_buv )
-    
+    allocate( N_b    (   mesh%ti1:mesh%ti2))
+    allocate( dN_dx_b(   mesh%ti1:mesh%ti2))
+    allocate( dN_dy_b(   mesh%ti1:mesh%ti2))
+    allocate( b_buv  (          1:mesh%nTri*2))
+    allocate( uv_buv (          1:mesh%nTri*2))
+
+    !(dividable by 2) ranges for b_buv,uv_buv
+    t21 = 1+2*(mesh%ti1-1)
+    t22 =   2*(mesh%ti2)
+
+    ! PETSc ranges for b_buv,uv_buv
+    call partition_list(mesh%nTri*2, par%i, par%n, pti1, pti2)
+
     ! Calculate N, dN/dx, and dN/dy on the b-grid
     CALL map_a_to_b_2D( mesh, ice%N_a, N_b    )
     CALL ddx_a_to_b_2D( mesh, ice%N_a, dN_dx_b)
@@ -1131,25 +1121,30 @@ CONTAINS
       IF (mesh%Tri_edge_index( ti) == 0) THEN
         ! Free triangle: fill in matrix row for the SSA/DIVA
         IF (C%include_SSADIVA_crossterms) THEN
-          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
         ELSE
-          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
         END IF
       ELSE
         ! Border triangle: apply boundary conditions
-        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
-        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
       END IF
-      
+
     END DO
-    CALL sync
     
   ! Solve the matrix equation
   ! =========================
+
+    ! TODO: The problem: b_buv and uv_buv are divideable by two but, petsc doesnt know that and
+    ! will divide 6 into 3:3 for two procs for example, whereas the division should be 2:4 here in that case.
+    ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
+    call allgather_array(b_buv,t21,t22)
+    call allgather_array(uv_buv,t21,t22)
     
-    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
+    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
       C%DIVA_SOR_nit             , &
       C%DIVA_SOR_tol             , &
@@ -1169,14 +1164,13 @@ CONTAINS
       v_b( ti) = uv_buv( nv)
       
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wN_b    )
-    CALL deallocate_shared( wdN_dx_b)
-    CALL deallocate_shared( wdN_dy_b)
-    CALL deallocate_shared( wb_buv  )
-    CALL deallocate_shared( wuv_buv )
+    deallocate( N_b    )
+    deallocate( dN_dx_b)
+    deallocate( dN_dy_b)
+    deallocate( b_buv  )
+    deallocate( uv_buv )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1192,11 +1186,11 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
-    
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
+   
     ! Local variables:
     INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
     
@@ -1244,11 +1238,11 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b, dN_dx_b, dN_dy_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
@@ -1298,10 +1292,10 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nu, nnz, kk, ku, kv, k, mu
@@ -1346,10 +1340,10 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: N_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: N_b
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: nv, nnz, kk, ku, kv, k, mv
@@ -1392,9 +1386,9 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: u_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: edge_index
@@ -1515,9 +1509,9 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
-    INTEGER,                             INTENT(IN)    :: ti
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: b_buv, uv_buv
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)          , INTENT(IN)    :: v_b
+    INTEGER                                         , INTENT(IN)    :: ti
+    REAL(dp), DIMENSION(2*(mesh%ti1-1)+1:2*mesh%ti2), INTENT(INOUT) :: b_buv, uv_buv
     
     ! Local variables:
     INTEGER                                            :: edge_index
@@ -1639,25 +1633,23 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2),          INTENT(INOUT) :: u_b, v_b
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'apply_velocity_limits'
     INTEGER                                            :: ti
-    REAL(dp), DIMENSION(:    ), POINTER                ::  uabs_b
-    INTEGER                                            :: wuabs_b
+    REAL(dp), DIMENSION(:    ), allocatable            ::  uabs_b
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nTri, uabs_b, wuabs_b)
+    allocate( uabs_b(mesh%ti1:mesh%ti2))
     
     ! Calculate absolute speed
     DO ti = mesh%ti1, mesh%ti2
       uabs_b( ti) = SQRT( u_b( ti)**2 + v_b( ti)**2)
     END DO
-    CALL sync
     
     ! Scale velocities accordingly
     DO ti = mesh%ti1, mesh%ti2
@@ -1666,10 +1658,9 @@ CONTAINS
         v_b( ti) = v_b( ti) * C%DIVA_vel_max / uabs_b( ti)
       END IF
     END DO
-    CALL sync
     
     ! Clean up after yourself
-    CALL deallocate_shared( wuabs_b)
+    deallocate( uabs_b)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1682,10 +1673,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: u_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: v_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
     REAL(dp),                            INTENT(IN)    :: rel
         
     ! Local variables:
@@ -1712,10 +1703,10 @@ CONTAINS
     
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_prev_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: u_b
-    REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: v_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: u_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)    :: v_prev_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: u_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(INOUT) :: v_b
     REAL(dp),                            INTENT(OUT)   :: resid_UV
     
     ! Local variables:
@@ -1779,15 +1770,23 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_a, v_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN) :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT):: u_a, v_a
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_a_2D'
+    real(dp), dimension(:), allocatable                :: l_u_b, l_v_b !local
     INTEGER                                            :: vi, vti, ti
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(l_u_b(1:mesh%nTri))
+    allocate(l_v_b(1:mesh%nTri))
+    l_u_b(mesh%ti1:mesh%ti2) = u_b
+    l_v_b(mesh%ti1:mesh%ti2) = v_b
+    call allgather_array(l_u_b)
+    call allgather_array(l_v_b)
     
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1796,12 +1795,11 @@ CONTAINS
       
       DO vti = 1, mesh%niTri( vi)
         ti = mesh%iTri( vi,vti)
-        u_a( vi) = u_a( vi) + (u_b( ti) / REAL( mesh%niTri( vi),dp))
-        v_a( vi) = v_a( vi) + (v_b( ti) / REAL( mesh%niTri( vi),dp))
+        u_a( vi) = u_a( vi) + (l_u_b( ti) / REAL( mesh%niTri( vi),dp))
+        v_a( vi) = v_a( vi) + (l_v_b( ti) / REAL( mesh%niTri( vi),dp))
       END DO
       
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1814,15 +1812,24 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_a, v_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2,C%nz ), INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2,C%nz ), INTENT(OUT)   :: u_a, v_a
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_a_3D'
+    real(dp), dimension(:,:), allocatable              :: l_u_b, l_v_b !local
     INTEGER                                            :: vi, vti, ti
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(l_u_b(1:mesh%nTri,C%nz))
+    allocate(l_v_b(1:mesh%nTri,C%nz))
+    l_u_b(mesh%ti1:mesh%ti2,:) = u_b
+    l_v_b(mesh%ti1:mesh%ti2,:) = v_b
+    call allgather_array(l_u_b)
+    call allgather_array(l_v_b)
+
     
     DO vi = mesh%vi1, mesh%vi2
       
@@ -1831,13 +1838,15 @@ CONTAINS
       
       DO vti = 1, mesh%niTri( vi)
         ti = mesh%iTri( vi,vti)
-        u_a( vi,:) = u_a( vi,:) + (u_b( ti,:) / REAL( mesh%niTri( vi),dp))
-        v_a( vi,:) = v_a( vi,:) + (v_b( ti,:) / REAL( mesh%niTri( vi),dp))
+        u_a( vi,:) = u_a( vi,:) + (l_u_b( ti,:) / REAL( mesh%niTri( vi),dp))
+        v_a( vi,:) = v_a( vi,:) + (l_v_b( ti,:) / REAL( mesh%niTri( vi),dp))
       END DO
       
     END DO
-    CALL sync
     
+    deallocate(l_u_b)
+    deallocate(l_v_b)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
@@ -1850,7 +1859,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: u_c, v_c
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)   :: u_c, v_c
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_c_2D'
@@ -1889,12 +1898,12 @@ CONTAINS
       END IF
       
     END DO
-    CALL sync
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_velocities_b_to_c_2D
+#if 0
   SUBROUTINE map_velocities_b_to_c_3D( mesh, u_b, v_b, u_c, v_c)
     ! Map velocity fields from the b-grid to the c-grid
 
@@ -1975,7 +1984,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE map_velocities_b_to_c_3D
-  
+#endif
   ! Initialise/remap data fields for the velocity solver(s)
   SUBROUTINE initialise_velocity_solver( mesh, ice)
     ! Allocate and initialise data fields for the velocity solver
@@ -1989,8 +1998,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_velocity_solver'
     LOGICAL                                            :: is_ISMIP_HOM
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_ISMIP_HOM
-    INTEGER                                            :: wu_ISMIP_HOM
+    REAL(dp), DIMENSION(:    ), allocatable            ::  u_ISMIP_HOM
     INTEGER                                            :: ti
     REAL(dp)                                           :: umin, umax, x, y
     
@@ -2000,8 +2008,8 @@ CONTAINS
     IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Data fields for the SIA
       
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+      allocate( ice%u_3D_SIA_b ( mesh%ti1:mesh%ti2, C%nz ))
+      allocate( ice%v_3D_SIA_b ( mesh%ti1:mesh%ti2, C%nz ))
       
     END IF
       
@@ -2010,38 +2018,38 @@ CONTAINS
       
       IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
         ! Velocity fields containing the SSA solution on the b-grid
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-        CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+        allocate( ice%u_base_SSA_b ( mesh%ti1:mesh%ti2 ))
+        allocate( ice%v_base_SSA_b ( mesh%ti1:mesh%ti2 ))
       END IF
       
       ! Physical terms in the SSA/DIVA
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%taudx_b               , ice%wtaudx_b              )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%taudy_b               , ice%wtaudy_b              )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%du_dx_a               , ice%wdu_dx_a              )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%du_dy_a               , ice%wdu_dy_a              )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dv_dx_a               , ice%wdv_dx_a              )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dv_dy_a               , ice%wdv_dy_a              )
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-      CALL allocate_shared_dp_2D(   mesh%nTri, C%nz       , ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-      CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%N_a                   , ice%wN_a                  )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%beta_a                , ice%wbeta_a               )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%beta_eff_a            , ice%wbeta_eff_a           )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%beta_eff_b            , ice%wbeta_eff_b           )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%taubx_b               , ice%wtaubx_b              )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%tauby_b               , ice%wtauby_b              )
-      CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%F2_a                  , ice%wF2_a                 )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_prev_b              , ice%wu_prev_b             )
-      CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_prev_b              , ice%wv_prev_b             )
-      
+      allocate( ice%taudx_b        ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%taudy_b        ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%du_dx_a        ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%du_dy_a        ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%dv_dx_a        ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%dv_dy_a        ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%du_dz_3D_b     ( mesh%ti1:mesh%ti2  , C%nz      ))
+      allocate( ice%dv_dz_3D_b     ( mesh%ti1:mesh%ti2  , C%nz      ))
+      allocate( ice%visc_eff_3D_a  ( mesh%vi1:mesh%vi2  , C%nz      ))
+      allocate( ice%visc_eff_int_a ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%N_a            ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%beta_a         ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%beta_eff_a     ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%beta_eff_b     ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%taubx_b        ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%tauby_b        ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%F2_a           ( mesh%vi1:mesh%vi2              ))
+      allocate( ice%u_prev_b       ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%v_prev_b       ( mesh%ti1:mesh%ti2              ))
+                                  
       ! Some administrative stuff to make solving the SSA/DIVA more efficient
-      CALL allocate_shared_int_1D(  mesh%nTri,              ice%ti2n_u                , ice%wti2n_u               )
-      CALL allocate_shared_int_1D(  mesh%nTri,              ice%ti2n_v                , ice%wti2n_v               )
-      CALL allocate_shared_int_2D(2*mesh%nTri, 2          , ice%n2ti_uv               , ice%wn2ti_uv              )
+      allocate( ice%ti2n_u         ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%ti2n_v         ( mesh%ti1:mesh%ti2              ))
+      allocate( ice%n2ti_uv     ( 2*(mesh%ti1-1)+1:2*mesh%ti2, 2    ))
       CALL initialise_matrix_conversion_lists(  mesh, ice)
       CALL initialise_SSADIVA_stiffness_matrix( mesh, ice)
-      
+
     END IF
     
     ! Initialise the ISMIP-HOM experiments for faster convergence
@@ -2057,7 +2065,7 @@ CONTAINS
     IF (is_ISMIP_HOM) THEN
       
       ! Allocate shared memory
-      CALL allocate_shared_dp_1D( mesh%nTri, u_ISMIP_HOM, wu_ISMIP_HOM)
+      allocate( u_ISMIP_HOM (mesh%ti1:mesh%ti2))
         
       umin = 0._dp
       umax = 0._dp
@@ -2090,7 +2098,6 @@ CONTAINS
           y = mesh%TriGC( ti,2)
           u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
         END DO
-        CALL sync
         
       ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_B') THEN
       
@@ -2119,7 +2126,6 @@ CONTAINS
           y = mesh%TriGC( ti,2)
           u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
         END DO
-        CALL sync
         
       ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_C') THEN
       
@@ -2148,7 +2154,6 @@ CONTAINS
           y = mesh%TriGC( ti,2)
           u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
         END DO
-        CALL sync
         
       ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_D') THEN
       
@@ -2177,21 +2182,18 @@ CONTAINS
           y = mesh%TriGC( ti,2)
           u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
         END DO
-        CALL sync
         
       END IF
       
       ! Initialise velocity fields with the approximation
       IF     (C%choice_ice_dynamics == 'SIA/SSA') THEN
         ice%u_base_SSA_b( mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
-        CALL sync
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
         ice%u_vav_b(      mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
-        CALL sync
       END IF
       
       ! Clean up after yourself
-      CALL deallocate_shared( wu_ISMIP_HOM)
+      deallocate( u_ISMIP_HOM)
       
     END IF ! IF (is_ISMIP_HOM) THEN
     
@@ -2246,6 +2248,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SSADIVA_stiffness_matrix'
     INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
     INTEGER                                            :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
+    integer, dimension(:), allocatable                 :: ti2n_u, ti2n_v
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2259,8 +2262,16 @@ CONTAINS
     CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
     
     ! Fill in matrix rows, right-hand side, and initial guess
-    CALL partition_list( 2*mesh%nTri, par%i, par%n, n1, n2)
-    DO n = n1, n2
+    CALL partition_list( mesh%nTri, par%i, par%n, n1, n2)
+
+    allocate(ti2n_u( 1:mesh%nTri))
+    allocate(ti2n_v( 1:mesh%nTri))
+    ti2n_u(mesh%ti1:mesh%ti2) = ice%ti2n_u
+    ti2n_v(mesh%ti1:mesh%ti2) = ice%ti2n_v
+    call allgather_array(ti2n_u)
+    call allgather_array(ti2n_v)
+
+    DO n = 1+2*(n1-1), n2*2
       
       ! Fill matrix coefficients
       IF (ice%n2ti_uv( n,1) > 0) THEN
@@ -2277,8 +2288,8 @@ CONTAINS
           DO k = k1, k2
             
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ! u-part
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
@@ -2300,8 +2311,8 @@ CONTAINS
           DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
@@ -2324,8 +2335,8 @@ CONTAINS
           DO k = k1, k2
             
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ! u-part
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
@@ -2347,8 +2358,8 @@ CONTAINS
           DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
             
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
-            mu = ice%ti2n_u( tj)
-            mv = ice%ti2n_v( tj)
+            mu = ti2n_u( tj)
+            mv = ti2n_v( tj)
             
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
@@ -2363,10 +2374,9 @@ CONTAINS
       ice%M_SSADIVA%ptr( n+1 : 2*mesh%nTri+1) = ice%M_SSADIVA%nnz+1
       
     END DO ! DO n = n1, n2
-    CALL sync
     
     ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, n1, n2)
+    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, 1+2*(n1-1), n2*2)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
@@ -2390,11 +2400,14 @@ CONTAINS
     CALL init_routine( routine_name)
     
     IF     (C%choice_ice_dynamics == 'SIA') THEN
-      CALL remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+      call crash('todo, implement SIA')
+      !CALL remap_velocities_SIA( mesh_old, mesh_new, map, ice)
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-      CALL remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+      call crash('todo, implement SSA')
+      !CALL remap_velocities_SSA( mesh_old, mesh_new, map, ice)
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-      CALL remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+      call crash('todo, implement SIA/SSA')
+      !CALL remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
     ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
       CALL remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
     ELSE
@@ -2405,6 +2418,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_velocities
+#if 0
   SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2696,6 +2710,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE remap_velocities_SIASSA
+#endif
   SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2709,8 +2724,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_DIVA'
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
-    INTEGER                                            :: wu_a, wv_a
+    REAL(dp), DIMENSION(:    ), allocatable            ::  u_a,  v_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2719,91 +2733,94 @@ CONTAINS
   ! =======================
     
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
-    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+    allocate( u_a( mesh_old%vi1:mesh_old%vi2))
+    allocate( v_a( mesh_old%vi1:mesh_old%vi2))
     
     ! Map velocities to the a-grid
     CALL map_b_to_a_2D( mesh_old, ice%u_vav_b, u_a)
     CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
     
     ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, 'cons_2nd_order')
     
     ! Reallocate b-grid velocities
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_vav_b, ice%wu_vav_b)
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_vav_b, ice%wv_vav_b)
+    CALL reallocate_bounds( ice%u_vav_b, mesh_new%ti1, mesh_new%ti2)
+    CALL reallocate_bounds( ice%v_vav_b, mesh_new%ti1, mesh_new%ti2)
     
     ! Map remapped velocities to the b-grid
     CALL map_a_to_b_2D( mesh_new, u_a, ice%u_vav_b)
     CALL map_a_to_b_2D( mesh_new, u_a, ice%v_vav_b)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wu_a)
-    CALL deallocate_shared( wv_a)
+    deallocate( u_a)
+    deallocate( v_a)
     
   ! == Reallocate everything else
   ! =============================
   
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
-        
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
-        
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
-        
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    call reallocate_bounds( ice%u_3D_a        , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    call reallocate_bounds( ice%v_3D_a        , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    call reallocate_bounds( ice%u_3D_b        , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    call reallocate_bounds( ice%v_3D_b        , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    call reallocate_bounds( ice%w_3D_a        , mesh_new%vi1, mesh_new%vi2  , C%nz )
+ 
+    call reallocate_bounds( ice%u_vav_a       , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%v_vav_a       , mesh_new%vi1, mesh_new%vi2         )
+   !call reallocate_bounds( ice%u_vav_b       , mesh_new%ti1, mesh_new%ti2         )
+   !call reallocate_bounds( ice%v_vav_b       , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%uabs_vav_a    , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%uabs_vav_b    , mesh_new%ti1, mesh_new%ti2         )
+  
+    call reallocate_bounds( ice%u_surf_a      , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%v_surf_a      , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%u_surf_b      , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%v_surf_b      , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%uabs_surf_a   , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%uabs_surf_b   , mesh_new%ti1, mesh_new%ti2         )
     
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    call reallocate_bounds( ice%u_base_a      , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%v_base_a      , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%u_base_b      , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%v_base_b      , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%uabs_base_a   , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%uabs_base_b   , mesh_new%ti1, mesh_new%ti2         )
+   
+   !call reallocate_bounds( ice%u_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+   !call reallocate_bounds( ice%v_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+   !call reallocate_bounds( ice%u_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
+   !call reallocate_bounds( ice%v_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
     
     ! Physical terms in the SSA/DIVA
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
-      
+    call reallocate_bounds( ice%taudx_b       , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%taudy_b       , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%du_dx_a       , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%du_dy_a       , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%dv_dx_a       , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%dv_dy_a       , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%du_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    call reallocate_bounds( ice%dv_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    call reallocate_bounds( ice%visc_eff_int_a, mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%N_a           , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%beta_a        , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%beta_eff_a    , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%beta_eff_b    , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%taubx_b       , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%tauby_b       , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%F2_a          , mesh_new%vi1, mesh_new%vi2         )
+    call reallocate_bounds( ice%u_prev_b      , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%v_prev_b      , mesh_new%ti1, mesh_new%ti2         )
+
+
     ! Some administrative stuff to make solving the SSA/DIVA more efficient
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
-    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+
+    call reallocate_bounds( ice%ti2n_u        , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%ti2n_v        , mesh_new%ti1, mesh_new%ti2         )
+    call reallocate_bounds( ice%n2ti_uv       ,(mesh_new%ti1-1)*2+1, mesh_new%ti2*2, 2  )
     CALL deallocate_matrix_CSR( ice%M_SSADIVA)
     
+
     CALL initialise_matrix_conversion_lists(  mesh_new, ice)
     CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
     

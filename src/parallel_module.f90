@@ -6,7 +6,6 @@ MODULE parallel_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning, &
                                              n_MPI_windows, resource_tracker, find_subroutine_in_resource_tracker, &
                                              mem_use_tot, mem_use_tot_max
-  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: C_PTR, C_F_POINTER
   
   IMPLICIT NONE
   

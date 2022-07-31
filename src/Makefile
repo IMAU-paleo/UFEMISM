@@ -4,8 +4,8 @@
 #     http://www.gnu.org/software/make/manual/make.html
 
 # For compiling setting, Makefile will point to the uncommented file below:
-#include Makefile_include_local.txt
-include Makefile_include_mac.txt
+include Makefile_include_local.txt
+#include Makefile_include_mac.txt
 #include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
@@ -14,7 +14,7 @@ MOD_PATH = module-files
 
 # Pattern rules for creating object files from *.f90 (fortran 90) source files
 $(OBJ_PATH)/%.o : %.f90 Makefile
-	$(F90) $(F90FLAGS) -c -o $@ $<
+	$(F90) $(F90FLAGS) -fbackslash -c -o $@ $<
 
 $(OBJ_PATH)/%.o : %.F90 Makefile
 	$(F90) $(F90FLAGS) -c -o $@ $<
@@ -60,6 +60,10 @@ UFEMISM_program_objects = \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \
         ice_dynamics_module.o \
+        ice_thickness_module.o \
+        ice_velocity_module.o \
+        BMB_module.o \
+        SMB_module.o \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 

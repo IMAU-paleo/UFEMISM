@@ -8,21 +8,11 @@ MODULE SMB_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             transpose_dp_2D, transpose_dp_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_restart_file_SMB, &
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D!, &
+  !                                           transpose_dp_2D, transpose_dp_3D
+  USE netcdf_module,                   ONLY: debug, inquire_restart_file_SMB, &
                                              read_restart_file_SMB
 
   ! Import specific functionality
@@ -35,6 +25,7 @@ MODULE SMB_module
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, &
                                              calc_remapping_operator_grid2mesh, map_grid2mesh_2D, map_grid2mesh_3D, &
                                              deallocate_remapping_operators_grid2mesh
+  use reallocate_mod,                  only: reallocate_bounds
 
   IMPLICIT NONE
 
@@ -137,7 +128,7 @@ CONTAINS
             C%choice_SMB_model == 'direct_regional') THEN
       ! Only need yearly total SMB in these cases
 
-      CALL allocate_shared_dp_1D( mesh%nV, SMB%SMB_year, SMB%wSMB_year)
+      allocate( SMB%SMB_year(mesh%vi1:mesh%vi2))
 
     ELSEIF (C%choice_SMB_model == 'IMAU-ITM' .OR. &
             C%choice_SMB_model == 'IMAU-ITM_wrongrefreezing') THEN
@@ -292,7 +283,6 @@ CONTAINS
         SMB%SMB_year( vi) = 0._dp
       END IF
     END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -446,12 +436,10 @@ CONTAINS
       SMB%MeltPreviousYear( vi) = SUM(SMB%Melt( vi,:))
 
     END DO
-    CALL sync
 
     ! Convert final SMB from water to ice equivalent
     SMB%SMB(      mesh%vi1:mesh%vi2,:) = SMB%SMB(      mesh%vi1:mesh%vi2,:) * 1000._dp / ice_density
     SMB%SMB_year( mesh%vi1:mesh%vi2  ) = SMB%SMB_year( mesh%vi1:mesh%vi2  ) * 1000._dp / ice_density
-    CALL sync
 
     ! Safety
     CALL check_for_NaN_dp_1D( SMB%AlbedoSurf      , 'SMB%AlbedoSurf'      )
@@ -560,12 +548,10 @@ CONTAINS
       SMB%Albedo_year( vi) = SUM(SMB%Albedo( vi,:)) / 12._dp
 
     END DO
-    CALL sync
 
     ! Convert final SMB from water to ice equivalent
     SMB%SMB(      mesh%vi1:mesh%vi2,:) = SMB%SMB(      mesh%vi1:mesh%vi1,:) * 1000._dp / ice_density
     SMB%SMB_year( mesh%vi1:mesh%vi2  ) = SMB%SMB_year( mesh%vi1:mesh%vi2  ) * 1000._dp / ice_density
-    CALL sync
 
     ! Safety
     CALL check_for_NaN_dp_1D( SMB%AlbedoSurf      , 'SMB%AlbedoSurf'      )
@@ -608,51 +594,44 @@ CONTAINS
     IF (par%master) WRITE (0,*) '  Initialising the IMAU-ITM SMB model...'
 
     ! Data fields
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%MeltPreviousYear, SMB%wMeltPreviousYear)
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%FirnDepth,        SMB%wFirnDepth       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Rainfall,         SMB%wRainfall        )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Snowfall,         SMB%wSnowfall        )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%AddedFirn,        SMB%wAddedFirn       )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Melt,             SMB%wMelt            )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Refreezing,       SMB%wRefreezing      )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Refreezing_year,  SMB%wRefreezing_year )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Runoff,           SMB%wRunoff          )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%Albedo,           SMB%wAlbedo          )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, SMB%SMB,              SMB%wSMB             )
-    CALL allocate_shared_dp_1D( mesh%nV,     SMB%SMB_year,         SMB%wSMB_year        )
+    allocate(  SMB%AlbedoSurf      (mesh%vi1:mesh%vi2    ))
+    allocate(  SMB%MeltPreviousYear(mesh%vi1:mesh%vi2    ))
+    allocate(  SMB%FirnDepth       (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Rainfall        (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Snowfall        (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%AddedFirn       (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Melt            (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Refreezing      (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Refreezing_year (mesh%vi1:mesh%vi2    ))
+    allocate(  SMB%Runoff          (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Albedo          (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%Albedo_year     (mesh%vi1:mesh%vi2    ))
+    allocate(  SMB%SMB             (mesh%vi1:mesh%vi2, 12))
+    allocate(  SMB%SMB_year        (mesh%vi1:mesh%vi2    ))
 
     ! Tuning parameters
-    CALL allocate_shared_dp_0D( SMB%C_abl_constant, SMB%wC_abl_constant)
-    CALL allocate_shared_dp_0D( SMB%C_abl_Ts,       SMB%wC_abl_Ts      )
-    CALL allocate_shared_dp_0D( SMB%C_abl_Q,        SMB%wC_abl_Q       )
-    CALL allocate_shared_dp_0D( SMB%C_refr,         SMB%wC_refr        )
 
-    IF (par%master) THEN
-      IF     (region_name == 'NAM') THEN
-        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_NAM
-        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_NAM
-        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_NAM
-        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_NAM
-      ELSEIF (region_name == 'EAS') THEN
-        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_EAS
-        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_EAS
-        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_EAS
-        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_EAS
-      ELSEIF (region_name == 'GRL') THEN
-        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_GRL
-        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_GRL
-        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_GRL
-        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_GRL
-      ELSEIF (region_name == 'ANT') THEN
-        SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_ANT
-        SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_ANT
-        SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_ANT
-        SMB%C_refr                   = C%SMB_IMAUITM_C_refr_ANT
-      END IF
-    END IF ! IF (par%master) THEN
-    CALL sync
+    IF     (region_name == 'NAM') THEN
+      SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_NAM
+      SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_NAM
+      SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_NAM
+      SMB%C_refr                   = C%SMB_IMAUITM_C_refr_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_EAS
+      SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_EAS
+      SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_EAS
+      SMB%C_refr                   = C%SMB_IMAUITM_C_refr_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_GRL
+      SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_GRL
+      SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_GRL
+      SMB%C_refr                   = C%SMB_IMAUITM_C_refr_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      SMB%C_abl_constant           = C%SMB_IMAUITM_C_abl_constant_ANT
+      SMB%C_abl_Ts                 = C%SMB_IMAUITM_C_abl_Ts_ANT
+      SMB%C_abl_Q                  = C%SMB_IMAUITM_C_abl_Q_ANT
+      SMB%C_refr                   = C%SMB_IMAUITM_C_refr_ANT
+    END IF
 
     ! Initialisation choice
     IF     (region_name == 'NAM') THEN
@@ -706,7 +685,6 @@ CONTAINS
       SMB%Albedo( vi,:) = SMB%AlbedoSurf( vi)
 
     END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -753,30 +731,23 @@ CONTAINS
 
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
-    CALL allocate_shared_int_0D( restart%grid%nx, restart%grid%wnx)
-    CALL allocate_shared_int_0D( restart%grid%ny, restart%grid%wny)
-    CALL allocate_shared_int_0D( restart%nt,      restart%wnt)
-    IF (par%master) THEN
-      restart%netcdf%filename = filename_restart
-      CALL inquire_restart_file_SMB( restart)
-    END IF
-    CALL sync
+    restart%netcdf%filename = filename_restart
+    CALL inquire_restart_file_SMB( restart)
 
     ! Assign range to each processor
     CALL partition_list( restart%grid%nx, par%i, par%n, restart%grid%i1, restart%grid%i2)
     CALL partition_list( restart%grid%ny, par%i, par%n, restart%grid%j1, restart%grid%j2)
 
     ! Allocate memory for raw data
-    CALL allocate_shared_dp_1D( restart%grid%nx, restart%grid%x,    restart%grid%wx)
-    CALL allocate_shared_dp_1D( restart%grid%ny, restart%grid%y,    restart%grid%wy)
-    CALL allocate_shared_dp_1D( restart%nt,      restart%time,      restart%wtime  )
+    allocate(  restart%grid%x( restart%grid%nx))
+    allocate(  restart%grid%y( restart%grid%ny))
+    allocate(  restart%time  ( restart%nt     ))
 
-    CALL allocate_shared_dp_3D( restart%grid%nx, restart%grid%ny, 12, restart%FirnDepth,        restart%wFirnDepth       )
-    CALL allocate_shared_dp_2D( restart%grid%nx, restart%grid%ny,     restart%MeltPreviousYear, restart%wMeltPreviousYear)
+    allocate( restart%FirnDepth(restart%grid%nx, restart%grid%ny, 12))
+    allocate( restart%MeltPreviousYear(restart%grid%nx, restart%grid%ny))
 
     ! Read data from input file
-    IF (par%master) CALL read_restart_file_SMB( restart, time_to_restart_from)
-    CALL sync
+    CALL read_restart_file_SMB( restart, time_to_restart_from)
 
     ! Safety
     ! CALL check_for_NaN_dp_3D( restart%FirnDepth,        'restart%FirnDepth',        'initialise_IMAU_ITM_firn_restart')
@@ -787,45 +758,32 @@ CONTAINS
     ! CALL transpose_dp_2D( restart%MeltPreviousYear, restart%wMeltPreviousYear)
 
     ! Fill in secondary grid parameters
-    CALL allocate_shared_dp_0D( restart%grid%dx,   restart%grid%wdx  )
-    CALL allocate_shared_dp_0D( restart%grid%xmin, restart%grid%wxmin)
-    CALL allocate_shared_dp_0D( restart%grid%xmax, restart%grid%wxmax)
-    CALL allocate_shared_dp_0D( restart%grid%ymin, restart%grid%wymin)
-    CALL allocate_shared_dp_0D( restart%grid%ymax, restart%grid%wymax)
-    IF (par%master) THEN
-      restart%grid%dx   = restart%grid%x( 2) - restart%grid%x( 1)
-      restart%grid%xmin = restart%grid%x( 1)
-      restart%grid%xmax = restart%grid%x( restart%grid%nx)
-      restart%grid%ymin = restart%grid%y( 1)
-      restart%grid%ymax = restart%grid%y( restart%grid%ny)
-    END IF
-    CALL sync
+    restart%grid%dx   = restart%grid%x( 2) - restart%grid%x( 1)
+    restart%grid%xmin = restart%grid%x( 1)
+    restart%grid%xmax = restart%grid%x( restart%grid%nx)
+    restart%grid%ymin = restart%grid%y( 1)
+    restart%grid%ymax = restart%grid%y( restart%grid%ny)
 
     ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D( restart%grid%n, restart%grid%wn)
-    IF (par%master) restart%grid%n  = restart%grid%nx * restart%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( restart%grid%nx, restart%grid%ny, restart%grid%ij2n, restart%grid%wij2n)
-    CALL allocate_shared_int_2D( restart%grid%n , 2              , restart%grid%n2ij, restart%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, restart%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, restart%grid%ny
-            n = n+1
-            restart%grid%ij2n( i,j) = n
-            restart%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = restart%grid%ny, 1, -1
-            n = n+1
-            restart%grid%ij2n( i,j) = n
-            restart%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
+    restart%grid%n  = restart%grid%nx * restart%grid%ny
+    allocate( restart%grid%ij2n( restart%grid%nx, restart%grid%ny ))
+    allocate( restart%grid%n2ij( restart%grid%n , 2               ))
+    n = 0
+    DO i = 1, restart%grid%nx
+      IF (MOD(i,2) == 1) THEN
+        DO j = 1, restart%grid%ny
+          n = n+1
+          restart%grid%ij2n( i,j) = n
+          restart%grid%n2ij( n,:) = [i,j]
+        END DO
+      ELSE
+        DO j = restart%grid%ny, 1, -1
+          n = n+1
+          restart%grid%ij2n( i,j) = n
+          restart%grid%n2ij( n,:) = [i,j]
+        END DO
+      END IF
+    END DO
 
     ! Map (transposed) raw data to the model mesh
     CALL calc_remapping_operator_grid2mesh( restart%grid, mesh)
@@ -834,22 +792,14 @@ CONTAINS
     CALL deallocate_remapping_operators_grid2mesh( restart%grid)
 
     ! Deallocate raw data
-    CALL deallocate_shared( restart%grid%wnx         )
-    CALL deallocate_shared( restart%grid%wny         )
-    CALL deallocate_shared( restart%grid%wx          )
-    CALL deallocate_shared( restart%grid%wy          )
-    CALL deallocate_shared( restart%grid%wdx         )
-    CALL deallocate_shared( restart%grid%wxmin       )
-    CALL deallocate_shared( restart%grid%wxmax       )
-    CALL deallocate_shared( restart%grid%wymin       )
-    CALL deallocate_shared( restart%grid%wymax       )
-    CALL deallocate_shared( restart%grid%wn          )
-    CALL deallocate_shared( restart%grid%wij2n       )
-    CALL deallocate_shared( restart%grid%wn2ij       )
-    CALL deallocate_shared( restart%wnt              )
-    CALL deallocate_shared( restart%wtime            )
-    CALL deallocate_shared( restart%wFirnDepth       )
-    CALL deallocate_shared( restart%wMeltPreviousYear)
+    deallocate( restart%grid%x          )
+    deallocate( restart%grid%y          )
+    deallocate( restart%grid%dx         )
+    deallocate( restart%grid%ij2n       )
+    deallocate( restart%grid%n2ij       )
+    deallocate( restart%time            )
+    deallocate( restart%FirnDepth       )
+    deallocate( restart%MeltPreviousYear)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -896,7 +846,6 @@ CONTAINS
         SMB%SMB_year( vi) = 0._dp
       END IF
     END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -928,25 +877,25 @@ CONTAINS
     int_dummy = int_dummy
 
     ! Firn depth and melt-during-previous-year must be remapped
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
-    CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, 'trilin')
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        'trilin')
 
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%AlbedoSurf,       SMB%wAlbedoSurf      )
-   !CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%MeltPreviousYear, SMB%wMeltPreviousYear)
-   !CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%FirnDepth,        SMB%wFirnDepth       )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Rainfall,         SMB%wRainfall        )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Snowfall,         SMB%wSnowfall        )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%AddedFirn,        SMB%wAddedFirn       )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Melt,             SMB%wMelt            )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Refreezing,       SMB%wRefreezing      )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%Refreezing_year,  SMB%wRefreezing_year )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Runoff,           SMB%wRunoff          )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Albedo,           SMB%wAlbedo          )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%Albedo_year,      SMB%wAlbedo_year     )
-    CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%SMB,              SMB%wSMB             )
-    CALL reallocate_shared_dp_1D( mesh_new%nV,     SMB%SMB_year,         SMB%wSMB_year        )
+    call reallocate_bounds( SMB%Q_TOA           ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%AlbedoSurf      ,mesh_new%vi1,mesh_new%vi2    )
+   !call reallocate_bounds( SMB%MeltPreviousYear,mesh_new%vi1,mesh_new%vi2    )
+   !call reallocate_bounds( SMB%FirnDepth       ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Rainfall        ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Snowfall        ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%AddedFirn       ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Melt            ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Refreezing      ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Refreezing_year ,mesh_new%vi1,mesh_new%vi2    )
+    call reallocate_bounds( SMB%Runoff          ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Albedo          ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%Albedo_year     ,mesh_new%vi1,mesh_new%vi2    )
+    call reallocate_bounds( SMB%SMB             ,mesh_new%vi1,mesh_new%vi2, 12)
+    call reallocate_bounds( SMB%SMB_year        ,mesh_new%vi1,mesh_new%vi2    )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

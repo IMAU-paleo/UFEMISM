@@ -5,7 +5,6 @@ MODULE mesh_update_module
   ! Import basic functionality
 #include <petsc/finclude/petscksp.h>
   USE mpi
-  USE, INTRINSIC :: ISO_C_BINDING,     ONLY: c_backspace
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
@@ -268,13 +267,12 @@ MODULE mesh_update_module
       if (C%do_time_display) then
         print*, region%time, region%dt, C%dt_output, mod(region%time-region%dt,C%dt_output)
         if (mod(region%time-region%dt,C%dt_output) /= 0._dp) then
-          write(*,"(A)",advance="yes") repeat(c_backspace,17) // &
-                                       ' - mesh time!    '
+          write(*,"(A)")  ' - mesh time!    '
         else
           ! Output took care of advancing a newline.
         end if
       end if
-      write(*,"(A)",advance="yes") '   Creating a new mesh for region ' &
+      write(*,"(A)") '   Creating a new mesh for region ' &
                                    // TRIM(region%mesh%region_name) // '...'
     end if
 

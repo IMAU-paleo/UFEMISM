@@ -46,9 +46,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Safety
-    IF (AA%m /= AA%n .OR. AA%m /= SIZE( b,1) .OR. AA%m /= SIZE( x,1)) THEN
-      CALL crash('matrix sizes dont match!')
-    END IF
+    ! Delayed until PetSc call
     
     CALL check_for_NaN_dp_1D(  AA%val, 'AA%val')
     CALL check_for_NaN_dp_1D(  b,      'b'      )
@@ -1126,9 +1124,9 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    deallocate( AA%ptr)
-    deallocate( AA%index)
-    deallocate( AA%val)
+    if (allocated(AA%ptr)) deallocate( AA%ptr)
+    if (allocated(AA%index)) deallocate( AA%index)
+    if (allocated(AA%val))deallocate( AA%val)
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1234,8 +1232,6 @@ CONTAINS
     !
     ! NOTE: each process has data for rows i1-i2
     
-    USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
-      
     IMPLICIT NONE
     
     ! In- and output variables:
@@ -1276,7 +1272,7 @@ CONTAINS
 
     ! Copy data to buffers
     ptr(   i1:i2) = AA%ptr(   i1:i2  ) + displs( par%i+1 )
-    call allgather_array(ptr,i1,i2)
+    call allgather_array(ptr(:AA%m),i1,i2)
     ptr( AA%m+1) = nnz_tot+1
     
     

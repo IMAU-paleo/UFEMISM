@@ -133,13 +133,12 @@ contains
     if (par%master) then
       if (C%do_time_display) then
         if (mod(region%time-region%dt,C%dt_output) /= 0._dp) then
-          write(*,"(A)",advance="yes") repeat(c_backspace,17) // &
-                                       ' - mesh time!    '
+          write(*,"(A)") ' - mesh time!    '
         else
           ! Output took care of advancing a newline.
         end if
       end if
-      write(*,"(A)",advance="yes") '  Creating a new mesh for region ' &
+      write(*,"(A)") '  Creating a new mesh for region ' &
                                    // TRIM(region%mesh%region_name) // '...'
     end if
 

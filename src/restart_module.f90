@@ -163,18 +163,34 @@ CONTAINS
     CALL sync
 
     ! Allocate memory
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hi,                 region%restart%wHi                )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hb,                 region%restart%wHb                )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%Hs,                 region%restart%wHs                )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%beta_sq,            region%restart%wbeta_sq           )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%phi_fric,           region%restart%wphi_fric          )
-    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti,                 region%restart%wTi                )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%MeltPreviousYear,   region%restart%wMeltPreviousYear  )
-    CALL allocate_shared_dp_2D( region%mesh%nV, 12,   region%restart%FirnDepth,          region%restart%wFirnDepth         )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_constant_inv, region%restart%wC_abl_constant_inv)
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_Ts_inv,       region%restart%wC_abl_Ts_inv      )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_abl_Q_inv,        region%restart%wC_abl_Q_inv       )
-    CALL allocate_shared_dp_1D( region%mesh%nV,       region%restart%C_refr_inv,         region%restart%wC_refr_inv        )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%Hi, region%restart%wHi)
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%Hb, region%restart%wHb)
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%Hs, region%restart%wHs)
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHi_dt, region%restart%wdHi_dt)
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHb_dt, region%restart%wdHb_dt)
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%SL,  region%restart%wSL )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHb, region%restart%wdHb)
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%beta_sq,  region%restart%wbeta_sq )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric, region%restart%wphi_fric)
+
+    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti, region%restart%wTi)
+
+    IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+
+      CALL allocate_shared_dp_1D( region%mesh%nV,     region%restart%MeltPreviousYear, region%restart%wMeltPreviousYear)
+      CALL allocate_shared_dp_2D( region%mesh%nV, 12, region%restart%FirnDepth,        region%restart%wFirnDepth       )
+
+      IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
+        CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%C_abl_constant_inv, region%restart%wC_abl_constant_inv)
+        CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%C_abl_Ts_inv,       region%restart%wC_abl_Ts_inv      )
+        CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%C_abl_Q_inv,        region%restart%wC_abl_Q_inv       )
+        CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%C_refr_inv,         region%restart%wC_refr_inv        )
+      END IF
+
+    END IF
 
     ! Read data from the restart file
     IF (par%master) CALL read_restart_file_init( region%name, region%restart, region%restart%netcdf)

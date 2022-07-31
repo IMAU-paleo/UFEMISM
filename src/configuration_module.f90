@@ -704,7 +704,8 @@ MODULE configuration_module
 
     LOGICAL             :: do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
     CHARACTER(LEN=256)  :: choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
-    REAL(dp)            :: fixed_sealevel_config                       = 0._dp
+    REAL(dp)            :: fixed_sealevel_config                       = 0._dp                            ! Sea level for "fixed" method
+    REAL(dp)            :: initial_guess_sealevel_config               = 0._dp                            ! Initial sea-level guess value for "eustatic" and "SELEN" methods
     CHARACTER(LEN=256)  :: filename_sealevel_record_config             = 'name_of_file.dat'
     INTEGER             :: sealevel_record_length_config               = 1
 
@@ -1421,6 +1422,7 @@ MODULE configuration_module
     LOGICAL                             :: do_ocean_floodfill
     CHARACTER(LEN=256)                  :: choice_sealevel_model
     REAL(dp)                            :: fixed_sealevel
+    REAL(dp)                            :: initial_guess_sealevel
     CHARACTER(LEN=256)                  :: filename_sealevel_record
     INTEGER                             :: sealevel_record_length
 
@@ -2234,6 +2236,7 @@ CONTAINS
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
+                     initial_guess_sealevel_config,                   &
                      filename_sealevel_record_config,                 &
                      sealevel_record_length_config,                   &
                      choice_GIA_model_config,                         &
@@ -3104,6 +3107,7 @@ CONTAINS
     C%do_ocean_floodfill                       = do_ocean_floodfill_config
     C%choice_sealevel_model                    = choice_sealevel_model_config
     C%fixed_sealevel                           = fixed_sealevel_config
+    C%initial_guess_sealevel                   = initial_guess_sealevel_config
     C%filename_sealevel_record                 = filename_sealevel_record_config
     C%sealevel_record_length                   = sealevel_record_length_config
 

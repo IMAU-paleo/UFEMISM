@@ -40,7 +40,7 @@ CONTAINS
 
   SUBROUTINE update_general_ice_model_data( mesh, ice)
     ! Update masks, surface elevation, and thickness above floatation
-    
+
     USE parameters_module, ONLY: ice_density, seawater_density
 
     IMPLICIT NONE

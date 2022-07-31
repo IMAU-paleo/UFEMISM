@@ -166,6 +166,8 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_Hi
     INTEGER :: id_var_Hb
     INTEGER :: id_var_Hs
+    INTEGER :: id_var_dHi_dt
+    INTEGER :: id_var_dHb_dt
     INTEGER :: id_var_SL
     INTEGER :: id_var_dHb
     INTEGER :: id_var_beta_sq
@@ -181,6 +183,8 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
     CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   '
+    CHARACTER(LEN=256) :: name_var_dHi_dt                = 'dHi_dt               '
+    CHARACTER(LEN=256) :: name_var_dHb_dt                = 'dHb_dt               '
     CHARACTER(LEN=256) :: name_var_SL                    = 'SL                   '
     CHARACTER(LEN=256) :: name_var_dHb                   = 'dHb                  '
     CHARACTER(LEN=256) :: name_var_beta_sq               = 'beta_sq              '

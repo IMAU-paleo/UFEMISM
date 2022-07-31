@@ -1354,14 +1354,16 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
-    INTEGER :: wHi, wHb, wHs, wTi
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt
+    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt
 
     ! Bed roughness
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric
     INTEGER :: wbeta_sq, wphi_fric
 
-    ! GIA
+    ! Sea level and GIA
     REAL(dp), DIMENSION(:    ), POINTER     :: SL
     REAL(dp), DIMENSION(:    ), POINTER     :: dHb
     INTEGER :: wSL, wdHb

@@ -11,6 +11,7 @@ MODULE ice_dynamics_module
 ! ====================
 
   USE mpi
+  USE parameters_module,                     ONLY: ice_density, seawater_density
   USE configuration_module,                  ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE petsc_module,                          ONLY: perr
   USE parallel_module,                       ONLY: par, sync, ierr, cerr, partition_list, &
@@ -26,12 +27,12 @@ MODULE ice_dynamics_module
                                                    deallocate_shared
   USE utilities_module,                      ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                                    check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                                   vertical_average, surface_elevation
+                                                   vertical_average, surface_elevation, thickness_above_floatation
   USE netcdf_module,                         ONLY: debug, write_to_debug_file
   USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
                                                    type_remapping_mesh_mesh, type_restart_data
   USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
-  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data
+  USE general_ice_model_data_module,         ONLY: update_general_ice_model_data, determine_masks
   USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
   USE ice_velocity_module,                   ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
                                                    map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
@@ -39,6 +40,7 @@ MODULE ice_dynamics_module
   USE basal_conditions_and_sliding_module,   ONLY: initialise_basal_conditions, remap_basal_conditions
   USE thermodynamics_module,                 ONLY: calc_ice_rheology, remap_ice_temperature
   USE calving_module,                        ONLY: run_calving_model, remove_unconnected_shelves, imposed_shelf_removal
+  USE forcing_module,                        ONLY: forcing
 
   IMPLICIT NONE
 
@@ -903,12 +905,37 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_ice_model( mesh, ice)
 
+    IF (C%is_restart) THEN
+      ! Get sea level from restart data
+      ice%SL_a( mesh%vi1:mesh%vi2) = restart%SL( mesh%vi1:mesh%vi2)
+
+    ELSE
+      ! Get sea level at initial time
+      IF (C%choice_sealevel_model == 'fixed') THEN
+        ice%SL_a( mesh%vi1:mesh%vi2) = C%fixed_sealevel
+
+      ELSEIF (C%choice_sealevel_model == 'prescribed') THEN
+        ice%SL_a( mesh%vi1:mesh%vi2) = forcing%sealevel_obs
+
+      ELSEIF (C%choice_sealevel_model == 'eustatic') THEN
+        ice%SL_a( mesh%vi1:mesh%vi2) = C%initial_guess_sealevel
+
+      ELSEIF (C%choice_sealevel_model == 'SELEN') THEN
+       ice%SL_a( mesh%vi1:mesh%vi2) = C%initial_guess_sealevel
+
+      ELSE
+        CALL crash('unknown choice_sealevel_model "' // TRIM( C%choice_sealevel_model) // '"!')
+      END IF
+
+    END IF
+
     ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
     DO vi = mesh%vi1, mesh%vi2
       ! Main quantities
-      ice%Hi_a( vi) = refgeo_init%Hi( vi)
-      ice%Hb_a( vi) = refgeo_init%Hb( vi)
-      ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), 0._dp)
+      ice%Hi_a( vi)  = refgeo_init%Hi( vi)
+      ice%Hb_a( vi)  = refgeo_init%Hb( vi)
+      ice%Hs_a( vi)  = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
 
       ! Differences w.r.t. present-day
       ice%dHi_a( vi) = ice%Hi_a( vi) - refgeo_PD%Hi( vi)
@@ -917,8 +944,29 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Initialise masks and slopes
-    CALL update_general_ice_model_data( mesh, ice)
+    ! Determine masks
+    CALL determine_masks( mesh, ice)
+
+    IF (C%is_restart) THEN
+
+      ice%dHb_dt_a( mesh%vi1:mesh%vi2) = restart%dHb_dt( mesh%vi1:mesh%vi2)
+      ice%dHi_dt_a( mesh%vi1:mesh%vi2) = restart%dHi_dt( mesh%vi1:mesh%vi2)
+
+      DO vi = mesh%vi1, mesh%vi2
+        IF (ice%mask_land_a( vi) == 1) THEN
+          ice%dHs_dt_a( vi) = ice%dHb_dt_a( vi) + ice%dHi_dt_a( vi)
+        ELSE
+          ice%dHs_dt_a( vi) = ice%dHi_dt_a( vi) * (1._dp - ice_density / seawater_density)
+        END IF
+      END DO
+
+    ELSE
+
+      ice%dHb_dt_a = 0._dp
+      ice%dHi_dt_a = 0._dp
+      ice%dHs_dt_a = 0._dp
+
+    END IF
 
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice, restart)

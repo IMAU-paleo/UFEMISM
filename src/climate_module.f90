@@ -238,12 +238,12 @@ CONTAINS
     ELSEIF (C%choice_climate_model == 'PD_obs') THEN
       ! Keep the climate fixed to present-day observed conditions
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, climate_matrix_global, region%climate_matrix)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
 
     ELSEIF (C%choice_climate_model == 'PD_dTglob') THEN
       ! Use the present-day climate plus a global temperature offset (de Boer et al., 2013)
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, climate_matrix_global, region%climate_matrix)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
 
     ELSEIF (C%choice_climate_model == 'matrix_warm_cold') THEN
       ! Use the warm/cold climate matrix (Berends et al., 2018)
@@ -419,7 +419,7 @@ CONTAINS
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
 
-    ! Initialise applied values to the PD-observed ones
+    ! Assign applied values to the PD-observed ones
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
@@ -432,12 +432,16 @@ CONTAINS
     END DO
     CALL sync
 
+    ! == Downscaling to model topography
+    ! ==================================
+
     ! Adapt temperature to model orography using a lapse-rate correction
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
 
-      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - 0.008_dp * &
-                                           (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
+      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - &
+                                          C%constant_lapserate * &
+                                          (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
     END DO
     END DO
     CALL sync
@@ -540,7 +544,7 @@ CONTAINS
 
   END SUBROUTINE initialise_climate_PD_obs_global
 
-  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, climate_matrix_global, climate_matrix)
+  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, ice, climate_matrix_global, climate_matrix, region_name)
     ! Initialise the regional climate model
     !
     ! Keep the climate fixed to present-day observed conditions
@@ -549,8 +553,10 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
     TYPE(type_climate_matrix_regional),  INTENT(INOUT) :: climate_matrix
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_regional_PD_obs'
@@ -566,6 +572,9 @@ CONTAINS
     ! Map the snapshots from global lat/lon-grid to model mesh
     CALL map_subclimate_to_mesh( mesh, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
 
+    ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+    CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
     ! Initialise applied climate with present-day observations
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
@@ -574,20 +583,38 @@ CONTAINS
       climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
       climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
       climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
+      climate_matrix%applied%Q_TOA(   vi,m) = climate_matrix%PD_obs%Q_TOA(   vi,m)
     END DO
     END DO
     CALL sync
 
-    ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
-    CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+    ! == Downscaling to model topography
+    ! ==================================
 
-    ! Initialise applied insolation with present-day values
+    ! Adapt temperature to model orography using a lapse-rate correction
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
-      climate_matrix%applied%Q_TOA( vi,m) = climate_matrix%PD_obs%Q_TOA( vi,m)
+
+      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - C%constant_lapserate * &
+                                           (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
     END DO
     END DO
     CALL sync
+
+    ! Downscale precipitation from the coarse-resolution reference
+    ! orography to the fine-resolution ice-model orography
+    IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'PAT') THEN
+      ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
+      CALL adapt_precip_Roe( mesh, climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                             climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
+                             climate_matrix%PD_obs%Precip, ice%Hs_a, climate_matrix%applied%T2m, &
+                             climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
+                             climate_matrix%applied%Precip)
+    ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
+      ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
+      CALL adapt_precip_CC( mesh, ice%Hs_a, climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                            climate_matrix%PD_obs%Precip, climate_matrix%applied%Precip, region_name)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=38)
@@ -1340,12 +1367,12 @@ CONTAINS
     CALL sync
 
     ! Calculate spatially variable lapse rate
-    region%climate_matrix%GCM_warm%lambda( region%mesh%vi1:region%mesh%vi2) = 0.008_dp
+    region%climate_matrix%GCM_warm%lambda( region%mesh%vi1:region%mesh%vi2) = C%constant_lapserate
     CALL sync
     IF     (region%name == 'NAM' .OR. region%name == 'EAS') THEN
       CALL initialise_snapshot_spatially_variable_lapserate( region%mesh, region%grid_smooth, region%climate_matrix%GCM_PI, region%climate_matrix%GCM_cold)
     ELSEIF (region%name == 'GLR' .OR. region%name == 'ANT') THEN
-      region%climate_matrix%GCM_cold%lambda( region%mesh%vi1:region%mesh%vi2) = 0.008_dp
+      region%climate_matrix%GCM_cold%lambda( region%mesh%vi1:region%mesh%vi2) = C%constant_lapserate
       CALL sync
     END IF
 
@@ -1664,8 +1691,8 @@ CONTAINS
     ! Smooth the lapse rate field with a 160 km Gaussian filter
     CALL smooth_Gaussian_2D( mesh, grid, climate%lambda, 160000._dp)
 
-    ! Normalise the entire region to a mean lapse rate of 8 K /km
-    climate%lambda( mesh%vi1:mesh%vi2) = climate%lambda( mesh%vi1:mesh%vi2) * (0.008_dp / lambda_mean_ice)
+    ! Normalise the entire region to a mean lapse rate of C%constant_lapserate K /km
+    climate%lambda( mesh%vi1:mesh%vi2) = climate%lambda( mesh%vi1:mesh%vi2) * (C%constant_lapserate / lambda_mean_ice)
 
     ! Clean up after yourself
     CALl deallocate_shared( wmask_calc_lambda)
@@ -3981,7 +4008,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       T_inv_ref( vi,m) = 88.9_dp + 0.67_dp *  T_ref_GCM( vi,m)
-      T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - 0.008_dp * (Hs( vi) - Hs_GCM( vi)))
+      T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - C%constant_lapserate * (Hs( vi) - Hs_GCM( vi)))
     END DO
     END DO
     CALL sync

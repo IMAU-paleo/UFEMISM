@@ -1358,6 +1358,11 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt
     INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt
 
+    ! Ice velocities
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D
+    INTEGER :: wu_3D, wv_3D
+
     ! Bed roughness
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric

@@ -85,9 +85,12 @@ CONTAINS
     routine_name = 'run_model('  //  region%name  //  ')'
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE (0,'(5A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
-                                                   ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    IF (par%master) THEN
+
+      WRITE(0,*) ''
+      WRITE (0,'(5A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
+                                     ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    END IF
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
     CALL associate_debug_fields(  region)
@@ -238,6 +241,12 @@ CONTAINS
         END IF
       END IF
 
+      ! == Update ice geometry
+      ! ======================
+
+      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
+      CALL sync
+
       ! == Output
       ! =========
 
@@ -249,15 +258,13 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! Write to regional NetCDF output files
+        ! Update ice sheet area and volume
+        CALL calculate_icesheet_volume_and_area( region)
+        ! Write to regional scalar output
+        CALL write_regional_scalar_data( region, region%time)
+        ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
-
-      ! == Update ice geometry
-      ! ======================
-
-      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
-      CALL sync
 
       ! == Advance region time
       ! ======================
@@ -272,6 +279,10 @@ CONTAINS
     ! ===== End of the main model time loop =====
     ! ===========================================
 
+    ! Determine total ice sheet area, volume, volume-above-flotation
+    ! and GMSL contribution, used for global scalar output
+    CALL calculate_icesheet_volume_and_area( region)
+
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
       ! If the mesh has been updated, create a new NetCDF file
@@ -280,18 +291,14 @@ CONTAINS
         CALL sync
         region%output_file_exists = .TRUE.
       END IF
+      ! Write to regional 2-/3-D output
       CALL write_to_output_files( region)
+      ! Write to regional scalar output
+      CALL write_regional_scalar_data( region, region%time)
     END IF
-
-    ! Determine total ice sheet area, volume, volume-above-flotation
-    ! and GMSL contribution, used for global scalar output
-    CALL calculate_icesheet_volume_and_area( region)
 
     tstop = MPI_WTIME()
     region%tcomp_total = tstop - tstart
-
-    ! Write to regional scalar output
-    CALL write_regional_scalar_data( region, region%time)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -459,13 +466,13 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),          INTENT(INOUT)     :: region
-    CHARACTER(LEN=3),                 INTENT(IN)        :: name
-    TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
-    TYPE(type_ocean_matrix_global),   INTENT(INOUT)     :: ocean_matrix_global
+    TYPE(type_model_region),          INTENT(INOUT)  :: region
+    CHARACTER(LEN=3),                 INTENT(IN)     :: name
+    TYPE(type_climate_matrix_global), INTENT(INOUT)  :: climate_matrix_global
+    TYPE(type_ocean_matrix_global),   INTENT(INOUT)  :: ocean_matrix_global
 
     ! Local variables:
-    CHARACTER(LEN=256)                                  :: routine_name
+    CHARACTER(LEN=256)                               :: routine_name
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
@@ -553,14 +560,7 @@ CONTAINS
     IF (par%master) WRITE(0,*) '  Initialising debug fields...'
 
     CALL initialise_debug_fields( region)
-
-    ! ===== Output files =====
-    ! ========================
-
-    CALL create_output_files(    region)
     CALL associate_debug_fields( region)
-    region%output_file_exists = .TRUE.
-    CALL sync
 
     ! ===== The "no ice" mask =====
     ! =============================
@@ -640,29 +640,6 @@ CONTAINS
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
 
-    ! ===== Scalar ice data =====
-    ! ===========================
-
-    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
-    ! for writing to the first time point of the output file
-    CALL calculate_PD_sealevel_contribution( region)
-    CALL calculate_icesheet_volume_and_area( region)
-
-    ! ===== Regional scalar output =====
-    ! ==================================
-
-    ! Create output file for regional scalar data
-    CALL create_regional_scalar_output_file( region)
-
-    ! Write scalar data at time t=0
-    CALL write_regional_scalar_data( region, C%start_time_of_run)
-
-    ! ===== Initial output after initialisation =====
-    ! ===============================================
-
-    ! Write to regional NetCDF output files
-    CALL write_to_output_files( region)
-
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================
 
@@ -673,6 +650,38 @@ CONTAINS
       CALL solve_DIVA( region%mesh, region%ice)
       C%choice_ice_dynamics = 'none'
     END IF
+
+    ! == Model wind-up
+    ! ================
+
+    CALL run_model_windup( region)
+
+    ! ===== Scalar ice data =====
+    ! ===========================
+
+    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
+    ! for writing to the first time point of the output file
+    CALL calculate_PD_sealevel_contribution( region)
+    CALL calculate_icesheet_volume_and_area( region)
+
+    ! ===== Regional output =====
+    ! ===========================
+
+    ! Create output file for regional scalar data
+    CALL create_regional_scalar_output_file( region)
+
+    ! Create output file for regional 2-/3-D data
+    CALL create_output_files( region)
+    region%output_file_exists = .TRUE.
+
+    ! Write scalar data at time t=0
+    CALL write_regional_scalar_data( region, C%start_time_of_run)
+
+    ! Write 2-/3-D data at time t=0
+    CALL write_to_output_files( region)
+
+    ! === Finalisation ===
+    ! ====================
 
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
 
@@ -765,6 +774,7 @@ CONTAINS
     CALL allocate_shared_bool_0D( region%do_output,        region%wdo_output       )
 
     IF (par%master) THEN
+
       region%time             = C%start_time_of_run
       region%dt               = C%dt_min
       region%dt_prev          = C%dt_min
@@ -1057,5 +1067,110 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 18)
 
   END SUBROUTINE initialise_model_square_grid
+
+  SUBROUTINE run_model_windup( region)
+    ! After a restart, go back in time a set amount of years and run only
+    ! the ice dynamics model (without ice thickness updates) until the
+    ! start of the run. This is useful to avoid shocks in the initial
+    ! evolution of the ice due to an empty, fresh-new velocity solver.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),       INTENT(INOUT)  :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'run_model_windup'
+    INTEGER                                       :: it
+    REAL(dp)                                      :: dt_ave
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. C%is_restart) THEN
+      ! Finalise routine path
+      CALL finalise_routine( routine_name)
+      ! Exit rutine
+      RETURN
+    END IF
+
+    ! === Wind up the model ===
+    ! =========================
+
+    IF (par%master) THEN
+      WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
+    END IF
+
+    ! Bring the timer C%total_windup_years years back in time
+    region%time = C%start_time_of_run - C%windup_total_years
+
+    ! Let the model know we want to run velocities from this point on
+    region%t_last_SIA       = region%time
+    region%t_next_SIA       = region%time
+    region%do_SIA           = .TRUE.
+
+    region%t_last_SSA       = region%time
+    region%t_next_SSA       = region%time
+    region%do_SSA           = .TRUE.
+
+    region%t_last_DIVA      = region%time
+    region%t_next_DIVA      = region%time
+    region%do_DIVA          = .TRUE.
+
+    region%t_last_thermo    = region%time
+    region%t_next_thermo    = region%time
+    region%do_thermo        = .TRUE.
+
+    ! Asume mid-value dt's from previous run
+    region%dt               = C%dt_max * .5_dp
+    region%dt_prev          = C%dt_max * .5_dp
+    region%dt_crit_SIA      = C%dt_max * .5_dp
+    region%dt_crit_SSA      = C%dt_max * .5_dp
+    region%dt_crit_ice      = C%dt_max * .5_dp
+    region%dt_crit_ice_prev = C%dt_max * .5_dp
+
+    ! Initialise iteration counter
+    it = 0
+    ! Initialise averaged time step
+    dt_ave = 0._dp
+
+    ! Run the ice model until the start of our real run
+    DO WHILE (region%time < C%start_time_of_run)
+
+      ! Update iteration counter
+      it = it + 1
+
+      ! Calculate ice velocities
+      CALL run_ice_model( region, C%start_time_of_run)
+
+      ! Calculate ice temperatures
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, &
+                             region%ocean_matrix%applied, region%SMB, region%time, &
+                             do_solve_heat_equation = region%do_thermo)
+
+      ! Display progress
+      if (par%master .AND. C%do_time_display) then
+        call time_display(region, C%start_time_of_run, dt_ave, it)
+      end if
+
+      ! Advance region time and repeat
+      IF (par%master) THEN
+        region%time = region%time + region%dt
+        dt_ave = dt_ave + region%dt
+      END IF
+      CALL sync
+
+    END DO
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_model_windup
 
 END MODULE UFEMISM_main_model

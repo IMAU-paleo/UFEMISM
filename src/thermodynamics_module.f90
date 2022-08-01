@@ -22,7 +22,7 @@ MODULE thermodynamics_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  
+
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
@@ -31,20 +31,20 @@ MODULE thermodynamics_module
   USE utilities_module,                ONLY: tridiagonal_solve, vertical_average, interpolate_ocean_depth
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_a_to_b_3D, ddy_a_to_b_3D
-  USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex      
+  USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex
   USE mesh_mapping_module,             ONLY: remap_field_dp_3D
-  
+
   IMPLICIT NONE
-  
+
 CONTAINS
-   
+
 ! == Run the chosen thermodynamics model
   SUBROUTINE run_thermo_model( mesh, ice, climate, ocean, SMB, time, do_solve_heat_equation)
     ! Run the thermodynamics model. If so specified, solve the heat equation;
     ! if not, only prescribe a vertically uniform temperature to newly ice-covered grid cells.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
@@ -61,7 +61,7 @@ CONTAINS
     INTEGER                                             ::  n_source_neighbours
     REAL(dp), DIMENSION(C%nz)                           :: Ti_source_neighbours
     REAL(dp)                                            :: T_surf_annual
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -70,81 +70,81 @@ CONTAINS
       ! NOTE: choice_ice_rheology_model should be set to "uniform"!
     ELSEIF (C%choice_thermo_model == '3D_heat_equation') THEN
       ! Solve the 3-D heat equation
-      
+
       ! NOTE: solved asynchronously from the ice dynamical equations.
       !       Since newly ice-covered pixels won't have a temperature assigned
       !       until the heat equation is solved again, treat these separately every time step.
-    
+
       ! Prescribe a simple temperature profile to newly ice-covered grid cells.
       DO vi = mesh%vi1, mesh%vi2
-        
+
         IF (ice%mask_ice_a( vi) == 1) THEN
-        
+
           IF (ice%mask_ice_a_prev( vi) == 0) THEN
             ! This grid cell is newly ice-covered
             ! If one of its neighbours was already ice-covered, assume the temperature
             ! profile here is equal to the profile from the upstream neighbour (due to advection).
             ! If no neighbours were ice-covered, the new ice must come from accumulation;
             ! just set a simple linear profile instead.
-            
+
             found_source_neighbour = .FALSE.
             Ti_source_neighbours   = 0._dp
             n_source_neighbours    = 0
             DO vvi = 1, mesh%nC( vi)
-              
+
               vj = mesh%C( vi,vvi)
-              
+
               IF (ice%mask_ice_a_prev( vj) == 1) THEN
                 found_source_neighbour = .TRUE.
                 n_source_neighbours    = n_source_neighbours  + 1
                 Ti_source_neighbours   = Ti_source_neighbours + ice%Ti_a( vj,:)
               END IF
-              
+
             END DO
-            
+
             IF     (found_source_neighbour) THEN
               ! Ice probably was advected from neighbouring grid cells; copy temperature profile from there
-              
+
               Ti_source_neighbours = Ti_source_neighbours / REAL( n_source_neighbours,dp)
               ice%Ti_a( vi,:) = Ti_source_neighbours
-              
+
             ELSE
               ! Ice probably came from surface accumulation; set temperature profile to annual mean surface temperature
-              
+
               T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
               ice%Ti_a( vi,:) = T_surf_annual
-              
+
             END IF
-            
+
           ELSE
             ! This grid cell was already ice-covered in the previous time step, no need to do anything
           END IF ! IF (ice%mask_ice_a_prev( j,i) == 0) THEN
-          
+
         ELSE ! IF (ice%mask_ice_a( vi) == 1) THEN
           ! This pixel is ice-free; set temperature profile to zero
-          
+
           ice%Ti_a( vi,:) = 0._dp
-          
+
         END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
-        
+
       END DO
       CALL sync
-    
+
       ! Calculate various physical terms
       CALL calc_heat_capacity(          mesh, ice)
       CALL calc_thermal_conductivity(   mesh, ice)
       CALL calc_pressure_melting_point( mesh, ice)
-      
+
       ! If so specified, solve the heat equation
       IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
-      
+
       ! Safety
       CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
-    
+
     ELSE
       CALL crash('unknown choice_thermo_model "' // TRIM( C%choice_thermo_model) // '"!')
     END IF
-    
+
     ! Calculate the ice flow factor for the new temperature solution
     CALL calc_ice_rheology( mesh, ice, time)
 
@@ -388,52 +388,52 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_3D_heat_equation
-  
+
 ! == Calculate upwind heat flux derivatives
   SUBROUTINE calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
     ! Calculate upwind heat flux derivatives at vertex vi, vertical layer k
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_upwind_heat_flux_derivatives'
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  dTi_dx_3D_b,  dTi_dy_3D_b
     INTEGER                                            :: wdTi_dx_3D_b, wdTi_dy_3D_b
     INTEGER                                            :: vi, k, vti, ti, n1, n2, n3, vib, vic, ti_upwind
     REAL(dp), DIMENSION(2)                             :: u_upwind, ab, ac
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dx_3D_b, wdTi_dx_3D_b)
     CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dy_3D_b, wdTi_dy_3D_b)
-    
+
     ! Calculate temperature gradients on the b-grid
     CALL ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b)
     CALL ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b)
-    
+
     ! Initialise
     u_times_dT_dx_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
     v_times_dT_dy_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
     CALL sync
-    
+
     DO vi = mesh%vi1, mesh%vi2
-    
+
       IF (ice%mask_ice_a( vi) == 1) THEN
-        
+
         ! The upwind velocity vector
         u_upwind = [-ice%u_vav_a( vi), -ice%v_vav_a( vi)]
-        
+
         ! Find the upwind triangle
         ti_upwind = 0
         DO vti = 1, mesh%niTri( vi)
-          
+
           ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
           ti  = mesh%iTri( vi,vti)
           vib = 0
@@ -443,48 +443,48 @@ CONTAINS
             IF (n2 == 4) n2 = 1
             n3 = n2 + 1
             IF (n3 == 4) n3 = 1
-            
+
             IF (mesh%Tri( ti,n1) == vi) THEN
               vib = mesh%Tri( ti,n2)
               vic = mesh%Tri( ti,n3)
               EXIT
             END IF
           END DO
-          
+
           ! Check if the upwind velocity vector points into this triangle
           ab = mesh%V( vib,:) - mesh%V( vi,:)
           ac = mesh%V( vic,:) - mesh%V( vi,:)
-          
+
           IF (CROSS2( ab, u_upwind) >= 0._dp .AND. CROSS2( u_upwind, ac) >= 0._dp) THEN
             ti_upwind = ti
             EXIT
           END IF
-          
+
         END DO ! DO iti = 1, mesh%niTri( vi)
-        
+
         ! Safety
         IF (ti_upwind == 0) THEN
           CALL crash('could not find upwind triangle!')
         END IF
-        
+
         ! Calculate u * dT/dx, v * dT/dy
         DO k = 1, C%nz
           u_times_dT_dx_upwind_a( vi,k) = ice%u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
           v_times_dT_dy_upwind_a( vi,k) = ice%v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
         END DO
-        
+
       END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
-      
+
     END DO ! DO vi = mesh%vi1, mesh%vi2
     CALL sync
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wdTi_dx_3D_b)
     CALL deallocate_shared( wdTi_dy_3D_b)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_upwind_heat_flux_derivatives
 
 ! == The Robin temperature solution
@@ -585,61 +585,61 @@ CONTAINS
 ! == Calculate various physical terms
   SUBROUTINE calc_internal_heating( mesh, ice)
     ! Calculate internal heating due to deformation
-    
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_internal_heating'
     INTEGER                                            :: vi, k
     REAL(dp), DIMENSION(:    ), POINTER                ::  dHs_dx_a,  dHs_dy_a
     INTEGER                                            :: wdHs_dx_a, wdHs_dy_a
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
     CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
-    
+
     ! Calculate surface slopes
     CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
     CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
-    
+
     ! Calculate internal heating
     DO vi = mesh%vi1, mesh%vi2
-      
+
       ice%internal_heating_a( vi,:) = 0._dp
-      
+
       IF (mesh%edge_index( vi) > 0) CYCLE ! Skip the domain boundary
       IF (ice%mask_ice_a( vi) == 0) CYCLE ! Skip ice-less elements
-  
+
       ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
       DO k = 2, C%nz-1
         ice%internal_heating_a( vi,k) = ((- grav * C%zeta(k)) / ice%Cpi_a( vi,k)) * ( &
              (p_zeta%a_zeta(k) * ice%u_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%u_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%u_3D_a( vi,k+1)) * dHs_dx_a( vi) + &
              (p_zeta%a_zeta(k) * ice%v_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%v_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%v_3D_a( vi,k+1)) * dHs_dy_a( vi) )
       END DO
-      
+
     END DO
     CALL sync
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wdHs_dx_a)
     CALL deallocate_shared( wdHs_dy_a)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_internal_heating
   SUBROUTINE calc_frictional_heating( mesh, ice)
     ! Calculate frictional heating at the base due to sliding
-    
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
@@ -647,7 +647,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_frictional_heating'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -658,14 +658,14 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     END IF
-    
+
     ! Calculate frictional heating
     DO vi = mesh%vi1, mesh%vi2
       IF (ice%mask_sheet_a( vi) == 1) THEN
         ice%frictional_heating_a( vi) = ice%beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
       ELSE
         ice%frictional_heating_a( vi) = 0._dp
-      END IF 
+      END IF
     END DO
     CALL sync
 
@@ -675,99 +675,99 @@ CONTAINS
   END SUBROUTINE calc_frictional_heating
   SUBROUTINE calc_heat_capacity( mesh, ice)
     ! Calculate the heat capacity of the ice
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_heat_capacity'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     IF     (C%choice_ice_heat_capacity == 'uniform') THEN
       ! Apply a uniform value for the heat capacity
-      
+
       ice%Cpi_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_heat_capacity
       CALL sync
-      
+
     ELSEIF (C%choice_ice_heat_capacity == 'Pounder1965') THEN
       ! Calculate the heat capacity of ice according to Pounder: The Physics of Ice (1965)
-      
+
       DO vi = mesh%vi1, mesh%vi2
         ice%Cpi_a( vi,:) = 2115.3_dp + 7.79293_dp * (ice%Ti_a( vi,:) - T0)
       END DO
       CALL sync
-    
+
     ELSE
       CALL crash('unknown choice_ice_heat_capacity "' // TRIM( C%choice_ice_heat_capacity) // '"!')
     END IF
-    
+
     ! Safety
     CALL check_for_NaN_dp_2D( ice%Cpi_a, 'ice%Cpi_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_heat_capacity
   SUBROUTINE calc_thermal_conductivity( mesh, ice)
     ! Calculate the thermal conductivity of the ice
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_thermal_conductivity'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     IF     (C%choice_ice_thermal_conductivity == 'uniform') THEN
       ! Apply a uniform value for the thermal conductivity
-      
+
       ice%Ki_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_thermal_conductivity
       CALL sync
-      
+
     ELSEIF (C%choice_ice_thermal_conductivity == 'Ritz1987') THEN
-      ! Calculate the thermal conductivity of ice according to Ritz (1987) 
-      
+      ! Calculate the thermal conductivity of ice according to Ritz (1987)
+
       DO vi = mesh%vi1, mesh%vi2
         ice%Ki_a( vi,:) = 3.101E+08_dp * EXP(-0.0057_dp * ice%Ti_a( vi,:))
       END DO
       CALL sync
-    
+
     ELSE
       CALL crash('unknown choice_ice_thermal_conductivity "' // TRIM( C%choice_ice_thermal_conductivity) // '"!')
     END IF
-    
+
     ! Safety
     CALL check_for_NaN_dp_2D( ice%Ki_a, 'ice%Ki_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_thermal_conductivity
   SUBROUTINE calc_pressure_melting_point( mesh, ice)
     ! Calculate the pressure melting point of the ice according to Huybrechts (1992)
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pressure_melting_point'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -775,56 +775,56 @@ CONTAINS
       ice%Ti_pmp_a( vi,:) = T0 - CC * ice%Hi_a( vi) * C%zeta
     END DO
     CALL sync
-    
+
     ! Safety
     CALL check_for_NaN_dp_2D( ice%Ti_pmp_a, 'ice%Ti_pmp_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_pressure_melting_point
-  
+
 ! == Calculate the  flow factor A in Glen's flow law
   SUBROUTINE calc_ice_rheology( mesh, ice, time)
     ! Calculate the flow factor A in Glen's flow law
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     REAL(dp),                            INTENT(IN)    :: time
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ice_rheology'
     INTEGER                                            :: vi,k
-    REAL(dp), DIMENSION(C%nZ)                          :: prof
+    REAL(dp), DIMENSION(C%nz)                          :: prof
     REAL(dp), PARAMETER                                :: A_low_temp  = 1.14E-05_dp   ! [Pa^-3 yr^-1] The constant a in the Arrhenius relationship
     REAL(dp), PARAMETER                                :: A_high_temp = 5.47E+10_dp   ! [Pa^-3 yr^-1] The constant a in the Arrhenius relationship
     REAL(dp), PARAMETER                                :: Q_low_temp  = 6.0E+04_dp    ! [J mol^-1] Activation energy for creep in the Arrhenius relationship
     REAL(dp), PARAMETER                                :: Q_high_temp = 13.9E+04_dp   ! [J mol^-1] Activation energy for creep in the Arrhenius relationship
     REAL(dp)                                           :: A_flow_MISMIP
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     IF     (C%choice_ice_rheology == 'uniform') THEN
       ! Apply a uniform value for the ice flow factor
-      
+
       ice%A_flow_3D_a( mesh%vi1:mesh%vi2,:) = C%uniform_flow_factor
       CALL sync
-      
+
     ELSEIF (C%choice_ice_rheology == 'Huybrechts1992') THEN
-    
+
       ! Calculate the ice flow factor as a function of the ice temperature according to the Arrhenius relationship (Huybrechts, 1992)
       DO vi = mesh%vi1, mesh%vi2
-      
+
         DO k = 1, C%nz
           IF (ice%mask_ice_a( vi) == 1) THEN
             IF (ice%Ti_a( vi,k) < 263.15_dp) THEN
-              ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * ice%Ti_a( vi,k)))  
+              ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * ice%Ti_a( vi,k)))
             ELSE
-              ice%A_flow_3D_a( vi,k) = A_high_temp * EXP(-Q_high_temp / (R_gas * ice%Ti_a( vi,k)))  
+              ice%A_flow_3D_a( vi,k) = A_high_temp * EXP(-Q_high_temp / (R_gas * ice%Ti_a( vi,k)))
             END IF
           ELSE
             IF (C%choice_ice_margin == 'BC') THEN
@@ -832,19 +832,19 @@ CONTAINS
             ELSEIF (C%choice_ice_margin == 'infinite_slab') THEN
               ! In the "infinite slab" case, calculate effective viscosity everywhere
               ! (even when there's technically no ice present)
-              ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * 263.15_dp))  
+              ice%A_flow_3D_a( vi,k) = A_low_temp  * EXP(-Q_low_temp  / (R_gas * 263.15_dp))
             ELSE
               CALL crash('unknown choice_ice_margin "' // TRIM( C%choice_ice_margin) // '"!')
             END IF
           END IF
         END DO ! DO k = 1, C%nz
-         
+
       END DO
       CALL sync
-    
+
     ELSEIF (C%choice_ice_rheology == 'MISMIP_mod') THEN
       ! The time-dependent, step-wise changing uniform flow factor in the MISMIP_mod experiment
-      
+
       A_flow_MISMIP = 1.0E-16_dp
       IF     (time < 15000._dp) THEN
         A_flow_MISMIP = 1.0E-16_dp
@@ -853,14 +853,14 @@ CONTAINS
       ELSEIF (time < 45000._dp) THEN
         A_flow_MISMIP = 1.0E-16_dp
       END IF
-        
+
       ice%A_flow_3D_a(  mesh%vi1:mesh%vi2,:) = A_flow_MISMIP
       CALL sync
-        
+
     ELSE
       CALL crash('unknown choice_ice_rheology "' // TRIM( C%choice_ice_rheology) // '"!')
     END IF
-        
+
     ! Apply the flow enhancement factors
     DO vi = mesh%vi1, mesh%vi2
       IF     (ice%mask_sheet_a( vi) == 1) THEN
@@ -877,14 +877,14 @@ CONTAINS
       CALL vertical_average( prof, ice%A_flow_vav_a( vi))
     END DO
     CALL sync
-    
+
     ! Safety
     CALL check_for_NaN_dp_2D( ice%A_flow_3D_a , 'ice%A_flow_3D_a' )
     CALL check_for_NaN_dp_1D( ice%A_flow_vav_a, 'ice%A_flow_vav_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calc_ice_rheology
 
 ! == Initialise the englacial ice temperature at the start of a simulation
@@ -926,6 +926,11 @@ CONTAINS
       CALL crash('unknown choice_initial_ice_temperature "' // TRIM( C%choice_initial_ice_temperature) // '"!')
     END IF
 
+    ! Calculate various physical terms
+    CALL calc_heat_capacity(          mesh, ice)
+    CALL calc_thermal_conductivity(   mesh, ice)
+    CALL calc_pressure_melting_point( mesh, ice)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -934,31 +939,31 @@ CONTAINS
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Simple uniform temperature
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_temperature_uniform'
     INTEGER                                            :: vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
-      
+
     DO vi = mesh%vi1, mesh%vi2
-    
+
       IF (ice%Hi_a( vi) > 0._dp) THEN
         ice%Ti_a( vi,:) = C%uniform_ice_temperature
       ELSE
         ice%Ti_a( vi,:) = 0._dp
       END IF
-      
+
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -967,14 +972,14 @@ CONTAINS
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Simple linear temperature profile
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'initialise_ice_temperature_linear'
     INTEGER                                             :: vi
@@ -982,9 +987,9 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-      
+
     DO vi = mesh%vi1, mesh%vi2
-    
+
       IF (ice%Hi_a( vi) > 0._dp) THEN
         T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
         T_PMP_base    = T0 - (ice%Hi_a( vi) * 8.7E-04_dp)
@@ -992,10 +997,10 @@ CONTAINS
       ELSE
         ice%Ti_a( vi,:) = 0._dp
       END IF
-      
+
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1004,32 +1009,32 @@ CONTAINS
     ! Initialise the englacial ice temperature at the start of a simulation
     !
     ! Initialise with the Robin solution
-      
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                      INTENT(IN)    :: mesh
     TYPE(type_ice_model),                 INTENT(INOUT) :: ice
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'initialise_ice_temperature_Robin'
     INTEGER                                             :: vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
- 
+
     ! Calculate Ti_pmp
     CALL calc_pressure_melting_point( mesh, ice)
-    
+
     ! Initialise with the Robin solution
     DO vi = mesh%vi1, mesh%vi2
       CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, ice%Ti_a, vi)
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1064,17 +1069,17 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ice_temperature_restart
-  
+
 ! == Remap englacial temperature
   SUBROUTINE remap_ice_temperature( mesh_old, mesh_new, map, ice)
     ! Remap englacial temperature
-  
+
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
     TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ice_temperature'
     INTEGER,  DIMENSION(:    ), POINTER                ::  mask_ice_a_old,  mask_ice_a_new
@@ -1086,7 +1091,7 @@ CONTAINS
     INTEGER                                            :: VstackN1, VstackN2
     INTEGER                                            :: sti, n, it
     REAL(dp), DIMENSION(C%nz)                          :: Ti_av
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1094,7 +1099,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh_old%nV,       mask_ice_a_old, wmask_ice_a_old)
     CALL allocate_shared_int_1D( mesh_new%nV,       mask_ice_a_new, wmask_ice_a_new)
     CALL allocate_shared_dp_2D(  mesh_old%nV, C%nz, Ti_ext        , wTi_ext       )
-    
+
     ! Fill in the old and new ice masks
     DO vi = mesh_old%vi1, mesh_old%vi2
       mask_ice_a_old( vi) = ice%mask_ice_a( vi)
@@ -1106,27 +1111,27 @@ CONTAINS
         mask_ice_a_new( vi) = 0
       END IF
     END DO
-    
+
   ! Extrapolate old ice temperature outside the ice to fill the entire domain
   ! =========================================================================
-  
+
     ! Initialise
     Ti_ext( mesh_old%vi1:mesh_old%vi2,:) = ice%Ti_a( mesh_old%vi1:mesh_old%vi2,:)
     CALL sync
-  
+
     IF (par%master) THEN
-      
+
       ! Allocate map and stacks for extrapolation
       ALLOCATE( Vmap(    mesh_old%nV))
       ALLOCATE( Vstack1( mesh_old%nV))
       ALLOCATE( Vstack2( mesh_old%nV))
-      
+
       ! Initialise the stack with all ice-free-next-to-ice-covered vertices
       ! (and also initialise the map)
       Vmap     = 0
       Vstack2  = 0
       VstackN2 = 0
-      
+
       DO vi = 1, mesh_old%nV
         IF (mask_ice_a_old( vi) == 1) THEN
           Vmap( vi) = 2
@@ -1143,99 +1148,99 @@ CONTAINS
           END DO
         END IF
       END DO
-      
+
       ! Perform a flood-fill-style extrapolation
       it = 0
       DO WHILE (VstackN2 > 0)
-        
+
         it = it + 1
-        
+
         ! Cycle stacks
         Vstack1( 1:VstackN2) = Vstack2( 1:VstackN2)
         VstackN1 = VstackN2
         Vstack2( 1:VstackN2) = 0
         VstackN2 = 0
-        
+
         ! Extrapolate temperature values into data-less-next-to-data-filled pixels
         DO sti = 1, VstackN1
-          
+
           vi = Vstack1( sti)
-          
+
           n     = 0
           Ti_av = 0._dp
-          
+
           DO vvi = 1, mesh_old%nC( vi)
-          
+
             vj = mesh_old%C( vi,vvi)
-            
+
             IF (VMap( vj) == 2) THEN
               n     = n     + 1
               Ti_av = Ti_av + Ti_ext( vj,:)
             END IF
-            
+
           END DO ! DO vvi = 1, mesh_old%nC( vi)
-          
+
           ! Extrapolate temperature by averaging over data-filled neighbours
           Ti_av = Ti_av / REAL( n,dp)
           Ti_ext( vi,:) = Ti_av
-          
+
         END DO ! DO sti = 1: VstackN1
-        
+
         ! Create new stack of data-less-next-to-data-filled pixels
         DO sti = 1, VstackN1
-        
+
           vi = Vstack1( sti)
-          
+
           ! Mark this pixel as data-filled on the Map
           Vmap( vi) = 2
-          
+
           ! Add its data-less neighbours to the Stack
           DO vvi = 1, mesh_old%nC( vi)
-          
+
             vj = mesh_old%C( vi,vvi)
-            
+
             IF (Vmap( vj) == 0) THEN
               Vmap( vj) = 1
               VstackN2 = VstackN2 + 1
               Vstack2(   VstackN2) = vj
             END IF
-            
+
           END DO ! DO vvi = 1, mesh_old%nC( vi)
         END DO ! DO sti = 1: VstackN1
-        
+
       END DO ! DO WHILE (VstackN2 > 0)
-      
+
       ! Clean up after yourself
       DEALLOCATE( Vmap   )
       DEALLOCATE( Vstack1)
       DEALLOCATE( Vstack2)
-      
+
     END IF ! IF (par%master) THEN
     CALL sync
-    
+
     ! Remap the extrapolated temperature field
     CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext, wTi_ext, 'cons_2nd_order')
-    
+
     ! Reallocate ice temperature field, copy remapped data only for ice-covered pixels
     CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz, ice%Ti_a, ice%wTi_a)
-    
+
     DO vi = mesh_new%vi1, mesh_new%vi2
       IF (mask_ice_a_new( vi) == 1) ice%Ti_a( vi,:) = Ti_ext( vi,:)
     END DO
-    
+
     ! Reallocate mask_ice_a_prev, fill it in (needed for the generic temperature update)
     CALL reallocate_shared_int_1D( mesh_new%nV, ice%mask_ice_a_prev, ice%wmask_ice_a_prev)
     ice%mask_ice_a_prev( mesh_new%vi1:mesh_new%vi2) = mask_ice_a_new( mesh_new%vi1:mesh_new%vi2)
     CALL sync
-    
+
     ! Clean up after yourself
     CALL deallocate_shared( wmask_ice_a_old)
     CALL deallocate_shared( wmask_ice_a_new)
     CALL deallocate_shared( wTi_ext        )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_ice_temperature
-  
+
 END MODULE thermodynamics_module

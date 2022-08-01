@@ -35,7 +35,8 @@ MODULE ice_dynamics_module
   USE general_ice_model_data_module,         ONLY: update_general_ice_model_data, determine_masks
   USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
   USE ice_velocity_module,                   ONLY: solve_SIA, solve_SSA, solve_DIVA, initialise_velocity_solver, remap_velocities, &
-                                                   map_velocities_b_to_c_2D, map_velocities_b_to_c_3D
+                                                   map_velocities_b_to_c_2D, map_velocities_b_to_c_3D, calc_3D_vertical_velocities, &
+                                                   map_velocities_b_to_a_2D, map_velocities_b_to_a_3D
   USE ice_thickness_module,                  ONLY: calc_dHi_dt
   USE basal_conditions_and_sliding_module,   ONLY: initialise_basal_conditions, remap_basal_conditions
   USE thermodynamics_module,                 ONLY: calc_ice_rheology, remap_ice_temperature
@@ -918,7 +919,8 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_model'
-    INTEGER                                            :: vi
+    INTEGER                                            :: vi, ti
+    REAL(dp), DIMENSION(C%nz)                          :: prof
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1031,6 +1033,73 @@ CONTAINS
       C%choice_ice_dynamics = 'none'
     ELSE
       CALL initialise_velocity_solver( mesh, ice)
+    END IF
+
+    IF (C%is_restart) THEN
+
+      IF (par%master) WRITE(0,*) '   Initialising ice velocities using data read from restart file...'
+
+      ! Set 3D velocity field to restart data
+      ice%u_3D_b( mesh%ti1:mesh%ti2,:) = restart%u_3D( mesh%ti1:mesh%ti2,:)
+      ice%v_3D_b( mesh%ti1:mesh%ti2,:) = restart%v_3D( mesh%ti1:mesh%ti2,:)
+      CALL sync
+
+      ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
+      CALL calc_3D_vertical_velocities( mesh, ice)
+
+      ! Copy surface velocity from the 3D fields
+      ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+      ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
+      CALL sync
+
+      ! Copy basal velocity from the 3D fields
+      ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,C%nz)
+      ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,C%nz)
+      CALL sync
+
+      ! Calculate vertically averaged velocities
+      DO ti = mesh%ti1, mesh%ti2
+        prof = ice%u_3D_b( ti,:)
+        CALL vertical_average( prof, ice%u_vav_b( ti))
+        prof = ice%v_3D_b( ti,:)
+        CALL vertical_average( prof, ice%v_vav_b( ti))
+      END DO
+      CALL sync
+
+      ! Special cases for the little ones
+      IF (C%choice_ice_dynamics == 'SIA') THEN
+        ! Basal velocity is zero
+        ice%u_base_b( mesh%ti1:mesh%ti2) = 0._dp
+        ice%v_base_b( mesh%ti1:mesh%ti2) = 0._dp
+        CALL sync
+
+      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+        ! No vertical velocity
+        ice%w_3D_a( mesh%vi1:mesh%vi2,:) = 0._dp
+        CALL sync
+      END IF
+
+      ! Map velocity components to the a-grid
+      CALL map_velocities_b_to_a_3D( mesh, ice%u_3D_b  , ice%v_3D_b  , ice%u_3D_a  , ice%v_3D_a  )
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_vav_b , ice%v_vav_b , ice%u_vav_a , ice%v_vav_a )
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_surf_b, ice%v_surf_b, ice%u_surf_a, ice%v_surf_a)
+      CALL map_velocities_b_to_a_2D( mesh, ice%u_base_b, ice%v_base_b, ice%u_base_a, ice%v_base_a)
+
+      ! Calculate absolute velocities on the b grid
+      DO ti = mesh%ti1, mesh%ti2
+        ice%uabs_vav_b(  ti) = SQRT( ice%u_vav_b(  ti)**2 + ice%v_vav_b(  ti)**2)
+        ice%uabs_surf_b( ti) = SQRT( ice%u_surf_b( ti)**2 + ice%v_surf_b( ti)**2)
+        ice%uabs_base_b( ti) = SQRT( ice%u_base_b( ti)**2 + ice%v_base_b( ti)**2)
+      END DO
+
+      ! Calculate absolute velocities on the a grid
+      DO vi = mesh%vi1, mesh%vi2
+        ice%uabs_vav_a(  vi) = SQRT( ice%u_vav_a(  vi)**2 + ice%v_vav_a(  vi)**2)
+        ice%uabs_surf_a( vi) = SQRT( ice%u_surf_a( vi)**2 + ice%v_surf_a( vi)**2)
+        ice%uabs_base_a( vi) = SQRT( ice%u_base_a( vi)**2 + ice%v_base_a( vi)**2)
+      END DO
+      CALL sync
+
     END IF
 
     ! Finalise routine path

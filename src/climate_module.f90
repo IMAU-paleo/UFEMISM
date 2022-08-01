@@ -532,7 +532,7 @@ CONTAINS
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_SN,     PD_obs%wWind_SN    )
 
     ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
     IF (par%master) CALL read_PD_obs_global_climate_file( PD_obs)
     CALL sync
 

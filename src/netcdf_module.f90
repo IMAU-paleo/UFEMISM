@@ -660,6 +660,10 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHi_dt, region%ice%dHi_dt_a, start = (/ 1, netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb_dt, region%ice%dHb_dt_a, start = (/ 1, netcdf%ti/)))
 
+    ! Velocities
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_u_3D, region%ice%u_3D_b, start = (/ 1, 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_v_3D, region%ice%v_3D_b, start = (/ 1, 1, netcdf%ti/)))
+
     ! Sea level and GIA
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,  region%ice%SL_a,  start = (/ 1, netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb, region%ice%dHb_a, start = (/ 1, netcdf%ti/)))
@@ -1144,23 +1148,28 @@ CONTAINS
     ! Define model data variables
 
     ! Geometry
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi, [vi, time], netcdf%id_var_Hi, long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb, [vi, time], netcdf%id_var_Hb, long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs, [vi, time], netcdf%id_var_Hs, long_name='Surface elevation', units='m')
 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt,           [vi,        time], netcdf%id_var_dHi_dt,           long_name='Ice thickness change', units='m/yr')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt,           [vi,        time], netcdf%id_var_dHb_dt,           long_name='Ice bedrock change', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt, [vi, time], netcdf%id_var_dHi_dt, long_name='Ice thickness change', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [vi, time], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
+
+    ! Velocities
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_u_3D, [ti, zeta, time], netcdf%id_var_u_3D, long_name='Ice 3D x-velocity', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_v_3D, [ti, zeta, time], netcdf%id_var_v_3D, long_name='Ice 3D y-velocity', units='m/yr')
 
     ! Sea level and GIA
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [vi,        time], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [vi,        time], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [vi, time], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb, [vi, time], netcdf%id_var_dHb, long_name='Bedrock deformation', units='m')
 
     ! Bed roughness
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,          [vi,        time], netcdf%id_var_beta_sq,          long_name='Bed roughness', units='?')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric,         [vi,        time], netcdf%id_var_phi_fric,         long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi, time], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='?')
 
     ! Temperature
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [vi, zeta,  time], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [vi, zeta,  time], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
@@ -2819,6 +2828,10 @@ CONTAINS
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHi_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHi_dt)
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHb_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHb_dt)
 
+    ! Velocities
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_u_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_u_3D)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_v_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_v_3D)
+
     ! Sea level and GIA
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_SL,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_SL )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHb,      (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHb)
@@ -2957,6 +2970,10 @@ CONTAINS
 
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHi_dt, restart%dHi_dt, start = (/ 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHb_dt, restart%dHb_dt, start = (/ 1, ti /) ))
+
+    ! Velocities
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_u_3D, restart%u_3D, start = (/ 1, 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_v_3D, restart%v_3D, start = (/ 1, 1, ti /) ))
 
     ! Bed roughness
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,  restart%beta_sq,  start = (/ 1, ti /) ))

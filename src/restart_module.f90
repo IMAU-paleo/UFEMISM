@@ -170,13 +170,16 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHi_dt, region%restart%wdHi_dt)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHb_dt, region%restart%wdHb_dt)
 
+    CALL allocate_shared_dp_2D( region%mesh%nTri, C%nz, region%restart%u_3D, region%restart%wu_3D)
+    CALL allocate_shared_dp_2D( region%mesh%nTri, C%nz, region%restart%v_3D, region%restart%wv_3D)
+
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%SL,  region%restart%wSL )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHb, region%restart%wdHb)
 
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%beta_sq,  region%restart%wbeta_sq )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric, region%restart%wphi_fric)
 
-    CALL allocate_shared_dp_2D( region%mesh%nV, C%nZ, region%restart%Ti, region%restart%wTi)
+    CALL allocate_shared_dp_2D( region%mesh%nV, C%nz, region%restart%Ti, region%restart%wTi)
 
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
 

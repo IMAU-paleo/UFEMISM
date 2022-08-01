@@ -386,6 +386,9 @@ MODULE configuration_module
     LOGICAL             :: fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
     LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
+    ! Model velocity wind-up before a restart
+    REAL(dp)            :: windup_total_years_config                   = 100._dp                          ! Go back in time and run the velocity solver for this amount of years
+
   ! == Ice dynamics - basal conditions and sliding
   ! ==============================================
 
@@ -1105,6 +1108,9 @@ MODULE configuration_module
     LOGICAL                             :: fixed_shelf_geometry
     LOGICAL                             :: fixed_sheet_geometry
     LOGICAL                             :: fixed_grounding_line
+
+    ! Model velocity wind-up before a restart
+    REAL(dp)                            :: windup_total_years
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -1979,6 +1985,7 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_sheet_geometry_config,                     &
                      fixed_grounding_line_config,                     &
+                     windup_total_years_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -2790,6 +2797,9 @@ CONTAINS
     C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
     C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
     C%fixed_grounding_line                     = fixed_grounding_line_config
+
+    ! Model velocity wind-up before a restart
+    C%windup_total_years                       = windup_total_years_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================

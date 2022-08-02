@@ -132,11 +132,13 @@ MODULE data_types_module
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave_a              ! Averaged till friction angle over a running window (degrees)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: phi_fric_window_a           ! Running window to store the history of phi_fric
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_inv_a               ! Inverted power-law friction coefficient [Pa m^−1/3 yr^1/3]
-    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
+    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wphi_fric_ave_a, wphi_fric_window_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
 
     ! Ice dynamics - physical terms in the SSA/DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
@@ -1358,7 +1360,8 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt
     REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt
-    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave
+    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt, wdHi_dt_ave
 
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D
@@ -1368,7 +1371,8 @@ MODULE data_types_module
     ! Bed roughness
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric
-    INTEGER :: wbeta_sq, wphi_fric
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave
+    INTEGER :: wbeta_sq, wphi_fric, wphi_fric_ave
 
     ! Sea level and GIA
     REAL(dp), DIMENSION(:    ), POINTER     :: SL

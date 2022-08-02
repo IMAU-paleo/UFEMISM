@@ -440,6 +440,7 @@ MODULE configuration_module
     REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
     REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
     REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+    INTEGER             :: phi_fric_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of phi_fric
 
   ! == Ice dynamics - calving
   ! =========================
@@ -1168,6 +1169,7 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_phi_max
     REAL(dp)                            :: basal_sliding_inv_tol_diff
     REAL(dp)                            :: basal_sliding_inv_tol_frac
+    INTEGER                             :: phi_fric_window_size
 
     ! Ice dynamics - calving
     ! ======================
@@ -2035,6 +2037,7 @@ CONTAINS
                      basal_sliding_inv_phi_max_config,                &
                      basal_sliding_inv_tol_diff_config,               &
                      basal_sliding_inv_tol_frac_config,               &
+                     phi_fric_window_size_config,                     &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_shelf_config,        &
                      calving_threshold_thickness_sheet_config,        &
@@ -2865,6 +2868,7 @@ CONTAINS
     C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
     C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
     C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
+    C%phi_fric_window_size                     = phi_fric_window_size_config
 
     ! Ice dynamics - calving
     ! ======================

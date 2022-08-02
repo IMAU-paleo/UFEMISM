@@ -252,14 +252,19 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! Update ice sheet area and volume
-        CALL calculate_icesheet_volume_and_area( region)
-        ! Write to regional scalar output
-        CALL write_regional_scalar_data( region, region%time)
+        ! ! Update ice sheet area and volume
+        ! CALL calculate_icesheet_volume_and_area( region)
+        ! ! Write to regional scalar output
+        ! CALL write_regional_scalar_data( region, region%time)
         ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
-      
+
+      ! Update ice sheet area and volume
+      CALL calculate_icesheet_volume_and_area( region)
+      ! Write to regional scalar output
+      CALL write_regional_scalar_data( region, region%time)
+
       ! == Update ice geometry
       ! ======================
 

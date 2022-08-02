@@ -388,7 +388,7 @@ CONTAINS
         IF (C%is_restart) THEN
           ! For restarts, weighed average between previous life and present
           region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-                                                 + hi_memory  * region%restart%dHi_dt( vi1:vi2)
+                                                 + hi_memory  * region%restart%dHi_dt_ave( vi1:vi2)
         ELSE
           ! Else, weighed average between birthday and present
           region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &

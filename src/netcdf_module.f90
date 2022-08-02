@@ -660,6 +660,8 @@ CONTAINS
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHi_dt, region%ice%dHi_dt_a, start = (/ 1, netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb_dt, region%ice%dHb_dt_a, start = (/ 1, netcdf%ti/)))
 
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHi_dt_ave, region%ice%dHi_dt_ave_a, start = (/ 1, netcdf%ti/)))
+
     ! Velocities
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_u_3D, region%ice%u_3D_b, start = (/ 1, 1, netcdf%ti/)))
     CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_v_3D, region%ice%v_3D_b, start = (/ 1, 1, netcdf%ti/)))
@@ -680,6 +682,10 @@ CONTAINS
             C%choice_sliding_law == 'Zoet-Iverson') THEN
 
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, region%ice%phi_fric_a, start = (/ 1, netcdf%ti/)))
+
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, region%ice%phi_fric_ave_a, start = (/ 1, netcdf%ti/)))
+      END IF
 
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
@@ -1155,6 +1161,8 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt, [vi, time], netcdf%id_var_dHi_dt, long_name='Ice thickness change', units='m/yr')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [vi, time], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
 
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave, [vi, time], netcdf%id_var_dHi_dt_ave, long_name='Averaged ice thickness change', units='m/yr')
+
     ! Velocities
 
     CALL create_double_var( netcdf%ncid, netcdf%name_var_u_3D, [ti, zeta, time], netcdf%id_var_u_3D, long_name='Ice 3D x-velocity', units='m/yr')
@@ -1166,7 +1174,9 @@ CONTAINS
 
     ! Bed roughness
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi, time], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [vi, time], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degrees')
 
     ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [vi, zeta,  time], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
@@ -1701,16 +1711,24 @@ CONTAINS
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_dt_a, netcdf%id_var_dHi_dt, netcdf%ti)
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, netcdf%id_var_dHb_dt, netcdf%ti)
 
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_dt_ave_a, netcdf%id_var_dHi_dt_ave, netcdf%ti)
+
     ! Sea level and GIA
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,  netcdf%id_var_SL, netcdf%ti)
     CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a, netcdf%id_var_dHb,netcdf%ti)
 
     ! Bed roughness
     IF (C%choice_sliding_law == 'Weertman' .OR. C%choice_sliding_law == 'Tsai2015' .OR. C%choice_sliding_law == 'Schoof2005') THEN
+
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%beta_sq_a, netcdf%id_var_beta_sq, netcdf%ti)
 
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson') THEN
+
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_a, netcdf%id_var_phi_fric, netcdf%ti)
+
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_ave_a, netcdf%id_var_phi_fric_ave, netcdf%ti)
+      END IF
 
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
@@ -2186,13 +2204,17 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt, [x, y, t], netcdf%id_var_dHi_dt, long_name='Ice thickness change', units='m/yr')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [x, y, t], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
 
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave, [x, y, t], netcdf%id_var_dHi_dt_ave, long_name='Averaged ice thickness change', units='m/yr')
+
     ! Sea level and GIA
     CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [x, y, t], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb, [x, y, t], netcdf%id_var_dHb, long_name='Bedrock deformation', units='m')
 
     ! Bed roughness
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y, t], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y, t], netcdf%id_var_phi_fric, long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y, t], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [x, y, t], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degress')
 
     ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [x, y, z, t], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
@@ -2828,6 +2850,8 @@ CONTAINS
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHi_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHi_dt)
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHb_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHb_dt)
 
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHi_dt_ave)
+
     ! Velocities
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_u_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_u_3D)
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_v_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_v_3D)
@@ -2839,6 +2863,8 @@ CONTAINS
     ! Bed roughness
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_beta_sq )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric)
+
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric_ave)
 
     ! Temperature
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,       (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti)
@@ -2971,6 +2997,8 @@ CONTAINS
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHi_dt, restart%dHi_dt, start = (/ 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHb_dt, restart%dHb_dt, start = (/ 1, ti /) ))
 
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHi_dt_ave, restart%dHi_dt_ave, start = (/ 1, ti /) ))
+
     ! Velocities
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_u_3D, restart%u_3D, start = (/ 1, 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_v_3D, restart%v_3D, start = (/ 1, 1, ti /) ))
@@ -2978,6 +3006,8 @@ CONTAINS
     ! Bed roughness
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,  restart%beta_sq,  start = (/ 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric, restart%phi_fric, start = (/ 1, ti /) ))
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, restart%phi_fric_ave, start = (/ 1, ti /) ))
 
     ! Temperature
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti, restart%Ti, start = (/ 1, 1, ti /) ))

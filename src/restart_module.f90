@@ -170,6 +170,8 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHi_dt, region%restart%wdHi_dt)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHb_dt, region%restart%wdHb_dt)
 
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%dHi_dt_ave, region%restart%wdHi_dt_ave)
+
     CALL allocate_shared_dp_2D( region%mesh%nTri, C%nz, region%restart%u_3D, region%restart%wu_3D)
     CALL allocate_shared_dp_2D( region%mesh%nTri, C%nz, region%restart%v_3D, region%restart%wv_3D)
 
@@ -178,6 +180,8 @@ CONTAINS
 
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%beta_sq,  region%restart%wbeta_sq )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric, region%restart%wphi_fric)
+
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric_ave, region%restart%wphi_fric_ave)
 
     CALL allocate_shared_dp_2D( region%mesh%nV, C%nz, region%restart%Ti, region%restart%wTi)
 

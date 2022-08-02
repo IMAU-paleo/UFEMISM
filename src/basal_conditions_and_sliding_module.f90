@@ -354,6 +354,9 @@ CONTAINS
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
         CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_inv_a, ice%wphi_fric_inv_a)
+        CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_ave_a, ice%wphi_fric_ave_a)
+        CALL allocate_shared_dp_2D( mesh%nV, C%phi_fric_window_size, &
+                                    ice%phi_fric_window_a, ice%wphi_fric_window_a)
 
       ELSE
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
@@ -406,9 +409,9 @@ CONTAINS
       IF     (C%choice_sliding_law == 'Weertman') THEN
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
       ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
       ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
@@ -416,7 +419,7 @@ CONTAINS
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
       ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
@@ -1666,6 +1669,9 @@ CONTAINS
     INTEGER,  DIMENSION(:    ), POINTER                ::  mask,  mask_filled
     INTEGER                                            :: wmask, wmask_filled
 
+    ! Initialisation
+    ! ==============
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1675,6 +1681,9 @@ CONTAINS
 
     ! Define the ice thickness factor for scaling of inversion
     h_scale = 1.0_dp/C%basal_sliding_inv_scale
+
+    ! Do the inversion
+    ! ================
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -1833,6 +1842,21 @@ CONTAINS
       CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_a, 10000._dp, mask_filled)
     END IF
     CALL sync
+
+    ! Running phi_fric average
+    ! ========================
+
+    ! Update the running window: drop oldest record and push the rest to the back
+    ice%phi_fric_window_a( mesh%vi1:mesh%vi2,2:C%phi_fric_window_size) = ice%phi_fric_window_a( mesh%vi1:mesh%vi2,1:C%phi_fric_window_size-1)
+
+    ! Update the running window: add new record to beginning of window
+    ice%phi_fric_window_a( mesh%vi1:mesh%vi2,1) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
+
+    ! Compute running average
+    ice%phi_fric_ave_a( mesh%vi1:mesh%vi2) = SUM(ice%phi_fric_window_a( mesh%vi1:mesh%vi2,:),2) / REAL(C%phi_fric_window_size,dp)
+
+    ! Finalisation
+    ! ============
 
     ! Clean up after yourself
     CALL deallocate_shared( wmask_filled)

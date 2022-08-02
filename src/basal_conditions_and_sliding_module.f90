@@ -1704,8 +1704,8 @@ CONTAINS
           h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
           ! Further adjust only where the previous value is not significantly improving the result
-          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.1_dp) .OR. &
-               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.1_dp) ) THEN
+          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.0_dp) .OR. &
+               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.0_dp) ) THEN
 
             ! Power-law-style sliding laws
             IF (C%choice_sliding_law == 'Weertman' .OR. &

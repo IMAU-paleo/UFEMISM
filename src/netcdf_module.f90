@@ -451,7 +451,7 @@ CONTAINS
       RETURN
     END IF
 
-    IF (par%master) WRITE(0,*) '  Creating new output files based on new mesh...'
+    IF (par%master) WRITE(0,*) '  Creating new output files based on current mesh...'
 
     ! Get output file names
     CALL get_output_filenames( region)
@@ -6872,6 +6872,8 @@ CONTAINS
       debug%dp_2D_monthly_a_10 => debug_ANT%dp_2D_monthly_a_10
 
     END IF
+
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

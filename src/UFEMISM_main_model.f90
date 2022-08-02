@@ -241,12 +241,6 @@ CONTAINS
         END IF
       END IF
 
-      ! == Update ice geometry
-      ! ======================
-
-      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
-      CALL sync
-
       ! == Output
       ! =========
 
@@ -265,6 +259,12 @@ CONTAINS
         ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
+      
+      ! == Update ice geometry
+      ! ======================
+
+      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
+      CALL sync
 
       ! == Advance region time
       ! ======================
@@ -1090,7 +1090,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. C%is_restart) THEN
+    IF ((.NOT. C%is_restart) .OR. (C%windup_total_years <= 0._dp)) THEN
       ! Finalise routine path
       CALL finalise_routine( routine_name)
       ! Exit rutine

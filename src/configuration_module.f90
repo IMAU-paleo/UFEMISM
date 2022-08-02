@@ -350,25 +350,28 @@ MODULE configuration_module
     REAL(dp)            :: DIVA_PETSc_rtol_config                      = 0.01_dp                          ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
     REAL(dp)            :: DIVA_PETSc_abstol_config                    = 2.5_dp                           ! DIVA PETSc solver - stop criterion, absolute difference
 
+    ! Velocity wind-up before a restart
+    REAL(dp)            :: windup_total_years_config                   = 0._dp                            ! Go back in time and run the velocity solver for this amount of years before actual run starts
+
   ! == Ice dynamics - time integration
   ! ==================================
 
     CHARACTER(LEN=256)  :: choice_timestepping_config                  = 'pc'                             ! Choice of timestepping method: "direct", "pc" (NOTE: 'direct' does not work with DIVA ice dynamcis!)
     CHARACTER(LEN=256)  :: choice_ice_integration_method_config        = 'explicit'                       ! Choice of ice thickness integration scheme: "none" (i.e. unchanging geometry), "explicit", "semi-implicit"
-    CHARACTER(LEN=256)  :: dHi_choice_matrix_solver_config             = 'SOR'                            ! Choice of matrix solver for the semi-implicit ice thickness equation: "SOR", "PETSc"
-    INTEGER             :: dHi_SOR_nit_config                          = 3000                             ! dHi SOR   solver - maximum number of iterations
-    REAL(dp)            :: dHi_SOR_tol_config                          = 2.5_dp                           ! dHi SOR   solver - stop criterion, absolute difference
-    REAL(dp)            :: dHi_SOR_omega_config                        = 1.3_dp                           ! dHi SOR   solver - over-relaxation parameter
-    REAL(dp)            :: dHi_PETSc_rtol_config                       = 0.001_dp                         ! dHi PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    REAL(dp)            :: dHi_PETSc_abstol_config                     = 0.001_dp                         ! dHi PETSc solver - stop criterion, absolute difference
+    CHARACTER(LEN=256)  :: dHi_choice_matrix_solver_config             = 'SOR'                            ! Choice of matrix solver for the semi-implicit ice thickness equation: "SOR", "PETSc" [NOT USED]
+    INTEGER             :: dHi_SOR_nit_config                          = 3000                             ! dHi SOR   solver - maximum number of iterations [NOT USED]
+    REAL(dp)            :: dHi_SOR_tol_config                          = 2.5_dp                           ! dHi SOR   solver - stop criterion, absolute difference [NOT USED]
+    REAL(dp)            :: dHi_SOR_omega_config                        = 1.3_dp                           ! dHi SOR   solver - over-relaxation parameter [NOT USED]
+    REAL(dp)            :: dHi_PETSc_rtol_config                       = 0.001_dp                         ! dHi PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached) [NOT USED]
+    REAL(dp)            :: dHi_PETSc_abstol_config                     = 0.001_dp                         ! dHi PETSc solver - stop criterion, absolute difference [NOT USED]
 
     ! Predictor-corrector ice-thickness update
     REAL(dp)            :: pc_epsilon_config                           = 3._dp                            ! Target truncation error in dHi_dt [m/yr] (epsilon in Robinson et al., 2020, Eq. 33)
     REAL(dp)            :: pc_k_I_config                               = 0.2_dp                           ! Exponent k_I in  Robinson et al., 2020, Eq. 33
     REAL(dp)            :: pc_k_p_config                               = 0.2_dp                           ! Exponent k_p in  Robinson et al., 2020, Eq. 33
     REAL(dp)            :: pc_eta_min_config                           = 1E-8_dp                          ! Normalisation term in estimation of the truncation error (Robinson et al., Eq. 32)
-    INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step
-    REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased)
+    INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step [NOT USED]
+    REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased) [NOT USED]
     REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
 
     ! Ice thickness boundary conditions
@@ -386,8 +389,10 @@ MODULE configuration_module
     LOGICAL             :: fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
     LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
-    ! Model velocity wind-up before a restart
-    REAL(dp)            :: windup_total_years_config                   = 100._dp                          ! Go back in time and run the velocity solver for this amount of years
+    ! Memory of first dHi_dt of simulation
+    LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt (for e.g. a smooth, no-shock restart)
+    REAL(dp)            :: get_senile_after_config                     = 100._dp                          ! Keep fading memory for this amount of years
+    INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! == Ice dynamics - basal conditions and sliding
   ! ==============================================
@@ -1073,6 +1078,9 @@ MODULE configuration_module
     REAL(dp)                            :: DIVA_PETSc_rtol
     REAL(dp)                            :: DIVA_PETSc_abstol
 
+    ! Velocity wind-up before a restart
+    REAL(dp)                            :: windup_total_years
+
     ! Ice dynamics - time integration
     ! ===============================
 
@@ -1109,8 +1117,10 @@ MODULE configuration_module
     LOGICAL                             :: fixed_sheet_geometry
     LOGICAL                             :: fixed_grounding_line
 
-    ! Model velocity wind-up before a restart
-    REAL(dp)                            :: windup_total_years
+    ! Memory of previous run during a restart
+    LOGICAL                             :: do_use_hi_memory
+    REAL(dp)                            :: get_senile_after
+    INTEGER                             :: dHi_dt_window_size
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -1959,6 +1969,7 @@ CONTAINS
                      DIVA_SOR_omega_config,                           &
                      DIVA_PETSc_rtol_config,                          &
                      DIVA_PETSc_abstol_config,                        &
+                     windup_total_years_config,                       &
                      choice_timestepping_config,                      &
                      choice_ice_integration_method_config,            &
                      dHi_choice_matrix_solver_config,                 &
@@ -1985,7 +1996,9 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_sheet_geometry_config,                     &
                      fixed_grounding_line_config,                     &
-                     windup_total_years_config,                       &
+                     do_use_hi_memory_config,                         &
+                     get_senile_after_config,                         &
+                     dHi_dt_window_size_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -2762,6 +2775,9 @@ CONTAINS
     C%DIVA_PETSc_rtol                          = DIVA_PETSc_rtol_config
     C%DIVA_PETSc_abstol                        = DIVA_PETSc_abstol_config
 
+    ! Velocity wind-up before a restart
+    C%windup_total_years                       = windup_total_years_config
+
     ! Ice dynamics - time integration
     ! ===============================
 
@@ -2798,8 +2814,10 @@ CONTAINS
     C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
     C%fixed_grounding_line                     = fixed_grounding_line_config
 
-    ! Model velocity wind-up before a restart
-    C%windup_total_years                       = windup_total_years_config
+    ! Memory of previous run during a restart
+    C%do_use_hi_memory                         = do_use_hi_memory_config
+    C%get_senile_after                         = get_senile_after_config
+    C%dHi_dt_window_size                       = dHi_dt_window_size_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================

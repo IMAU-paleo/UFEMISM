@@ -214,6 +214,8 @@ CONTAINS
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
     REAL(dp)                                           :: dt_from_pc, dt_crit_adv
+    REAL(dp)                                           :: hi_memory, hi_senile
+    REAL(dp)                                           :: int_old, int_new
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -349,10 +351,84 @@ CONTAINS
 
       CALL sync
 
+      ! Truncation error
+      ! ================
+
       ! Determine truncation error
       CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice)
 
-    END IF ! IF (do_update_ice_velocity) THEN
+      ! Memory step
+      ! ===========
+
+      ! Uses the values of dHi_dt from the start of the run (or the last from
+      ! a previous run, in case of a restart) and computes a weighed average
+      ! between the old and new values. The average starts giving full weight
+      ! to the old dHi_dt (start of run), and exponentially (but slowly) shifts
+      ! the weight to the new values (current time step) over time. At time
+      ! C%start_time_of_run + C%get_senile_after, memory is completely lost
+      ! and the newly computed dHi_dt is fully used from that time onwards.
+
+      ! Only if so specified
+      IF (C%do_use_hi_memory) THEN
+
+        ! Compute how senile our current run is
+        IF (region%time < C%start_time_of_run) THEN
+          ! For wind-up, keep memory intact
+          hi_senile = 0._dp
+        ELSE
+          ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
+          hi_senile = min(1._dp, max(0._dp, (region%time - C%start_time_of_run) / C%get_senile_after))
+        END IF
+
+        ! Memory fades
+        hi_memory = 1._dp - hi_senile**10
+        ! No matter what
+        hi_memory = min(hi_memory, 0.99_dp)
+
+        IF (C%is_restart) THEN
+          ! For restarts, weighed average between previous life and present
+          region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
+                                                 + hi_memory  * region%restart%dHi_dt( vi1:vi2)
+        ELSE
+          ! Else, weighed average between birthday and present
+          region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
+                                                 + hi_memory  * 0._dp!region%ice%dHi_dt_ave_a( vi1:vi2)
+        END IF
+
+        ! Even when your neurons are no more, their atoms
+        ! carry on, so make sure mass is conserved
+        IF (par%master) THEN
+          ! Total memory-based ice change rate
+          int_new = SUM(region%ice%dHi_dt_a)
+          ! Total original ice change rate
+          int_old = SUM( (region%ice%Hi_corr - region%ice%Hi_a) / region%dt_crit_ice )
+        END IF
+        CALL sync
+
+        IF (int_old > 0._dp) THEN
+          ! Scale memory-based rates to conserve total mass change
+          region%ice%dHi_dt_a( vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2) * (int_old / int_new)
+        END IF
+
+      END IF ! (C%do_use_hi_memory)
+      CALL sync
+
+      ! Running dHi_dt average
+      ! ======================
+
+      ! Update the running window: drop oldest record and push the rest to the back
+      region%ice%dHi_dt_window_a(vi1:vi2,2:C%dHi_dt_window_size) = region%ice%dHi_dt_window_a(vi1:vi2,1:C%dHi_dt_window_size-1)
+
+      ! Update the running window: add new record to beginning of window
+      region%ice%dHi_dt_window_a(vi1:vi2,1) = region%ice%dHi_dt_a(vi1:vi2)
+
+      ! Compute running average
+      region%ice%dHi_dt_ave_a( vi1:vi2) = SUM(region%ice%dHi_dt_window_a(vi1:vi2,:),2) / REAL(C%dHi_dt_window_size,dp)
+
+    END IF ! (do_update_ice_velocity)
+
+    ! Final quantities
+    ! ================
 
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
@@ -361,7 +437,11 @@ CONTAINS
     region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
     CALL sync
 
-    !IF (par%master) WRITE(0,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_adv = ', dt_crit_adv, ', dt_from_pc = ', dt_from_pc, ', dt = ', region%dt
+    ! IF (par%master) THEN
+    !   WRITE(0,'(A,F8.3,A,F8.3,A,F8.3)') 'dt_crit_adv = ', dt_crit_adv, &
+    !                                     ', dt_from_pc = ', dt_from_pc, &
+    !                                     ', dt_crit_ice = ', region%dt_crit_ice
+    ! END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1227,11 +1307,13 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
 
     ! Ice dynamics - ice thickness calculation
-    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_in                , ice%wdVi_in               )
-    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem, ice%dVi_out               , ice%wdVi_out              )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHi_dt_a              , ice%wdHi_dt_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%dHs_dt_a              , ice%wdHs_dt_a             )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
+    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem,          ice%dVi_in          , ice%wdVi_in            )
+    CALL allocate_shared_dp_2D(   mesh%nV  , mesh%nC_mem,          ice%dVi_out         , ice%wdVi_out           )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_a        , ice%wdHi_dt_a          )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHs_dt_a        , ice%wdHs_dt_a          )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_tplusdt_a    , ice%wHi_tplusdt_a      )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_ave_a    , ice%wdHi_dt_ave_a      )
+    CALL allocate_shared_dp_2D(   mesh%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a , ice%wdHi_dt_window_a   )
 
     ! Ice dynamics - calving
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
@@ -1424,11 +1506,13 @@ CONTAINS
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
 
     ! Ice dynamics - ice thickness calculation
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_in                , ice%wdVi_in               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem, ice%dVi_out               , ice%wdVi_out              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHi_dt_a              , ice%wdHi_dt_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHs_dt_a              , ice%wdHs_dt_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_tplusdt_a          , ice%wHi_tplusdt_a         )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem,      ice%dVi_in           , ice%wdVi_in               )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem,      ice%dVi_out          , ice%wdVi_out              )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_a         , ice%wdHi_dt_a             )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHs_dt_a         , ice%wdHs_dt_a             )
+   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%Hi_tplusdt_a     , ice%wHi_tplusdt_a         )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_ave_a     , ice%wdHi_dt_ave_a         )
+    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a  , ice%wdHi_dt_window_a      )
 
    ! Ice dynamics - calving
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )

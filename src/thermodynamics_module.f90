@@ -8,31 +8,23 @@ MODULE thermodynamics_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_int_0D,   allocate_shared_dp_0D, &
-                                             allocate_shared_int_1D,   allocate_shared_dp_1D, &
-                                             allocate_shared_int_2D,   allocate_shared_dp_2D, &
-                                             allocate_shared_int_3D,   allocate_shared_dp_3D, &
-                                             allocate_shared_bool_0D,  allocate_shared_bool_1D, &
-                                             reallocate_shared_int_0D, reallocate_shared_dp_0D, &
-                                             reallocate_shared_int_1D, reallocate_shared_dp_1D, &
-                                             reallocate_shared_int_2D, reallocate_shared_dp_2D, &
-                                             reallocate_shared_int_3D, reallocate_shared_dp_3D, &
-                                             deallocate_shared
+  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_module,                   ONLY: debug
   
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
                                              type_SMB_model
-  USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
-  USE utilities_module,                ONLY: tridiagonal_solve, vertical_average, interpolate_ocean_depth
+  !USE zeta_module,                     ONLY: calculate_zeta_derivatives, p_zeta
+  USE utilities_module,                ONLY: vertical_average, interpolate_ocean_depth
   USE mesh_operators_module,           ONLY: apply_Neumann_BC_direct_a_3D, ddx_a_to_a_2D, ddy_a_to_a_2D, &
                                              ddx_a_to_b_3D, ddy_a_to_b_3D
   USE mesh_help_functions_module,      ONLY: CROSS2, find_containing_vertex      
   USE mesh_mapping_module,             ONLY: remap_field_dp_3D
+  use mpi_module,                          only: allgather_array
+  use reallocate_mod,                      only: reallocate_bounds
   
   IMPLICIT NONE
   
@@ -61,9 +53,14 @@ CONTAINS
     INTEGER                                             ::  n_source_neighbours
     REAL(dp), DIMENSION(C%nz)                           :: Ti_source_neighbours
     REAL(dp)                                            :: T_surf_annual
+    REAL(dp), dimension(:,:), allocatable               :: Ti_a
     
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    allocate(Ti_a(mesh%nV,C%nz))
+    Ti_a(mesh%vi1:mesh%vi2,:) = ice%Ti_a
+    call allgather_array(Ti_a)
 
     IF     (C%choice_thermo_model == 'none') THEN
       ! No need to do anything
@@ -97,7 +94,7 @@ CONTAINS
               IF (ice%mask_ice_a_prev( vj) == 1) THEN
                 found_source_neighbour = .TRUE.
                 n_source_neighbours    = n_source_neighbours  + 1
-                Ti_source_neighbours   = Ti_source_neighbours + ice%Ti_a( vj,:)
+                Ti_source_neighbours   = Ti_source_neighbours + Ti_a( vj,:)
               END IF
               
             END DO
@@ -111,7 +108,9 @@ CONTAINS
             ELSE
               ! Ice probably came from surface accumulation; set temperature profile to annual mean surface temperature
               
-              T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
+              !TODO T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
+              T_surf_annual = T0!TODO replace with line above
+
               ice%Ti_a( vi,:) = T_surf_annual
               
             END IF
@@ -128,7 +127,8 @@ CONTAINS
         END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
         
       END DO
-      CALL sync
+
+      deallocate(Ti_a)
     
       ! Calculate various physical terms
       CALL calc_heat_capacity(          mesh, ice)
@@ -136,7 +136,7 @@ CONTAINS
       CALL calc_pressure_melting_point( mesh, ice)
       
       ! If so specified, solve the heat equation
-      IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
+   !TODO   IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
       
       ! Safety
       CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
@@ -153,6 +153,7 @@ CONTAINS
 
   END SUBROUTINE run_thermo_model
 
+#if 0
 ! == Solve the 3-D heat equation
   SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
 
@@ -333,7 +334,7 @@ CONTAINS
       ! replace the temperature profile in those cells with the Robin solution
 
       DO vi = mesh%vi1, mesh%vi2
-        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new, vi)
+        IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new(vi,:), vi)
       END DO
       CALL sync
 
@@ -469,6 +470,8 @@ CONTAINS
     
   END SUBROUTINE calc_upwind_heat_flux_derivatives
 
+#endif
+
 ! == The Robin temperature solution
   SUBROUTINE replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti, vi)
     ! This function calculates for one horizontal grid point the temperature profiles
@@ -484,7 +487,7 @@ CONTAINS
     TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
     TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
     TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
-    REAL(dp), DIMENSION(:,:  ),           INTENT(INOUT) :: Ti
+    REAL(dp), DIMENSION(  :  ),           INTENT(INOUT) :: Ti
     INTEGER,                              INTENT(IN)    :: vi
 
     ! Local variables:
@@ -510,7 +513,8 @@ CONTAINS
     thermal_diffusivity_robin         = thermal_conductivity_robin / (ice_density * c_0_specific_heat)                ! Thermal diffusivity             [m^2 y^-1]
     bottom_temperature_gradient_robin = - ice%GHF_a( vi) / thermal_conductivity_robin                                 ! Temperature gradient at bedrock
 
-    Ts = MIN( T0, SUM(climate%T2m( vi,:)) / 12._dp)
+    !TODO Ts = MIN( T0, SUM(climate%T2m( vi,:)) / 12._dp)
+    Ts = T0 !WRONG TODO replace with line above, but allows us to run without climate
 
     IF (ice%mask_sheet_a( vi) == 1 ) THEN
 
@@ -522,13 +526,13 @@ CONTAINS
           distance_above_bed = (1._dp - C%zeta(k)) * ice%Hi_a( vi)
           erf1 = erf( distance_above_bed / thermal_length_scale)
           erf2 = erf( ice%Hi_a( vi) / thermal_length_scale)
-          Ti( vi,k) = Ts + SQRT(pi) / 2._dp * thermal_length_scale * bottom_temperature_gradient_robin * (erf1 - erf2)
+          Ti( k) = Ts + SQRT(pi) / 2._dp * thermal_length_scale * bottom_temperature_gradient_robin * (erf1 - erf2)
         END DO
 
       ELSE
 
         ! Ablation area: use linear temperature profile from Ts to (offset below) T_pmp
-        Ti( vi,:) = Ts + ((T0 - CC * ice%Hi_a( vi)) - Ts) * C%zeta(:)
+        Ti( :) = Ts + ((T0 - CC * ice%Hi_a( vi)) - Ts) * C%zeta(:)
 
       END IF
 
@@ -536,22 +540,24 @@ CONTAINS
 
       ! Use a linear profile between Ts and seawater temperature:
       depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-      CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
-      Ti( vi,:) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
+      !TODO needs initialized ocean! CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
+      T_ocean_at_shelf_base = 0 !TODO remove this statement!
+      Ti( :) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
 
     ELSE
 
       ! No ice present: use Ts everywhere
-      Ti( vi,:) = Ts
+      Ti( :) = Ts
 
     END IF
 
     ! Correct all temperatures above T_pmp:
     DO k = 1, C%nz
-      Ti( vi,k) = MIN( Ti( vi,k), ice%Ti_pmp_a( vi,k))
+      Ti( k) = MIN( Ti( k), ice%Ti_pmp_a( vi,k))
     END DO
 
   END SUBROUTINE replace_Ti_with_robin_solution
+#if 0
 
 ! == Calculate various physical terms
   SUBROUTINE calc_internal_heating( mesh, ice)
@@ -643,6 +649,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_frictional_heating
+#endif
   SUBROUTINE calc_heat_capacity( mesh, ice)
     ! Calculate the heat capacity of the ice
       
@@ -663,7 +670,6 @@ CONTAINS
       ! Apply a uniform value for the heat capacity
       
       ice%Cpi_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_heat_capacity
-      CALL sync
       
     ELSEIF (C%choice_ice_heat_capacity == 'Pounder1965') THEN
       ! Calculate the heat capacity of ice according to Pounder: The Physics of Ice (1965)
@@ -671,7 +677,6 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
         ice%Cpi_a( vi,:) = 2115.3_dp + 7.79293_dp * (ice%Ti_a( vi,:) - T0)
       END DO
-      CALL sync
     
     ELSE
       CALL crash('unknown choice_ice_heat_capacity "' // TRIM( C%choice_ice_heat_capacity) // '"!')
@@ -704,7 +709,6 @@ CONTAINS
       ! Apply a uniform value for the thermal conductivity
       
       ice%Ki_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_thermal_conductivity
-      CALL sync
       
     ELSEIF (C%choice_ice_thermal_conductivity == 'Ritz1987') THEN
       ! Calculate the thermal conductivity of ice according to Ritz (1987) 
@@ -712,7 +716,6 @@ CONTAINS
       DO vi = mesh%vi1, mesh%vi2
         ice%Ki_a( vi,:) = 3.101E+08_dp * EXP(-0.0057_dp * ice%Ti_a( vi,:))
       END DO
-      CALL sync
     
     ELSE
       CALL crash('unknown choice_ice_thermal_conductivity "' // TRIM( C%choice_ice_thermal_conductivity) // '"!')
@@ -753,7 +756,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_pressure_melting_point
-  
 ! == Calculate the  flow factor A in Glen's flow law
   SUBROUTINE calc_ice_rheology( mesh, ice, time)
     ! Calculate the flow factor A in Glen's flow law
@@ -782,7 +784,6 @@ CONTAINS
       ! Apply a uniform value for the ice flow factor
       
       ice%A_flow_3D_a( mesh%vi1:mesh%vi2,:) = C%uniform_flow_factor
-      CALL sync
       
     ELSEIF (C%choice_ice_rheology == 'Huybrechts1992') THEN
     
@@ -810,7 +811,6 @@ CONTAINS
         END DO ! DO k = 1, C%nz
          
       END DO
-      CALL sync
     
     ELSEIF (C%choice_ice_rheology == 'MISMIP_mod') THEN
       ! The time-dependent, step-wise changing uniform flow factor in the MISMIP_mod experiment
@@ -825,7 +825,6 @@ CONTAINS
       END IF
         
       ice%A_flow_3D_a(  mesh%vi1:mesh%vi2,:) = A_flow_MISMIP
-      CALL sync
         
     ELSE
       CALL crash('unknown choice_ice_rheology "' // TRIM( C%choice_ice_rheology) // '"!')
@@ -839,14 +838,12 @@ CONTAINS
         ice%A_flow_3D_a( vi,:) = ice%A_flow_3D_a( vi,:) * C%m_enh_shelf
       END IF
     END DO
-    CALL sync
 
     ! Calculate vertical average
     DO vi = mesh%vi1, mesh%vi2
       prof = ice%A_flow_3D_a( vi,:)
       CALL vertical_average( prof, ice%A_flow_vav_a( vi))
     END DO
-    CALL sync
     
     ! Safety
     CALL check_for_NaN_dp_2D( ice%A_flow_3D_a , 'ice%A_flow_3D_a' )
@@ -856,7 +853,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
     
   END SUBROUTINE calc_ice_rheology
-  
 ! == Initialise the englacial ice temperature at the start of a simulation
   SUBROUTINE initialise_ice_temperature( mesh, ice, climate, ocean, SMB, region_name)
     ! Initialise the englacial ice temperature at the start of a simulation
@@ -995,7 +991,7 @@ CONTAINS
     
     ! Initialise with the Robin solution
     DO vi = mesh%vi1, mesh%vi2
-      CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, ice%Ti_a, vi)
+      CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, ice%Ti_a(vi,:), vi)
     END DO
     CALL sync
     
@@ -1105,12 +1101,10 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_ice_temperature'
-    INTEGER,  DIMENSION(:    ), POINTER                ::  mask_ice_a_old,  mask_ice_a_new
-    INTEGER                                            :: wmask_ice_a_old, wmask_ice_a_new
+    INTEGER,  DIMENSION(:    ), allocatable            :: mask_ice_a_new
     INTEGER                                            :: vi, vvi, vj
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Ti_ext
-    INTEGER                                            :: wTi_ext
-    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: Vmap, Vstack1, Vstack2
+    REAL(dp), DIMENSION(:,:  ), allocatable            :: Ti_ext, Ti_ext_local
+    INTEGER,  DIMENSION(:    ), ALLOCATABlE            :: Vmap, Vstack1, Vstack2, Vtemp
     INTEGER                                            :: VstackN1, VstackN2
     INTEGER                                            :: sti, n, it
     REAL(dp), DIMENSION(C%nz)                          :: Ti_av
@@ -1118,15 +1112,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory
-    CALL allocate_shared_int_1D( mesh_old%nV,       mask_ice_a_old, wmask_ice_a_old)
-    CALL allocate_shared_int_1D( mesh_new%nV,       mask_ice_a_new, wmask_ice_a_new)
-    CALL allocate_shared_dp_2D(  mesh_old%nV, C%nz, Ti_ext        , wTi_ext       )
+    ! Allocate memory
+    allocate( mask_ice_a_new(mesh_new%vi1:mesh_new%vi2))
     
-    ! Fill in the old and new ice masks
-    DO vi = mesh_old%vi1, mesh_old%vi2
-      mask_ice_a_old( vi) = ice%mask_ice_a( vi)
-    END DO
+
     DO vi = mesh_new%vi1, mesh_new%vi2
       IF (ice%Hi_a( vi) > 0._dp) THEN
         mask_ice_a_new( vi) = 1
@@ -1139,127 +1128,126 @@ CONTAINS
   ! =========================================================================
   
     ! Initialise
-    Ti_ext( mesh_old%vi1:mesh_old%vi2,:) = ice%Ti_a( mesh_old%vi1:mesh_old%vi2,:)
-    CALL sync
+    allocate(Ti_ext(mesh_old%nV,C%nz))
+    Ti_ext(mesh_old%vi1:mesh_old%vi2,:) = ice%Ti_a
+    call allgather_array(Ti_ext)
   
-    IF (par%master) THEN
+    ! Allocate map and stacks for extrapolation
+    ALLOCATE( Vmap(    mesh_old%nV))
+    ALLOCATE( Vstack1( mesh_old%nV))
+    ALLOCATE( Vstack2( mesh_old%nV))
+    
+    ! Initialise the stack with all ice-free-next-to-ice-covered vertices
+    ! (and also initialise the map)
+    Vmap     = 0
+    Vstack2  = 0
+    VstackN2 = 0
+    
+    DO vi = 1, mesh_old%nV
+      IF (ice%mask_ice_a( vi) == 1) THEN
+        Vmap( vi) = 2
+      ELSE
+        DO vvi = 1, mesh_old%nC( vi)
+          vj = mesh_old%C( vi,vvi)
+          IF (ice%mask_ice_a( vj) == 1) THEN
+            ! Vertex vi is ice-free, but adjacent to ice-covered vertex vj
+            VMap( vi) = 1
+            VstackN2 = VstackN2 + 1
+            Vstack2(   VstackN2) = vi
+            EXIT
+          END IF
+        END DO
+      END IF
+    END DO
+    
+    ! Perform a flood-fill-style extrapolation
+    it = 0
+    DO WHILE (VstackN2 > 0)
       
-      ! Allocate map and stacks for extrapolation
-      ALLOCATE( Vmap(    mesh_old%nV))
-      ALLOCATE( Vstack1( mesh_old%nV))
-      ALLOCATE( Vstack2( mesh_old%nV))
+      it = it + 1
       
-      ! Initialise the stack with all ice-free-next-to-ice-covered vertices
-      ! (and also initialise the map)
-      Vmap     = 0
-      Vstack2  = 0
+      ! Cycle stacks, efficiently
+      call move_alloc(Vstack1, Vtemp)
+      call move_alloc(Vstack2, Vstack1)
+      VstackN1 = VstackN2
+      call move_alloc(Vtemp, Vstack2)
       VstackN2 = 0
       
-      DO vi = 1, mesh_old%nV
-        IF (mask_ice_a_old( vi) == 1) THEN
-          Vmap( vi) = 2
-        ELSE
-          DO vvi = 1, mesh_old%nC( vi)
-            vj = mesh_old%C( vi,vvi)
-            IF (mask_ice_a_old( vj) == 1) THEN
-              ! Vertex vi is ice-free, but adjacent to ice-covered vertex vj
-              VMap( vi) = 1
-              VstackN2 = VstackN2 + 1
-              Vstack2(   VstackN2) = vi
-              EXIT
-            END IF
-          END DO
-        END IF
-      END DO
+      ! Extrapolate temperature values into data-less-next-to-data-filled pixels
+      DO sti = 1, VstackN1
+        
+        vi = Vstack1( sti)
+        
+        n     = 0
+        Ti_av = 0._dp
+        
+        DO vvi = 1, mesh_old%nC( vi)
+        
+          vj = mesh_old%C( vi,vvi)
+          
+          IF (VMap( vj) == 2) THEN
+            n     = n     + 1
+            Ti_av = Ti_av + Ti_ext( vj,:)
+          END IF
+          
+        END DO ! DO vvi = 1, mesh_old%nC( vi)
+        
+        ! Extrapolate temperature by averaging over data-filled neighbours
+        Ti_av = Ti_av / REAL( n,dp)
+        Ti_ext( vi,:) = Ti_av
+        
+      END DO ! DO sti = 1: VstackN1
       
-      ! Perform a flood-fill-style extrapolation
-      it = 0
-      DO WHILE (VstackN2 > 0)
-        
-        it = it + 1
-        
-        ! Cycle stacks
-        Vstack1( 1:VstackN2) = Vstack2( 1:VstackN2)
-        VstackN1 = VstackN2
-        Vstack2( 1:VstackN2) = 0
-        VstackN2 = 0
-        
-        ! Extrapolate temperature values into data-less-next-to-data-filled pixels
-        DO sti = 1, VstackN1
-          
-          vi = Vstack1( sti)
-          
-          n     = 0
-          Ti_av = 0._dp
-          
-          DO vvi = 1, mesh_old%nC( vi)
-          
-            vj = mesh_old%C( vi,vvi)
-            
-            IF (VMap( vj) == 2) THEN
-              n     = n     + 1
-              Ti_av = Ti_av + Ti_ext( vj,:)
-            END IF
-            
-          END DO ! DO vvi = 1, mesh_old%nC( vi)
-          
-          ! Extrapolate temperature by averaging over data-filled neighbours
-          Ti_av = Ti_av / REAL( n,dp)
-          Ti_ext( vi,:) = Ti_av
-          
-        END DO ! DO sti = 1: VstackN1
-        
-        ! Create new stack of data-less-next-to-data-filled pixels
-        DO sti = 1, VstackN1
-        
-          vi = Vstack1( sti)
-          
-          ! Mark this pixel as data-filled on the Map
-          Vmap( vi) = 2
-          
-          ! Add its data-less neighbours to the Stack
-          DO vvi = 1, mesh_old%nC( vi)
-          
-            vj = mesh_old%C( vi,vvi)
-            
-            IF (Vmap( vj) == 0) THEN
-              Vmap( vj) = 1
-              VstackN2 = VstackN2 + 1
-              Vstack2(   VstackN2) = vj
-            END IF
-            
-          END DO ! DO vvi = 1, mesh_old%nC( vi)
-        END DO ! DO sti = 1: VstackN1
-        
-      END DO ! DO WHILE (VstackN2 > 0)
+      ! Create new stack of data-less-next-to-data-filled pixels
+      DO sti = 1, VstackN1
       
-      ! Clean up after yourself
-      DEALLOCATE( Vmap   )
-      DEALLOCATE( Vstack1)
-      DEALLOCATE( Vstack2)
+        vi = Vstack1( sti)
+        
+        ! Mark this pixel as data-filled on the Map
+        Vmap( vi) = 2
+        
+        ! Add its data-less neighbours to the Stack
+        DO vvi = 1, mesh_old%nC( vi)
+        
+          vj = mesh_old%C( vi,vvi)
+          
+          IF (Vmap( vj) == 0) THEN
+            Vmap( vj) = 1
+            VstackN2 = VstackN2 + 1
+            Vstack2(   VstackN2) = vj
+          END IF
+          
+        END DO ! DO vvi = 1, mesh_old%nC( vi)
+      END DO ! DO sti = 1: VstackN1
       
-    END IF ! IF (par%master) THEN
-    CALL sync
+    END DO ! DO WHILE (VstackN2 > 0)
     
+    ! Clean up after yourself
+    DEALLOCATE( Vmap   )
+    DEALLOCATE( Vstack1)
+    DEALLOCATE( Vstack2)
+      
     ! Remap the extrapolated temperature field
-    CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext, wTi_ext, 'cons_2nd_order')
+    allocate(Ti_ext_local(mesh_old%vi1:mesh_old%vi2,C%nz))
+    Ti_ext_local = Ti_ext(mesh_old%vi1:mesh_old%vi2,:)
+    deallocate(Ti_ext)
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext_local, 'cons_2nd_order')
     
     ! Reallocate ice temperature field, copy remapped data only for ice-covered pixels
-    CALL reallocate_shared_dp_2D( mesh_new%nV, C%nz, ice%Ti_a, ice%wTi_a)
+    call reallocate_bounds( ice%Ti_a, mesh_new%vi1, mesh_new%vi2, C%nz )
     
     DO vi = mesh_new%vi1, mesh_new%vi2
-      IF (mask_ice_a_new( vi) == 1) ice%Ti_a( vi,:) = Ti_ext( vi,:)
+      IF (mask_ice_a_new( vi) == 1) ice%Ti_a( vi,:) = Ti_ext_local( vi,:)
     END DO
     
     ! Reallocate mask_ice_a_prev, fill it in (needed for the generic temperature update)
-    CALL reallocate_shared_int_1D( mesh_new%nV, ice%mask_ice_a_prev, ice%wmask_ice_a_prev)
-    ice%mask_ice_a_prev( mesh_new%vi1:mesh_new%vi2) = mask_ice_a_new( mesh_new%vi1:mesh_new%vi2)
-    CALL sync
+    CALL reallocate_bounds( ice%mask_ice_a_prev,1,mesh_new%nV)
+    ice%mask_ice_a_prev(mesh_new%vi1:mesh_new%vi2) = mask_ice_a_new
+    call allgather_array(ice%mask_ice_a_prev)
     
     ! Clean up after yourself
-    CALL deallocate_shared( wmask_ice_a_old)
-    CALL deallocate_shared( wmask_ice_a_new)
-    CALL deallocate_shared( wTi_ext        )
+    deallocate( mask_ice_a_new)
+    deallocate( Ti_ext_local  )
     
     ! Finalise routine path
     CALL finalise_routine( routine_name)

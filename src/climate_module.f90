@@ -1663,8 +1663,11 @@ CONTAINS
   SUBROUTINE calculate_GCM_bias( mesh, climate_matrix)
     ! Calculate the GCM bias in temperature and precipitation
     !
-    ! Account for the fact that the GCM PI snapshot has a lower resolution, and therefore
-    ! a different surface elevation than the PD observed climatology!
+    ! Account for the fact that the GCM PI snapshot has a lower resolution, and
+    ! therefore a different surface elevation than the PD observed climatology!
+    ! This assumes PD and PI periods are equivalent, which is ok for now. A better
+    ! approach would be to compute this bias by comparing a PD snapshot from a GCM
+    ! to the observational data.
 
     IMPLICIT NONE
 
@@ -1699,7 +1702,7 @@ CONTAINS
       ! Calculate precipitation bias
       climate_matrix%GCM_bias_Precip( vi,m) = climate_matrix%GCM_PI%Precip( vi,m) / climate_matrix%PD_obs%Precip( vi,m)
 
-      ! Calculate elevation bias
+      ! Calculate elevation bias (not really needed, just for symmetry)
       climate_matrix%GCM_bias_Hs( vi) = climate_matrix%GCM_PI%Hs( vi) - climate_matrix%PD_obs%Hs( vi)
 
     END DO
@@ -1707,7 +1710,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
 
   END SUBROUTINE calculate_GCM_bias
 
@@ -1781,13 +1784,13 @@ CONTAINS
     DO m = 1, 12
 
       ! Temperature
-      climate%T2m_corr(    vi,m) = climate%T2m(    vi,m) - climate_matrix%GCM_bias_T2m(    vi,m)
+      climate%T2m_corr( vi,m) = climate%T2m( vi,m) - climate_matrix%GCM_bias_T2m( vi,m)
 
       ! Precipitation
       climate%Precip_corr( vi,m) = climate%Precip( vi,m) / climate_matrix%GCM_bias_Precip( vi,m)
 
-      ! Surface elevation (just keep it)
-      climate%Hs_corr(     vi  ) = climate%Hs(     vi  )! - climate_matrix%GCM_bias_Hs(    vi   )
+      ! Surface elevation (not really needed, just for symmetry)
+      climate%Hs_corr( vi) = climate%Hs( vi)
 
     END DO
     END DO
@@ -3395,8 +3398,8 @@ CONTAINS
 
     END IF ! IF (.NOT. ASSOCIATED( climate_matrix%ISMIP_forcing%grid%nx)) THEN
 
-  ! ===== aSMB =====
-  ! ================
+    ! ===== aSMB =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3470,8 +3473,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( waSMB_raw)
 
-  ! ===== dSMBdz =====
-  ! ================
+    ! ===== dSMBdz =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3545,8 +3548,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wdSMBdz_raw)
 
-  ! ===== aST =====
-  ! ================
+    ! ===== aST =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3614,8 +3617,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( waST_raw)
 
-  ! ===== dSTdz =====
-  ! ================
+    ! ===== dSTdz =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -4436,13 +4439,9 @@ CONTAINS
 
 
 
-!============================
-!============================
-
-
-
-
-
+!==============================
+! OBSOLETE: just for the record
+!==============================
 
   ! ! Parameterised climate (ERA40 + global temperature offset) from de Boer et al., 2013
   ! SUBROUTINE run_climate_model_dT_glob( mesh, ice, climate, region_name)

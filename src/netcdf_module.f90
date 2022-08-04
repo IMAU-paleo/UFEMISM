@@ -682,7 +682,6 @@ CONTAINS
             C%choice_sliding_law == 'Zoet-Iverson') THEN
 
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, region%ice%phi_fric_a, start = (/ 1, netcdf%ti/)))
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, region%ice%phi_fric_ave_a, start = (/ 1, netcdf%ti/)))
 
       IF (C%do_basal_sliding_inversion) THEN
         CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, region%ice%phi_fric_ave_a, start = (/ 1, netcdf%ti/)))
@@ -2865,7 +2864,9 @@ CONTAINS
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_beta_sq )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric)
 
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric_ave)
+    IF (C%choice_basal_roughness == 'restart') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric_ave)
+    END IF
 
     ! Temperature
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,       (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti)
@@ -3008,7 +3009,9 @@ CONTAINS
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,  restart%beta_sq,  start = (/ 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric, restart%phi_fric, start = (/ 1, ti /) ))
 
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, restart%phi_fric_ave, start = (/ 1, ti /) ))
+    IF (C%choice_basal_roughness == 'restart') THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, restart%phi_fric_ave, start = (/ 1, ti /) ))
+    END IF
 
     ! Temperature
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti, restart%Ti, start = (/ 1, 1, ti /) ))

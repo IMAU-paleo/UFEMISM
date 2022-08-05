@@ -29,7 +29,7 @@ MODULE restart_module
                                              read_restart_file_mesh, inquire_restart_file_init, &
                                              read_restart_file_init
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
-  USE data_types_module,               ONLY: type_model_region
+  USE data_types_module,               ONLY: type_model_region, type_mesh, type_remapping_mesh_mesh, type_restart_data
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
   USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
                                              find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
@@ -38,6 +38,7 @@ MODULE restart_module
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
 
   IMPLICIT NONE
 
@@ -181,7 +182,9 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%beta_sq,  region%restart%wbeta_sq )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric, region%restart%wphi_fric)
 
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric_ave, region%restart%wphi_fric_ave)
+    IF (C%basal_roughness_restart_type == 'average') THEN
+      CALL allocate_shared_dp_1D( region%mesh%nV, region%restart%phi_fric_ave, region%restart%wphi_fric_ave)
+    END IF
 
     CALL allocate_shared_dp_2D( region%mesh%nV, C%nz, region%restart%Ti, region%restart%wTi)
 
@@ -207,5 +210,50 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 12)
 
   END SUBROUTINE read_init_data_from_restart_file
+
+  SUBROUTINE remap_restart_data( mesh_old, mesh_new, map, restart)
+    ! Remap or reallocate all the data fields
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_restart_data),             INTENT(INOUT) :: restart
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_restart_data'
+    INTEGER                                            :: int_dummy
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! To prevent compiler warnings for unused variables
+    int_dummy = mesh_old%nV
+    int_dummy = mesh_new%nV
+    int_dummy = map%int_dummy
+
+    IF (par%master) WRITE(0,*) '   Remapping key restart data...'
+
+    ! Remap some key data
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%Hi, restart%wHi, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%Hb, restart%wHb, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%Hs, restart%wHs, 'cons_2nd_order')
+
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%dHi_dt_ave, restart%wdHi_dt_ave, 'cons_2nd_order')
+
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%SL,  restart%wSL , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%dHb, restart%wdHb, 'cons_2nd_order')
+
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%beta_sq,  restart%wbeta_sq , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%phi_fric, restart%wphi_fric, 'cons_2nd_order')
+
+    IF (C%basal_roughness_restart_type == 'average') THEN
+      CALL remap_field_dp_2D( mesh_old, mesh_new, map, restart%phi_fric_ave, restart%wphi_fric_ave, 'cons_2nd_order')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE remap_restart_data
 
 END MODULE restart_module

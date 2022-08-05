@@ -46,7 +46,7 @@ MODULE UFEMISM_main_model
 
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
-  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
+  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file, remap_restart_data
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE utilities_module,                    ONLY: time_display
@@ -410,6 +410,9 @@ CONTAINS
     CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
+
+    ! Remap key restart data
+    CALL remap_restart_data( region%mesh, region%mesh_new, map, region%restart)
 
     ! Deallocate shared memory for the mapping arrays
     CALL deallocate_remapping_operators_mesh_mesh( map)

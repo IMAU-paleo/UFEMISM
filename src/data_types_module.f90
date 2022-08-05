@@ -1353,6 +1353,9 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
     INTEGER :: wnz, wnt, wzeta, wtime
 
+    ! Mesh
+    TYPE(type_mesh)                         :: mesh
+
     ! Ice dynamics
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb

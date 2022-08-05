@@ -150,7 +150,7 @@ MODULE configuration_module
     REAL(dp)            :: res_max_coast_config                        = 40._dp                           !                                 coastline             [km]
     REAL(dp)            :: mesh_fitness_threshold_config               = 0.95_dp                          ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
     LOGICAL             :: do_force_mesh_update_config                 = .FALSE.                          ! Force a mesh update once after do_force_mesh_update_after years
-    REAL(dp)            :: do_force_mesh_update_after_config           = 10._dp                           ! Minimum years after which a force update occurs (model needs some time before it)
+    REAL(dp)            :: do_force_mesh_update_after_config           = 10._dp                           ! Minimum years after which a force update occurs (model needs some time before first update)
 
   ! == Resolutions of the different square grids
   ! ============================================
@@ -1794,12 +1794,13 @@ CONTAINS
     ! Set up the resource tracker
     ! ===========================
 
-    ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
+    ! Allocate space to track up to 2,000 subroutines per region
+    ! That should be enough for a while...
     n = 0
-    IF (C%do_NAM) n = n + 1000
-    IF (C%do_EAS) n = n + 1000
-    IF (C%do_GRL) n = n + 1000
-    IF (C%do_ANT) n = n + 1000
+    IF (C%do_NAM) n = n + 2000
+    IF (C%do_EAS) n = n + 2000
+    IF (C%do_GRL) n = n + 2000
+    IF (C%do_ANT) n = n + 2000
     ALLOCATE( resource_tracker( n))
 
     ! Initialise values

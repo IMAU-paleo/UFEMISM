@@ -429,15 +429,17 @@ CONTAINS
     CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
     CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
 
-    ! Remap key restart data
-    CALL remap_restart_data( region%mesh, region%mesh_new, map, region%restart)
-
     ! Deallocate shared memory for the mapping arrays
     CALL deallocate_remapping_operators_mesh_mesh( map)
 
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
+
+    ! Remap key restart data
+    IF (C%is_restart) THEN
+      CALL remap_restart_data( region)
+    END IF
 
     ! When the next output is written, new output files must be created.
     region%output_file_exists = .FALSE.
@@ -533,9 +535,9 @@ CONTAINS
     IF (C%is_restart) THEN
 
       ! Read mesh from a restart file
-      CALL read_mesh_from_restart_file( region)
+      CALL read_mesh_from_restart_file( region%mesh, region%restart, region%name, region%time)
       ! Read data (on the mesh) from a restart file
-      CALL read_init_data_from_restart_file( region)
+      CALL read_init_data_from_restart_file( region%restart, region%name)
       ! Initialise topographic data fields (on a square grid), mapping the initial topo from the mesh onto the grid
       CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name, region%mesh, region%restart)
 

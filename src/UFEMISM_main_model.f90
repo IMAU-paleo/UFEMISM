@@ -146,21 +146,39 @@ CONTAINS
       ! ==============
 
       ! Check if the mesh needs to be updated
-      IF (par%master) t2 = MPI_WTIME()
+      IF (par%master) THEN
+        t2 = MPI_WTIME()
+      END IF
+
       meshfitness = 1._dp
+
       IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
         CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)
       END IF
-      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
 
-      ! If required, update the mesh
-      IF (meshfitness < C%mesh_fitness_threshold) THEN
-      ! IF (.FALSE.) THEN
-      ! IF (.TRUE.) THEN
+      IF (par%master) THEN
+        region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+      END IF
+
+      ! If needed (or commanded), update the mesh
+      IF ( meshfitness < C%mesh_fitness_threshold .OR. &
+          (region%do_mesh .AND. region%time >= C%start_time_of_run + C%do_force_mesh_update_after) ) THEN
+
         region%t_last_mesh = region%time
-        IF (par%master) t2 = MPI_WTIME()
+
+        IF (par%master) THEN
+          t2 = MPI_WTIME()
+        END IF
+
         CALL run_model_update_mesh( region, climate_matrix_global)
-        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+
+        IF (par%master) THEN
+          region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+        END IF
+
+        ! Make sure a forced mesh update is not triggered again next time step
+        region%do_mesh = .FALSE.
+
       END IF
 
       ! == Ice dynamics
@@ -793,7 +811,9 @@ CONTAINS
 
       region%t_last_mesh      = C%start_time_of_run
       region%t_next_mesh      = C%start_time_of_run + C%dt_mesh_min
-      region%do_mesh          = .FALSE.
+      IF (C%do_force_mesh_update) THEN
+        region%do_mesh          = .TRUE.
+      END IF
 
       region%t_last_SIA       = C%start_time_of_run
       region%t_next_SIA       = C%start_time_of_run

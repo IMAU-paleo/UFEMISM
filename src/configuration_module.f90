@@ -149,6 +149,8 @@ MODULE configuration_module
     REAL(dp)            :: res_max_mountain_config                     = 40._dp                           !                                 mountains             [km]
     REAL(dp)            :: res_max_coast_config                        = 40._dp                           !                                 coastline             [km]
     REAL(dp)            :: mesh_fitness_threshold_config               = 0.95_dp                          ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
+    LOGICAL             :: do_force_mesh_update_config                 = .FALSE.                          ! Force a mesh update once after do_force_mesh_update_after years
+    REAL(dp)            :: do_force_mesh_update_after_config           = 10._dp                           ! Minimum years after which a force update occurs (model needs some time before it)
 
   ! == Resolutions of the different square grids
   ! ============================================
@@ -911,6 +913,8 @@ MODULE configuration_module
     REAL(dp)                            :: res_max_mountain
     REAL(dp)                            :: res_max_coast
     REAL(dp)                            :: mesh_fitness_threshold
+    LOGICAL                             :: do_force_mesh_update
+    REAL(dp)                            :: do_force_mesh_update_after
 
     ! Resolutions of the different square grids
     ! =========================================
@@ -2059,6 +2063,8 @@ CONTAINS
                      res_max_mountain_config,                         &
                      res_max_coast_config,                            &
                      mesh_fitness_threshold_config,                   &
+                     do_force_mesh_update_config,                     &
+                     do_force_mesh_update_after_config,               &
                      dx_grid_output_config,                           &
                      dx_grid_GIA_config,                              &
                      dx_grid_smooth_config,                           &
@@ -2610,6 +2616,8 @@ CONTAINS
     C%res_max_mountain                         = res_max_mountain_config
     C%res_max_coast                            = res_max_coast_config
     C%mesh_fitness_threshold                   = mesh_fitness_threshold_config
+    C%do_force_mesh_update                     = do_force_mesh_update_config
+    C%do_force_mesh_update_after               = do_force_mesh_update_after_config
 
     ! The smallest allowed resolution
     C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast)

@@ -276,14 +276,19 @@ MODULE mesh_update_module
     if (par%master) then
       if (C%do_time_display) then
         if (mod(region%time-region%dt,C%dt_output) /= 0._dp) then
-          write(*,"(A)",advance="yes") repeat(c_backspace,17) // &
-                                       ' - mesh time!    '
+          write(*,"(A,F8.3,A)",advance="yes") repeat(c_backspace,99) // &
+                                              '   t = ', region%time/1e3_dp, ' kyr - mesh time!    '
         else
           ! Output took care of advancing a newline.
         end if
       end if
-      write(*,"(A)",advance="yes") '   Creating a new mesh for region ' &
-                                   // TRIM(region%mesh%region_name) // '...'
+      if (region%do_mesh) then
+        write(*,"(A)",advance="yes") '   Forcing the creation of a new mesh for region ' &
+                                     // TRIM(region%mesh%region_name) // '...'
+      else
+        write(*,"(A)",advance="yes") '   Creating a new mesh for region ' &
+                                     // TRIM(region%mesh%region_name) // '...'
+      end if
     end if
 
     ! Orientation of domain partitioning: east-west for GRL, north-south everywhere else

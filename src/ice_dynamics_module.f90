@@ -214,7 +214,7 @@ CONTAINS
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
     REAL(dp)                                           :: dt_from_pc, dt_crit_adv
-    REAL(dp)                                           :: hi_memory, hi_senile
+    REAL(dp)                                           :: hi_memory, hi_senile, time_passed
     REAL(dp)                                           :: int_old, int_new
 
     ! Add routine to path
@@ -368,8 +368,11 @@ CONTAINS
       ! C%start_time_of_run + C%get_senile_after, memory is completely lost
       ! and the newly computed dHi_dt is fully used from that time onwards.
 
-      ! Only if so specified
-      IF (C%do_use_hi_memory) THEN
+      ! Compute how much time has passed since start of run
+      time_passed = region%time - C%start_time_of_run
+
+      ! Only if so specified and before memory fades away
+      IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
 
         ! Compute how senile our current run is
         IF (region%time < C%start_time_of_run) THEN
@@ -377,7 +380,7 @@ CONTAINS
           hi_senile = 0._dp
         ELSE
           ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
-          hi_senile = min(1._dp, max(0._dp, (region%time - C%start_time_of_run) / C%get_senile_after))
+          hi_senile = min(1._dp, max(0._dp, time_passed / C%get_senile_after))
         END IF
 
         ! Memory fades
@@ -392,26 +395,28 @@ CONTAINS
         ELSE
           ! Else, weighed average between birthday and present
           region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-                                                 + hi_memory  * 0._dp!region%ice%dHi_dt_ave_a( vi1:vi2)
-        END IF
-
-        ! Even when your neurons are no more, their atoms
-        ! carry on, so make sure mass is conserved
-        IF (par%master) THEN
-          ! Total memory-based ice change rate
-          int_new = SUM(region%ice%dHi_dt_a)
-          ! Total original ice change rate
-          int_old = SUM( (region%ice%Hi_corr - region%ice%Hi_a) / region%dt_crit_ice )
+                                                 + hi_memory  * 0._dp
         END IF
         CALL sync
 
-        IF (int_old > 0._dp) THEN
+        ! Even when your neurons are no more, their atoms
+        ! carry on, so make sure mass is conserved
+
+        ! Total memory-based ice change rate
+        int_new = SUM(region%ice%dHi_dt_a( vi1:vi2))
+        ! Total original ice change rate
+        int_old = SUM( (region%ice%Hi_corr( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt_crit_ice )
+
+        CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+        CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+        IF (int_new > 0._dp) THEN
           ! Scale memory-based rates to conserve total mass change
           region%ice%dHi_dt_a( vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2) * (int_old / int_new)
         END IF
+        CALL sync
 
       END IF ! (C%do_use_hi_memory)
-      CALL sync
 
       ! Running dHi_dt average
       ! ======================

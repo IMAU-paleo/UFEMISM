@@ -238,6 +238,7 @@
   Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
   Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
   basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+  basal_roughness_restart_type_config         = 'average'                        ! Values from previous run: "last" (last output) or "average" (running average)
 
   ! Basal sliding inversion
   do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness

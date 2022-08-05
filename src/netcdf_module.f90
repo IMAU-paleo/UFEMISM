@@ -1176,7 +1176,9 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi, time], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [vi, time], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degrees')
+    IF (C%do_basal_sliding_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [vi, time], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degrees')
+    END IF
 
     ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [vi, zeta,  time], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
@@ -2214,7 +2216,9 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y, t], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y, t], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
 
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [x, y, t], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degress')
+    IF (C%do_basal_sliding_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [x, y, t], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degress')
+    END IF
 
     ! Temperature
     CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [x, y, z, t], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
@@ -2864,7 +2868,7 @@ CONTAINS
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_beta_sq )
     CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric)
 
-    IF (C%choice_basal_roughness == 'restart') THEN
+    IF (C%choice_basal_roughness == 'restart' .AND. C%basal_roughness_restart_type == 'average') THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric_ave)
     END IF
 
@@ -3009,7 +3013,7 @@ CONTAINS
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,  restart%beta_sq,  start = (/ 1, ti /) ))
     CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric, restart%phi_fric, start = (/ 1, ti /) ))
 
-    IF (C%choice_basal_roughness == 'restart') THEN
+    IF (C%choice_basal_roughness == 'restart' .AND. C%basal_roughness_restart_type == 'average') THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, restart%phi_fric_ave, start = (/ 1, ti /) ))
     END IF
 

@@ -63,6 +63,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_conditions
+
   SUBROUTINE initialise_basal_conditions( mesh, ice, restart)
     ! Allocation and initialisation
 
@@ -135,6 +136,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_basal_hydrology
+
   SUBROUTINE initialise_basal_hydrology( mesh, ice)
     ! Allocation and initialisation
 
@@ -195,6 +197,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_pore_water_pressure_saturated
+
   SUBROUTINE calc_pore_water_pressure_Martin2011( mesh, ice)
     ! Calculate the pore water pressure
     !
@@ -318,22 +321,18 @@ CONTAINS
       ! Weertman-type ("power law") sliding law
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
-            C%choice_sliding_law == 'Coulomb_regularised') THEN
+            C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+            C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Regularised Coulomb-type sliding law
-      CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
-    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
-      ! Modified power-law relation according to Tsai et al. (2015)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
-    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
-      ! Modified power-law relation according to Schoof (2005)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
-      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
-    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
       CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
+    ELSEIF (C%choice_sliding_law == 'Schoof2005' .OR. &
+            C%choice_sliding_law == 'Tsai2015') THEN
+      ! Modified power-law relation according to Schoof (2005)
+      ! Modified power-law relation according to Tsai et al. (2015)
+      CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
+      CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
@@ -406,20 +405,29 @@ CONTAINS
 
       IF (par%master) WRITE(0,*) '   Initialising bed roughness using data read from restart file...'
 
-      IF     (C%choice_sliding_law == 'Weertman') THEN
+      IF     (C%choice_sliding_law == 'Weertman' .OR. &
+              C%choice_sliding_law == 'Schoof2005' .OR. &
+              C%choice_sliding_law == 'Tsai2015') THEN
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-      ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
-      ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
-      ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
-        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
-        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-      ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
-        ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
-        ice%beta_sq_a(  mesh%vi1:mesh%vi2) = restart%beta_sq( mesh%vi1:mesh%vi2)
-      ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
-        ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
+
+        IF (C%choice_sliding_law == 'Tsai2015') THEN
+          ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
+        ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+          ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
+        END IF
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        IF (C%basal_roughness_restart_type == 'average') THEN
+          ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric_ave( mesh%vi1:mesh%vi2)
+        ELSEIF (C%basal_roughness_restart_type == 'last') THEN
+          ice%phi_fric_a( mesh%vi1:mesh%vi2) = restart%phi_fric( mesh%vi1:mesh%vi2)
+        ELSE
+          CALL crash('unknown basal_roughness_restart_type "' // TRIM( C%basal_roughness_restart_type) // '"!')
+        END IF
+
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
@@ -1073,6 +1081,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Weertman
+
   SUBROUTINE calc_sliding_law_Coulomb( mesh, ice, u_a, v_a, beta_a)
     ! Coulomb-type sliding law
 
@@ -1117,6 +1126,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Coulomb
+
   SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ! Regularised Coulomb-type sliding law
 
@@ -1161,6 +1171,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Coulomb_regularised
+
   SUBROUTINE calc_sliding_law_Tsai2015(  mesh, ice, u_a, v_a, beta_a)
     ! Modified power-law relation according to Tsai et al. (2015)
     ! (implementation based on equations provided by Asay-Dvis et al., 2016)
@@ -1208,6 +1219,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Tsai2015
+
   SUBROUTINE calc_sliding_law_Schoof2005(  mesh, ice, u_a, v_a, beta_a)
     ! Modified power-law relation according to Tsai et al. (2015)
     ! (implementation based on equations provided by Asay-Dvis et al., 2016)
@@ -1255,6 +1267,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_Schoof2005
+
   SUBROUTINE calc_sliding_law_ZoetIverson( mesh, ice, u_a, v_a, beta_a)
     ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
 
@@ -1352,6 +1365,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised
+
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C( mesh, beta_a)
     ! Sliding laws for some idealised experiments
     !
@@ -1385,6 +1399,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C
+
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, beta_a)
     ! Sliding laws for some idealised experiments
     !
@@ -1417,6 +1432,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D
+
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice, beta_a)
     ! Sliding laws for some idealised experiments
     !
@@ -1479,6 +1495,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_conditions
+
   SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -1519,6 +1536,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_hydrology
+
   SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 

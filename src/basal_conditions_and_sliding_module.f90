@@ -28,7 +28,7 @@ MODULE basal_conditions_and_sliding_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_reference_geometry, type_grid, type_restart_data
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, smooth_Gaussian_2D
 
   IMPLICIT NONE
 
@@ -1599,10 +1599,12 @@ CONTAINS
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Yield-stress sliding law
       IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'nearest_neighbour')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'nearest_neighbour')
         IF (C%do_basal_sliding_inversion) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'nearest_neighbour')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_ave_a, ice%wphi_fric_ave_a, 'nearest_neighbour')
+          CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%phi_fric_window_a, ice%wphi_fric_window_a, 'nearest_neighbour')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)

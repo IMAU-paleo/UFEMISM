@@ -149,6 +149,8 @@ MODULE configuration_module
     REAL(dp)            :: res_max_mountain_config                     = 40._dp                           !                                 mountains             [km]
     REAL(dp)            :: res_max_coast_config                        = 40._dp                           !                                 coastline             [km]
     REAL(dp)            :: mesh_fitness_threshold_config               = 0.95_dp                          ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
+
+    ! Forced mesh update
     LOGICAL             :: do_force_mesh_update_config                 = .FALSE.                          ! Force a mesh update once after do_force_mesh_update_after years
     REAL(dp)            :: do_force_mesh_update_after_config           = 10._dp                           ! Minimum years after which a force update occurs (model needs some time before first update)
 

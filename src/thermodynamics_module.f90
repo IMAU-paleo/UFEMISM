@@ -464,14 +464,20 @@ CONTAINS
 
         ! Safety
         IF (ti_upwind == 0) THEN
-          CALL crash('could not find upwind triangle!')
-        END IF
-
-        ! Calculate u * dT/dx, v * dT/dy
+          IF (.NOT. mesh%edge_index( vi) == 0) THEN
+            u_times_dT_dx_upwind_a( vi,:) = 0._dp
+            v_times_dT_dy_upwind_a( vi,:) = 0._dp
+          ELSE
+            CALL crash('could not find upwind triangle!')
+          END IF
+        ELSE
+          ! Calculate u * dT/dx, v * dT/dy
         DO k = 1, C%nz
           u_times_dT_dx_upwind_a( vi,k) = ice%u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
           v_times_dT_dy_upwind_a( vi,k) = ice%v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
         END DO
+
+        END IF
 
       END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
 

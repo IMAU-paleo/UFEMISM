@@ -90,10 +90,17 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_direct'
+    INTEGER                                            :: vi1, vi2
     REAL(dp)                                           :: dt_crit_SIA, dt_crit_SSA
+    REAL(dp)                                           :: hi_memory, hi_senile, time_passed
+    REAL(dp)                                           :: int_old, int_new
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Abbreviations for cleaner code
+    vi1 = region%mesh%vi1
+    vi2 = region%mesh%vi2
 
     ! Calculate ice velocities with the selected ice-dynamical approximation
     ! ======================================================================
@@ -181,18 +188,38 @@ CONTAINS
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
 
-    !IF (par%master) WRITE(0,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_SIA = ', dt_crit_SIA, ', dt_crit_SSA = ', dt_crit_SSA, ', dt = ', region%dt
-
     ! Calculate new ice geometry
     ! ==========================
 
     IF (C%choice_ice_dynamics == 'none') THEN
+
       ! Fixed ice geometry
-      region%ice%dHi_dt_a( region%mesh%vi1 : region%mesh%vi2) = 0._dp
+      region%ice%dHi_dt_a( vi1:vi2) = 0._dp
+      region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2)
       CALL sync
+
     ELSE
+
+      ! Compute new dHi_dt and corresponding Hi_tplusdt_a
       CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
+
+      ! Calculate ice thickness at the end of this model loop
+      region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
+      CALL sync
+
     END IF
+
+    ! Running dHi_dt average
+    ! ======================
+
+    ! Update the running window: drop oldest record and push the rest to the back
+    region%ice%dHi_dt_window_a(vi1:vi2,2:C%dHi_dt_window_size) = region%ice%dHi_dt_window_a(vi1:vi2,1:C%dHi_dt_window_size-1)
+
+    ! Update the running window: add new record to beginning of window
+    region%ice%dHi_dt_window_a(vi1:vi2,1) = region%ice%dHi_dt_a(vi1:vi2)
+
+    ! Compute running average
+    region%ice%dHi_dt_ave_a( vi1:vi2) = SUM(region%ice%dHi_dt_window_a(vi1:vi2,:),2) / REAL(C%dHi_dt_window_size,dp)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -214,8 +241,8 @@ CONTAINS
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
     REAL(dp)                                           :: dt_from_pc, dt_crit_adv
-    REAL(dp)                                           :: hi_memory, hi_senile, time_passed
-    REAL(dp)                                           :: int_old, int_new
+    REAL(dp)                                           :: hi_memory, hi_senile, hi_youth
+    REAL(dp)                                           :: time_passed, int_old, int_new
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -360,7 +387,7 @@ CONTAINS
       ! Memory step
       ! ===========
 
-      ! Uses the values of dHi_dt from the start of the run (or the last from
+      ! Uses the values of dHi_dt from the start of the run (or values from
       ! a previous run, in case of a restart) and computes a weighed average
       ! between the old and new values. The average starts giving full weight
       ! to the old dHi_dt (start of run), and exponentially (but slowly) shifts
@@ -370,6 +397,15 @@ CONTAINS
 
       ! Compute how much time has passed since start of run
       time_passed = region%time - C%start_time_of_run
+
+      ! Set how youthful our run is
+      IF (C%is_restart) THEN
+        ! For restarts, experience makes you age like fine wine
+        hi_youth = 10._dp
+      ELSE
+        ! For first timers, let them mess up
+        hi_youth = 1._dp
+      END IF
 
       ! Only if so specified and before memory fades away
       IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
@@ -384,9 +420,9 @@ CONTAINS
         END IF
 
         ! Memory fades
-        hi_memory = 1._dp - hi_senile**10
+        hi_memory = 1._dp - hi_senile**hi_youth
         ! No matter what
-        hi_memory = min(hi_memory, 0.99_dp)
+        hi_memory = min(hi_memory, 0.9_dp)
 
         IF (C%is_restart) THEN
           ! For restarts, weighed average between previous life and present
@@ -438,15 +474,82 @@ CONTAINS
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
 
-    ! Calculate ice thickness at the end of this model loop
-    region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
-    CALL sync
+    ! ! Memory step
+    ! ! ===========
 
-    ! IF (par%master) THEN
-    !   WRITE(0,'(A,F8.3,A,F8.3,A,F8.3)') 'dt_crit_adv = ', dt_crit_adv, &
-    !                                     ', dt_from_pc = ', dt_from_pc, &
-    !                                     ', dt_crit_ice = ', region%dt_crit_ice
-    ! END IF
+    ! ! Uses the values of dHi_dt from the start of the run (or the last from
+    ! ! a previous run, in case of a restart) and computes a weighed average
+    ! ! between the old and new values. The average starts giving full weight
+    ! ! to the old dHi_dt (start of run), and exponentially (but slowly) shifts
+    ! ! the weight to the new values (current time step) over time. At time
+    ! ! C%start_time_of_run + C%get_senile_after, memory is completely lost
+    ! ! and the newly computed dHi_dt is fully used from that time onwards.
+
+    ! ! Compute how much time has passed since start of run
+    ! time_passed = region%time - C%start_time_of_run
+
+    ! ! Only if so specified and before memory fades away
+    ! IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
+
+    !   ! Compute how senile our current run is
+    !   IF (region%time < C%start_time_of_run) THEN
+    !     ! For wind-up, keep memory intact
+    !     hi_senile = 0._dp
+    !   ELSE
+    !     ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
+    !     hi_senile = min(1._dp, max(0._dp, time_passed / C%get_senile_after))
+    !   END IF
+
+    !   ! Memory fades
+    !   hi_memory = 1._dp - hi_senile**10
+    !   ! No matter what
+    !   hi_memory = min(hi_memory, 0.99_dp)
+
+    !   IF (C%is_restart) THEN
+    !     ! For restarts, weighed average between previous life and present
+    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2) + region%dt * &
+    !                                         ( (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
+    !                                                  + hi_memory  * region%ice%dHi_dt_past_a( vi1:vi2) &
+    !                                         )
+    !   ELSE
+    !     ! Else, weighed average between birthday and present
+    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2) + region%dt * &
+    !                                         ( (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
+    !                                                  + hi_memory  * 0._dp &
+    !                                         )
+    !   END IF
+
+    !   region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_tplusdt_a( vi1:vi2))
+    !   CALL sync
+
+    !   ! Even when your neurons are no more, their atoms
+    !   ! carry on, so make sure mass is conserved
+
+    !   ! Total memory-based new ice thickness
+    !   int_new = SUM( region%ice%Hi_tplusdt_a( vi1:vi2))
+    !   ! Total original ice thickness
+    !   int_old = SUM( MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2)) )
+
+    !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    !   IF (int_new > 0._dp) THEN
+    !     ! Scale memory-based rates to conserve total mass change
+    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_tplusdt_a( vi1:vi2) * (int_old / int_new)
+    !   END IF
+    !   CALL sync
+
+    !   ! Correct dHi_dt based on new Hi_tplusdt_a
+    !   region%ice%dHi_dt_a( vi1:vi2) = (region%ice%Hi_tplusdt_a( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt
+
+    ! ! Else, compute Hi_tplusdt_a as usual
+    ! ELSE
+
+      ! Calculate ice thickness at the end of this model loop
+      region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
+      CALL sync
+
+    ! END IF ! (C%do_use_hi_memory)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -726,6 +829,9 @@ CONTAINS
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_SIA, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     dt_crit_SIA = dt_crit_SIA * dt_correction_factor
 
+    ! Safety
+    dt_crit_SIA = MAX(dt_crit_SIA, C%dt_min)
+
     ! Clean up after yourself
     CALL deallocate_shared( wu_c     )
     CALL deallocate_shared( wv_c     )
@@ -787,6 +893,9 @@ CONTAINS
 
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_adv, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     dt_crit_adv = MIN(C%dt_max, dt_crit_adv * dt_correction_factor)
+
+    ! Safety
+    dt_crit_adv = MAX(dt_crit_adv, C%dt_min)
 
     ! Clean up after yourself
     CALL deallocate_shared( wu_c)

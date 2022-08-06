@@ -354,7 +354,7 @@ MODULE configuration_module
     REAL(dp)            :: DIVA_PETSc_rtol_config                      = 0.01_dp                          ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
     REAL(dp)            :: DIVA_PETSc_abstol_config                    = 2.5_dp                           ! DIVA PETSc solver - stop criterion, absolute difference
 
-    ! Velocity wind-up before a restart
+    ! Velocity wind-up
     REAL(dp)            :: windup_total_years_config                   = 0._dp                            ! Go back in time and run the velocity solver for this amount of years before actual run starts
 
   ! == Ice dynamics - time integration

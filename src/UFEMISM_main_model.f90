@@ -1112,7 +1112,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'run_model_windup'
     INTEGER                                       :: it
-    REAL(dp)                                      :: dt_ave
+    REAL(dp)                                      :: dt_ave, t_end
 
     ! === Initialisation ===
     ! ======================
@@ -1120,7 +1120,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF ((.NOT. C%is_restart) .OR. (C%windup_total_years <= 0._dp)) THEN
+    IF (C%windup_total_years <= 0._dp) THEN
       ! Finalise routine path
       CALL finalise_routine( routine_name)
       ! Exit rutine
@@ -1134,8 +1134,11 @@ CONTAINS
       WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
     END IF
 
-    ! Bring the timer C%total_windup_years years back in time
-    region%time = C%start_time_of_run - C%windup_total_years
+    ! Save current time as end-time for wind-up
+    t_end = region%time
+
+    ! Bring the timer C%windup_total_years years back in time
+    region%time = region%time - C%windup_total_years
 
     ! Let the model know we want to run velocities from this point on
     region%t_last_SIA       = region%time
@@ -1167,14 +1170,14 @@ CONTAINS
     ! Initialise averaged time step
     dt_ave = 0._dp
 
-    ! Run the ice model until the start of our real run
-    DO WHILE (region%time < C%start_time_of_run)
+    ! Run the ice model until coming back to present
+    DO WHILE (region%time < t_end)
 
       ! Update iteration counter
       it = it + 1
 
       ! Calculate ice velocities
-      CALL run_ice_model( region, C%start_time_of_run)
+      CALL run_ice_model( region, t_end)
 
       ! Calculate ice temperatures
       CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, &
@@ -1183,7 +1186,7 @@ CONTAINS
 
       ! Display progress
       if (par%master .AND. C%do_time_display) then
-        call time_display(region, C%start_time_of_run, dt_ave, it)
+        call time_display(region, t_end, dt_ave, it)
       end if
 
       ! Advance region time and repeat

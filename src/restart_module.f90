@@ -242,18 +242,27 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. C%do_basal_sliding_inversion) THEN
+    IF ( (.NOT. C%choice_basal_roughness == 'restart') .AND. &
+         (.NOT. C%do_use_hi_memory) ) THEN
+      CALL finalise_routine(routine_name)
+      RETURN
+    END IF
 
-      ! To prevent compiler warnings for unused variables
-      int_dummy = map%int_dummy
+    ! To prevent compiler warnings for unused variables
+    int_dummy = map%int_dummy
 
-      IF (par%master) WRITE(0,*) '   Remapping key restart data...'
+    IF (par%master) WRITE(0,*) '   Remapping key restart data...'
 
-      ! Allocate and read restart mesh
-      CALL read_mesh_from_restart_file( region%restart%mesh, region%restart, region%name, region%time)
+    ! Allocate and read restart mesh
+    CALL read_mesh_from_restart_file( region%restart%mesh, region%restart, region%name, region%time)
 
-      ! Calculate the mapping array
-      CALL calc_remapping_operators_mesh_mesh( region%restart%mesh, region%mesh, map)
+    ! Calculate the mapping array
+    CALL calc_remapping_operators_mesh_mesh( region%restart%mesh, region%mesh, map)
+
+    ! == Basal roughness
+    ! ==================
+
+    IF (C%choice_basal_roughness == 'restart') THEN
 
       ! Map data field from source mesh to new mesh
       IF (C%basal_roughness_restart_type == 'last') THEN
@@ -269,13 +278,24 @@ CONTAINS
         CALL crash('unknown basal_roughness_restart_type "' // TRIM( C%basal_roughness_restart_type) // '"!')
       END IF
 
-      ! Deallocate shared memory for the mapping array
-      CALL deallocate_remapping_operators_mesh_mesh( map)
-
-      ! Deallocate restart mesh
-      CALL deallocate_mesh_all( region%restart%mesh)
-
     END IF
+
+    ! == Ice thickness rate of change
+    ! ===============================
+
+    IF (C%do_use_hi_memory ) THEN
+
+      ! Map data field from source mesh to new mesh
+      CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
+                             region%restart%dHi_dt_ave, region%ice%dHi_dt_past_a, &
+                             'cons_2nd_order')
+    END IF
+
+    ! Deallocate shared memory for the mapping array
+    CALL deallocate_remapping_operators_mesh_mesh( map)
+
+    ! Deallocate restart mesh
+    CALL deallocate_mesh_all( region%restart%mesh)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

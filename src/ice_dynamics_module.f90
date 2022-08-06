@@ -391,7 +391,7 @@ CONTAINS
         IF (C%is_restart) THEN
           ! For restarts, weighed average between previous life and present
           region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-                                                 + hi_memory  * region%restart%dHi_dt_ave( vi1:vi2)
+                                                 + hi_memory  * region%ice%dHi_dt_past_a( vi1:vi2)
         ELSE
           ! Else, weighed average between birthday and present
           region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
@@ -1076,11 +1076,15 @@ CONTAINS
         END IF
       END DO
 
+      ice%dHi_dt_past_a( mesh%vi1:mesh%vi2) = restart%dHi_dt_ave( mesh%vi1:mesh%vi2)
+
     ELSE
 
       ice%dHb_dt_a = 0._dp
       ice%dHi_dt_a = 0._dp
       ice%dHs_dt_a = 0._dp
+
+      ice%dHi_dt_past_a = 0._dp
 
     END IF
 
@@ -1319,6 +1323,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_tplusdt_a    , ice%wHi_tplusdt_a      )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_ave_a    , ice%wdHi_dt_ave_a      )
     CALL allocate_shared_dp_2D(   mesh%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a , ice%wdHi_dt_window_a   )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_past_a    , ice%wdHi_dt_past_a    )
 
     ! Ice dynamics - calving
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
@@ -1518,6 +1523,7 @@ CONTAINS
    !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%Hi_tplusdt_a     , ice%wHi_tplusdt_a         )
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_ave_a     , ice%wdHi_dt_ave_a         )
     CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a  , ice%wdHi_dt_window_a      )
+    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_past_a     , ice%wdHi_dt_past_a       )
 
    ! Ice dynamics - calving
     CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )

@@ -264,19 +264,28 @@ CONTAINS
 
     IF (C%choice_basal_roughness == 'restart') THEN
 
-      ! Map data field from source mesh to new mesh
+      ! Map bed roughness from restart mesh to new mesh
+      ! Use exp(log()) to account for different orders of magnitude
       IF (C%basal_roughness_restart_type == 'last') THEN
+        ! Use log of last output from previous run
         CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
-                               region%restart%phi_fric, region%ice%phi_fric_a, &
-                               'nearest_neighbour')
+                               LOG(region%restart%phi_fric), region%ice%phi_fric_a, &
+                               'cons_2nd_order')
 
       ELSEIF (C%basal_roughness_restart_type == 'average') THEN
+        ! Use log of averaged bed roughness from previous run
         CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
-                               region%restart%phi_fric_ave, region%ice%phi_fric_a, &
-                               'nearest_neighbour')
+                               LOG(region%restart%phi_fric_ave), region%ice%phi_fric_a, &
+                               'cons_2nd_order')
       ELSE
         CALL crash('unknown basal_roughness_restart_type "' // TRIM( C%basal_roughness_restart_type) // '"!')
       END IF
+
+      IF (par%master) THEN
+        ! Bring it back from the log domain to the real world
+        region%ice%phi_fric_a = EXP(region%ice%phi_fric_a)
+      END IF
+      CALL sync
 
     END IF
 

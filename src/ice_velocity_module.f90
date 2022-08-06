@@ -1994,8 +1994,15 @@ CONTAINS
           END DO
         END DO
 
-        u_c( aci,:) = u_b( til,:)
-        v_c( aci,:) = v_b( til,:)
+        ! For border edges, make sure a triangle is found
+        ! If not, just set it to zero
+        IF (til /= 0) THEN
+          u_c( aci,:) = u_b( til,:)
+          v_c( aci,:) = v_b( til,:)
+        ELSE
+          u_c( aci,:) = 0._dp
+          v_c( aci,:) = 0._dp
+        END IF
 
       END IF
 

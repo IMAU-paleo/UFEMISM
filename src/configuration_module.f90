@@ -433,6 +433,7 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
     CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'last'                           ! Values from previous run: "last" (last output) or "average" (running average)
+    LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .FALSE.                          ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
@@ -1166,6 +1167,7 @@ MODULE configuration_module
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
     CHARACTER(LEN=256)                  :: basal_roughness_restart_type
+    LOGICAL                             :: do_basal_roughness_remap_adjustment
 
     ! Basal roughness inversion
     LOGICAL                             :: do_basal_sliding_inversion
@@ -2038,6 +2040,7 @@ CONTAINS
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
                      basal_roughness_restart_type_config,             &
+                     do_basal_roughness_remap_adjustment_config,      &
                      do_basal_sliding_inversion_config,               &
                      do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_t_start_config,                &
@@ -2874,6 +2877,7 @@ CONTAINS
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
     C%basal_roughness_restart_type             = basal_roughness_restart_type_config
+    C%do_basal_roughness_remap_adjustment      = do_basal_roughness_remap_adjustment_config
 
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config

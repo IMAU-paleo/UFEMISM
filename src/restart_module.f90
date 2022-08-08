@@ -336,12 +336,16 @@ CONTAINS
       END DO
       CALL sync
 
-      ! Bring values from both methods back from the log domain to the real world
-      bed_method1( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method1( region%mesh%vi1:region%mesh%vi2))
-      bed_method2( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method2( region%mesh%vi1:region%mesh%vi2))
+      IF (C%do_basal_roughness_remap_adjustment) THEN
 
-      ! Calibrate the resulting bed roughness within the range of the two mapping methods
-      CALL adjust_remapped_bed_roughness(region, bed_method1, bed_method2)
+        ! Bring values from both methods back from the log domain to the real world
+        bed_method1( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method1( region%mesh%vi1:region%mesh%vi2))
+        bed_method2( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method2( region%mesh%vi1:region%mesh%vi2))
+
+        ! Calibrate the resulting bed roughness within the range of the two mapping methods
+        CALL adjust_remapped_bed_roughness(region, bed_method1, bed_method2)
+
+      END IF
 
       ! Clean up after yourself
       CALL deallocate_shared( wbed_method1)

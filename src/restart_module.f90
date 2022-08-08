@@ -12,7 +12,8 @@ MODULE restart_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
-                                             allocate_shared_dp_1D, allocate_shared_dp_2D
+                                             allocate_shared_dp_1D, allocate_shared_dp_2D, &
+                                             deallocate_shared
   USE netcdf_module,                   ONLY: inquire_restart_file_mesh, read_restart_file_mesh, &
                                              inquire_restart_file_init, read_restart_file_init
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
@@ -27,6 +28,8 @@ MODULE restart_module
   USE mesh_creation_module,            ONLY: create_transect
   USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, map_mesh2mesh_2D, &
                                              deallocate_remapping_operators_mesh_mesh
+  USE utilities_module,                ONLY: time_display
+  USE ice_dynamics_module,             ONLY: run_ice_model
 
   IMPLICIT NONE
 
@@ -143,7 +146,7 @@ CONTAINS
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 111)
 
   END SUBROUTINE read_mesh_from_restart_file
 
@@ -236,8 +239,13 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                  :: routine_name = 'remap_restart_data'
-    INTEGER                                        :: int_dummy
     TYPE(type_remapping_mesh_mesh)                 :: map
+    REAL(dp), DIMENSION(:    ), POINTER            ::  bed_method1,  bed_method2
+    INTEGER                                        :: wbed_method1, wbed_method2
+    INTEGER                                        :: vi, int_dummy
+
+    ! == Initialisation
+    ! =================
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -250,6 +258,9 @@ CONTAINS
 
     ! To prevent compiler warnings for unused variables
     int_dummy = map%int_dummy
+
+    ! == Mapping basics
+    ! =================
 
     IF (par%master) WRITE(0,*) '   Remapping key restart data...'
 
@@ -264,28 +275,73 @@ CONTAINS
 
     IF (C%choice_basal_roughness == 'restart') THEN
 
+      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method1, wbed_method1)
+      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method2, wbed_method2)
+
       ! Map bed roughness from restart mesh to new mesh
-      ! Use exp(log()) to account for different orders of magnitude
+      ! Use a combination of two methods to balance out interpolation errors
+      ! Use exp(log()) trick to account for different orders of magnitude
       IF (C%basal_roughness_restart_type == 'last') THEN
         ! Use log of last output from previous run
+        ! Use a mapping method that keeps sharpness
         CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
-                               LOG(region%restart%phi_fric), region%ice%phi_fric_a, &
+                               LOG(region%restart%phi_fric), bed_method1, &
+                               'trilin')
+
+        ! Use log of last output from previous run
+        ! Use a mapping method that smooths the field
+        CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
+                               LOG(region%restart%phi_fric), bed_method2, &
                                'cons_2nd_order')
 
       ELSEIF (C%basal_roughness_restart_type == 'average') THEN
         ! Use log of averaged bed roughness from previous run
+        ! Use a mapping method that keeps sharpness
         CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
-                               LOG(region%restart%phi_fric_ave), region%ice%phi_fric_a, &
+                               LOG(region%restart%phi_fric_ave), bed_method1, &
+                               'trilin')
+
+        ! Use log of last output from previous run
+        ! Use a mapping method that smooths the field
+        CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
+                               LOG(region%restart%phi_fric_ave), bed_method2, &
                                'cons_2nd_order')
       ELSE
         CALL crash('unknown basal_roughness_restart_type "' // TRIM( C%basal_roughness_restart_type) // '"!')
       END IF
 
-      IF (par%master) THEN
-        ! Bring it back from the log domain to the real world
-        region%ice%phi_fric_a = EXP(region%ice%phi_fric_a)
-      END IF
+      ! Use a combination of two methods to balance out interpolation errors
+      ! Use exp(log()) trick to account for different orders of magnitude
+      DO vi = region%mesh%vi1, region%mesh%vi2
+
+        ! Keep very high friction values
+        IF ( EXP(bed_method1( vi)) >= 20.0_dp .OR. EXP(bed_method2( vi)) >= 20.0_dp ) THEN
+          region%ice%phi_fric_a( vi) = EXP( MAX(bed_method1( vi), bed_method2( vi)) )
+
+        ! Keep very high sliding values
+        ELSEIF ( EXP(bed_method1( vi)) < 0.2_dp .OR. EXP(bed_method2( vi)) < 0.2_dp ) THEN
+          region%ice%phi_fric_a( vi) = EXP( MIN(bed_method1( vi), bed_method2( vi)) )
+
+        ! Compute average of both methods for mid-range values
+        ELSE
+          region%ice%phi_fric_a( vi) = EXP( (bed_method1( vi) + bed_method2( vi)) / 2._dp )
+
+        END IF
+
+        ! Make sure bed roughness stays within the prescribed limits
+        region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), &
+                                             C%basal_sliding_inv_phi_min), &
+                                             C%basal_sliding_inv_phi_max)
+
+      END DO
       CALL sync
+
+      ! Bring values from both methods back from the log domain to the real world
+      bed_method1( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method1( region%mesh%vi1:region%mesh%vi2))
+      bed_method2( region%mesh%vi1:region%mesh%vi2) = EXP(bed_method2( region%mesh%vi1:region%mesh%vi2))
+
+      ! Calibrate the resulting bed roughness within the range of the two mapping methods
+      CALL adjust_remapped_bed_roughness(region, bed_method1, bed_method2)
 
     END IF
 
@@ -295,10 +351,14 @@ CONTAINS
     IF (C%do_use_hi_memory ) THEN
 
       ! Map data field from source mesh to new mesh
+      ! Already re-allocated by remap_ice_model
       CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
                              region%restart%dHi_dt_ave, region%ice%dHi_dt_past_a, &
                              'cons_2nd_order')
     END IF
+
+    ! == Finalisation
+    ! ===============
 
     ! Deallocate shared memory for the mapping array
     CALL deallocate_remapping_operators_mesh_mesh( map)
@@ -306,9 +366,133 @@ CONTAINS
     ! Deallocate restart mesh
     CALL deallocate_mesh_all( region%restart%mesh)
 
+    ! Clean up after yourself
+    CALL deallocate_shared( wbed_method1)
+    CALL deallocate_shared( wbed_method2)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_restart_data
+
+  SUBROUTINE adjust_remapped_bed_roughness( region, bed_method1, bed_method2)
+    ! After a bed roughness remap, go back in time a set amount of years and
+    ! run only the ice dynamics model (without ice thickness updates) until
+    ! coming back to present, adjusting the remapped bed roughness within the
+    ! range of values generated by the two mapping methods. The adjustment uses
+    ! the averaged past rates of ice thickness change, with the aim of reducing
+    ! shock increases/decreases of ice thickness due to interpolation errors.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),             INTENT(INOUT)  :: region
+    REAL(dp), DIMENSION(region%mesh%nV), INTENT(IN)     :: bed_method1,  bed_method2
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'adjust_remapped_bed_roughness'
+    INTEGER                                             :: it, vi
+    REAL(dp)                                            :: dt_ave, t_end
+    REAL(dp)                                            :: h_scale, h_delta
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (C%windup_total_years <= 0._dp) THEN
+      ! Finalise routine path
+      CALL finalise_routine( routine_name)
+      ! Exit rutine
+      RETURN
+    END IF
+
+    ! === Wind up the model ===
+    ! =========================
+
+    IF (par%master) THEN
+      WRITE (0,*) '    Adjusting the remapped bed roughness field to the new mesh...'
+    END IF
+
+    ! Save current time as end-time for wind-up
+    t_end = region%time
+
+    ! Bring the timer 1000 years back in time
+    region%time = region%time - 1000._dp
+
+    ! Let the model know we want to run velocities from this point on
+    region%t_last_SIA       = region%time
+    region%t_next_SIA       = region%time
+    region%do_SIA           = .TRUE.
+
+    region%t_last_SSA       = region%time
+    region%t_next_SSA       = region%time
+    region%do_SSA           = .TRUE.
+
+    region%t_last_DIVA      = region%time
+    region%t_next_DIVA      = region%time
+    region%do_DIVA          = .TRUE.
+
+    ! Run the ice model until coming back to present
+    DO WHILE (region%time < t_end)
+
+      ! Make sure memory/senility method is off
+      C%do_use_hi_memory = .FALSE.
+
+      ! Calculate ice velocities
+      CALL run_ice_model( region, t_end)
+
+      ! Define the dHi_dt factor for scaling of inversion
+      h_scale = 1.0_dp/1000._dp
+
+      DO vi = region%mesh%vi1, region%mesh%vi2
+
+        ! Compute difference between the current and reference dHi_dt
+        h_delta = region%ice%dHi_dt_a( vi) - region%ice%dHi_dt_ave_a( vi)
+
+        ! Invert only where the model has grounded ice
+        IF (region%ice%mask_sheet_a( vi) == 1) THEN
+
+          ! Scale the difference and restrict it to the [-1.5 1.5] range
+          h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+          ! Further adjust only where needed
+          IF ( (h_delta > 0._dp) .OR. &
+               (h_delta < 0._dp) ) THEN
+
+            ! Adjust based on scaled dHi_dt difference
+            region%ice%phi_fric_a( vi) = region%ice%phi_fric_a( vi) * (10._dp ** (-h_delta))
+            ! Constrain adjusted value to within the range of the two mapping methods
+            region%ice%phi_fric_a( vi) = MAX(region%ice%phi_fric_a( vi), MIN(bed_method1( vi), bed_method2( vi)))
+            region%ice%phi_fric_a( vi) = MIN(region%ice%phi_fric_a( vi), MAX(bed_method1( vi), bed_method2( vi)))
+
+          END IF
+
+        END IF
+
+        ! Make sure bed roughness stays within the prescribed limits
+        region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), &
+                                             C%basal_sliding_inv_phi_min), &
+                                             C%basal_sliding_inv_phi_max)
+
+      END DO
+      CALL sync
+
+      ! Advance region time and repeat
+      IF (par%master) THEN
+        region%time = region%time + region%dt
+      END IF
+      CALL sync
+
+    END DO
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE adjust_remapped_bed_roughness
 
 END MODULE restart_module

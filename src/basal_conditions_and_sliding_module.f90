@@ -307,39 +307,52 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness'
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
+
     ! Shared memory allocation
-    ! ========================
+    ! ------------------------
 
     IF     (C%choice_sliding_law == 'no_sliding') THEN
       ! No sliding allowed
+
     ELSEIF (C%choice_sliding_law == 'idealised') THEN
       ! Sliding laws for some idealised experiments
+
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Weertman-type ("power law") sliding law
+
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised' .OR. &
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Regularised Coulomb-type sliding law
       ! Zoet-Iverson sliding law (Zoet & Iverson, 2020)
+
       CALL allocate_shared_dp_1D( mesh%nV, ice%phi_fric_a, ice%wphi_fric_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%tauc_a    , ice%wtauc_a    )
+
     ELSEIF (C%choice_sliding_law == 'Schoof2005' .OR. &
             C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Schoof (2005)
       ! Modified power-law relation according to Tsai et al. (2015)
+
       CALL allocate_shared_dp_1D( mesh%nV, ice%alpha_sq_a, ice%walpha_sq_a)
       CALL allocate_shared_dp_1D( mesh%nV, ice%beta_sq_a , ice%wbeta_sq_a )
+
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
     CALL sync
 
-    ! Inversion-stuff allocation
-    ! ==========================
+
+    ! == Inversion-stuff allocation
+    ! =============================
 
     IF (C%do_basal_sliding_inversion) THEN
       IF (C%choice_sliding_law == 'Weertman' .OR. &
@@ -362,8 +375,12 @@ CONTAINS
       END IF
     END IF
 
-    ! Initialisation
-    ! ==============
+
+    ! == Initial values
+    ! =================
+
+    ! Uniform method
+    ! --------------
 
     IF (C%choice_basal_roughness == 'uniform') THEN
       ! Apply a uniform bed roughness
@@ -371,34 +388,52 @@ CONTAINS
       IF     (C%choice_sliding_law == 'Weertman') THEN
         ! Weertman sliding law; bed roughness is described by beta_sq
         ice%beta_sq_a( mesh%vi1:mesh%vi2) = C%slid_Weertman_beta_sq_uniform
+
       ELSEIF (C%choice_sliding_law == 'Coulomb') THEN
         ! Coulomb sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+
       ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
         ! Regularised Coulomb sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_Coulomb_phi_fric_uniform
+
       ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
         ! Tsai2015 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Tsai2015_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Tsai2015_beta_sq_uniform
+
       ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
         ! Schoof2005 sliding law; bed roughness is described by alpha_sq for the Coulomb part, and beta_sq for the Weertman part
         ice%alpha_sq_a( mesh%vi1:mesh%vi2) = C%slid_Schoof2005_alpha_sq_uniform
         ice%beta_sq_a(  mesh%vi1:mesh%vi2) = C%slid_Schoof2005_beta_sq_uniform
+
       ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
         ! Zoet-Iverson sliding law; bed roughness is described by phi_fric
         ice%phi_fric_a( mesh%vi1:mesh%vi2) = C%slid_ZI_phi_fric_uniform
+
       ELSE
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
+
+
+    ! Parameterised method
+    ! --------------------
 
     ELSEIF (C%choice_basal_roughness == 'parameterised') THEN
       ! Apply the chosen parameterisation of bed roughness
       CALL calc_bed_roughness( mesh, ice)
 
+
+    ! Prescribed method
+    ! -----------------
+
     ELSEIF (C%choice_basal_roughness == 'prescribed') THEN
       ! If bed roughness is prescribed, read it from the provided NetCDF file
       CALL initialise_bed_roughness_from_file( mesh, ice)
+
+
+    ! Restart method
+    ! --------------
 
     ELSEIF (C%choice_basal_roughness == 'restart') THEN
       ! Assign the values that have been already read from a restart file
@@ -432,13 +467,17 @@ CONTAINS
         CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
       END IF
 
+
+    ! Unknown methods
+    ! ---------------
+
     ELSE
       CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')
     END IF
     CALL sync
 
-    ! Inversion initialisation
-    ! ========================
+    ! Initial values for inversion
+    ! ============================
 
     IF (C%do_basal_sliding_inversion) THEN
       IF (C%choice_sliding_law == 'Weertman' .OR. &
@@ -457,6 +496,9 @@ CONTAINS
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
       END IF
     END IF
+
+    ! == Finalisation
+    ! ===============
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))

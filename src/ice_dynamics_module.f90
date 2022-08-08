@@ -241,7 +241,7 @@ CONTAINS
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
     REAL(dp)                                           :: dt_from_pc, dt_crit_adv
-    REAL(dp)                                           :: hi_memory, hi_senile, hi_youth
+    REAL(dp)                                           :: hi_memory, hi_senile
     REAL(dp)                                           :: time_passed, int_old, int_new
 
     ! Add routine to path
@@ -398,15 +398,6 @@ CONTAINS
       ! Compute how much time has passed since start of run
       time_passed = region%time - C%start_time_of_run
 
-      ! Set how youthful our run is
-      IF (C%is_restart) THEN
-        ! For restarts, experience makes you age like fine wine
-        hi_youth = 10._dp
-      ELSE
-        ! For first timers, let them mess up
-        hi_youth = 1._dp
-      END IF
-
       ! Only if so specified and before memory fades away
       IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
 
@@ -420,7 +411,7 @@ CONTAINS
         END IF
 
         ! Memory fades
-        hi_memory = 1._dp - hi_senile**hi_youth
+        hi_memory = 1._dp - hi_senile
         ! No matter what
         hi_memory = min(hi_memory, 0.9_dp)
 
@@ -474,82 +465,9 @@ CONTAINS
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
 
-    ! ! Memory step
-    ! ! ===========
-
-    ! ! Uses the values of dHi_dt from the start of the run (or the last from
-    ! ! a previous run, in case of a restart) and computes a weighed average
-    ! ! between the old and new values. The average starts giving full weight
-    ! ! to the old dHi_dt (start of run), and exponentially (but slowly) shifts
-    ! ! the weight to the new values (current time step) over time. At time
-    ! ! C%start_time_of_run + C%get_senile_after, memory is completely lost
-    ! ! and the newly computed dHi_dt is fully used from that time onwards.
-
-    ! ! Compute how much time has passed since start of run
-    ! time_passed = region%time - C%start_time_of_run
-
-    ! ! Only if so specified and before memory fades away
-    ! IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
-
-    !   ! Compute how senile our current run is
-    !   IF (region%time < C%start_time_of_run) THEN
-    !     ! For wind-up, keep memory intact
-    !     hi_senile = 0._dp
-    !   ELSE
-    !     ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
-    !     hi_senile = min(1._dp, max(0._dp, time_passed / C%get_senile_after))
-    !   END IF
-
-    !   ! Memory fades
-    !   hi_memory = 1._dp - hi_senile**10
-    !   ! No matter what
-    !   hi_memory = min(hi_memory, 0.99_dp)
-
-    !   IF (C%is_restart) THEN
-    !     ! For restarts, weighed average between previous life and present
-    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2) + region%dt * &
-    !                                         ( (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-    !                                                  + hi_memory  * region%ice%dHi_dt_past_a( vi1:vi2) &
-    !                                         )
-    !   ELSE
-    !     ! Else, weighed average between birthday and present
-    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2) + region%dt * &
-    !                                         ( (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-    !                                                  + hi_memory  * 0._dp &
-    !                                         )
-    !   END IF
-
-    !   region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_tplusdt_a( vi1:vi2))
-    !   CALL sync
-
-    !   ! Even when your neurons are no more, their atoms
-    !   ! carry on, so make sure mass is conserved
-
-    !   ! Total memory-based new ice thickness
-    !   int_new = SUM( region%ice%Hi_tplusdt_a( vi1:vi2))
-    !   ! Total original ice thickness
-    !   int_old = SUM( MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2)) )
-
-    !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-
-    !   IF (int_new > 0._dp) THEN
-    !     ! Scale memory-based rates to conserve total mass change
-    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_tplusdt_a( vi1:vi2) * (int_old / int_new)
-    !   END IF
-    !   CALL sync
-
-    !   ! Correct dHi_dt based on new Hi_tplusdt_a
-    !   region%ice%dHi_dt_a( vi1:vi2) = (region%ice%Hi_tplusdt_a( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt
-
-    ! ! Else, compute Hi_tplusdt_a as usual
-    ! ELSE
-
-      ! Calculate ice thickness at the end of this model loop
-      region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
-      CALL sync
-
-    ! END IF ! (C%do_use_hi_memory)
+    ! Calculate ice thickness at the end of this model loop
+    region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1113,7 +1031,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_model'
-    INTEGER                                            :: vi, ti
+    INTEGER                                            :: vi, ti, k
     REAL(dp), DIMENSION(C%nz)                          :: prof
 
     ! Add routine to path
@@ -1185,7 +1103,16 @@ CONTAINS
         END IF
       END DO
 
+      ! Averaged dHi_dt from restart file
       ice%dHi_dt_past_a( mesh%vi1:mesh%vi2) = restart%dHi_dt_ave( mesh%vi1:mesh%vi2)
+
+      ! Running window for averaged dHi_dt for current run
+      DO k = 1, C%dHi_dt_window_size
+        ice%dHi_dt_window_a( mesh%vi1:mesh%vi2,k) = ice%dHi_dt_past_a( mesh%vi1:mesh%vi2)
+      END DO
+
+      ! Averaged dHi_dt for current run
+      ice%dHi_dt_ave_a( mesh%vi1:mesh%vi2) = ice%dHi_dt_past_a( mesh%vi1:mesh%vi2)
 
     ELSE
 
@@ -1193,7 +1120,9 @@ CONTAINS
       ice%dHi_dt_a = 0._dp
       ice%dHs_dt_a = 0._dp
 
-      ice%dHi_dt_past_a = 0._dp
+      ice%dHi_dt_past_a   = 0._dp
+      ice%dHi_dt_window_a = 0._dp
+      ice%dHi_dt_ave_a    = 0._dp
 
     END IF
 
@@ -1496,11 +1425,13 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_2nd_order')
-   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_2nd_order')
+    ! The only fields that actually need to be mapped. The rest is either remapped in their
+    ! own subroutines or are reallocated and reinitialised to 0.
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        ,    ice%wHi_a        ,    'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    ,    ice%wdHi_dt_a    ,    'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a,    ice%wHi_tplusdt_a,    'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_ave_a,    ice%wdHi_dt_ave_a,    'cons_2nd_order')
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%dHi_dt_window_a, ice%wdHi_dt_window_a, 'cons_2nd_order')
 
     ! Remove very thin ice resulting from remapping errors
     DO vi = mesh_new%vi1, mesh_new%vi2
@@ -1559,114 +1490,69 @@ CONTAINS
     ! ===========================================
 
     ! Basic data - ice thickness, bedrock height, surface height, mask, 3D ice velocities and temperature
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_a                  , ice%wHi_a                 )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hb_a                  , ice%wHb_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hs_a                  , ice%wHs_a                 )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%SL_a                  , ice%wSL_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%TAF_a                 , ice%wTAF_a                )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_a                  , ice%wTi_a                 )
-
-    ! Ice velocities (these are remapped/reallocated in remap_velocities)
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
-
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
-
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_surf_a              , ice%ww_surf_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
-
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%w_base_a              , ice%ww_base_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hs_a,                 ice%wHs_a                )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%TAF_a,                ice%wTAF_a               )
 
     ! Different masks
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_land_a           , ice%wmask_land_a          )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ocean_a          , ice%wmask_ocean_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_lake_a           , ice%wmask_lake_a          )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a            , ice%wmask_ice_a           )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_sheet_a          , ice%wmask_sheet_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_shelf_a          , ice%wmask_shelf_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_coast_a          , ice%wmask_coast_a         )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_margin_a         , ice%wmask_margin_a        )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_gl_a             , ice%wmask_gl_a            )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_cf_a             , ice%wmask_cf_a            )
-    CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_a                , ice%wmask_a               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%f_grnd_a              , ice%wf_grnd_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%f_grnd_b              , ice%wf_grnd_b             )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_land_a,          ice%wmask_land_a         )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_ocean_a,         ice%wmask_ocean_a        )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_lake_a,          ice%wmask_lake_a         )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_ice_a,           ice%wmask_ice_a          )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_sheet_a,         ice%wmask_sheet_a        )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_shelf_a,         ice%wmask_shelf_a        )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_coast_a,         ice%wmask_coast_a        )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_margin_a,        ice%wmask_margin_a       )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_gl_a,            ice%wmask_gl_a           )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_cf_a,            ice%wmask_cf_a           )
+    CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_a,               ice%wmask_a              )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%f_grnd_a,             ice%wf_grnd_a            )
+    CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grnd_b,             ice%wf_grnd_b            )
 
     ! Ice physical properties
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%A_flow_vav_a          , ice%wA_flow_vav_a         )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ti_pmp_a              , ice%wTi_pmp_a             )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Cpi_a                 , ice%wCpi_a                )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%Ki_a                  , ice%wKi_a                 )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%A_flow_3D_a,          ice%wA_flow_3D_a         )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%A_flow_vav_a,         ice%wA_flow_vav_a        )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%Ti_pmp_a,             ice%wTi_pmp_a            )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%Cpi_a,                ice%wCpi_a               )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%Ki_a,                 ice%wKi_a                )
 
     ! Zeta derivatives
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dt_a            , ice%wdzeta_dt_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dx_a            , ice%wdzeta_dx_a           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%dzeta_dy_a            , ice%wdzeta_dy_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dzeta_dz_a            , ice%wdzeta_dz_a           )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%dzeta_dt_a,           ice%wdzeta_dt_a          )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%dzeta_dx_a,           ice%wdzeta_dx_a          )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%dzeta_dy_a,           ice%wdzeta_dy_a          )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dzeta_dz_a,           ice%wdzeta_dz_a          )
 
     ! Ice dynamics - ice thickness calculation
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem,      ice%dVi_in           , ice%wdVi_in               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , mesh_new%nC_mem,      ice%dVi_out          , ice%wdVi_out              )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_a         , ice%wdHi_dt_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHs_dt_a         , ice%wdHs_dt_a             )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%Hi_tplusdt_a     , ice%wHi_tplusdt_a         )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_ave_a     , ice%wdHi_dt_ave_a         )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a  , ice%wdHi_dt_window_a      )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                       ice%dHi_dt_past_a     , ice%wdHi_dt_past_a       )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, mesh_new%nC_mem, ice%dVi_in,               ice%wdVi_in              )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, mesh_new%nC_mem, ice%dVi_out,              ice%wdVi_out             )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHs_dt_a,             ice%wdHs_dt_a            )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHi_dt_past_a,        ice%wdHi_dt_past_a       )
 
    ! Ice dynamics - calving
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_eff_cf_a           , ice%wHi_eff_cf_a          )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%float_margin_frac_a,  ice%wfloat_margin_frac_a )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hi_eff_cf_a,          ice%wHi_eff_cf_a         )
 
     ! Ice dynamics - predictor/corrector ice thickness update
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_zeta               , ice%wpc_zeta              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_tau                , ice%wpc_tau               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_fcb                , ice%wpc_fcb               )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_eta                , ice%wpc_eta               )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_eta_prev           , ice%wpc_eta_prev          )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_beta3              , ice%wpc_beta3             )
-   !CALL reallocate_shared_dp_0D(                                   ice%pc_beta4              , ice%wpc_beta4             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f1                 , ice%wpc_f1                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f2                 , ice%wpc_f2                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f3                 , ice%wpc_f3                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%pc_f4                 , ice%wpc_f4                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_old                , ice%wHi_old               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_pred               , ice%wHi_pred              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%Hi_corr               , ice%wHi_corr              )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_tau,               ice%wpc_tau              )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_fcb,               ice%wpc_fcb              )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_f1,                ice%wpc_f1               )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_f2,                ice%wpc_f2               )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_f3,                ice%wpc_f3               )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%pc_f4,                ice%wpc_f4               )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hi_old,               ice%wHi_old              )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hi_pred,              ice%wHi_pred             )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hi_corr,              ice%wHi_corr             )
 
     ! Thermodynamics
-   !CALL reallocate_shared_int_1D(  mesh_new%nV  ,                  ice%mask_ice_a_prev       , ice%wmask_ice_a_prev      )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%internal_heating_a    , ice%winternal_heating_a   )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%frictional_heating_a  , ice%wfrictional_heating_a )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%GHF_a                 , ice%wGHF_a                )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%internal_heating_a,   ice%winternal_heating_a  )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%frictional_heating_a, ice%wfrictional_heating_a)
 
     ! Mesh adaptation data
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%surf_curv             , ice%wsurf_curv            )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%log_velocity          , ice%wlog_velocity         )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_curv,            ice%wsurf_curv           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%log_velocity,         ice%wlog_velocity        )
 
     ! Useful extra stuff
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHi_a                 , ice%wdHi_a                )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dHs_a                 , ice%wdHs_a                )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHi_a,                ice%wdHi_a               )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHs_a,                ice%wdHs_a               )
 
 
     ! End of memory reallocation

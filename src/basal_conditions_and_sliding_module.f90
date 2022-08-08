@@ -1793,7 +1793,7 @@ CONTAINS
           C%choice_sliding_law == 'Schoof2005') THEN
 
         ! Store the inverted parameters in a local variable
-        rough_smoothed( 1:mesh%nV) = ice%beta_sq_inv_a( 1:mesh%nV)
+        rough_smoothed( mesh%vi1:mesh%vi2) = ice%beta_sq_inv_a( mesh%vi1:mesh%vi2)
         CALL sync
 
         ! Smooth the local variable
@@ -1812,7 +1812,7 @@ CONTAINS
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
         ! Store the inverted parameters in a local variable
-        rough_smoothed( 1:mesh%nV) = ice%phi_fric_inv_a( 1:mesh%nV)
+        rough_smoothed( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
         CALL sync
 
         ! Smooth the local variable

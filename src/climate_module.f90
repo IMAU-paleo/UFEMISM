@@ -1251,13 +1251,21 @@ CONTAINS
       WDU_ref_GCM(  vi,:) =       (w_tot( vi)  * climate_matrix%GCM_warm%Wind_DU(     vi,:)) + &
                          ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Wind_DU(     vi,:))
 
-      P_ref_GCM(  vi,:) =         (w_tot( vi)  * climate_matrix%GCM_warm%Precip_corr( vi,:)) + &
-                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Precip_corr( vi,:))
+      P_ref_GCM(  vi,:) =         (w_tot( vi)  * LOG(climate_matrix%GCM_warm%Precip_corr( vi,:))) + &
+                         ((1._dp - w_tot( vi)) * LOG(climate_matrix%GCM_cold%Precip_corr( vi,:)))
 
-      ! Safety net in case resulting precipitation is negative
       DO m = 1, 12
+        ! Bring it back from the LOG domain
+        P_ref_GCM( vi,m) = EXP(P_ref_GCM(vi,m))
+        ! Safety net in case resulting precipitation is negative
         P_ref_GCM( vi,m) = max( 0.0_dp, P_ref_GCM(vi,m))
       END DO
+
+      ! If full warm, use snapshot directly to prevent exp(log(*)) precision errors
+      IF (w_tot( vi) == 1._dp) THEN
+        P_ref_GCM( vi,:) = max( 0.0_dp, climate_matrix%GCM_warm%Precip_corr( vi,:))
+      END IF
+
 
     END DO
     CALL sync
@@ -1746,6 +1754,14 @@ CONTAINS
     END IF
     CALL sync
 
+    ! Safety net in case resulting precipitation is negative
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate%Precip_corr( vi,m) = max( 0.0_dp, climate%Precip_corr(vi,m))
+    END DO
+    END DO
+    CALL sync
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -1792,6 +1808,14 @@ CONTAINS
       ! Surface elevation (not really needed, just for symmetry)
       climate%Hs_corr( vi) = climate%Hs( vi)
 
+    END DO
+    END DO
+    CALL sync
+
+    ! Safety net in case resulting precipitation is negative
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate%Precip_corr( vi,m) = max( 0.0_dp, climate%Precip_corr(vi,m))
     END DO
     END DO
     CALL sync

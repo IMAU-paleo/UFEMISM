@@ -421,6 +421,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
 
     ! Basal sliding inversion
+    CHARACTER(LEN=256)  :: choice_BIVgeo_method_config                 = 'Berends2022'                    ! Choice of geometry-based inversion method: "PDC2012", "Lipscomb2021", "CISM+", "Berends2022", "Bernales2017"
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
     LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
     REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
@@ -430,6 +431,14 @@ MODULE configuration_module
     REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
     REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
     REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+    REAL(dp)            :: BIVgeo_Berends2022_tauc_config              = 10._dp                           ! Timescale       in the Berends2022 geometry/velocity-based basal inversion method [yr]
+    REAL(dp)            :: BIVgeo_Berends2022_H0_config                = 100._dp                          ! First  thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+    REAL(dp)            :: BIVgeo_Berends2022_u0_config                = 250._dp                          ! First  velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+    REAL(dp)            :: BIVgeo_Berends2022_Hi_scale_config          = 300._dp                          ! Second thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+    REAL(dp)            :: BIVgeo_Berends2022_u_scale_config           = 3000._dp                         ! Second velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+    REAL(dp)            :: BIVgeo_Berends2022_phimin_config            = 0.1_dp                           ! Smallest allowed value for the inverted till friction angle phi
+    REAL(dp)            :: BIVgeo_Berends2022_phimax_config            = 30._dp                           ! Largest  allowed value for the inverted till friction angle phi
+    CHARACTER(LEN=256)  :: BIVgeo_target_velocity_filename_config      = ''                               ! NetCDF file where the target velocities are read in the CISM+ and Berends2022 geometry/velocity-based basal inversion methods
 
   ! == Ice dynamics - calving
   ! =========================
@@ -1148,6 +1157,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: basal_roughness_filename
 
     ! Basal roughness inversion
+    CHARACTER(LEN=256)                  :: choice_BIVgeo_method
     LOGICAL                             :: do_basal_sliding_inversion
     LOGICAL                             :: do_basal_sliding_smoothing
     REAL(dp)                            :: basal_sliding_inv_scale
@@ -1157,6 +1167,14 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_phi_max
     REAL(dp)                            :: basal_sliding_inv_tol_diff
     REAL(dp)                            :: basal_sliding_inv_tol_frac
+    REAL(dp)                            :: BIVgeo_Berends2022_tauc
+    REAL(dp)                            :: BIVgeo_Berends2022_H0
+    REAL(dp)                            :: BIVgeo_Berends2022_u0
+    REAL(dp)                            :: BIVgeo_Berends2022_Hi_scale
+    REAL(dp)                            :: BIVgeo_Berends2022_u_scale
+    REAL(dp)                            :: BIVgeo_Berends2022_phimin
+    REAL(dp)                            :: BIVgeo_Berends2022_phimax
+    CHARACTER(LEN=256)                  :: BIVgeo_target_velocity_filename
 
     ! Ice dynamics - calving
     ! ======================
@@ -2018,6 +2036,7 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
+                     choice_BIVgeo_method_config,                     &
                      do_basal_sliding_inversion_config,               &
                      do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_scale_config,                  &
@@ -2027,6 +2046,14 @@ CONTAINS
                      basal_sliding_inv_phi_max_config,                &
                      basal_sliding_inv_tol_diff_config,               &
                      basal_sliding_inv_tol_frac_config,               &
+                     BIVgeo_Berends2022_tauc_config,                  &
+                     BIVgeo_Berends2022_H0_config,                    &
+                     BIVgeo_Berends2022_u0_config,                    &
+                     BIVgeo_Berends2022_Hi_scale_config,              &
+                     BIVgeo_Berends2022_u_scale_config,               &
+                     BIVgeo_Berends2022_phimin_config,                &
+                     BIVgeo_Berends2022_phimax_config,                &
+                     BIVgeo_target_velocity_filename_config,          &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_shelf_config,        &
                      calving_threshold_thickness_sheet_config,        &
@@ -2843,6 +2870,7 @@ CONTAINS
     C%basal_roughness_filename                 = basal_roughness_filename_config
 
     ! Basal roughness inversion
+    C%choice_BIVgeo_method                     = choice_BIVgeo_method_config
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
     C%do_basal_sliding_smoothing               = do_basal_sliding_smoothing_config
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
@@ -2852,6 +2880,14 @@ CONTAINS
     C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
     C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
     C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
+    C%BIVgeo_Berends2022_tauc                  = BIVgeo_Berends2022_tauc_config
+    C%BIVgeo_Berends2022_H0                    = BIVgeo_Berends2022_H0_config
+    C%BIVgeo_Berends2022_u0                    = BIVgeo_Berends2022_u0_config
+    C%BIVgeo_Berends2022_Hi_scale              = BIVgeo_Berends2022_Hi_scale_config
+    C%BIVgeo_Berends2022_u_scale               = BIVgeo_Berends2022_u_scale_config
+    C%BIVgeo_Berends2022_phimin                = BIVgeo_Berends2022_phimin_config
+    C%BIVgeo_Berends2022_phimax                = BIVgeo_Berends2022_phimax_config
+    C%BIVgeo_target_velocity_filename          = BIVgeo_target_velocity_filename_config
 
     ! Ice dynamics - calving
     ! ======================

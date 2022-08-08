@@ -219,7 +219,7 @@ CONTAINS
 
       IF (C%do_basal_sliding_inversion) THEN
         IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, C%dt_basal)
         END IF
       END IF
 

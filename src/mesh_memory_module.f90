@@ -100,6 +100,7 @@ CONTAINS
     CALL allocate_shared_dp_0D(  mesh%alpha_min,        mesh%walpha_min       )
     CALL allocate_shared_dp_0D(  mesh%dz_max_ice,       mesh%wdz_max_ice      )
     CALL allocate_shared_dp_0D(  mesh%res_max,          mesh%wres_max         )
+    CALL allocate_shared_dp_0D(  mesh%res_max_ice,      mesh%wres_max_ice     )
     CALL allocate_shared_dp_0D(  mesh%res_max_margin,   mesh%wres_max_margin  )
     CALL allocate_shared_dp_0D(  mesh%res_max_gl,       mesh%wres_max_gl      )
     CALL allocate_shared_dp_0D(  mesh%res_max_cf,       mesh%wres_max_cf      )
@@ -163,7 +164,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 53)
 
   END SUBROUTINE allocate_mesh_primary
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
@@ -328,6 +329,7 @@ CONTAINS
     CALL deallocate_shared( mesh%walpha_min)
     CALL deallocate_shared( mesh%wdz_max_ice)
     CALL deallocate_shared( mesh%wres_max)
+    CALL deallocate_shared( mesh%wres_max_ice)
     CALL deallocate_shared( mesh%wres_max_margin)
     CALL deallocate_shared( mesh%wres_max_gl)
     CALL deallocate_shared( mesh%wres_max_cf)
@@ -496,6 +498,7 @@ CONTAINS
     CALL allocate_shared_dist_dp_0D(  mesh%alpha_min,        mesh%walpha_min       )
     CALL allocate_shared_dist_dp_0D(  mesh%dz_max_ice,       mesh%wdz_max_ice      )
     CALL allocate_shared_dist_dp_0D(  mesh%res_max,          mesh%wres_max         )
+    CALL allocate_shared_dist_dp_0D(  mesh%res_max_ice,      mesh%wres_max_ice     )
     CALL allocate_shared_dist_dp_0D(  mesh%res_max_margin,   mesh%wres_max_margin  )
     CALL allocate_shared_dist_dp_0D(  mesh%res_max_gl,       mesh%wres_max_gl      )
     CALL allocate_shared_dist_dp_0D(  mesh%res_max_cf,       mesh%wres_max_cf      )
@@ -555,7 +558,7 @@ CONTAINS
     CALL allocate_shared_dp_2D(  mesh%nPOI, 3, mesh%POI_w,                     mesh%wPOI_w                    )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 53)
 
   END SUBROUTINE allocate_submesh_primary
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
@@ -685,6 +688,7 @@ CONTAINS
     CALL deallocate_shared( mesh%walpha_min)
     CALL deallocate_shared( mesh%wdz_max_ice)
     CALL deallocate_shared( mesh%wres_max)
+    CALL deallocate_shared( mesh%wres_max_ice)
     CALL deallocate_shared( mesh%wres_max_margin)
     CALL deallocate_shared( mesh%wres_max_gl)
     CALL deallocate_shared( mesh%wres_max_cf)

@@ -143,6 +143,7 @@ MODULE configuration_module
     REAL(dp)            :: alpha_min_config                            = 0.55_dp                          ! Minimum internal angle of triangles (0.4363 = 25 degrees)
     REAL(dp)            :: dz_max_ice_config                           = 20000._dp                        ! Maximum allowed 2nd order surface deviation over ice
     REAL(dp)            :: res_max_config                              = 800._dp                          ! Maximum allowed resolution                            [km]
+    REAL(dp)            :: res_max_ice_config                          = 40._dp                           ! Maximum allowed resolution over ice                   [km]
     REAL(dp)            :: res_max_margin_config                       = 40._dp                           ! Maximum allowed resolution over land-based ice margin [km]
     REAL(dp)            :: res_max_gl_config                           = 40._dp                           !                                 grounding line        [km]
     REAL(dp)            :: res_max_cf_config                           = 40._dp                           !                                 calving front         [km]
@@ -909,6 +910,7 @@ MODULE configuration_module
     REAL(dp)                            :: dz_max_ice
     REAL(dp)                            :: res_max
     REAL(dp)                            :: res_min
+    REAL(dp)                            :: res_max_ice
     REAL(dp)                            :: res_max_margin
     REAL(dp)                            :: res_max_gl
     REAL(dp)                            :: res_max_cf
@@ -2060,6 +2062,7 @@ CONTAINS
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
                      res_max_config,                                  &
+                     res_max_ice_config,                              &
                      res_max_margin_config,                           &
                      res_max_gl_config,                               &
                      res_max_cf_config,                               &
@@ -2613,6 +2616,7 @@ CONTAINS
     C%alpha_min                                = alpha_min_config
     C%dz_max_ice                               = dz_max_ice_config
     C%res_max                                  = res_max_config
+    C%res_max_ice                              = res_max_ice_config
     C%res_max_margin                           = res_max_margin_config
     C%res_max_gl                               = res_max_gl_config
     C%res_max_cf                               = res_max_cf_config
@@ -2623,7 +2627,7 @@ CONTAINS
     C%do_force_mesh_update_after               = do_force_mesh_update_after_config
 
     ! The smallest allowed resolution
-    C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast)
+    C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast, C%res_max_ice)
 
     ! Resolutions of the different square grids
     ! =========================================

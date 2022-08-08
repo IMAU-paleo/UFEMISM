@@ -281,6 +281,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: alpha_min                     ! Sharpest inner angle allowed by Rupperts algorithm
     REAL(dp),                   POINTER     :: dz_max_ice                    ! Maximum allowed vertical error in Rupperts algorithm over ice
     REAL(dp),                   POINTER     :: res_max                       ! Maximum resolution anywhere
+    REAL(dp),                   POINTER     :: res_max_ice                   ! Maximum resolution over ice
     REAL(dp),                   POINTER     :: res_max_margin                ! Maximum resolution over the ice margin
     REAL(dp),                   POINTER     :: res_max_gl                    ! Maximum resolution over the grounding line
     REAL(dp),                   POINTER     :: res_max_cf                    ! Maximum resolution over the calving front
@@ -290,7 +291,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: resolution_min                ! Finest   resolution of the mesh ( = MINVAL(R), where R = distance to nearest neighbour)
     REAL(dp),                   POINTER     :: resolution_max                ! Coarsest resolution of the mesh
     INTEGER :: wlambda_M, wphi_M, walpha_stereo, wxmin, wxmax, wymin, wymax, wtol_dist, wnV_mem, wnTri_mem, wnC_mem, wnV, wnTri, wperturb_dir
-    INTEGER :: walpha_min, wdz_max_ice, wres_max, wres_max_margin, wres_max_gl, wres_max_cf, wres_max_mountain, wres_max_coast, wres_min, wresolution_min, wresolution_max
+    INTEGER :: walpha_min, wdz_max_ice, wres_max, wres_max_ice, wres_max_margin, wres_max_gl, wres_max_cf, wres_max_mountain, wres_max_coast, wres_min, wresolution_min, wresolution_max
 
     ! Primary mesh data (needed for mesh creation & refinement)
     ! =========================================================

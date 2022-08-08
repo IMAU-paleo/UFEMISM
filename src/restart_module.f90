@@ -343,6 +343,10 @@ CONTAINS
       ! Calibrate the resulting bed roughness within the range of the two mapping methods
       CALL adjust_remapped_bed_roughness(region, bed_method1, bed_method2)
 
+      ! Clean up after yourself
+      CALL deallocate_shared( wbed_method1)
+      CALL deallocate_shared( wbed_method2)
+
     END IF
 
     ! == Ice thickness rate of change
@@ -365,10 +369,6 @@ CONTAINS
 
     ! Deallocate restart mesh
     CALL deallocate_mesh_all( region%restart%mesh)
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wbed_method1)
-    CALL deallocate_shared( wbed_method2)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

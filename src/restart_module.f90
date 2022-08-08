@@ -27,7 +27,7 @@ MODULE restart_module
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
   USE mesh_creation_module,            ONLY: create_transect
   USE mesh_mapping_module,             ONLY: calc_remapping_operators_mesh_mesh, map_mesh2mesh_2D, &
-                                             deallocate_remapping_operators_mesh_mesh
+                                             deallocate_remapping_operators_mesh_mesh, smooth_Gaussian_2D
   USE utilities_module,                ONLY: time_display
   USE ice_dynamics_module,             ONLY: run_ice_model
 
@@ -240,8 +240,9 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                  :: routine_name = 'remap_restart_data'
     TYPE(type_remapping_mesh_mesh)                 :: map
-    REAL(dp), DIMENSION(:    ), POINTER            ::  bed_method1,  bed_method2
-    INTEGER                                        :: wbed_method1, wbed_method2
+    REAL(dp), DIMENSION(:    ), POINTER            ::  bed_method1,  bed_method2,  rough_smoothed
+    INTEGER                                        :: wbed_method1, wbed_method2, wrough_smoothed
+    REAL(dp)                                       :: basal_roughness_remap_wsmooth
     INTEGER                                        :: vi, int_dummy
 
     ! == Initialisation
@@ -273,10 +274,11 @@ CONTAINS
     ! == Basal roughness
     ! ==================
 
-    IF (C%choice_basal_roughness == 'restart') THEN
+    IF (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_basal_sliding_inversion)) THEN
 
-      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method1, wbed_method1)
-      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method2, wbed_method2)
+      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method1,    wbed_method1)
+      CALL allocate_shared_dp_1D( region%mesh%nV, bed_method2,    wbed_method2)
+      CALL allocate_shared_dp_1D( region%mesh%nV, rough_smoothed, wrough_smoothed)
 
       ! Map bed roughness from restart mesh to new mesh
       ! Use a combination of two methods to balance out interpolation errors
@@ -336,6 +338,9 @@ CONTAINS
       END DO
       CALL sync
 
+      ! == Adjustment of basal roughness
+      ! ================================
+
       IF (C%do_basal_roughness_remap_adjustment) THEN
 
         ! Bring values from both methods back from the log domain to the real world
@@ -347,11 +352,37 @@ CONTAINS
 
       END IF
 
+      ! == Smoothing of final bed roughness
+      ! ===================================
+
+      ! Store the inverted parameters in a local variable
+      rough_smoothed( region%mesh%vi1:region%mesh%vi2) = region%ice%phi_fric_a( region%mesh%vi1:region%mesh%vi2)
+      CALL sync
+
+      ! Smooth the local variable
+      CALL smooth_Gaussian_2D( region%mesh, region%grid_smooth, rough_smoothed, C%basal_sliding_inv_rsmooth)
+
+      ! Set weight for combination with unsmoothed field
+      basal_roughness_remap_wsmooth = 0.04_dp
+
+      DO vi = region%mesh%vi1, region%mesh%vi2
+
+          ! Combined the smoothed and raw fields through a weighed average
+          region%ice%phi_fric_a( vi) = (1._dp - basal_roughness_remap_wsmooth) * region%ice%phi_fric_a( vi) + &
+                                                basal_roughness_remap_wsmooth  * rough_smoothed( vi)
+
+          ! Make sure the variable stays within the prescribed limits
+          region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+
+      END DO
+      CALL sync
+
       ! Clean up after yourself
       CALL deallocate_shared( wbed_method1)
       CALL deallocate_shared( wbed_method2)
+      CALL deallocate_shared( wrough_smoothed)
 
-    END IF
+    END IF ! (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_basal_sliding_inversion))
 
     ! == Ice thickness rate of change
     ! ===============================

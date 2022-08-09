@@ -27,7 +27,7 @@ MODULE ice_dynamics_module
   use ice_velocity_module,                 only: map_velocities_b_to_c_2D, remap_velocities, initialise_velocity_solver
   use ice_thickness_module,                only: calc_dHi_dt
   use basal_conditions_and_sliding_module, only: initialise_basal_conditions, remap_basal_conditions
-  ! use thermodynamics_module,               only: calc_ice_rheology, remap_ice_temperature
+  use thermodynamics_module,               only: calc_ice_rheology, remap_ice_temperature
   use mpi_module,                          only: allgather_array
 
   implicit none
@@ -887,7 +887,7 @@ contains
     allocate(  ice%Hi_corr             (mesh%vi1:mesh%vi2               ))
 
     ! Thermodynamics
-    allocate(  ice%mask_ice_a_prev     (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%mask_ice_a_prev     (       1:mesh%nV                ))
     allocate(  ice%internal_heating_a  (mesh%vi1:mesh%vi2 , C%nz        ))
     allocate(  ice%frictional_heating_a(mesh%vi1:mesh%vi2               ))
     allocate(  ice%GHF_a               (mesh%vi1:mesh%vi2               ))
@@ -936,7 +936,6 @@ contains
         ice%Hi_a( vi) = 0._dp
       END IF
     END DO
-    CALL sync
 
     ! Remove artificial ice at domain border (messes up with thermodynamics)
     DO vi = mesh_new%vi1, mesh_new%vi2
@@ -944,10 +943,9 @@ contains
         ice%Hi_a( vi) = 0._dp
       END IF
     END DO
-    CALL sync
 
     ! ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
-    ! CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
+    CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
 
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,        'cons_2nd_order')
@@ -1053,7 +1051,7 @@ contains
     ! ===============
 
     ! ! Recalculate ice flow factor
-    ! CALL calc_ice_rheology( mesh_new, ice, time)
+    CALL calc_ice_rheology( mesh_new, ice, time)
 
     ! Update masks
     CALL update_general_ice_model_data( mesh_new, ice)

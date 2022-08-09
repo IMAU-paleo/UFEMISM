@@ -60,6 +60,7 @@ UFEMISM_program_objects = \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \
+        thermodynamics_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
         ice_dynamics_module.o \

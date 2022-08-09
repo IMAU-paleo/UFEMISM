@@ -55,9 +55,10 @@ program UFEMISM_program
                                    initialise_model_configuration, C, crash, warning, &
                                    reset_resource_tracker
   use parallel_module,       only: initialise_parallelisation, par, sync, ierr
-  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region
+  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region, &
+                                   type_climate_matrix_global
   use forcing_module,        only: initialise_global_forcing
-
+  use climate_module,        only: initialise_climate_model_global
   use zeta_module,           only: initialise_zeta_discretisation
   use UFEMISM_main_model,    only: initialise_model, run_model
   use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
@@ -67,17 +68,20 @@ program UFEMISM_program
 
   implicit none
 
-  character(len=256), parameter      :: version_number = '0.1'
+  character(len=256), parameter        :: version_number = '0.1'
 
   ! The four model regions
   type(type_model_region), allocatable :: NAM, EAS, GRL, ANT
 
+  ! The global climate/ocean matrices
+  TYPE(type_climate_matrix_global)     :: climate_matrix_global
+
   ! Coupling
-  real(dp)                           :: t_coupling, t_end_models
+  real(dp)                             :: t_coupling, t_end_models
 
   ! Computation time tracking
-  type(type_netcdf_resource_tracker) :: resources
-  real(dp)                           :: tstart, tstop, t1, tcomp_loop
+  type(type_netcdf_resource_tracker)   :: resources
+  real(dp)                             :: tstart, tstop, t1, tcomp_loop
 
 ! ===== START =====
 ! =================
@@ -107,6 +111,11 @@ program UFEMISM_program
 
   call initialise_model_configuration( version_number)
 
+  ! == Create the resource tracking output file
+  ! ===========================================
+
+  call create_resource_tracking_file( resources)
+
   ! == Vertical scaled coordinate transformation
   ! ============================================
 
@@ -117,10 +126,10 @@ program UFEMISM_program
 
   call initialise_global_forcing
 
-  ! == Create the resource tracking output file
-  ! ===========================================
+  ! == Initialise the climate matrix
+  ! ================================
 
-  call create_resource_tracking_file( resources)
+  CALL initialise_climate_model_global( climate_matrix_global)
 
   ! == Initialise the model regions
   ! ===============================

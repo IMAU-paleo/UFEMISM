@@ -311,22 +311,32 @@
   ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
   ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]
 
-  ! Climate matrix
-  ! ==============
+  ! Climate
+  ! =======
 
-  ! Present-day observed climate (ERA40) (NetCDF)
-  filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
+    choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "idealised", "PD_obs", "matrix_warm_cold"
 
-  ! GCM snapshots
-  choice_climate_matrix_config                = 'PI_LGM'                         ! 'PI_LGM' uses 2 snapshots
-  filename_GCM_snapshot_PI_config             = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  filename_GCM_snapshot_LGM_config            = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+    ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+    filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
 
-  ! Ice5G ice-sheet geometry
-  filename_ICE5G_PD_config                    = 'data/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  filename_ICE5G_LGM_config                   = 'data/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
+    ! GCM snapshots in the matrix_warm_cold option
+    filename_climate_snapshot_PI_config         = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+    filename_climate_snapshot_warm_config       = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+    filename_climate_snapshot_cold_config       = 'data/CMIP5/atm/CCSM_CMIP5_lgm_atmos.nc'
 
-  constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
+    constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
+
+    ! Orbit time and CO2 concentration of the warm and cold snapshots
+    matrix_high_CO2_level_config                = 280.0                            ! CO2 level  pertaining to the warm climate (PI  level default)
+    matrix_low_CO2_level_config                 = 190.0                            ! CO2 level  pertaining to the cold climate (LGM level default)
+    matrix_warm_orbit_time_config               = 0.0                              ! Orbit time pertaining to the warm climate (PI default)
+    matrix_cold_orbit_time_config               = -21000.0                         ! Orbit time pertaining to the cold climate (LGM default)
+
+    ! Whether or not to apply a bias correction to the GCM snapshots
+    climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
+    climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+
+    switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
 
   ! Forcing
   ! =======

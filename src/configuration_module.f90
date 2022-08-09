@@ -402,33 +402,40 @@ MODULE configuration_module
   REAL(dp)            :: uniform_ice_thermal_conductivity_config     = 6.626958E7_dp                    ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
   logical             :: use_submesh_config                          = .true.
 
-  ! Climate
-  ! =======
+  ! == Climate
+  ! ==========
 
-  CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+    CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
+    CHARACTER(LEN=256)  :: choice_idealised_climate_config             = 'EISMINT1_A'
 
-  ! GCM snapshots in the matrix_warm_cold option
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+    ! NetCDF files containing direct global/regional climate forcing
+    CHARACTER(LEN=256)  :: filename_direct_global_climate_config       = ''
+    CHARACTER(LEN=256)  :: filename_direct_regional_climate_NAM_config = ''
+    CHARACTER(LEN=256)  :: filename_direct_regional_climate_EAS_config = ''
+    CHARACTER(LEN=256)  :: filename_direct_regional_climate_GRL_config = ''
+    CHARACTER(LEN=256)  :: filename_direct_regional_climate_ANT_config = ''
 
-  ! Scaling factor for CO2 vs ice weights
-  REAL(dp)            :: climate_matrix_CO2vsice_NAM_config          = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on temperature
-  REAL(dp)            :: climate_matrix_CO2vsice_EAS_config          = 0.5_dp                           ! Can be set separately for different regions
-  REAL(dp)            :: climate_matrix_CO2vsice_GRL_config          = 0.75_dp                          ! Default values are from Berends et al, 2018
-  REAL(dp)            :: climate_matrix_CO2vsice_ANT_config          = 0.75_dp                          ! 1.0_dp equals glacial index method
+    ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+    CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
 
-  ! Orbit time and CO2 concentration of the warm and cold snapshots
-  REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
-  REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
-  REAL(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
-  REAL(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
+    ! GCM snapshots in the matrix_warm_cold option
+    CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+    CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+    CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
 
-  ! Whether or not to apply a bias correction to the GCM snapshots
-  LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
-  LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+    REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
-  LOGICAL             :: switch_glacial_index_precip_config          = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+    ! Orbit time and CO2 concentration of the warm and cold snapshots
+    REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
+    REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
+    REAL(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
+    REAL(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
+
+    ! Whether or not to apply a bias correction to the GCM snapshots
+    LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
+    LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+
+    LOGICAL             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
   ! Ocean
   ! =====
@@ -602,23 +609,6 @@ MODULE configuration_module
   REAL(dp)            :: ELRA_lithosphere_flex_rigidity_config       = 1.0E+25_dp                       ! Lithospheric flexural rigidity [kg m^2 s^-2]
   REAL(dp)            :: ELRA_bedrock_relaxation_time_config         = 3000.0_dp                        ! Relaxation time for bedrock adjustment [yr]
   REAL(dp)            :: ELRA_mantle_density_config                  = 3300.0_dp                        ! Mantle density [kg m^-3]
-
-  ! Climate matrix
-  ! ==============
-
-  ! Present-day observed climate (ERA40) (NetCDF)
-  CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
-
-  ! GCM snapshots
-  CHARACTER(LEN=256)  :: choice_climate_matrix_config                = 'PI_LGM'                         ! 'PI_LGM' uses 2 snapshots
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_PI_config             = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-  CHARACTER(LEN=256)  :: filename_GCM_snapshot_LGM_config            = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
-
-  ! Ice5G ice-sheet geometry
-  CHARACTER(LEN=256)  :: filename_ICE5G_PD_config                    = 'data/ICE5G/ice5g_v1.2_00.0k_1deg.nc'
-  CHARACTER(LEN=256)  :: filename_ICE5G_LGM_config                   = 'data/ICE5G/ice5g_v1.2_21.0k_1deg.nc'
-
-  REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
   ! SMB tuning
   ! ==========
@@ -1056,30 +1046,37 @@ MODULE configuration_module
     ! Climate
     ! =======
 
-    CHARACTER(LEN=256)                  :: choice_climate_model
+      character(len=256)                  :: choice_climate_model
+      character(len=256)                  :: choice_idealised_climate
 
-    ! GCM snapshots in the matrix_warm_cold option
-    CHARACTER(LEN=256)                  :: filename_climate_snapshot_PI
-    CHARACTER(LEN=256)                  :: filename_climate_snapshot_warm
-    CHARACTER(LEN=256)                  :: filename_climate_snapshot_cold
+      ! NetCDF files containing direct global/regional climate forcing
+      character(len=256)                  :: filename_direct_global_climate
+      character(len=256)                  :: filename_direct_regional_climate_NAM
+      character(len=256)                  :: filename_direct_regional_climate_EAS
+      character(len=256)                  :: filename_direct_regional_climate_GRL
+      character(len=256)                  :: filename_direct_regional_climate_ANT
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: climate_matrix_CO2vsice_NAM
-    REAL(dp)                            :: climate_matrix_CO2vsice_EAS
-    REAL(dp)                            :: climate_matrix_CO2vsice_GRL
-    REAL(dp)                            :: climate_matrix_CO2vsice_ANT
+      ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+      character(len=256)                  :: filename_PD_obs_climate
 
-    ! Orbit time and CO2 concentration of the warm and cold snapshots
-    REAL(dp)                            :: matrix_high_CO2_level
-    REAL(dp)                            :: matrix_low_CO2_level
-    REAL(dp)                            :: matrix_warm_orbit_time
-    REAL(dp)                            :: matrix_cold_orbit_time
+      ! GCM snapshots in the matrix_warm_cold option
+      character(len=256)                  :: filename_climate_snapshot_PI
+      character(len=256)                  :: filename_climate_snapshot_warm
+      character(len=256)                  :: filename_climate_snapshot_cold
 
-    ! Whether or not to apply a bias correction to the GCM snapshots
-    LOGICAL                             :: climate_matrix_biascorrect_warm
-    LOGICAL                             :: climate_matrix_biascorrect_cold
+      real(dp)                            :: constant_lapserate
 
-    LOGICAL                             :: switch_glacial_index_precip
+      ! Orbit time and CO2 concentration of the warm and cold snapshots
+      real(dp)                            :: matrix_high_CO2_level
+      real(dp)                            :: matrix_low_CO2_level
+      real(dp)                            :: matrix_warm_orbit_time
+      real(dp)                            :: matrix_cold_orbit_time
+
+      ! Whether or not to apply a bias correction to the GCM snapshots
+      logical                             :: climate_matrix_biascorrect_warm
+      logical                             :: climate_matrix_biascorrect_cold
+
+      logical                             :: switch_glacial_index
 
     ! Ocean
     ! =====
@@ -1252,23 +1249,6 @@ MODULE configuration_module
     REAL(dp)                            :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
-
-    ! Climate matrix
-    ! ==============
-
-    CHARACTER(LEN=256)                  :: filename_PD_obs_climate
-    CHARACTER(LEN=256)                  :: choice_climate_matrix
-    CHARACTER(LEN=256)                  :: filename_GCM_snapshot_PI
-    CHARACTER(LEN=256)                  :: filename_GCM_snapshot_LGM
-    CHARACTER(LEN=256)                  :: filename_ICE5G_PD
-    CHARACTER(LEN=256)                  :: filename_ICE5G_LGM
-
-    CHARACTER(LEN=256)                  :: choice_ocean_temperature_model
-    REAL(dp)                            :: ocean_temperature_PD
-    REAL(dp)                            :: ocean_temperature_cold
-    REAL(dp)                            :: ocean_temperature_warm
-
-    REAL(dp)                            :: constant_lapserate
 
     ! SMB melt tuning
     ! ===============
@@ -1787,20 +1767,24 @@ CONTAINS
                      uniform_ice_thermal_conductivity_config,         &
                      use_submesh_config,                              &
                      choice_climate_model_config,                     &
+                     choice_idealised_climate_config,                 &
+                     filename_direct_global_climate_config,           &
+                     filename_direct_regional_climate_NAM_config,     &
+                     filename_direct_regional_climate_EAS_config,     &
+                     filename_direct_regional_climate_GRL_config,     &
+                     filename_direct_regional_climate_ANT_config,     &
+                     filename_PD_obs_climate_config,                  &
                      filename_climate_snapshot_PI_config,             &
                      filename_climate_snapshot_warm_config,           &
                      filename_climate_snapshot_cold_config,           &
-                     climate_matrix_CO2vsice_NAM_config,              &
-                     climate_matrix_CO2vsice_EAS_config,              &
-                     climate_matrix_CO2vsice_GRL_config,              &
-                     climate_matrix_CO2vsice_ANT_config,              &
+                     constant_lapserate_config,                       &
                      matrix_high_CO2_level_config,                    &
                      matrix_low_CO2_level_config,                     &
                      matrix_warm_orbit_time_config,                   &
                      matrix_cold_orbit_time_config,                   &
                      climate_matrix_biascorrect_warm_config,          &
                      climate_matrix_biascorrect_cold_config,          &
-                     switch_glacial_index_precip_config,              &
+                     switch_glacial_index_config,                     &
                      choice_ocean_model_config,                       &
                      choice_idealised_ocean_config,                   &
                      filename_PD_obs_ocean_config,                    &
@@ -1930,12 +1914,6 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
-                     filename_PD_obs_climate_config,                  &
-                     choice_climate_matrix_config,                    &
-                     filename_GCM_snapshot_PI_config,                 &
-                     filename_GCM_snapshot_LGM_config,                &
-                     filename_ICE5G_PD_config,                        &
-                     filename_ICE5G_LGM_config,                       &
                      choice_ocean_temperature_model_config,           &
                      ocean_temperature_PD_config,                     &
                      ocean_temperature_cold_config,                   &
@@ -2378,30 +2356,37 @@ CONTAINS
     ! Climate
     ! =======
 
-    C%choice_climate_model                     = choice_climate_model_config
+      C%choice_climate_model                     = choice_climate_model_config
+      C%choice_idealised_climate                 = choice_idealised_climate_config
 
-    ! GCM snapshots in the matrix_warm_cold option
-    C%filename_climate_snapshot_PI             = filename_climate_snapshot_PI_config
-    C%filename_climate_snapshot_warm           = filename_climate_snapshot_warm_config
-    C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
+      ! NetCDF files containing direct global/regional climate forcing
+      C%filename_direct_global_climate           = filename_direct_global_climate_config
+      C%filename_direct_regional_climate_NAM     = filename_direct_regional_climate_NAM_config
+      C%filename_direct_regional_climate_EAS     = filename_direct_regional_climate_EAS_config
+      C%filename_direct_regional_climate_GRL     = filename_direct_regional_climate_GRL_config
+      C%filename_direct_regional_climate_ANT     = filename_direct_regional_climate_ANT_config
 
-    ! Scaling factor for CO2 vs ice weights
-    C%climate_matrix_CO2vsice_NAM              = climate_matrix_CO2vsice_NAM_config
-    C%climate_matrix_CO2vsice_EAS              = climate_matrix_CO2vsice_EAS_config
-    C%climate_matrix_CO2vsice_GRL              = climate_matrix_CO2vsice_GRL_config
-    C%climate_matrix_CO2vsice_ANT              = climate_matrix_CO2vsice_ANT_config
+      ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+      C%filename_PD_obs_climate                  = filename_PD_obs_climate_config
 
-    ! Orbit time and CO2 concentration of the warm and cold snapshots
-    C%matrix_high_CO2_level                    = matrix_high_CO2_level_config
-    C%matrix_low_CO2_level                     = matrix_low_CO2_level_config
-    C%matrix_warm_orbit_time                   = matrix_warm_orbit_time_config
-    C%matrix_cold_orbit_time                   = matrix_cold_orbit_time_config
+      ! GCM snapshots in the matrix_warm_cold option
+      C%filename_climate_snapshot_PI             = filename_climate_snapshot_PI_config
+      C%filename_climate_snapshot_warm           = filename_climate_snapshot_warm_config
+      C%filename_climate_snapshot_cold           = filename_climate_snapshot_cold_config
 
-    ! Whether or not to apply a bias correction to the GCM snapshots
-    C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
-    C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
+      C%constant_lapserate                       = constant_lapserate_config
 
-    C%switch_glacial_index_precip              = switch_glacial_index_precip_config
+      ! Orbit time and CO2 concentration of the warm and cold snapshots
+      C%matrix_high_CO2_level                    = matrix_high_CO2_level_config
+      C%matrix_low_CO2_level                     = matrix_low_CO2_level_config
+      C%matrix_warm_orbit_time                   = matrix_warm_orbit_time_config
+      C%matrix_cold_orbit_time                   = matrix_cold_orbit_time_config
+
+      ! Whether or not to apply a bias correction to the GCM snapshots
+      C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
+      C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
+
+      C%switch_glacial_index                     = switch_glacial_index_config
 
     ! Ocean
     ! =====
@@ -2574,23 +2559,6 @@ CONTAINS
     C%ELRA_lithosphere_flex_rigidity           = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
-
-    ! Climate matrix
-    ! ==============
-
-    C%filename_PD_obs_climate                  = filename_PD_obs_climate_config
-    C%choice_climate_matrix                    = choice_climate_matrix_config
-    C%filename_GCM_snapshot_PI                 = filename_GCM_snapshot_PI_config
-    C%filename_GCM_snapshot_LGM                = filename_GCM_snapshot_LGM_config
-    C%filename_ICE5G_PD                        = filename_ICE5G_PD_config
-    C%filename_ICE5G_LGM                       = filename_ICE5G_LGM_config
-
-    C%choice_ocean_temperature_model           = choice_ocean_temperature_model_config
-    C%ocean_temperature_PD                     = ocean_temperature_PD_config
-    C%ocean_temperature_cold                   = ocean_temperature_cold_config
-    C%ocean_temperature_warm                   = ocean_temperature_warm_config
-
-    C%constant_lapserate                       = constant_lapserate_config
 
     ! SMB melt tuning
     ! ===============

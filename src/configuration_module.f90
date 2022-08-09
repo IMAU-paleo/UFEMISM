@@ -405,72 +405,74 @@ MODULE configuration_module
   ! == Climate
   ! ==========
 
-    CHARACTER(LEN=256)  :: choice_climate_model_config                 = 'matrix_warm_cold'               ! Choice of climate model: "none", "idealised", "PD_obs", "PD_dTglob", "matrix_warm_cold", "direct_global", "direct_regional"
-    CHARACTER(LEN=256)  :: choice_idealised_climate_config             = 'EISMINT1_A'
+    character(len=256)  :: choice_climate_model_config                 = 'PD_obs'                        ! Choice of climate model: "none", "PD_obs", "matrix_warm_cold"
+    character(len=256)  :: choice_idealised_climate_config             = 'EISMINT1_A'
 
     ! NetCDF files containing direct global/regional climate forcing
-    CHARACTER(LEN=256)  :: filename_direct_global_climate_config       = ''
-    CHARACTER(LEN=256)  :: filename_direct_regional_climate_NAM_config = ''
-    CHARACTER(LEN=256)  :: filename_direct_regional_climate_EAS_config = ''
-    CHARACTER(LEN=256)  :: filename_direct_regional_climate_GRL_config = ''
-    CHARACTER(LEN=256)  :: filename_direct_regional_climate_ANT_config = ''
+    character(len=256)  :: filename_direct_global_climate_config       = ''
+    character(len=256)  :: filename_direct_regional_climate_NAM_config = ''
+    character(len=256)  :: filename_direct_regional_climate_EAS_config = ''
+    character(len=256)  :: filename_direct_regional_climate_GRL_config = ''
+    character(len=256)  :: filename_direct_regional_climate_ANT_config = ''
 
     ! NetCDF file containing the present-day observed climate (e.g. ERA40)
-    CHARACTER(LEN=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
+    character(len=256)  :: filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
 
     ! GCM snapshots in the matrix_warm_cold option
-    CHARACTER(LEN=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-    CHARACTER(LEN=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
-    CHARACTER(LEN=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
+    character(len=256)  :: filename_climate_snapshot_PI_config         = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+    character(len=256)  :: filename_climate_snapshot_warm_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_PI_Control.nc'
+    character(len=256)  :: filename_climate_snapshot_cold_config       = 'data/GCM_snapshots/Singarayer_Valdes_2010_LGM.nc'
 
-    REAL(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
+    real(dp)            :: constant_lapserate_config                   = 0.008_dp                         ! Constant atmospheric lapse rate [K m^-1]
 
     ! Orbit time and CO2 concentration of the warm and cold snapshots
-    REAL(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
-    REAL(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
-    REAL(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
-    REAL(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
+    real(dp)            :: matrix_high_CO2_level_config                = 280._dp                          ! CO2 level  pertaining to the warm climate (PI  level default)
+    real(dp)            :: matrix_low_CO2_level_config                 = 190._dp                          ! CO2 level  pertaining to the cold climate (LGM level default)
+    real(dp)            :: matrix_warm_orbit_time_config               = 0._dp                            ! Orbit time pertaining to the warm climate (PI default)
+    real(dp)            :: matrix_cold_orbit_time_config               = -21000._dp                       ! Orbit time pertaining to the cold climate (LGM default)
 
     ! Whether or not to apply a bias correction to the GCM snapshots
-    LOGICAL             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
-    LOGICAL             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+    logical             :: climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
+    logical             :: climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
-    LOGICAL             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
+    ! Glacial index method
+    logical             :: switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used, warm/cold weights will depend only on CO2
 
   ! Ocean
   ! =====
 
-  CHARACTER(LEN=256)  :: choice_ocean_model_config                   = 'matrix_warm_cold'               ! Choice of ocean model: "none", "idealised", "uniform_warm_cold", "PD_obs", "matrix_warm_cold"
-  CHARACTER(LEN=256)  :: choice_idealised_ocean_config               = 'MISMIP+_warm'                   ! Choice of idealised ocean: 'MISMIP+_warm', 'MISMIP+_cold', 'MISOMIP1', 'Reese2018_ANT'
+    character(len=256)  :: choice_ocean_model_config                   = 'PD_obs'                         ! Choice of ocean model: "none", "PD_obs", "matrix_warm_cold"
+    character(len=256)  :: choice_idealised_ocean_config               = 'MISMIP+_warm'                   ! Choice of idealised ocean: 'MISMIP+_warm', 'MISMIP+_cold', 'MISOMIP1', 'Reese2018_ANT'
 
-  ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
-  CHARACTER(LEN=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
-  CHARACTER(LEN=256)  :: name_ocean_temperature_config               = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
-  CHARACTER(LEN=256)  :: name_ocean_salinity_config                  = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+    ! NetCDF file containing the present-day observed ocean
+    character(len=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
+    character(len=256)  :: name_ocean_temperature_obs_config           = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+    character(len=256)  :: name_ocean_salinity_obs_config              = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
 
-  ! GCM snapshots in the matrix_warm_cold option
-  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
-  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_warm_config     = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
-  CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_cold_config     = 'data/COSMOS_ocean_examples/COSMOS_LGM_oceanTS_prep.nc'
+    ! GCM snapshots in the matrix_warm_cold option
+    character(len=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
+    character(len=256)  :: filename_GCM_ocean_snapshot_warm_config     = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
+    character(len=256)  :: filename_GCM_ocean_snapshot_cold_config     = 'data/COSMOS_ocean_examples/COSMOS_LGM_oceanTS_prep.nc'
+    character(len=256)  :: name_ocean_temperature_GCM_config           = 't_ocean'
+    character(len=256)  :: name_ocean_salinity_GCM_config              = 's_ocean'
 
-  ! Parameters used when choice_ocean_model = "matrix_warm_cold"
-  CHARACTER(LEN=256)  :: choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
-  REAL(dp)            :: ocean_vertical_grid_max_depth_config        = 1500._dp                         ! Maximum depth           to be used for ocean data
-  REAL(dp)            :: ocean_regular_grid_dz_config                = 150._dp                          ! Vertical grid spacing   to be used for ocean data when choice_ocean_vertical_grid_config = 'regular'
-  CHARACTER(LEN=256)  :: ocean_extrap_dir_config                     = 'data/extrapolated_ocean_files'  ! Directory where extrapolated ocean files are stored
-  REAL(dp)            :: ocean_extrap_res_config                     = 5000._dp                         ! High resolution at which the ocean data extrapolation should be performed
-  REAL(dp)            :: ocean_extrap_Gauss_sigma_config             = 8000._dp                         ! 1-sigma of the Gaussian smoothing operation used to extrapolate the ocean data
-  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_NAM_config  = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'                     ! Path to a NetCDF file containing
-  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_EAS_config  = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'                          ! (present-day) geometry at high
-  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/Greenland_BedMachine_5km.nc'      ! resolution, used for ocean
-  CHARACTER(LEN=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
-  REAL(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
+    ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+    real(dp)            :: ocean_temperature_PD_config                 = 271.46_dp                        ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
+    real(dp)            :: ocean_temperature_cold_config               = 268.16_dp                        ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
+    real(dp)            :: ocean_temperature_warm_config               = 275.16_dp                        ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
 
-  ! Scaling factor for CO2 vs ice weights
-  REAL(dp)            :: ocean_matrix_CO2vsice_NAM_config            = 0.5_dp                           ! Weight factor for the influence of CO2 vs ice cover on ocean T and S
-  REAL(dp)            :: ocean_matrix_CO2vsice_EAS_config            = 0.5_dp                           ! Can be set separately for different regions
-  REAL(dp)            :: ocean_matrix_CO2vsice_GRL_config            = 0.75_dp
-  REAL(dp)            :: ocean_matrix_CO2vsice_ANT_config            = 0.75_dp
+    ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+    character(len=256)  :: choice_ocean_vertical_grid_config           = 'regular'                        ! Choice of vertical grid to be used for ocean data
+    real(dp)            :: ocean_vertical_grid_max_depth_config        = 1500._dp                         ! Maximum depth           to be used for ocean data
+    real(dp)            :: ocean_regular_grid_dz_config                = 150._dp                          ! Vertical grid spacing   to be used for ocean data when choice_ocean_vertical_grid_config = 'regular'
+    character(len=256)  :: ocean_extrap_dir_config                     = 'data/extrapolated_ocean_files'  ! Directory where extrapolated ocean files are stored
+    real(dp)            :: ocean_extrap_res_config                     = 5000._dp                         ! High resolution at which the ocean data extrapolation should be performed
+    real(dp)            :: ocean_extrap_Gauss_sigma_config             = 8000._dp                         ! 1-sigma of the Gaussian smoothing operation used to extrapolate the ocean data
+    character(len=256)  :: ocean_extrap_hires_geo_filename_NAM_config  = 'data/ETOPO1/NorthAmerica_ETOPO1_5km.nc'                     ! Path to a NetCDF file containing
+    character(len=256)  :: ocean_extrap_hires_geo_filename_EAS_config  = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'                          ! (present-day) geometry at high
+    character(len=256)  :: ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'      ! resolution, used for ocean
+    character(len=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
+    real(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
 
   ! Surface mass balance
   ! ====================
@@ -629,15 +631,6 @@ MODULE configuration_module
   REAL(dp)            :: C_refr_EAS_config                           = 0.051_dp
   REAL(dp)            :: C_refr_GRL_config                           = 0.051_dp
   REAL(dp)            :: C_refr_ANT_config                           = 0.051_dp
-
-  ! Sub-shelf melt parameterisation
-  ! ===============================
-
-  ! Ocean temperature (used for both thermodynamics and basal melt)
-  CHARACTER(LEN=256)  :: choice_ocean_temperature_model_config       = 'scaled'                         ! Can be "fixed" (use PD value) or "scaled" (scale between "PD", "warm", and "cold" values based on forcing (prescribed or inverse-modelled))
-  REAL(dp)            :: ocean_temperature_PD_config                 = 271.46_dp                        ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
-  REAL(dp)            :: ocean_temperature_cold_config               = 268.16_dp                        ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
-  REAL(dp)            :: ocean_temperature_warm_config               = 275.16_dp                        ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
 
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
@@ -1076,44 +1069,46 @@ MODULE configuration_module
       logical                             :: climate_matrix_biascorrect_warm
       logical                             :: climate_matrix_biascorrect_cold
 
+      ! Glacial index method
       logical                             :: switch_glacial_index
 
     ! Ocean
     ! =====
 
-    CHARACTER(LEN=256)                  :: choice_ocean_model
-    CHARACTER(LEN=256)                  :: choice_idealised_ocean
+      character(len=256)                  :: choice_ocean_model
+      character(len=256)                  :: choice_idealised_ocean
 
-    ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
-    CHARACTER(LEN=256)                  :: filename_PD_obs_ocean
-    CHARACTER(LEN=256)                  :: name_ocean_temperature
-    CHARACTER(LEN=256)                  :: name_ocean_salinity
+      ! NetCDF file containing the present-day observed ocean
+      character(len=256)                  :: filename_PD_obs_ocean
+      character(len=256)                  :: name_ocean_temperature_obs
+      character(len=256)                  :: name_ocean_salinity_obs
 
-    ! GCM snapshots in the matrix_warm_cold option
-    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_PI
-    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_warm
-    CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_cold
+      ! GCM snapshots in the matrix_warm_cold option
+      character(len=256)                  :: filename_GCM_ocean_snapshot_PI
+      character(len=256)                  :: filename_GCM_ocean_snapshot_warm
+      character(len=256)                  :: filename_GCM_ocean_snapshot_cold
+      character(len=256)                  :: name_ocean_temperature_GCM
+      character(len=256)                  :: name_ocean_salinity_GCM
 
-    ! Parameters used when choice_ocean_model = "matrix_warm_cold"
-    CHARACTER(LEN=256)                  :: choice_ocean_vertical_grid
-    REAL(dp)                            :: ocean_vertical_grid_max_depth
-    REAL(dp)                            :: ocean_regular_grid_dz
-    INTEGER                             :: nz_ocean ! NOTE: nz_ocean and z_ocean cannot be set through the config file, but are filled in by the "initialise_ocean_vertical_grid" in the ocean_module!
-    REAL(dp), DIMENSION(:), ALLOCATABLE :: z_ocean
-    CHARACTER(LEN=256)                  :: ocean_extrap_dir
-    REAL(dp)                            :: ocean_extrap_res
-    REAL(dp)                            :: ocean_extrap_Gauss_sigma
-    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_NAM
-    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_EAS
-    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_GRL
-    CHARACTER(LEN=256)                  :: ocean_extrap_hires_geo_filename_ANT
-    REAL(dp)                            :: ocean_w_tot_hist_averaging_window
+      ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+      real(dp)                            :: ocean_temperature_PD
+      real(dp)                            :: ocean_temperature_cold
+      real(dp)                            :: ocean_temperature_warm
 
-    ! Scaling factor for CO2 vs ice weights
-    REAL(dp)                            :: ocean_matrix_CO2vsice_NAM
-    REAL(dp)                            :: ocean_matrix_CO2vsice_EAS
-    REAL(dp)                            :: ocean_matrix_CO2vsice_GRL
-    REAL(dp)                            :: ocean_matrix_CO2vsice_ANT
+      ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+      character(len=256)                  :: choice_ocean_vertical_grid
+      real(dp)                            :: ocean_vertical_grid_max_depth
+      real(dp)                            :: ocean_regular_grid_dz
+      INTEGER                             :: nz_ocean
+      real(dp), dimension(:), allocatable :: z_ocean
+      character(len=256)                  :: ocean_extrap_dir
+      real(dp)                            :: ocean_extrap_res
+      real(dp)                            :: ocean_extrap_Gauss_sigma
+      character(len=256)                  :: ocean_extrap_hires_geo_filename_NAM
+      character(len=256)                  :: ocean_extrap_hires_geo_filename_EAS
+      character(len=256)                  :: ocean_extrap_hires_geo_filename_GRL
+      character(len=256)                  :: ocean_extrap_hires_geo_filename_ANT
+      real(dp)                            :: ocean_w_tot_hist_averaging_window
 
     ! Surface mass balance
     ! ====================
@@ -1788,11 +1783,16 @@ CONTAINS
                      choice_ocean_model_config,                       &
                      choice_idealised_ocean_config,                   &
                      filename_PD_obs_ocean_config,                    &
-                     name_ocean_temperature_config,                   &
-                     name_ocean_salinity_config,                      &
+                     name_ocean_temperature_obs_config,               &
+                     name_ocean_salinity_obs_config,                  &
                      filename_GCM_ocean_snapshot_PI_config,           &
                      filename_GCM_ocean_snapshot_warm_config,         &
                      filename_GCM_ocean_snapshot_cold_config,         &
+                     name_ocean_temperature_GCM_config,               &
+                     name_ocean_salinity_GCM_config,                  &
+                     ocean_temperature_PD_config,                     &
+                     ocean_temperature_cold_config,                   &
+                     ocean_temperature_warm_config,                   &
                      choice_ocean_vertical_grid_config,               &
                      ocean_vertical_grid_max_depth_config,            &
                      ocean_regular_grid_dz_config,                    &
@@ -1804,10 +1804,6 @@ CONTAINS
                      ocean_extrap_hires_geo_filename_GRL_config,      &
                      ocean_extrap_hires_geo_filename_ANT_config,      &
                      ocean_w_tot_hist_averaging_window_config,        &
-                     ocean_matrix_CO2vsice_NAM_config,                &
-                     ocean_matrix_CO2vsice_EAS_config,                &
-                     ocean_matrix_CO2vsice_GRL_config,                &
-                     ocean_matrix_CO2vsice_ANT_config,                &
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
@@ -1914,10 +1910,6 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
-                     choice_ocean_temperature_model_config,           &
-                     ocean_temperature_PD_config,                     &
-                     ocean_temperature_cold_config,                   &
-                     ocean_temperature_warm_config,                   &
                      constant_lapserate_config,                       &
                      C_abl_constant_NAM_config,                       &
                      C_abl_constant_EAS_config,                       &
@@ -2386,42 +2378,44 @@ CONTAINS
       C%climate_matrix_biascorrect_warm          = climate_matrix_biascorrect_warm_config
       C%climate_matrix_biascorrect_cold          = climate_matrix_biascorrect_cold_config
 
+      ! Glacial index method
       C%switch_glacial_index                     = switch_glacial_index_config
 
     ! Ocean
     ! =====
 
-    C%choice_ocean_model                       = choice_ocean_model_config
-    C%choice_idealised_ocean                   = choice_idealised_ocean_config
+      C%choice_ocean_model                       = choice_ocean_model_config
+      C%choice_idealised_ocean                   = choice_idealised_ocean_config
 
-    ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
-    C%filename_PD_obs_ocean                    = filename_PD_obs_ocean_config
-    C%name_ocean_temperature                   = name_ocean_temperature_config
-    C%name_ocean_salinity                      = name_ocean_salinity_config
+      ! NetCDF file containing the present-day observed ocean
+      C%filename_PD_obs_ocean                    = filename_PD_obs_ocean_config
+      C%name_ocean_temperature_obs               = name_ocean_temperature_obs_config
+      C%name_ocean_salinity_obs                  = name_ocean_salinity_obs_config
 
-    ! GCM snapshots in the matrix_warm_cold option
-    C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config
-    C%filename_GCM_ocean_snapshot_warm         = filename_GCM_ocean_snapshot_warm_config
-    C%filename_GCM_ocean_snapshot_cold         = filename_GCM_ocean_snapshot_cold_config
+      ! GCM snapshots in the matrix_warm_cold option
+      C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config
+      C%filename_GCM_ocean_snapshot_warm         = filename_GCM_ocean_snapshot_warm_config
+      C%filename_GCM_ocean_snapshot_cold         = filename_GCM_ocean_snapshot_cold_config
+      C%name_ocean_temperature_GCM               = name_ocean_temperature_GCM_config
+      C%name_ocean_salinity_GCM                  = name_ocean_salinity_GCM_config
 
-    ! Parameters used when choice_ocean_model = "matrix_warm_cold"
-    C%choice_ocean_vertical_grid               = choice_ocean_vertical_grid_config
-    C%ocean_vertical_grid_max_depth            = ocean_vertical_grid_max_depth_config
-    C%ocean_regular_grid_dz                    = ocean_regular_grid_dz_config
-    C%ocean_extrap_dir                         = ocean_extrap_dir_config
-    C%ocean_extrap_res                         = ocean_extrap_res_config
-    C%ocean_extrap_Gauss_sigma                 = ocean_extrap_Gauss_sigma_config
-    C%ocean_extrap_hires_geo_filename_NAM      = ocean_extrap_hires_geo_filename_NAM_config
-    C%ocean_extrap_hires_geo_filename_EAS      = ocean_extrap_hires_geo_filename_EAS_config
-    C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
-    C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
-    C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
+      ! Uniform ocean temperature values used when choice_ocean_model = "uniform_warm_cold"
+      C%ocean_temperature_PD                     = ocean_temperature_PD_config
+      C%ocean_temperature_cold                   = ocean_temperature_cold_config
+      C%ocean_temperature_warm                   = ocean_temperature_warm_config
 
-    ! Scaling factor for CO2 vs ice weights
-    C%ocean_matrix_CO2vsice_NAM                = ocean_matrix_CO2vsice_NAM_config
-    C%ocean_matrix_CO2vsice_EAS                = ocean_matrix_CO2vsice_EAS_config
-    C%ocean_matrix_CO2vsice_GRL                = ocean_matrix_CO2vsice_GRL_config
-    C%ocean_matrix_CO2vsice_ANT                = ocean_matrix_CO2vsice_ANT_config
+      ! Parameters used when choice_ocean_model = "matrix_warm_cold"
+      C%choice_ocean_vertical_grid               = choice_ocean_vertical_grid_config
+      C%ocean_vertical_grid_max_depth            = ocean_vertical_grid_max_depth_config
+      C%ocean_regular_grid_dz                    = ocean_regular_grid_dz_config
+      C%ocean_extrap_dir                         = ocean_extrap_dir_config
+      C%ocean_extrap_res                         = ocean_extrap_res_config
+      C%ocean_extrap_Gauss_sigma                 = ocean_extrap_Gauss_sigma_config
+      C%ocean_extrap_hires_geo_filename_NAM      = ocean_extrap_hires_geo_filename_NAM_config
+      C%ocean_extrap_hires_geo_filename_EAS      = ocean_extrap_hires_geo_filename_EAS_config
+      C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
+      C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
+      C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
 
     ! Surface mass balance
     ! ====================

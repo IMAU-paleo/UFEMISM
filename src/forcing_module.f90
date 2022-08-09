@@ -1003,7 +1003,6 @@ CONTAINS
 
       CALL inquire_insolation_file( forcing)
 
-
       ! Insolation
       allocate(forcing%ins_time(forcing%ins_nyears))
       allocate(forcing%ins_lat(forcing%ins_nlat))

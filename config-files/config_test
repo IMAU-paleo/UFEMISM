@@ -24,20 +24,6 @@
   do_GRL_config                               = .false.                          ! Greenland
   do_ANT_config                               = .true.                           ! Antarctica
 
-  ! Benchmark experiments
-  ! =====================
-
-  do_benchmark_experiment_config              = .FALSE.
-  choice_benchmark_experiment_config          = 'EISMINT_I'
-  SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
-  ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
-  ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d`Arolla input file
-  MISMIPplus_do_tune_A_for_GL_config          = .FALSE.                          ! Whether or not the flow factor A should be tuned for the GL position
-  MISMIPplus_xGL_target_config                = 450000.0                         ! Mid-channel GL position to tune the flow factor A for
-  MISMIPplus_A_flow_initial_config            = 2.0E-17                          ! Initial flow factor before tuning (or throughout the run when tuning is not used)
-  MISMIPplus_scenario_config                  = ''                               ! Choose between the five MISMIP+  scenarios from Cornford   et al. (2020): ice0, ice1ra, ice1rr, ice2ra, ice2rr
-  MISOMIP1_scenario_config                    = ''                               ! Choose between the four MISOMIP+ scenarios from Asay-Davis et al. (2016): IceOcean1ra, IceOcean1rr, IceOcean2ra, IceOcean2rr
-
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! =======================================================================
 
@@ -46,13 +32,6 @@
   fixed_output_dir_suffix_config              = ''                               ! Suffix to put after the fixed output directory name, useful when doing ensemble runs with the template+variation set-up
   do_write_regional_scalar_output_config      = .TRUE.
   do_write_global_scalar_output_config        = .TRUE.
-
-  ! Debugging
-  ! =========
-
-  do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
-  do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
-  do_time_display_config                      = .TRUE.                           ! Print current model time to screen
 
   ! Domain size for the four regions
   ! ================================
@@ -144,17 +123,24 @@
 
   remove_Lake_Vostok_config                   = .TRUE.
 
-  ! Whether or not the simulation is a restart of a previous simulation
-  ! ===================================================================
+  ! Forcing
+  ! =======
 
-  is_restart_config                           = .FALSE.
-  time_to_restart_from_config                 = 0.0                              ! Can be different from C%start_time_of_run, though this will issue a warning
+  ! The choice of forcing:
+  ! 'd18O_inverse_dT_glob' : Use the inverse routine with the specified d18O record to calculate a global temperature offset (e.g. de Boer et al., 2013)
+  ! 'CO2_direct'           : Use the specified CO2 record to force the climate matrix (e.g. Berends et al., 2018)
+  ! 'd18O_inverse_CO2'     : Use the inverse routine with the specified d18O record to calculate CO2 and then force the climate matrix (e.g. Berends et al., 2019)
+  choice_forcing_method_config                = 'CO2_direct'
 
-  ! Initial model state when restarting from a previous run
-  filename_restart_NAM_config                 = 'filename_restart_NAM_placeholder'
-  filename_restart_EAS_config                 = 'filename_restart_EAS_placeholder'
-  filename_restart_GRL_config                 = 'filename_restart_GRL_placeholder'
-  filename_restart_ANT_config                 = 'filename_restart_ANT_placeholder'
+  dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
+  dT_deepwater_dT_surf_ratio_config           = 0.25                             ! Ratio between global mean surface temperature change and deep-water temperature change
+  d18O_dT_deepwater_ratio_config              = -0.28                            ! Ratio between deep-water temperature change and benthic d18O change
+
+  dT_glob_inverse_averaging_window_config     = 2000.0                           ! Time window (in yr) over which global mean temperature anomaly is averaged before changing it with the inverse routine
+  inverse_d18O_to_dT_glob_scaling_config      = 20.0                             ! Scaling factor between modelled d18O anomaly and prescribed temperature anomaly change (value from de Boer et al., 2013)
+  CO2_inverse_averaging_window_config         = 2000.0                           ! Time window (in yr) over which CO2                             is averaged before changing it with the inverse routine
+  inverse_d18O_to_CO2_scaling_config          = 68.0                             ! Scaling factor between modelled d18O anomaly and modelled CO2 change (value from Berends et al., 2019)
+  inverse_d18O_to_CO2_initial_CO2_config      = 280.0                            ! CO2 value at the start of the simulation when using the inverse method to calculate CO2
 
   ! Input data file paths
   ! =====================
@@ -240,50 +226,6 @@
   choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
   choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
-  ! Ice dynamics - basal conditions and sliding
-  ! ===========================================
-
-  ! Sliding laws
-  choice_sliding_law_config                   = 'Coulomb_regularised'            ! Choice of sliding law: "no_sliding", "idealised", "Coulomb", "Coulomb_regularised", "Weertman", "Tsai2015", "Schoof2005", "Zoet-Iverson"
-  choice_idealised_sliding_law_config         = ''                               ! "ISMIP_HOM_C", "ISMIP_HOM_D", "ISMIP_HOM_E", "ISMIP_HOM_F"
-  slid_delta_v_config                         = 1.0E-3                           ! Normalisation parameter to prevent errors when velocity is zero
-  slid_Weertman_m_config                      = 3.0                              ! Exponent in Weertman sliding law
-  slid_Coulomb_reg_q_plastic_config           = 0.3                              ! Scaling exponent   in regularised Coulomb sliding law
-  slid_Coulomb_reg_u_threshold_config         = 100.0                            ! Threshold velocity in regularised Coulomb sliding law
-  slid_ZI_ut_config                           = 200.0                            ! (uniform) transition velocity used in the Zoet-Iverson sliding law [m/yr]
-  slid_ZI_p_config                            = 5.0                              ! Velocity exponent             used in the Zoet-Iverson sliding law
-
-  ! Basal hydrology
-  choice_basal_hydrology_config               = 'Martin2011'                     ! Choice of basal conditions: "saturated", "Martin2011"
-  Martin2011_hydro_Hb_min_config              = 0.0                              ! Martin et al. (2011) basal hydrology model: low-end  Hb  value of bedrock-dependent pore-water pressure
-  Martin2011_hydro_Hb_max_config              = 1000.0                           ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
-
-  ! Basal roughness / friction
-  choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
-  slid_Weertman_beta_sq_uniform_config        = 1.0E4                            ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 15.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
-  slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
-  slid_Tsai2015_beta_sq_uniform_config        = 1.0E4                            ! Uniform value for beta_sq  in the Tsai2015 sliding law
-  slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
-  slid_Schoof2005_beta_sq_uniform_config      = 1.0E4                            ! Uniform value for beta_sq  in the Schoof2005 sliding law
-  slid_ZI_phi_fric_uniform_config             = 15.0                             ! Uniform value for phi_fric in the Zoet-Iverson sliding law
-  choice_param_basal_roughness_config         = 'Martin2011'                     ! "Martin2011", "SSA_icestream", "MISMIP+", "BIVMIP_A", "BIVMIP_B", "BIVMIP_C"
-  Martin2011till_phi_Hb_min_config            = -1000.0                          ! Martin et al. (2011) bed roughness model: low-end  Hb  value of bedrock-dependent till friction angle
-  Martin2011till_phi_Hb_max_config            = 0.0                              ! Martin et al. (2011) bed roughness model: high-end Hb  value of bedrock-dependent till friction angle
-  Martin2011till_phi_min_config               = 5.0                              ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
-  Martin2011till_phi_max_config               = 20.0                             ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
-  basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
-
-  ! Ice dynamics - calving
-  ! ======================
-
-  choice_calving_law_config                   = 'threshold_thickness'            ! Choice of calving law: "none", "threshold_thickness"
-  calving_threshold_thickness_config          = 200.0                            ! Threshold ice thickness in the "threshold_thickness" calving law (200m taken from ANICE)
-  do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-  remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
-  continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
-  continental_shelf_min_height_config         = -2000.0                          ! Maximum depth of the continental shelf
-
   ! Thermodynamics and rheology
   ! ===========================
 
@@ -297,144 +239,33 @@
   choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   uniform_ice_thermal_conductivity_config     = 6.626958E7                       ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
 
-  ! Sea level and GIA
-  ! =================
-
-  do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
-  choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
-  fixed_sealevel_config                       = 0.0
-  filename_sealevel_record_config             = 'name_of_file.dat'
-  sealevel_record_length_config               = 1
-
-  choice_GIA_model_config                     = 'ELRA'                           ! Can be "none", "ELRA", or "SELEN"
-  ELRA_lithosphere_flex_rigidity_config       = 1.0E+25                          ! Lithospheric flexural rigidity [kg m^2 s^-2]
-  ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
-  ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]
-
   ! Climate
   ! =======
 
-    choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "idealised", "PD_obs", "matrix_warm_cold"
+  choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "idealised", "PD_obs", "matrix_warm_cold"
 
-    ! NetCDF file containing the present-day observed climate (e.g. ERA40)
-    filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
+  ! NetCDF file containing the present-day observed climate (e.g. ERA40)
+  filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
 
-    ! GCM snapshots in the matrix_warm_cold option
-    filename_climate_snapshot_PI_config         = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
-    filename_climate_snapshot_warm_config       = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
-    filename_climate_snapshot_cold_config       = 'data/CMIP5/atm/CCSM_CMIP5_lgm_atmos.nc'
+  ! GCM snapshots in the matrix_warm_cold option
+  filename_climate_snapshot_PI_config         = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+  filename_climate_snapshot_warm_config       = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
+  filename_climate_snapshot_cold_config       = 'data/CMIP5/atm/CCSM_CMIP5_lgm_atmos.nc'
 
-    constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
+  constant_lapserate_config                   = 0.008                            ! Constant atmospheric lapse rate [K m^-1]
 
-    ! Orbit time and CO2 concentration of the warm and cold snapshots
-    matrix_high_CO2_level_config                = 280.0                            ! CO2 level  pertaining to the warm climate (PI  level default)
-    matrix_low_CO2_level_config                 = 190.0                            ! CO2 level  pertaining to the cold climate (LGM level default)
-    matrix_warm_orbit_time_config               = 0.0                              ! Orbit time pertaining to the warm climate (PI default)
-    matrix_cold_orbit_time_config               = -21000.0                         ! Orbit time pertaining to the cold climate (LGM default)
+  ! Orbit time and CO2 concentration of the warm and cold snapshots
+  matrix_high_CO2_level_config                = 280.0                            ! CO2 level  pertaining to the warm climate (PI  level default)
+  matrix_low_CO2_level_config                 = 190.0                            ! CO2 level  pertaining to the cold climate (LGM level default)
+  matrix_warm_orbit_time_config               = 0.0                              ! Orbit time pertaining to the warm climate (PI default)
+  matrix_cold_orbit_time_config               = -21000.0                         ! Orbit time pertaining to the cold climate (LGM default)
 
-    ! Whether or not to apply a bias correction to the GCM snapshots
-    climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
-    climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
+  ! Whether or not to apply a bias correction to the GCM snapshots
+  climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
+  climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
-    switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
-
-  ! Forcing
-  ! =======
-
-  ! The choice of forcing:
-  ! 'd18O_inverse_dT_glob' : Use the inverse routine with the specified d18O record to calculate a global temperature offset (e.g. de Boer et al., 2013)
-  ! 'CO2_direct'           : Use the specified CO2 record to force the climate matrix (e.g. Berends et al., 2018)
-  ! 'd18O_inverse_CO2'     : Use the inverse routine with the specified d18O record to calculate CO2 and then force the climate matrix (e.g. Berends et al., 2019)
-  choice_forcing_method_config                = 'CO2_direct'
-
-  dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
-  dT_deepwater_dT_surf_ratio_config           = 0.25                             ! Ratio between global mean surface temperature change and deep-water temperature change
-  d18O_dT_deepwater_ratio_config              = -0.28                            ! Ratio between deep-water temperature change and benthic d18O change
-
-  dT_glob_inverse_averaging_window_config     = 2000.0                           ! Time window (in yr) over which global mean temperature anomaly is averaged before changing it with the inverse routine
-  inverse_d18O_to_dT_glob_scaling_config      = 20.0                             ! Scaling factor between modelled d18O anomaly and prescribed temperature anomaly change (value from de Boer et al., 2013)
-  CO2_inverse_averaging_window_config         = 2000.0                           ! Time window (in yr) over which CO2                             is averaged before changing it with the inverse routine
-  inverse_d18O_to_CO2_scaling_config          = 68.0                             ! Scaling factor between modelled d18O anomaly and modelled CO2 change (value from Berends et al., 2019)
-  inverse_d18O_to_CO2_initial_CO2_config      = 280.0                            ! CO2 value at the start of the simulation when using the inverse method to calculate CO2
-
-  ! SMB tuning
-  ! ==========
-
-  C_abl_constant_NAM_config                   = -49.0                            ! 34.0      (commented values are old ANICE defaults, but since refreezing was not calculated right
-  C_abl_constant_EAS_config                   = -49.0                            !            and this has since been fixed, these values will still not give the same results as
-  C_abl_constant_GRL_config                   = -49.0                            !            they used to in ANICE.)
-  C_abl_constant_ANT_config                   = -49.0
-  C_abl_Ts_NAM_config                         = 10.0                             ! 10.0
-  C_abl_Ts_EAS_config                         = 10.0
-  C_abl_Ts_GRL_config                         = 10.0
-  C_abl_Ts_ANT_config                         = 10.0
-  C_abl_Q_NAM_config                          = 0.0227                           ! 0.513
-  C_abl_Q_EAS_config                          = 0.0227
-  C_abl_Q_GRL_config                          = 0.0227
-  C_abl_Q_ANT_config                          = 0.0227
-  C_refr_NAM_config                           = 0.051                            ! 0.012
-  C_refr_EAS_config                           = 0.051
-  C_refr_GRL_config                           = 0.051
-  C_refr_ANT_config                           = 0.051
-
-  ! Sub-shelf melt parameterisation
-  ! ===============================
-
-  ! Ocean temperature (used for both thermodynamics and basal melt)
-  choice_ocean_temperature_model_config       = 'scaled'                         ! Can be "fixed" (use PD value) or "scaled" (scale between "PD", "warm", and "cold" values based on forcing (prescribed or inverse-modelled))
-  ocean_temperature_PD_config                 = 271.46                           ! present day temperature of the ocean beneath the shelves [K; -1.7 Celsius]
-  ocean_temperature_cold_config               = 268.16                           ! cold period temperature of the ocean beneath the shelves [K; -5.0 Celcius]
-  ocean_temperature_warm_config               = 275.16                           ! warm period temperature of the ocean beneath the shelves [K;  2.0 Celcius]
-
-  ! Mean ocean temperatures and deep ocean & exposed shelf melt rates were tuned by Bas de Boer in 2011.
-  T_ocean_mean_PD_NAM_config                  = -1.7                             ! Present day temperature of the ocean beneath the shelves [Celcius]
-  T_ocean_mean_PD_EAS_config                  = -1.7
-  T_ocean_mean_PD_GRL_config                  =  2.0
-  T_ocean_mean_PD_ANT_config                  = -1.7
-  T_ocean_mean_cold_NAM_config                = -5.0                             ! Cold period temperature of the ocean beneath the shelves [Celcius]
-  T_ocean_mean_cold_EAS_config                = -5.0
-  T_ocean_mean_cold_GRL_config                =  0.0
-  T_ocean_mean_cold_ANT_config                = -5.0
-  T_ocean_mean_warm_NAM_config                =  2.0                             ! Warm period temperature of the ocean beneath the shelves [Celcius]
-  T_ocean_mean_warm_EAS_config                =  2.0
-  T_ocean_mean_warm_GRL_config                =  4.0
-  T_ocean_mean_warm_ANT_config                =  2.0
-
-  BMB_deepocean_PD_NAM_config                 =  -5.0                            ! Present-day sub-shelf melt rate for deep-ocean areas [m/year]
-  BMB_deepocean_PD_EAS_config                 =  -5.0
-  BMB_deepocean_PD_GRL_config                 =  -5.0
-  BMB_deepocean_PD_ANT_config                 =  -5.0
-  BMB_deepocean_cold_NAM_config               =  -2.0                            ! Cold period sub-shelf melt rate for deep-ocean areas [m/year]
-  BMB_deepocean_cold_EAS_config               =  -2.0
-  BMB_deepocean_cold_GRL_config               =  -2.0
-  BMB_deepocean_cold_ANT_config               =  -2.0
-  BMB_deepocean_warm_NAM_config               = -10.0                            ! Warm period sub-shelf melt rate for deep-ocean areas [m/year]
-  BMB_deepocean_warm_EAS_config               = -10.0
-  BMB_deepocean_warm_GRL_config               = -10.0
-  BMB_deepocean_warm_ANT_config               = -10.0
-
-  BMB_shelf_exposed_PD_NAM_config             =  -3.0                            ! Present-day sub-shelf melt rate for exposed areas    [m/year]
-  BMB_shelf_exposed_PD_EAS_config             =  -3.0
-  BMB_shelf_exposed_PD_GRL_config             =  -3.0
-  BMB_shelf_exposed_PD_ANT_config             =  -3.0
-  BMB_shelf_exposed_cold_NAM_config           =  -0.0                            ! Cold period sub-shelf melt rate for exposed areas    [m/year]
-  BMB_shelf_exposed_cold_EAS_config           =  -0.0
-  BMB_shelf_exposed_cold_GRL_config           =  -0.0
-  BMB_shelf_exposed_cold_ANT_config           =  -0.0
-  BMB_shelf_exposed_warm_NAM_config           =  -6.0                            ! Warm period sub-shelf melt rate for exposed areas    [m/year]
-  BMB_shelf_exposed_warm_EAS_config           =  -6.0
-  BMB_shelf_exposed_warm_GRL_config           =  -6.0
-  BMB_shelf_exposed_warm_ANT_config           =  -6.0
-
-  subshelf_melt_factor_NAM_config             = 0.005                            ! Overall tuning factor for sub-shelf melt rate
-  subshelf_melt_factor_EAS_config             = 0.005
-  subshelf_melt_factor_GRL_config             = 0.005
-  subshelf_melt_factor_ANT_config             = 0.005
-
-  deep_ocean_threshold_depth_NAM_config       = 1200.0                           ! Threshold water depth for "deep ocean" (as opposed to continental shelf);
-  deep_ocean_threshold_depth_EAS_config       = 800.0                            ! this mostly prevents ice shelves from growing beyond the continental shelf
-  deep_ocean_threshold_depth_GRL_config       = 800.0                            ! Different depths for different regions is a bit ad hoc, but in reality
-  deep_ocean_threshold_depth_ANT_config       = 1800.0                           ! the different surface ocean temperatures probably result in the same effect...
+  ! Glacial index method
+  switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
 
   ! Which data fields will be written to the help_fields output file
   ! ================================================================

@@ -57,6 +57,7 @@ UFEMISM_program_objects = \
         netcdf_module.o \
         forcing_module.o \
         climate_module.o \
+        ocean_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \

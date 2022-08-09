@@ -50,18 +50,19 @@ program UFEMISM_program
 
   use mpi
   use petscksp
+  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region, &
+                                   type_climate_matrix_global, type_ocean_matrix_global
+  use parallel_module,       only: initialise_parallelisation, par, sync, ierr
   use petsc_module,          only: perr
   use configuration_module,  only: dp, routine_path, write_total_model_time_to_screen, &
                                    initialise_model_configuration, C, crash, warning, &
                                    reset_resource_tracker
-  use parallel_module,       only: initialise_parallelisation, par, sync, ierr
-  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region, &
-                                   type_climate_matrix_global
+  use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
+  use zeta_module,           only: initialise_zeta_discretisation
   use forcing_module,        only: initialise_global_forcing
   use climate_module,        only: initialise_climate_model_global
-  use zeta_module,           only: initialise_zeta_discretisation
+  use ocean_module,          only: initialise_ocean_vertical_grid, initialise_ocean_model_global
   use UFEMISM_main_model,    only: initialise_model, run_model
-  use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
 
 ! ===== Main variables =====
 ! ==========================
@@ -75,6 +76,7 @@ program UFEMISM_program
 
   ! The global climate/ocean matrices
   TYPE(type_climate_matrix_global)     :: climate_matrix_global
+  TYPE(type_ocean_matrix_global)       :: ocean_matrix_global
 
   ! Coupling
   real(dp)                             :: t_coupling, t_end_models
@@ -130,6 +132,12 @@ program UFEMISM_program
   ! ================================
 
   CALL initialise_climate_model_global( climate_matrix_global)
+
+  ! == Initialise the ocean matrix
+  ! ==============================
+
+  CALL initialise_ocean_vertical_grid
+  CALL initialise_ocean_model_global( ocean_matrix_global)
 
   ! == Initialise the model regions
   ! ===============================

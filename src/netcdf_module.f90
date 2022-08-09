@@ -17,13 +17,13 @@ MODULE netcdf_module
   use data_types_module,        only: type_forcing_data, type_netcdf_resource_tracker, &
                                       type_reference_geometry, type_model_region, &
                                       type_debug_fields, type_mesh, type_grid, &
-                                      type_restart_data, type_climate_snapshot_global
-                                      ! type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
-                                      ! type_ocean_snapshot_global, type_highres_ocean_data, &
+                                      type_restart_data, type_climate_snapshot_global, &
+                                      type_ocean_snapshot_global
+                                      ! type_sparse_matrix_CSR_dp, type_highres_ocean_data
   use netcdf,                   only: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
-                                           nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
-                                           nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
-                                           nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
+                                      nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
+                                      nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
+                                      nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
   use mesh_mapping_module,      only: map_mesh2grid_2D, map_mesh2grid_3D
   ! use sparse_matrix_module,     only: deallocate_matrix_CSR
 
@@ -3610,7 +3610,7 @@ contains
     CALL init_routine( routine_name)
 
     ! Open the netcdf file
-    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
+    call handle_error(nf90_open(refgeo%netcdf%filename, nf90_share, refgeo%netcdf%ncid))
 
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
@@ -3647,7 +3647,7 @@ contains
     CALL init_routine( routine_name)
 
     ! Open the netcdf file
-    CALL open_netcdf_file( refgeo%netcdf%filename, refgeo%netcdf%ncid)
+    call handle_error(nf90_open(refgeo%netcdf%filename, nf90_share, refgeo%netcdf%ncid))
 
     ! Read the data
     CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
@@ -3667,121 +3667,7 @@ contains
 ! Insolation
 ! ==========
 
-  SUBROUTINE inquire_insolation_data_file( forcing)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_insolation_data_file'
-    ! INTEGER                                :: int_dummy
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    call crash('Not implemented yet...')
-
-    ! ! Open the netcdf file
-    ! CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-
-    ! ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    ! CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
-    ! CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_month,    int_dummy,                 forcing%netcdf_ins%id_dim_month)
-    ! CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_lat,      forcing%ins_nlat,          forcing%netcdf_ins%id_dim_lat)
-
-    ! ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    ! CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_time,  (/ forcing%netcdf_ins%id_dim_time                                                                 /), forcing%netcdf_ins%id_var_time)
-    ! CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_month, (/ forcing%netcdf_ins%id_dim_month                                                                /), forcing%netcdf_ins%id_var_month)
-    ! CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_lat,   (/ forcing%netcdf_ins%id_dim_lat                                                                  /), forcing%netcdf_ins%id_var_lat)
-    ! CALL inquire_double_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_var_Q_TOA, (/ forcing%netcdf_ins%id_dim_time, forcing%netcdf_ins%id_dim_month, forcing%netcdf_ins%id_dim_lat /), forcing%netcdf_ins%id_var_Q_TOA)
-
-    ! ! Close the netcdf file
-    ! CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_insolation_data_file
-
-  SUBROUTINE read_insolation_data_file( forcing, ti0, ti1, ins_Q_TOA0, ins_Q_TOA1)
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_forcing_data),        INTENT(INOUT) :: forcing
-    INTEGER,                        INTENT(IN)    :: ti0, ti1
-    REAL(dp), DIMENSION(:,:),       INTENT(OUT)   :: ins_Q_TOA0, ins_Q_TOA1
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file'
-    ! INTEGER                                       :: mi, li
-    ! REAL(dp), DIMENSION(:,:,:), ALLOCATABLE       :: Q_temp0, Q_temp1
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    call crash('Not implemented yet...')
-
-    ! ! Temporary memory to store the data read from the netCDF file
-    ! ALLOCATE( Q_temp0(1, 12, forcing%ins_nlat))
-    ! ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
-
-    ! ! Read data
-    ! CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-    ! CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-    ! CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
-    ! CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-    ! ! Store the data in the shared memory structure
-    ! DO mi = 1, 12
-    ! DO li = 1, forcing%ins_nlat
-    !   ins_Q_TOA0( li,mi) = Q_temp0( 1,mi,li)
-    !   ins_Q_TOA1( li,mi) = Q_temp1( 1,mi,li)
-    ! END DO
-    ! END DO
-
-    ! ! Clean up temporary memory
-    ! DEALLOCATE(Q_temp0)
-    ! DEALLOCATE(Q_temp1)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_insolation_data_file
-
-  SUBROUTINE read_insolation_data_file_time_lat( forcing)
-
-    IMPLICIT NONE
-
-    ! Output variable
-    TYPE(type_forcing_data), INTENT(INOUT) :: forcing
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_insolation_data_file_time_lat'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    call crash('Not implemented yet...')
-
-    ! ! Open the netcdf file
-    ! CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
-
-    ! ! Read the data
-    ! CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
-    ! CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_lat,     forcing%ins_lat,     start = (/ 1 /) ))
-
-    ! ! Close the netcdf file
-    ! CALL close_netcdf_file(forcing%netcdf_ins%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_insolation_data_file_time_lat
-
-    SUBROUTINE inquire_insolation_file( forcing)
+  SUBROUTINE inquire_insolation_file( forcing)
     IMPLICIT NONE
 
     ! Output variable
@@ -3790,10 +3676,8 @@ contains
     ! Local variables:
     INTEGER                                :: int_dummy
 
-    IF (.NOT. par%master) RETURN
-
     ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    call handle_error(nf90_open(forcing%netcdf_ins%filename, nf90_share, forcing%netcdf_ins%ncid))
 
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     CALL inquire_dim( forcing%netcdf_ins%ncid, forcing%netcdf_ins%name_dim_time,     forcing%ins_nyears,        forcing%netcdf_ins%id_dim_time)
@@ -3827,7 +3711,7 @@ contains
     ALLOCATE( Q_temp1(1, 12, forcing%ins_nlat))
 
     ! Read data
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    call handle_error(nf90_open(forcing%netcdf_ins%filename, nf90_share, forcing%netcdf_ins%ncid))
     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp0, start = (/ ti0, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_Q_TOA, Q_temp1, start = (/ ti1, 1, 1 /), count = (/ 1, 12, forcing%ins_nlat /), stride = (/ 1, 1, 1 /) ))
     CALL close_netcdf_file(forcing%netcdf_ins%ncid)
@@ -3852,10 +3736,8 @@ contains
     ! Output variable
     TYPE(type_forcing_data), INTENT(INOUT) :: forcing
 
-    IF (.NOT. par%master) RETURN
-
     ! Open the netcdf file
-    CALL open_netcdf_file(forcing%netcdf_ins%filename, forcing%netcdf_ins%ncid)
+    call handle_error(nf90_open(forcing%netcdf_ins%filename, nf90_share, forcing%netcdf_ins%ncid))
 
     ! Read the data
     CALL handle_error(nf90_get_var( forcing%netcdf_ins%ncid, forcing%netcdf_ins%id_var_time,    forcing%ins_time,    start = (/ 1 /) ))
@@ -3885,7 +3767,7 @@ contains
     call crash('Not implemented yet...')
 
     ! ! Open the netcdf file
-    ! CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
+    ! call handle_error(nf90_open(forcing%netcdf_ghf%filename, nf90_share, forcing%netcdf_ghf%ncid))
 
     ! ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     ! CALL inquire_dim( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%name_dim_lon, forcing%grid_ghf%nlon, forcing%netcdf_ghf%id_dim_lon)
@@ -3920,7 +3802,7 @@ contains
     call crash('Not implemented yet...')
 
     ! ! Open the netcdf file
-    ! CALL open_netcdf_file(forcing%netcdf_ghf%filename, forcing%netcdf_ghf%ncid)
+    ! call handle_error(nf90_open(forcing%netcdf_ghf%filename, nf90_share, forcing%netcdf_ghf%ncid))
 
     ! ! Read the data
     ! CALL handle_error(nf90_get_var( forcing%netcdf_ghf%ncid, forcing%netcdf_ghf%id_var_lon, forcing%grid_ghf%lon, start=(/1   /) ))
@@ -3953,7 +3835,7 @@ contains
     integer                                           :: int_dummy
 
     ! Open the netcdf file
-    call open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+    call handle_error(nf90_open(clim%netcdf%filename, nf90_share, clim%netcdf%ncid))
 
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
     call inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,   clim%nlat, clim%netcdf%id_dim_lat)
@@ -3983,7 +3865,7 @@ contains
     type(type_climate_snapshot_global), intent(inout) :: clim
 
     ! Open the netcdf file
-    call open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
+    call handle_error(nf90_open(clim%netcdf%filename, nf90_share, clim%netcdf%ncid))
 
     ! Read the data
     call handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
@@ -3998,6 +3880,61 @@ contains
     call close_netcdf_file( clim%netcdf%ncid)
 
   end subroutine read_PD_obs_global_climate_file
+
+! Ocean
+! =====
+
+  subroutine inquire_PD_obs_global_ocean_file( ocn)
+    ! Check if the right dimensions and variables are present in the file.
+
+    implicit none
+
+    ! Input variables:
+    type(type_ocean_snapshot_global), intent(inout) :: ocn
+
+    ! Open the netcdf file
+    call handle_error(nf90_open(ocn%netcdf%filename, nf90_share, ocn%netcdf%ncid))
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    call inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
+    call inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
+    call inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    call inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
+    call inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
+    call inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
+
+    call inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature_obs), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_T_ocean)
+    call inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity_obs)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_S_ocean)
+
+    ! Close the netcdf file
+    call close_netcdf_file( ocn%netcdf%ncid)
+
+  end subroutine inquire_PD_obs_global_ocean_file
+
+  subroutine read_PD_obs_global_ocean_file( ocn)
+
+    implicit none
+
+    ! Input variables:
+    type(type_ocean_snapshot_global), intent(inout) :: ocn
+
+    ! Open the netcdf file
+    CALL handle_error(nf90_open(ocn%netcdf%filename, nf90_share, ocn%netcdf%ncid))
+
+    ! Read the data
+    call handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
+    call handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
+    call handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
+
+    call handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
+    call handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    call close_netcdf_file( ocn%netcdf%ncid)
+
+  end subroutine read_PD_obs_global_ocean_file
 
 ! Restart files
 ! =============
@@ -4506,11 +4443,7 @@ contains
     CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
 
     IF (stat /= nf90_noerr) THEN
-      IF (PRESENT( message)) THEN
-        CALL crash( message)
-      ELSE
-        CALL crash( 'netcdf error')
-      END IF
+      CALL crash( trim(nf90_strerror(stat)))
     END IF
 
   END SUBROUTINE handle_error

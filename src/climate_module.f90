@@ -5,7 +5,7 @@ module climate_module
 ! ====================
 
   use configuration_module, only : dp, C, init_routine, finalise_routine, crash
-  use parallel_module,      only : par, sync, partition_list
+  use parallel_module,      only : par, partition_list
   use data_types_module,    only : type_climate_matrix_global, type_climate_snapshot_global
   use netcdf_module,        only : inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file
 
@@ -34,6 +34,7 @@ contains
       write(*,'(3A)') ' Initialising global climate model "', trim(C%choice_climate_model), '"...'
     end if
 
+    ! Pick selected method
     select case (C%choice_climate_model)
 
       case('none')
@@ -44,7 +45,7 @@ contains
         call initialise_climate_model_global_PD_obs( climate_matrix%PD_obs)
 
       case('matrix_warm_cold')
-        ! Use the warm/cold climate matrix (Berends et al., 2018)
+        ! Allocate all global snapshots used in the warm/cold climate matrix
         call crash(TRIM(C%choice_climate_model) // ' not implemented yet...')
 
       case default
@@ -77,7 +78,7 @@ contains
 
     ! Initialise the present-day observed global climate
     PD_obs%name = 'PD_obs'
-    PD_obs%netcdf%filename   = C%filename_PD_obs_climate
+    PD_obs%netcdf%filename = C%filename_PD_obs_climate
 
     ! Inquire data from the NetCDF file + get grid size (nlon, nlat)
     call inquire_PD_obs_global_climate_file( PD_obs)

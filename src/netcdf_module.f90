@@ -295,20 +295,15 @@ CONTAINS
 
   END SUBROUTINE inquire_single_or_double_var
 
-  SUBROUTINE handle_error( stat, message)
-    USE netcdf, ONLY: nf90_noerr, nf90_strerror
+  SUBROUTINE handle_error( stat)
+
     IMPLICIT NONE
 
     ! Input variables:
-    INTEGER,                    INTENT(IN) :: stat
-    CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
+    INTEGER, INTENT(IN) :: stat
 
     IF (stat /= nf90_noerr) THEN
-      IF (PRESENT( message)) THEN
-        CALL crash( message)
-      ELSE
-        CALL crash( 'netcdf error')
-      END IF
+      CALL crash( trim(nf90_strerror(stat)))
     END IF
 
   END SUBROUTINE handle_error

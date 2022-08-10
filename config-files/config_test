@@ -206,7 +206,7 @@
   fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
   ! Memory of first dHi_dt of simulation
-  do_use_hi_memory_config                     = .TRUE.                           ! Keep a fading memory of first dHi_dt (for e.g. a smooth, no-shock restart)
+  do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt (for e.g. a smooth, no-shock restart)
   get_senile_after_config                     = 10000.0                          ! Keep fading memory for this amount of years
   dHi_dt_window_size_config                   = 2000                             ! Number of previous time steps used to compute a running average of dHi_dt
 

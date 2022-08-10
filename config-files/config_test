@@ -157,7 +157,7 @@
   d18O_record_length_config                   = 2051
 
   ! Geothermal heat flux
-  choice_geothermal_heat_flux_config          = 'constant'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
+  choice_geothermal_heat_flux_config          = 'constant'                       ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   constant_geothermal_heat_flux_config        = 1.72E06                          ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
   filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
@@ -266,6 +266,15 @@
 
   ! Glacial index method
   switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+
+  ! Sea level and GIA
+  ! =================
+
+  do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
+  choice_sealevel_model_config                = 'prescribed'                     ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
+  fixed_sealevel_config                       = 0.0
+  filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl_PD00.dat'
+  sealevel_record_length_config               = 30001
 
   ! Which data fields will be written to the help_fields output file
   ! ================================================================

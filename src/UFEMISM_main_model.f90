@@ -8,7 +8,7 @@ module UFEMISM_main_model
 
   use mpi
   use configuration_module,         only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parameters_module
+  use parameters_module,            only:
   use petsc_module,                 only: perr
   use parallel_module,              only: par, sync, ierr, cerr, partition_list
   use data_types_module,            only: type_model_region, type_grid, type_remapping_mesh_mesh
@@ -404,9 +404,9 @@ contains
     call associate_debug_fields( region)
     region%output_file_exists = .true.
     call sync
-    
-    ! ===== The "no ice" mask
-    ! =======================
+
+    ! ===== The "no ice" mask =====
+    ! =============================
 
     allocate(region%mask_noice(region%mesh%vi1:region%mesh%vi2))
     call initialise_mask_noice(region, region%mesh)
@@ -417,20 +417,24 @@ contains
     call initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
 
     ! ===== The SMB model =====
-    ! =========================    
-    
+    ! =========================
+
     CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
-    
+
     ! ===== The BMB model =====
-    ! =========================    
-    
-    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name) 
-    
- 
+    ! =========================
+
+    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+
+    ! ===== Finalisation =====
+    ! ========================
 
     if (par%master) then
       write(*,"(3A)") ' Finished initialising model region ', region%name, '.'
     end if
+
+    ! Make sure all processes reached this point
+    call sync
 
     ! Finalise routine path
     call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
@@ -458,6 +462,7 @@ contains
 
     ! Timers and time steps
     ! =====================
+
     region%time           = C%start_time_of_run
     region%dt             = C%dt_min
     region%dt_prev        = C%dt_min

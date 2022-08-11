@@ -7,27 +7,27 @@ module UFEMISM_main_model
 ! ================
 
   use mpi
-  use configuration_module,         only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parameters_module,            only:
-  use petsc_module,                 only: perr
-  use parallel_module,              only: par, sync, ierr, cerr, partition_list
-  use data_types_module,            only: type_model_region, type_grid, type_remapping_mesh_mesh
-  use reference_fields_module,      only: initialise_reference_geometries, map_reference_geometries_to_mesh
-  use mesh_memory_module,           only: deallocate_mesh_all
-  use mesh_creation_module,         only: create_mesh_from_cart_data
-  use mesh_mapping_module,          only: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                           calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
-                                           calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
-  use mesh_update_module,           only: determine_mesh_fitness, create_new_mesh
-  use mesh_single_module,           only: create_new_mesh_single, create_single_mesh_from_cart_data
-  use netcdf_module,                only: initialise_debug_fields, create_output_files, associate_debug_fields, &
-                                           write_to_output_files, create_debug_file, reallocate_debug_fields
-  use ice_dynamics_module,          only: initialise_ice_model, remap_ice_model, run_ice_model
-  use BMB_module,                   only: initialise_BMB_model, remap_bmb_model
-  use SMB_module,                   only: initialise_SMB_model, remap_smb_model
-  use general_ice_model_data_module,only: initialise_mask_noice
-  use reallocate_mod,               only: reallocate
-  use utilities_module,             only: time_display, inverse_oblique_sg_projection
+  use configuration_module,          only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  use parameters_module,             only:
+  use petsc_module,                  only: perr
+  use parallel_module,               only: par, sync, ierr, cerr, partition_list
+  use data_types_module,             only: type_model_region, type_grid, type_remapping_mesh_mesh
+  use reference_fields_module,       only: initialise_reference_geometries, map_reference_geometries_to_mesh
+  use mesh_memory_module,            only: deallocate_mesh_all
+  use mesh_creation_module,          only: create_mesh_from_cart_data
+  use mesh_mapping_module,           only: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+                                            calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                            calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
+  use mesh_update_module,            only: determine_mesh_fitness, create_new_mesh
+  use mesh_single_module,            only: create_new_mesh_single, create_single_mesh_from_cart_data
+  use netcdf_module,                 only: initialise_debug_fields, create_output_files, associate_debug_fields, &
+                                            write_to_output_files, create_debug_file, reallocate_debug_fields
+  use ice_dynamics_module,           only: initialise_ice_model, remap_ice_model, run_ice_model
+  use BMB_module,                    only: initialise_BMB_model, remap_bmb_model
+  use SMB_module,                    only: initialise_SMB_model, remap_smb_model
+  use general_ice_model_data_module, only: initialise_mask_noice
+  use reallocate_mod,                only: reallocate
+  use utilities_module,              only: time_display, inverse_oblique_sg_projection
 
 ! ===== Preamble =====
 ! ====================
@@ -522,18 +522,53 @@ contains
     implicit none
 
     ! In/output variables:
-    type(type_model_region),      intent(inout) :: region
-    type(type_grid),              intent(inout) :: grid
-    real(dp),                     intent(in)    :: dx
+    type(type_model_region),       intent(inout) :: region
+    type(type_grid),               intent(inout) :: grid
+    real(dp),                      intent(in)    :: dx
 
     ! Local variables:
-    character(len=256), parameter               :: routine_name = 'initialise_model_square_grid'
-    real(dp)                                    :: xmid, ymid
-    integer                                     :: nsx, nsy, i, j, n
-    real(dp), parameter                         :: tol = 1E-9_dp
+    character(len=256), parameter                :: routine_name = 'initialise_model_square_grid'
+    real(dp)                                     :: xmid, ymid
+    integer                                      :: nsx, nsy, i, j, n
+    real(dp), parameter                          :: tol = 1E-9_dp
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
     call init_routine( routine_name)
+
+    ! === Basic grid data ===
+    ! =======================
+
+    ! Projection parameters for this region
+    select case (region%name)
+
+      case ('NAM')
+        ! North America
+        grid%lambda_M     = C%lambda_M_NAM
+        grid%phi_M        = C%phi_M_NAM
+        grid%alpha_stereo = C%alpha_stereo_NAM
+
+      case ('EAS')
+        ! Eurasia
+        grid%lambda_M     = C%lambda_M_EAS
+        grid%phi_M        = C%phi_M_EAS
+        grid%alpha_stereo = C%alpha_stereo_EAS
+
+      case ('GRL')
+        ! Greenland
+        grid%lambda_M     = C%lambda_M_GRL
+        grid%phi_M        = C%phi_M_GRL
+        grid%alpha_stereo = C%alpha_stereo_GRL
+
+      case ('ANT')
+        ! Antarctica
+        grid%lambda_M     = C%lambda_M_ANT
+        grid%phi_M        = C%phi_M_ANT
+        grid%alpha_stereo = C%alpha_stereo_ANT
+
+    end select
 
     nsx = 0
     nsy = 0
@@ -545,46 +580,80 @@ contains
     xmid = (region%mesh%xmin + region%mesh%xmax) / 2._dp
     ymid = (region%mesh%ymin + region%mesh%ymax) / 2._dp
 
-    nsx = ceiling((region%mesh%xmax - xmid - grid%dx/2._dp) / grid%dx)
-    nsy = ceiling((region%mesh%ymax - ymid - grid%dx/2._dp) / grid%dx)
+    ! Number of points at each side of domain center
+    nsx = floor((region%mesh%xmax - xmid) / grid%dx)
+    nsy = floor((region%mesh%ymax - ymid) / grid%dx)
 
-    grid%nx = 2*nsx + 1
-    grid%ny = 2*nsy + 1
+    ! Determine total number of points per dimension as twice the
+    ! number per side, plus the middle point, plus 1 grid cell to
+    ! make sure the mesh lies completely inside the grid for any
+    ! grid resolution
+    grid%nx = (2*nsx + 1) + 1
+    grid%ny = (2*nsy + 1) + 1
 
+    ! Determine total number of grid points
+    grid%n  = grid%nx * grid%ny
+
+    ! Assign range to each processor
+    call partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
+    call partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+
+    ! === Grid generation ===
+    ! =======================
+
+    ! Allocate x and y coordinates for square grid
     allocate( grid%x ( grid%nx ))
     allocate( grid%y ( grid%ny ))
 
-    do i = 1, grid%nx
-      grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
-    end do
-    do j = 1, grid%ny
-      grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
-    end do
-
+    ! Compute corners of grid
     grid%xmin = grid%x(1      )
     grid%xmax = grid%x(grid%nx)
     grid%ymin = grid%y(1      )
     grid%ymax = grid%y(grid%ny)
 
+    ! Compute x coordinates
+    grid%xmin = xmid - nsx * grid%dx
+    grid%xmax = xmid + nsx * grid%dx
+    do i = 1, grid%nx
+      grid%x( i) = grid%xmin + (i-1)*grid%dx
+    end do
+
+    ! Compute y coordinates
+    grid%ymin = ymid - nsy * grid%dx
+    grid%ymax = ymid + nsy * grid%dx
+    do j = 1, grid%ny
+      grid%y( j) = grid%ymin + (j-1)*grid%dx
+    end do
+
+    ! === Grid-to-vector tables ===
+    ! =============================
+
+    ! Allocate table data
+    allocate ( grid%ij2n( grid%nx, grid%ny ))
+    allocate ( grid%n2ij( grid%n , 2       ))
+
     ! Tolerance; points lying within this distance of each other are treated as identical
     grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
 
     ! Set up grid-to-vector translation tables
-    grid%n  = grid%nx * grid%ny
-    allocate ( grid%ij2n( grid%nx, grid%ny ))
-    allocate ( grid%n2ij( grid%n , 2       ))
     n = 0
     do i = 1, grid%nx
-        do j = 1, grid%ny
-          n = n+1
-          grid%ij2n( i,j) = n
-          grid%n2ij( n,:) = [i,j]
-        end do
+    do j = 1, grid%ny
+      n = n+1
+      grid%ij2n( i,j) = n
+      grid%n2ij( n,:) = [i,j]
+    end do
     end do
 
-    ! Assign range to each processor
-    call partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
-    call partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+    ! === Mappings between mesh and grid ===
+    ! ======================================
+
+    ! Calculate mapping arrays between the mesh and the grid
+    call calc_remapping_operator_mesh2grid( region%mesh, grid)
+    call calc_remapping_operator_grid2mesh( grid, region%mesh)
+
+    ! === Geographical coordinates ===
+    ! ================================
 
     ! Calculate lat-lon coordinates
     allocate( grid%lat(grid%nx, grid%ny))
@@ -598,12 +667,11 @@ contains
     end do
     end do
 
-    ! Calculate mapping arrays between the mesh and the grid
-    call calc_remapping_operator_mesh2grid( region%mesh, grid)
-    call calc_remapping_operator_grid2mesh( grid, region%mesh)
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
-    call finalise_routine( routine_name, n_extra_windows_expected = 15)
+    call finalise_routine( routine_name)
 
   end subroutine initialise_model_square_grid
 

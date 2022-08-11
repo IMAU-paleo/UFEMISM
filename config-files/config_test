@@ -3,7 +3,7 @@
   ! Time steps and range
   ! ====================
 
-  start_time_of_run_config                    = -500.0                           ! Start time (in years) of the simulations
+  start_time_of_run_config                    = -10.0                            ! Start time (in years) of the simulations
   end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
@@ -33,29 +33,6 @@
   do_write_regional_scalar_output_config      = .TRUE.
   do_write_global_scalar_output_config        = .TRUE.
 
-  ! Domain size for the four regions
-  ! ================================
-
-  xmin_NAM_config                             = -3600000.0                       ! Western  boundary     of the North America domain [m]
-  xmax_NAM_config                             =  3600000.0                       ! Eastern  boundary     of the North America domain [m]
-  ymin_NAM_config                             = -2400000.0                       ! Southern boundary     of the North America domain [m]
-  ymax_NAM_config                             =  2400000.0                       ! Northern boundary     of the North America domain [m]
-
-  xmin_EAS_config                             = -3400000.0                       ! Western  boundary     of the Eurasia domain [m]
-  xmax_EAS_config                             =  3400000.0                       ! Eastern  boundary     of the Eurasia domain [m]
-  ymin_EAS_config                             = -2080000.0                       ! Southern boundary     of the Eurasia domain [m]
-  ymax_EAS_config                             =  2080000.0                       ! Northern boundary     of the Eurasia domain [m]
-
-  xmin_GRL_config                             =  -830000.0                       ! Western  boundary     of the Greenland domain [m]
-  xmax_GRL_config                             =   830000.0                       ! Eastern  boundary     of the Greenland domain [m]
-  ymin_GRL_config                             = -1430000.0                       ! Southern boundary     of the Greenland domain [m]
-  ymax_GRL_config                             =  1430000.0                       ! Northern boundary     of the Greenland domain [m]
-
-  xmin_ANT_config                             = -3300000.0                       ! Western  boundary     of the Antarctica domain [m]
-  xmax_ANT_config                             =  3300000.0                       ! Eastern  boundary     of the Antarctica domain [m]
-  ymin_ANT_config                             = -3300000.0                       ! Southern boundary     of the Antarctica domain [m]
-  ymax_ANT_config                             =  3300000.0                       ! Northern boundary     of the Antarctica domain [m]
-
   ! Mesh generation parameters
   ! ==========================
 
@@ -63,9 +40,9 @@
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 40000.0                          ! Maximum allowed 2nd order surface deviation over ice
   res_max_config                              = 600.0                            ! Maximum allowed resolution                            [km]
-  res_max_margin_config                       = 80.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 80.0                             !                                 grounding line        [km]
-  res_max_cf_config                           = 80.0                             !                                 calving front         [km]
+  res_max_margin_config                       = 10.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 10.0                             !                                 grounding line        [km]
+  res_max_cf_config                           = 10.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 600.0                            !                                 mountains             [km]
   res_max_coast_config                        = 600.0                            !                                 coastline             [km]
   mesh_fitness_threshold_config               = 0.99                             ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating

@@ -3595,74 +3595,74 @@ contains
 ! Reference geometries
 ! ====================
 
-  SUBROUTINE inquire_reference_geometry_file( refgeo)
+  subroutine inquire_reference_geometry_file( refgeo)
     ! Check if the right dimensions and variables are present in the file.
 
-    IMPLICIT NONE
+    implicit none
 
     ! Input variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    type(type_reference_geometry), intent(inout) :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_reference_geometry_file'
+    character(len=256), parameter                :: routine_name = 'inquire_reference_geometry_file'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Open the netcdf file
     call handle_error(nf90_open(refgeo%netcdf%filename, nf90_share, refgeo%netcdf%ncid))
 
     ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
-    CALL inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
+    call inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_x, refgeo%grid%nx, refgeo%netcdf%id_dim_x)
+    call inquire_dim( refgeo%netcdf%ncid, refgeo%netcdf%name_dim_y, refgeo%grid%ny, refgeo%netcdf%id_dim_y)
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
+    call inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_x,  (/ refgeo%netcdf%id_dim_x                         /), refgeo%netcdf%id_var_x )
+    call inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_y,  (/                         refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_y )
 
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
-    CALL inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
+    call inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hi, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hi)
+    call inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hb, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hb)
+    call inquire_double_var( refgeo%netcdf%ncid, refgeo%netcdf%name_var_Hs, (/ refgeo%netcdf%id_dim_x, refgeo%netcdf%id_dim_y /), refgeo%netcdf%id_var_Hs)
 
     ! Close the netcdf file
-    CALL close_netcdf_file( refgeo%netcdf%ncid)
+    call close_netcdf_file( refgeo%netcdf%ncid)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE inquire_reference_geometry_file
+  end subroutine inquire_reference_geometry_file
 
-  SUBROUTINE read_reference_geometry_file(    refgeo)
+  subroutine read_reference_geometry_file(    refgeo)
     ! Read reference geometry data from a NetCDF file
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_reference_geometry), INTENT(INOUT) :: refgeo
+    type(type_reference_geometry), intent(inout) :: refgeo
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_reference_geometry_file'
+    character(len=256), parameter                :: routine_name = 'read_reference_geometry_file'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Open the netcdf file
     call handle_error(nf90_open(refgeo%netcdf%filename, nf90_share, refgeo%netcdf%ncid))
 
     ! Read the data
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,      refgeo%grid%x,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,      refgeo%grid%y,  start = (/ 1    /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi,     refgeo%Hi_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb,     refgeo%Hb_grid, start = (/ 1, 1 /) ))
-    CALL handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs,     refgeo%Hs_grid, start = (/ 1, 1 /) ))
+    call handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_x,  refgeo%grid%x,  start = (/ 1    /) ))
+    call handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_y,  refgeo%grid%y,  start = (/ 1    /) ))
+    call handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hi, refgeo%Hi_grid, start = (/ 1, 1 /) ))
+    call handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hb, refgeo%Hb_grid, start = (/ 1, 1 /) ))
+    call handle_error(nf90_get_var( refgeo%netcdf%ncid, refgeo%netcdf%id_var_Hs, refgeo%Hs_grid, start = (/ 1, 1 /) ))
 
     ! Close the netcdf file
-    CALL close_netcdf_file( refgeo%netcdf%ncid)
+    call close_netcdf_file( refgeo%netcdf%ncid)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE read_reference_geometry_file
+  end subroutine read_reference_geometry_file
 
 ! Insolation
 ! ==========

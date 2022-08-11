@@ -32,6 +32,9 @@ contains
       write (*,'(3A)') ' Initialising global ocean model "', TRIM(C%choice_ocean_model), '"...'
     end if
 
+    ! Initialise ocean vertical grid
+    CALL initialise_ocean_vertical_grid
+
     ! Pick selected method
     select case(C%choice_ocean_model)
 

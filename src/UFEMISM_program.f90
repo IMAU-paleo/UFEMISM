@@ -54,14 +54,13 @@ program UFEMISM_program
                                    type_climate_matrix_global, type_ocean_matrix_global
   use parallel_module,       only: initialise_parallelisation, par, sync, ierr
   use petsc_module,          only: perr
-  use configuration_module,  only: dp, routine_path, write_total_model_time_to_screen, &
-                                   initialise_model_configuration, C, crash, warning, &
-                                   reset_resource_tracker
+  use configuration_module,  only: dp, C, routine_path, write_total_model_time_to_screen, &
+                                   initialise_model_configuration, reset_resource_tracker
   use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
   use zeta_module,           only: initialise_zeta_discretisation
   use forcing_module,        only: initialise_global_forcing
   use climate_module,        only: initialise_climate_model_global
-  use ocean_module,          only: initialise_ocean_vertical_grid, initialise_ocean_model_global
+  use ocean_module,          only: initialise_ocean_model_global
   use UFEMISM_main_model,    only: initialise_model, run_model
 
 ! ===== Main variables =====
@@ -136,7 +135,6 @@ program UFEMISM_program
   ! == Initialise the ocean matrix
   ! ==============================
 
-  CALL initialise_ocean_vertical_grid
   CALL initialise_ocean_model_global( ocean_matrix_global)
 
   ! == Initialise the model regions

@@ -2007,7 +2007,7 @@ CONTAINS
         END IF
       END IF
       do_reuse_PD_map = .FALSE.
-      IF (did_remap_init) THEN
+      IF (did_remap_PD) THEN
         IF (region%refgeo_GIAeq%grid%xmin == region%refgeo_PD%grid%xmin .AND. &
             region%refgeo_GIAeq%grid%xmax == region%refgeo_PD%grid%xmax .AND. &
             region%refgeo_GIAeq%grid%ymin == region%refgeo_PD%grid%ymin .AND. &

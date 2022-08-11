@@ -47,7 +47,7 @@
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
   res_max_config                              = 500.0                            ! Maximum allowed resolution                            [km]
-  res_max_ice_config                          = 20.0                             ! Maximum allowed resolution over ice                   [km]
+  res_max_ice_config                          = 40.0                             ! Maximum allowed resolution over ice                   [km]
   res_max_margin_config                       = 20.0                             ! Maximum allowed resolution over land-based ice margin [km]
   res_max_gl_config                           = 20.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 20.0                             !                                 calving front         [km]

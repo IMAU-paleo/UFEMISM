@@ -242,21 +242,16 @@ CONTAINS
       ! == Basal sliding inversion
       ! ==========================
 
-      IF (C%do_basal_sliding_inversion) THEN
-        IF (region%do_basal) THEN
-          IF (region%time > C%basal_sliding_inv_t_start .AND. region%time < C%basal_sliding_inv_t_end) THEN
-            CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
-          END IF
-        END IF
+      IF (C%do_basal_sliding_inversion .AND. region%do_basal) THEN
+        ! Adjust bed roughness
+        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%time)
       END IF
 
       ! == SBM IMAU-ITM inversion
       ! =========================
 
-      IF (C%do_SMB_IMAUITM_inversion) THEN
-        IF (region%do_SMB_inv) THEN
-          CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
-        END IF
+      IF (C%do_SMB_IMAUITM_inversion .AND. region%do_SMB_inv) THEN
+        CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
       END IF
 
       ! == Output

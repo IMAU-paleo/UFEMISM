@@ -306,6 +306,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_bed_roughness'
+    INTEGER                                            :: k
 
     ! == Initialisation
     ! =================
@@ -351,8 +352,8 @@ CONTAINS
     CALL sync
 
 
-    ! == Inversion-stuff allocation
-    ! =============================
+    ! == Inversion-stuff initialisation
+    ! =================================
 
     IF (C%do_basal_sliding_inversion) THEN
       IF (C%choice_sliding_law == 'Weertman' .OR. &
@@ -491,6 +492,11 @@ CONTAINS
               C%choice_sliding_law == 'Zoet-Iverson') THEN
 
         ice%phi_fric_inv_a( mesh%vi1:mesh%vi2) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
+        ice%phi_fric_ave_a( mesh%vi1:mesh%vi2) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
+
+        DO k = 1, C%phi_fric_window_size
+          ice%phi_fric_window_a( mesh%vi1:mesh%vi2, k) = ice%phi_fric_a( mesh%vi1:mesh%vi2)
+        END DO
 
       ELSE
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
@@ -1711,7 +1717,7 @@ CONTAINS
 ! ===== Inversion =====
 ! =====================
 
-  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo)
+  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo, time)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and extrapolate the resulting field over the rest of the domain
 
@@ -1722,6 +1728,7 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+    REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
@@ -1736,6 +1743,18 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    IF (time < C%basal_sliding_inv_t_start) THEN
+      ! Nothing to do for now. Just return.
+      CALL finalise_routine( routine_name)
+      RETURN
+    ELSEIF (time >= C%basal_sliding_inv_t_end) THEN
+      ! Inversion is done. Use running average of bed roughness.
+      ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_ave_a( mesh%vi1:mesh%vi2)
+      ! And return.
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Allocate masks for extrapolation
     CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )

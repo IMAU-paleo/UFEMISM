@@ -1734,9 +1734,9 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val, w_smooth
-    REAL(dp), DIMENSION(SIZE(ice%Hi_a))                :: rough_smoothed
-    INTEGER,  DIMENSION(:    ), POINTER                ::  mask,  mask_filled
-    INTEGER                                            :: wmask, wmask_filled
+    INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
+    REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
+    INTEGER                                            :: wmask, wmask_filled, wrough_smoothed
 
     ! Initialisation
     ! ==============
@@ -1759,6 +1759,9 @@ CONTAINS
     ! Allocate masks for extrapolation
     CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
     CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+
+    ! Allocate smoothed bed roughness field
+    CALL allocate_shared_dp_1D( mesh%nV, rough_smoothed, wrough_smoothed)
 
     ! Define the ice thickness factor for scaling of inversion
     h_scale = 1.0_dp/C%basal_sliding_inv_scale
@@ -1942,6 +1945,7 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wmask_filled)
     CALL deallocate_shared( wmask)
+    CALL deallocate_shared( wrough_smoothed)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

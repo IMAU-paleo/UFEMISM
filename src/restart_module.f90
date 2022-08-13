@@ -421,14 +421,14 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),             INTENT(INOUT)  :: region
-    REAL(dp), DIMENSION(region%mesh%nV), INTENT(IN)     :: bed_method1,  bed_method2
+    TYPE(type_model_region),             INTENT(INOUT) :: region
+    REAL(dp), DIMENSION(region%mesh%nV), INTENT(IN)    :: bed_method1,  bed_method2
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'adjust_remapped_bed_roughness'
-    INTEGER                                             :: it, vi
-    REAL(dp)                                            :: dt_ave, t_end
-    REAL(dp)                                            :: h_scale, h_delta
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'adjust_remapped_bed_roughness'
+    INTEGER                                            :: it, vi
+    REAL(dp)                                           :: dt_ave, t_end
+    REAL(dp)                                           :: h_scale, h_delta
 
     ! === Initialisation ===
     ! ======================
@@ -436,38 +436,38 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (C%windup_total_years <= 0._dp) THEN
-      ! Finalise routine path
-      CALL finalise_routine( routine_name)
-      ! Exit rutine
-      RETURN
-    END IF
+    ! IF (C%windup_total_years <= 0._dp) THEN
+    !   ! Finalise routine path
+    !   CALL finalise_routine( routine_name)
+    !   ! Exit rutine
+    !   RETURN
+    ! END IF
 
     ! === Wind up the model ===
     ! =========================
 
     IF (par%master) THEN
       WRITE (0,*) '    Adjusting the remapped bed roughness field to the new mesh...'
+
+      ! Save current time as end-time for wind-up
+      t_end = region%time
+
+      ! Bring the timer 1000 years back in time
+      region%time = region%time - 1000._dp!C%windup_total_years
+
+      ! Let the model know we want to run velocities from this point on
+      region%t_last_SIA       = region%time
+      region%t_next_SIA       = region%time
+      region%do_SIA           = .TRUE.
+
+      region%t_last_SSA       = region%time
+      region%t_next_SSA       = region%time
+      region%do_SSA           = .TRUE.
+
+      region%t_last_DIVA      = region%time
+      region%t_next_DIVA      = region%time
+      region%do_DIVA          = .TRUE.
     END IF
-
-    ! Save current time as end-time for wind-up
-    t_end = region%time
-
-    ! Bring the timer 1000 years back in time
-    region%time = region%time - 1000._dp
-
-    ! Let the model know we want to run velocities from this point on
-    region%t_last_SIA       = region%time
-    region%t_next_SIA       = region%time
-    region%do_SIA           = .TRUE.
-
-    region%t_last_SSA       = region%time
-    region%t_next_SSA       = region%time
-    region%do_SSA           = .TRUE.
-
-    region%t_last_DIVA      = region%time
-    region%t_next_DIVA      = region%time
-    region%do_DIVA          = .TRUE.
 
     ! Run the ice model until coming back to present
     DO WHILE (region%time < t_end)

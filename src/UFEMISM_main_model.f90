@@ -333,7 +333,7 @@ CONTAINS
 
     ! In- and output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
+    TYPE(type_climate_matrix_global),    INTENT(INOUT) :: climate_matrix_global
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_model_update_mesh'
@@ -430,6 +430,12 @@ CONTAINS
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
+
+    ! Run the sub-models once to fill them in
+    CALL run_climate_model( region, climate_matrix_global, region%time)
+    CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
+    CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
+    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
 
     ! Remap key restart data
     IF (C%is_restart) THEN

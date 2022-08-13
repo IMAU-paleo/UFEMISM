@@ -92,6 +92,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_direct'
     INTEGER                                            :: vi1, vi2
     REAL(dp)                                           :: dt_crit_SIA, dt_crit_SSA
+    REAL(dp)                                           :: r_solver_acc, dt_max
     REAL(dp)                                           :: hi_memory, hi_senile, time_passed
     REAL(dp)                                           :: int_old, int_new
 
@@ -101,6 +102,31 @@ CONTAINS
     ! Abbreviations for cleaner code
     vi1 = region%mesh%vi1
     vi2 = region%mesh%vi2
+
+    ! Start-up phase
+    ! ==============
+
+    ! Get a more accurate velocity solution during the start-up phase to prevent initialisation "bumps"
+    IF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+      r_solver_acc = 0.01_dp * 0.99_dp * (region%time - C%start_time_of_run) / C%dt_startup_phase
+    ELSE
+      r_solver_acc = 1._dp
+    END IF
+
+    region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
+    region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
+    region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
+    region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+    region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+
+    ! Reduce the time-step during the start-up phase
+    IF     (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+      dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((region%time - C%start_time_of_run) / C%dt_startup_phase)**2
+    ELSEIF (region%time >= C%end_time_of_run   - C%dt_startup_phase) THEN
+      dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time  ) / C%dt_startup_phase)**2
+    ELSE
+      dt_max = C%dt_max
+    END IF
 
     ! Calculate ice velocities with the selected ice-dynamical approximation
     ! ======================================================================
@@ -118,11 +144,18 @@ CONTAINS
 
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-        IF (par%master) region%dt_crit_SIA = dt_crit_SIA
 
-        ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SIA = MAX( C%dt_min, MIN( dt_max, dt_crit_SIA))
+
+          ! Update timer
+          region%dt_crit_SIA = dt_crit_SIA
+          region%t_last_SIA  = region%time
+          region%t_next_SIA  = region%time + region%dt_crit_SIA
+
+        END IF
         CALL sync
 
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
@@ -137,11 +170,18 @@ CONTAINS
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-        IF (par%master) region%dt_crit_SSA = dt_crit_SSA
 
-        ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SSA = MAX( C%dt_min, MIN( dt_max, dt_crit_SSA))
+
+          ! Update timer
+          region%dt_crit_SSA = dt_crit_SSA
+          region%t_last_SSA  = region%time
+          region%t_next_SSA  = region%time + region%dt_crit_SSA
+
+        END IF
         CALL sync
 
       END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
@@ -156,11 +196,18 @@ CONTAINS
 
         ! Calculate critical time step
         CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-        IF (par%master) region%dt_crit_SIA = dt_crit_SIA
 
-        ! Update timer
-        IF (par%master) region%t_last_SIA = region%time
-        IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SIA = MAX( C%dt_min, MIN( dt_max, dt_crit_SIA))
+
+          ! Update timer
+          region%dt_crit_SIA = dt_crit_SIA
+          region%t_last_SIA  = region%time
+          region%t_next_SIA  = region%time + region%dt_crit_SIA
+
+        END IF
         CALL sync
 
       END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
@@ -172,14 +219,21 @@ CONTAINS
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-        IF (par%master) region%dt_crit_SSA = dt_crit_SSA
 
-        ! Update timer
-        IF (par%master) region%t_last_SSA = region%time
-        IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
+        IF (par%master) THEN
+
+          ! Apply conditions to the time step
+          dt_crit_SSA = MAX( C%dt_min, MIN( dt_max, dt_crit_SSA))
+
+          ! Update timer
+          region%dt_crit_SSA = dt_crit_SSA
+          region%t_last_SSA  = region%time
+          region%t_next_SSA  = region%time + region%dt_crit_SSA
+
+        END IF
         CALL sync
 
-      END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
+      END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
 
     ELSE ! IF     (C%choice_ice_dynamics == 'SIA') THEN
       CALL crash('"direct" time stepping works only with SIA, SSA, or SIA/SSA ice dynamics, not with DIVA!')
@@ -241,8 +295,12 @@ CONTAINS
     INTEGER                                            :: vi1,vi2
     LOGICAL                                            :: do_update_ice_velocity
     REAL(dp)                                           :: dt_from_pc, dt_crit_adv
+    REAL(dp)                                           :: r_solver_acc, dt_max
     REAL(dp)                                           :: hi_memory, hi_senile
-    REAL(dp)                                           :: time_passed, int_old, int_new
+    REAL(dp)                                           :: time_passed, int_old, int_new!, Hi_tot_new
+
+    ! == Initialisation
+    ! =================
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -254,8 +312,9 @@ CONTAINS
     ! Determine whether or not we need to update ice velocities
     do_update_ice_velocity = .FALSE.
     IF     (C%choice_ice_dynamics == 'none') THEN
-      region%ice%dHi_dt_a( vi1:vi2) = 0._dp
-      CALL sync
+      region%ice%dHi_dt_a(     vi1:vi2) = 0._dp
+      region%ice%Hi_corr(      vi1:vi2) = region%ice%Hi_a( vi1:vi2)
+      region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_a( vi1:vi2)
     ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
       IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
@@ -267,6 +326,77 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
     END IF
+    CALL sync
+
+    ! == Start-up / Cool-down
+    ! =======================
+
+    IF (C%dt_startup_phase > 0._dp) THEN
+      ! Set smaller time steps and tolerances prevent initialisation "bumps"
+
+      ! Get a more accurate velocity solution during start-up and cool-down
+      IF (region%time < C%start_time_of_run) THEN
+        ! Wind-up
+        r_solver_acc = 0.01_dp
+
+      ELSEIF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+        ! Start-up
+        r_solver_acc = 0.01_dp + 0.99_dp * (region%time - C%start_time_of_run) / C%dt_startup_phase
+
+      ELSEIF (region%time >= C%end_time_of_run - C%dt_startup_phase) THEN
+        ! Cool-down
+        r_solver_acc = 0.01_dp + 0.99_dp * (C%end_time_of_run - region%time) / C%dt_startup_phase
+
+      ELSE
+        ! Any other time
+        r_solver_acc = 1._dp
+      END IF
+
+      ! Enforce the higher accuracy on the SSA/DIVA solution
+      region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
+      region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
+      region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
+      region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+      region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
+
+      ! Reduce the time-step during start-up and cool-down of simulation
+      IF (region%time < C%start_time_of_run) THEN
+        ! Wind-up
+        dt_max = C%dt_min
+
+      ELSEIF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
+        ! Start-up
+        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((region%time - C%start_time_of_run) / C%dt_startup_phase)**2
+
+      ELSEIF (region%time >= C%end_time_of_run   - C%dt_startup_phase) THEN
+        ! Cool-down
+        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time  ) / C%dt_startup_phase)**2
+
+      ELSE
+        ! Any other time
+        dt_max = C%dt_max
+      END IF
+
+    ELSE
+      ! Skip the start-up and cool-down phases
+
+      ! No additional accuracy
+      r_solver_acc = 1._dp
+
+      ! Unmodified values
+      region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit
+      region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol
+      region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
+      region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol
+      region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol
+
+      ! Full maxumium time step
+      dt_max = C%dt_max
+
+    END IF ! (C%dt_startup_phase > 0._dp)
+
+    ! == Velocity update
+    ! ==================
 
     IF (do_update_ice_velocity) THEN
 
@@ -275,9 +405,15 @@ CONTAINS
 
       IF (par%master) THEN
 
-        region%dt_crit_ice_prev = MAX(C%dt_min, MIN(C%dt_max, region%dt_crit_ice))
+        ! Calculate critical time step
+        region%dt_crit_ice_prev = region%dt_crit_ice
         dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
         region%dt_crit_ice      = MAX( C%dt_min, MAX( 0.5_dp * region%dt_crit_ice_prev, MINVAL([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc])))
+
+        ! Apply conditions to the time step
+        region%dt_crit_ice = MAX( C%dt_min, MIN( dt_max, region%dt_crit_ice))
+
+        ! Calculate zeta
         region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
 
       END IF
@@ -433,6 +569,7 @@ CONTAINS
         int_new = SUM(region%ice%dHi_dt_a( vi1:vi2))
         ! Total original ice change rate
         int_old = SUM( (region%ice%Hi_corr( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt_crit_ice )
+        CALL sync
 
         CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
         CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -468,6 +605,23 @@ CONTAINS
     ! Calculate ice thickness at the end of this model loop
     region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
     CALL sync
+
+    ! ! Apply anti-shock after mesh update
+    ! IF ( (region%ice%Hi_tot_old_time /= C%start_time_of_run) .AND. &
+    !      (region%time - region%ice%Hi_tot_old_time < 100._dp) ) THEN
+
+    !   ! Get new total ice thickness
+    !   Hi_tot_new = SUM(region%ice%Hi_tplusdt_a( vi1:vi2))
+    !   CALL sync
+    !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, Hi_tot_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+    !   IF (Hi_tot_new > 0._dp) THEN
+    !     ! Scale new ice thickness to conserve total mass from before the mesh-update
+    !     region%ice%Hi_tplusdt_a( vi1:vi2) = region%ice%Hi_tplusdt_a( vi1:vi2) * (region%ice%Hi_tot_old / Hi_tot_new)
+    !   END IF
+    !   CALL sync
+
+    ! END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1138,6 +1292,14 @@ CONTAINS
     END IF
     CALL sync
 
+    ! ! Initialise total ice thickness at start of run
+    ! ice%Hi_tot_old = SUM( ice%Hi_a( mesh%vi1:mesh%vi2))
+    ! CALL sync
+    ! ! Communicate mid-point results among processes
+    ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, ice%Hi_tot_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    ! ! Initialise time (to make sure it is not used until a mesh update)
+    ! ice%Hi_tot_old_time = C%start_time_of_run
+
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice, restart)
 
@@ -1361,7 +1523,9 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_tplusdt_a    , ice%wHi_tplusdt_a      )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_ave_a    , ice%wdHi_dt_ave_a      )
     CALL allocate_shared_dp_2D(   mesh%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a , ice%wdHi_dt_window_a   )
-    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_past_a    , ice%wdHi_dt_past_a    )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_past_a   , ice%wdHi_dt_past_a     )
+    ! CALL allocate_shared_dp_0D(                                    ice%Hi_tot_old      , ice%wHi_tot_old        )
+    ! CALL allocate_shared_dp_0D(                                    ice%Hi_tot_old_time , ice%wHi_tot_old_time   )
 
     ! Ice dynamics - calving
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%float_margin_frac_a   , ice%wfloat_margin_frac_a  )
@@ -1425,6 +1589,14 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! ! Save total ice thickness pre-mesh update for future reference
+    ! ice%Hi_tot_old = SUM( ice%Hi_a( mesh_old%vi1:mesh_old%vi2))
+    ! CALL sync
+    ! ! Communicate mid-point results among processes
+    ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, ice%Hi_tot_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    ! ! Save time of this computation
+    ! ice%Hi_tot_old_time = time
+
     ! The only fields that actually need to be mapped. The rest is either remapped in their
     ! own subroutines or are reallocated and reinitialised to 0.
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        ,    ice%wHi_a        ,    'cons_2nd_order')
@@ -1453,8 +1625,8 @@ CONTAINS
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
 
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
-    CALL reallocate_shared_dp_1D(    mesh_new%nV,  ice%Hb_a,                   ice%wHb_a                     )
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a, ice%wdHb_a, 'cons_2nd_order')
+    CALL reallocate_shared_dp_1D( mesh_new%nV,  ice%Hb_a, ice%wHb_a)
     ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
 
     ! Geothermal heat flux

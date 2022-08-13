@@ -169,6 +169,11 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
+    INTEGER                                 :: DIVA_SOR_nit
+    REAL(dp)                                :: DIVA_SOR_tol
+    REAL(dp)                                :: DIVA_SOR_omega
+    REAL(dp)                                :: DIVA_PETSc_rtol
+    REAL(dp)                                :: DIVA_PETSc_abstol
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
 
     ! Ice dynamics - ice thickness calculation
@@ -180,7 +185,9 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHi_dt_window_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_past_a
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a, wdHi_dt_past_a
+    ! REAL(dp),                   POINTER     :: Hi_tot_old
+    ! REAL(dp),                   POINTER     :: Hi_tot_old_time
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a, wdHi_dt_past_a!, wHi_tot_old, wHi_tot_old_time
 
     ! Ice dynamics - calving
     REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels

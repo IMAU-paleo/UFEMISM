@@ -58,6 +58,8 @@ MODULE configuration_module
     REAL(dp)            :: end_time_of_run_config                      = 50000.0_dp                       ! End   time (in years) of the simulations
     REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
     REAL(dp)            :: dt_max_config                               = 10.0_dp                          ! Maximum time step (in years) of the ice model
+    REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
+    REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time and before end_time when dt = dt_min, to ensure smooth restarts
     REAL(dp)            :: dt_thermo_config                            = 10.0_dp                          ! Time step (in years) for updating thermodynamics
     REAL(dp)            :: dt_climate_config                           = 10._dp                           ! Time step (in years) for updating the climate
     REAL(dp)            :: dt_ocean_config                             = 10._dp                           ! Time step (in years) for updating the ocean
@@ -377,7 +379,6 @@ MODULE configuration_module
     REAL(dp)            :: pc_eta_min_config                           = 1E-8_dp                          ! Normalisation term in estimation of the truncation error (Robinson et al., Eq. 32)
     INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step [NOT USED]
     REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased) [NOT USED]
-    REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)  :: ice_thickness_west_BC_config                = 'zero'                           ! Choice of boundary conditions for ice thickness at the domain boundary: "infinite", "periodic", "zero", "ISMIP_HOM_F"
@@ -832,6 +833,8 @@ MODULE configuration_module
     REAL(dp)                            :: end_time_of_run
     REAL(dp)                            :: dt_coupling
     REAL(dp)                            :: dt_max
+    REAL(dp)                            :: dt_min
+    REAL(dp)                            :: dt_startup_phase
     REAL(dp)                            :: dt_thermo
     REAL(dp)                            :: dt_climate
     REAL(dp)                            :: dt_ocean
@@ -1111,7 +1114,6 @@ MODULE configuration_module
     REAL(dp)                            :: pc_eta_min
     INTEGER                             :: pc_max_timestep_iterations
     REAL(dp)                            :: pc_redo_tol
-    REAL(dp)                            :: dt_min
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)                  :: ice_thickness_west_BC
@@ -1845,6 +1847,8 @@ CONTAINS
                      end_time_of_run_config,                          &
                      dt_coupling_config,                              &
                      dt_max_config,                                   &
+                     dt_min_config,                                   &
+                     dt_startup_phase_config,                         &
                      dt_thermo_config,                                &
                      dt_climate_config,                               &
                      dt_ocean_config,                                 &
@@ -1999,7 +2003,6 @@ CONTAINS
                      pc_eta_min_config,                               &
                      pc_max_timestep_iterations_config,               &
                      pc_redo_tol_config,                              &
-                     dt_min_config,                                   &
                      ice_thickness_west_BC_config,                    &
                      ice_thickness_east_BC_config,                    &
                      ice_thickness_south_BC_config,                   &
@@ -2541,6 +2544,8 @@ CONTAINS
     C%end_time_of_run                          = end_time_of_run_config
     C%dt_coupling                              = dt_coupling_config
     C%dt_max                                   = dt_max_config
+    C%dt_min                                   = dt_min_config
+    C%dt_startup_phase                         = dt_startup_phase_config
     C%dt_thermo                                = dt_thermo_config
     C%dt_climate                               = dt_climate_config
     C%dt_ocean                                 = dt_ocean_config
@@ -2821,7 +2826,6 @@ CONTAINS
     C%pc_eta_min                               = pc_eta_min_config
     C%pc_max_timestep_iterations               = pc_max_timestep_iterations_config
     C%pc_redo_tol                              = pc_redo_tol_config
-    C%dt_min                                   = dt_min_config
 
     ! Ice thickness boundary conditions
     C%ice_thickness_west_BC                    = ice_thickness_west_BC_config
@@ -3758,7 +3762,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string(' ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     ! Stop the program
@@ -3832,7 +3836,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string(' WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     ! Clean up after yourself

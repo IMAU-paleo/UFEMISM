@@ -1182,11 +1182,11 @@ CONTAINS
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
       C%DIVA_choice_matrix_solver, &
-      C%DIVA_SOR_nit             , &
-      C%DIVA_SOR_tol             , &
-      C%DIVA_SOR_omega           , &
-      C%DIVA_PETSc_rtol          , &
-      C%DIVA_PETSc_abstol)
+      ice%DIVA_SOR_nit           , &
+      ice%DIVA_SOR_tol           , &
+      ice%DIVA_SOR_omega         , &
+      ice%DIVA_PETSc_rtol        , &
+      ice%DIVA_PETSc_abstol)
 
   ! Get solution back on the b-grid
   ! ================================

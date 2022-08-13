@@ -8,6 +8,8 @@
   dt_mesh_min_config                          = 1e20                             ! Minimum amount of time (in years) between mesh updates
   dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
   dt_max_config                               = 10.0                             ! Maximum time step (in years) of the ice model
+  dt_min_config                               = 0.01                             ! Smallest allowed time step [yr]
+  dt_startup_phase_config                     = 10.0                             ! Length of time window (in years) after start_time and before end_time when dt = dt_min, to ensure smooth restarts
   dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
   dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
@@ -188,7 +190,6 @@
   pc_eta_min_config                           = 1E-8                             ! Normalisation term in estimation of the truncation error (Robinson et al., Eq. 32)
   pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step [NOT USED]
   pc_redo_tol_config                          = 10.0                             ! Maximum allowed truncation error (any higher and the timestep is decreased) [NOT USED]
-  dt_min_config                               = 0.01                             ! Smallest allowed time step [yr]
 
   ! Ice thickness boundary conditions
   ice_thickness_west_BC_config                = 'zero'                           ! Choice of boundary conditions for ice thickness at the domain boundary: "infinite", "periodic", "zero", "ISMIP_HOM_F"

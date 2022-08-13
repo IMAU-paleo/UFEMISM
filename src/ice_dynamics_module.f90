@@ -331,69 +331,42 @@ CONTAINS
     ! == Start-up / Cool-down
     ! =======================
 
+    ! Default velocity accuracy
+    r_solver_acc = 1._dp
+
+    ! Default max time step
+    dt_max = C%dt_max
+
+    ! Start-up
     IF (C%dt_startup_phase > 0._dp) THEN
-      ! Set smaller time steps and tolerances prevent initialisation "bumps"
-
-      ! Get a more accurate velocity solution during start-up and cool-down
-      IF (region%time < C%start_time_of_run) THEN
-        ! Wind-up
-        r_solver_acc = 0.01_dp
-
-      ELSEIF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
-        ! Start-up
-        r_solver_acc = 0.01_dp + 0.99_dp * (region%time - C%start_time_of_run) / C%dt_startup_phase
-
-      ELSEIF (region%time >= C%end_time_of_run - C%dt_startup_phase) THEN
-        ! Cool-down
-        r_solver_acc = 0.01_dp + 0.99_dp * (C%end_time_of_run - region%time) / C%dt_startup_phase
-
-      ELSE
-        ! Any other time
-        r_solver_acc = 1._dp
-      END IF
-
-      ! Enforce the higher accuracy on the SSA/DIVA solution
-      region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
-      region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
-      region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
-      region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
-      region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
-
-      ! Reduce the time-step during start-up and cool-down of simulation
       IF (region%time < C%start_time_of_run) THEN
         ! Wind-up
         dt_max = C%dt_min
-
+        r_solver_acc = 0.01_dp
       ELSEIF (region%time <= C%start_time_of_run + C%dt_startup_phase) THEN
-        ! Start-up
+        ! Reduce time maximum time step
         dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((region%time - C%start_time_of_run) / C%dt_startup_phase)**2
-
-      ELSEIF (region%time >= C%end_time_of_run   - C%dt_startup_phase) THEN
-        ! Cool-down
-        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time  ) / C%dt_startup_phase)**2
-
-      ELSE
-        ! Any other time
-        dt_max = C%dt_max
+        ! Enforce higher accuracy
+        r_solver_acc = 0.01_dp + 0.99_dp * (region%time - C%start_time_of_run) / C%dt_startup_phase
       END IF
+    END IF
 
-    ELSE
-      ! Skip the start-up and cool-down phases
+    ! Cool-down
+    IF (C%dt_cooldown_phase > 0._dp) THEN
+      IF (region%time >= C%end_time_of_run - C%dt_cooldown_phase) THEN
+        ! Reduce time maximum time step
+        dt_max = C%dt_min + (C%dt_max - C%dt_min) * ((C%end_time_of_run - region%time) / C%dt_cooldown_phase)**2
+        ! Enforce higher accuracy
+        r_solver_acc = 0.01_dp + 0.99_dp * (C%end_time_of_run - region%time) / C%dt_cooldown_phase
+      END IF
+    END IF
 
-      ! No additional accuracy
-      r_solver_acc = 1._dp
-
-      ! Unmodified values
-      region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit
-      region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol
-      region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
-      region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol
-      region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol
-
-      ! Full maxumium time step
-      dt_max = C%dt_max
-
-    END IF ! (C%dt_startup_phase > 0._dp)
+    ! Accuracy for the SSA/DIVA solution
+    region%ice%DIVA_SOR_nit      = C%DIVA_SOR_nit      * CEILING( 1._dp / r_solver_acc)
+    region%ice%DIVA_SOR_tol      = C%DIVA_SOR_tol      * r_solver_acc
+    region%ice%DIVA_SOR_omega    = C%DIVA_SOR_omega
+    region%ice%DIVA_PETSc_rtol   = C%DIVA_PETSc_rtol   * r_solver_acc
+    region%ice%DIVA_PETSc_abstol = C%DIVA_PETSc_abstol * r_solver_acc
 
     ! == Velocity update
     ! ==================

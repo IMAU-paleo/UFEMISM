@@ -54,23 +54,33 @@ MODULE configuration_module
   ! == Time steps and range
   ! =======================
 
+    ! General
     REAL(dp)            :: start_time_of_run_config                    = 0.0_dp                           ! Start time (in years) of the simulations
     REAL(dp)            :: end_time_of_run_config                      = 50000.0_dp                       ! End   time (in years) of the simulations
+    REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
+
+    ! Ice dynamics
     REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
     REAL(dp)            :: dt_max_config                               = 10.0_dp                          ! Maximum time step (in years) of the ice model
     REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
-    REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time and before end_time when dt = dt_min, to ensure smooth restarts
+    REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time when dt = dt_min, to ensure smooth restarts
+    REAL(dp)            :: dt_cooldown_phase_config                    = 10._dp                           ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
+
+    ! Sub-models
     REAL(dp)            :: dt_thermo_config                            = 10.0_dp                          ! Time step (in years) for updating thermodynamics
     REAL(dp)            :: dt_climate_config                           = 10._dp                           ! Time step (in years) for updating the climate
     REAL(dp)            :: dt_ocean_config                             = 10._dp                           ! Time step (in years) for updating the ocean
     REAL(dp)            :: dt_SMB_config                               = 10._dp                           ! Time step (in years) for updating the SMB
     REAL(dp)            :: dt_BMB_config                               = 10._dp                           ! Time step (in years) for updating the BMB
-    REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
-    REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
     REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
+
+    ! Inversions
     REAL(dp)            :: dt_basal_config                             = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
     REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
+
+    ! Output
+    REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
 
   ! == Which ice sheets do we simulate?
   ! ===================================
@@ -835,6 +845,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_max
     REAL(dp)                            :: dt_min
     REAL(dp)                            :: dt_startup_phase
+    REAL(dp)                            :: dt_cooldown_phase
     REAL(dp)                            :: dt_thermo
     REAL(dp)                            :: dt_climate
     REAL(dp)                            :: dt_ocean
@@ -1849,6 +1860,7 @@ CONTAINS
                      dt_max_config,                                   &
                      dt_min_config,                                   &
                      dt_startup_phase_config,                         &
+                     dt_cooldown_phase_config,                        &
                      dt_thermo_config,                                &
                      dt_climate_config,                               &
                      dt_ocean_config,                                 &
@@ -2546,6 +2558,7 @@ CONTAINS
     C%dt_max                                   = dt_max_config
     C%dt_min                                   = dt_min_config
     C%dt_startup_phase                         = dt_startup_phase_config
+    C%dt_cooldown_phase                        = dt_cooldown_phase_config
     C%dt_thermo                                = dt_thermo_config
     C%dt_climate                               = dt_climate_config
     C%dt_ocean                                 = dt_ocean_config

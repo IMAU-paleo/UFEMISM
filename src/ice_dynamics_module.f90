@@ -575,7 +575,7 @@ CONTAINS
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
     CALL determine_timesteps_and_actions( region, t_end)
 
-    ! Calculate ice thickness at the end of this model loop
+    ! Calculate ice thickness at the end of the adjusted time step
     region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
     CALL sync
 
@@ -1122,10 +1122,27 @@ CONTAINS
         END IF
       END IF
 
+      ! Finally, the output
+      ! ===================
+
+      ! This requires a couple of additional considerations,
+      ! to avoid output records at weird, decimal-laden
+      ! times. We use the fact that nothing in the model
+      ! really changes between one time step and the next
+      ! one, i.e., the model has the same state at all times
+      ! between those steps. Thus, we identify the two time
+      ! steps encompasing our desired, rounded output time,
+      ! and then simply ask the model to output that model
+      ! state using the desired time as time-of-record.
+
       region%do_output  = .FALSE.
-      IF (region%time >= region%t_next_output) THEN
+      ! Check if we will overshoot the output timestep
+      IF (t_next > region%t_next_output) THEN
+        ! Output before ice and time are updated
         region%do_output      = .TRUE.
-        region%t_last_output  = region%time
+        ! The output routines will record this time
+        region%t_last_output  = region%t_next_output
+        ! Set next output at desired time
         region%t_next_output  = region%t_last_output + C%dt_output
       END IF
 

@@ -316,6 +316,8 @@ CONTAINS
 
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
+      ! Update output time of record
+      region%t_last_output = C%end_time_of_run
       ! If the mesh has been updated, create a new NetCDF file
       IF (.NOT. region%output_file_exists) THEN
         CALL create_output_files( region)

@@ -482,13 +482,16 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
+    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%t_last_output/1e3, ' kyr - writing output...'
 
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
-    IF (C%do_write_ISMIP_output) CALL write_to_ISMIP_output_files( region)
+
+    IF (C%do_write_ISMIP_output) THEN
+      CALL write_to_ISMIP_output_files( region)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -643,7 +646,7 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start = (/ netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start = (/ netcdf%ti/)))
 
     ! Write data
 
@@ -739,7 +742,7 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Write data
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -1696,7 +1699,7 @@ CONTAINS
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Map and write data
 
@@ -1779,7 +1782,7 @@ CONTAINS
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Write data
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -5285,40 +5288,40 @@ CONTAINS
     CALL sync
 
     ! Write to all the ISMIP output files
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hi_a                    , 'lithk'                    )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hs_a                    , 'orog'                     )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hb_a                    , 'topg'                     )
-    CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,              region%ice%GHF_a                   , 'hfgeoubed'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%SMB%SMB_year                , 'acabf'                    )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_sheet               , 'libmassbfgr'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_shelf               , 'libmassbffl'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%dHs_dt_a                , 'dlithkdt'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_surf_a                , 'xvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_surf_a                , 'yvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_surf_a                , 'zvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_base_a                , 'xvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_base_a                , 'yvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_base_a                , 'zvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_vav_a                 , 'xvelmean'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_vav_a                 , 'yvelmean'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Ti_a( :,1)              , 'litemptop'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_gr                         , 'litempbotgr'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_fl                         , 'litempbotfl'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, basal_drag                         , 'strbasemag'               )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_flux                       , 'licalvf'                  )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_and_front_melt_flux        , 'lifmassbf'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, land_ice_area_fraction             , 'sftgif'                   )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, grounded_ice_sheet_area_fraction   , 'sftgrf'                   )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, floating_ice_shelf_area_fraction   , 'sftflf'                   )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, land_ice_mass                      , 'lim'                      )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, mass_above_floatation              , 'limnsw'                   )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, grounded_ice_sheet_area            , 'iareagr'                  )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, floating_ice_sheet_area            , 'iareafl'                  )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_SMB                          , 'tendacabf'                )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB                          , 'tendlibmassbf'            )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB_shelf                    , 'tendlibmassbffl'          )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_flux                 , 'tendlicalvf'              )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hi_a                    , 'lithk'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hs_a                    , 'orog'                     )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hb_a                    , 'topg'                     )
+    CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,                       region%ice%GHF_a                   , 'hfgeoubed'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%SMB%SMB_year                , 'acabf'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_sheet               , 'libmassbfgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_shelf               , 'libmassbffl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%dHs_dt_a                , 'dlithkdt'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_surf_a                , 'xvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_surf_a                , 'yvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_surf_a                , 'zvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_base_a                , 'xvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_base_a                , 'yvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_base_a                , 'zvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_vav_a                 , 'xvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_vav_a                 , 'yvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Ti_a( :,1)              , 'litemptop'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_gr                         , 'litempbotgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_fl                         , 'litempbotfl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, basal_drag                         , 'strbasemag'               )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, calving_flux                       , 'licalvf'                  )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, calving_and_front_melt_flux        , 'lifmassbf'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, land_ice_area_fraction             , 'sftgif'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, grounded_ice_sheet_area_fraction   , 'sftgrf'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, floating_ice_shelf_area_fraction   , 'sftflf'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, land_ice_mass                      , 'lim'                      )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, mass_above_floatation              , 'limnsw'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, grounded_ice_sheet_area            , 'iareagr'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, floating_ice_sheet_area            , 'iareafl'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_SMB                          , 'tendacabf'                )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_BMB                          , 'tendlibmassbf'            )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_BMB_shelf                    , 'tendlibmassbffl'          )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_calving_flux                 , 'tendlicalvf'              )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
 
     ! Clean up after yourself
     CALL deallocate_shared( wTi_base_gr                      )

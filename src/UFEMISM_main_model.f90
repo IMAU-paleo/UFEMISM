@@ -645,7 +645,7 @@ CONTAINS
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name, region%restart)
 
     ! ===== The GIA model =====
     ! =========================

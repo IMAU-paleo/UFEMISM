@@ -1400,6 +1400,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: C_refr_inv
     INTEGER :: wFirnDepth, wMeltPreviousYear, wC_abl_constant_inv, wC_abl_Ts_inv, wC_abl_Q_inv, wC_refr_inv
 
+    ! BMB
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf
+    INTEGER :: wBMB_shelf
+
     ! Isotopes
     REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce
     INTEGER :: wIsoIce

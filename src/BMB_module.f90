@@ -27,7 +27,7 @@ MODULE BMB_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
-                                             type_remapping_mesh_mesh, type_reference_geometry
+                                             type_remapping_mesh_mesh, type_reference_geometry, type_restart_data
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
@@ -188,7 +188,7 @@ CONTAINS
 
   END SUBROUTINE run_BMB_model
 
-  SUBROUTINE initialise_BMB_model( mesh, ice, BMB, region_name)
+  SUBROUTINE initialise_BMB_model( mesh, ice, BMB, region_name, restart)
     ! Allocate memory for the data fields of the SMB model.
 
     IMPLICIT NONE
@@ -198,6 +198,7 @@ CONTAINS
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_restart_data),             INTENT(IN)    :: restart
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model'
@@ -214,8 +215,7 @@ CONTAINS
 
     ! Shelf
     IF     (C%choice_BMB_shelf_model == 'uniform' .OR. &
-            C%choice_BMB_shelf_model == 'idealised' .OR. &
-            C%choice_BMB_shelf_model == 'inversion') THEN
+            C%choice_BMB_shelf_model == 'idealised') THEN
       ! Nothing else needs to be done
     ELSEIF (C%choice_BMB_shelf_model == 'ANICE_legacy') THEN
       CALL initialise_BMB_model_ANICE_legacy( mesh, BMB, region_name)
@@ -229,6 +229,8 @@ CONTAINS
       CALL initialise_BMB_model_PICO(  mesh, ice, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'PICOP') THEN
       CALL initialise_BMB_model_PICOP( mesh, ice, BMB)
+    ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL initialise_BMB_model_inversion( mesh, BMB, restart)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -2313,6 +2315,39 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_shelf_inversion
+
+  SUBROUTINE initialise_BMB_model_inversion( mesh, BMB, restart)
+    ! Invert basal melt using the reference topography
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+    TYPE(type_restart_data),             INTENT(IN)    :: restart
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_inversion'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (C%is_restart .AND. C%BMB_inv_use_restart_field) THEN
+
+      IF (par%master) WRITE (0,*) '   Initialising ice shelf basal mass balance using data read from restart file...'
+
+      ! Assign field from restart file
+      BMB%BMB_shelf( mesh%vi1:mesh%vi2) = restart%BMB_shelf( mesh%vi1:mesh%vi2)
+
+    ELSE
+      ! No need to do anything
+    END IF
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_BMB_model_inversion
 
 ! ===== Some generally useful tools =====
 ! =======================================

@@ -707,6 +707,11 @@ CONTAINS
 
     END IF
 
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_BMB_shelf, region%BMB%BMB_shelf, start = (/ 1, netcdf%ti/)))
+    END IF
+
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
 
@@ -1191,6 +1196,11 @@ CONTAINS
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        [vi,    time], netcdf%id_var_C_abl_Q_inv,        long_name='Insolation ablation factor', units='-')
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         [vi,    time], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
       END IF
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [vi, time], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
 
     ! Leave definition mode
@@ -1752,6 +1762,11 @@ CONTAINS
 
     END IF
 
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%BMB_shelf, netcdf%id_var_BMB_shelf, netcdf%ti)
+    END IF
+
     ! Close the file
     IF (par%master) CALL close_netcdf_file(netcdf%ncid)
 
@@ -2234,6 +2249,11 @@ CONTAINS
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,           [x, y, t], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
       END IF
 
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [x, y, t], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
 
     ! Leave definition mode
@@ -2888,6 +2908,11 @@ CONTAINS
 
     END IF
 
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_BMB_shelf)
+    END IF
+
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
 
@@ -3036,6 +3061,11 @@ CONTAINS
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         restart%C_refr_inv,         start = (/ 1,    ti /) ))
       END IF
 
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_BMB_shelf, restart%BMB_shelf, start = (/ 1, ti /) ))
     END IF
 
     ! Close the netcdf file

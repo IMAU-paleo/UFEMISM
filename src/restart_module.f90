@@ -216,6 +216,10 @@ CONTAINS
 
     END IF
 
+    IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
+      CALL allocate_shared_dp_1D( restart%mesh%nV, restart%BMB_shelf, restart%wBMB_shelf)
+    END IF
+
     ! Read data from the restart file
     IF (par%master) CALL read_restart_file_init( region_name, restart, restart%netcdf)
     CALL sync

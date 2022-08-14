@@ -58,9 +58,9 @@ MODULE configuration_module
     REAL(dp)            :: start_time_of_run_config                    = 0.0_dp                           ! Start time (in years) of the simulations
     REAL(dp)            :: end_time_of_run_config                      = 50000.0_dp                       ! End   time (in years) of the simulations
     REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
+    REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
 
     ! Ice dynamics
-    REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
     REAL(dp)            :: dt_max_config                               = 10.0_dp                          ! Maximum time step (in years) of the ice model
     REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
     REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time when dt = dt_min, to ensure smooth restarts
@@ -406,7 +406,7 @@ MODULE configuration_module
     LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
     ! Memory of first dHi_dt of simulation
-    LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt (for e.g. a smooth, no-shock restart)
+    LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt
     REAL(dp)            :: get_senile_after_config                     = 100._dp                          ! Keep fading memory for this amount of years
     INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
@@ -634,6 +634,7 @@ MODULE configuration_module
     REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
+    LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
     REAL(dp)            :: BMB_inv_scale_ocean_config                  = 100._dp                          ! Scaling constant for inversion procedure over open ocean [m]
 
@@ -1370,6 +1371,7 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
 
+    LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
     REAL(dp)                            :: BMB_inv_scale_ocean
 
@@ -2219,6 +2221,7 @@ CONTAINS
                      choice_BMB_subgrid_config,                       &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
+                     BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
                      choice_basin_scheme_NAM_config,                  &
@@ -3082,6 +3085,7 @@ CONTAINS
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
 
+    C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config
     C%BMB_inv_scale_ocean                      = BMB_inv_scale_ocean_config
 

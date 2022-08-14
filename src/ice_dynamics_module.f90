@@ -493,68 +493,6 @@ CONTAINS
       ! Determine truncation error
       CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice)
 
-      ! Memory step
-      ! ===========
-
-      ! Uses the values of dHi_dt from the start of the run (or values from
-      ! a previous run, in case of a restart) and computes a weighed average
-      ! between the old and new values. The average starts giving full weight
-      ! to the old dHi_dt (start of run), and exponentially (but slowly) shifts
-      ! the weight to the new values (current time step) over time. At time
-      ! C%start_time_of_run + C%get_senile_after, memory is completely lost
-      ! and the newly computed dHi_dt is fully used from that time onwards.
-
-      ! Compute how much time has passed since start of run
-      time_passed = region%time - C%start_time_of_run
-
-      ! Only if so specified and before memory fades away
-      IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
-
-        ! Compute how senile our current run is
-        IF (region%time < C%start_time_of_run) THEN
-          ! For wind-up, keep memory intact
-          hi_senile = 0._dp
-        ELSE
-          ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
-          hi_senile = min(1._dp, max(0._dp, time_passed / C%get_senile_after))
-        END IF
-
-        ! Memory fades
-        hi_memory = 1._dp - hi_senile
-        ! No matter what
-        hi_memory = min(hi_memory, 0.9_dp)
-
-        IF (C%is_restart) THEN
-          ! For restarts, weighed average between previous life and present
-          region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-                                                 + hi_memory  * region%ice%dHi_dt_past_a( vi1:vi2)
-        ELSE
-          ! Else, weighed average between birthday and present
-          region%ice%dHi_dt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%dHi_dt_a( vi1:vi2) &
-                                                 + hi_memory  * 0._dp
-        END IF
-        CALL sync
-
-        ! Even when your neurons are no more, their atoms
-        ! carry on, so make sure mass is conserved
-
-        ! Total memory-based ice change rate
-        int_new = SUM(region%ice%dHi_dt_a( vi1:vi2))
-        ! Total original ice change rate
-        int_old = SUM( (region%ice%Hi_corr( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt_crit_ice )
-        CALL sync
-
-        CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-        CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-
-        IF (int_new > 0._dp) THEN
-          ! Scale memory-based rates to conserve total mass change
-          region%ice%dHi_dt_a( vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2) * (int_old / int_new)
-        END IF
-        CALL sync
-
-      END IF ! (C%do_use_hi_memory)
-
       ! Running dHi_dt average
       ! ======================
 
@@ -578,6 +516,61 @@ CONTAINS
     ! Calculate ice thickness at the end of the adjusted time step
     region%ice%Hi_tplusdt_a( vi1:vi2) = MAX( 0._dp, region%ice%Hi_a( vi1:vi2) + region%dt * region%ice%dHi_dt_a( vi1:vi2))
     CALL sync
+
+    ! Memory step
+    ! ===========
+
+    ! Uses the values of Hi from the previous time step (or last value from
+    ! a previous run, in case of a restart) and computes a weighed average
+    ! between the old and new time steps. The average starts giving full weight
+    ! to the old Hi, ans slowly shifts the weight to Hi_tplusdt over time. At
+    ! time C%start_time_of_run + C%get_senile_after, memory is completely lost
+    ! and the newly computed Hi_tplusdt is fully used from that time onwards.
+
+    ! Compute how much time has passed since start of run
+    time_passed = region%time - C%start_time_of_run
+
+    ! Only if so specified and before memory fades away
+    IF (C%do_use_hi_memory .AND. time_passed < C%get_senile_after) THEN
+
+      ! Compute how senile our current run is
+      IF (region%time < C%start_time_of_run) THEN
+        ! For wind-up, keep memory intact
+        hi_senile = 0._dp
+      ELSE
+        ! For actual runs, get senility level: 0 at start, 1 after C%get_senile_after years
+        hi_senile = min(1._dp, max(0._dp, time_passed / C%get_senile_after))
+      END IF
+
+      ! Memory fades
+      hi_memory = 1._dp - hi_senile**1._dp
+      ! No matter what
+      hi_memory = min(hi_memory, 0.99_dp)
+
+      ! Weighed average between birth and present
+      region%ice%Hi_tplusdt_a( vi1:vi2) = (1._dp - hi_memory) * region%ice%Hi_tplusdt_a( vi1:vi2) &
+                                                 + hi_memory  * region%ice%Hi_a( vi1:vi2)
+      CALL sync
+
+      ! ! Even when your neurons are no more, their atoms
+      ! ! carry on, so make sure mass is conserved
+
+      ! ! Total memory-based ice change rate
+      ! int_new = SUM(region%ice%dHi_dt_a( vi1:vi2))
+      ! ! Total original ice change rate
+      ! int_old = SUM( (region%ice%Hi_corr( vi1:vi2) - region%ice%Hi_a( vi1:vi2)) / region%dt_crit_ice )
+      ! CALL sync
+
+      ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_new, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+      ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, int_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+
+      ! IF (int_new > 0._dp) THEN
+      !   ! Scale memory-based rates to conserve total mass change
+      !   region%ice%dHi_dt_a( vi1:vi2) = region%ice%dHi_dt_a( vi1:vi2) * (int_old / int_new)
+      ! END IF
+      ! CALL sync
+
+    END IF ! (time_passed < C%get_senile_after)
 
     ! ! Apply anti-shock after mesh update
     ! IF ( (region%ice%Hi_tot_old_time /= C%start_time_of_run) .AND. &

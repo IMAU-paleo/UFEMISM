@@ -25,7 +25,7 @@
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
 
   ! Inversions
-  dt_basal_config                             = 10.0                             ! Time step (in years) for calling the iterative inversion of basal roughness
+  dt_basal_config                             = 4.0                              ! Time step (in years) for calling the iterative inversion of basal roughness
   dt_SMB_inv_config                           = 10.0                             ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! Output
@@ -178,8 +178,8 @@
   m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
   m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice
 
-  ! Velocity wind-up before a restart
-  windup_total_years_config                   = 0.0                              ! Go back in time and run the velocity solver for this amount of years before actual run starts
+  ! Velocity wind-up at start
+  windup_total_years_config                   = 10.0                             ! Go back in time and run the velocity solver for this amount of years before actual run starts
 
   ! Ice dynamics - time integration
   ! ===============================
@@ -216,9 +216,9 @@
   fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
   fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
 
-  ! Memory of first dHi_dt of simulation
-  do_use_hi_memory_config                     = .TRUE.                           ! Keep a fading memory of first dHi_dt
-  get_senile_after_config                     = 10000.0                          ! Keep fading memory for this amount of years
+  ! Memory of Hi from previous time step
+  do_use_hi_memory_config                     = .TRUE.                           ! Keep a fading memory of Hi
+  get_senile_after_config                     = 20000.0                          ! Keep fading memory for this amount of years
   dHi_dt_window_size_config                   = 2000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! Ice dynamics - basal conditions and sliding

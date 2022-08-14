@@ -35,6 +35,7 @@ MODULE UFEMISM_main_model
                                                  calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
   USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
+  USE forcing_module,                      ONLY: forcing, update_sealevel_record_at_model_time
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
   USE climate_module,                      ONLY: initialise_climate_model_regional,       remap_climate_model,  run_climate_model
@@ -123,6 +124,18 @@ CONTAINS
 
       ! Update iteration counter
       it = it + 1
+
+      ! == Sea-level
+      ! ============
+
+      IF (C%choice_sealevel_model == 'prescribed') THEN
+        ! Update global sea level based on record
+        CALL update_sealevel_record_at_model_time( region%time)
+        ! Update regional sea level based on record
+        region%ice%SL_a( region%mesh%vi1:region%mesh%vi2) = forcing%sealevel_obs
+      ELSE
+        ! Updated during coupling interval or update not needed
+      END IF
 
       ! == GIA
       ! ======

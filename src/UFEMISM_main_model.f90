@@ -831,6 +831,8 @@ CONTAINS
       region%t_next_mesh      = C%start_time_of_run + C%dt_mesh_min
       IF (C%do_force_mesh_update) THEN
         region%do_mesh          = .TRUE.
+      ELSE
+        region%do_mesh          = .FALSE.
       END IF
 
       region%t_last_SIA       = C%start_time_of_run

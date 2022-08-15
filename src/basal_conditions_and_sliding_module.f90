@@ -1733,7 +1733,8 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_scale, h_delta, h_dfrac, new_val, w_smooth
+    REAL(dp)                                           :: h_scale, h_delta, h_dfrac
+    REAL(dp)                                           :: new_val, min_lim, w_smooth
     INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
     REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
     INTEGER                                            :: wmask, wmask_filled, wrough_smoothed
@@ -1823,8 +1824,18 @@ CONTAINS
               new_val = ice%phi_fric_inv_a( vi)
               ! Adjust based on scaled ice thickness difference
               new_val = new_val * (10._dp ** (-h_delta))
+              ! Compute local minumum limit for bed roughness
+              IF (C%basal_sliding_inv_thin_ice_Hi > 0._dp) THEN
+                IF (refgeo%Hi( vi) <= C%basal_sliding_inv_thin_ice_Hi) THEN
+                  min_lim = C%basal_sliding_inv_phi_min + &
+                            (1._dp - refgeo%Hi( vi) / C%basal_sliding_inv_thin_ice_Hi) &
+                            * (C%basal_sliding_inv_phi_min_thin - C%basal_sliding_inv_phi_min)
+                ELSE
+                  min_lim = C%basal_sliding_inv_phi_min
+                END IF
+              END IF
               ! Constrain adjusted value to roughness limits
-              new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+              new_val = MIN(MAX(new_val, min_lim), C%basal_sliding_inv_phi_max)
               ! Replace old bed roughness value with the adjusted one
               ice%phi_fric_inv_a( vi) = new_val
 

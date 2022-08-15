@@ -454,8 +454,10 @@ MODULE configuration_module
     REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
-    REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
     REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
+    REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
+    REAL(dp)            :: basal_sliding_inv_thin_ice_Hi_config        = 0._dp                            ! If reference ice is thinner than this value, increase the min limit on phi_fric
+    REAL(dp)            :: basal_sliding_inv_phi_min_thin_config       = 1._dp                            ! Minimum value of phi_fric over thin ice areas allowed during inversion
     REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
     REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
     INTEGER             :: phi_fric_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of phi_fric
@@ -1191,8 +1193,10 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_scale
     REAL(dp)                            :: basal_sliding_inv_rsmooth
     REAL(dp)                            :: basal_sliding_inv_wsmooth
-    REAL(dp)                            :: basal_sliding_inv_phi_min
     REAL(dp)                            :: basal_sliding_inv_phi_max
+    REAL(dp)                            :: basal_sliding_inv_phi_min
+    REAL(dp)                            :: basal_sliding_inv_thin_ice_Hi
+    REAL(dp)                            :: basal_sliding_inv_phi_min_thin
     REAL(dp)                            :: basal_sliding_inv_tol_diff
     REAL(dp)                            :: basal_sliding_inv_tol_frac
     INTEGER                             :: phi_fric_window_size
@@ -2065,8 +2069,10 @@ CONTAINS
                      basal_sliding_inv_scale_config,                  &
                      basal_sliding_inv_rsmooth_config,                &
                      basal_sliding_inv_wsmooth_config,                &
-                     basal_sliding_inv_phi_min_config,                &
                      basal_sliding_inv_phi_max_config,                &
+                     basal_sliding_inv_phi_min_config,                &
+                     basal_sliding_inv_thin_ice_Hi_config,            &
+                     basal_sliding_inv_phi_min_thin_config,           &
                      basal_sliding_inv_tol_diff_config,               &
                      basal_sliding_inv_tol_frac_config,               &
                      phi_fric_window_size_config,                     &
@@ -2907,8 +2913,10 @@ CONTAINS
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
     C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
     C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
-    C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
     C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
+    C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
+    C%basal_sliding_inv_thin_ice_Hi            = basal_sliding_inv_thin_ice_Hi_config
+    C%basal_sliding_inv_phi_min_thin           = basal_sliding_inv_phi_min_thin_config
     C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
     C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
     C%phi_fric_window_size                     = phi_fric_window_size_config

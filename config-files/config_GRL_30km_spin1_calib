@@ -265,8 +265,10 @@
   basal_sliding_inv_scale_config              = 10000.0                          ! Scaling constant for inversion procedure [m]
   basal_sliding_inv_rsmooth_config            = 10000.0                          ! Smoothing radius for inversion procedure [m]
   basal_sliding_inv_wsmooth_config            = 0.05                             ! Weight given to the smoothed roughness (1 = full smoothing applied)
-  basal_sliding_inv_phi_min_config            = 0.1                              ! Minimum value of phi_fric allowed during inversion
   basal_sliding_inv_phi_max_config            = 45.0                             ! Maximum value of phi_fric allowed during inversion
+  basal_sliding_inv_phi_min_config            = 0.1                              ! Minimum value of phi_fric allowed during inversion
+  basal_sliding_inv_thin_ice_Hi_config        = 0.0                              ! If reference ice is thinner than this value, increase the min limit on phi_fric
+  basal_sliding_inv_phi_min_thin_config       = 1.0                              ! Minimum value of phi_fric over thin ice areas allowed during inversion
   basal_sliding_inv_tol_diff_config           = 0.0                              ! Minimum ice thickness difference [m] that triggers inversion
   basal_sliding_inv_tol_frac_config           = 0.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
   phi_fric_window_size_config                 = 250                              ! Number of previous inversion time steps used to compute a running average of phi_fric
@@ -376,10 +378,10 @@
   SMB_IMAUITM_C_abl_constant_EAS_config       = 0.0
   SMB_IMAUITM_C_abl_constant_GRL_config       = 0.0
   SMB_IMAUITM_C_abl_constant_ANT_config       = 0.0
-  SMB_IMAUITM_C_abl_Ts_NAM_config             = 10.0                             ! 10.0 : Temperature-based melt factor
-  SMB_IMAUITM_C_abl_Ts_EAS_config             = 10.0
-  SMB_IMAUITM_C_abl_Ts_GRL_config             = 10.0
-  SMB_IMAUITM_C_abl_Ts_ANT_config             = 10.0
+  SMB_IMAUITM_C_abl_Ts_NAM_config             = 20.0                             ! 10.0 : Temperature-based melt factor
+  SMB_IMAUITM_C_abl_Ts_EAS_config             = 20.0
+  SMB_IMAUITM_C_abl_Ts_GRL_config             = 20.0
+  SMB_IMAUITM_C_abl_Ts_ANT_config             = 20.0
   SMB_IMAUITM_C_abl_Q_NAM_config              = 0.0227                           ! 0.0227 : Insolation-based melt factor
   SMB_IMAUITM_C_abl_Q_EAS_config              = 0.0227
   SMB_IMAUITM_C_abl_Q_GRL_config              = 0.0227

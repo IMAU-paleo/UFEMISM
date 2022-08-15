@@ -238,12 +238,12 @@ CONTAINS
     ELSEIF (C%choice_climate_model == 'PD_obs') THEN
       ! Keep the climate fixed to present-day observed conditions
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, climate_matrix_global, region%climate_matrix)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
 
     ELSEIF (C%choice_climate_model == 'PD_dTglob') THEN
       ! Use the present-day climate plus a global temperature offset (de Boer et al., 2013)
 
-      CALL initialise_climate_model_regional_PD_obs( region%mesh, climate_matrix_global, region%climate_matrix)
+      CALL initialise_climate_model_regional_PD_obs( region%mesh, region%ice, climate_matrix_global, region%climate_matrix, region%name)
 
     ELSEIF (C%choice_climate_model == 'matrix_warm_cold') THEN
       ! Use the warm/cold climate matrix (Berends et al., 2018)
@@ -413,18 +413,25 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_PD_obs'
     INTEGER                                            :: vi,m
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! == Present-day insolation
+    ! =========================
 
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
 
-    ! Initialise applied values to the PD-observed ones
+    ! == Downscaling to model topography
+    ! ==================================
+
+    ! Initialise applied climate with present-day conditions and current model topography
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
-      climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
-      climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
-      climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
+      climate_matrix%applied%Hs(      vi  ) = ice%Hs_a( vi  )
       climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
       climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
       climate_matrix%applied%Q_TOA(   vi,m) = climate_matrix%PD_obs%Q_TOA(   vi,m)
@@ -436,7 +443,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
 
-      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - 0.008_dp * &
+      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - C%constant_lapserate * &
                                            (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
     END DO
     END DO
@@ -445,17 +452,47 @@ CONTAINS
     ! Downscale precipitation from the coarse-resolution reference
     ! orography to the fine-resolution ice-model orography
     IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'PAT') THEN
+
       ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
-      CALL adapt_precip_Roe( mesh, climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+      CALL adapt_precip_Roe( mesh, &
+                             climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
                              climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
-                             climate_matrix%PD_obs%Precip, ice%Hs_a, climate_matrix%applied%T2m, &
-                             climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
+                             climate_matrix%PD_obs%Precip, &
+                             climate_matrix%applied%Hs, climate_matrix%applied%T2m, &
+                             climate_matrix%applied%Wind_LR, climate_matrix%applied%Wind_DU, &
                              climate_matrix%applied%Precip)
+
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
+
       ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
-      CALL adapt_precip_CC( mesh, ice%Hs_a, climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
-                            climate_matrix%PD_obs%Precip, climate_matrix%applied%Precip, region_name)
+      CALL adapt_precip_CC( mesh, climate_matrix%applied%Hs, &
+                            climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                            climate_matrix%PD_obs%Precip, &
+                            climate_matrix%applied%Precip, region_name)
     END IF
+
+    ! == Safety checks
+    ! ================
+
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      ! Safety net in case resulting precipitation is negative
+      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+    END DO
+    END DO
+    CALL sync
+
+    ! == Finalisation
+    ! ===============
+
+    ! print*, ' '
+    ! print*, minval(climate_matrix%applied%Hs), maxval(climate_matrix%applied%Hs)
+    ! print*, minval(climate_matrix%applied%T2m), maxval(climate_matrix%applied%T2m)
+    ! print*, minval(climate_matrix%applied%Precip), maxval(climate_matrix%applied%Precip)
+    ! print*, minval(climate_matrix%applied%Wind_LR), maxval(climate_matrix%applied%Wind_LR)
+    ! print*, minval(climate_matrix%applied%Wind_DU), maxval(climate_matrix%applied%Wind_DU)
+    ! print*, minval(climate_matrix%applied%Q_TOA), maxval(climate_matrix%applied%Q_TOA)
+    ! stop ':)'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -528,7 +565,7 @@ CONTAINS
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_SN,     PD_obs%wWind_SN    )
 
     ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
     IF (par%master) CALL read_PD_obs_global_climate_file( PD_obs)
     CALL sync
 
@@ -540,7 +577,7 @@ CONTAINS
 
   END SUBROUTINE initialise_climate_PD_obs_global
 
-  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, climate_matrix_global, climate_matrix)
+  SUBROUTINE initialise_climate_model_regional_PD_obs( mesh, ice, climate_matrix_global, climate_matrix, region_name)
     ! Initialise the regional climate model
     !
     ! Keep the climate fixed to present-day observed conditions
@@ -549,12 +586,17 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
     TYPE(type_climate_matrix_regional),  INTENT(INOUT) :: climate_matrix
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_model_regional_PD_obs'
     INTEGER                                            :: vi,m
+
+    ! Initialisation
+    ! ==============
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -563,31 +605,77 @@ CONTAINS
     CALL allocate_climate_snapshot_regional( mesh, climate_matrix%PD_obs,  'PD_obs' )
     CALL allocate_climate_snapshot_regional( mesh, climate_matrix%applied, 'applied')
 
+    ! == Mapping global data to regional domain
+    ! =========================================
+
     ! Map the snapshots from global lat/lon-grid to model mesh
     CALL map_subclimate_to_mesh( mesh, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
 
-    ! Initialise applied climate with present-day observations
-    DO m = 1, 12
-    DO vi = mesh%vi1, mesh%vi2
-      climate_matrix%applied%T2m(     vi,m) = climate_matrix%PD_obs%T2m(     vi,m)
-      climate_matrix%applied%Precip(  vi,m) = climate_matrix%PD_obs%Precip(  vi,m)
-      climate_matrix%applied%Hs(      vi  ) = climate_matrix%PD_obs%Hs(      vi  )
-      climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
-      climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
-    END DO
-    END DO
-    CALL sync
+    ! == Present-day insolation
+    ! =========================
 
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
 
-    ! Initialise applied insolation with present-day values
+    ! == Downscaling to model topography
+    ! ==================================
+
+    ! Initialise applied climate with present-day conditions and current model topography
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
-      climate_matrix%applied%Q_TOA( vi,m) = climate_matrix%PD_obs%Q_TOA( vi,m)
+      climate_matrix%applied%Hs(      vi  ) = ice%Hs_a( vi  )
+      climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
+      climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
+      climate_matrix%applied%Q_TOA(   vi,m) = climate_matrix%PD_obs%Q_TOA(   vi,m)
     END DO
     END DO
     CALL sync
+
+    ! Adapt temperature to model orography using a lapse-rate correction
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - C%constant_lapserate * &
+                                           (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
+    END DO
+    END DO
+    CALL sync
+
+    ! Downscale precipitation from the coarse-resolution reference
+    ! orography to the fine-resolution ice-model orography
+    IF (region_name == 'NAM' .OR. region_name == 'EAS' .OR. region_name == 'PAT') THEN
+
+      ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
+      CALL adapt_precip_Roe( mesh, &
+                             climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                             climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
+                             climate_matrix%PD_obs%Precip, &
+                             climate_matrix%applied%Hs, climate_matrix%applied%T2m, &
+                             climate_matrix%applied%Wind_LR, climate_matrix%applied%Wind_DU, &
+                             climate_matrix%applied%Precip)
+
+    ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
+
+      ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
+      CALL adapt_precip_CC( mesh, climate_matrix%applied%Hs, &
+                            climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                            climate_matrix%PD_obs%Precip, &
+                            climate_matrix%applied%Precip, region_name)
+    END IF
+
+    ! == Safety checks
+    ! ================
+
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      ! Safety net in case resulting precipitation is negative
+      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+    END DO
+    END DO
+    CALL sync
+
+    ! == Finalisation
+    ! ===============
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=38)
@@ -717,20 +805,43 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_warm_cold'
     INTEGER                                            :: vi,m
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! == Global forcing
+    ! =================
 
     ! Update forcing at model time
     CALL get_insolation_at_time( mesh, time, climate_matrix%applied%Q_TOA)
     CALL update_CO2_at_model_time( time)
 
+    ! == Temperatures
+    ! ===============
+
     ! Use the (CO2 + absorbed insolation)-based interpolation scheme for temperature
     CALL run_climate_model_matrix_warm_cold_temperature( mesh, grid, ice, SMB, climate_matrix, region_name)
+
+    ! == Precipitation
+    ! ================
 
     ! Use the (CO2 + ice-sheet geometry)-based interpolation scheme for precipitation
     CALL run_climate_model_matrix_warm_cold_precipitation( mesh, grid, ice, climate_matrix, region_name)
 
-    ! Safety checks
+    ! == Safety checks
+    ! ================
+
+    ! print*, ' '
+    ! print*, minval(climate_matrix%applied%Hs), maxval(climate_matrix%applied%Hs)
+    ! print*, minval(climate_matrix%applied%T2m), maxval(climate_matrix%applied%T2m)
+    ! print*, minval(climate_matrix%applied%Precip), maxval(climate_matrix%applied%Precip)
+    ! print*, minval(climate_matrix%applied%Wind_LR), maxval(climate_matrix%applied%Wind_LR)
+    ! print*, minval(climate_matrix%applied%Wind_DU), maxval(climate_matrix%applied%Wind_DU)
+    ! print*, minval(climate_matrix%applied%Q_TOA), maxval(climate_matrix%applied%Q_TOA)
+    ! stop ':)'
+
     DO vi = mesh%vi1, mesh%vi2
     DO m = 1, 12
       IF (climate_matrix%applied%T2m( vi,m) < 150._dp) THEN
@@ -747,6 +858,9 @@ CONTAINS
     END DO
     END DO
     CALL sync
+
+    ! == Finalisation
+    ! ===============
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -778,6 +892,9 @@ CONTAINS
     INTEGER                                            :: wT_ref_GCM, wHs_GCM, wlambda_GCM
     REAL(dp), PARAMETER                                :: w_cutoff = 0._dp        ! Crop weights to [-w_cutoff, 1 + w_cutoff]
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -790,8 +907,8 @@ CONTAINS
     CALL allocate_shared_dp_1D( mesh%nV,     Hs_GCM,       wHs_GCM       )
     CALL allocate_shared_dp_1D( mesh%nV,     lambda_GCM,   wlambda_GCM   )
 
-    ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
-    ! =====================================================================
+    ! == CO2 interpolation weight
+    ! ===========================
 
     IF     (C%choice_forcing_method == 'CO2_direct') THEN
       ! use observed record
@@ -812,8 +929,8 @@ CONTAINS
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
                                (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
 
-    ! Find ice albedo-based interpolation weight
-    ! ==========================================
+    ! == Ice albedo-based interpolation weight
+    ! ========================================
 
     ! Initialise
     climate_matrix%applied%I_abs( mesh%vi1:mesh%vi2) = 0._dp
@@ -866,8 +983,8 @@ CONTAINS
 
     END IF
 
-    ! Modifier CO2-based weight for w_ice, so it smoothly vanishes during full warm conditions
-    ! ========================================================================================
+    ! == Modifier CO2-based weight for w_ice
+    ! ======================================
 
     ! Initialise to the CO2 weight, but limited to [0,1] interval
     w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
@@ -878,8 +995,8 @@ CONTAINS
     ! Limit the resulting weight to [0,1], just in case
     w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
-    ! Final combined weight (Glacial Matrix)
-    ! ======================================
+    ! == Final weight (Glacial Matrix)
+    ! ================================
 
     ! Combine interpolation weights from absorbed insolation and CO2
     ! into the final weights fields, modifiying the insolation weight
@@ -888,8 +1005,8 @@ CONTAINS
     w_tot(mesh%vi1:mesh%vi2) = (w_CO2 + w_ice(mesh%vi1:mesh%vi2) * &
                                (1._dp - w_CO2aux)) / (2._dp - w_CO2aux)
 
-    ! Overwrite everything if pure glacial index method is wanted
-    ! ===========================================================
+    ! == Glacial Index
+    ! ================
 
     ! If a glacial index is used, weight will depend only on CO2
     IF (C%switch_glacial_index) THEN
@@ -902,26 +1019,46 @@ CONTAINS
     ! Find matrix-interpolated orography, lapse rate, and temperature
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Berends et al., 2018 - Eq. 8
-      Hs_GCM(     vi  ) = (w_tot( vi) * climate_matrix%GCM_warm%Hs_corr(  vi  )) + &
+      ! Use the bias corrected fields here
+      Hs_GCM(     vi  ) =          (w_tot( vi)  * climate_matrix%GCM_warm%Hs_corr(  vi  )) + &
                           ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Hs_corr(  vi  ))
-      ! Not listed in the article, shame on me!
-      lambda_GCM( vi  ) = (w_tot( vi) * climate_matrix%GCM_warm%lambda(   vi  )) + &
+
+      lambda_GCM( vi  ) =          (w_tot( vi)  * climate_matrix%GCM_warm%lambda(   vi  )) + &
                           ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%lambda(   vi  ))
-      ! Berends et al., 2018 - Eq. 6
-      T_ref_GCM(  vi,:) = (w_tot( vi) * climate_matrix%GCM_warm%T2m_corr( vi,:)) + &
+
+      T_ref_GCM(  vi,:) =          (w_tot( vi)  * climate_matrix%GCM_warm%T2m_corr( vi,:)) + &
                           ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%T2m_corr( vi,:))
 
-      ! Adapt temperature to model orography using matrix-derived lapse-rate
-      ! Berends et al., 2018 - Eq. 11
-      DO m = 1, 12
-        climate_matrix%applied%T2m( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * &
-                                            (ice%Hs_a( vi) - Hs_GCM( vi))
-      END DO
-
     END DO
-
     CALL sync
+
+    ! == Downscaling to model topography
+    ! ==================================
+
+    ! Set applied topography to current model topography
+    DO vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%Hs( vi) = ice%Hs_a( vi)
+    END DO
+    CALL sync
+
+    ! Adapt temperature to model orography using a lapse-rate correction
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%applied%T2m( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * &
+                                          (climate_matrix%applied%Hs( vi) - Hs_GCM( vi))
+    END DO
+    END DO
+    CALL sync
+
+    ! == Safety checks
+    ! ================
+
+    CALL check_for_NaN_dp_2D( climate_matrix%applied%T2m, &
+                             'climate_matrix%applied%T2m')
+
+    ! == Finalisation
+    ! ===============
 
     ! Clean up after yourself
     CALL deallocate_shared( ww_ins)
@@ -931,10 +1068,6 @@ CONTAINS
     CALL deallocate_shared( wT_ref_GCM)
     CALL deallocate_shared( wHs_GCM)
     CALL deallocate_shared( wlambda_GCM)
-
-    ! Safety
-    CALL check_for_NaN_dp_2D( climate_matrix%applied%T2m, &
-                             'climate_matrix%applied%T2m')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -964,25 +1097,31 @@ CONTAINS
     REAL(dp)                                           :: w_vol
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_thk,  w_ice,  w_tot
     INTEGER                                            :: ww_thk, ww_ice, ww_tot
-    REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM, P_ref_GCM
+    REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM, T_ref_GCM_down, WLR_ref_GCM, WDU_ref_GCM, P_ref_GCM
     REAL(dp), DIMENSION(:    ), POINTER                :: Hs_GCM, lambda_GCM
-    INTEGER                                            :: wT_ref_GCM, wP_ref_GCM, wHs_GCM, wlambda_GCM
+    INTEGER                                            :: wT_ref_GCM, wT_ref_GCM_down, wP_ref_GCM, wHs_GCM, wlambda_GCM, wWLR_ref_GCM, wWDU_ref_GCM
     REAL(dp), PARAMETER                                :: w_cutoff = 0._dp  ! Crop weights to [-w_cutoff, 1 + w_cutoff]
+
+    ! == Initialisation
+    ! =================
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh%nV,     w_thk,      ww_thk     )
-    CALL allocate_shared_dp_1D( mesh%nV,     w_ice,      ww_ice     )
-    CALL allocate_shared_dp_1D( mesh%nV,     w_tot,      ww_tot     )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM,  wT_ref_GCM )
-    CALL allocate_shared_dp_2D( mesh%nV, 12, P_ref_GCM,  wP_ref_GCM )
-    CALL allocate_shared_dp_1D( mesh%nV,     Hs_GCM,     wHs_GCM    )
-    CALL allocate_shared_dp_1D( mesh%nV,     lambda_GCM, wlambda_GCM)
+    CALL allocate_shared_dp_1D( mesh%nV,     w_thk,          ww_thk         )
+    CALL allocate_shared_dp_1D( mesh%nV,     w_ice,          ww_ice         )
+    CALL allocate_shared_dp_1D( mesh%nV,     w_tot,          ww_tot         )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM,      wT_ref_GCM     )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, T_ref_GCM_down, wT_ref_GCM_down)
+    CALL allocate_shared_dp_2D( mesh%nV, 12, WLR_ref_GCM,    wWLR_ref_GCM   )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, WDU_ref_GCM,    wWDU_ref_GCM   )
+    CALL allocate_shared_dp_2D( mesh%nV, 12, P_ref_GCM,      wP_ref_GCM     )
+    CALL allocate_shared_dp_1D( mesh%nV,     Hs_GCM,         wHs_GCM        )
+    CALL allocate_shared_dp_1D( mesh%nV,     lambda_GCM,     wlambda_GCM    )
 
-    ! Find CO2 interpolation weight (use either prescribed or modelled CO2)
-    ! =====================================================================
+    ! == CO2 interpolation weight
+    ! ===========================
 
     IF     (C%choice_forcing_method == 'CO2_direct') THEN
       ! use observed record
@@ -1003,8 +1142,8 @@ CONTAINS
     w_CO2 = MAX( -w_cutoff, MIN( 1._dp + w_cutoff, (CO2 - C%matrix_low_CO2_level) / &
                                (C%matrix_high_CO2_level - C%matrix_low_CO2_level) ))
 
-    ! Calculate interpolation weights based on ice geometry
-    ! =====================================================
+    ! == Geometry-based interpolation weights
+    ! =======================================
 
     ! First calculate the total ice volume term (second
     ! factor in the RHS of Berends et al., 2018, Eq. 12)
@@ -1023,8 +1162,8 @@ CONTAINS
     END DO
 
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
-      ! Combine total volume + local ice thickness
 
+      ! Combine total volume + local ice thickness
       DO vi = mesh%vi1, mesh%vi2
 
         ! Use uncorrected Hs from the GCMs for this check
@@ -1051,14 +1190,14 @@ CONTAINS
       CALL smooth_Gaussian_2D( mesh, grid, w_ice, 200000._dp)
 
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
-      ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
 
+      ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
       w_ice( mesh%vi1:mesh%vi2) = 1._dp - w_vol
 
     END IF
 
-    ! Modifier CO2-based weight for w_ice, so it smoothly vanishes during full warm conditions
-    ! ========================================================================================
+    ! == Modifier CO2-based weight for w_ice
+    ! ======================================
 
     ! Initialise to the CO2 weight, but limited to [0,1] interval
     w_CO2aux = max( 0._dp, min( 1._dp, w_CO2))
@@ -1069,8 +1208,8 @@ CONTAINS
     ! Limit the resulting weight to [0,1], just in case
     w_CO2aux = max( 0._dp, min( 1._dp, w_CO2aux))
 
-    ! Final combined weight (Glacial Matrix)
-    ! ======================================
+    ! == Final weight (Glacial Matrix)
+    ! ================================
 
     ! Combine interpolation weights from geometry and CO2 into
     ! the final weights fields, modifiying the geometry weight
@@ -1080,8 +1219,8 @@ CONTAINS
     w_tot(mesh%vi1:mesh%vi2) =          w_CO2aux  * w_CO2 + &
                                (1._dp - w_CO2aux) * w_ice(mesh%vi1:mesh%vi2)
 
-    ! Overwrite everything if pure glacial index method is wanted
-    ! ===========================================================
+    ! == Glacial Index
+    ! ================
 
     ! If a glacial index is used, weight will depend only on CO2
     IF (C%switch_glacial_index) THEN
@@ -1091,6 +1230,9 @@ CONTAINS
     ! Interpolate the GCM snapshots
     ! =============================
 
+    ! Find matrix-interpolated orography, lapse rate, temperature, wind, and precipitation; all
+    ! interpolated linearly, which is simple and good enough for now. Once we got nice results,
+    ! we can safely add some sophistication to it.
     DO vi = mesh%vi1, mesh%vi2
 
       ! Use the bias corrected fields here
@@ -1103,67 +1245,101 @@ CONTAINS
       T_ref_GCM(  vi,:) =         (w_tot( vi)  * climate_matrix%GCM_warm%T2m_corr(    vi,:)) + &
                          ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%T2m_corr(    vi,:))
 
-      P_ref_GCM(  vi,:) =         (w_tot( vi)  * climate_matrix%GCM_warm%Precip_corr( vi,:)) + &
-                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Precip_corr( vi,:))
+      WLR_ref_GCM(  vi,:) =       (w_tot( vi)  * climate_matrix%GCM_warm%Wind_LR(     vi,:)) + &
+                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Wind_LR(     vi,:))
 
-      ! Adapt temperature to model orography using matrix-derived lapse-rate
-      ! Berends et al., 2018 - Eq. 11
+      WDU_ref_GCM(  vi,:) =       (w_tot( vi)  * climate_matrix%GCM_warm%Wind_DU(     vi,:)) + &
+                         ((1._dp - w_tot( vi)) * climate_matrix%GCM_cold%Wind_DU(     vi,:))
+
+      P_ref_GCM(  vi,:) =         (w_tot( vi)  * LOG(climate_matrix%GCM_warm%Precip_corr( vi,:))) + &
+                         ((1._dp - w_tot( vi)) * LOG(climate_matrix%GCM_cold%Precip_corr( vi,:)))
+
       DO m = 1, 12
-        T_ref_GCM( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * &
-                                              (ice%Hs_a( vi) - Hs_GCM( vi))
-      END DO
-
-
-      ! Safety net in case resulting precipitation is negative
-      DO m = 1, 12
+        ! Bring it back from the LOG domain
+        P_ref_GCM( vi,m) = EXP(P_ref_GCM(vi,m))
+        ! Safety net in case resulting precipitation is negative
         P_ref_GCM( vi,m) = max( 0.0_dp, P_ref_GCM(vi,m))
       END DO
+
+      ! If full warm, use snapshot directly to prevent exp(log(*)) precision errors
+      IF (w_tot( vi) == 1._dp) THEN
+        P_ref_GCM( vi,:) = max( 0.0_dp, climate_matrix%GCM_warm%Precip_corr( vi,:))
+      END IF
+
 
     END DO
     CALL sync
 
-    ! Downscale precipitation from the coarse-resolution reference
-    ! GCM orography to the fine-resolution ice-model orography
-    ! ========================================================
+    ! == Downscaling to model topography
+    ! ==================================
+
+    ! Set applied winds to interpolated ones (no better approach atm)
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%Wind_LR( vi,m) = WLR_ref_GCM( vi,m)
+      climate_matrix%applied%Wind_DU( vi,m) = WDU_ref_GCM( vi,m)
+    END DO
+    END DO
+    CALL sync
+
+    ! Downscale interpolated temperatures to applied Hs.
+    ! In a perfect world, this should be simply climate_matrix%applied%T2m obtained from the
+    ! temperature climate_matrix subroutine. However, since that temperature does not necessarily
+    ! use the same final weights as the precipitation here (insolation-albedo vs geometry weights),
+    ! we need to compute an auxiliary "applied" temperature that is consistent with the interpolated
+    ! precipitation, which then go together into the Roer&Lindzen model. This is it.
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      T_ref_GCM_down( vi,m) = T_ref_GCM( vi,m) - lambda_GCM( vi) * (climate_matrix%applied%Hs( vi) - Hs_GCM( vi))
+    END DO
+    END DO
 
     IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
 
       ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
       CALL adapt_precip_Roe( mesh, &
-                             Hs_GCM, T_ref_GCM, climate_matrix%PD_obs%Wind_LR, &
-                             climate_matrix%PD_obs%Wind_DU, P_ref_GCM, &
-                             ice%Hs_a, climate_matrix%applied%T2m, climate_matrix%PD_obs%Wind_LR, &
-                             climate_matrix%PD_obs%Wind_DU, climate_matrix%applied%Precip)
+                             Hs_GCM, T_ref_GCM, WLR_ref_GCM, WDU_ref_GCM, P_ref_GCM, &
+                             climate_matrix%applied%Hs, T_ref_GCM_down, &
+                             climate_matrix%applied%Wind_LR, climate_matrix%applied%Wind_DU, &
+                             climate_matrix%applied%Precip)
 
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
 
       ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
-      CALL adapt_precip_CC( mesh, &
-                            ice%Hs_a, Hs_GCM, T_ref_GCM, P_ref_GCM, &
+      CALL adapt_precip_CC( mesh, climate_matrix%applied%Hs, &
+                            Hs_GCM, T_ref_GCM, P_ref_GCM, &
                             climate_matrix%applied%Precip, region_name)
 
     END IF
 
+    ! == Safety checks
+    ! ================
+
+    DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       ! Safety net in case resulting precipitation is negative
-      DO m = 1, 12
-        climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
-      END DO
+      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+    END DO
     END DO
     CALL sync
+
+    CALL check_for_NaN_dp_2D( climate_matrix%applied%Precip, &
+                             'climate_matrix%applied%Precip')
+
+    ! == Finalisation
+    ! ===============
 
     ! Clean up after yourself
     CALL deallocate_shared( ww_thk)
     CALL deallocate_shared( ww_ice)
     CALL deallocate_shared( ww_tot)
     CALL deallocate_shared( wT_ref_GCM)
+    CALL deallocate_shared( wT_ref_GCM_down)
+    CALL deallocate_shared( wWLR_ref_GCM)
+    CALL deallocate_shared( wWDU_ref_GCM)
     CALL deallocate_shared( wP_ref_GCM)
     CALL deallocate_shared( wHs_GCM)
     CALL deallocate_shared( wlambda_GCM)
-
-    ! Safety
-    CALL check_for_NaN_dp_2D( climate_matrix%applied%Precip, &
-                             'climate_matrix%applied%Precip')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1312,6 +1488,9 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_climate_matrix_regional'
     INTEGER                                            :: vi, m
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -1322,53 +1501,119 @@ CONTAINS
     CALL allocate_climate_snapshot_regional( region%mesh, region%climate_matrix%GCM_cold, name = 'GCM_cold')
     CALL allocate_climate_snapshot_regional( region%mesh, region%climate_matrix%applied,  name = 'applied')
 
+    ! == Mapping global data to regional domain
+    ! =========================================
+
     ! Map the snapshots from global lat/lon-grid to model mesh
     CALL map_subclimate_to_mesh( region%mesh, climate_matrix_global%PD_obs,   region%climate_matrix%PD_obs  )
     CALL map_subclimate_to_mesh( region%mesh, climate_matrix_global%GCM_PI,   region%climate_matrix%GCM_PI  )
     CALL map_subclimate_to_mesh( region%mesh, climate_matrix_global%GCM_warm, region%climate_matrix%GCM_warm)
     CALL map_subclimate_to_mesh( region%mesh, climate_matrix_global%GCM_cold, region%climate_matrix%GCM_cold)
 
+    ! == Wind assumption
+    ! ==================
+
     ! Right now, no wind is read from GCM output; just use PD observations everywhere
     DO vi = region%mesh%vi1, region%mesh%vi2
     DO m = 1, 12
-      region%climate_matrix%GCM_warm%Wind_WE( vi,m) = region%climate_matrix%PD_obs%Wind_WE( vi,m)
-      region%climate_matrix%GCM_warm%Wind_SN( vi,m) = region%climate_matrix%PD_obs%Wind_SN( vi,m)
-      region%climate_matrix%GCM_cold%Wind_WE( vi,m) = region%climate_matrix%PD_obs%Wind_WE( vi,m)
-      region%climate_matrix%GCM_cold%Wind_SN( vi,m) = region%climate_matrix%PD_obs%Wind_SN( vi,m)
+      region%climate_matrix%GCM_warm%Wind_LR( vi,m) = region%climate_matrix%PD_obs%Wind_LR( vi,m)
+      region%climate_matrix%GCM_warm%Wind_DU( vi,m) = region%climate_matrix%PD_obs%Wind_DU( vi,m)
+      region%climate_matrix%GCM_cold%Wind_LR( vi,m) = region%climate_matrix%PD_obs%Wind_LR( vi,m)
+      region%climate_matrix%GCM_cold%Wind_DU( vi,m) = region%climate_matrix%PD_obs%Wind_DU( vi,m)
     END DO
     END DO
     CALL sync
 
+    ! == Lapse rates
+    ! ==============
+
     ! Calculate spatially variable lapse rate
-    region%climate_matrix%GCM_warm%lambda( region%mesh%vi1:region%mesh%vi2) = 0.008_dp
+    region%climate_matrix%GCM_warm%lambda( region%mesh%vi1:region%mesh%vi2) = C%constant_lapserate
     CALL sync
     IF     (region%name == 'NAM' .OR. region%name == 'EAS') THEN
       CALL initialise_snapshot_spatially_variable_lapserate( region%mesh, region%grid_smooth, region%climate_matrix%GCM_PI, region%climate_matrix%GCM_cold)
     ELSEIF (region%name == 'GLR' .OR. region%name == 'ANT') THEN
-      region%climate_matrix%GCM_cold%lambda( region%mesh%vi1:region%mesh%vi2) = 0.008_dp
+      region%climate_matrix%GCM_cold%lambda( region%mesh%vi1:region%mesh%vi2) = C%constant_lapserate
       CALL sync
     END IF
+
+    ! == Bias correction
+    ! ==================
 
     ! Calculate and apply GCM bias correction
     CALL calculate_GCM_bias(    region%mesh, region%climate_matrix)
     CALL correct_GCM_bias_warm( region%mesh, region%climate_matrix, region%climate_matrix%GCM_warm, do_correct_bias = C%climate_matrix_biascorrect_warm)
     CALL correct_GCM_bias_cold( region%mesh, region%climate_matrix, region%climate_matrix%GCM_cold, do_correct_bias = C%climate_matrix_biascorrect_cold)
 
+    ! == Absorbed insolation
+    ! ======================
+
     ! Get reference absorbed insolation for the GCM snapshots
     CALL initialise_snapshot_absorbed_insolation( region%mesh, region%climate_matrix%GCM_warm, region%name, region%mask_noice)
     CALL initialise_snapshot_absorbed_insolation( region%mesh, region%climate_matrix%GCM_cold, region%name, region%mask_noice)
 
-    ! Initialise applied climate with present-day observations
-    DO vi = region%mesh%vi1, region%mesh%vi2
+    ! == Downscaling to model topography
+    ! ==================================
+
+    ! Initialise applied climate with warm conditions and current model topography
     DO m = 1, 12
-      region%climate_matrix%applied%T2m(     vi,m) = region%climate_matrix%PD_obs%T2m(     vi,m)
-      region%climate_matrix%applied%Precip(  vi,m) = region%climate_matrix%PD_obs%Precip(  vi,m)
-      region%climate_matrix%applied%Hs(      vi  ) = region%climate_matrix%PD_obs%Hs(      vi  )
-      region%climate_matrix%applied%Wind_LR( vi,m) = region%climate_matrix%PD_obs%Wind_LR( vi,m)
-      region%climate_matrix%applied%Wind_DU( vi,m) = region%climate_matrix%PD_obs%Wind_DU( vi,m)
+    DO vi = region%mesh%vi1, region%mesh%vi2
+      region%climate_matrix%applied%Hs(      vi  ) = region%ice%Hs_a( vi)
+      region%climate_matrix%applied%Wind_LR( vi,m) = region%climate_matrix%GCM_warm%Wind_LR( vi,m)
+      region%climate_matrix%applied%Wind_DU( vi,m) = region%climate_matrix%GCM_warm%Wind_DU( vi,m)
+      region%climate_matrix%applied%Q_TOA(   vi,m) = region%climate_matrix%GCM_warm%Q_TOA(   vi,m)
     END DO
     END DO
     CALL sync
+
+    ! Adapt temperature to model orography using a lapse-rate correction
+    DO m = 1, 12
+    DO vi = region%mesh%vi1, region%mesh%vi2
+
+      region%climate_matrix%applied%T2m( vi,m) = region%climate_matrix%GCM_warm%T2m_corr( vi,m) - &
+                                                 region%climate_matrix%GCM_warm%lambda( vi) * &
+                                               ( region%climate_matrix%applied%Hs( vi) - &
+                                                 region%climate_matrix%GCM_warm%Hs_corr( vi) )
+    END DO
+    END DO
+    CALL sync
+
+    ! Downscale precipitation from the coarse-resolution reference
+    ! GCM orography to the fine-resolution ice-model orography
+    IF (region%name == 'NAM' .OR. region%name == 'EAS') THEN
+
+      ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
+      CALL adapt_precip_Roe( region%mesh, &
+                             region%climate_matrix%GCM_warm%Hs_corr, region%climate_matrix%GCM_warm%T2m_corr, &
+                             region%climate_matrix%GCM_warm%Wind_LR, region%climate_matrix%GCM_warm%Wind_DU, &
+                             region%climate_matrix%GCM_warm%Precip_corr, &
+                             region%climate_matrix%applied%Hs, region%climate_matrix%applied%T2m, &
+                             region%climate_matrix%applied%Wind_LR, region%climate_matrix%PD_obs%Wind_DU, &
+                             region%climate_matrix%applied%Precip)
+
+    ELSEIF (region%name == 'GRL' .OR. region%name == 'ANT') THEN
+
+      ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
+      CALL adapt_precip_CC( region%mesh, region%climate_matrix%applied%Hs, &
+                            region%climate_matrix%GCM_warm%Hs_corr, region%climate_matrix%GCM_warm%T2m_corr, &
+                            region%climate_matrix%GCM_warm%Precip_corr, &
+                            region%climate_matrix%applied%Precip, region%name)
+
+    END IF
+
+    ! == Safety checks
+    ! ================
+
+    DO m = 1, 12
+    DO vi = region%mesh%vi1, region%mesh%vi2
+      ! Safety net in case resulting precipitation is negative
+      region%climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, region%climate_matrix%applied%Precip(vi,m))
+    END DO
+    END DO
+    CALL sync
+
+    ! == Finalisation
+    ! ===============
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=113)
@@ -1426,8 +1671,11 @@ CONTAINS
   SUBROUTINE calculate_GCM_bias( mesh, climate_matrix)
     ! Calculate the GCM bias in temperature and precipitation
     !
-    ! Account for the fact that the GCM PI snapshot has a lower resolution, and therefore
-    ! a different surface elevation than the PD observed climatology!
+    ! Account for the fact that the GCM PI snapshot has a lower resolution, and
+    ! therefore a different surface elevation than the PD observed climatology!
+    ! This assumes PD and PI periods are equivalent, which is ok for now. A better
+    ! approach would be to compute this bias by comparing a PD snapshot from a GCM
+    ! to the observational data.
 
     IMPLICIT NONE
 
@@ -1462,7 +1710,7 @@ CONTAINS
       ! Calculate precipitation bias
       climate_matrix%GCM_bias_Precip( vi,m) = climate_matrix%GCM_PI%Precip( vi,m) / climate_matrix%PD_obs%Precip( vi,m)
 
-      ! Calculate elevation bias
+      ! Calculate elevation bias (not really needed, just for symmetry)
       climate_matrix%GCM_bias_Hs( vi) = climate_matrix%GCM_PI%Hs( vi) - climate_matrix%PD_obs%Hs( vi)
 
     END DO
@@ -1470,7 +1718,7 @@ CONTAINS
     CALL sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
 
   END SUBROUTINE calculate_GCM_bias
 
@@ -1504,6 +1752,14 @@ CONTAINS
       climate%Precip_corr( mesh%vi1:mesh%vi2,:) = climate_matrix%PD_obs%Precip( mesh%vi1:mesh%vi2,:)
       climate%Hs_corr(     mesh%vi1:mesh%vi2  ) = climate_matrix%PD_obs%Hs(     mesh%vi1:mesh%vi2  )
     END IF
+    CALL sync
+
+    ! Safety net in case resulting precipitation is negative
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate%Precip_corr( vi,m) = max( 0.0_dp, climate%Precip_corr(vi,m))
+    END DO
+    END DO
     CALL sync
 
     ! Finalise routine path
@@ -1544,14 +1800,22 @@ CONTAINS
     DO m = 1, 12
 
       ! Temperature
-      climate%T2m_corr(    vi,m) = climate%T2m(    vi,m) - climate_matrix%GCM_bias_T2m(    vi,m)
+      climate%T2m_corr( vi,m) = climate%T2m( vi,m) - climate_matrix%GCM_bias_T2m( vi,m)
 
       ! Precipitation
       climate%Precip_corr( vi,m) = climate%Precip( vi,m) / climate_matrix%GCM_bias_Precip( vi,m)
 
-      ! Surface elevation (just keep it)
-      climate%Hs_corr(     vi  ) = climate%Hs(     vi  ) - climate_matrix%GCM_bias_Hs(    vi   )
+      ! Surface elevation (not really needed, just for symmetry)
+      climate%Hs_corr( vi) = climate%Hs( vi)
 
+    END DO
+    END DO
+    CALL sync
+
+    ! Safety net in case resulting precipitation is negative
+    DO m = 1, 12
+    DO vi = mesh%vi1, mesh%vi2
+      climate%Precip_corr( vi,m) = max( 0.0_dp, climate%Precip_corr(vi,m))
     END DO
     END DO
     CALL sync
@@ -1664,8 +1928,8 @@ CONTAINS
     ! Smooth the lapse rate field with a 160 km Gaussian filter
     CALL smooth_Gaussian_2D( mesh, grid, climate%lambda, 160000._dp)
 
-    ! Normalise the entire region to a mean lapse rate of 8 K /km
-    climate%lambda( mesh%vi1:mesh%vi2) = climate%lambda( mesh%vi1:mesh%vi2) * (0.008_dp / lambda_mean_ice)
+    ! Normalise the entire region to a mean lapse rate of C%constant_lapserate K /km
+    climate%lambda( mesh%vi1:mesh%vi2) = climate%lambda( mesh%vi1:mesh%vi2) * (C%constant_lapserate / lambda_mean_ice)
 
     ! Clean up after yourself
     CALl deallocate_shared( wmask_calc_lambda)
@@ -3158,8 +3422,8 @@ CONTAINS
 
     END IF ! IF (.NOT. ASSOCIATED( climate_matrix%ISMIP_forcing%grid%nx)) THEN
 
-  ! ===== aSMB =====
-  ! ================
+    ! ===== aSMB =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3233,8 +3497,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( waSMB_raw)
 
-  ! ===== dSMBdz =====
-  ! ================
+    ! ===== dSMBdz =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3308,8 +3572,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( wdSMBdz_raw)
 
-  ! ===== aST =====
-  ! ================
+    ! ===== aST =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3377,8 +3641,8 @@ CONTAINS
     ! Clean up after yourself
     CALL deallocate_shared( waST_raw)
 
-  ! ===== dSTdz =====
-  ! ================
+    ! ===== dSTdz =====
+    ! ================
 
     ! Timeframe 0
     ! ===========
@@ -3981,7 +4245,7 @@ CONTAINS
     DO m = 1, 12
     DO vi = mesh%vi1, mesh%vi2
       T_inv_ref( vi,m) = 88.9_dp + 0.67_dp *  T_ref_GCM( vi,m)
-      T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - 0.008_dp * (Hs( vi) - Hs_GCM( vi)))
+      T_inv(     vi,m) = 88.9_dp + 0.67_dp * (T_ref_GCM( vi,m) - C%constant_lapserate * (Hs( vi) - Hs_GCM( vi)))
     END DO
     END DO
     CALL sync
@@ -4199,13 +4463,9 @@ CONTAINS
 
 
 
-!============================
-!============================
-
-
-
-
-
+!==============================
+! OBSOLETE: just for the record
+!==============================
 
   ! ! Parameterised climate (ERA40 + global temperature offset) from de Boer et al., 2013
   ! SUBROUTINE run_climate_model_dT_glob( mesh, ice, climate, region_name)

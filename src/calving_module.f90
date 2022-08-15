@@ -47,9 +47,9 @@ CONTAINS
       calving_round = calving_round + 1                     ! Increase the counter
       CALL sync                                             ! Let all processes reach this point before next loop
     END DO
-    IF (par%master .AND. calving_round == C%max_calving_rounds .AND. C%max_calving_rounds > 5) THEN
-      CALL warning('max_calving_rounds reached! Thin ice potentially still floating around...')
-    END IF
+    ! IF (par%master .AND. calving_round == C%max_calving_rounds .AND. C%max_calving_rounds > 5) THEN
+    !   CALL warning('max_calving_rounds reached! Thin ice potentially still floating around...')
+    ! END IF
 
     ! Clean up after yourself
     CALL deallocate_shared(wcalving_event)

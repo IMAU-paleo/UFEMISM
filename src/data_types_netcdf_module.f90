@@ -166,10 +166,16 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_Hi
     INTEGER :: id_var_Hb
     INTEGER :: id_var_Hs
+    INTEGER :: id_var_dHi_dt
+    INTEGER :: id_var_dHb_dt
+    INTEGER :: id_var_dHi_dt_ave
+    INTEGER :: id_var_u_3D
+    INTEGER :: id_var_v_3D
     INTEGER :: id_var_SL
     INTEGER :: id_var_dHb
     INTEGER :: id_var_beta_sq
     INTEGER :: id_var_phi_fric
+    INTEGER :: id_var_phi_fric_ave
     INTEGER :: id_var_Ti
     INTEGER :: id_var_FirnDepth
     INTEGER :: id_var_MeltPreviousYear
@@ -177,14 +183,21 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_C_abl_Ts_inv
     INTEGER :: id_var_C_abl_Q_inv
     INTEGER :: id_var_C_refr_inv
+    INTEGER :: id_var_BMB_shelf
 
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
     CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   '
+    CHARACTER(LEN=256) :: name_var_dHi_dt                = 'dHi_dt               '
+    CHARACTER(LEN=256) :: name_var_dHb_dt                = 'dHb_dt               '
+    CHARACTER(LEN=256) :: name_var_dHi_dt_ave            = 'dHi_dt_ave           '
+    CHARACTER(LEN=256) :: name_var_u_3D                  = 'u_3D                 '
+    CHARACTER(LEN=256) :: name_var_v_3D                  = 'v_3D                 '
     CHARACTER(LEN=256) :: name_var_SL                    = 'SL                   '
     CHARACTER(LEN=256) :: name_var_dHb                   = 'dHb                  '
     CHARACTER(LEN=256) :: name_var_beta_sq               = 'beta_sq              '
     CHARACTER(LEN=256) :: name_var_phi_fric              = 'phi_fric             '
+    CHARACTER(LEN=256) :: name_var_phi_fric_ave          = 'phi_fric_ave         '
     CHARACTER(LEN=256) :: name_var_Ti                    = 'Ti                   '
     CHARACTER(LEN=256) :: name_var_FirnDepth             = 'FirnDepth            '
     CHARACTER(LEN=256) :: name_var_MeltPreviousYear      = 'MeltPreviousYear     '
@@ -192,6 +205,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_C_abl_Ts_inv          = 'C_abl_Ts_inv         '
     CHARACTER(LEN=256) :: name_var_C_abl_Q_inv           = 'C_abl_Q_inv          '
     CHARACTER(LEN=256) :: name_var_C_refr_inv            = 'C_refr_inv           '
+    CHARACTER(LEN=256) :: name_var_BMB_shelf             = 'BMB_shelf            '
 
   END TYPE type_netcdf_restart
 

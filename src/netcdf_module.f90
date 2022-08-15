@@ -295,20 +295,15 @@ CONTAINS
 
   END SUBROUTINE inquire_single_or_double_var
 
-  SUBROUTINE handle_error( stat, message)
-    USE netcdf, ONLY: nf90_noerr, nf90_strerror
+  SUBROUTINE handle_error( stat)
+
     IMPLICIT NONE
 
     ! Input variables:
-    INTEGER,                    INTENT(IN) :: stat
-    CHARACTER(LEN=*), OPTIONAL, INTENT(IN) :: message
+    INTEGER, INTENT(IN) :: stat
 
     IF (stat /= nf90_noerr) THEN
-      IF (PRESENT( message)) THEN
-        CALL crash( message)
-      ELSE
-        CALL crash( 'netcdf error')
-      END IF
+      CALL crash( trim(nf90_strerror(stat)))
     END IF
 
   END SUBROUTINE handle_error
@@ -451,7 +446,7 @@ CONTAINS
       RETURN
     END IF
 
-    IF (par%master) WRITE(0,*) '  Creating new output files based on new mesh...'
+    IF (par%master) WRITE(0,*) '  Creating new output files based on current mesh...'
 
     ! Get output file names
     CALL get_output_filenames( region)
@@ -487,13 +482,16 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
+    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%t_last_output/1e3, ' kyr - writing output...'
 
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
-    IF (C%do_write_ISMIP_output) CALL write_to_ISMIP_output_files( region)
+
+    IF (C%do_write_ISMIP_output) THEN
+      CALL write_to_ISMIP_output_files( region)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -648,47 +646,70 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start = (/ netcdf%ti/)))
 
     ! Write data
 
     ! Geometry
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi,               region%ice%Hi_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb,               region%ice%Hb_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs,               region%ice%Hs_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,               region%ice%SL_a,                start = (/ 1,     netcdf%ti/)))
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb,              region%ice%dHb_a,               start = (/ 1,     netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hi, region%ice%Hi_a, start = (/ 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hb, region%ice%Hb_a, start = (/ 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Hs, region%ice%Hs_a, start = (/ 1, netcdf%ti/)))
+
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHi_dt, region%ice%dHi_dt_a, start = (/ 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb_dt, region%ice%dHb_dt_a, start = (/ 1, netcdf%ti/)))
+
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHi_dt_ave, region%ice%dHi_dt_ave_a, start = (/ 1, netcdf%ti/)))
+
+    ! Velocities
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_u_3D, region%ice%u_3D_b, start = (/ 1, 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_v_3D, region%ice%v_3D_b, start = (/ 1, 1, netcdf%ti/)))
+
+    ! Sea level and GIA
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_SL,  region%ice%SL_a,  start = (/ 1, netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_dHb, region%ice%dHb_a, start = (/ 1, netcdf%ti/)))
 
     ! Bed roughness
     IF (C%choice_sliding_law == 'Weertman' .OR. &
         C%choice_sliding_law == 'Tsai2015' .OR. &
         C%choice_sliding_law == 'Schoof2005') THEN
 
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq,          region%ice%beta_sq_a,           start = (/ 1,     netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq, region%ice%beta_sq_a, start = (/ 1, netcdf%ti/)))
 
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
             C%choice_sliding_law == 'Coulomb_regularised' .OR. &
             C%choice_sliding_law == 'Zoet-Iverson') THEN
 
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric,         region%ice%phi_fric_a,          start = (/ 1,     netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, region%ice%phi_fric_a, start = (/ 1, netcdf%ti/)))
+
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, region%ice%phi_fric_ave_a, start = (/ 1, netcdf%ti/)))
+      END IF
 
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
 
     ! Temperature
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,                 region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti, region%ice%Ti_a, start = (/ 1, 1, netcdf%ti/)))
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,           start = (/ 1, 1,  netcdf%ti/)))
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear,    start = (/ 1,     netcdf%ti/)))
+
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_FirnDepth,        region%SMB%FirnDepth,        start = (/ 1, 1, netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, region%SMB%MeltPreviousYear, start = (/ 1,    netcdf%ti/)))
+
       IF (C%do_SMB_IMAUITM_inversion) THEN
-        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, region%SMB%C_abl_constant_inv, start = (/ 1,  netcdf%ti/)))
-        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       region%SMB%C_abl_Ts_inv,       start = (/ 1,  netcdf%ti/)))
-        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        region%SMB%C_abl_Q_inv,        start = (/ 1,  netcdf%ti/)))
-        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         region%SMB%C_refr_inv,         start = (/ 1,  netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, region%SMB%C_abl_constant_inv, start = (/ 1, netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       region%SMB%C_abl_Ts_inv,       start = (/ 1, netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        region%SMB%C_abl_Q_inv,        start = (/ 1, netcdf%ti/)))
+        CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         region%SMB%C_refr_inv,         start = (/ 1, netcdf%ti/)))
       END IF
+
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_BMB_shelf, region%BMB%BMB_shelf, start = (/ 1, netcdf%ti/)))
     END IF
 
     ! Close the file
@@ -726,7 +747,7 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Write data
     CALL write_help_field_mesh( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -1136,18 +1157,34 @@ CONTAINS
     ! Define model data variables
 
     ! Geometry
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,               [vi,        time], netcdf%id_var_Hi,               long_name='Ice thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,               [vi,        time], netcdf%id_var_Hb,               long_name='Bedrock elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,               [vi,        time], netcdf%id_var_Hs,               long_name='Surface elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,               [vi,        time], netcdf%id_var_SL,               long_name='Sea surface change', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,              [vi,        time], netcdf%id_var_dHb,              long_name='Bedrock deformation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi, [vi, time], netcdf%id_var_Hi, long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb, [vi, time], netcdf%id_var_Hb, long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs, [vi, time], netcdf%id_var_Hs, long_name='Surface elevation', units='m')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt, [vi, time], netcdf%id_var_dHi_dt, long_name='Ice thickness change', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [vi, time], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave, [vi, time], netcdf%id_var_dHi_dt_ave, long_name='Averaged ice thickness change', units='m/yr')
+
+    ! Velocities
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_u_3D, [ti, zeta, time], netcdf%id_var_u_3D, long_name='Ice 3D x-velocity', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_v_3D, [ti, zeta, time], netcdf%id_var_v_3D, long_name='Ice 3D y-velocity', units='m/yr')
+
+    ! Sea level and GIA
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [vi, time], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb, [vi, time], netcdf%id_var_dHb, long_name='Bedrock deformation', units='m')
 
     ! Bed roughness
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,          [vi,        time], netcdf%id_var_beta_sq,          long_name='Bed roughness', units='?')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric,         [vi,        time], netcdf%id_var_phi_fric,         long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi, time], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
+
+    IF (C%do_basal_sliding_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [vi, time], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degrees')
+    END IF
 
     ! Temperature
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,               [vi, zeta,  time], netcdf%id_var_Ti,               long_name='Ice temperature', units='K')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [vi, zeta,  time], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
@@ -1159,6 +1196,11 @@ CONTAINS
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        [vi,    time], netcdf%id_var_C_abl_Q_inv,        long_name='Insolation ablation factor', units='-')
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         [vi,    time], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
       END IF
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [vi, time], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
 
     ! Leave definition mode
@@ -1667,41 +1709,62 @@ CONTAINS
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,      start=(/         netcdf%ti/)))
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Map and write data
 
     ! Geometry
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a,             netcdf%id_var_Hi,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a,             netcdf%id_var_Hb,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a,             netcdf%id_var_Hs,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,             netcdf%id_var_SL,               netcdf%ti      )
-    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a,            netcdf%id_var_dHb,              netcdf%ti      )
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hi_a, netcdf%id_var_Hi, netcdf%ti)
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hb_a, netcdf%id_var_Hb, netcdf%ti)
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Hs_a, netcdf%id_var_Hs, netcdf%ti)
+
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_dt_a, netcdf%id_var_dHi_dt, netcdf%ti)
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_dt_a, netcdf%id_var_dHb_dt, netcdf%ti)
+
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_dt_ave_a, netcdf%id_var_dHi_dt_ave, netcdf%ti)
+
+    ! Sea level and GIA
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%SL_a,  netcdf%id_var_SL, netcdf%ti)
+    CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHb_a, netcdf%id_var_dHb,netcdf%ti)
 
     ! Bed roughness
     IF (C%choice_sliding_law == 'Weertman' .OR. C%choice_sliding_law == 'Tsai2015' .OR. C%choice_sliding_law == 'Schoof2005') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%beta_sq_a,      netcdf%id_var_beta_sq,          netcdf%ti      )
+
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%beta_sq_a, netcdf%id_var_beta_sq, netcdf%ti)
 
     ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. C%choice_sliding_law == 'Coulomb_regularised' .OR. C%choice_sliding_law == 'Zoet-Iverson') THEN
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_a,     netcdf%id_var_phi_fric,         netcdf%ti      )
+
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_a, netcdf%id_var_phi_fric, netcdf%ti)
+
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_ave_a, netcdf%id_var_phi_fric_ave, netcdf%ti)
+      END IF
 
     ELSE
       CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
     END IF
 
     ! Temperature
-    CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a,             netcdf%id_var_Ti,               netcdf%ti, C%nZ)
+    CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a, netcdf%id_var_Ti, netcdf%ti, C%nZ)
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
-      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12  )
-      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
+
+      CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%FirnDepth,        netcdf%id_var_FirnDepth,        netcdf%ti, 12)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti    )
+
       IF (C%do_SMB_IMAUITM_inversion) THEN
         CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_constant_inv, netcdf%id_var_C_abl_constant_inv, netcdf%ti)
         CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Ts_inv,       netcdf%id_var_C_abl_Ts_inv,       netcdf%ti)
         CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Q_inv,        netcdf%id_var_C_abl_Q_inv,        netcdf%ti)
         CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_refr_inv,         netcdf%id_var_C_refr_inv,         netcdf%ti)
       END IF
+
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%BMB_shelf, netcdf%id_var_BMB_shelf, netcdf%ti)
     END IF
 
     ! Close the file
@@ -1734,7 +1797,7 @@ CONTAINS
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%t_last_output, start=(/ netcdf%ti/)))
 
     ! Write data
     CALL write_help_field_grid( region, netcdf, netcdf%id_help_field_01, C%help_field_01)
@@ -2140,38 +2203,57 @@ CONTAINS
     ! order of appearence in the netcdf file.
 
     ! Dimension variables: zeta, month, time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,                  [x            ], netcdf%id_var_x,                  long_name='X-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,                  [   y         ], netcdf%id_var_y,                  long_name='Y-coordinate', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,               [      z      ], netcdf%id_var_zeta,               long_name='Vertical scaled coordinate', units='unitless')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_month,              [         m   ], netcdf%id_var_month,              long_name='Month', units='1-12'    )
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,               [            t], netcdf%id_var_time,               long_name='Time', units='years'   )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,     [x            ], netcdf%id_var_x,     long_name='X-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,     [   y         ], netcdf%id_var_y,     long_name='Y-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_zeta,  [      z      ], netcdf%id_var_zeta,  long_name='Vertical scaled coordinate', units='unitless')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_month, [         m   ], netcdf%id_var_month, long_name='Month', units='1-12'    )
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_time,  [            t], netcdf%id_var_time,  long_name='Time', units='years'   )
 
     ! Ice model data
 
     ! Geometry
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi,                 [x, y,       t], netcdf%id_var_Hi,                 long_name='Ice thickness', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb,                 [x, y,       t], netcdf%id_var_Hb,                 long_name='Bedrock elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs,                 [x, y,       t], netcdf%id_var_Hs,                 long_name='Surface elevation', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,                 [x, y,       t], netcdf%id_var_SL,                 long_name='Sea surface change', units='m')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb,                [x, y,       t], netcdf%id_var_dHb,                long_name='Bedrock deformation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hi, [x, y, t], netcdf%id_var_Hi, long_name='Ice thickness', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hb, [x, y, t], netcdf%id_var_Hb, long_name='Bedrock elevation', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Hs, [x, y, t], netcdf%id_var_Hs, long_name='Surface elevation', units='m')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt, [x, y, t], netcdf%id_var_dHi_dt, long_name='Ice thickness change', units='m/yr')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb_dt, [x, y, t], netcdf%id_var_dHb_dt, long_name='Ice bedrock change', units='m/yr')
+
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave, [x, y, t], netcdf%id_var_dHi_dt_ave, long_name='Averaged ice thickness change', units='m/yr')
+
+    ! Sea level and GIA
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_SL,  [x, y, t], netcdf%id_var_SL,  long_name='Sea surface change', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_dHb, [x, y, t], netcdf%id_var_dHb, long_name='Bedrock deformation', units='m')
 
     ! Bed roughness
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,            [x, y,       t], netcdf%id_var_beta_sq,            long_name='Bed roughness', units='?')
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric,           [x, y,       t], netcdf%id_var_phi_fric,           long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y, t], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y, t], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
+
+    IF (C%do_basal_sliding_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [x, y, t], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degress')
+    END IF
 
     ! Temperature
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti,                 [x, y, z,    t], netcdf%id_var_Ti,                 long_name='Ice temperature', units='K')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Ti, [x, y, z, t], netcdf%id_var_Ti, long_name='Ice temperature', units='K')
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+
       CALL create_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        [x, y,    m, t], netcdf%id_var_FirnDepth,          long_name='Firn depth', units='m')
       CALL create_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, [x, y,       t], netcdf%id_var_MeltPreviousYear,   long_name='Melt during previous year', units='mie')
+
       IF (C%do_SMB_IMAUITM_inversion) THEN
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv,   [x, y, t], netcdf%id_var_C_abl_constant_inv, long_name='Threshold ablation factor', units='-')
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,         [x, y, t], netcdf%id_var_C_abl_Ts_inv,       long_name='Temperature ablation factor', units='-')
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,          [x, y, t], netcdf%id_var_C_abl_Q_inv,        long_name='Insolation ablation factor', units='-')
         CALL create_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,           [x, y, t], netcdf%id_var_C_refr_inv,         long_name='Refreezing factor', units='-')
       END IF
+
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [x, y, t], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
 
     ! Leave definition mode
@@ -2783,28 +2865,52 @@ CONTAINS
     ! Inquire model data
 
     ! Geometry
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hi              )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hb              )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,               (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_Hs              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hi,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_Hi)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hb,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_Hb)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Hs,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_Hs)
+
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHi_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHi_dt)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHb_dt,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHb_dt)
+
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHi_dt_ave,   (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHi_dt_ave)
+
+    ! Velocities
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_u_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_u_3D)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_v_3D,     (/ netcdf%id_dim_ti, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_v_3D)
+
+    ! Sea level and GIA
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_SL,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_SL )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_dHb,      (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_dHb)
 
     ! Bed roughness
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_beta_sq )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric)
 
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,          (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_beta_sq         )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric,         (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_phi_fric        )
+    IF (C%choice_basal_roughness == 'restart' .AND. C%basal_roughness_restart_type == 'average') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_phi_fric_ave)
+    END IF
 
     ! Temperature
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,               (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti              )
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_Ti,       (/ netcdf%id_dim_vi, netcdf%id_dim_zeta,  netcdf%id_dim_time /), netcdf%id_var_Ti)
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
-      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi,                      netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear  )
-      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth         )
+
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_MeltPreviousYear, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_MeltPreviousYear)
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_FirnDepth,        (/ netcdf%id_dim_vi, netcdf%id_dim_month, netcdf%id_dim_time /), netcdf%id_var_FirnDepth)
+
       IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
-        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv, (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_constant_inv)
-        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,       (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Ts_inv      )
-        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_abl_Q_inv       )
-        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         (/ netcdf%id_dim_vi,                  netcdf%id_dim_time /), netcdf%id_var_C_refr_inv        )
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_constant_inv, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_C_abl_constant_inv)
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Ts_inv,       (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_C_abl_Ts_inv      )
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_abl_Q_inv,        (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_C_abl_Q_inv       )
+        CALL inquire_double_var( netcdf%ncid, netcdf%name_var_C_refr_inv,         (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_C_refr_inv        )
       END IF
+
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_BMB_shelf)
     END IF
 
     ! Close the netcdf file
@@ -2913,27 +3019,53 @@ CONTAINS
     ! Read the data
 
     ! Geometry
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi,               restart%Hi,               start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb,               restart%Hb,               start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs,               restart%Hs,               start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hi, restart%Hi, start = (/ 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hb, restart%Hb, start = (/ 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Hs, restart%Hs, start = (/ 1, ti /) ))
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHi_dt, restart%dHi_dt, start = (/ 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHb_dt, restart%dHb_dt, start = (/ 1, ti /) ))
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHi_dt_ave, restart%dHi_dt_ave, start = (/ 1, ti /) ))
+
+    ! Velocities
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_u_3D, restart%u_3D, start = (/ 1, 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_v_3D, restart%v_3D, start = (/ 1, 1, ti /) ))
 
     ! Bed roughness
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,          restart%beta_sq,          start = (/ 1,    ti /) ))
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric,         restart%phi_fric,         start = (/ 1,    ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq,  restart%beta_sq,  start = (/ 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric, restart%phi_fric, start = (/ 1, ti /) ))
+
+    IF (C%choice_basal_roughness == 'restart' .AND. C%basal_roughness_restart_type == 'average') THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, restart%phi_fric_ave, start = (/ 1, ti /) ))
+    END IF
 
     ! Temperature
-    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti,               restart%Ti,               start = (/ 1, 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_Ti, restart%Ti, start = (/ 1, 1, ti /) ))
+
+    ! Sea level and GIA
+
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_SL,  restart%SL,  start = (/ 1, ti /) ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_dHb, restart%dHb, start = (/ 1, ti /) ))
 
     ! SMB
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
+
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_MeltPreviousYear, restart%MeltPreviousYear, start = (/ 1,    ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_FirnDepth,        restart%FirnDepth,        start = (/ 1, 1, ti /) ))
+
       IF (C%do_SMB_IMAUITM_inversion .AND. C%SMB_IMAUITM_inv_choice_init_C == 'restart') THEN
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_constant_inv, restart%C_abl_constant_inv, start = (/ 1,    ti /) ))
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Ts_inv,       restart%C_abl_Ts_inv,       start = (/ 1,    ti /) ))
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_abl_Q_inv,        restart%C_abl_Q_inv,        start = (/ 1,    ti /) ))
         CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_C_refr_inv,         restart%C_refr_inv,         start = (/ 1,    ti /) ))
       END IF
+
+    END IF
+
+    ! BMB
+    IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_BMB_shelf, restart%BMB_shelf, start = (/ 1, ti /) ))
     END IF
 
     ! Close the netcdf file
@@ -5186,40 +5318,40 @@ CONTAINS
     CALL sync
 
     ! Write to all the ISMIP output files
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hi_a                    , 'lithk'                    )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hs_a                    , 'orog'                     )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Hb_a                    , 'topg'                     )
-    CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,              region%ice%GHF_a                   , 'hfgeoubed'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%SMB%SMB_year                , 'acabf'                    )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_sheet               , 'libmassbfgr'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%BMB%BMB_shelf               , 'libmassbffl'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%dHs_dt_a                , 'dlithkdt'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_surf_a                , 'xvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_surf_a                , 'yvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_surf_a                , 'zvelsurf'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_base_a                , 'xvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_base_a                , 'yvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%w_base_a                , 'zvelbase'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%u_vav_a                 , 'xvelmean'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%v_vav_a                 , 'yvelmean'                 )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, region%ice%Ti_a( :,1)              , 'litemptop'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_gr                         , 'litempbotgr'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, Ti_base_fl                         , 'litempbotfl'              )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, basal_drag                         , 'strbasemag'               )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_flux                       , 'licalvf'                  )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, calving_and_front_melt_flux        , 'lifmassbf'                )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, land_ice_area_fraction             , 'sftgif'                   )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, grounded_ice_sheet_area_fraction   , 'sftgrf'                   )
-    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%time, floating_ice_shelf_area_fraction   , 'sftflf'                   )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, land_ice_mass                      , 'lim'                      )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, mass_above_floatation              , 'limnsw'                   )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, grounded_ice_sheet_area            , 'iareagr'                  )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, floating_ice_sheet_area            , 'iareafl'                  )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_SMB                          , 'tendacabf'                )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB                          , 'tendlibmassbf'            )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_BMB_shelf                    , 'tendlibmassbffl'          )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_flux                 , 'tendlicalvf'              )
-    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%time, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hi_a                    , 'lithk'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hs_a                    , 'orog'                     )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Hb_a                    , 'topg'                     )
+    CALL write_to_ISMIP_output_file_field_notime(  region%mesh, region%grid_output, foldername, icesheet_code,                       region%ice%GHF_a                   , 'hfgeoubed'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%SMB%SMB_year                , 'acabf'                    )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_sheet               , 'libmassbfgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%BMB%BMB_shelf               , 'libmassbffl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%dHs_dt_a                , 'dlithkdt'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_surf_a                , 'xvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_surf_a                , 'yvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_surf_a                , 'zvelsurf'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_base_a                , 'xvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_base_a                , 'yvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%w_base_a                , 'zvelbase'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%u_vav_a                 , 'xvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%v_vav_a                 , 'yvelmean'                 )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, region%ice%Ti_a( :,1)              , 'litemptop'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_gr                         , 'litempbotgr'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, Ti_base_fl                         , 'litempbotfl'              )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, basal_drag                         , 'strbasemag'               )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, calving_flux                       , 'licalvf'                  )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, calving_and_front_melt_flux        , 'lifmassbf'                )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, land_ice_area_fraction             , 'sftgif'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, grounded_ice_sheet_area_fraction   , 'sftgrf'                   )
+    CALL write_to_ISMIP_output_file_field(         region%mesh, region%grid_output, foldername, icesheet_code, region%t_last_output, floating_ice_shelf_area_fraction   , 'sftflf'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, land_ice_mass                      , 'lim'                      )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, mass_above_floatation              , 'limnsw'                   )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, grounded_ice_sheet_area            , 'iareagr'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, floating_ice_sheet_area            , 'iareafl'                  )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_SMB                          , 'tendacabf'                )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_BMB                          , 'tendlibmassbf'            )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_BMB_shelf                    , 'tendlibmassbffl'          )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_calving_flux                 , 'tendlicalvf'              )
+    CALL write_to_ISMIP_output_file_scalar(                                         foldername, icesheet_code, region%t_last_output, total_calving_and_front_melt_flux  , 'tendlifmassbf'            )
 
     ! Clean up after yourself
     CALL deallocate_shared( wTi_base_gr                      )
@@ -6806,6 +6938,8 @@ CONTAINS
       debug%dp_2D_monthly_a_10 => debug_ANT%dp_2D_monthly_a_10
 
     END IF
+
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

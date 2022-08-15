@@ -54,21 +54,33 @@ MODULE configuration_module
   ! == Time steps and range
   ! =======================
 
+    ! General
     REAL(dp)            :: start_time_of_run_config                    = 0.0_dp                           ! Start time (in years) of the simulations
     REAL(dp)            :: end_time_of_run_config                      = 50000.0_dp                       ! End   time (in years) of the simulations
+    REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
     REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
+
+    ! Ice dynamics
     REAL(dp)            :: dt_max_config                               = 10.0_dp                          ! Maximum time step (in years) of the ice model
+    REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
+    REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time when dt = dt_min, to ensure smooth restarts
+    REAL(dp)            :: dt_cooldown_phase_config                    = 10._dp                           ! Length of time window (in years) before end_time when dt = dt_min, to ensure smooth restarts
+
+    ! Sub-models
     REAL(dp)            :: dt_thermo_config                            = 10.0_dp                          ! Time step (in years) for updating thermodynamics
     REAL(dp)            :: dt_climate_config                           = 10._dp                           ! Time step (in years) for updating the climate
     REAL(dp)            :: dt_ocean_config                             = 10._dp                           ! Time step (in years) for updating the ocean
     REAL(dp)            :: dt_SMB_config                               = 10._dp                           ! Time step (in years) for updating the SMB
     REAL(dp)            :: dt_BMB_config                               = 10._dp                           ! Time step (in years) for updating the BMB
-    REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
-    REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
     REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
+
+    ! Inversions
     REAL(dp)            :: dt_basal_config                             = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
     REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
+
+    ! Output
+    REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
 
   ! == Which ice sheets do we simulate?
   ! ===================================
@@ -143,12 +155,17 @@ MODULE configuration_module
     REAL(dp)            :: alpha_min_config                            = 0.55_dp                          ! Minimum internal angle of triangles (0.4363 = 25 degrees)
     REAL(dp)            :: dz_max_ice_config                           = 20000._dp                        ! Maximum allowed 2nd order surface deviation over ice
     REAL(dp)            :: res_max_config                              = 800._dp                          ! Maximum allowed resolution                            [km]
+    REAL(dp)            :: res_max_ice_config                          = 40._dp                           ! Maximum allowed resolution over ice                   [km]
     REAL(dp)            :: res_max_margin_config                       = 40._dp                           ! Maximum allowed resolution over land-based ice margin [km]
     REAL(dp)            :: res_max_gl_config                           = 40._dp                           !                                 grounding line        [km]
     REAL(dp)            :: res_max_cf_config                           = 40._dp                           !                                 calving front         [km]
     REAL(dp)            :: res_max_mountain_config                     = 40._dp                           !                                 mountains             [km]
     REAL(dp)            :: res_max_coast_config                        = 40._dp                           !                                 coastline             [km]
     REAL(dp)            :: mesh_fitness_threshold_config               = 0.95_dp                          ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
+
+    ! Forced mesh update
+    LOGICAL             :: do_force_mesh_update_config                 = .FALSE.                          ! Force a mesh update once after do_force_mesh_update_after years
+    REAL(dp)            :: do_force_mesh_update_after_config           = 10._dp                           ! Minimum years after which a force update occurs (model needs some time before first update)
 
   ! == Resolutions of the different square grids
   ! ============================================
@@ -350,26 +367,28 @@ MODULE configuration_module
     REAL(dp)            :: DIVA_PETSc_rtol_config                      = 0.01_dp                          ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
     REAL(dp)            :: DIVA_PETSc_abstol_config                    = 2.5_dp                           ! DIVA PETSc solver - stop criterion, absolute difference
 
+    ! Velocity wind-up
+    REAL(dp)            :: windup_total_years_config                   = 0._dp                            ! Go back in time and run the velocity solver for this amount of years before actual run starts
+
   ! == Ice dynamics - time integration
   ! ==================================
 
     CHARACTER(LEN=256)  :: choice_timestepping_config                  = 'pc'                             ! Choice of timestepping method: "direct", "pc" (NOTE: 'direct' does not work with DIVA ice dynamcis!)
     CHARACTER(LEN=256)  :: choice_ice_integration_method_config        = 'explicit'                       ! Choice of ice thickness integration scheme: "none" (i.e. unchanging geometry), "explicit", "semi-implicit"
-    CHARACTER(LEN=256)  :: dHi_choice_matrix_solver_config             = 'SOR'                            ! Choice of matrix solver for the semi-implicit ice thickness equation: "SOR", "PETSc"
-    INTEGER             :: dHi_SOR_nit_config                          = 3000                             ! dHi SOR   solver - maximum number of iterations
-    REAL(dp)            :: dHi_SOR_tol_config                          = 2.5_dp                           ! dHi SOR   solver - stop criterion, absolute difference
-    REAL(dp)            :: dHi_SOR_omega_config                        = 1.3_dp                           ! dHi SOR   solver - over-relaxation parameter
-    REAL(dp)            :: dHi_PETSc_rtol_config                       = 0.001_dp                         ! dHi PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    REAL(dp)            :: dHi_PETSc_abstol_config                     = 0.001_dp                         ! dHi PETSc solver - stop criterion, absolute difference
+    CHARACTER(LEN=256)  :: dHi_choice_matrix_solver_config             = 'SOR'                            ! Choice of matrix solver for the semi-implicit ice thickness equation: "SOR", "PETSc" [NOT USED]
+    INTEGER             :: dHi_SOR_nit_config                          = 3000                             ! dHi SOR   solver - maximum number of iterations [NOT USED]
+    REAL(dp)            :: dHi_SOR_tol_config                          = 2.5_dp                           ! dHi SOR   solver - stop criterion, absolute difference [NOT USED]
+    REAL(dp)            :: dHi_SOR_omega_config                        = 1.3_dp                           ! dHi SOR   solver - over-relaxation parameter [NOT USED]
+    REAL(dp)            :: dHi_PETSc_rtol_config                       = 0.001_dp                         ! dHi PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached) [NOT USED]
+    REAL(dp)            :: dHi_PETSc_abstol_config                     = 0.001_dp                         ! dHi PETSc solver - stop criterion, absolute difference [NOT USED]
 
     ! Predictor-corrector ice-thickness update
     REAL(dp)            :: pc_epsilon_config                           = 3._dp                            ! Target truncation error in dHi_dt [m/yr] (epsilon in Robinson et al., 2020, Eq. 33)
     REAL(dp)            :: pc_k_I_config                               = 0.2_dp                           ! Exponent k_I in  Robinson et al., 2020, Eq. 33
     REAL(dp)            :: pc_k_p_config                               = 0.2_dp                           ! Exponent k_p in  Robinson et al., 2020, Eq. 33
     REAL(dp)            :: pc_eta_min_config                           = 1E-8_dp                          ! Normalisation term in estimation of the truncation error (Robinson et al., Eq. 32)
-    INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step
-    REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased)
-    REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
+    INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step [NOT USED]
+    REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased) [NOT USED]
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)  :: ice_thickness_west_BC_config                = 'zero'                           ! Choice of boundary conditions for ice thickness at the domain boundary: "infinite", "periodic", "zero", "ISMIP_HOM_F"
@@ -385,6 +404,11 @@ MODULE configuration_module
     LOGICAL             :: fixed_shelf_geometry_config                 = .FALSE.                          ! Keep geometry of floating ice fixed
     LOGICAL             :: fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
     LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
+
+    ! Memory of first dHi_dt of simulation
+    LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt
+    REAL(dp)            :: get_senile_after_config                     = 100._dp                          ! Keep fading memory for this amount of years
+    INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! == Ice dynamics - basal conditions and sliding
   ! ==============================================
@@ -419,6 +443,8 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011till_phi_min_config               = 5._dp                            ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
     REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+    CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'last'                           ! Values from previous run: "last" (last output) or "average" (running average)
+    LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .FALSE.                          ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
@@ -432,6 +458,7 @@ MODULE configuration_module
     REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
     REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
     REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+    INTEGER             :: phi_fric_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of phi_fric
 
   ! == Ice dynamics - calving
   ! =========================
@@ -607,6 +634,7 @@ MODULE configuration_module
     REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
+    LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
     REAL(dp)            :: BMB_inv_scale_ocean_config                  = 100._dp                          ! Scaling constant for inversion procedure over open ocean [m]
 
@@ -704,7 +732,8 @@ MODULE configuration_module
 
     LOGICAL             :: do_ocean_floodfill_config                   = .TRUE.                           ! Use a flood-fill to determine the ocean mask, so that (pro-/sub-glacial) lakes dont exist
     CHARACTER(LEN=256)  :: choice_sealevel_model_config                = 'eustatic'                       ! Can be "fixed", "prescribed", "eustatic", or "SELEN"
-    REAL(dp)            :: fixed_sealevel_config                       = 0._dp
+    REAL(dp)            :: fixed_sealevel_config                       = 0._dp                            ! Sea level for "fixed" method
+    REAL(dp)            :: initial_guess_sealevel_config               = 0._dp                            ! Initial sea-level guess value for "eustatic" and "SELEN" methods
     CHARACTER(LEN=256)  :: filename_sealevel_record_config             = 'name_of_file.dat'
     INTEGER             :: sealevel_record_length_config               = 1
 
@@ -815,6 +844,9 @@ MODULE configuration_module
     REAL(dp)                            :: end_time_of_run
     REAL(dp)                            :: dt_coupling
     REAL(dp)                            :: dt_max
+    REAL(dp)                            :: dt_min
+    REAL(dp)                            :: dt_startup_phase
+    REAL(dp)                            :: dt_cooldown_phase
     REAL(dp)                            :: dt_thermo
     REAL(dp)                            :: dt_climate
     REAL(dp)                            :: dt_ocean
@@ -894,12 +926,15 @@ MODULE configuration_module
     REAL(dp)                            :: dz_max_ice
     REAL(dp)                            :: res_max
     REAL(dp)                            :: res_min
+    REAL(dp)                            :: res_max_ice
     REAL(dp)                            :: res_max_margin
     REAL(dp)                            :: res_max_gl
     REAL(dp)                            :: res_max_cf
     REAL(dp)                            :: res_max_mountain
     REAL(dp)                            :: res_max_coast
     REAL(dp)                            :: mesh_fitness_threshold
+    LOGICAL                             :: do_force_mesh_update
+    REAL(dp)                            :: do_force_mesh_update_after
 
     ! Resolutions of the different square grids
     ! =========================================
@@ -1069,6 +1104,9 @@ MODULE configuration_module
     REAL(dp)                            :: DIVA_PETSc_rtol
     REAL(dp)                            :: DIVA_PETSc_abstol
 
+    ! Velocity wind-up before a restart
+    REAL(dp)                            :: windup_total_years
+
     ! Ice dynamics - time integration
     ! ===============================
 
@@ -1088,7 +1126,6 @@ MODULE configuration_module
     REAL(dp)                            :: pc_eta_min
     INTEGER                             :: pc_max_timestep_iterations
     REAL(dp)                            :: pc_redo_tol
-    REAL(dp)                            :: dt_min
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)                  :: ice_thickness_west_BC
@@ -1104,6 +1141,11 @@ MODULE configuration_module
     LOGICAL                             :: fixed_shelf_geometry
     LOGICAL                             :: fixed_sheet_geometry
     LOGICAL                             :: fixed_grounding_line
+
+    ! Memory of previous run during a restart
+    LOGICAL                             :: do_use_hi_memory
+    REAL(dp)                            :: get_senile_after
+    INTEGER                             :: dHi_dt_window_size
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -1138,6 +1180,8 @@ MODULE configuration_module
     REAL(dp)                            :: Martin2011till_phi_min
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
+    CHARACTER(LEN=256)                  :: basal_roughness_restart_type
+    LOGICAL                             :: do_basal_roughness_remap_adjustment
 
     ! Basal roughness inversion
     LOGICAL                             :: do_basal_sliding_inversion
@@ -1151,6 +1195,7 @@ MODULE configuration_module
     REAL(dp)                            :: basal_sliding_inv_phi_max
     REAL(dp)                            :: basal_sliding_inv_tol_diff
     REAL(dp)                            :: basal_sliding_inv_tol_frac
+    INTEGER                             :: phi_fric_window_size
 
     ! Ice dynamics - calving
     ! ======================
@@ -1326,6 +1371,7 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
 
+    LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
     REAL(dp)                            :: BMB_inv_scale_ocean
 
@@ -1421,6 +1467,7 @@ MODULE configuration_module
     LOGICAL                             :: do_ocean_floodfill
     CHARACTER(LEN=256)                  :: choice_sealevel_model
     REAL(dp)                            :: fixed_sealevel
+    REAL(dp)                            :: initial_guess_sealevel
     CHARACTER(LEN=256)                  :: filename_sealevel_record
     INTEGER                             :: sealevel_record_length
 
@@ -1768,12 +1815,13 @@ CONTAINS
     ! Set up the resource tracker
     ! ===========================
 
-    ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
+    ! Allocate space to track up to 2,000 subroutines per region
+    ! That should be enough for a while...
     n = 0
-    IF (C%do_NAM) n = n + 1000
-    IF (C%do_EAS) n = n + 1000
-    IF (C%do_GRL) n = n + 1000
-    IF (C%do_ANT) n = n + 1000
+    IF (C%do_NAM) n = n + 2000
+    IF (C%do_EAS) n = n + 2000
+    IF (C%do_GRL) n = n + 2000
+    IF (C%do_ANT) n = n + 2000
     ALLOCATE( resource_tracker( n))
 
     ! Initialise values
@@ -1812,6 +1860,9 @@ CONTAINS
                      end_time_of_run_config,                          &
                      dt_coupling_config,                              &
                      dt_max_config,                                   &
+                     dt_min_config,                                   &
+                     dt_startup_phase_config,                         &
+                     dt_cooldown_phase_config,                        &
                      dt_thermo_config,                                &
                      dt_climate_config,                               &
                      dt_ocean_config,                                 &
@@ -1951,6 +2002,7 @@ CONTAINS
                      DIVA_SOR_omega_config,                           &
                      DIVA_PETSc_rtol_config,                          &
                      DIVA_PETSc_abstol_config,                        &
+                     windup_total_years_config,                       &
                      choice_timestepping_config,                      &
                      choice_ice_integration_method_config,            &
                      dHi_choice_matrix_solver_config,                 &
@@ -1965,7 +2017,6 @@ CONTAINS
                      pc_eta_min_config,                               &
                      pc_max_timestep_iterations_config,               &
                      pc_redo_tol_config,                              &
-                     dt_min_config,                                   &
                      ice_thickness_west_BC_config,                    &
                      ice_thickness_east_BC_config,                    &
                      ice_thickness_south_BC_config,                   &
@@ -1977,6 +2028,9 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_sheet_geometry_config,                     &
                      fixed_grounding_line_config,                     &
+                     do_use_hi_memory_config,                         &
+                     get_senile_after_config,                         &
+                     dHi_dt_window_size_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -2002,6 +2056,8 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
+                     basal_roughness_restart_type_config,             &
+                     do_basal_roughness_remap_adjustment_config,      &
                      do_basal_sliding_inversion_config,               &
                      do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_t_start_config,                &
@@ -2013,6 +2069,7 @@ CONTAINS
                      basal_sliding_inv_phi_max_config,                &
                      basal_sliding_inv_tol_diff_config,               &
                      basal_sliding_inv_tol_frac_config,               &
+                     phi_fric_window_size_config,                     &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_shelf_config,        &
                      calving_threshold_thickness_sheet_config,        &
@@ -2025,12 +2082,15 @@ CONTAINS
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
                      res_max_config,                                  &
+                     res_max_ice_config,                              &
                      res_max_margin_config,                           &
                      res_max_gl_config,                               &
                      res_max_cf_config,                               &
                      res_max_mountain_config,                         &
                      res_max_coast_config,                            &
                      mesh_fitness_threshold_config,                   &
+                     do_force_mesh_update_config,                     &
+                     do_force_mesh_update_after_config,               &
                      dx_grid_output_config,                           &
                      dx_grid_GIA_config,                              &
                      dx_grid_smooth_config,                           &
@@ -2161,6 +2221,7 @@ CONTAINS
                      choice_BMB_subgrid_config,                       &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
+                     BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
                      choice_basin_scheme_NAM_config,                  &
@@ -2234,6 +2295,7 @@ CONTAINS
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
+                     initial_guess_sealevel_config,                   &
                      filename_sealevel_record_config,                 &
                      sealevel_record_length_config,                   &
                      choice_GIA_model_config,                         &
@@ -2497,6 +2559,9 @@ CONTAINS
     C%end_time_of_run                          = end_time_of_run_config
     C%dt_coupling                              = dt_coupling_config
     C%dt_max                                   = dt_max_config
+    C%dt_min                                   = dt_min_config
+    C%dt_startup_phase                         = dt_startup_phase_config
+    C%dt_cooldown_phase                        = dt_cooldown_phase_config
     C%dt_thermo                                = dt_thermo_config
     C%dt_climate                               = dt_climate_config
     C%dt_ocean                                 = dt_ocean_config
@@ -2575,15 +2640,18 @@ CONTAINS
     C%alpha_min                                = alpha_min_config
     C%dz_max_ice                               = dz_max_ice_config
     C%res_max                                  = res_max_config
+    C%res_max_ice                              = res_max_ice_config
     C%res_max_margin                           = res_max_margin_config
     C%res_max_gl                               = res_max_gl_config
     C%res_max_cf                               = res_max_cf_config
     C%res_max_mountain                         = res_max_mountain_config
     C%res_max_coast                            = res_max_coast_config
     C%mesh_fitness_threshold                   = mesh_fitness_threshold_config
+    C%do_force_mesh_update                     = do_force_mesh_update_config
+    C%do_force_mesh_update_after               = do_force_mesh_update_after_config
 
     ! The smallest allowed resolution
-    C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast)
+    C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast, C%res_max_ice)
 
     ! Resolutions of the different square grids
     ! =========================================
@@ -2752,6 +2820,9 @@ CONTAINS
     C%DIVA_PETSc_rtol                          = DIVA_PETSc_rtol_config
     C%DIVA_PETSc_abstol                        = DIVA_PETSc_abstol_config
 
+    ! Velocity wind-up before a restart
+    C%windup_total_years                       = windup_total_years_config
+
     ! Ice dynamics - time integration
     ! ===============================
 
@@ -2771,7 +2842,6 @@ CONTAINS
     C%pc_eta_min                               = pc_eta_min_config
     C%pc_max_timestep_iterations               = pc_max_timestep_iterations_config
     C%pc_redo_tol                              = pc_redo_tol_config
-    C%dt_min                                   = dt_min_config
 
     ! Ice thickness boundary conditions
     C%ice_thickness_west_BC                    = ice_thickness_west_BC_config
@@ -2787,6 +2857,11 @@ CONTAINS
     C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
     C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
     C%fixed_grounding_line                     = fixed_grounding_line_config
+
+    ! Memory of previous run during a restart
+    C%do_use_hi_memory                         = do_use_hi_memory_config
+    C%get_senile_after                         = get_senile_after_config
+    C%dHi_dt_window_size                       = dHi_dt_window_size_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -2821,6 +2896,8 @@ CONTAINS
     C%Martin2011till_phi_min                   = Martin2011till_phi_min_config
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
+    C%basal_roughness_restart_type             = basal_roughness_restart_type_config
+    C%do_basal_roughness_remap_adjustment      = do_basal_roughness_remap_adjustment_config
 
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
@@ -2834,6 +2911,7 @@ CONTAINS
     C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
     C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
     C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
+    C%phi_fric_window_size                     = phi_fric_window_size_config
 
     ! Ice dynamics - calving
     ! ======================
@@ -3007,6 +3085,7 @@ CONTAINS
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
 
+    C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config
     C%BMB_inv_scale_ocean                      = BMB_inv_scale_ocean_config
 
@@ -3104,6 +3183,7 @@ CONTAINS
     C%do_ocean_floodfill                       = do_ocean_floodfill_config
     C%choice_sealevel_model                    = choice_sealevel_model_config
     C%fixed_sealevel                           = fixed_sealevel_config
+    C%initial_guess_sealevel                   = initial_guess_sealevel_config
     C%filename_sealevel_record                 = filename_sealevel_record_config
     C%sealevel_record_length                   = sealevel_record_length_config
 
@@ -3699,7 +3779,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string(' ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     ! Stop the program
@@ -3773,7 +3853,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string(' WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     ! Clean up after yourself

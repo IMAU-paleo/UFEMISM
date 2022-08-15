@@ -187,6 +187,12 @@ MODULE mesh_update_module
     ! Special area resolution - ice margin, grounding line, calving front
     ! ===================================================================
 
+    ! Ice interior
+    IF (contains_ice .AND. dmax > mesh_new%res_max_ice * 2._dp * 1000._dp) THEN
+      IsGood = .FALSE.
+      RETURN
+    END IF
+
     ! Coastline
     IF (contains_coast .AND. dmax > mesh_new%res_max_coast * 2._dp * 1000._dp) THEN
       IsGood = .FALSE.
@@ -276,14 +282,19 @@ MODULE mesh_update_module
     if (par%master) then
       if (C%do_time_display) then
         if (mod(region%time-region%dt,C%dt_output) /= 0._dp) then
-          write(*,"(A)",advance="yes") repeat(c_backspace,17) // &
-                                       ' - mesh time!    '
+          write(*,"(A,F8.3,A)",advance="yes") repeat(c_backspace,99) // &
+                                              '   t = ', region%time/1e3_dp, ' kyr - mesh time!    '
         else
           ! Output took care of advancing a newline.
         end if
       end if
-      write(*,"(A)",advance="yes") '   Creating a new mesh for region ' &
-                                   // TRIM(region%mesh%region_name) // '...'
+      if (region%do_mesh) then
+        write(*,"(A)",advance="yes") '   Forcing the creation of a new mesh for region ' &
+                                     // TRIM(region%mesh%region_name) // '...'
+      else
+        write(*,"(A)",advance="yes") '   Creating a new mesh for region ' &
+                                     // TRIM(region%mesh%region_name) // '...'
+      end if
     end if
 
     ! Orientation of domain partitioning: east-west for GRL, north-south everywhere else
@@ -343,6 +354,7 @@ MODULE mesh_update_module
       ! Determine resolutions
       submesh%res_min          = MAX( C%res_min,          res_min_inc)
       submesh%res_max          = MAX( C%res_max,          res_min_inc)
+      submesh%res_max_ice      = MAX( C%res_max_ice,      res_min_inc)
       submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
       submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
       submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
@@ -384,7 +396,7 @@ MODULE mesh_update_module
     END IF
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 111)
 
   END SUBROUTINE create_new_mesh
 
@@ -604,9 +616,9 @@ MODULE mesh_update_module
     REAL(dp), DIMENSION(2)                        :: p,q,r,pq,qr,rp
     REAL(dp)                                      :: dmax
     REAL(dp), PARAMETER                           :: res_tol = 1.2_dp ! Resolution tolerance factor
-    INTEGER                                       :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
-    REAL(dp)                                      :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
-    REAL(dp)                                      :: fcoast, fmargin, fgl, fcf
+    INTEGER                                       :: nice, nuice, ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
+    REAL(dp)                                      :: lice, luice, lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
+    REAL(dp)                                      :: fice, fcoast, fmargin, fgl, fcf
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -615,15 +627,18 @@ MODULE mesh_update_module
 
     ! Determine fraction of fit triangles
 
+    nice     = 0 ! Number of       ice triangles
     ncoast   = 0 ! Number of       coastline triangles
     nmargin  = 0 ! Number of       margin triangles
     ngl      = 0 ! Mumber of       grounding line triangles
     ncf      = 0 ! Number of       calving front triangles
+    nuice    = 0 ! Number of unfit ice triangles
     nucoast  = 0 ! Number of unfit coastline triangles
     numargin = 0 ! Number of unfit margin triangles
     nugl     = 0 ! Mumber of unfit grounding line triangles
     nucf     = 0 ! Number of unfit calving front triangles
 
+    lice     = 0._dp ! Total length of coastline
     lcoast   = 0._dp ! Total length of coastline
     lmargin  = 0._dp
     lgl      = 0._dp
@@ -652,6 +667,15 @@ MODULE mesh_update_module
 
       ! Longest triangle leg
       dmax = MAXVAL([SQRT(pq(1)**2+pq(2)**2), SQRT(qr(1)**2+qr(2)**2), SQRT(rp(1)**2+rp(2)**2)])
+
+      IF (ice%mask_ice_a( v1)==1 .OR. ice%mask_ice_a( v2)==1 .OR. ice%mask_ice_a( v3)==1) THEN
+        nice = nice + 1
+        lice = lice + dmax
+        IF (dmax > C%res_max_ice*2.0_dp*1000._dp*res_tol) THEN
+          nuice = nuice + 1
+          luice = luice + dmax
+        END IF
+      END IF
 
       IF (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) THEN
         ncoast = ncoast + 1
@@ -691,6 +715,7 @@ MODULE mesh_update_module
     CALL sync
 
     ! Gather mesh fitness data from all processes
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, nice,     1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, ncoast,   1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, nmargin,  1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, ngl,      1, MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -709,17 +734,19 @@ MODULE mesh_update_module
     CALL MPI_ALLREDUCE( MPI_IN_PLACE, lucf,     1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 
     ! Calculate mesh fitness
+    fice    = 1._dp - luice    / lice
     fcoast  = 1._dp - lucoast  / lcoast
     fmargin = 1._dp - lumargin / lmargin
     fgl     = 1._dp - lugl     / lgl
     fcf     = 1._dp - lucf     / lcf
 
+    IF (nice   ==0) fice  = 1._dp
     IF (ncoast ==0) fcoast  = 1._dp
     IF (nmargin==0) fmargin = 1._dp
     IF (ngl    ==0) fgl     = 1._dp
     if (ncf    ==0) fcf     = 1._dp
 
-    fitness = MIN( MIN( MIN( fcoast, fmargin), fgl), fcf)
+    fitness = MIN( MIN( MIN( fcoast, fmargin), fgl), fcf, fice)
 
     IF (par%master) THEN
       DO i = 1, par%n-1

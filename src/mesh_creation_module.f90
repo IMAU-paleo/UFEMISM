@@ -202,6 +202,12 @@ CONTAINS
     ! Special area resolution - ice margin, grounding line, calving front
     ! ===================================================================
 
+    ! Ice interior
+    IF (contains_ice .AND. dmax > mesh%res_max_ice * 2._dp * 1000._dp) THEN
+      is_good = .FALSE.
+      RETURN
+    END IF
+
     ! Coastline
     IF (contains_coast .AND. dmax > mesh%res_max_coast * 2._dp * 1000._dp) THEN
       is_good = .FALSE.
@@ -410,6 +416,7 @@ CONTAINS
       ! Determine resolutions
       submesh%res_min          = MAX( C%res_min,          res_min_inc)
       submesh%res_max          = MAX( C%res_max,          res_min_inc)
+      submesh%res_max_ice      = MAX( C%res_max_ice,      res_min_inc)
       submesh%res_max_margin   = MAX( C%res_max_margin,   res_min_inc)
       submesh%res_max_gl       = MAX( C%res_max_gl,       res_min_inc)
       submesh%res_max_cf       = MAX( C%res_max_cf,       res_min_inc)
@@ -2019,6 +2026,7 @@ CONTAINS
     mesh%alpha_min            = C%alpha_min
     mesh%dz_max_ice           = C%dz_max_ice
     mesh%res_max              = C%res_max
+    mesh%res_max_ice          = C%res_max_ice
     mesh%res_max_margin       = C%res_max_margin
     mesh%res_max_gl           = C%res_max_gl
     mesh%res_max_cf           = C%res_max_cf

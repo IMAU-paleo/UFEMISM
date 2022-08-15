@@ -132,11 +132,13 @@ MODULE data_types_module
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_a                  ! Till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave_a              ! Averaged till friction angle over a running window (degrees)
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: phi_fric_window_a           ! Running window to store the history of phi_fric
     REAL(dp), DIMENSION(:    ), POINTER     :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), POINTER     :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq_inv_a               ! Inverted power-law friction coefficient [Pa m^−1/3 yr^1/3]
-    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
+    INTEGER :: wphi_fric_a, wphi_fric_inv_a, wphi_fric_ave_a, wphi_fric_window_a, wtauc_a, walpha_sq_a, wbeta_sq_a, wbeta_sq_inv_a
 
     ! Ice dynamics - physical terms in the SSA/DIVA
     REAL(dp), DIMENSION(:    ), POINTER     :: taudx_b                     ! x-component of the driving stress
@@ -167,6 +169,11 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
+    INTEGER                                 :: DIVA_SOR_nit
+    REAL(dp)                                :: DIVA_SOR_tol
+    REAL(dp)                                :: DIVA_SOR_omega
+    REAL(dp)                                :: DIVA_PETSc_rtol
+    REAL(dp)                                :: DIVA_PETSc_abstol
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
 
     ! Ice dynamics - ice thickness calculation
@@ -175,7 +182,12 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave_a
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: dHi_dt_window_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_past_a
+    ! REAL(dp),                   POINTER     :: Hi_tot_old
+    ! REAL(dp),                   POINTER     :: Hi_tot_old_time
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a, wdHi_dt_past_a!, wHi_tot_old, wHi_tot_old_time
 
     ! Ice dynamics - calving
     REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels
@@ -276,6 +288,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: alpha_min                     ! Sharpest inner angle allowed by Rupperts algorithm
     REAL(dp),                   POINTER     :: dz_max_ice                    ! Maximum allowed vertical error in Rupperts algorithm over ice
     REAL(dp),                   POINTER     :: res_max                       ! Maximum resolution anywhere
+    REAL(dp),                   POINTER     :: res_max_ice                   ! Maximum resolution over ice
     REAL(dp),                   POINTER     :: res_max_margin                ! Maximum resolution over the ice margin
     REAL(dp),                   POINTER     :: res_max_gl                    ! Maximum resolution over the grounding line
     REAL(dp),                   POINTER     :: res_max_cf                    ! Maximum resolution over the calving front
@@ -285,7 +298,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: resolution_min                ! Finest   resolution of the mesh ( = MINVAL(R), where R = distance to nearest neighbour)
     REAL(dp),                   POINTER     :: resolution_max                ! Coarsest resolution of the mesh
     INTEGER :: wlambda_M, wphi_M, walpha_stereo, wxmin, wxmax, wymin, wymax, wtol_dist, wnV_mem, wnTri_mem, wnC_mem, wnV, wnTri, wperturb_dir
-    INTEGER :: walpha_min, wdz_max_ice, wres_max, wres_max_margin, wres_max_gl, wres_max_cf, wres_max_mountain, wres_max_coast, wres_min, wresolution_min, wresolution_max
+    INTEGER :: walpha_min, wdz_max_ice, wres_max, wres_max_ice, wres_max_margin, wres_max_gl, wres_max_cf, wres_max_mountain, wres_max_coast, wres_min, wresolution_min, wresolution_max
 
     ! Primary mesh data (needed for mesh creation & refinement)
     ! =========================================================
@@ -1349,19 +1362,31 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: zeta, time
     INTEGER :: wnz, wnt, wzeta, wtime
 
+    ! Mesh
+    TYPE(type_mesh)                         :: mesh
+
     ! Ice dynamics
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi
     REAL(dp), DIMENSION(:    ), POINTER     :: Hb
     REAL(dp), DIMENSION(:    ), POINTER     :: Hs
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Ti
-    INTEGER :: wHi, wHb, wHs, wTi
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHb_dt
+    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave
+    INTEGER :: wHi, wHb, wHs, wTi, wdHi_dt, wdHb_dt, wdHi_dt_ave
+
+    ! Ice velocities
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: u_3D
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: v_3D
+    INTEGER :: wu_3D, wv_3D
 
     ! Bed roughness
     REAL(dp), DIMENSION(:    ), POINTER     :: beta_sq
     REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric
-    INTEGER :: wbeta_sq, wphi_fric
+    REAL(dp), DIMENSION(:    ), POINTER     :: phi_fric_ave
+    INTEGER :: wbeta_sq, wphi_fric, wphi_fric_ave
 
-    ! GIA
+    ! Sea level and GIA
     REAL(dp), DIMENSION(:    ), POINTER     :: SL
     REAL(dp), DIMENSION(:    ), POINTER     :: dHb
     INTEGER :: wSL, wdHb
@@ -1374,6 +1399,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: C_abl_Q_inv
     REAL(dp), DIMENSION(:    ), POINTER     :: C_refr_inv
     INTEGER :: wFirnDepth, wMeltPreviousYear, wC_abl_constant_inv, wC_abl_Ts_inv, wC_abl_Q_inv, wC_refr_inv
+
+    ! BMB
+    REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf
+    INTEGER :: wBMB_shelf
 
     ! Isotopes
     REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce

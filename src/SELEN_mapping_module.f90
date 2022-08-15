@@ -175,7 +175,7 @@ CONTAINS
     CALL MPI_REDUCE( d_sl_temp, d_sl, SELEN%mesh%nV, MPI_DOUBLE_PRECISION, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
     call sync   ! JB: this one is quite important. Without it the ice thickness goes to hell
-                ! during mass the conservation steps below. Race conditions FML
+                ! during the mass conservation steps below. Race conditions FML
 
     IF (do_scale) THEN
       ! Guarantee conservation of mass when mapping ice thickness

@@ -62,7 +62,6 @@ UFEMISM_program_objects = \
         mesh_update_module.o \
         zeta_module.o \
         netcdf_module.o \
-        restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
@@ -90,6 +89,7 @@ UFEMISM_program_objects = \
         SELEN_spline_interpolation_module.o \
         SELEN_sealevel_equation_module.o \
         SELEN_main_module.o \
+        restart_module.o \
         tests_and_checks_module.o \
         text_output_module.o \
         scalar_data_output_module.o \
@@ -115,7 +115,6 @@ UFEMISM_program_objects = \
         mesh_update_module.o \
         zeta_module.o \
         netcdf_module.o \
-        restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
@@ -132,6 +131,7 @@ UFEMISM_program_objects = \
         ice_dynamics_module.o \
         isotopes_module.o \
         bedrock_ELRA_module.o \
+        restart_module.o \
         tests_and_checks_module.o \
         text_output_module.o \
         scalar_data_output_module.o \

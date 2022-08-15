@@ -888,7 +888,7 @@ CONTAINS
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, PD_obs%nz_ocean_Raw, PD_obs%S_ocean_raw, PD_obs%wS_ocean_raw)
 
     ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading PD observed ocean data from file ', TRIM(PD_obs%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Reading PD observed ocean data from file ', TRIM(PD_obs%netcdf%filename), '...'
     IF (par%master) CALL read_PD_obs_global_ocean_file( PD_obs)
     CALL sync
 

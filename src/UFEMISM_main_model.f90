@@ -26,7 +26,7 @@ MODULE UFEMISM_main_model
                                                  create_debug_file, write_PETSc_matrix_to_NetCDF, create_regional_scalar_output_file
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
-  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
+  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,                  ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
@@ -35,6 +35,7 @@ MODULE UFEMISM_main_model
                                                  calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
   USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
+  USE forcing_module,                      ONLY: forcing, update_sealevel_record_at_model_time
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
   USE climate_module,                      ONLY: initialise_climate_model_regional,       remap_climate_model,  run_climate_model
@@ -46,7 +47,7 @@ MODULE UFEMISM_main_model
 
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
   USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
-  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
+  USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file, remap_restart_data
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
   USE ice_velocity_module,                 ONLY: solve_DIVA
   USE utilities_module,                    ONLY: time_display
@@ -85,9 +86,12 @@ CONTAINS
     routine_name = 'run_model('  //  region%name  //  ')'
     CALL init_routine( routine_name)
 
-    IF (par%master) WRITE(0,*) ''
-    IF (par%master) WRITE (0,'(5A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
-                                                   ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    IF (par%master) THEN
+
+      WRITE(0,*) ''
+      WRITE (0,'(5A,F9.3,A,F9.3,A)') '  Running model region ', region%name, ' (', TRIM(region%long_name), &
+                                     ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
+    END IF
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
     CALL associate_debug_fields(  region)
@@ -121,6 +125,18 @@ CONTAINS
       ! Update iteration counter
       it = it + 1
 
+      ! == Sea-level
+      ! ============
+
+      IF (C%choice_sealevel_model == 'prescribed') THEN
+        ! Update global sea level based on record
+        CALL update_sealevel_record_at_model_time( region%time)
+        ! Update regional sea level based on record
+        region%ice%SL_a( region%mesh%vi1:region%mesh%vi2) = forcing%sealevel_obs
+      ELSE
+        ! Updated during coupling interval or update not needed
+      END IF
+
       ! == GIA
       ! ======
 
@@ -143,21 +159,39 @@ CONTAINS
       ! ==============
 
       ! Check if the mesh needs to be updated
-      IF (par%master) t2 = MPI_WTIME()
+      IF (par%master) THEN
+        t2 = MPI_WTIME()
+      END IF
+
       meshfitness = 1._dp
+
       IF (region%time > region%t_last_mesh + C%dt_mesh_min) THEN
         CALL determine_mesh_fitness(region%mesh, region%ice, meshfitness)
       END IF
-      IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
 
-      ! If required, update the mesh
-      IF (meshfitness < C%mesh_fitness_threshold) THEN
-      ! IF (.FALSE.) THEN
-      ! IF (.TRUE.) THEN
+      IF (par%master) THEN
+        region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+      END IF
+
+      ! If needed (or commanded), update the mesh
+      IF ( meshfitness < C%mesh_fitness_threshold .OR. &
+          (region%do_mesh .AND. region%time >= C%start_time_of_run + C%do_force_mesh_update_after) ) THEN
+
         region%t_last_mesh = region%time
-        IF (par%master) t2 = MPI_WTIME()
+
+        IF (par%master) THEN
+          t2 = MPI_WTIME()
+        END IF
+
         CALL run_model_update_mesh( region, climate_matrix_global)
-        IF (par%master) region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+
+        IF (par%master) THEN
+          region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+        END IF
+
+        ! Make sure a forced mesh update is not triggered again next time step
+        region%do_mesh = .FALSE.
+
       END IF
 
       ! == Ice dynamics
@@ -221,21 +255,16 @@ CONTAINS
       ! == Basal sliding inversion
       ! ==========================
 
-      IF (C%do_basal_sliding_inversion) THEN
-        IF (region%do_basal) THEN
-          IF (region%time > C%basal_sliding_inv_t_start .AND. region%time < C%basal_sliding_inv_t_end) THEN
-            CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
-          END IF
-        END IF
+      IF (C%do_basal_sliding_inversion .AND. region%do_basal) THEN
+        ! Adjust bed roughness
+        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%time)
       END IF
 
       ! == SBM IMAU-ITM inversion
       ! =========================
 
-      IF (C%do_SMB_IMAUITM_inversion) THEN
-        IF (region%do_SMB_inv) THEN
-          CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
-        END IF
+      IF (C%do_SMB_IMAUITM_inversion .AND. region%do_SMB_inv) THEN
+        CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
       END IF
 
       ! == Output
@@ -249,9 +278,18 @@ CONTAINS
           CALL sync
           region%output_file_exists = .TRUE.
         END IF
-        ! Write to regional NetCDF output files
+        ! ! Update ice sheet area and volume
+        ! CALL calculate_icesheet_volume_and_area( region)
+        ! ! Write to regional scalar output
+        ! CALL write_regional_scalar_data( region, region%time)
+        ! Write to regional 2-/3-D output
         CALL write_to_output_files( region)
       END IF
+
+      ! Update ice sheet area and volume
+      CALL calculate_icesheet_volume_and_area( region)
+      ! Write to regional scalar output
+      CALL write_regional_scalar_data( region, region%time)
 
       ! == Update ice geometry
       ! ======================
@@ -272,26 +310,28 @@ CONTAINS
     ! ===== End of the main model time loop =====
     ! ===========================================
 
+    ! Determine total ice sheet area, volume, volume-above-flotation
+    ! and GMSL contribution, used for global scalar output
+    CALL calculate_icesheet_volume_and_area( region)
+
     ! Write to NetCDF output one last time at the end of the simulation
     IF (region%time == C%end_time_of_run) THEN
+      ! Update output time of record
+      region%t_last_output = C%end_time_of_run
       ! If the mesh has been updated, create a new NetCDF file
       IF (.NOT. region%output_file_exists) THEN
         CALL create_output_files( region)
         CALL sync
         region%output_file_exists = .TRUE.
       END IF
+      ! Write to regional 2-/3-D output
       CALL write_to_output_files( region)
+      ! Write to regional scalar output
+      CALL write_regional_scalar_data( region, region%time)
     END IF
-
-    ! Determine total ice sheet area, volume, volume-above-flotation
-    ! and GMSL contribution, used for global scalar output
-    CALL calculate_icesheet_volume_and_area( region)
 
     tstop = MPI_WTIME()
     region%tcomp_total = tstop - tstart
-
-    ! Write to regional scalar output
-    CALL write_regional_scalar_data( region, region%time)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -308,7 +348,7 @@ CONTAINS
 
     ! In- and output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
-    TYPE(type_climate_matrix_global),    INTENT(IN)    :: climate_matrix_global
+    TYPE(type_climate_matrix_global),    INTENT(INOUT) :: climate_matrix_global
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_model_update_mesh'
@@ -378,11 +418,6 @@ CONTAINS
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
 
-    IF (C%is_restart) THEN
-      ! Map restart initial geometry from old to new mesh (if needed)
-      CALL remap_restart_init_topo( region, region%mesh, region%mesh_new, map)
-    END IF
-
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'none') THEN
       ! Do nothing
@@ -410,6 +445,17 @@ CONTAINS
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
+
+    ! Run the sub-models once to fill them in
+    CALL run_climate_model( region, climate_matrix_global, region%time)
+    CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
+    CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
+    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
+
+    ! Remap key restart data
+    IF (C%is_restart) THEN
+      CALL remap_restart_data( region)
+    END IF
 
     ! When the next output is written, new output files must be created.
     region%output_file_exists = .FALSE.
@@ -464,13 +510,13 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_model_region),          INTENT(INOUT)     :: region
-    CHARACTER(LEN=3),                 INTENT(IN)        :: name
-    TYPE(type_climate_matrix_global), INTENT(INOUT)     :: climate_matrix_global
-    TYPE(type_ocean_matrix_global),   INTENT(INOUT)     :: ocean_matrix_global
+    TYPE(type_model_region),          INTENT(INOUT)  :: region
+    CHARACTER(LEN=3),                 INTENT(IN)     :: name
+    TYPE(type_climate_matrix_global), INTENT(INOUT)  :: climate_matrix_global
+    TYPE(type_ocean_matrix_global),   INTENT(INOUT)  :: ocean_matrix_global
 
     ! Local variables:
-    CHARACTER(LEN=256)                                  :: routine_name
+    CHARACTER(LEN=256)                               :: routine_name
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
@@ -499,25 +545,29 @@ CONTAINS
 
     CALL allocate_region_timers_and_scalars( region)
 
-    ! ===== Reference topographic data fields =====
-    ! =============================================
-
-    CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
-
-    ! ===== The mesh =====
-    ! ====================
+    ! ===== Initial geometry =====
+    ! ============================
 
     IF (C%is_restart) THEN
-      ! Read mesh and data (on the mesh) from a restart file
-      CALL read_mesh_from_restart_file( region)
-      CALL read_init_data_from_restart_file( region)
+
+      ! Read mesh from a restart file
+      CALL read_mesh_from_restart_file( region%mesh, region%restart, region%name, region%time)
+      ! Read data (on the mesh) from a restart file
+      CALL read_init_data_from_restart_file( region%restart, region%name)
+      ! Initialise topographic data fields (on a square grid), mapping the initial topo from the mesh onto the grid
+      CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name, region%mesh, region%restart)
+
     ELSE
+
+      ! Initialise topographic data fields (on a square grid)
+      CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
       ! Create a new mesh from the reference initial geometry
       CALL create_mesh_from_cart_data( region)
+
     END IF
 
-    ! ===== Reference geometries -> mesh =====
-    ! ========================================
+    ! ===== Reference geometries: grid to mesh =====
+    ! ==============================================
 
     IF (par%master) WRITE(0,*) '  Mapping reference geometries onto the initial model mesh...'
 
@@ -526,9 +576,9 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hb , region%refgeo_init%wHb )
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_init%Hs , region%refgeo_init%wHs )
 
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi   , region%refgeo_PD%wHi   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb   , region%refgeo_PD%wHb   )
-    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs   , region%refgeo_PD%wHs   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hi,    region%refgeo_PD%wHi   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hb,    region%refgeo_PD%wHb   )
+    CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_PD%Hs,    region%refgeo_PD%wHs   )
 
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hi, region%refgeo_GIAeq%wHi)
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hb, region%refgeo_GIAeq%wHb)
@@ -554,14 +604,7 @@ CONTAINS
     IF (par%master) WRITE(0,*) '  Initialising debug fields...'
 
     CALL initialise_debug_fields( region)
-
-    ! ===== Output files =====
-    ! ========================
-
-    CALL create_output_files(    region)
     CALL associate_debug_fields( region)
-    region%output_file_exists = .TRUE.
-    CALL sync
 
     ! ===== The "no ice" mask =====
     ! =============================
@@ -602,7 +645,7 @@ CONTAINS
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name, region%restart)
 
     ! ===== The GIA model =====
     ! =========================
@@ -641,23 +684,6 @@ CONTAINS
     ! Initialise the rheology
     CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
 
-    ! ===== Scalar ice data =====
-    ! ===========================
-
-    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
-    ! for writing to the first time point of the output file
-    CALL calculate_PD_sealevel_contribution( region)
-    CALL calculate_icesheet_volume_and_area( region)
-
-    ! ===== Regional scalar output =====
-    ! ==================================
-
-    ! Create output file for regional scalar data
-    CALL create_regional_scalar_output_file( region)
-
-    ! Write scalar data at time t=0
-    CALL write_regional_scalar_data( region, C%start_time_of_run)
-
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================
 
@@ -668,6 +694,38 @@ CONTAINS
       CALL solve_DIVA( region%mesh, region%ice)
       C%choice_ice_dynamics = 'none'
     END IF
+
+    ! == Model wind-up
+    ! ================
+
+    CALL run_model_windup( region)
+
+    ! ===== Scalar ice data =====
+    ! ===========================
+
+    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
+    ! for writing to the first time point of the output file
+    CALL calculate_PD_sealevel_contribution( region)
+    CALL calculate_icesheet_volume_and_area( region)
+
+    ! ===== Regional output =====
+    ! ===========================
+
+    ! Create output file for regional scalar data
+    CALL create_regional_scalar_output_file( region)
+
+    ! Create output file for regional 2-/3-D data
+    CALL create_output_files( region)
+    region%output_file_exists = .TRUE.
+
+    ! Write scalar data at time t=0
+    CALL write_regional_scalar_data( region, C%start_time_of_run)
+
+    ! Write 2-/3-D data at time t=0
+    CALL write_to_output_files( region)
+
+    ! === Finalisation ===
+    ! ====================
 
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
 
@@ -760,65 +818,72 @@ CONTAINS
     CALL allocate_shared_bool_0D( region%do_output,        region%wdo_output       )
 
     IF (par%master) THEN
-      region%time           = C%start_time_of_run
-      region%dt             = C%dt_min
-      region%dt_prev        = C%dt_min
 
-      region%t_last_mesh    = C%start_time_of_run
-      region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
-      region%do_mesh        = .FALSE.
+      region%time             = C%start_time_of_run
+      region%dt               = C%dt_min
+      region%dt_prev          = C%dt_min
+      region%dt_crit_SIA      = C%dt_min
+      region%dt_crit_SSA      = C%dt_min
+      region%dt_crit_ice      = C%dt_min
+      region%dt_crit_ice_prev = C%dt_min
 
-      region%t_last_SIA     = C%start_time_of_run
-      region%t_next_SIA     = C%start_time_of_run
-      region%do_SIA         = .TRUE.
-
-      region%t_last_SSA     = C%start_time_of_run
-      region%t_next_SSA     = C%start_time_of_run
-      region%do_SSA         = .TRUE.
-
-      region%t_last_DIVA    = C%start_time_of_run
-      region%t_next_DIVA    = C%start_time_of_run
-      region%do_DIVA        = .TRUE.
-
-      region%t_last_thermo  = C%start_time_of_run
-      region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
-      region%do_thermo      = .FALSE.
-
-      region%t_last_climate = C%start_time_of_run
-      region%t_next_climate = C%start_time_of_run
-      region%do_climate     = .TRUE.
-
-      region%t_last_ocean   = C%start_time_of_run
-      region%t_next_ocean   = C%start_time_of_run
-      region%do_ocean       = .TRUE.
-
-      region%t_last_SMB     = C%start_time_of_run
-      region%t_next_SMB     = C%start_time_of_run
-      region%do_SMB         = .TRUE.
-
-      region%t_last_BMB     = C%start_time_of_run
-      region%t_next_BMB     = C%start_time_of_run
-      region%do_BMB         = .TRUE.
-
-      region%t_last_ELRA    = C%start_time_of_run
-      region%t_next_ELRA    = C%start_time_of_run
-      IF (C%choice_GIA_model == 'ELRA') THEN
-        region%do_ELRA      = .TRUE.
-      ELSE
-        region%do_ELRA      = .FALSE.
+      region%t_last_mesh      = C%start_time_of_run
+      region%t_next_mesh      = C%start_time_of_run + C%dt_mesh_min
+      IF (C%do_force_mesh_update) THEN
+        region%do_mesh          = .TRUE.
       END IF
 
-      region%t_last_basal   = C%start_time_of_run
-      region%t_next_basal   = C%start_time_of_run + C%dt_basal
-      region%do_basal       = .FALSE.
+      region%t_last_SIA       = C%start_time_of_run
+      region%t_next_SIA       = C%start_time_of_run
+      region%do_SIA           = .TRUE.
 
-      region%t_last_SMB_inv = C%start_time_of_run
-      region%t_next_SMB_inv = C%start_time_of_run + C%dt_SMB_inv
-      region%do_SMB_inv     = .FALSE.
+      region%t_last_SSA       = C%start_time_of_run
+      region%t_next_SSA       = C%start_time_of_run
+      region%do_SSA           = .TRUE.
 
-      region%t_last_output  = C%start_time_of_run
-      region%t_next_output  = C%start_time_of_run
-      region%do_output      = .TRUE.
+      region%t_last_DIVA      = C%start_time_of_run
+      region%t_next_DIVA      = C%start_time_of_run
+      region%do_DIVA          = .TRUE.
+
+      region%t_last_thermo    = C%start_time_of_run
+      region%t_next_thermo    = C%start_time_of_run + C%dt_thermo
+      region%do_thermo        = .FALSE.
+
+      region%t_last_climate   = C%start_time_of_run
+      region%t_next_climate   = C%start_time_of_run
+      region%do_climate       = .TRUE.
+
+      region%t_last_ocean     = C%start_time_of_run
+      region%t_next_ocean     = C%start_time_of_run
+      region%do_ocean         = .TRUE.
+
+      region%t_last_SMB       = C%start_time_of_run
+      region%t_next_SMB       = C%start_time_of_run
+      region%do_SMB           = .TRUE.
+
+      region%t_last_BMB       = C%start_time_of_run
+      region%t_next_BMB       = C%start_time_of_run
+      region%do_BMB           = .TRUE.
+
+      region%t_last_ELRA      = C%start_time_of_run
+      region%t_next_ELRA      = C%start_time_of_run
+      IF (C%choice_GIA_model == 'ELRA') THEN
+        region%do_ELRA        = .TRUE.
+      ELSE
+        region%do_ELRA        = .FALSE.
+      END IF
+
+      region%t_last_basal     = C%start_time_of_run
+      region%t_next_basal     = C%start_time_of_run + C%dt_basal
+      region%do_basal         = .FALSE.
+
+      region%t_last_SMB_inv   = C%start_time_of_run
+      region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv
+      region%do_SMB_inv       = .FALSE.
+
+      region%t_last_output    = C%start_time_of_run
+      region%t_next_output    = C%start_time_of_run
+      region%do_output        = .TRUE.
     END IF
 
     ! ===== Scalars =====
@@ -1048,5 +1113,113 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 18)
 
   END SUBROUTINE initialise_model_square_grid
+
+  SUBROUTINE run_model_windup( region)
+    ! After a restart, go back in time a set amount of years and run only
+    ! the ice dynamics model (without ice thickness updates) until the
+    ! start of the run. This is useful to avoid shocks in the initial
+    ! evolution of the ice due to an empty, fresh-new velocity solver.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_model_region),       INTENT(INOUT)  :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'run_model_windup'
+    INTEGER                                       :: it
+    REAL(dp)                                      :: dt_ave, t_end
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (C%windup_total_years <= 0._dp) THEN
+      ! Finalise routine path
+      CALL finalise_routine( routine_name)
+      ! Exit rutine
+      RETURN
+    END IF
+
+    ! === Wind up the model ===
+    ! =========================
+
+    IF (par%master) THEN
+      WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
+    END IF
+
+    ! Save current time as end-time for wind-up
+    t_end = region%time
+
+    ! Bring the timer C%windup_total_years years back in time
+    region%time = region%time - C%windup_total_years
+
+    ! Let the model know we want to run velocities from this point on
+    region%t_last_SIA       = region%time
+    region%t_next_SIA       = region%time
+    region%do_SIA           = .TRUE.
+
+    region%t_last_SSA       = region%time
+    region%t_next_SSA       = region%time
+    region%do_SSA           = .TRUE.
+
+    region%t_last_DIVA      = region%time
+    region%t_next_DIVA      = region%time
+    region%do_DIVA          = .TRUE.
+
+    region%t_last_thermo    = region%time
+    region%t_next_thermo    = region%time
+    region%do_thermo        = .TRUE.
+
+    ! Asume mid-value dt's from previous run
+    region%dt               = C%dt_max * .5_dp
+    region%dt_prev          = C%dt_max * .5_dp
+    region%dt_crit_SIA      = C%dt_max * .5_dp
+    region%dt_crit_SSA      = C%dt_max * .5_dp
+    region%dt_crit_ice      = C%dt_max * .5_dp
+    region%dt_crit_ice_prev = C%dt_max * .5_dp
+
+    ! Initialise iteration counter
+    it = 0
+    ! Initialise averaged time step
+    dt_ave = 0._dp
+
+    ! Run the ice model until coming back to present
+    DO WHILE (region%time < t_end)
+
+      ! Update iteration counter
+      it = it + 1
+
+      ! Calculate ice velocities
+      CALL run_ice_model( region, t_end)
+
+      ! Calculate ice temperatures
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, &
+                             region%ocean_matrix%applied, region%SMB, region%time, &
+                             do_solve_heat_equation = region%do_thermo)
+
+      ! Display progress
+      if (par%master .AND. C%do_time_display) then
+        call time_display(region, t_end, dt_ave, it)
+      end if
+
+      ! Advance region time and repeat
+      IF (par%master) THEN
+        region%time = region%time + region%dt
+        dt_ave = dt_ave + region%dt
+      END IF
+      CALL sync
+
+    END DO
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_model_windup
 
 END MODULE UFEMISM_main_model

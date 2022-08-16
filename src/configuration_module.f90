@@ -148,9 +148,13 @@ MODULE configuration_module
     REAL(dp)            :: ymin_ANT_config                             = -3300000._dp                     ! Southern boundary     of the Antarctica domain [m]
     REAL(dp)            :: ymax_ANT_config                             =  3300000._dp                     ! Northern boundary     of the Antarctica domain [m]
 
-  ! == Mesh generation parameters
-  ! =============================
+  ! == Mesh
+  ! =======
 
+    ! Generation
+    LOGICAL             :: use_submesh_config                          = .FALSE.                          ! Generate the mesh in parallel using multi-process method
+
+    ! Parameters
     INTEGER             :: nconmax_config                              = 32                               ! Maximum number of vertex connections
     REAL(dp)            :: alpha_min_config                            = 0.55_dp                          ! Minimum internal angle of triangles (0.4363 = 25 degrees)
     REAL(dp)            :: dz_max_ice_config                           = 20000._dp                        ! Maximum allowed 2nd order surface deviation over ice
@@ -170,9 +174,9 @@ MODULE configuration_module
   ! == Resolutions of the different square grids
   ! ============================================
 
-    REAL(dp)            :: dx_grid_output_config                       = 40000._dp                        ! Resolution of the square grid used for writing output                       [m]
-    REAL(dp)            :: dx_grid_GIA_config                          = 100000._dp                       ! Resolution of the square grid used for GIA modelling (ELRA or SELEN)        [m]
-    REAL(dp)            :: dx_grid_smooth_config                       = 50000._dp                        ! Resolution of the square grid used for data smoothing in the climate matrix [m]
+    REAL(dp)            :: dx_grid_output_config                       = 40000._dp                        ! Resolution of the square grid used for writing output                [m]
+    REAL(dp)            :: dx_grid_GIA_config                          = 100000._dp                       ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
+    REAL(dp)            :: dx_grid_smooth_config                       = 50000._dp                        ! Resolution of the square grid used for data smoothing                [m]
 
   ! == High-resolution Points Of Interest (POIs)
   ! ============================================
@@ -443,8 +447,8 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011till_phi_min_config               = 5._dp                            ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
     REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
-    CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'last'                           ! Values from previous run: "last" (last output) or "average" (running average)
-    LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .FALSE.                          ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
+    CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'average'                        ! Values from previous run: "last" (last output) or "average" (running average)
+    LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
@@ -924,6 +928,8 @@ MODULE configuration_module
     ! Mesh generation parameters
     ! ==========================
 
+
+    LOGICAL                             :: use_submesh
     INTEGER                             :: nconmax
     REAL(dp)                            :: alpha_min
     REAL(dp)                            :: dz_max_ice
@@ -2087,6 +2093,7 @@ CONTAINS
                      continental_shelf_calving_config,                &
                      continental_shelf_min_height_config,             &
                      minimum_ice_thickness_config,                    &
+                     use_submesh_config,                              &
                      nconmax_config,                                  &
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
@@ -2645,6 +2652,7 @@ CONTAINS
     ! Mesh generation parameters
     ! ==========================
 
+    C%use_submesh                              = use_submesh_config
     C%nconmax                                  = nconmax_config
     C%alpha_min                                = alpha_min_config
     C%dz_max_ice                               = dz_max_ice_config

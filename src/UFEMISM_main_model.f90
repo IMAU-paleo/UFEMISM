@@ -34,6 +34,7 @@ MODULE UFEMISM_main_model
                                                  calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
                                                  calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
+  USE mesh_single_module,                  ONLY: create_single_mesh_from_cart_data, create_new_mesh_single
   USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
   USE forcing_module,                      ONLY: forcing, update_sealevel_record_at_model_time
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
@@ -358,7 +359,13 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Create a new mesh
-    CALL create_new_mesh( region)
+    IF (C%use_submesh) THEN
+      ! Multi-process method
+      CALL create_new_mesh( region)
+    ELSE
+      ! Single-process method
+      CALL create_new_mesh_single( region)
+    END IF
 
     IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
 
@@ -562,7 +569,13 @@ CONTAINS
       ! Initialise topographic data fields (on a square grid)
       CALL initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
       ! Create a new mesh from the reference initial geometry
-      CALL create_mesh_from_cart_data( region)
+      IF (C%use_submesh) THEN
+        ! Multi-process method
+        CALL create_mesh_from_cart_data( region)
+      ELSE
+        ! Single-process method
+        CALL create_single_mesh_from_cart_data( region)
+      END IF
 
     END IF
 
@@ -1148,12 +1161,13 @@ CONTAINS
     ! === Wind up the model ===
     ! =========================
 
+    ! Save current time as end-time for wind-up
+    t_end = region%time
+    CALL sync
+
     IF (par%master) THEN
 
       WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
-
-      ! Save current time as end-time for wind-up
-      t_end = region%time
 
       ! Bring the timer C%windup_total_years years back in time
       region%time = region%time - C%windup_total_years

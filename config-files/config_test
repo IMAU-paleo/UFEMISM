@@ -29,7 +29,7 @@
   dt_SMB_inv_config                           = 10.0                             ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! Output
-  dt_output_config                            = 50.0                             ! Time step (in years) for writing output
+  dt_output_config                            = 10.0                             ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -52,9 +52,13 @@
   do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
   do_time_display_config                      = .TRUE.                           ! Print current model time to screen
 
-  ! Mesh generation parameters
-  ! ==========================
+  ! Mesh
+  ! ====
 
+  ! Generation
+  use_submesh_config                          = .FALSE.                          ! Generate the mesh in parallel using multi-process method
+
+  ! Parameters
   nconmax_config                              = 16                               ! Maximum number of vertex connections
   alpha_min_config                            = 0.55                             ! Minimum internal angle of triangles (0.4363 = 25 degrees)
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice

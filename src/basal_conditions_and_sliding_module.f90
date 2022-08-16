@@ -1619,11 +1619,9 @@ CONTAINS
 
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Power-law sliding law
-      IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
+      IF (C%do_basal_sliding_inversion) THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
-        IF (C%do_basal_sliding_inversion) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
-        END IF
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
       END IF
@@ -1646,14 +1644,12 @@ CONTAINS
             C%choice_sliding_law == 'Coulomb_regularised' .OR. &
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Yield-stress sliding law
-      IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'nearest_neighbour')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'nearest_neighbour')
-        IF (C%do_basal_sliding_inversion) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'nearest_neighbour')
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_ave_a, ice%wphi_fric_ave_a, 'nearest_neighbour')
-          CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%phi_fric_window_a, ice%wphi_fric_window_a, 'nearest_neighbour')
-        END IF
+      IF (C%do_basal_sliding_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a,        ice%wphi_fric_a,        'nearest_neighbour')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,            ice%wtauc_a,            'nearest_neighbour')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a,    ice%wphi_fric_inv_a,    'nearest_neighbour')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_ave_a,    ice%wphi_fric_ave_a,    'nearest_neighbour')
+        CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%phi_fric_window_a, ice%wphi_fric_window_a, 'nearest_neighbour')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%tauc_a    , ice%wtauc_a    )
@@ -1699,7 +1695,9 @@ CONTAINS
         CALL initialise_bed_roughness_from_file( mesh_new, ice)
 
       ELSEIF (C%choice_basal_roughness == 'restart') THEN
-        ! Do nothing, as these values were already remapped in the previous step above
+        ! Do nothing, as these values were already reallocated in the
+        ! previous step above, and will be remapped later within the
+        ! restart module.
 
       ELSE
         CALL crash('unknown choice_basal_roughness "' // TRIM( C%choice_basal_roughness) // '"!')

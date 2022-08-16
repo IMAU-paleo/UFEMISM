@@ -31,3 +31,7 @@ slurm-*.out
 
 # Ignore depend file
 src/.depend
+
+# Ignore Matlab files
+/*.m
+/*.asv

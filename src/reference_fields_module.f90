@@ -295,6 +295,16 @@ CONTAINS
     ! Remove ice based on the no-ice masks (grid versions)
     CALL apply_mask_noice_grid( refgeo, region_name)
 
+    ! Remove very thin ice
+    DO j = 1, refgeo%grid%ny
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      IF (refgeo%Hi_grid( i,j) < C%minimum_ice_thickness) THEN
+        refgeo%Hi_grid( i,j) = 0._dp
+      END IF
+    END DO
+    END DO
+    CALL sync
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
 
@@ -436,6 +446,16 @@ CONTAINS
 
     ! Remove ice based on the no-ice masks (grid versions)
     CALL apply_mask_noice_grid( refgeo, region_name)
+
+    ! Remove very thin ice
+    DO j = 1, refgeo%grid%ny
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+      IF (refgeo%Hi_grid( i,j) < C%minimum_ice_thickness) THEN
+        refgeo%Hi_grid( i,j) = 0._dp
+      END IF
+    END DO
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
@@ -2095,6 +2115,14 @@ CONTAINS
     ! Map PD data to the mesh
     CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
     CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
+
+    ! Remove very thin ice
+    DO vi = mesh%vi1, mesh%vi2
+      IF (refgeo%Hi( vi) < C%minimum_ice_thickness) THEN
+        refgeo%Hi( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
 
     DO vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)

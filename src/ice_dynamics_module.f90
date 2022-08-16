@@ -771,13 +771,13 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Remove very thin ice
-    ! DO vi = mesh%vi1, mesh%vi2
-    !   IF (ice%Hi_a( vi) < 1.0_dp) THEN
-    !     ice%Hi_a( vi) = 0._dp
-    !   END IF
-    ! END DO
-    ! CALL sync
+    ! Remove very thin ice
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%Hi_a( vi) < C%minimum_ice_thickness) THEN
+        ice%Hi_a( vi) = 0._dp
+      END IF
+    END DO
+    CALL sync
 
     ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
     DO vi = mesh%vi1, mesh%vi2

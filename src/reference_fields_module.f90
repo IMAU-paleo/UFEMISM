@@ -27,7 +27,7 @@ MODULE reference_fields_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             is_floating, surface_elevation, remove_Lake_Vostok
+                                             is_floating, surface_elevation, remove_Lake_Vostok, oblique_sg_projection
   USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_reference_geometry_file, read_reference_geometry_file
   USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, &
                                              type_mesh, type_remapping_mesh_mesh, type_restart_data
@@ -187,6 +187,29 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Projection parameters for this region
+    CALL allocate_shared_dp_0D(  refgeo%grid%lambda_M,     refgeo%grid%wlambda_M    )
+    CALL allocate_shared_dp_0D(  refgeo%grid%phi_M,        refgeo%grid%wphi_M       )
+    CALL allocate_shared_dp_0D(  refgeo%grid%alpha_stereo, refgeo%grid%walpha_stereo)
+
+    IF     (region_name == 'NAM') THEN
+      refgeo%grid%lambda_M     = C%lambda_M_NAM
+      refgeo%grid%phi_M        = C%phi_M_NAM
+      refgeo%grid%alpha_stereo = C%alpha_stereo_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      refgeo%grid%lambda_M     = C%lambda_M_EAS
+      refgeo%grid%phi_M        = C%phi_M_EAS
+      refgeo%grid%alpha_stereo = C%alpha_stereo_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      refgeo%grid%lambda_M     = C%lambda_M_GRL
+      refgeo%grid%phi_M        = C%phi_M_GRL
+      refgeo%grid%alpha_stereo = C%alpha_stereo_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      refgeo%grid%lambda_M     = C%lambda_M_ANT
+      refgeo%grid%phi_M        = C%phi_M_ANT
+      refgeo%grid%alpha_stereo = C%alpha_stereo_ANT
+    END IF
 
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
@@ -586,14 +609,24 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                :: routine_name = 'apply_mask_noice_GRL_remove_Ellesmere_grid'
     INTEGER                                      :: i,j
+    REAL(dp), DIMENSION(2)                       :: pa_latlon, pb_latlon
+    REAL(dp)                                     :: xa,ya,xb,yb
     REAL(dp), DIMENSION(2)                       :: pa, pb
     REAL(dp)                                     :: yl_ab
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    pa = [-750000._dp,  900000._dp]
-    pb = [-250000._dp, 1250000._dp]
+    ! The two endpoints in lat,lon
+    pa_latlon = [76.74_dp, -74.79_dp]
+    pb_latlon = [82.19_dp, -60.00_dp]
+
+    ! The two endpoints in x,y
+    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%alpha_stereo, xa, ya)
+    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%alpha_stereo, xb, yb)
+
+    pa = [xa,ya]
+    pb = [xb,yb]
 
     DO i = refgeo%grid%i1, refgeo%grid%i2
       yl_ab = pa(2) + (refgeo%grid%x(i) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))

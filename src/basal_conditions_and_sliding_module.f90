@@ -1822,20 +1822,27 @@ CONTAINS
 
               ! Save bed roughness at this vertex in aux variable
               new_val = ice%phi_fric_inv_a( vi)
+
               ! Adjust based on scaled ice thickness difference
               new_val = new_val * (10._dp ** (-h_delta))
+
               ! Compute local minumum limit for bed roughness
+              min_lim = C%basal_sliding_inv_phi_min
+
+              ! Increase minimum value for thin ice
               IF (C%basal_sliding_inv_thin_ice_Hi > 0._dp) THEN
+
                 IF (refgeo%Hi( vi) <= C%basal_sliding_inv_thin_ice_Hi) THEN
                   min_lim = C%basal_sliding_inv_phi_min + &
                             (1._dp - refgeo%Hi( vi) / C%basal_sliding_inv_thin_ice_Hi) &
                             * (C%basal_sliding_inv_phi_min_thin - C%basal_sliding_inv_phi_min)
-                ELSE
-                  min_lim = C%basal_sliding_inv_phi_min
                 END IF
+
               END IF
+
               ! Constrain adjusted value to roughness limits
               new_val = MIN(MAX(new_val, min_lim), C%basal_sliding_inv_phi_max)
+
               ! Replace old bed roughness value with the adjusted one
               ice%phi_fric_inv_a( vi) = new_val
 

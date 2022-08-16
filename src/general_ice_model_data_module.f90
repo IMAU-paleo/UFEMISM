@@ -998,20 +998,30 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    TYPE(type_mesh),               INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(:    ),    INTENT(OUT)   :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(2)                             :: pa, pb
-    REAL(dp)                                           :: yl_ab
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
+    INTEGER                                      :: vi
+    REAL(dp), DIMENSION(2)                       :: pa_latlon, pb_latlon
+    REAL(dp)                                     :: xa,ya,xb,yb
+    REAL(dp), DIMENSION(2)                       :: pa, pb
+    REAL(dp)                                     :: yl_ab
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    pa = [-750000._dp,  900000._dp]
-    pb = [-250000._dp, 1250000._dp]
+    ! The two endpoints in lat,lon
+    pa_latlon = [76.74_dp, -74.79_dp]
+    pb_latlon = [82.19_dp, -60.00_dp]
+
+    ! The two endpoints in x,y
+    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xa, ya)
+    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xb, yb)
+
+    pa = [xa,ya]
+    pb = [xb,yb]
 
     DO vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))

@@ -1149,39 +1149,42 @@ CONTAINS
     ! =========================
 
     IF (par%master) THEN
+
       WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
+
+      ! Save current time as end-time for wind-up
+      t_end = region%time
+
+      ! Bring the timer C%windup_total_years years back in time
+      region%time = region%time - C%windup_total_years
+
+      ! Let the model know we want to run velocities from this point on
+      region%t_last_SIA       = region%time
+      region%t_next_SIA       = region%time
+      region%do_SIA           = .TRUE.
+
+      region%t_last_SSA       = region%time
+      region%t_next_SSA       = region%time
+      region%do_SSA           = .TRUE.
+
+      region%t_last_DIVA      = region%time
+      region%t_next_DIVA      = region%time
+      region%do_DIVA          = .TRUE.
+
+      region%t_last_thermo    = region%time
+      region%t_next_thermo    = region%time
+      region%do_thermo        = .TRUE.
+
+      ! Asume mid-value dt's from previous run
+      region%dt               = C%dt_max * .5_dp
+      region%dt_prev          = C%dt_max * .5_dp
+      region%dt_crit_SIA      = C%dt_max * .5_dp
+      region%dt_crit_SSA      = C%dt_max * .5_dp
+      region%dt_crit_ice      = C%dt_max * .5_dp
+      region%dt_crit_ice_prev = C%dt_max * .5_dp
+
     END IF
-
-    ! Save current time as end-time for wind-up
-    t_end = region%time
-
-    ! Bring the timer C%windup_total_years years back in time
-    region%time = region%time - C%windup_total_years
-
-    ! Let the model know we want to run velocities from this point on
-    region%t_last_SIA       = region%time
-    region%t_next_SIA       = region%time
-    region%do_SIA           = .TRUE.
-
-    region%t_last_SSA       = region%time
-    region%t_next_SSA       = region%time
-    region%do_SSA           = .TRUE.
-
-    region%t_last_DIVA      = region%time
-    region%t_next_DIVA      = region%time
-    region%do_DIVA          = .TRUE.
-
-    region%t_last_thermo    = region%time
-    region%t_next_thermo    = region%time
-    region%do_thermo        = .TRUE.
-
-    ! Asume mid-value dt's from previous run
-    region%dt               = C%dt_max * .5_dp
-    region%dt_prev          = C%dt_max * .5_dp
-    region%dt_crit_SIA      = C%dt_max * .5_dp
-    region%dt_crit_SSA      = C%dt_max * .5_dp
-    region%dt_crit_ice      = C%dt_max * .5_dp
-    region%dt_crit_ice_prev = C%dt_max * .5_dp
+    CALL sync
 
     ! Initialise iteration counter
     it = 0

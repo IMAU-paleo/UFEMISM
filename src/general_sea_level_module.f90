@@ -180,21 +180,24 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_GMSL_contributions'
 
-    IF (.NOT. par%master) RETURN
-
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Set GMSL contributions of all simulated ice sheets (NetCDF version)
-    global_data%GMSL_NAM = 0._dp
-    global_data%GMSL_EAS = 0._dp
-    global_data%GMSL_GRL = 0._dp
-    global_data%GMSL_ANT = 0._dp
+    IF (par%master) THEN
 
-    IF (C%do_NAM) global_data%GMSL_NAM = NAM%GMSL_contribution
-    IF (C%do_EAS) global_data%GMSL_EAS = EAS%GMSL_contribution
-    IF (C%do_GRL) global_data%GMSL_GRL = GRL%GMSL_contribution
-    IF (C%do_ANT) global_data%GMSL_ANT = ANT%GMSL_contribution
+      ! Set GMSL contributions of all simulated ice sheets (NetCDF version)
+      global_data%GMSL_NAM = 0._dp
+      global_data%GMSL_EAS = 0._dp
+      global_data%GMSL_GRL = 0._dp
+      global_data%GMSL_ANT = 0._dp
+
+      IF (C%do_NAM) global_data%GMSL_NAM = NAM%GMSL_contribution
+      IF (C%do_EAS) global_data%GMSL_EAS = EAS%GMSL_contribution
+      IF (C%do_GRL) global_data%GMSL_GRL = GRL%GMSL_contribution
+      IF (C%do_ANT) global_data%GMSL_ANT = ANT%GMSL_contribution
+
+    END IF
+    CALL sync
 
     ! Determine global mean sea level (NetCDF version)
     IF     (C%choice_sealevel_model == 'fixed') THEN
@@ -210,6 +213,7 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_sealevel_model "' // TRIM(C%choice_sealevel_model) // '"!')
     END IF
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

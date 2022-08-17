@@ -563,6 +563,7 @@ CONTAINS
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Precip,      PD_obs%wPrecip     )
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_WE,     PD_obs%wWind_WE    )
     CALL allocate_shared_dp_3D( PD_obs%nlon, PD_obs%nlat, 12, PD_obs%Wind_SN,     PD_obs%wWind_SN    )
+    CALL allocate_shared_dp_2D( PD_obs%nlon, PD_obs%nlat,     PD_obs%Mask_ice,    PD_obs%wMask_ice   )
 
     ! Read data from the NetCDF file
     IF (par%master) WRITE(0,*) '  Reading PD observed climate data from file ', TRIM(PD_obs%netcdf%filename), '...'
@@ -1094,7 +1095,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_matrix_warm_cold_precipitation'
     INTEGER                                            :: vi, m
     REAL(dp)                                           :: CO2, w_CO2, w_CO2aux
-    REAL(dp)                                           :: w_vol
+    REAL(dp)                                           :: w_vol, dHs_sum_mod, dHs_sum_gcm
     REAL(dp), DIMENSION(:    ), POINTER                ::  w_thk,  w_ice,  w_tot
     INTEGER                                            :: ww_thk, ww_ice, ww_tot
     REAL(dp), DIMENSION(:,:  ), POINTER                :: T_ref_GCM, T_ref_GCM_down, WLR_ref_GCM, WDU_ref_GCM, P_ref_GCM
@@ -1123,13 +1124,13 @@ CONTAINS
     ! == CO2 interpolation weight
     ! ===========================
 
-    IF     (C%choice_forcing_method == 'CO2_direct') THEN
+    IF ( C%choice_forcing_method == 'CO2_direct') THEN
       ! use observed record
       CO2 = forcing%CO2_obs
-    ELSEIF (C%choice_forcing_method == 'd18O_inverse_CO2') THEN
+    ELSEIF ( C%choice_forcing_method == 'd18O_inverse_CO2') THEN
       ! Use inverted record
       CO2 = forcing%CO2_mod
-    ELSEIF (C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
+    ELSEIF ( C%choice_forcing_method == 'd18O_inverse_dT_glob') THEN
       ! lol what you thinking
       CALL crash('must only be called with the correct forcing method, check your code!')
     ELSE
@@ -1145,44 +1146,116 @@ CONTAINS
     ! == Geometry-based interpolation weights
     ! =======================================
 
-    ! First calculate the total ice volume term (second
-    ! factor in the RHS of Berends et al., 2018, Eq. 12)
-    ! Use uncorrected Hs from the GCMs for this trick
-    w_vol = MAX(-w_cutoff, MIN(1._dp + w_cutoff, &
-               (SUM(ice%Hs_a) - SUM(climate_matrix%GCM_warm%Hs)) / &
-               (SUM(climate_matrix%GCM_cold%Hs) - SUM(climate_matrix%GCM_warm%Hs)) ))
+    ! Keep track of the cumulative differences in ice elevations both
+    ! in the model and between the cold and warm snapshots. They will
+    ! be used later for the computation of the volume-based term.
+    dHs_sum_mod = 0._dp
+    dHs_sum_gcm = 0._dp
 
-    ! Then calculate the local ice thickness term (first
-    ! factor in the RHS of Berends et al., 2018, Eq. 12)
-    ! Use uncorrected Hs from the GCMs for this trick
+    ! First calculate the local ice elevation term
     DO vi = mesh%vi1, mesh%vi2
-      w_thk(vi) = MAX(-w_cutoff, MIN(1._dp + w_cutoff, &
-                     ((ice%Hs_a( vi) - climate_matrix%GCM_PI%Hs( vi)) / &
-                      (climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_PI%Hs( vi))) ))
-    END DO
 
-    IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
+      ! No ice in any GCM snapshot
+      IF ( climate_matrix%GCM_cold%Mask_ice( vi) < .3_dp .AND. &
+           climate_matrix%GCM_warm%Mask_ice( vi) < .3_dp ) THEN
 
-      ! Combine total volume + local ice thickness
-      DO vi = mesh%vi1, mesh%vi2
+        ! Elevation term should not influence the interpolation
+        w_thk( vi) = 1._dp
 
-        ! Use uncorrected Hs from the GCMs for this check
-        IF (climate_matrix%GCM_warm%Hs( vi) < climate_matrix%GCM_PI%Hs( vi) + 50._dp) THEN
-          IF (climate_matrix%GCM_cold%Hs( vi) < climate_matrix%GCM_PI%Hs( vi) + 50._dp) THEN
-            ! No ice in any GCM state. Use only total ice volume.
-            w_ice( vi) = 1._dp - w_vol
+      ! Ice in warm snapshot but not in cold one
+      ELSEIF ( climate_matrix%GCM_cold%Mask_ice( vi) < .3_dp .AND. &
+               climate_matrix%GCM_warm%Mask_ice( vi) > .3_dp ) THEN
 
-          ELSE
-            ! No ice in warm climate, ice in cold climate. Combine the weights.
-            w_ice( vi) = 1._dp - MAX(-w_cutoff, MIN(1._dp + w_cutoff, &
-                                 w_thk( vi) * w_vol ))
-          END IF
+        ! Weird, let me know
+        ! CALL warning('wait... we have ice in the warm snapshot but not in the cold one??')
+
+        ! Elevation term should not influence the interpolation
+        w_thk( vi) = 1._dp
+
+      ! Ice in cold snapshot but not in warm one (typical NAM or EAS situation)
+      ELSEIF ( climate_matrix%GCM_cold%Mask_ice( vi) > .3_dp .AND. &
+               climate_matrix%GCM_warm%Mask_ice( vi) < .3_dp ) THEN
+
+        ! Check for positive difference between cold and warm elevations
+        ! Use original (uncorrected) Hs from the GCMs for this check
+        IF ( climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi) > 0._dp) THEN
+
+          ! Compute the ratio between the elevation change in the model and the change in the GCM
+          ! Use original (uncorrected) Hs from the GCMs for this ratio
+          w_thk(vi) = ice%dHs_a( vi) / (climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi))
+
+          ! Add this difference to the total
+          dHs_sum_gcm = dHs_sum_gcm + (climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi))
+
         ELSE
-          ! Ice in both GCM states. Combine the weights.
-          w_ice( vi) = 1._dp - MAX(-w_cutoff, MIN(1._dp + w_cutoff, &
-                               w_thk( vi) * w_vol ))
+
+          ! Weiiiiiird
+          CALL warning('wait... ice during cold snapshot not higher than ice-free land during warm snapshot??')
+          ! Elevation term should not influence the interpolation
+          w_thk( vi) = 1._dp
+
         END IF
 
+      ! Ice in both snapshots (typical GRL or ANT situation)
+      ELSEIF ( climate_matrix%GCM_cold%Mask_ice( vi) > .3_dp .AND. &
+               climate_matrix%GCM_warm%Mask_ice( vi) > .3_dp ) THEN
+
+        ! Positive difference between cold and warm elevations
+        ! Use original (uncorrected) Hs from the GCMs for this check
+        IF ( climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi) > 0._dp) THEN
+
+          ! Compute the ratio between the elevation change in the model and the change in the GCM
+          ! Use original (uncorrected) Hs from the GCMs for this ratio
+          w_thk(vi) = ice%dHs_a( vi) / (climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi))
+
+        ! Negative or no difference between cold and warm elevations
+        ELSE
+
+          ! Elevation term should not influence the interpolation
+          w_thk( vi) = 1._dp
+
+        END IF
+
+        ! Add (or reduce, if negative) this difference to the total
+        dHs_sum_gcm = dHs_sum_gcm + (climate_matrix%GCM_cold%Hs( vi) - climate_matrix%GCM_warm%Hs( vi))
+
+      END IF
+
+      ! Limit the final weight to the [0 1] range
+      w_thk( vi) = MAX( 0._dp, MIN( 1._dp, w_thk( vi)))
+
+      ! Check if this vertex is (or was) ice in the model
+      IF ( ice%Hi_a( vi) > 0._dp .OR. ABS(ice%dHi_a( vi)) > 0._dp) THEN
+        ! Add the elevation difference to the total
+        dHs_sum_mod = dHs_sum_mod + ice%dHs_a( vi)
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Communicate and add each of the processes sub-total elevation differences
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, dHs_sum_gcm, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, dHs_sum_mod, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+    CALL sync
+
+    ! Then calculate the total ice volume term through the ratio between
+    ! the modelled and GCM total elevation changes
+    IF (dHs_sum_gcm > 0._dp) THEN
+      w_vol =  dHs_sum_mod / dHs_sum_gcm
+      ! Limit the final weight to the [0 1] range
+      w_vol = MAX( 0._dp, MIN( 1._dp, w_vol))
+    ELSE
+      w_vol = 0._dp
+    END IF
+
+    ! Combine the elevation- and volume-based terms
+    IF (region_name == 'NAM' .OR. region_name == 'EAS') THEN
+
+      DO vi = mesh%vi1, mesh%vi2
+        ! Compute final weight
+        w_ice( vi) = 1._dp - (w_thk( vi) * w_vol)
+        ! Limit the final weight to the [0 1] range
+        w_ice( vi) = MAX( 0._dp, MIN( 1._dp, w_ice( vi)))
       END DO
       CALL sync
 
@@ -1191,8 +1264,13 @@ CONTAINS
 
     ELSEIF (region_name == 'GRL' .OR. region_name == 'ANT') THEN
 
-      ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
-      w_ice( mesh%vi1:mesh%vi2) = 1._dp - w_vol
+      DO vi = mesh%vi1, mesh%vi2
+        ! Use only total ice volume and CO2; Berends et al., 2018, Eq. 13
+        w_ice( vi) = 1._dp - w_vol
+        ! Limit the final weight to the [0 1] range
+        w_ice( vi) = MAX( 0._dp, MIN( 1._dp, w_ice( vi)))
+      END DO
+      CALL sync
 
     END IF
 
@@ -1417,13 +1495,14 @@ CONTAINS
     CALL sync
 
     ! Allocate memory
-    CALL allocate_shared_dp_1D( snapshot%nlon,                    snapshot%lon,     snapshot%wlon    )
-    CALL allocate_shared_dp_1D(                snapshot%nlat,     snapshot%lat,     snapshot%wlat    )
-    CALL allocate_shared_dp_2D( snapshot%nlon, snapshot%nlat,     snapshot%Hs,      snapshot%wHs     )
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%T2m,     snapshot%wT2m    )
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Precip,  snapshot%wPrecip )
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_WE, snapshot%wWind_WE)
-    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_SN, snapshot%wWind_SN)
+    CALL allocate_shared_dp_1D( snapshot%nlon,                    snapshot%lon,      snapshot%wlon     )
+    CALL allocate_shared_dp_1D(                snapshot%nlat,     snapshot%lat,      snapshot%wlat     )
+    CALL allocate_shared_dp_2D( snapshot%nlon, snapshot%nlat,     snapshot%Hs,       snapshot%wHs      )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%T2m,      snapshot%wT2m     )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Precip,   snapshot%wPrecip  )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_WE,  snapshot%wWind_WE )
+    CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, 12, snapshot%Wind_SN,  snapshot%wWind_SN )
+    CALL allocate_shared_dp_2D( snapshot%nlon, snapshot%nlat,     snapshot%Mask_ice, snapshot%wMask_ice)
 
     ! Read data from the NetCDF file
     IF (par%master) WRITE(0,*) '   Reading GCM snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
@@ -1645,6 +1724,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_SN,     climate%wWind_SN    )
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_LR,     climate%wWind_LR    )
     CALL allocate_shared_dp_2D( mesh%nV, 12, climate%Wind_DU,     climate%wWind_DU    )
+    CALL allocate_shared_dp_1D( mesh%nV,     climate%Mask_ice,    climate%wMask_ice   )
 
     CALL allocate_shared_dp_0D(              climate%CO2,         climate%wCO2        )
     CALL allocate_shared_dp_0D(              climate%orbit_time,  climate%worbit_time )
@@ -1856,12 +1936,12 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, mask_calc_lambda, wmask_calc_lambda)
 
     ! Determine where the variable lapse rate should be calculated
-    ! (i.e. where has the surface elevation increased substantially)
-    ! ==============================================================
+    ! (i.e. where the surface elevation increased substantially)
+    ! ==========================================================
 
     DO vi = mesh%vi1, mesh%vi2
 
-      IF (climate%Hs( vi) > climate_PI%Hs( vi) + 100._dp) THEN
+      IF ( climate_PI%Mask_ice( vi) < .3_dp .AND. climate%Mask_ice( vi) > .3_dp) THEN
         mask_calc_lambda( vi) = 1
       ELSE
         mask_calc_lambda( vi) = 0
@@ -1998,7 +2078,7 @@ CONTAINS
         ice_dummy%mask_ocean_a( vi) = 0
       END IF
 
-      IF (climate%Hs( vi) > 100._dp .AND. SUM(climate%T2m( vi,:)) / 12._dp < 0._dp) THEN
+      IF (climate%Mask_ice( vi) > .3_dp) THEN
         ice_dummy%mask_ice_a( vi) = 1
       ELSE
         ice_dummy%mask_ice_a( vi) = 0
@@ -3942,11 +4022,12 @@ CONTAINS
     CALL create_remapping_arrays_glob_mesh( mesh, grid, map)
 
     ! Map global climate data to the mesh
-    CALL map_latlon2mesh_2D( mesh, map, cglob%Hs,      creg%Hs     )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%T2m,     creg%T2m    )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Precip,  creg%Precip )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_WE, creg%Wind_WE)
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_SN, creg%Wind_SN)
+    CALL map_latlon2mesh_2D( mesh, map, cglob%Hs,       creg%Hs      )
+    CALL map_latlon2mesh_3D( mesh, map, cglob%T2m,      creg%T2m     )
+    CALL map_latlon2mesh_3D( mesh, map, cglob%Precip,   creg%Precip  )
+    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_WE,  creg%Wind_WE )
+    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_SN,  creg%Wind_SN )
+    CALL map_latlon2mesh_2D( mesh, map, cglob%Mask_ice, creg%Mask_ice)
 
     ! Deallocate mapping arrays
     CALL deallocate_remapping_arrays_glob_mesh( map)
@@ -3955,7 +4036,6 @@ CONTAINS
     CALL rotate_wind_to_model_mesh( mesh, creg%wind_WE, creg%wind_SN, creg%wind_LR, creg%wind_DU)
 
     ! Clean up after yourself
-
     CALL deallocate_shared( grid%wnlon)
     CALL deallocate_shared( grid%wnlat)
     CALL deallocate_shared( grid%wlon )
@@ -4192,6 +4272,7 @@ CONTAINS
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_SN,     subclimate%wWind_SN    )
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_LR,     subclimate%wWind_LR    )
     CALL reallocate_shared_dp_2D( mesh_new%nV, 12, subclimate%Wind_DU,     subclimate%wWind_DU    )
+    CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%Mask_ice,    subclimate%wMask_ice   )
 
     CALL reallocate_shared_dp_1D( mesh_new%nV,     subclimate%lambda,      subclimate%wlambda     )
 

@@ -1626,7 +1626,7 @@ CONTAINS
     CALL remap_basal_conditions( mesh_old, mesh_new, map, ice)
 
     ! GIA and sea level
-    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_a, ice%wdHb_a) ! Remapped above only to compute Hb_a. Recomputed later when needed.
+    CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_a, ice%wdHb_a) ! Remapped above only to compute Hb_a. Recomputed below and later when needed.
     CALL remap_field_dp_2D(   mesh_old, mesh_new, map, ice%SL_a,     ice%wSL_a,     'cons_2nd_order') ! If not remapped, gets reset to 0 -> not good.
     IF (C%choice_GIA_model == 'SELEN') THEN
       CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
@@ -1641,11 +1641,21 @@ CONTAINS
       CALL crash('unknown choice_GIA_model "' // TRIM( C%choice_GIA_model) // '"!')
     END IF
 
+    ! Update the three elevation differences
+    CALL reallocate_shared_dp_1D(  mesh_new%nV, ice%Hs_a,  ice%wHs_a )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV, ice%dHi_a, ice%wdHi_a)
+    CALL reallocate_shared_dp_1D(  mesh_new%nV, ice%dHs_a, ice%wdHs_a)
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+    END DO
+    ice%dHi_a( mesh_new%vi1:mesh_new%vi2) = ice%Hi_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hi( mesh_new%vi1:mesh_new%vi2)
+    ice%dHs_a( mesh_new%vi1:mesh_new%vi2) = ice%Hs_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hs( mesh_new%vi1:mesh_new%vi2)
+    ice%dHb_a( mesh_new%vi1:mesh_new%vi2) = ice%Hb_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2)
+
     ! Simple memory reallocation for all the rest
     ! ===========================================
 
     ! Basic data - ice thickness, bedrock height, surface height, mask, 3D ice velocities and temperature
-    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hs_a,                 ice%wHs_a                )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%TAF_a,                ice%wTAF_a               )
 
     ! Different masks
@@ -1704,11 +1714,6 @@ CONTAINS
     ! Mesh adaptation data
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%surf_curv,            ice%wsurf_curv           )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%log_velocity,         ice%wlog_velocity        )
-
-    ! Useful extra stuff
-    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHi_a,                ice%wdHi_a               )
-    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHs_a,                ice%wdHs_a               )
-
 
     ! End of memory reallocation
     ! ==========================

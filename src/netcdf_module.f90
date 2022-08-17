@@ -3505,13 +3505,14 @@ CONTAINS
     CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /),  clim%netcdf%id_var_lat)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /),  clim%netcdf%id_var_lon)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /),  clim%netcdf%id_var_Hs)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_T2m)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Precip)
-    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_WE)
-    !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_SN)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /), clim%netcdf%id_var_lat)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /), clim%netcdf%id_var_lon)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Hs)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_T2m)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Precip)
+    ! CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE, (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_WE)
+    ! CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN, (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_SN)
+    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Mask_ice, (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Mask_ice)
 
     ! Close the netcdf file
     CALL close_netcdf_file(clim%netcdf%ncid)
@@ -3531,13 +3532,14 @@ CONTAINS
     CALL open_netcdf_file(clim%netcdf%filename, clim%netcdf%ncid)
 
     ! Read the data
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
-    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
-    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
-    !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,      clim%lon,      start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,      clim%lat,      start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,       clim%Hs,       start = (/ 1, 1    /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,      clim%T2m,      start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,   clim%Precip,   start = (/ 1, 1, 1 /) ))
+    ! CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
+    ! CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Mask_ice, clim%Mask_ice, start = (/ 1, 1    /) ))
 
     ! Close the netcdf file
     CALL close_netcdf_file(clim%netcdf%ncid)

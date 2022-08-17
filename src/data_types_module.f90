@@ -644,7 +644,8 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:,:), POINTER     :: Precip                        ! Monthly mean precipitation (m)
     REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_WE                       ! Monthly mean west-east wind speed (m/s)
     REAL(dp), DIMENSION(:,:,:), POINTER     :: Wind_SN                       ! Monthly mean south_north wind speed (m/s)
-    INTEGER :: wHs, wT2m, wPrecip, wWind_WE, wWind_SN
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
+    INTEGER :: wHs, wT2m, wPrecip, wWind_WE, wWind_SN, wMask_ice
 
     ! Paralelisation
     INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
@@ -800,7 +801,8 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Wind_SN                       ! Monthly mean south-north wind speed (m/s)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Wind_LR                       ! Monthly mean wind speed in the x-direction (m/s)
     REAL(dp), DIMENSION(:,:  ), POINTER     :: Wind_DU                       ! Monthly mean wind speed in the y-direction (m/s)
-    INTEGER :: wHs, wT2m, wPrecip, wHs_ref, wWind_WE, wWind_SN, wWind_LR, wWind_DU ! MPI windows to all these memory spaces
+    REAL(dp), DIMENSION(:    ), POINTER     :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
+    INTEGER :: wHs, wT2m, wPrecip, wHs_ref, wWind_WE, wWind_SN, wWind_LR, wWind_DU, wMask_ice ! MPI windows to all these memory spaces
 
     ! Spatially variable lapse rate for GCM snapshots (see Berends et al., 2018)
     REAL(dp), DIMENSION(:    ), POINTER     :: lambda

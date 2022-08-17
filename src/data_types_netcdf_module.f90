@@ -940,6 +940,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_Albedo
     INTEGER :: id_var_Wind_WE
     INTEGER :: id_var_Wind_SN
+    INTEGER :: id_var_Mask_ice
 
     CHARACTER(LEN=256) :: name_var_lon                   = 'lon                  '
     CHARACTER(LEN=256) :: name_var_lat                   = 'lat                  '
@@ -949,6 +950,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_Albedo                = 'Albedo               '
     CHARACTER(LEN=256) :: name_var_Wind_WE               = 'Wind_WE              '
     CHARACTER(LEN=256) :: name_var_Wind_SN               = 'Wind_SN              '
+    CHARACTER(LEN=256) :: name_var_Mask_ice              = 'Mask_ice             '
 
   END TYPE type_netcdf_climate_data
 

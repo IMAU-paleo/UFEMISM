@@ -334,6 +334,17 @@ CONTAINS
     ! == Get grid structure from PD grid
     ! ==================================
 
+    ! Projection parameters for this region
+    CALL allocate_shared_dp_0D(  refgeo%grid%lambda_M,     refgeo%grid%wlambda_M    )
+    CALL allocate_shared_dp_0D(  refgeo%grid%phi_M,        refgeo%grid%wphi_M       )
+    CALL allocate_shared_dp_0D(  refgeo%grid%alpha_stereo, refgeo%grid%walpha_stereo)
+
+
+    refgeo%grid%lambda_M     = refgeo_PD%grid%lambda_M
+    refgeo%grid%phi_M        = refgeo_PD%grid%phi_M
+    refgeo%grid%alpha_stereo = refgeo_PD%grid%alpha_stereo
+
+
     ! Allocate memory for grid size
     CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
     CALL allocate_shared_int_0D( refgeo%grid%ny, refgeo%grid%wny)

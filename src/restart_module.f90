@@ -456,8 +456,8 @@ CONTAINS
       ! Save current time as end-time for wind-up
       t_end = region%time
 
-      ! Bring the timer 1000 years back in time
-      region%time = region%time - 1000._dp!C%windup_total_years
+      ! Bring the timer 10 years back in time
+      region%time = region%time - 10._dp!C%windup_total_years
 
       ! Let the model know we want to run velocities from this point on
       region%t_last_SIA       = region%time

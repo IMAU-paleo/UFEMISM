@@ -940,7 +940,7 @@ CONTAINS
     ELSEIF (field_name == 'Precip') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Precip, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2)/12._dp, start=(/1, netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%climate_matrix%applied%Wind_WE, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Wind_WE_year') THEN
@@ -1570,9 +1570,9 @@ CONTAINS
     ELSEIF (field_name == 'T2m_year') THEN
       CALL create_double_var( netcdf%ncid, 'T2m_year',                 [vi,    t], id_var, long_name='Annual mean 2-m air temperature', units='K')
     ELSEIF (field_name == 'Precip') THEN
-      CALL create_double_var( netcdf%ncid, 'Precip',                   [vi, m, t], id_var, long_name='Monthly total precipitation', units='mm')
+      CALL create_double_var( netcdf%ncid, 'Precip',                   [vi, m, t], id_var, long_name='Monthly total precipitation', units='m')
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL create_double_var( netcdf%ncid, 'Precip_year',              [vi,    t], id_var, long_name='Annual total precipitation', units='mm')
+      CALL create_double_var( netcdf%ncid, 'Precip_year',              [vi,    t], id_var, long_name='Annual total precipitation', units='m')
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL create_double_var( netcdf%ncid, 'Wind_WE',                  [vi, m, t], id_var, long_name='Monthly mean zonal wind', units='m/s')
     ELSEIF (field_name == 'Wind_WE_year') THEN
@@ -2001,7 +2001,7 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%Precip, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Precip_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Precip( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Precip( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'Wind_WE') THEN
@@ -2537,9 +2537,9 @@ CONTAINS
     ELSEIF (field_name == 'T2m_year') THEN
       CALL create_double_var( netcdf%ncid, 'T2m_year',                 [x, y,    t], id_var, long_name='Annual mean 2-m air temperature', units='K')
     ELSEIF (field_name == 'Precip') THEN
-      CALL create_double_var( netcdf%ncid, 'Precip',                   [x, y, m, t], id_var, long_name='Monthly total precipitation', units='mm')
+      CALL create_double_var( netcdf%ncid, 'Precip',                   [x, y, m, t], id_var, long_name='Monthly total precipitation', units='m')
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL create_double_var( netcdf%ncid, 'Precip_year',              [x, y,    t], id_var, long_name='Annual total precipitation', units='mm')
+      CALL create_double_var( netcdf%ncid, 'Precip_year',              [x, y,    t], id_var, long_name='Annual total precipitation', units='m')
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL create_double_var( netcdf%ncid, 'Wind_WE',                  [x, y, m, t], id_var, long_name='Monthly mean zonal wind', units='m/s')
     ELSEIF (field_name == 'Wind_WE_year') THEN

@@ -1167,7 +1167,7 @@ CONTAINS
 
     IF (par%master) THEN
 
-      WRITE (0,*) '  Winding up model region ', region%name, ' for a nice restart...'
+      WRITE (0,*) '  Winding up model region ', region%name, ' for a nice start...'
 
       ! Bring the timer C%windup_total_years years back in time
       region%time = region%time - C%windup_total_years

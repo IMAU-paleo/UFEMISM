@@ -570,6 +570,14 @@ CONTAINS
     IF (par%master) CALL read_PD_obs_global_climate_file( PD_obs)
     CALL sync
 
+    ! print*, ' '
+    ! print*, minval(PD_obs%Hs), maxval(PD_obs%Hs)
+    ! print*, minval(PD_obs%T2m), maxval(PD_obs%T2m)
+    ! print*, minval(PD_obs%Precip), maxval(PD_obs%Precip)
+    ! print*, minval(PD_obs%Wind_WE), maxval(PD_obs%Wind_WE)
+    ! print*, minval(PD_obs%Wind_SN), maxval(PD_obs%Wind_SN)
+    ! stop ':)'
+
     ! Determine process domains
     CALL partition_list( PD_obs%nlon, par%i, par%n, PD_obs%i1, PD_obs%i2)
 
@@ -1189,8 +1197,8 @@ CONTAINS
 
         ELSE
 
-          ! Weiiiiiird
-          CALL warning('wait... ice during cold snapshot not higher than ice-free land during warm snapshot??')
+          ! Weiiiiiird ( ... tho it can happen with thin ice over "new" land after sea level drop)
+          ! CALL warning('wait... ice during cold snapshot not higher than ice-free land during warm snapshot??')
           ! Elevation term should not influence the interpolation
           w_thk( vi) = 1._dp
 

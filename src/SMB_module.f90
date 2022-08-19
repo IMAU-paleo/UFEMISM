@@ -368,45 +368,65 @@ CONTAINS
     INTEGER                                             :: mprev
     REAL(dp)                                            :: snowfrac, liquid_water, sup_imp_wat
 
+    ! == Initialisation
+    ! =================
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Make sure this routine is called correctly
-    IF (.NOT. C%choice_SMB_model == 'IMAU-ITM') THEN
-      CALL crash('should only be called when choice_SMB_model == "IMAU-ITM"!')
-    END IF
-
     DO vi = mesh%vi1, mesh%vi2
 
-      ! Background albedo
+      ! == Background albedo
+      ! ====================
+
+      ! Default value
       SMB%AlbedoSurf( vi) = albedo_soil
 
-      IF (ice%mask_ocean_a( vi) == 1 .AND. (ice%mask_shelf_a( vi) == 0 .OR. mask_noice( vi) == 1)) THEN
+      ! Open water value
+      IF (ice%mask_ocean_a( vi) == 1 .AND. &
+         (ice%mask_shelf_a( vi) == 0 .OR. mask_noice( vi) == 1)) THEN
         SMB%AlbedoSurf( vi) = albedo_water
       END IF
 
+      ! Ice value
       IF ( ice%mask_ice_a( vi) == 1) THEN
         SMB%AlbedoSurf( vi) = albedo_ice
       END IF
 
-      DO m = 1, 12  ! Month loop
+      ! == Month loop
+      ! =============
+
+      DO m = 1, 12
+
+        ! Set previous month index
+        ! ========================
 
         mprev = m - 1
 
+        ! If January, then December
         IF (mprev==0) THEN
           mprev = 12
         END IF
 
+        ! Monthly albedo
+        ! ==============
+
+        ! Compute value
         SMB%Albedo( vi,m) = MIN(albedo_snow, MAX( SMB%AlbedoSurf( vi), &
                                 albedo_snow - (albedo_snow - SMB%AlbedoSurf( vi))  * &
                                 EXP(-15._dp * SMB%FirnDepth( vi,mprev)) - 0.015_dp * SMB%MeltPreviousYear( vi)))
 
-        IF (ice%mask_ocean_a( vi) == 1 .AND. (ice%mask_shelf_a( vi) == 0 .OR. mask_noice( vi) == 1)) THEN
+        ! Reset for open water
+        IF (ice%mask_ocean_a( vi) == 1 .AND. &
+           (ice%mask_shelf_a( vi) == 0 .OR. mask_noice( vi) == 1)) THEN
           SMB%Albedo( vi,m) = albedo_water
         END IF
 
-        ! Determine albation as function af surface temperature and albedo/insolation
-        ! according to Bintanja et al. (2002)
+        ! Monthly ablation
+        ! ================
+
+        ! Determine ablation as function af surface temperature and
+        ! albedo/insolation according to Bintanja et al. (2002)
 
         IF (C%do_SMB_IMAUITM_inversion) THEN
 
@@ -420,41 +440,49 @@ CONTAINS
                                          SMB%C_abl_constant)           * sec_per_year / (L_fusion * 1000._dp * 12._dp))
         END IF
 
+        ! Monthly accumulation
+        ! ====================
+
         ! Determine accumulation with snow/rain fraction from Ohmura et al. (1999),
         ! liquid water content (rain and melt water) and snowdepth
-
-        ! NOTE: commented version is the old ANICE version, supposedly based on "physics" (which we cant check), but
-        !       the new version was tuned to RACMO output and produced significantly better snow fractions...
-
-       ! snowfrac = MAX(0._dp, MIN(1._dp, 0.5_dp   * (1 - ATAN((climate%T2m(vi,m) - T0) / 3.5_dp)  / 1.25664_dp)))
         snowfrac = MAX(0._dp, MIN(1._dp, 0.725_dp * (1 - ATAN((climate%T2m( vi,m) - T0) / 5.95_dp) / 1.8566_dp)))
 
         SMB%Snowfall( vi,m) = climate%Precip( vi,m) *          snowfrac
         SMB%Rainfall( vi,m) = climate%Precip( vi,m) * (1._dp - snowfrac)
 
-        ! Refreezing, according to Janssens & Huybrechts, 2000)
-        ! The refreezing (=effective retention) is the minimum value of the amount of super imposed
-        ! water and the available liquid water, with a maximum value of the total precipitation.
-        ! (see also Huybrechts & de Wolde, 1999)
-
         ! Add this month's snow accumulation to next month's initial snow depth.
         SMB%AddedFirn( vi,m) = SMB%Snowfall( vi,m) - SMB%Melt( vi,m)
         SMB%FirnDepth( vi,m) = MIN(10._dp, MAX(0._dp, SMB%FirnDepth( vi,mprev) + SMB%AddedFirn( vi,m) ))
 
-      END DO ! DO m = 1, 12
+      END DO ! m = 1, 12
 
-      ! Calculate refrezzing for the whole year, divide equally over the 12 months, then calculate resulting runoff and SMB.
-      ! This resolves the problem with refreezing, where liquid water is mostly available in summer
-      ! but "refreezing potential" mostly in winter, and there is no proper meltwater retention.
+      ! Annual Refreezing
+      ! =================
 
+      ! According to Janssens & Huybrechts (1999, 2000)
+      ! The refreezing (=effective retention) is the minimum value of the amount
+      ! of super imposed water and the available liquid water. Calculated for the
+      ! whole year, then divided equally over the 12 months. This is done to account
+      ! for the fact that liquid water is mostly available in summer, but "refreezing
+      ! potential" is mostly available in winter. Not capped at total precipitation
+      ! to account for cases where there is more melt than precipitation (e.g. ANT).
+
+      ! Total refreezing estimation
       sup_imp_wat  = SMB%C_refr * MAX(0._dp, T0 - SUM(climate%T2m( vi,:))/12._dp)
+
+      ! Total amount of available liquid water
       liquid_water = SUM(SMB%Rainfall( vi,:)) + SUM(SMB%Melt( vi,:))
 
-      SMB%Refreezing_year( vi) = MIN( MIN( sup_imp_wat, liquid_water), SUM(climate%Precip( vi,:)))
+      ! Effective refreezing
+      SMB%Refreezing_year( vi) = MIN( sup_imp_wat, liquid_water)
 
+      ! Limit it to ice areas only
       IF (ice%mask_ice_a( vi)==0) THEN
         SMB%Refreezing_year( vi) = 0._dp
       END IF
+
+      ! Monthly refreezing, runoff, and SMB
+      ! ===================================
 
       DO m = 1, 12
         SMB%Refreezing( vi,m) = SMB%Refreezing_year( vi) / 12._dp
@@ -462,18 +490,31 @@ CONTAINS
         SMB%SMB(        vi,m) = SMB%Snowfall( vi,m) + SMB%Refreezing( vi,m) - SMB%Melt( vi,m)
       END DO
 
+      ! Annual SMB
+      ! ==========
+
+      ! Sum of monthly fields
       SMB%SMB_year( vi) = SUM(SMB%SMB( vi,:))
+
+      ! Annual ablation
+      ! ===============
 
       ! Calculate total melt over this year, to be used for determining next year's albedo
       SMB%MeltPreviousYear( vi) = SUM(SMB%Melt( vi,:))
 
-    END DO
+    END DO ! vi = mesh%vi1, mesh%vi2
     CALL sync
+
+    ! == Final quantities
+    ! ===================
 
     ! Convert final SMB from water to ice equivalent
     SMB%SMB(      mesh%vi1:mesh%vi2,:) = SMB%SMB(      mesh%vi1:mesh%vi2,:) * 1000._dp / ice_density
     SMB%SMB_year( mesh%vi1:mesh%vi2  ) = SMB%SMB_year( mesh%vi1:mesh%vi2  ) * 1000._dp / ice_density
     CALL sync
+
+    ! == Finalisation
+    ! ===============
 
     ! Safety
     CALL check_for_NaN_dp_1D( SMB%AlbedoSurf      , 'SMB%AlbedoSurf'      )
@@ -661,7 +702,7 @@ CONTAINS
 
       SMB%Albedo( vi,:) = SMB%AlbedoSurf( vi)
 
-    END DO
+    END DO ! vi = mesh%vi1, mesh%vi2
     CALL sync
 
     ! Finalise routine path

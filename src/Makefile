@@ -102,7 +102,8 @@ ifeq ($(shell command -v makedepf90 2>&1 > /dev/null; echo $$?), 0)
 .depend: Makefile *.f90 *.F90
 	  makedepf90 -b object-files *.f90 *.F90 > .depend;
 else
-.depend:
-	  $(warning makedepf90 not present, multithreaded compilation make -jX will not work!)
-	  touch .depend;
+.NOTPARALLEL:
+.depend: 
+	$(warning makedepf90 disabled, enabling .NOTPARALLEL: for the whole makefile )
+	touch .depend;
 endif

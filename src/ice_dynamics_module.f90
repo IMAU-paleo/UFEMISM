@@ -23,7 +23,7 @@ MODULE ice_dynamics_module
   use mesh_mapping_module,                 only: remap_field_dp_2D
   use general_ice_model_data_module,       only: update_general_ice_model_data
   ! use mesh_operators_module,               only: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  use ice_velocity_module,                 only: solve_DIVA
+  use ice_velocity_module,                 only: solve_SIA, solve_SSA, solve_DIVA
   use ice_velocity_module,                 only: map_velocities_b_to_c_2D, remap_velocities, initialise_velocity_solver
   use ice_thickness_module,                only: calc_dHi_dt
   use basal_conditions_and_sliding_module, only: initialise_basal_conditions, remap_basal_conditions
@@ -260,37 +260,34 @@ contains
 
       IF     (C%choice_ice_dynamics == 'SIA') THEN
 
-        call crash('todo, implement'//C%choice_ice_dynamics)
         ! Calculate velocities
-      !  CALL solve_SIA(  region%mesh, region%ice)
+       call solve_SIA( region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SIA = region%time
-      !  region%t_next_SIA = region%time + region%dt_crit_ice
+       ! Update timer
+       region%t_last_SIA = region%time
+       region%t_next_SIA = region%time + region%dt_crit_ice
 
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
- 
-        call crash('todo, implement'//C%choice_ice_dynamics)
-        ! Calculate velocities
-      !  CALL solve_SSA(  region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SSA = region%time
-      !  region%t_next_SSA = region%time + region%dt_crit_ice
+        ! Calculate velocities
+       CALL solve_SSA( region%mesh, region%ice)
+
+       ! Update timer
+       region%t_last_SSA = region%time
+       region%t_next_SSA = region%time + region%dt_crit_ice
 
 
       ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
 
-        call crash('todo, implement'//C%choice_ice_dynamics)
         ! Calculate velocities
-      !  CALL solve_SIA(  region%mesh, region%ice)
-      !  CALL solve_SSA(  region%mesh, region%ice)
+       CALL solve_SIA(  region%mesh, region%ice)
+       CALL solve_SSA(  region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SIA = region%time
-      !  region%t_last_SSA = region%time
-      !  region%t_next_SIA = region%time + region%dt_crit_ice
-      !  region%t_next_SSA = region%time + region%dt_crit_ice
+       ! Update timer
+       region%t_last_SIA = region%time
+       region%t_last_SSA = region%time
+       region%t_next_SIA = region%time + region%dt_crit_ice
+       region%t_next_SSA = region%time + region%dt_crit_ice
 
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
 

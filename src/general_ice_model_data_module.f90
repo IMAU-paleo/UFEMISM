@@ -20,54 +20,54 @@ MODULE general_ice_model_data_module
   IMPLICIT NONE
 
 CONTAINS
-  
+
   ! Routines for calculating general ice model data - Hs, masks, ice physical properties
   SUBROUTINE update_general_ice_model_data( mesh, ice)
-    
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_general_ice_model_data'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     ! Calculate surface elevation and thickness above floatation
     DO vi = mesh%vi1, mesh%vi2
       ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
       ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
     END DO
-    
+
     ! Determine masks
     CALL determine_masks( mesh, ice)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE update_general_ice_model_data
   SUBROUTINE determine_masks( mesh, ice)
     ! Determine the different masks, on both the Aa and the Ac mesh
-      
+
     IMPLICIT NONE
-    
+
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice 
-    
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_masks'
     INTEGER                                            :: vi, ci, vc
     real(dp), dimension(:), allocatable                :: Hi_a, Hb_a, SL_a
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    
+
     ! Get necessary information
     allocate(Hi_a(1:mesh%nV))
     allocate(Hb_a(1:mesh%nV))
@@ -78,7 +78,7 @@ CONTAINS
     call allgather_array(Hi_a)
     call allgather_array(Hb_a)
     call allgather_array(SL_a)
-    
+
 
     ! Start out with land everywhere, fill in the rest based on input.
     ice%mask_land_a   = 1
@@ -92,41 +92,41 @@ CONTAINS
     ice%mask_gl_a     = 0
     ice%mask_cf_a     = 0
     ice%mask_a        = C%type_land
-  
+
     DO vi = mesh%vi1, mesh%vi2
-      
+
       ! Determine ocean (both open and shelf-covered)
       IF (is_floating( Hi_a( vi), Hb_a( vi), SL_a( vi))) THEN
         ice%mask_ocean_a( vi) = 1
         ice%mask_land_a(  vi) = 0
         ice%mask_a(       vi) = C%type_ocean
       END IF
-    
+
       ! Determine ice
       IF (Hi_a( vi) > 0._dp) THEN
         ice%mask_ice_a( vi)  = 1
       END IF
-      
+
       ! Determine sheet
       IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
         ice%mask_sheet_a( vi) = 1
         ice%mask_a(       vi) = C%type_sheet
       END IF
-    
+
       ! Determine shelf
       IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ocean_a( vi) == 1) THEN
         ice%mask_shelf_a( vi) = 1
         ice%mask_a(       vi) = C%type_shelf
       END IF
-      
+
     END DO ! DO vi = 1, mesh%nV
-  
+
     ! Determine coast, grounding line and calving front
     DO vi = mesh%vi1, mesh%vi2
-    
-      IF (ice%mask_land_a( vi) == 1) THEN  
+
+      IF (ice%mask_land_a( vi) == 1) THEN
         ! Land bordering ocean equals coastline
-        
+
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           ! if neighbour is sea
@@ -136,10 +136,10 @@ CONTAINS
           END IF
         END DO
       END IF
-    
-      IF (ice%mask_ice_a( vi) == 1) THEN  
+
+      IF (ice%mask_ice_a( vi) == 1) THEN
         ! Ice bordering non-ice equals margin
-        
+
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           ! if neighbour has no ice
@@ -149,10 +149,10 @@ CONTAINS
           END IF
         END DO
       END IF
-    
-      IF (ice%mask_sheet_a( vi) == 1) THEN  
+
+      IF (ice%mask_sheet_a( vi) == 1) THEN
         ! Sheet bordering shelf equals groundingline
-        
+
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           ! if neighbour has ocean and ice
@@ -162,10 +162,10 @@ CONTAINS
           END IF
         END DO
       END IF
-  
-      IF (ice%mask_ice_a( vi) == 1) THEN  
+
+      IF (ice%mask_ice_a( vi) == 1) THEN
         ! Ice (sheet or shelf) bordering open ocean equals calvingfront
-        
+
         DO ci = 1, mesh%nC(vi)
           vc = mesh%C( vi,ci)
           ! if neighbour has ocean and no ice
@@ -174,7 +174,7 @@ CONTAINS
             ice%mask_cf_a( vi) = 1
           END IF
         END DO
-        
+
       END IF
     END DO ! DO vi = 1, mesh%nV
 
@@ -196,41 +196,41 @@ CONTAINS
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE determine_masks
-  
+
 ! == Routines for calculating sub-grid grounded fractions
   SUBROUTINE determine_grounded_fractions( mesh, ice)
     ! Determine the grounded fractions of all grid cells
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions'
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-  
+
     CALL determine_grounded_fractions_a( mesh, ice)
     CALL determine_grounded_fractions_b( mesh, ice)
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE determine_grounded_fractions
   SUBROUTINE determine_grounded_fractions_a( mesh, ice)
     ! Determine the grounded fractions of all grid cells on the a-grid
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_a'
     REAL(dp), DIMENSION(:    ), allocatable            :: TAF_a, TAF_b
@@ -238,10 +238,10 @@ CONTAINS
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, ccb1, ccb2
     REAL(dp)                                           :: TAFa, TAFb, TAFc, A_vor, A_tri_tot, A_tri_grnd, A_grnd
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-  
+
     ! Make neighbours of TAF_a available
     allocate(TAF_a(1:mesh%nV))
     TAF_a(mesh%vi1:mesh%vi2) = ice%TAF_a
@@ -253,89 +253,89 @@ CONTAINS
     call allgather_array(TAF_b)
 
     DO vi = mesh%vi1, mesh%vi2
-    
+
       ! Skip border vertices
       IF (mesh%edge_index( vi) > 0) THEN
         ice%f_grnd_a( vi) = 0._dp
         CYCLE
       END IF
-    
+
       ! Determine maximum and minimum TAF of the local neighbourhood
       TAF_max = -1E6_dp
       TAF_min =  1E6_dp
-    
+
       TAF_max = MAX( TAF_max, TAF_a( vi))
       TAF_min = MIN( TAF_min, TAF_a( vi))
-    
+
       DO ci = 1, mesh%nC( vi)
         vj = mesh%C( vi,ci)
         TAF_max = MAX( TAF_max, TAF_a( vj))
         TAF_min = MIN( TAF_min, TAF_a( vj))
       END DO
-    
+
       ! If the entire local neighbourhood is grounded, the answer is trivial
       IF (TAF_min >= 0._dp) THEN
         ice%f_grnd_a( vi) = 1._dp
         CYCLE
       END IF
-    
+
       ! If the entire local neighbourhood is floating, the answer is trivial
       IF (TAF_max <= 0._dp) THEN
         ice%f_grnd_a( vi) = 0._dp
         CYCLE
       END IF
-    
+
       ! The local neighbourhood contains both grounded and floating vertices.
       A_vor  = 0._dp
       A_grnd = 0._dp
-    
+
       va   = mesh%V( vi,:)
       TAFa = ice%TAF_a( vi)
-    
+
       DO iti = 1, mesh%niTri( vi)
-      
+
         iti2 = iti + 1
         IF (iti == mesh%niTri( vi)) iti2 = 1
-      
+
         ti1 = mesh%iTri( vi,iti )
         ti2 = mesh%iTri( vi,iti2)
-      
+
         ccb1 = mesh%Tricc( ti1,:)
         ccb2 = mesh%Tricc( ti2,:)
-      
+
         TAFb = TAF_b( ti1)
         TAFc = TAF_b( ti2)
-      
+
         ! Determine total area of, and grounded area within, this subtriangle
         CALL determine_grounded_area_triangle( va, ccb1, ccb2, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
-      
+
         A_vor  = A_vor  + A_tri_tot
         A_grnd = A_grnd + A_tri_grnd
-      
+
       END DO ! DO iati = 1, mesh%niTriAaAc( avi)
-    
+
       ! Calculate the grounded fraction of this Voronoi cell
       ice%f_grnd_a( vi) = A_grnd / A_vor
-    
+
     END DO
-  
+
     ! Clean up after yourself
     deallocate( TAF_a )
     deallocate( TAF_b )
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE determine_grounded_fractions_a
   SUBROUTINE determine_grounded_fractions_b( mesh, ice)
     ! Determine the grounded fractions of all grid cells on the b-grid
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_grounded_fractions_b'
     INTEGER                                            :: ti, via, vib, vic
@@ -343,7 +343,7 @@ CONTAINS
     REAL(dp)                                           :: TAF_max, TAF_min
     REAL(dp), DIMENSION(2)                             :: va, vb, vc
     REAL(dp)                                           :: TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -352,67 +352,67 @@ CONTAINS
     call allgather_array(TAF_a)
 
     DO ti = mesh%ti1, mesh%ti2
-    
+
       via = mesh%Tri( ti,1)
       vib = mesh%Tri( ti,2)
       vic = mesh%Tri( ti,3)
-    
+
       ! Determine maximum and minimum TAF of the local neighbourhood
       TAF_max = MAXVAL([ TAF_a( via), TAF_a( vib), TAF_a( vic)])
       TAF_min = MINVAL([ TAF_a( via), TAF_a( vib), TAF_a( vic)])
-    
+
       ! If the entire local neighbourhood is grounded, the answer is trivial
       IF (TAF_min >= 0._dp) THEN
         ice%f_grnd_b( ti) = 1._dp
         CYCLE
       END IF
-    
+
       ! If the entire local neighbourhood is floating, the answer is trivial
       IF (TAF_max <= 0._dp) THEN
         ice%f_grnd_b( ti) = 0._dp
         CYCLE
       END IF
-    
+
       ! The local neighbourhood contains both grounded and floating vertices.
-    
+
       va   = mesh%V( via,:)
       vb   = mesh%V( vib,:)
       vc   = mesh%V( vic,:)
-      
+
       TAFa = TAF_a( via)
       TAFb = TAF_a( vib)
       TAFc = TAF_a( vic)
-      
+
       ! Determine total area of, and grounded area within, this subtriangle
       CALL determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
-    
+
       ! Calculate the grounded fraction of this Voronoi cell
       ice%f_grnd_b( ti) = A_tri_grnd / A_tri_tot
-    
+
     END DO
 
     deallocate( TAF_a )
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-  
+
   END SUBROUTINE determine_grounded_fractions_b
   SUBROUTINE determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
     ! Determine the grounded area of the triangle [va,vb,vc], where the thickness-above-floatation is given at all three corners
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
     REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
     REAL(dp),                            INTENT(OUT)   :: A_tri_tot, A_tri_grnd
-  
+
     ! Local variables:
     REAL(dp)                                           :: A_flt
-  
+
     ! Determine total area of this subtriangle
     CALL find_triangle_area( va, vb, vc, A_tri_tot)
-      
+
     IF     (TAFa >= 0._dp .AND. TAFb >= 0._dp .AND. TAFc >= 0._dp) THEN
       ! If all three corners are grounded, the answer is trivial
       A_tri_grnd = A_tri_tot
@@ -421,7 +421,7 @@ CONTAINS
       A_tri_grnd = 0._dp
     ELSE
       ! At least one corner is grounded and at least one corner is floating
-    
+
       IF     (TAFa >= 0._dp .AND. TAFb <= 0._dp .AND. TAFc <= 0._dp) THEN
         ! a is grounded, b and c are floating
         CALL determine_grounded_area_triangle_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_tri_grnd)
@@ -447,57 +447,57 @@ CONTAINS
         A_tri_grnd = 0._dp
         CALL crash('TAF = [{dp_01},{dp_02},{dp_03}]', dp_01 = TAFa, dp_02 = TAFb, dp_03 = TAFc)
       END IF
-    
+
     END IF
-  
+
   END SUBROUTINE determine_grounded_area_triangle
   SUBROUTINE determine_grounded_area_triangle_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_tri_grnd)
     ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is grounded
     ! and b and c are floating
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
     REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
     REAL(dp),                            INTENT(OUT)   :: A_tri_grnd
-  
+
     ! Local variables:
     REAL(dp)                                           :: lambda_ab, lambda_ac
     REAL(dp), DIMENSION(2)                             :: pab, pac
-  
+
     lambda_ab = TAFa / (TAFa - TAFb)
     pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
-  
+
     lambda_ac = TAFa / (TAFa - TAFc)
     pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
-  
+
     CALL find_triangle_area( va, pab, pac, A_tri_grnd)
-  
+
   END SUBROUTINE determine_grounded_area_triangle_1grnd_2flt
   SUBROUTINE determine_grounded_area_triangle_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_tri_flt)
     ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is floating
     ! and b and c are grounded
-  
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     REAL(dp), DIMENSION(2),              INTENT(IN)    :: va, vb, vc
     REAL(dp),                            INTENT(IN)    :: TAFa, TAFb, TAFc
     REAL(dp),                            INTENT(OUT)   :: A_tri_flt
-  
+
     ! Local variables:
     REAL(dp)                                           :: lambda_ab, lambda_ac
     REAL(dp), DIMENSION(2)                             :: pab, pac
-  
+
     lambda_ab = TAFa / (TAFa - TAFb)
     pab = (va * (1._dp - lambda_ab)) + (vb * lambda_ab)
-  
+
     lambda_ac = TAFa / (TAFa - TAFc)
     pac = (va * (1._dp - lambda_ac)) + (vc * lambda_ac)
-  
+
     CALL find_triangle_area( va, pab, pac, A_tri_flt)
-  
+
   END SUBROUTINE determine_grounded_area_triangle_1flt_2grnd
 
 ! == The no-ice mask, to prevent ice growth in certain areas
@@ -506,26 +506,26 @@ CONTAINS
     ! Greenland from NAM and EAS, and Ellesmere Island from GRL.
     !
     ! Also used to define calving fronts in certain idealised-geometry experiments
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_model_region),             INTENT(INOUT) :: region
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice'
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-  
+
     ! Initialise
     region%mask_noice( mesh%vi1:mesh%vi2) = 0
     CALL sync
-  
+
     IF     (region%name == 'NAM') THEN
       ! Define a no-ice mask for North America
-  
+
       IF     (C%choice_mask_noice_NAM == 'none') THEN
         ! No no-ice mask is defined for North America
       ELSEIF (C%choice_mask_noice_NAM == 'NAM_remove_GRL') THEN
@@ -534,10 +534,10 @@ CONTAINS
       ELSE
         CALL crash('unknown choice_mask_noice_NAM "' // TRIM( C%choice_mask_noice_NAM) // '"!')
       END IF
-    
+
     ELSEIF (region%name == 'EAS') THEN
       ! Define a no-ice mask for Eurasia
-  
+
       IF     (C%choice_mask_noice_EAS == 'none') THEN
         ! No no-ice mask is defined for Eurasia
       ELSEIF (C%choice_mask_noice_EAS == 'EAS_remove_GRL') THEN
@@ -546,10 +546,10 @@ CONTAINS
       ELSE
         CALL crash('unknown choice_mask_noice_EAS "' // TRIM( C%choice_mask_noice_EAS) // '"!')
       END IF
-    
+
     ELSEIF (region%name == 'GRL') THEN
       ! Define a no-ice mask for Greenland
-  
+
       IF     (C%choice_mask_noice_GRL == 'none') THEN
         ! No no-ice mask is defined for Greenland
       ELSEIF (C%choice_mask_noice_GRL == 'GRL_remove_Ellesmere') THEN
@@ -558,10 +558,10 @@ CONTAINS
       ELSE
         CALL crash('unknown choice_mask_noice_GRL "' // TRIM( C%choice_mask_noice_GRL) // '"!')
       END IF
-    
+
     ELSEIF (region%name == 'ANT') THEN
       ! Define a no-ice mask for Antarctica, or for an idealised-geometry experiment
-  
+
       IF     (C%choice_mask_noice_ANT == 'none') THEN
         ! No no-ice mask is defined for Antarctica
       ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
@@ -573,18 +573,18 @@ CONTAINS
       ELSE
         CALL crash('unknown choice_mask_noice_ANT "' // TRIM( C%choice_mask_noice_ANT) // '"!')
       END IF
-    
+
     END IF
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice
   SUBROUTINE initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the North America domain
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
@@ -594,13 +594,13 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb
     REAL(dp)                                           :: yl_ab
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     pa = [ 490000._dp, 1530000._dp]
     pb = [2030000._dp,  570000._dp]
-  
+
     DO vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
       IF (mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) > pa(1) .AND. mesh%V( vi,2) > pb(2)) THEN
@@ -616,9 +616,9 @@ CONTAINS
   END SUBROUTINE initialise_mask_noice_NAM_remove_GRL
   SUBROUTINE initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the Eurasia domain
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
@@ -628,15 +628,15 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
     REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-  
+
     pa = [-2900000._dp, 1300000._dp]
     pb = [-1895000._dp,  900000._dp]
     pc = [ -835000._dp, 1135000._dp]
     pd = [ -400000._dp, 1855000._dp]
-  
+
     DO vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
       yl_bc = pb(2) + (mesh%V( vi,1) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
@@ -650,16 +650,16 @@ CONTAINS
         mask_noice( vi) = 0
       END IF
     END DO
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice_EAS_remove_GRL
   SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
     ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
@@ -669,13 +669,13 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp), DIMENSION(2)                             :: pa, pb
     REAL(dp)                                           :: yl_ab
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     pa = [-750000._dp,  900000._dp]
     pb = [-250000._dp, 1250000._dp]
-  
+
     DO vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
       IF (mesh%V( vi,2) > pa(2) .AND. mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) < pb(1)) THEN
@@ -684,16 +684,16 @@ CONTAINS
         mask_noice( vi) = 0
       END IF
     END DO
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere
   SUBROUTINE initialise_mask_noice_MISMIP_mod( mesh, mask_noice)
     ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised-geometry experiment
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
@@ -701,10 +701,10 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIP_mod'
     INTEGER                                            :: vi
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-      
+
     ! Create a nice circular ice shelf
     DO vi = mesh%vi1, mesh%vi2
       IF (SQRT(mesh%V( vi,1)**2 + mesh%V( vi,2)**2) > mesh%xmax * 0.95_dp) THEN
@@ -714,16 +714,16 @@ CONTAINS
       END IF
     END DO
 
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice_MISMIP_mod
   SUBROUTINE initialise_mask_noice_MISMIPplus( mesh, mask_noice)
     ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
-    
+
     IMPLICIT NONE
-  
+
     ! In- and output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
@@ -731,10 +731,10 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIPplus'
     INTEGER                                            :: vi
-  
+
     ! Add routine to path
     CALL init_routine( routine_name)
-      
+
     DO vi = mesh%vi1, mesh%vi2
       ! NOTE: because UFEMISM wants to centre the domain at x=0, the front now lies at x = 240 km
       IF (mesh%V( vi,1) > 240000._dp) THEN
@@ -743,7 +743,7 @@ CONTAINS
         mask_noice( vi) = 0
       END IF
     END DO
-  
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 

@@ -51,7 +51,7 @@ contains
 
       case default
         ! Unknown option
-        CALL crash('unknown choice_ocean_model "' // TRIM( C%choice_ocean_model) // '"!')
+        call crash('unknown choice_ocean_model "' // trim( C%choice_ocean_model) // '"!')
 
     end select
 

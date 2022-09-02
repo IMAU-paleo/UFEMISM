@@ -322,7 +322,8 @@ contains
     ! ================================
 
     ! Region name
-    region%name      = name
+    region%name = name
+
     if (region%name == 'NAM') then
       region%long_name = 'North America'
     else if (region%name == 'EAS') then
@@ -388,27 +389,15 @@ contains
     call initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     call initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
 
-    ! ===== Initialise dummy fields for debugging =====
-    ! =================================================
-
-    if (par%master) then
-      write(*,"(A)") '  Initialising debug fields...'
-    end if
+    ! ===== Dummy fields for debugging =====
+    ! ======================================
 
     call initialise_debug_fields( region)
-
-    ! ===== Output files =====
-    ! ========================
-
-    call create_output_files(    region)
     call associate_debug_fields( region)
-    region%output_file_exists = .true.
-    call sync
 
     ! ===== The "no ice" mask =====
     ! =============================
 
-    allocate(region%mask_noice(region%mesh%vi1:region%mesh%vi2))
     call initialise_mask_noice(region, region%mesh)
 
     ! ===== The ice dynamics model =====
@@ -425,6 +414,13 @@ contains
     ! =========================
 
     CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+
+    ! ===== Output files =====
+    ! ========================
+
+    call create_output_files( region)
+    region%output_file_exists = .true.
+    call sync
 
     ! ===== Finalisation =====
     ! ========================

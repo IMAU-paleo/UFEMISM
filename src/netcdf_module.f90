@@ -2937,6 +2937,10 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    if (par%master) then
+      write(*,"(A)") '  Initialising debug fields...'
+    end if
+
     IF     (region%name == 'NAM') THEN
       CALL initialise_debug_fields_region( debug_NAM, region%mesh)
     ELSEIF (region%name == 'EAS') THEN

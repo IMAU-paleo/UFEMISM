@@ -1,55 +1,61 @@
-MODULE general_ice_model_data_module
+module general_ice_model_data_module
 
-  ! Only "secondary geometry" right now: masks, surface elevation, TAF
+  ! "Secondary geometry": masks, grounded fraction, surface elevation, TAF
 
-  ! Import basic functionality
-#include <petsc/finclude/petscksp.h>
-  USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
+! ===== Preamble =====
+! ====================
 
-  ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_model_region
-  USE utilities_module,                ONLY: is_floating, surface_elevation, thickness_above_floatation
-  use mpi_module,                      only: allgather_array
-  USE mesh_help_functions_module,      ONLY: find_triangle_area
-  USE mesh_operators_module,           ONLY: map_a_to_b_2D
+  use mpi
+  use configuration_module,       only : dp, C, routine_path, init_routine, &
+                                         finalise_routine, crash, warning
+  use parallel_module,            only : par, sync, ierr, cerr, partition_list
+  use data_types_module,          only : type_mesh, type_ice_model, type_model_region
+  use utilities_module,           only : is_floating, surface_elevation, &
+                                         thickness_above_floatation, oblique_sg_projection
+  use mpi_module,                 only : allgather_array
+  use mesh_help_functions_module, only : find_triangle_area
+  use mesh_operators_module,      only : map_a_to_b_2D
 
-  IMPLICIT NONE
+  implicit none
 
-CONTAINS
+contains
+
+! ===== Main =====
+! ================
 
   ! Routines for calculating general ice model data - Hs, masks, ice physical properties
-  SUBROUTINE update_general_ice_model_data( mesh, ice)
+  subroutine update_general_ice_model_data( mesh, ice)
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_general_ice_model_data'
-    INTEGER                                            :: vi
+    character(len=256), parameter       :: routine_name = 'update_general_ice_model_data'
+    integer                             :: vi
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Calculate surface elevation and thickness above floatation
-    DO vi = mesh%vi1, mesh%vi2
+    do vi = mesh%vi1, mesh%vi2
       ice%Hs_a(  vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
       ice%TAF_a( vi) = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
-    END DO
+    end do
 
     ! Determine masks
-    CALL determine_masks( mesh, ice)
+    call determine_masks( mesh, ice)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE update_general_ice_model_data
+  end subroutine update_general_ice_model_data
+
+! ===== Masks =====
+! =================
+
   SUBROUTINE determine_masks( mesh, ice)
     ! Determine the different masks, on both the Aa and the Ac mesh
 
@@ -199,7 +205,9 @@ CONTAINS
 
   END SUBROUTINE determine_masks
 
-! == Routines for calculating sub-grid grounded fractions
+! ===== Grounded fractions =====
+! ==============================
+
   SUBROUTINE determine_grounded_fractions( mesh, ice)
     ! Determine the grounded fractions of all grid cells
 
@@ -222,6 +230,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE determine_grounded_fractions
+
   SUBROUTINE determine_grounded_fractions_a( mesh, ice)
     ! Determine the grounded fractions of all grid cells on the a-grid
 
@@ -327,6 +336,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE determine_grounded_fractions_a
+
   SUBROUTINE determine_grounded_fractions_b( mesh, ice)
     ! Determine the grounded fractions of all grid cells on the b-grid
 
@@ -397,6 +407,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE determine_grounded_fractions_b
+
   SUBROUTINE determine_grounded_area_triangle( va, vb, vc, TAFa, TAFb, TAFc, A_tri_tot, A_tri_grnd)
     ! Determine the grounded area of the triangle [va,vb,vc], where the thickness-above-floatation is given at all three corners
 
@@ -451,6 +462,7 @@ CONTAINS
     END IF
 
   END SUBROUTINE determine_grounded_area_triangle
+
   SUBROUTINE determine_grounded_area_triangle_1grnd_2flt( va, vb, vc, TAFa, TAFb, TAFc, A_tri_grnd)
     ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is grounded
     ! and b and c are floating
@@ -475,6 +487,7 @@ CONTAINS
     CALL find_triangle_area( va, pab, pac, A_tri_grnd)
 
   END SUBROUTINE determine_grounded_area_triangle_1grnd_2flt
+
   SUBROUTINE determine_grounded_area_triangle_1flt_2grnd( va, vb, vc, TAFa, TAFb, TAFc, A_tri_flt)
     ! Determine the grounded area of the triangle [va,vb,vc], where vertex a is floating
     ! and b and c are grounded
@@ -500,100 +513,147 @@ CONTAINS
 
   END SUBROUTINE determine_grounded_area_triangle_1flt_2grnd
 
-! == The no-ice mask, to prevent ice growth in certain areas
-  SUBROUTINE initialise_mask_noice( region, mesh)
-    ! Mask a certain area where no ice is allowed to grow. This is used to "remove"
-    ! Greenland from NAM and EAS, and Ellesmere Island from GRL.
-    !
-    ! Also used to define calving fronts in certain idealised-geometry experiments
+! ===== No ice mask =====
+! =======================
 
-    IMPLICIT NONE
+  subroutine initialise_mask_noice( region, mesh)
+    ! Mask a certain area where no ice is allowed to grow.
+
+    implicit none
 
     ! In- and output variables
-    TYPE(type_model_region),             INTENT(INOUT) :: region
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    type(type_model_region), intent(inout) :: region
+    type(type_mesh),         intent(in)    :: mesh
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice'
+    character(len=256), parameter          :: routine_name = 'initialise_mask_noice'
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    ! Initialise
-    region%mask_noice( mesh%vi1:mesh%vi2) = 0
-    CALL sync
+    if ( allocated( region%mask_noice)) then
+      ! De-allocation after mesh update
 
-    IF     (region%name == 'NAM') THEN
+      if (par%master) then
+        write(*,"(A)") '  Re-initialising the no-ice mask...'
+      end if
+
+      deallocate( region%mask_noice)
+
+    else
+      ! Initialisation
+
+      if (par%master) then
+        write(*,"(A)") '  Initialising the no-ice mask...'
+      end if
+
+    end if
+
+    ! Memory allocation
+    allocate( region%mask_noice(mesh%vi1:mesh%vi2), source=0)
+
+    ! === No-ice mask definition ===
+    ! ==============================
+
+    if (region%name == 'NAM') then
       ! Define a no-ice mask for North America
 
-      IF     (C%choice_mask_noice_NAM == 'none') THEN
-        ! No no-ice mask is defined for North America
-      ELSEIF (C%choice_mask_noice_NAM == 'NAM_remove_GRL') THEN
-        ! Prevent ice growth in the Greenlandic part of the North America domain
-        CALL initialise_mask_noice_NAM_remove_GRL( mesh, region%mask_noice)
-      ELSE
-        CALL crash('unknown choice_mask_noice_NAM "' // TRIM( C%choice_mask_noice_NAM) // '"!')
-      END IF
+      select case (C%choice_mask_noice_NAM)
 
-    ELSEIF (region%name == 'EAS') THEN
+        case ('none')
+          ! No no-ice mask is defined for North America
+
+        case ('NAM_remove_GRL')
+          ! WIP
+          call crash('No-ice mask for "' // region%name // '" not implemented yet!')
+          ! Prevent ice growth in the Greenlandic part of the North America domain
+          call initialise_mask_noice_NAM_remove_GRL( mesh, region%mask_noice)
+
+        case default
+          ! Unknown case
+          call crash('unknown choice_mask_noice_NAM "' // trim( C%choice_mask_noice_NAM) // '"!')
+
+      end select
+
+    elseif (region%name == 'EAS') then
       ! Define a no-ice mask for Eurasia
 
-      IF     (C%choice_mask_noice_EAS == 'none') THEN
-        ! No no-ice mask is defined for Eurasia
-      ELSEIF (C%choice_mask_noice_EAS == 'EAS_remove_GRL') THEN
-        ! Prevent ice growth in the Greenlandic part of the Eurasia domain
-        CALL initialise_mask_noice_EAS_remove_GRL( mesh, region%mask_noice)
-      ELSE
-        CALL crash('unknown choice_mask_noice_EAS "' // TRIM( C%choice_mask_noice_EAS) // '"!')
-      END IF
+      select case (C%choice_mask_noice_EAS)
 
-    ELSEIF (region%name == 'GRL') THEN
+        case ('none')
+          ! No no-ice mask is defined for Eurasia
+
+        case ('EAS_remove_GRL')
+          ! WIP
+          call crash('No-ice mask for "' // region%name // '" not implemented yet!')
+          ! Prevent ice growth in the Greenlandic part of the Eurasian domain
+          call initialise_mask_noice_EAS_remove_GRL( mesh, region%mask_noice)
+
+        case default
+          ! Unknown case
+          call crash('unknown choice_mask_noice_EAS "' // trim( C%choice_mask_noice_EAS) // '"!')
+
+      end select
+
+    elseif (region%name == 'GRL') then
       ! Define a no-ice mask for Greenland
 
-      IF     (C%choice_mask_noice_GRL == 'none') THEN
-        ! No no-ice mask is defined for Greenland
-      ELSEIF (C%choice_mask_noice_GRL == 'GRL_remove_Ellesmere') THEN
-        ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
-        CALL initialise_mask_noice_GRL_remove_Ellesmere( mesh, region%mask_noice)
-      ELSE
-        CALL crash('unknown choice_mask_noice_GRL "' // TRIM( C%choice_mask_noice_GRL) // '"!')
-      END IF
+      select case (C%choice_mask_noice_GRL)
 
-    ELSEIF (region%name == 'ANT') THEN
-      ! Define a no-ice mask for Antarctica, or for an idealised-geometry experiment
+        case ('none')
+          ! No no-ice mask is defined for Greenland
 
-      IF     (C%choice_mask_noice_ANT == 'none') THEN
-        ! No no-ice mask is defined for Antarctica
-      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP_mod') THEN
-        ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised geometry
-        CALL initialise_mask_noice_MISMIP_mod( mesh, region%mask_noice)
-      ELSEIF (C%choice_mask_noice_ANT == 'MISMIP+') THEN
-        ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
-        CALL initialise_mask_noice_MISMIPplus( mesh, region%mask_noice)
-      ELSE
-        CALL crash('unknown choice_mask_noice_ANT "' // TRIM( C%choice_mask_noice_ANT) // '"!')
-      END IF
+        case ('GRL_remove_Ellesmere')
+          ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
+          call initialise_mask_noice_GRL_remove_Ellesmere( mesh, region%mask_noice)
 
-    END IF
+        case default
+          ! Unknown case
+          call crash('unknown choice_mask_noice_GRL "' // trim( C%choice_mask_noice_GRL) // '"!')
+
+      end select
+
+    elseif (region%name == 'ANT') then
+      ! Define a no-ice mask for Antarctica
+
+      select case (C%choice_mask_noice_ANT)
+
+        case ('none')
+          ! No no-ice mask is defined for Antarctica
+
+        case default
+          ! Unknown case
+          call crash('unknown choice_mask_noice_ANT "' // trim( C%choice_mask_noice_ANT) // '"!')
+
+      end select
+
+    end if
+
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_mask_noice
+  end subroutine initialise_mask_noice
+
   SUBROUTINE initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the North America domain
 
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT)   :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_NAM_remove_GRL'
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(2)                             :: pa, pb
-    REAL(dp)                                           :: yl_ab
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_mask_noice_NAM_remove_GRL'
+    INTEGER                                               :: vi
+    REAL(dp), DIMENSION(2)                                :: pa, pb
+    REAL(dp)                                              :: yl_ab
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -614,20 +674,21 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice_NAM_remove_GRL
+
   SUBROUTINE initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the Eurasia domain
 
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT)   :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_EAS_remove_GRL'
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(2)                             :: pa, pb, pc, pd
-    REAL(dp)                                           :: yl_ab, yl_bc, yl_cd
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_mask_noice_EAS_remove_GRL'
+    INTEGER                                               :: vi
+    REAL(dp), DIMENSION(2)                                :: pa, pb, pc, pd
+    REAL(dp)                                              :: yl_ab, yl_bc, yl_cd
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -655,101 +716,53 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_mask_noice_EAS_remove_GRL
-  SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
+
+  subroutine initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
     ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
+    type(type_mesh),                        intent(in)    :: mesh
+    integer,  dimension(mesh%vi1:mesh%vi2), intent(inout) :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
-    INTEGER                                            :: vi
-    REAL(dp), DIMENSION(2)                             :: pa, pb
-    REAL(dp)                                           :: yl_ab
+    character(len=256), parameter                         :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
+    integer                                               :: vi
+    real(dp), dimension(2)                                :: pa_latlon, pb_latlon, pa, pb
+    real(dp)                                              :: xa, ya, xb, yb, yl_ab
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    pa = [-750000._dp,  900000._dp]
-    pb = [-250000._dp, 1250000._dp]
+    ! The two endpoints in lat,lon
+    pa_latlon = [76.74_dp, -74.79_dp]
+    pb_latlon = [82.19_dp, -60.00_dp]
 
-    DO vi = mesh%vi1, mesh%vi2
-      yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
-      IF (mesh%V( vi,2) > pa(2) .AND. mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) < pb(1)) THEN
+    ! The two endpoints in x,y
+    call oblique_sg_projection( pa_latlon(2), pa_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xa, ya)
+    call oblique_sg_projection( pb_latlon(2), pb_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xb, yb)
+
+    pa = [xa,ya]
+    pb = [xb,yb]
+
+    do vi = mesh%vi1, mesh%vi2
+      yl_ab = pa(2) + (mesh%V( vi,1) - pa(1)) * (pb(2)-pa(2)) / (pb(1)-pa(1))
+      if (mesh%V( vi,2) > pa(2) .and. mesh%V( vi,2) > yl_ab .and. mesh%V( vi,1) < pb(1)) then
         mask_noice( vi) = 1
-      ELSE
+      else
         mask_noice( vi) = 0
-      END IF
-    END DO
+      end if
+    end do
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_mask_noice_GRL_remove_Ellesmere
-  SUBROUTINE initialise_mask_noice_MISMIP_mod( mesh, mask_noice)
-    ! Confine ice to the circular shelf around the cone-shaped island of the MISMIP_mod idealised-geometry experiment
+  end subroutine initialise_mask_noice_GRL_remove_Ellesmere
 
-    IMPLICIT NONE
+! ===== Drainage basins =====
+! ===========================
 
-    ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIP_mod'
-    INTEGER                                            :: vi
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Create a nice circular ice shelf
-    DO vi = mesh%vi1, mesh%vi2
-      IF (SQRT(mesh%V( vi,1)**2 + mesh%V( vi,2)**2) > mesh%xmax * 0.95_dp) THEN
-        mask_noice( vi) = 1
-      ELSE
-        mask_noice( vi) = 0
-      END IF
-    END DO
-
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE initialise_mask_noice_MISMIP_mod
-  SUBROUTINE initialise_mask_noice_MISMIPplus( mesh, mask_noice)
-    ! Enforce the static calving front at x = 640 km in the MISMIP+ idealised geometry
-
-    IMPLICIT NONE
-
-    ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(:    ),          INTENT(OUT)   :: mask_noice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_MISMIPplus'
-    INTEGER                                            :: vi
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    DO vi = mesh%vi1, mesh%vi2
-      ! NOTE: because UFEMISM wants to centre the domain at x=0, the front now lies at x = 240 km
-      IF (mesh%V( vi,1) > 240000._dp) THEN
-        mask_noice( vi) = 1
-      ELSE
-        mask_noice( vi) = 0
-      END IF
-    END DO
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE initialise_mask_noice_MISMIPplus
-
-  ! == Routines for defining ice drainage basins from an external polygon file
   SUBROUTINE initialise_basins( mesh, basin_ID, nbasins, region_name)
     ! Define the ice basins mask from an external text file
 
@@ -1187,4 +1200,4 @@ CONTAINS
 
   END SUBROUTINE initialise_basins
 
-END MODULE general_ice_model_data_module
+end module general_ice_model_data_module

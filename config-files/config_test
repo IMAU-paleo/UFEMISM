@@ -222,7 +222,7 @@
   choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "idealised", "PD_obs", "matrix_warm_cold"
 
   ! NetCDF file containing the present-day observed climate (e.g. ERA40)
-  filename_PD_obs_climate_config              = 'data/ERA40/ERA40_climate_global.nc'
+  filename_PD_obs_climate_config              = 'data/ERA5/ERA5_clim_1959_2021.nc'
 
   ! GCM snapshots in the matrix_warm_cold option
   filename_climate_snapshot_PI_config         = 'data/CMIP5/atm/CCSM_CMIP5_piControl_atmos.nc'
@@ -259,14 +259,14 @@
   help_field_01_config                        = 'lat'
   help_field_02_config                        = 'lon'
   help_field_03_config                        = 'resolution'
-  help_field_04_config                        = 'Hi'
-  help_field_05_config                        = 'Hs'
-  help_field_06_config                        = 'Hb'
-  help_field_07_config                        = 'mask'
+  help_field_04_config                        = 'mask'
+  help_field_05_config                        = 'Hi'
+  help_field_06_config                        = 'Hs'
+  help_field_07_config                        = 'Hb'
   help_field_08_config                        = 'uabs_surf'
-  help_field_09_config                        = 'none'
-  help_field_10_config                        = 'none'
-  help_field_11_config                        = 'none'
+  help_field_09_config                        = 'T2m_year'
+  help_field_10_config                        = 'Precip_year'
+  help_field_11_config                        = 'SMB_year'
   help_field_12_config                        = 'none'
   help_field_13_config                        = 'none'
   help_field_14_config                        = 'none'

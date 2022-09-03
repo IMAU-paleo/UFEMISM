@@ -578,7 +578,7 @@ contains
     ELSEIF (field_name == 'Precip') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%climate_matrix%applied%Precip, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2)/12._dp, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, SUM(region%climate_matrix%applied%Precip,2), region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'Wind_WE') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%climate_matrix%applied%Wind_WE, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'Wind_WE_year') THEN
@@ -1151,9 +1151,9 @@ contains
     ELSEIF (field_name == 'Runoff_year') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff_year',              [vi,    t], id_var, long_name='Annual total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Albedo') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo',                   [vi, m, t], id_var, long_name='Monthly mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo',                   [vi, m, t], id_var, long_name='Monthly mean albedo', units='-')
     ELSEIF (field_name == 'Albedo_year') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [vi,    t], id_var, long_name='Annual mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [vi,    t], id_var, long_name='Annual mean albedo', units='-')
     ELSEIF (field_name == 'FirnDepth') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [vi, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
@@ -1438,7 +1438,7 @@ contains
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%climate_matrix%applied%Precip, id_var, netcdf%ti, 12)
     ELSEIF (field_name == 'Precip_year') THEN
       DO vi = region%mesh%vi1, region%mesh%vi2
-        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Precip( vi,:)) / 12._dp
+        dp_2D_a( vi) = SUM( region%climate_matrix%applied%Precip( vi,:))
       END DO
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti, region%mesh%nV)
     ELSEIF (field_name == 'Wind_WE') THEN
@@ -1915,9 +1915,9 @@ contains
     ELSEIF (field_name == 'Runoff_year') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff_year',              [x, y,    t], id_var, long_name='Annual total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Albedo') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo',                   [x, y, m, t], id_var, long_name='Monthly mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo',                   [x, y, m, t], id_var, long_name='Monthly mean albedo', units='-')
     ELSEIF (field_name == 'Albedo_year') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [x, y,    t], id_var, long_name='Annual mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [x, y,    t], id_var, long_name='Annual mean albedo', units='-')
     ELSEIF (field_name == 'FirnDepth') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [x, y, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN

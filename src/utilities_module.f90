@@ -172,56 +172,53 @@ CONTAINS
 
   END FUNCTION thickness_above_floatation
 
-! ! == The error function (used in the Roe&Lindzen precipitation model)
-!   SUBROUTINE error_function(X, ERR)
-!     ! Purpose: Compute error function erf(x)
-!     ! Input:   x   --- Argument of erf(x)
-!     ! Output:  ERR --- erf(x)
+! == The error function (used in the Roe&Lindzen precipitation model)
+  subroutine error_function(X, ERR)
+    ! Purpose: Compute error function erf(x)
+    ! Input:   x   --- Argument of erf(x)
+    ! Output:  ERR --- erf(x)
 
-!     IMPLICIT NONE
+    implicit none
 
-!     ! Input variables:
-!     REAL(dp), INTENT(IN)  :: X
+    ! Input/Output variables:
+    real(dp), intent(in)  :: X
+    real(dp), intent(out) :: ERR
 
-!     ! Output variables:
-!     REAL(dp), INTENT(OUT) :: ERR
+    ! Local variables:
+    real(dp)              :: EPS
+    real(dp)              :: X2
+    real(dp)              :: ER
+    real(dp)              :: R
+    real(dp)              :: C0
+    integer               :: k
 
-!     ! Local variables:
-!     REAL(dp)              :: EPS
-!     REAL(dp)              :: X2
-!     REAL(dp)              :: ER
-!     REAL(dp)              :: R
-!     REAL(dp)              :: C0
-!     INTEGER               :: k
+    EPS = 1.0E-15_dp
+    X2  = X * X
+    if ( abs(X) < 3.5_dp) then
+     ER = 1.0_dp
+     R  = 1.0_dp
+     do k = 1, 50
+       R  = R * X2 / (real(k, dp) + 0.5_dp)
+       ER = ER+R
+       if ( abs(R) < abs(ER) * EPS) then
+        C0  = 2.0_dp / sqrt(pi) * X * exp(-X2)
+        ERR = C0 * ER
+        exit
+       end if
+     end do
+    else
+     ER = 1.0_dp
+     R  = 1.0_dp
+     do k = 1, 12
+       R  = -R * (real(k, dp) - 0.5_dp) / X2
+       ER = ER + R
+       C0  = exp(-X2) / (abs(X) * sqrt(pi))
+       ERR = 1.0_dp - C0 * ER
+       if ( X < 0.0_dp) ERR = -ERR
+     end do
+    end if
 
-!     EPS = 1.0E-15_dp
-!     X2  = X * X
-!     IF(ABS(X) < 3.5_dp) THEN
-!      ER = 1.0_dp
-!      R  = 1.0_dp
-!      DO k = 1, 50
-!        R  = R * X2 / (REAL(k, dp) + 0.5_dp)
-!        ER = ER+R
-!        IF(ABS(R) < ABS(ER) * EPS) THEN
-!         C0  = 2.0_dp / SQRT(pi) * X * EXP(-X2)
-!         ERR = C0 * ER
-!         EXIT
-!        END IF
-!      END DO
-!     ELSE
-!      ER = 1.0_dp
-!      R  = 1.0_dp
-!      DO k = 1, 12
-!        R  = -R * (REAL(k, dp) - 0.5_dp) / X2
-!        ER = ER + R
-!        C0  = EXP(-X2) / (ABS(X) * SQRT(pi))
-!        ERR = 1.0_dp - C0 * ER
-!        IF(X < 0.0_dp) ERR = -ERR
-!      END DO
-!     ENDIF
-
-!     RETURN
-!   END SUBROUTINE error_function
+  end subroutine error_function
 
 ! ===== The oblique stereographic projection =====
 ! ================================================

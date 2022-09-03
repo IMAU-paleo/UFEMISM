@@ -201,16 +201,16 @@ contains
     implicit none
 
     ! In/output variables:
-    type(type_mesh),                       intent(in)  :: mesh
-    real(dp),                              intent(in)  :: time
-    real(dp), dimension(:,:),              intent(out) :: Q_TOA
+    type(type_mesh),                           intent(in)  :: mesh
+    real(dp),                                  intent(in)  :: time
+    real(dp), dimension(mesh%vi1:mesh%vi2,12), intent(out) :: Q_TOA
 
     ! Local variables:
-    character(len=256), parameter                      :: routine_name = 'get_insolation_at_time'
-    real(dp)                                           :: time_applied
-    integer                                            :: vi, m, ilat_l, ilat_u
-    real(dp)                                           :: wt0, wt1, wlat_l, wlat_u
-    real(dp), dimension(:,:), allocatable              :: Q_TOA_int
+    character(len=256), parameter                          :: routine_name = 'get_insolation_at_time'
+    real(dp)                                               :: time_applied
+    integer                                                :: vi, m, ilat_l, ilat_u
+    real(dp)                                               :: wt0, wt1, wlat_l, wlat_u
+    real(dp), dimension(:,:), allocatable                  :: Q_TOA_int
 
     ! Add routine to path
     call init_routine( routine_name)

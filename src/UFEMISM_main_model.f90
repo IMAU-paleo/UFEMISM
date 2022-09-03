@@ -7,27 +7,29 @@ module UFEMISM_main_model
 ! ================
 
   use mpi
-  use configuration_module,          only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parameters_module,             only:
-  use petsc_module,                  only: perr
-  use parallel_module,               only: par, sync, ierr, cerr, partition_list
-  use data_types_module,             only: type_model_region, type_grid, type_remapping_mesh_mesh
-  use reference_fields_module,       only: initialise_reference_geometries, map_reference_geometries_to_mesh
-  use mesh_memory_module,            only: deallocate_mesh_all
-  use mesh_creation_module,          only: create_mesh_from_cart_data
-  use mesh_mapping_module,           only: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+  use configuration_module,          only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  use parameters_module,             only :
+  use petsc_module,                  only : perr
+  use parallel_module,               only : par, sync, ierr, cerr, partition_list
+  use data_types_module,             only : type_model_region, type_grid, type_remapping_mesh_mesh, &
+                                            type_climate_matrix_global
+  use reference_fields_module,       only : initialise_reference_geometries, map_reference_geometries_to_mesh
+  use mesh_memory_module,            only : deallocate_mesh_all
+  use mesh_creation_module,          only : create_mesh_from_cart_data
+  use mesh_mapping_module,           only : calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
                                             calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
                                             calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
-  use mesh_update_module,            only: determine_mesh_fitness, create_new_mesh
-  use mesh_single_module,            only: create_new_mesh_single, create_single_mesh_from_cart_data
-  use netcdf_module,                 only: initialise_debug_fields, create_output_files, associate_debug_fields, &
+  use mesh_update_module,            only : determine_mesh_fitness, create_new_mesh
+  use mesh_single_module,            only : create_new_mesh_single, create_single_mesh_from_cart_data
+  use netcdf_module,                 only : initialise_debug_fields, create_output_files, associate_debug_fields, &
                                             write_to_output_files, create_debug_file, reallocate_debug_fields
-  use ice_dynamics_module,           only: initialise_ice_model, remap_ice_model, run_ice_model
-  use BMB_module,                    only: initialise_BMB_model, remap_bmb_model
-  use SMB_module,                    only: initialise_SMB_model, remap_smb_model
-  use general_ice_model_data_module, only: initialise_mask_noice, initialise_basins
-  use reallocate_mod,                only: reallocate
-  use utilities_module,              only: time_display, inverse_oblique_sg_projection
+  use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model
+  use climate_module,                only : initialise_climate_model_regional
+  use BMB_module,                    only : initialise_BMB_model, remap_bmb_model
+  use SMB_module,                    only : initialise_SMB_model, remap_smb_model
+  use general_ice_model_data_module, only : initialise_mask_noice, initialise_basins
+  use reallocate_mod,                only : reallocate
+  use utilities_module,              only : time_display, inverse_oblique_sg_projection
 
 ! ===== Preamble =====
 ! ====================
@@ -301,15 +303,16 @@ contains
 
   end subroutine run_model_update_mesh
 
-  subroutine initialise_model( region, name)
+  subroutine initialise_model( region, name, climate_matrix_global)
     ! Initialise the entire model region - read initial and PD data, create the mesh,
     ! initialise the ice dynamics, climate, ocean, and SMB sub models
 
     implicit none
 
     ! In/output variables:
-    type(type_model_region), intent(inout) :: region
-    character(len=3),        intent(in)    :: name
+    type(type_model_region),          intent(inout) :: region
+    character(len=3),                 intent(in)    :: name
+    type(type_climate_matrix_global), intent(inout) :: climate_matrix_global
 
     ! Local variables:
     character(len=256)                     :: routine_name
@@ -409,6 +412,11 @@ contains
     ! ======================
 
     call initialise_basins( region%mesh, region%ice)
+
+    ! ===== The climate model =====
+    ! =============================
+
+    CALL initialise_climate_model_regional( region, climate_matrix_global)
 
     ! ===== The SMB model =====
     ! =========================

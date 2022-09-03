@@ -19,7 +19,7 @@ MODULE SMB_module
   USE data_types_module,               ONLY: type_mesh, type_ice_model, &
                                              type_SMB_model, type_remapping_mesh_mesh, &
                                              type_climate_matrix_regional, &
-                                             type_climate_snapshot_regional, type_direct_SMB_forcing_regional, &
+                                             type_climate_snapshot_regional, &
                                              type_restart_data
   USE forcing_module,                  ONLY: forcing
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, &
@@ -87,11 +87,11 @@ CONTAINS
 
       CALL run_SMB_model_IMAUITM_wrongrefreezing( mesh, ice, climate_matrix%applied, SMB, mask_noice)
 
-    ELSEIF (C%choice_SMB_model == 'direct_global' .OR. &
-            C%choice_SMB_model == 'direct_regional') THEN
-      ! Use a directly prescribed global/regional SMB
+    ! ELSEIF (C%choice_SMB_model == 'direct_global' .OR. &
+    !         C%choice_SMB_model == 'direct_regional') THEN
+    !   ! Use a directly prescribed global/regional SMB
 
-      CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
+    !   CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
 
     ELSE
       IF (par%master) WRITE(0,*) 'run_SMB_model - ERROR: unknown choice_SMB_model "', TRIM(C%choice_SMB_model), '"!'
@@ -809,48 +809,48 @@ CONTAINS
   ! == Directly prescribed global/regional SMB
   ! ==========================================
 
-  SUBROUTINE run_SMB_model_direct( mesh, SMB_direct, SMB, time, mask_noice)
-    ! Run the selected SMB model: direct global/regional SMB forcing.
-    !
-    ! NOTE: the whole business of reading the data from the NetCDF file and mapping
-    !       it to the model mesh is handled by the climate_module!
-    ! NOTE ALSO: since the climate_module routines for the "direct_global" option
-    !       already map the results to the model mesh (located in region%climate_matrix%SMB_direct),
-    !       in this routine here we can treat "direct_global" and "direct_regional" the same way
+  ! SUBROUTINE run_SMB_model_direct( mesh, SMB_direct, SMB, time, mask_noice)
+  !   ! Run the selected SMB model: direct global/regional SMB forcing.
+  !   !
+  !   ! NOTE: the whole business of reading the data from the NetCDF file and mapping
+  !   !       it to the model mesh is handled by the climate_module!
+  !   ! NOTE ALSO: since the climate_module routines for the "direct_global" option
+  !   !       already map the results to the model mesh (located in region%climate_matrix%SMB_direct),
+  !   !       in this routine here we can treat "direct_global" and "direct_regional" the same way
 
-    IMPLICIT NONE
+  !   IMPLICIT NONE
 
-    ! In/output variables
-    TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    TYPE(type_direct_SMB_forcing_regional), INTENT(IN)    :: SMB_direct
-    TYPE(type_SMB_model),                   INTENT(INOUT) :: SMB
-    REAL(dp),                               INTENT(IN)    :: time
-    INTEGER,  DIMENSION(:    ),             INTENT(IN)    :: mask_noice
+  !   ! In/output variables
+  !   TYPE(type_mesh),                        INTENT(IN)    :: mesh
+  !   TYPE(type_direct_SMB_forcing_regional), INTENT(IN)    :: SMB_direct
+  !   TYPE(type_SMB_model),                   INTENT(INOUT) :: SMB
+  !   REAL(dp),                               INTENT(IN)    :: time
+  !   INTEGER,  DIMENSION(:    ),             INTENT(IN)    :: mask_noice
 
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_direct'
-    REAL(dp)                                           :: wt0, wt1
-    INTEGER                                            :: vi
+  !   ! Local variables:
+  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_direct'
+  !   REAL(dp)                                           :: wt0, wt1
+  !   INTEGER                                            :: vi
 
-    ! Add routine to path
-    CALL init_routine( routine_name)
+  !   ! Add routine to path
+  !   CALL init_routine( routine_name)
 
-    ! Interpolate the two timeframes in time
-    wt0 = (SMB_direct%t1 - time) / (SMB_direct%t1 - SMB_direct%t0)
-    wt1 = 1._dp - wt0
+  !   ! Interpolate the two timeframes in time
+  !   wt0 = (SMB_direct%t1 - time) / (SMB_direct%t1 - SMB_direct%t0)
+  !   wt1 = 1._dp - wt0
 
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mask_noice( vi) == 0) THEN
-        SMB%SMB_year( vi) = (wt0 * SMB_direct%SMB_year0( vi)) + (wt1 * SMB_direct%SMB_year1( vi))
-      ELSE
-        SMB%SMB_year( vi) = 0._dp
-      END IF
-    END DO
+  !   DO vi = mesh%vi1, mesh%vi2
+  !     IF (mask_noice( vi) == 0) THEN
+  !       SMB%SMB_year( vi) = (wt0 * SMB_direct%SMB_year0( vi)) + (wt1 * SMB_direct%SMB_year1( vi))
+  !     ELSE
+  !       SMB%SMB_year( vi) = 0._dp
+  !     END IF
+  !   END DO
 
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
+  !   ! Finalise routine path
+  !   CALL finalise_routine( routine_name)
 
-  END SUBROUTINE run_SMB_model_direct
+  ! END SUBROUTINE run_SMB_model_direct
 
   ! == Remapping after mesh update
   ! ==============================

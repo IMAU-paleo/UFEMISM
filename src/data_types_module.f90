@@ -717,9 +717,6 @@ MODULE data_types_module
 
   END TYPE type_memory_use_tracker
 
-  !===============================
-  !===============================
-
   ! Global climate types
   !=====================
 
@@ -749,61 +746,15 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:,:), allocatable :: Precip                        ! Monthly mean precipitation (m)
     REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE                       ! Monthly mean west-east wind speed (m/s)
     REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN                       ! Monthly mean south_north wind speed (m/s)
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
 
     ! Paralelisation
     INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
 
   END TYPE type_climate_snapshot_global
 
-  TYPE type_direct_climate_forcing_global
-    ! Direct global climate forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_climate_forcing_global) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), allocatable :: lat
-    REAL(dp), DIMENSION(:    ), allocatable :: lon
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframeallocatableg the model time)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Hs0,      Hs1                 ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: T2m0,     T2m1                ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Precip0,  Precip1             ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE0, Wind_WE1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN0, Wind_SN1            ! Monthly mean south_north wind speed (m/s)
-
-  END TYPE type_direct_climate_forcing_global
-
-  TYPE type_direct_SMB_forcing_global
-    ! Direct global SMB forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_SMB_forcing_global) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), allocatable :: lat
-    REAL(dp), DIMENSION(:    ), allocatable :: lon
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframeallocatableg the model time)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_year0, T2m_year1          ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: SMB_year0, SMB_year1          ! Yearly total SMB (m.i.e.)
-
-  END TYPE type_direct_SMB_forcing_global
-
   TYPE type_climate_matrix_global
-    ! The climate matrix data structure. Contains all the different global GCM snapshots.
+    ! The climate matrix data structure. Contains all the different global climate snapshots.
 
     ! The present-day observed climate (e.g. ERA40)
     TYPE(type_climate_snapshot_global)       :: PD_obs
@@ -812,10 +763,6 @@ MODULE data_types_module
     TYPE(type_climate_snapshot_global)       :: GCM_PI
     TYPE(type_climate_snapshot_global)       :: GCM_warm
     TYPE(type_climate_snapshot_global)       :: GCM_cold
-
-    ! ! Direct climate forcing
-    TYPE(type_direct_climate_forcing_global) :: direct
-    TYPE(type_direct_SMB_forcing_global)     :: SMB_direct
 
   END TYPE type_climate_matrix_global
 
@@ -843,6 +790,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_SN                       ! Monthly mean south-north wind speed (m/s)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_LR                       ! Monthly mean wind speed in the x-direction (m/s)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_DU                       ! Monthly mean wind speed in the y-direction (m/s)
+    REAL(dp), DIMENSION(:    ), allocatable :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
 
     ! Spatially variable lapse rallocatable snapshots (see Berends et al., 2018)
     REAL(dp), DIMENSION(:    ), allocatable :: lambda
@@ -850,6 +798,7 @@ MODULE data_types_module
     ! Bias-corrected GCM data   allocatable
     REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_corr                      ! Bias-corrected monthly mean 2m air temperature (K)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Precip_corr                   ! Bias-corrected monthly mean precipitation (m)
+    REAL(dp), DIMENSION(:    ), allocatable :: Hs_corr                       ! Bias-corrected surface elevation (m)
 
     ! Reference absorbed insolatallocatableM snapshots), or insolation at model time for the applied climate
     REAL(dp), DIMENSION(:,:  ), allocatable :: Q_TOA                         ! Monthly mean insolation at the top of the atmosphere (W/m2) (taken from the prescribed insolation solution at orbit_time)
@@ -857,65 +806,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: I_abs                         ! Total yearly absorbed insolation, used in the climate matrix for interpolation
 
   END TYPE type_climate_snapshot_regional
-
-  TYPE type_direct_climate_forcing_regional
-    ! Direct regional climate forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_climate_forcing_regional) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), allocatable :: x_raw, y_raw
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframes enveloping the model time) on the source grid
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Hs0_raw,      Hs1_raw         ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: T2m0_raw,     T2m1_raw        ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Precip0_raw,  Precip1_raw     ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE0_raw, Wind_WE1_raw    ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN0_raw, Wind_SN1_raw    ! Monthly mean south_north wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_LR0_raw, Wind_LR1_raw    ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_DU0_raw, Wind_DU1_raw    ! Monthly mean south_north wind speed (m/s)
-
-    ! Actual data (two timeframeallocatableg the model time) on the model mesh
-    REAL(dp), DIMENSION(:    ), allocatable :: Hs0,      Hs1                 ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m0,     T2m1                ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Precip0,  Precip1             ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_WE0, Wind_WE1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_SN0, Wind_SN1            ! Monthly mean south_north wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_LR0, Wind_LR1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_DU0, Wind_DU1            ! Monthly mean south_north wind speed (m/s)
-  END TYPE type_direct_climate_forcing_regional
-
-  TYPE type_direct_SMB_forcing_regional
-    ! Direct regional SMB forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_SMB_forcing_regional) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), allocatable :: x_raw, y_raw
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframes enveloping the model time) on the source grid
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_year0_raw, T2m_year1_raw  ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: SMB_year0_raw, SMB_year1_raw  ! Yearly total SMB (m.i.e.)
-
-    ! Actual data (two timeframeallocatableg the model time) on the model mesh
-    REAL(dp), DIMENSION(:    ), allocatable :: T2m_year0, T2m_year1          ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:    ), allocatable :: SMB_year0, SMB_year1          ! Yearly total SMB (m.i.e.)
-
-  END TYPE type_direct_SMB_forcing_regional
 
   TYPE type_climate_matrix_regional
     ! All the relevant climate data fields (PD observations, GCM snapshots, and final, applied climate) on the model region grid
@@ -932,10 +822,6 @@ MODULE data_types_module
     ! GCM bias
     REAL(dp), DIMENSION(:,:  ), allocatable :: GCM_bias_T2m                  ! GCM temperature   bias (= [modelled PI temperature  ] - [observed PI temperature  ])
     REAL(dp), DIMENSION(:,:  ), allocatable :: GCM_bias_Precip               ! GCM precipitation bias (= [modelled PI precipitation] / [observed PI precipitation])
-
-    ! Direct climate/SMB forcing
-    TYPE(type_direct_climate_forcing_regional) :: direct
-    TYPE(type_direct_SMB_forcing_regional)     :: SMB_direct
 
   END TYPE type_climate_matrix_regional
 

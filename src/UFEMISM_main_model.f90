@@ -25,7 +25,7 @@ module UFEMISM_main_model
   use ice_dynamics_module,           only: initialise_ice_model, remap_ice_model, run_ice_model
   use BMB_module,                    only: initialise_BMB_model, remap_bmb_model
   use SMB_module,                    only: initialise_SMB_model, remap_smb_model
-  use general_ice_model_data_module, only: initialise_mask_noice
+  use general_ice_model_data_module, only: initialise_mask_noice, initialise_basins
   use reallocate_mod,                only: reallocate
   use utilities_module,              only: time_display, inverse_oblique_sg_projection
 
@@ -404,6 +404,11 @@ contains
     ! ==================================
 
     call initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD)
+
+    ! ===== Ice basins =====
+    ! ======================
+
+    call initialise_basins( region%mesh, region%ice)
 
     ! ===== The SMB model =====
     ! =========================

@@ -145,9 +145,9 @@ MODULE data_types_module
 
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_in
-    ! REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_out ! Unused
-    REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
 
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp)                                :: pc_zeta
@@ -199,6 +199,10 @@ MODULE data_types_module
     ! Mesh adaptation data
     REAL(dp), DIMENSION(:    ), allocatable :: surf_curv
     REAL(dp), DIMENSION(:    ), allocatable :: log_velocity
+
+    ! Useful extra stuff
+    REAL(dp), DIMENSION(:    ), allocatable :: dHi_a   ! Ice thickness difference w.r.t. PD
+    REAL(dp), DIMENSION(:    ), allocatable :: dHs_a   ! Ice elevation difference w.r.t. PD
 
   END TYPE type_ice_model
 

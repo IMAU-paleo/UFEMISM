@@ -2032,43 +2032,48 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_c_3D
+
 #endif
+
   ! Initialise/remap data fields for the velocity solver(s)
-  SUBROUTINE initialise_velocity_solver( mesh, ice)
+  subroutine initialise_velocity_solver( mesh, ice)
     ! Allocate and initialise data fields for the velocity solver
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_velocity_solver'
-    LOGICAL                                            :: is_ISMIP_HOM
-    REAL(dp), DIMENSION(:    ), allocatable            ::  u_ISMIP_HOM
-    INTEGER                                            :: ti
-    REAL(dp)                                           :: umin, umax, x, y
+    character(len=256), parameter       :: routine_name = 'initialise_velocity_solver'
+    real(dp), dimension(:), allocatable ::  u_ISMIP_HOM
+    integer                             :: ti
+    real(dp)                            :: umin, umax, x, y
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
+    if (C%choice_ice_dynamics == 'SIA' .or. &
+        C%choice_ice_dynamics == 'SIA/SSA') then
       ! Data fields for the SIA
 
       allocate( ice%u_3D_SIA_b ( mesh%ti1:mesh%ti2, C%nz ))
       allocate( ice%v_3D_SIA_b ( mesh%ti1:mesh%ti2, C%nz ))
 
-    END IF
+    end if
 
-    IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA' .OR. C%choice_ice_dynamics == 'DIVA') THEN
+    if (C%choice_ice_dynamics == 'SSA' .or. &
+        C%choice_ice_dynamics == 'SIA/SSA' .or. &
+        C%choice_ice_dynamics == 'DIVA') then
       ! Data fields for the SSA / DIVA
 
-      IF (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA') THEN
+      if (C%choice_ice_dynamics == 'SSA' .or. &
+          C%choice_ice_dynamics == 'SIA/SSA') then
         ! Velocity fields containing the SSA solution on the b-grid
         allocate( ice%u_base_SSA_b ( mesh%ti1:mesh%ti2 ))
         allocate( ice%v_base_SSA_b ( mesh%ti1:mesh%ti2 ))
-      END IF
+      end if
 
       ! Physical terms in the SSA/DIVA
       allocate( ice%taudx_b        ( mesh%ti1:mesh%ti2              ))
@@ -2095,22 +2100,17 @@ contains
       allocate( ice%ti2n_u         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%ti2n_v         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%n2ti_uv     ( 2*(mesh%ti1-1)+1:2*mesh%ti2, 2    ))
-      CALL initialise_matrix_conversion_lists(  mesh, ice)
-      CALL initialise_SSADIVA_stiffness_matrix( mesh, ice)
+      call initialise_matrix_conversion_lists(  mesh, ice)
+      call initialise_SSADIVA_stiffness_matrix( mesh, ice)
 
-    END IF
+    end if
 
     ! Initialise the ISMIP-HOM experiments for faster convergence
-    is_ISMIP_HOM = .FALSE.
-    IF (C%choice_refgeo_init_ANT == 'idealised' .AND. &
-       (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A' .OR. &
-        C%choice_refgeo_init_idealised == 'ISMIP_HOM_B' .OR. &
-        C%choice_refgeo_init_idealised == 'ISMIP_HOM_C' .OR. &
-        C%choice_refgeo_init_idealised == 'ISMIP_HOM_D')) THEN
-      is_ISMIP_HOM = .TRUE.
-    END IF
-
-    IF (is_ISMIP_HOM) THEN
+    if (C%choice_refgeo_init_ANT == 'idealised' .and. &
+       (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A' .or. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_B' .or. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_C' .or. &
+        C%choice_refgeo_init_idealised == 'ISMIP_HOM_D')) then
 
       ! Allocate shared memory
       allocate( u_ISMIP_HOM (mesh%ti1:mesh%ti2))
@@ -2119,153 +2119,154 @@ contains
       umax = 0._dp
 
       ! Calculate an approximation of the solution
-      IF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A') THEN
+      if (C%choice_refgeo_init_idealised == 'ISMIP_HOM_A') then
 
-        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+        if     (C%ISMIP_HOM_L == 160000._dp) then
           umin = 1.6_dp
           umax = 108.84_dp
-        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  80000._dp) then
           umin = 1.75_dp
           umax = 95.73_dp
-        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  40000._dp) then
           umin = 2.27_dp
           umax = 74.45_dp
-        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  20000._dp) then
           umin = 4.49_dp
           umax = 49.99_dp
-        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  10000._dp) then
           umin = 11.09_dp
           umax = 32.74_dp
-        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==   5000._dp) then
           umin = 18.38_dp
           umax = 24.79_dp
-        END IF
+        end if
 
-        DO ti = mesh%ti1, mesh%ti2
+        do ti = mesh%ti1, mesh%ti2
           x = mesh%TriGC( ti,1)
           y = mesh%TriGC( ti,2)
-          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
-        END DO
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (sin( x) * sin( y))) / 2._dp)**2
+        end do
 
-      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_B') THEN
+      elseif (C%choice_refgeo_init_idealised == 'ISMIP_HOM_B') then
 
-        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+        if     (C%ISMIP_HOM_L == 160000._dp) then
           umin = 1.57_dp
           umax = 111.41_dp
-        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  80000._dp) then
           umin = 1.69_dp
           umax = 100.73_dp
-        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  40000._dp) then
           umin = 2.09_dp
           umax = 82.3_dp
-        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  20000._dp) then
           umin = 3.92_dp
           umax = 57.84_dp
-        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  10000._dp) then
           umin = 10.23_dp
           umax = 35.2_dp
-        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==   5000._dp) then
           umin = 17.22_dp
           umax = 23.53_dp
-        END IF
+        end if
 
-        DO ti = mesh%ti1, mesh%ti2
+        do ti = mesh%ti1, mesh%ti2
           x = mesh%TriGC( ti,1)
           y = mesh%TriGC( ti,2)
-          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
-        END DO
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - sin( x)) / 2._dp)**2
+        end do
 
-      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_C') THEN
+      elseif (C%choice_refgeo_init_idealised == 'ISMIP_HOM_C') then
 
-        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+        if     (C%ISMIP_HOM_L == 160000._dp) then
           umin = 8.77_dp
           umax = 143.45_dp
-        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  80000._dp) then
           umin = 9.8_dp
           umax = 60.28_dp
-        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  40000._dp) then
           umin = 11.84_dp
           umax = 28.57_dp
-        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  20000._dp) then
           umin = 14.55_dp
           umax = 18.48_dp
-        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  10000._dp) then
           umin = 15.7_dp
           umax = 16.06_dp
-        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==   5000._dp) then
           umin = 13.38_dp
           umax = 13.51_dp
-        END IF
+        end if
 
-        DO ti = mesh%ti1, mesh%ti2
+        do ti = mesh%ti1, mesh%ti2
           x = mesh%TriGC( ti,1)
           y = mesh%TriGC( ti,2)
           u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - (SIN( x) * SIN( y))) / 2._dp)**2
-        END DO
+        end do
 
-      ELSEIF (C%choice_refgeo_init_idealised == 'ISMIP_HOM_D') THEN
+      elseif (C%choice_refgeo_init_idealised == 'ISMIP_HOM_D') then
 
-        IF     (C%ISMIP_HOM_L == 160000._dp) THEN
+        if     (C%ISMIP_HOM_L == 160000._dp) then
           umin = 8.62_dp
           umax = 227.23_dp
-        ELSEIF (C%ISMIP_HOM_L ==  80000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  80000._dp) then
           umin = 9.65_dp
           umax = 94.79_dp
-        ELSEIF (C%ISMIP_HOM_L ==  40000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  40000._dp) then
           umin = 12.18_dp
           umax = 40.06_dp
-        ELSEIF (C%ISMIP_HOM_L ==  20000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  20000._dp) then
           umin = 15.28_dp
           umax = 20.29_dp
-        ELSEIF (C%ISMIP_HOM_L ==  10000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==  10000._dp) then
           umin = 15.93_dp
           umax = 16.25_dp
-        ELSEIF (C%ISMIP_HOM_L ==   5000._dp) THEN
+        elseif (C%ISMIP_HOM_L ==   5000._dp) then
           umin = 14.43_dp
           umax = 14.59_dp
-        END IF
+        end if
 
-        DO ti = mesh%ti1, mesh%ti2
+        do ti = mesh%ti1, mesh%ti2
           x = mesh%TriGC( ti,1)
           y = mesh%TriGC( ti,2)
-          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - SIN( x)) / 2._dp)**2
-        END DO
+          u_ISMIP_HOM( ti) = umin + (umax - umin) * ( (1._dp - sin( x)) / 2._dp)**2
+        end do
 
-      END IF
+      end if
 
       ! Initialise velocity fields with the approximation
-      IF     (C%choice_ice_dynamics == 'SIA/SSA') THEN
+      if     (C%choice_ice_dynamics == 'SIA/SSA') then
         ice%u_base_SSA_b( mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+      elseif (C%choice_ice_dynamics == 'DIVA') then
         ice%u_vav_b(      mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
-      END IF
+      end if
 
       ! Clean up after yourself
       deallocate( u_ISMIP_HOM)
 
-    END IF ! IF (is_ISMIP_HOM) THEN
+    end if
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
+    call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
 
-  END SUBROUTINE initialise_velocity_solver
-  SUBROUTINE initialise_matrix_conversion_lists( mesh, ice)
+  end subroutine initialise_velocity_solver
+
+  subroutine initialise_matrix_conversion_lists( mesh, ice)
     ! Initialise lists for converting triangle indices to stiffness matrix rows and vice versa
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_matrix_conversion_lists'
-    INTEGER                                            :: ti, nu, nv
+    character(LEN=256), parameter       :: routine_name = 'initialise_matrix_conversion_lists'
+    integer                             :: ti, nu, nv
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    DO ti = mesh%ti1, mesh%ti2
+    do ti = mesh%ti1, mesh%ti2
 
       nu = 2*ti - 1
       nv = 2*ti
@@ -2276,30 +2277,30 @@ contains
       ice%n2ti_uv( nu,:) = [ti,0 ]
       ice%n2ti_uv( nv,:) = [0 ,ti]
 
-    END DO
-    CALL sync
+    end do
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_matrix_conversion_lists
-  SUBROUTINE initialise_SSADIVA_stiffness_matrix( mesh, ice)
+  end subroutine initialise_matrix_conversion_lists
+
+  subroutine initialise_SSADIVA_stiffness_matrix( mesh, ice)
     ! Initialise the non-zero structure template of the SSA/DIVA stiffness matrix
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SSADIVA_stiffness_matrix'
-    INTEGER                                            :: ncols, nrows, nnz_per_row_max, nnz_max
-    INTEGER                                            :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
-    integer, dimension(:), allocatable                 :: ti2n_u, ti2n_v
+    character(len=256), parameter       :: routine_name = 'initialise_SSADIVA_stiffness_matrix'
+    integer                             :: ncols, nrows, nnz_per_row_max, nnz_max
+    integer                             :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
+    integer, dimension(:), allocatable  :: ti2n_u, ti2n_v
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Allocate shared memory for A
     ncols           = 2*mesh%nTri    ! from
@@ -2307,10 +2308,10 @@ contains
     nnz_per_row_max = 20
 
     nnz_max = nrows * nnz_per_row_max
-    CALL allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
+    call allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
 
     ! Fill in matrix rows, right-hand side, and initial guess
-    CALL partition_list( mesh%nTri, par%i, par%n, n1, n2)
+    call partition_list( mesh%nTri, par%i, par%n, n1, n2)
 
     allocate(ti2n_u( 1:mesh%nTri))
     allocate(ti2n_v( 1:mesh%nTri))
@@ -2319,21 +2320,21 @@ contains
     call allgather_array(ti2n_u)
     call allgather_array(ti2n_v)
 
-    DO n = 1+2*(n1-1), n2*2
+    do n = 1+2*(n1-1), n2*2
 
       ! Fill matrix coefficients
-      IF (ice%n2ti_uv( n,1) > 0) THEN
+      if (ice%n2ti_uv( n,1) > 0) then
         ! u
 
         ti = ice%n2ti_uv( n,1)
 
-        IF (mesh%Tri_edge_index( ti) == 0) THEN
+        if (mesh%Tri_edge_index( ti) == 0) then
           ! Free triangle: fill in matrix row for the SSA/DIVA
 
           k1 = mesh%M2_ddx_b_b_CSR%ptr( ti)
           k2 = mesh%M2_ddx_b_b_CSR%ptr( ti+1) - 1
 
-          DO k = k1, k2
+          do k = k1, k2
 
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
             mu = ti2n_u( tj)
@@ -2347,16 +2348,16 @@ contains
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
 
-          END DO
+          end do
 
-        ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        else ! IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Border triangle: apply boundary conditions
 
           k1 = mesh%M_Neumann_BC_b_CSR%ptr( ti)
           k2 = mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
 
           ! Matrix
-          DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
+          do k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
 
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
             mu = ti2n_u( tj)
@@ -2365,22 +2366,22 @@ contains
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mu
 
-          END DO
+          end do
 
-        END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        end if ! IF (mesh%Tri_edge_index( ti) == 0) THEN
 
-      ELSE ! IF (MOD( n,2) == 1) THEN
+      else ! IF (MOD( n,2) == 1) THEN
         ! v
 
         ti = ice%n2ti_uv( n,2)
 
-        IF (mesh%Tri_edge_index( ti) == 0) THEN
+        if (mesh%Tri_edge_index( ti) == 0) then
           ! Free triangle: fill in matrix row for the SSA/DIVA
 
           k1 = mesh%M2_ddx_b_b_CSR%ptr( ti)
           k2 = mesh%M2_ddx_b_b_CSR%ptr( ti+1) - 1
 
-          DO k = k1, k2
+          do k = k1, k2
 
             tj  = mesh%M2_ddx_b_b_CSR%index( k)
             mu = ti2n_u( tj)
@@ -2394,16 +2395,16 @@ contains
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
 
-          END DO
+          end do
 
-        ELSE ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        else ! IF (mesh%Tri_edge_index( ti) == 0) THEN
           ! Border triangle: apply boundary conditions
 
           k1 = mesh%M_Neumann_BC_b_CSR%ptr( ti)
           k2 = mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
 
           ! Matrix
-          DO k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
+          do k = mesh%M_Neumann_BC_b_CSR%ptr( ti), mesh%M_Neumann_BC_b_CSR%ptr( ti+1) - 1
 
             tj  = mesh%M_Neumann_BC_b_CSR%index( k)
             mu = ti2n_u( tj)
@@ -2412,24 +2413,25 @@ contains
             ice%M_SSADIVA%nnz =  ice%M_SSADIVA%nnz + 1
             ice%M_SSADIVA%index( ice%M_SSADIVA%nnz) = mv
 
-          END DO
+          end do
 
-        END IF ! IF (mesh%Tri_edge_index( ti) == 0) THEN
+        end if ! IF (mesh%Tri_edge_index( ti) == 0) THEN
 
-      END IF ! IF (MOD( n,2) == 1) THEN
+      end if ! IF (MOD( n,2) == 1) THEN
 
       ! Finalise this matrix row
       ice%M_SSADIVA%ptr( n+1 : 2*mesh%nTri+1) = ice%M_SSADIVA%nnz+1
 
-    END DO ! DO n = n1, n2
+    end do ! DO n = n1, n2
 
     ! Combine results from the different processes
-    CALL finalise_matrix_CSR_dist( ice%M_SSADIVA, 1+2*(n1-1), n2*2)
+    call finalise_matrix_CSR_dist( ice%M_SSADIVA, 1+2*(n1-1), n2*2)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
+    call finalise_routine( routine_name, n_extra_windows_expected = 7)
 
-  END SUBROUTINE initialise_SSADIVA_stiffness_matrix
+  end subroutine initialise_SSADIVA_stiffness_matrix
+
   SUBROUTINE remap_velocities( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2466,7 +2468,9 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities
+
 #if 0
+
   SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 

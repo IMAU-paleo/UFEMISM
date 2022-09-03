@@ -403,7 +403,7 @@ contains
     ! ===== The ice dynamics model =====
     ! ==================================
 
-    call initialise_ice_model( region%mesh, region%ice, region%refgeo_init)
+    call initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD)
 
     ! ===== The SMB model =====
     ! =========================

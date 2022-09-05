@@ -12,7 +12,7 @@ module UFEMISM_main_model
   use petsc_module,                  only : perr
   use parallel_module,               only : par, sync, ierr, cerr, partition_list
   use data_types_module,             only : type_model_region, type_grid, type_remapping_mesh_mesh, &
-                                            type_climate_matrix_global
+                                            type_climate_matrix_global, type_ocean_matrix_global
   use reference_fields_module,       only : initialise_reference_geometries, map_reference_geometries_to_mesh
   use mesh_memory_module,            only : deallocate_mesh_all
   use mesh_creation_module,          only : create_mesh_from_cart_data
@@ -24,6 +24,7 @@ module UFEMISM_main_model
   use netcdf_module,                 only : initialise_debug_fields, create_output_files, associate_debug_fields, &
                                             write_to_output_files, create_debug_file, reallocate_debug_fields
   use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model
+  use ocean_module,                  only : initialise_ocean_model_regional
   use climate_module,                only : initialise_climate_model_regional
   use BMB_module,                    only : initialise_BMB_model, remap_bmb_model
   use SMB_module,                    only : initialise_SMB_model, remap_smb_model
@@ -303,7 +304,7 @@ contains
 
   end subroutine run_model_update_mesh
 
-  subroutine initialise_model( region, name, climate_matrix_global)
+  subroutine initialise_model( region, name, climate_matrix_global, ocean_matrix_global)
     ! Initialise the entire model region - read initial and PD data, create the mesh,
     ! initialise the ice dynamics, climate, ocean, and SMB sub models
 
@@ -313,9 +314,10 @@ contains
     type(type_model_region),          intent(inout) :: region
     character(len=3),                 intent(in)    :: name
     type(type_climate_matrix_global), intent(inout) :: climate_matrix_global
+    type(type_ocean_matrix_global),   intent(inout) :: ocean_matrix_global
 
     ! Local variables:
-    character(len=256)                     :: routine_name
+    character(len=256)                              :: routine_name
 
     ! Add routine to path
     routine_name = 'initialise_model('  //  name  //  ')'
@@ -417,6 +419,11 @@ contains
     ! =============================
 
     CALL initialise_climate_model_regional( region, climate_matrix_global)
+
+    ! ===== The ocean model =====
+    ! ===========================
+
+    CALL initialise_ocean_model_regional( region, ocean_matrix_global)
 
     ! ===== The SMB model =====
     ! =========================

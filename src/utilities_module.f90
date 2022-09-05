@@ -1961,254 +1961,254 @@ CONTAINS
 !     CALL sync
 
 !   END SUBROUTINE map_glob_to_grid_2D
-!   SUBROUTINE map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
-!     ! Map a data field from a global lat-lon grid to the regional square grid
 
-!     IMPLICIT NONE
+  subroutine map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
+    ! Map a data field from a global lat-lon grid to the regional square grid
 
-!     ! In/output variables:
-!     INTEGER,                         INTENT(IN)  :: nlat
-!     INTEGER,                         INTENT(IN)  :: nlon
-!     REAL(dp), DIMENSION(nlat),       INTENT(IN)  :: lat
-!     REAL(dp), DIMENSION(nlon),       INTENT(IN)  :: lon
-!     TYPE(type_grid),                 INTENT(IN)  :: grid
-!     REAL(dp), DIMENSION(:,:,:),      INTENT(IN)  :: d_glob
-!     REAL(dp), DIMENSION(:,:,:),      INTENT(OUT) :: d_grid
+    implicit none
 
-!     ! Local variables:
-!     INTEGER                                      :: i, j, il, iu, jl, ju, k, nz
-!     REAL(dp)                                     :: wil, wiu, wjl, wju
+    ! In/output variables:
+    integer,                    intent(in)  :: nlat
+    integer,                    intent(in)  :: nlon
+    real(dp), dimension(nlat),  intent(in)  :: lat
+    real(dp), dimension(nlon),  intent(in)  :: lon
+    type(type_grid),            intent(in)  :: grid
+    real(dp), dimension(:,:,:), intent(in)  :: d_glob
+    real(dp), dimension(:,:,:), intent(out) :: d_grid
 
-!     nz = SIZE( d_glob,3)
+    ! Local variables:
+    integer                                 :: i, j, il, iu, jl, ju, k, nz
+    real(dp)                                :: wil, wiu, wjl, wju
 
-!     ! Safety
-!     IF (SIZE(d_grid,3) /= nz) THEN
-!       WRITE(0,*) 'map_glob_to_grid_3D - ERROR: Z-dimensions of global data (', SIZE(d_glob,3), ') and grid data (', SIZE(d_grid,3), ') fields do not match!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
+    nz = size( d_glob,3)
 
-!     DO j = 1, grid%ny
-!     DO i = grid%i1, grid%i2
+    ! Safety
+    if (size(d_grid,3) /= nz) then
+      call crash('Z-dimensions of global data and grid data fields do not match!')
+    end if
 
-!       ! Find enveloping lat-lon indices
-!       il  = MAX(1,MIN(nlon-1, 1 + FLOOR((grid%lon(i,j)-MINVAL(lon)) / (lon(2)-lon(1)))))
-!       iu  = il+1
-!       wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
-!       wiu = 1-wil
+    do j = 1, grid%ny
+    do i = grid%i1, grid%i2
 
-!       ! Exception for pixels near the zero meridian
-!       IF (grid%lon(i,j) < MINVAL(lon)) THEN
-!         il = nlon
-!         iu = 1
-!         wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
-!         wiu = 1-wil
-!       ELSEIF (grid%lon(i,j) > MAXVAL(lon)) THEN
-!         il = nlon
-!         iu = 1
-!         wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
-!         wil = 1-wiu
-!       END IF
+      ! Find enveloping lat-lon indices
+      il  = max(1,min(nlon-1, 1 + floor((grid%lon(i,j)-minval(lon)) / (lon(2)-lon(1)))))
+      iu  = il+1
+      wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+      wiu = 1-wil
 
-!       jl  = MAX(1,MIN(nlat-1, 1 + FLOOR((grid%lat(i,j)-MINVAL(lat)) / (lat(2)-lat(1)))))
-!       ju  = jl+1
-!       wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
-!       wju = 1-wjl
+      ! Exception for pixels near the zero meridian
+      if (grid%lon(i,j) < minval(lon)) then
+        il = nlon
+        iu = 1
+        wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+        wiu = 1-wil
+      elseif (grid%lon(i,j) > maxval(lon)) then
+        il = nlon
+        iu = 1
+        wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
+        wil = 1-wiu
+      end if
 
-!       ! Interpolate data
-!       DO k = 1, nz
-!         d_grid( i,j,k) = (d_glob( il,jl,k) * wil * wjl) + &
-!                          (d_glob( il,ju,k) * wil * wju) + &
-!                          (d_glob( iu,jl,k) * wiu * wjl) + &
-!                          (d_glob( iu,ju,k) * wiu * wju)
-!       END DO
+      jl  = max(1,min(nlat-1, 1 + floor((grid%lat(i,j)-minval(lat)) / (lat(2)-lat(1)))))
+      ju  = jl+1
+      wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
+      wju = 1-wjl
 
-!     END DO
-!     END DO
-!     CALL sync
+      ! Interpolate data
+      do k = 1, nz
+        d_grid( i,j,k) = (d_glob( il,jl,k) * wil * wjl) + &
+                         (d_glob( il,ju,k) * wil * wju) + &
+                         (d_glob( iu,jl,k) * wiu * wjl) + &
+                         (d_glob( iu,ju,k) * wiu * wju)
+      end do
 
-!   END SUBROUTINE map_glob_to_grid_3D
+    end do
+    end do
 
-!   ! == Gaussian extrapolation (used for ocean data)
-!   SUBROUTINE extrapolate_Gaussian_floodfill( grid, mask, d, sigma, mask_filled)
-!     ! Extrapolate the data field d into the area designated by the mask,
-!     ! using Gaussian extrapolation of sigma
-!     !
-!     ! NOTE: not parallelised! This is done instead by dividing vertical
-!     !       ocean layers over the processes.
-!     !
-!     ! Note about the mask:
-!     !    2 = data provided
-!     !    1 = no data provided, fill allowed
-!     !    0 = no fill allowed
-!     ! (so basically this routine extrapolates data from the area
-!     !  where mask == 2 into the area where mask == 1)
+  end subroutine map_glob_to_grid_3D
 
-!     IMPLICIT NONE
+  ! == Gaussian extrapolation (used for ocean data)
+  subroutine extrapolate_Gaussian_floodfill( grid, mask, d, sigma, mask_filled)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! NOTE: not parallelised! This is done instead by dividing vertical
+    !       ocean layers over the processes.
+    !
+    ! Note about the mask:
+    !    2 = data provided
+    !    1 = no data provided, fill allowed
+    !    0 = no fill allowed
+    ! (so basically this routine extrapolates data from the area
+    !  where mask == 2 into the area where mask == 1)
 
-!     ! In/output variables:
-!     TYPE(type_grid),                     INTENT(IN)    :: grid
-!     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)    :: mask
-!     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
-!     REAL(dp),                            INTENT(IN)    :: sigma
-!     INTEGER,  DIMENSION(:,:  ),          INTENT(OUT)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
+    implicit none
 
-!     ! Local variables:
-!     INTEGER                                            :: i,j,k,ii,jj,it
-!     INTEGER                                            :: stackN1, stackN2
-!     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: stack1, stack2
-!     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: map
-!     INTEGER                                            :: n_search
-!     LOGICAL                                            :: has_filled_neighbours
-!     INTEGER                                            :: n
-!     REAL(dp)                                           :: sum_d, w, sum_w
+    ! In/output variables:
+    type(type_grid),            intent(in)    :: grid
+    integer,  dimension(:,:  ), intent(in)    :: mask
+    real(dp), dimension(:,:  ), intent(inout) :: d
+    real(dp),                   intent(in)    :: sigma
+    integer,  dimension(:,:  ), intent(out)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
 
-!     n_search = 1 + CEILING( 2._dp * sigma / grid%dx)
+    ! Local variables:
+    integer                                   :: i,j,k,ii,jj,it
+    integer                                   :: stackN1, stackN2
+    integer,  dimension(:,:  ), allocatable   :: stack1, stack2
+    integer,  dimension(:,:  ), allocatable   :: map
+    integer                                   :: n_search
+    logical                                   :: has_filled_neighbours
+    integer                                   :: n
+    real(dp)                                  :: sum_d, w, sum_w
 
-!     ! Allocate map and stacks. Amount for memory is an estimation; if there
-!     ! are out-of-bounds errors, increase the memory for the stacks.
-!     ALLOCATE( map(       grid%nx,  grid%ny))
-!     ALLOCATE( stack1( 8*(grid%nx + grid%ny),2))
-!     ALLOCATE( stack2( 8*(grid%nx + grid%ny),2))
+    n_search = 1 + ceiling( 2._dp * sigma / grid%dx)
 
-!     map         = 0
-!     stack1      = 0
-!     stack2      = 0
-!     stackN1     = 0
-!     stackN2     = 0
-!     mask_filled = 0
+    ! Allocate map and stacks. Amount for memory is an estimation; if there
+    ! are out-of-bounds errors, increase the memory for the stacks.
+    allocate( map(       grid%nx,  grid%ny))
+    allocate( stack1( 8*(grid%nx + grid%ny),2))
+    allocate( stack2( 8*(grid%nx + grid%ny),2))
 
-!     ! Initialise the map from the mask
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
-!       IF (mask( i,j) == 2) THEN
-!         map( i,j) = 2
-!       END IF
-!     END DO
-!     END DO
+    map         = 0
+    stack1      = 0
+    stack2      = 0
+    stackN1     = 0
+    stackN2     = 0
+    mask_filled = 0
 
-!     ! Initialise the stack with all empty-next-to-filled grid cells
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
+    ! Initialise the map from the mask
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      if (mask( i,j) == 2) then
+        map( i,j) = 2
+      end if
+    end do
+    end do
 
-!       IF (mask( i,j) == 1) THEN
-!         ! This grid cell is empty and should be filled
+    ! Initialise the stack with all empty-next-to-filled grid cells
+    do j = 1, grid%ny
+    do i = 1, grid%nx
 
-!         has_filled_neighbours = .FALSE.
-!         DO jj = MAX(1 ,j-1), MIN(grid%ny,j+1)
-!         DO ii = MAX(1 ,i-1), MIN(grid%nx,i+1)
-!           IF (mask( ii,jj) == 2) THEN
-!             has_filled_neighbours = .TRUE.
-!             EXIT
-!           END IF
-!         END DO
-!         IF (has_filled_neighbours) EXIT
-!         END DO
+      if (mask( i,j) == 1) then
+        ! This grid cell is empty and should be filled
 
-!         IF (has_filled_neighbours) THEN
-!           ! Add this empty-with-filled-neighbours grid cell to the stack,
-!           ! and mark it as stacked on the map
-!           map( i,j) = 1
-!           stackN2 = stackN2 + 1
-!           stack2( stackN2,:) = [i,j]
-!         END IF
+        has_filled_neighbours = .false.
+        do jj = max(1 ,j-1), min(grid%ny,j+1)
+        do ii = max(1 ,i-1), min(grid%nx,i+1)
+          if (mask( ii,jj) == 2) then
+            has_filled_neighbours = .true.
+            exit
+          end if
+        end do
+        if (has_filled_neighbours) then
+          exit
+        end if
+        end do
 
-!       END IF ! IF (map( i,j) == 0) THEN
+        if (has_filled_neighbours) then
+          ! Add this empty-with-filled-neighbours grid cell to the stack,
+          ! and mark it as stacked on the map
+          map( i,j) = 1
+          stackN2 = stackN2 + 1
+          stack2( stackN2,:) = [i,j]
+        end if
 
-!     END DO
-!     END DO
+      end if
 
-!     ! Perform the flood-fill
-!     it = 0
-!     DO WHILE (stackN2 > 0)
+    end do
+    end do
 
-!       it = it + 1
+    ! Perform the flood-fill
+    it = 0
+    do while (stackN2 > 0)
 
-!       ! Go over all the stacked empty-next-to-filled grid cells, perform the
-!       ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
-!       DO k = 1, stackN2
+      it = it + 1
 
-!         ! Get grid cell indices
-!         i = stack2( k,1)
-!         j = stack2( k,2)
+      ! Go over all the stacked empty-next-to-filled grid cells, perform the
+      ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
+      do k = 1, stackN2
 
-!         ! Find Gaussian-weighted average value over nearby filled pixels within the basin
-!         n     = 0
-!         sum_d = 0._dp
-!         sum_w = 0._dp
+        ! Get grid cell indices
+        i = stack2( k,1)
+        j = stack2( k,2)
 
-!         DO jj = MAX( 1 ,j - n_search), MIN( grid%ny,j + n_search)
-!         DO ii = MAX( 1 ,i - n_search), MIN( grid%nx,i + n_search)
+        ! Find Gaussian-weighted average value over nearby filled pixels within the basin
+        n     = 0
+        sum_d = 0._dp
+        sum_w = 0._dp
 
-!           IF (map( ii,jj) == 2) THEN
-!             n     = n + 1
-!             w     = EXP( -0.5_dp * (SQRT(REAL(ii-i,dp)**2 + REAL(jj-j,dp)**2) / sigma)**2)
-!             sum_w = sum_w + w
-!             sum_d = sum_d + w * d( ii,jj)
-!           END IF
+        do jj = max( 1 ,j - n_search), min( grid%ny,j + n_search)
+        do ii = max( 1 ,i - n_search), min( grid%nx,i + n_search)
 
-!         END DO
-!         END DO
+          if (map( ii,jj) == 2) then
+            n     = n + 1
+            w     = exp( -0.5_dp * (sqrt(real(ii-i,dp)**2 + real(jj-j,dp)**2) / sigma)**2)
+            sum_w = sum_w + w
+            sum_d = sum_d + w * d( ii,jj)
+          end if
 
-!         ! Fill in averaged value
-!         d( i,j) = sum_d / sum_w
+        end do
+        end do
 
-!         ! Mark grid cell as filled
-!         map( i,j) = 2
-!         mask_filled( i,j) = 1
+        ! Fill in averaged value
+        d( i,j) = sum_d / sum_w
 
-!       END DO ! DO k = 1, stackN2
+        ! Mark grid cell as filled
+        map( i,j) = 2
+        mask_filled( i,j) = 1
 
-!       ! Cycle the stacks
-!       stack1  = stack2
-!       stackN1 = stackN2
-!       stack2  = 0
-!       stackN2 = 0
+      end do ! k = 1, stackN2
 
-!       ! List new empty-next-to-filled grid cells
-!       DO k = 1, stackN1
+      ! Cycle the stacks
+      stack1  = stack2
+      stackN1 = stackN2
+      stack2  = 0
+      stackN2 = 0
 
-!         ! Get grid cell indices
-!         i = stack1( k,1)
-!         j = stack1( k,2)
+      ! List new empty-next-to-filled grid cells
+      do k = 1, stackN1
 
-!         ! Find empty neighbours; if unlisted, list them and mark them on the map
-!         DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-!         DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        ! Get grid cell indices
+        i = stack1( k,1)
+        j = stack1( k,2)
 
-!           IF (map( ii,jj) == 0 .AND. mask( ii,jj) == 1) THEN
-!             map( ii,jj) = 1
-!             stackN2 = stackN2 + 1
-!             stack2( stackN2,:) = [ii,jj]
-!           END IF
+        ! Find empty neighbours; if unlisted, list them and mark them on the map
+        do jj = max( 1, j-1), min( grid%ny, j+1)
+        do ii = max( 1, i-1), min( grid%nx, i+1)
 
-!         END DO
-!         END DO
+          if (map( ii,jj) == 0 .and. mask( ii,jj) == 1) then
+            map( ii,jj) = 1
+            stackN2 = stackN2 + 1
+            stack2( stackN2,:) = [ii,jj]
+          end if
 
-!       END DO ! DO k = 1, stackN1
+        end do
+        end do
 
-!       ! Safety
-!       IF (it > 2 * MAX( grid%ny, grid%nx)) THEN
-!         WRITE(0,*) '  extrapolate_Gaussian_floodfill - ERROR: flood-fill got stuck!'
-!         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!       END IF
+      end do ! k = 1, stackN1
 
-!     END DO ! DO WHILE (stackN2 > 0)
+      ! Safety
+      if (it > 2 * max( grid%ny, grid%nx)) then
+        call crash('flood-fill got stuck!')
+      end if
 
-!     ! Mark grid cells that could not be filled
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
-!       IF (mask_filled( i,j) == 0 .AND. mask( i,j) == 1) THEN
-!         mask_filled( i,j) = 2
-!       END IF
-!     END DO
-!     END DO
+    end do ! while (stackN2 > 0)
 
-!     ! Clean up after yourself
-!     DEALLOCATE( map   )
-!     DEALLOCATE( stack1)
-!     DEALLOCATE( stack2)
+    ! Mark grid cells that could not be filled
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      if (mask_filled( i,j) == 0 .and. mask( i,j) == 1) then
+        mask_filled( i,j) = 2
+      end if
+    end do
+    end do
 
-!   END SUBROUTINE extrapolate_Gaussian_floodfill
+    ! Clean up after yourself
+    deallocate( map   )
+    deallocate( stack1)
+    deallocate( stack2)
+
+  end subroutine extrapolate_Gaussian_floodfill
 
 !   ! == Interpolate ocean column data to a queried depth
   SUBROUTINE interpolate_ocean_depth( nz_ocean, z_ocean, f_ocean, z_query, f_query)

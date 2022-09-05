@@ -140,10 +140,10 @@ program UFEMISM_program
   ! == Initialise the model regions
   ! ===============================
 
-  if (C%do_NAM) call initialise_model( NAM, 'NAM', climate_matrix_global)
-  if (C%do_EAS) call initialise_model( EAS, 'EAS', climate_matrix_global)
-  if (C%do_GRL) call initialise_model( GRL, 'GRL', climate_matrix_global)
-  if (C%do_ANT) call initialise_model( ANT, 'ANT', climate_matrix_global)
+  if (C%do_NAM) call initialise_model( NAM, 'NAM', climate_matrix_global, ocean_matrix_global)
+  if (C%do_EAS) call initialise_model( EAS, 'EAS', climate_matrix_global, ocean_matrix_global)
+  if (C%do_GRL) call initialise_model( GRL, 'GRL', climate_matrix_global, ocean_matrix_global)
+  if (C%do_ANT) call initialise_model( ANT, 'ANT', climate_matrix_global, ocean_matrix_global)
 
 ! ===== The big time loop =====
 ! =============================

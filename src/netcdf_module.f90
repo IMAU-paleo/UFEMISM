@@ -18,8 +18,8 @@ MODULE netcdf_module
                                       type_reference_geometry, type_model_region, &
                                       type_debug_fields, type_mesh, type_grid, &
                                       type_restart_data, type_climate_snapshot_global, &
-                                      type_ocean_snapshot_global
-                                      ! type_sparse_matrix_CSR_dp, type_highres_ocean_data
+                                      type_ocean_snapshot_global, type_highres_ocean_data
+                                      ! type_sparse_matrix_CSR_dp
   use netcdf,                   only: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                       nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
                                       nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
@@ -4625,57 +4625,54 @@ contains
 
   ! END SUBROUTINE read_GCM_global_ocean_file
 
-  ! ! High-resolution geometry used for extrapolating ocean data
-  ! SUBROUTINE inquire_hires_geometry_file( hires)
-  !   ! Check if the right dimensions and variables are present in the file.
+  ! High-resolution geometry used for extrapolating ocean data
+  subroutine inquire_hires_geometry_file( hires)
+    ! Check if the right dimensions and variables are present in the file.
 
-  !   IMPLICIT NONE
+    implicit none
 
-  !   ! Input variables:
-  !   TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+    ! Input variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
 
-  !   IF (.NOT. par%master) RETURN
+    ! Open the netcdf file
+    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
 
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
+    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
 
-  !   ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-  !   CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
-  !   CALL inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
 
-  !   ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-  !   CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
-  !   CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
-  !   CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
-  !   CALL inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
+    ! Close the netcdf file
+    call close_netcdf_file( hires%netcdf_geo%ncid)
 
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( hires%netcdf_geo%ncid)
+  end subroutine inquire_hires_geometry_file
 
-  ! END SUBROUTINE inquire_hires_geometry_file
-  ! SUBROUTINE read_hires_geometry_file(    hires)
-  !   ! Read the high-resolution geometry netcdf file
+  subroutine read_hires_geometry_file( hires)
+    ! Read the high-resolution geometry netcdf file
 
-  !   IMPLICIT NONE
+    implicit none
 
-  !   ! In/output variables:
-  !   TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+    ! In/output variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
 
-  !   IF (.NOT. par%master) RETURN
+    ! Open the netcdf file
+    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
 
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+    ! Read the data
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
 
-  !   ! Read the data
-  !   CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
-  !   CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
-  !   CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
+    ! Close the netcdf file
+    call close_netcdf_file( hires%netcdf_geo%ncid)
 
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( hires%netcdf_geo%ncid)
-
-  ! END SUBROUTINE read_hires_geometry_file
+  end subroutine read_hires_geometry_file
 
   ! ! Create/read an extrapolated ocean data file
   ! SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)

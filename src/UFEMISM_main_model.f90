@@ -1,15 +1,11 @@
 module UFEMISM_main_model
   ! The main regional ice-sheet model
 
-#include <petsc/finclude/petscksp.h>
-
-! ===== uses =====
+! ===== Uses =====
 ! ================
 
   use mpi
   use configuration_module,          only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parameters_module,             only :
-  use petsc_module,                  only : perr
   use parallel_module,               only : par, sync, ierr, cerr, partition_list
   use data_types_module,             only : type_model_region, type_grid, type_remapping_mesh_mesh, &
                                             type_climate_matrix_global, type_ocean_matrix_global
@@ -24,13 +20,14 @@ module UFEMISM_main_model
   use netcdf_module,                 only : initialise_debug_fields, create_output_files, associate_debug_fields, &
                                             write_to_output_files, create_debug_file, reallocate_debug_fields
   use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model
+  use climate_module,                only : initialise_climate_model_regional, run_climate_model
   use ocean_module,                  only : initialise_ocean_model_regional
-  use climate_module,                only : initialise_climate_model_regional
   use BMB_module,                    only : initialise_BMB_model, remap_bmb_model
-  use SMB_module,                    only : initialise_SMB_model, remap_smb_model
+  use SMB_module,                    only : initialise_SMB_model, remap_smb_model, run_SMB_model
   use general_ice_model_data_module, only : initialise_mask_noice, initialise_basins
   use reallocate_mod,                only : reallocate
   use utilities_module,              only : time_display, inverse_oblique_sg_projection
+  use thermodynamics_module,         only : initialise_thermo_model
 
 ! ===== Preamble =====
 ! ====================
@@ -419,6 +416,7 @@ contains
     ! =============================
 
     call initialise_climate_model_regional( region, climate_matrix_global)
+    call run_climate_model( region, climate_matrix_global, C%start_time_of_run)
 
     ! ===== The ocean model =====
     ! ===========================
@@ -429,11 +427,36 @@ contains
     ! =========================
 
     call initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
+    call run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
 
     ! ===== The BMB model =====
     ! =========================
 
     call initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+
+    ! ===== The GIA model =====
+    ! =========================
+
+    select case (C%choice_GIA_model)
+
+      case ('none')
+        ! Nothing to do
+
+      case ('ELRA')
+        ! ELRA model
+        call crash('choice_GIA_model "' // TRIM(C%choice_GIA_model) // '" not implemented yet!')
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
+
+    end select
+
+    ! ===== Ice temperature =====
+    ! ===========================
+
+    ! Initialise the ice temperature profile
+    call initialise_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name)
 
     ! ===== Output files =====
     ! ========================

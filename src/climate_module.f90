@@ -25,6 +25,48 @@ contains
 ! ===== Main routines =====
 ! =========================
 
+  subroutine run_climate_model( region, climate_matrix_global, time)
+    ! Run the regional climate model
+
+    implicit none
+
+    ! In/output variables:
+    type(type_model_region),          intent(inout) :: region
+    type(type_climate_matrix_global), intent(inout) :: climate_matrix_global
+    real(dp),                         intent(in)    :: time
+
+    ! Local variables:
+    character(len=256), parameter                   :: routine_name = 'run_climate_model'
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    select case (C%choice_climate_model)
+
+      case ('none')
+        ! No need to do anything
+
+      case('PD_obs')
+        ! Keep the climate fixed to present-day observed conditions
+        call run_climate_model_PD_obs( region%mesh, region%ice, region%climate_matrix, region%name)
+
+      case('matrix_warm_cold')
+        ! Use the warm/cold climate matrix method
+        call crash(trim(C%choice_climate_model) // &
+                   ' not implemented yet...')
+
+      case default
+        ! Unknown option
+        call crash('unknown choice_climate_model"' // &
+                    trim(C%choice_climate_model) // '"!')
+
+    end select
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine run_climate_model
+
   subroutine initialise_climate_model_global( climate_matrix)
     ! Initialise the global climate model
 
@@ -55,11 +97,13 @@ contains
 
       case('matrix_warm_cold')
         ! Allocate all global snapshots used in the warm/cold climate matrix
-        call crash(TRIM(C%choice_climate_model) // ' not implemented yet...')
+        call crash(trim(C%choice_climate_model) // &
+                   ' not implemented yet...')
 
       case default
         ! Unknown option
-        call crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
+        call crash('unknown choice_climate_model"' // &
+                    trim(C%choice_climate_model) // '"!')
 
     end select
 
@@ -84,7 +128,7 @@ contains
     call init_routine( routine_name)
 
     if (par%master) then
-      write(*,'(3A)') '  Initialising regional climate model "', TRIM(C%choice_climate_model), '"...'
+      write(*,'(3A)') '  Initialising regional climate model "', trim(C%choice_climate_model), '"...'
     end if
 
     ! Pick selected method
@@ -99,11 +143,11 @@ contains
 
       case('matrix_warm_cold')
         ! Allocate all global snapshots used in the warm/cold climate matrix
-        call crash(TRIM(C%choice_climate_model) // ' not implemented yet...')
+        call crash(trim(C%choice_climate_model) // ' not implemented yet...')
 
       case default
         ! Unknown option
-        call crash('unknown choice_climate_model"' // TRIM(C%choice_climate_model) // '"!')
+        call crash('unknown choice_climate_model"' // trim(C%choice_climate_model) // '"!')
 
     end select
 
@@ -114,6 +158,97 @@ contains
 
 ! ===== Observational PD climate =====
 ! ====================================
+
+  subroutine run_climate_model_PD_obs( mesh, ice, climate_matrix, region_name)
+    ! Run the regional climate model
+    !
+    ! Keep the climate fixed to present-day observed conditions
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                    intent(in)    :: mesh
+    type(type_ice_model),               intent(in)    :: ice
+    type(type_climate_matrix_regional), intent(inout) :: climate_matrix
+    character(len=3),                   intent(in)    :: region_name
+
+    ! Local variables:
+    character(len=256), parameter                     :: routine_name = 'run_climate_model_PD_obs'
+    integer                                           :: vi,m
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! === Present-day insolation ===
+    ! ==============================
+
+    ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+    CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+    ! === Downscaling to model topography ===
+    ! =======================================
+
+    ! Initialise applied climate with present-day conditions and current model topography
+    do m = 1, 12
+    do vi = mesh%vi1, mesh%vi2
+      climate_matrix%applied%Hs(      vi  ) = ice%Hs_a( vi  )
+      climate_matrix%applied%Wind_LR( vi,m) = climate_matrix%PD_obs%Wind_LR( vi,m)
+      climate_matrix%applied%Wind_DU( vi,m) = climate_matrix%PD_obs%Wind_DU( vi,m)
+      climate_matrix%applied%Q_TOA(   vi,m) = climate_matrix%PD_obs%Q_TOA(   vi,m)
+    end do
+    end do
+
+    ! Adapt temperature to model orography using a lapse-rate correction
+    do m = 1, 12
+    do vi = mesh%vi1, mesh%vi2
+
+      climate_matrix%applied%T2m( vi,m) = climate_matrix%PD_obs%T2m( vi,m) - C%constant_lapserate * &
+                                           (ice%Hs_a( vi) - climate_matrix%PD_obs%Hs( vi))
+    end do
+    end do
+
+    ! Downscale precipitation from the coarse-resolution reference
+    ! orography to the fine-resolution ice-model orography
+    if (region_name == 'NAM' .or. region_name == 'EAS' .or. region_name == 'PAT') then
+
+      ! Use the Roe&Lindzen precipitation model to do this; Berends et al., 2018, Eqs. A3-A7
+      call adapt_precip_Roe( mesh, &
+                             climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                             climate_matrix%PD_obs%Wind_LR, climate_matrix%PD_obs%Wind_DU, &
+                             climate_matrix%PD_obs%Precip, &
+                             climate_matrix%applied%Hs, climate_matrix%applied%T2m, &
+                             climate_matrix%applied%Wind_LR, climate_matrix%applied%Wind_DU, &
+                             climate_matrix%applied%Precip)
+
+    elseif (region_name == 'GRL' .or. region_name == 'ANT') then
+
+      ! Use a simpler temperature-based correction; Berends et al., 2018, Eq. 14
+      call adapt_precip_CC( mesh, climate_matrix%applied%Hs, &
+                            climate_matrix%PD_obs%Hs, climate_matrix%PD_obs%T2m, &
+                            climate_matrix%PD_obs%Precip, &
+                            climate_matrix%applied%Precip, region_name)
+    end if
+
+    ! === Safety checks ===
+    ! =====================
+
+    do m = 1, 12
+    do vi = mesh%vi1, mesh%vi2
+      ! Safety net in case resulting precipitation is negative
+      climate_matrix%applied%Precip( vi,m) = max( 0.0_dp, climate_matrix%applied%Precip(vi,m))
+    end do
+    end do
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine run_climate_model_PD_obs
 
   subroutine initialise_climate_model_global_PD_obs( PD_obs)
     ! Initialise the observational present-day global climate model
@@ -148,7 +283,7 @@ contains
 
     if (par%master) then
       write(*,'(3A)') '  Reading PD observed climate data from file ', &
-                         TRIM(PD_obs%netcdf%filename), '...'
+                         trim(PD_obs%netcdf%filename), '...'
     end if
 
     ! Read data from the NetCDF file

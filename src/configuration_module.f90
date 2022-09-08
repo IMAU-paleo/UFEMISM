@@ -1355,7 +1355,7 @@ CONTAINS
 
       IF     (iargc() == 0) THEN
 
-        write(*,"(3A)") ' ERROR: MINIMISM v', TRIM(version_number), ' needs at least one config file to run!'
+        write(*,"(3A)") ' ERROR: MINIMISM v', trim(version_number), ' needs at least one config file to run!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
       ELSEIF (iargc() == 1) THEN
@@ -1364,8 +1364,7 @@ CONTAINS
         CALL getarg( 1, config_filename)
         config_mode = 'single_config'
 
-        write(*,"(A)") ''
-        write(*,"(2A)") ' Simulation settings from configuration file: ', TRIM(config_filename)
+        write(*,"(2A)") ' Simulation settings from configuration file: ', trim(config_filename)
 
       ELSEIF (iargc() == 2) THEN
 
@@ -1374,12 +1373,11 @@ CONTAINS
         CALL getarg( 2, variation_filename)
         config_mode = 'template+variation'
 
-        write(*,"(A)") ''
-        write(*,"(4A))") ' Simulation settings from configuration files: ', TRIM(template_filename), ' & ', TRIM(variation_filename)
+        write(*,"(4A))") ' Simulation settings from configuration files: ', trim(template_filename), ' & ', trim(variation_filename)
 
       ELSE
 
-        write(*,"(A)") ' ERROR: MINIMISM v', TRIM(version_number), ' can take either one or two config files to run!'
+        write(*,"(A)") ' ERROR: MINIMISM v', trim(version_number), ' can take either one or two config files to run!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
       END IF
@@ -1431,7 +1429,7 @@ CONTAINS
 
     ELSE ! IF (config_mode == 'single_config') THEN
 
-      IF (master) WRITE(0,*) 'initialise_model_configuration - ERROR: unknown config_mode "', TRIM(config_mode), '"!'
+      IF (master) WRITE(0,*) 'initialise_model_configuration - ERROR: unknown config_mode "', trim(config_mode), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
 
     END IF ! IF (config_mode == 'single_config') THEN
@@ -1450,18 +1448,18 @@ CONTAINS
 
       IF (master) THEN
         CALL get_procedural_output_dir_name( output_dir_procedural)
-        C%output_dir(1:21) = TRIM(output_dir_procedural) // '/'
+        C%output_dir(1:21) = trim(output_dir_procedural) // '/'
       END IF
       CALL MPI_BCAST( C%output_dir, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
 
     ELSE
       ! Use the provided name (return an error if this directory already exists)
 
-      C%output_dir = TRIM(C%fixed_output_dir) // TRIM(C%fixed_output_dir_suffix) // '/'
+      C%output_dir = trim(C%fixed_output_dir) // trim(C%fixed_output_dir_suffix) // '/'
 
-      INQUIRE( FILE = TRIM(C%output_dir)//'/.', EXIST=ex)
+      INQUIRE( FILE = trim(C%output_dir)//'/.', EXIST=ex)
       IF (ex) THEN
-        WRITE(0,*) ' ERROR: fixed_output_dir_config ', TRIM(C%output_dir), ' already exists!'
+        WRITE(0,*) ' ERROR: fixed_output_dir_config ', trim(C%output_dir), ' already exists!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF
 
@@ -1469,21 +1467,21 @@ CONTAINS
 
     ! Create the directory
     IF (master) THEN
-      CALL system('mkdir ' // TRIM(C%output_dir))
+      CALL system('mkdir ' // trim(C%output_dir))
       write(*,"(A)") ''
-      write(*,"(2A)") ' Output directory: ', TRIM(C%output_dir)
+      write(*,"(2A)") ' Output directory: ', trim(C%output_dir)
     END IF
     CALL MPI_BARRIER( MPI_COMM_WORLD, ierr)
 
     ! Copy the config file to the output directory
     IF (master) THEN
       IF     (config_mode == 'single_config') THEN
-        CALL system('cp ' // config_filename    // ' ' // TRIM(C%output_dir))
+        CALL system('cp ' // config_filename    // ' ' // trim(C%output_dir))
       ELSEIF (config_mode == 'template+variation') THEN
-        CALL system('cp ' // template_filename  // ' ' // TRIM(C%output_dir))
-        CALL system('cp ' // variation_filename // ' ' // TRIM(C%output_dir))
+        CALL system('cp ' // template_filename  // ' ' // trim(C%output_dir))
+        CALL system('cp ' // variation_filename // ' ' // trim(C%output_dir))
       ELSE
-        WRITE(0,*) ' initialise_model_configuration - ERROR: unknown config_mode "', TRIM(config_mode), '"!'
+        WRITE(0,*) ' initialise_model_configuration - ERROR: unknown config_mode "', trim(config_mode), '"!'
         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
       END IF ! IF (config_mode == 'single_config') THEN
     END IF ! IF (master) THEN
@@ -1980,9 +1978,9 @@ CONTAINS
 
      IF (config_filename == '') RETURN
 
-     OPEN(UNIT=config_unit, FILE=TRIM(config_filename), STATUS='OLD', ACTION='READ', iostat=ios)
+     OPEN(UNIT=config_unit, FILE=trim(config_filename), STATUS='OLD', ACTION='READ', iostat=ios)
      IF(ios /= 0) THEN
-       WRITE(UNIT=*, FMT='(/3A/)') ' ERROR: Could not open the configuration file: ', TRIM(config_filename)
+       WRITE(UNIT=*, FMT='(/3A/)') ' ERROR: Could not open the configuration file: ', trim(config_filename)
        STOP
      END IF
 
@@ -1991,7 +1989,7 @@ CONTAINS
      CLOSE(UNIT=config_unit)
 
      IF(ios /= 0) THEN
-       WRITE(UNIT=*, FMT='(/3A)') ' ERROR while reading configuration file: ', TRIM(config_filename)
+       WRITE(UNIT=*, FMT='(/3A)') ' ERROR while reading configuration file: ', trim(config_filename)
        STOP
      END IF
 
@@ -2796,7 +2794,7 @@ CONTAINS
 
     output_dir(17:20) = '_001'
 
-    INQUIRE( FILE = TRIM(output_dir)//'/.', EXIST=ex )
+    INQUIRE( FILE = trim(output_dir)//'/.', EXIST=ex )
 
     DO WHILE (ex)
 
@@ -2868,7 +2866,7 @@ CONTAINS
 
      END IF
 
-     INQUIRE( FILE=TRIM(output_dir)//'/.', EXIST=ex )
+     INQUIRE( FILE=trim(output_dir)//'/.', EXIST=ex )
 
     END DO
 
@@ -2925,16 +2923,16 @@ CONTAINS
 
     ! Check if routine_name has enough memory
     len_path_tot  = LEN(      routine_path)
-    len_path_used = LEN_TRIM( routine_path)
-    len_name      = LEN_TRIM( routine_name)
+    len_path_used = LEN_trim( routine_path)
+    len_name      = LEN_trim( routine_name)
 
     IF (len_path_used + 1 + len_name > len_path_tot) THEN
-      WRITE(0,*) 'init_routine - ERROR: routine_path = "', TRIM( routine_path), '", no more space to append routine_name = "', TRIM( routine_name), '"!'
+      WRITE(0,*) 'init_routine - ERROR: routine_path = "', trim( routine_path), '", no more space to append routine_name = "', trim( routine_name), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
     ! Append this routine to the routine path
-    routine_path = TRIM( routine_path) // '/' // TRIM( routine_name)
+    routine_path = trim( routine_path) // '/' // trim( routine_name)
 
     ! Initialise the computation time tracker
     CALL find_subroutine_in_resource_tracker( i)
@@ -2983,7 +2981,7 @@ CONTAINS
     i = INDEX( routine_path, routine_name)
 
     IF (i == 0) THEN
-      WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
+      WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', trim( routine_name), '" not found in routine_path = "', trim( routine_path), '"!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
@@ -3104,7 +3102,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // TRIM( err_msg_loc),'red') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string('ERROR: ' // trim( err_msg_loc),'red') // ' in ' // colour_string( trim(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     error stop
@@ -3178,7 +3176,7 @@ CONTAINS
     IF (PRESENT( dp_10 )) CALL insert_val_into_string_dp(  err_msg_loc, '{dp_10}' , dp_10 )
 
     ! Write the error to the screen
-    WRITE(0,'(A,A,A,A,A,A)') colour_string('WARNING: ' // TRIM( err_msg_loc),'yellow') // ' in ' // colour_string( TRIM(routine_path),'light blue') // &
+    WRITE(0,'(A,A,A,A,A,A)') colour_string('WARNING: ' // trim( err_msg_loc),'yellow') // ' in ' // colour_string( trim(routine_path),'light blue') // &
       ' on process ', colour_string( process_str,'light blue'), ' (0 = master)'
 
     ! Clean up after yourself
@@ -3246,7 +3244,7 @@ CONTAINS
     ci = INDEX( str, marker)
 
     ! Safety
-    IF (ci == 0) CALL crash('insert_val_into_string_int: couldnt find marker "' // TRIM( marker) // '" in string "' // TRIM( str) // '"!')
+    IF (ci == 0) CALL crash('insert_val_into_string_int: couldnt find marker "' // trim( marker) // '" in string "' // trim( str) // '"!')
 
     ! Write val to a string
     IF     (ABS( val) < 10) THEN
@@ -3311,7 +3309,7 @@ CONTAINS
     ci = INDEX( str, marker)
 
     ! Safety
-    IF (ci == 0) CALL crash('insert_val_into_string_dp: couldnt find marker "' // TRIM( marker) // '" in string "' // TRIM( str) // '"!')
+    IF (ci == 0) CALL crash('insert_val_into_string_dp: couldnt find marker "' // trim( marker) // '" in string "' // trim( str) // '"!')
 
     ! Write val to a string
     WRITE( val_str,'(E11.5)') val

@@ -345,6 +345,11 @@
     filename_sealevel_record_config             = 'data/Sealevel/bintanja2008_rsl_PD00.dat'
     sealevel_record_length_config               = 30001
 
+    choice_GIA_model_config                     = 'none'                           ! Can be "none", "ELRA", or "SELEN"
+    ELRA_lithosphere_flex_rigidity_config       = 1.0E+25                          ! Lithospheric flexural rigidity [kg m^2 s^-2]
+    ELRA_bedrock_relaxation_time_config         = 3000.0                           ! Relaxation time for bedrock adjustment [yr]
+    ELRA_mantle_density_config                  = 3300.0                           ! Mantle density [kg m^-3]
+
   ! Output fields
   ! =============
 

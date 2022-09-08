@@ -84,7 +84,7 @@ contains
     call init_routine( routine_name)
 
     if (par%master) then
-      write(*,'(3A)') ' Initialising regional climate model "', TRIM(C%choice_climate_model), '"...'
+      write(*,'(3A)') '  Initialising regional climate model "', TRIM(C%choice_climate_model), '"...'
     end if
 
     ! Pick selected method

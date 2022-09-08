@@ -418,22 +418,22 @@ contains
     ! ===== The climate model =====
     ! =============================
 
-    CALL initialise_climate_model_regional( region, climate_matrix_global)
+    call initialise_climate_model_regional( region, climate_matrix_global)
 
     ! ===== The ocean model =====
     ! ===========================
 
-    CALL initialise_ocean_model_regional( region, ocean_matrix_global)
+    call initialise_ocean_model_regional( region, ocean_matrix_global)
 
     ! ===== The SMB model =====
     ! =========================
 
-    CALL initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
+    call initialise_SMB_model( region%mesh, region%ice, region%SMB, region%name)
 
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+    call initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
 
     ! ===== Output files =====
     ! ========================

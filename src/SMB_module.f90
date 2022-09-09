@@ -118,6 +118,7 @@ contains
       write (*,"(3A)") '  Initialising regional SMB model "', &
                           trim(C%choice_SMB_model), '"...'
     end if
+    call sync
 
     ! === Choice of model ===
     ! =======================
@@ -159,17 +160,17 @@ contains
     implicit none
 
     ! In/output variables
-    type(type_mesh),                      intent(in)    :: mesh
-    type(type_ice_model),                 intent(in)    :: ice
-    type(type_climate_snapshot_regional), intent(in)    :: climate
-    type(type_SMB_model),                 intent(inout) :: SMB
-    integer,  dimension(:    ),           intent(in)    :: mask_noice
+    type(type_mesh),                        intent(in)    :: mesh
+    type(type_ice_model),                   intent(in)    :: ice
+    type(type_climate_snapshot_regional),   intent(in)    :: climate
+    type(type_SMB_model),                   intent(inout) :: SMB
+    integer,  dimension(mesh%vi1:mesh%vi2), intent(in)    :: mask_noice
 
     ! Local variables:
-    character(len=256), parameter                       :: routine_name = 'run_SMB_model_IMAUITM'
-    integer                                             :: vi, m
-    integer                                             :: mprev
-    real(dp)                                            :: snowfrac, liquid_water, sup_imp_wat
+    character(len=256), parameter                         :: routine_name = 'run_SMB_model_IMAUITM'
+    integer                                               :: vi, m
+    integer                                               :: mprev
+    real(dp)                                              :: snowfrac, liquid_water, sup_imp_wat
 
     ! === Initialisation ===
     ! ======================

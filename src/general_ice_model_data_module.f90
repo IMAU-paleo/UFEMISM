@@ -540,6 +540,7 @@ contains
       if (par%master) then
         write(*,"(A)") '  Re-initialising the no-ice mask...'
       end if
+      call sync
 
       deallocate( region%mask_noice)
 
@@ -549,6 +550,7 @@ contains
       if (par%master) then
         write(*,"(A)") '  Initialising the no-ice mask...'
       end if
+      call sync
 
     end if
 

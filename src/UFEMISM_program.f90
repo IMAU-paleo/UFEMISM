@@ -103,6 +103,7 @@ program UFEMISM_program
     write(*,"(A)") ' =============================================='
     write(*,"(A)") ''
   end if
+  call sync
 
   tstart = MPI_WTIME()
   t1     = MPI_WTIME()
@@ -116,6 +117,7 @@ program UFEMISM_program
   ! ===========================================
 
   call create_resource_tracking_file( resources)
+  call sync
 
   ! == Vertical scaled coordinate transformation
   ! ============================================
@@ -156,6 +158,7 @@ program UFEMISM_program
       write(*,"(A)") ''
       write(*,"(A,F9.3,A)") ' Coupling model: t = ', t_coupling/1000._dp, ' kyr'
     end if
+    call sync
 
     ! == Regional model runs
     ! ======================

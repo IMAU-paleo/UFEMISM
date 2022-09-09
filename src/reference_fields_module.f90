@@ -97,8 +97,9 @@ contains
         ! Idealised geometry
         if (par%master) then
           write(*,'(3A)') '  Initialising present-day     reference geometry from idealised case "', &
-                             TRIM(C%choice_refgeo_PD_idealised), '"...'
+                             trim(C%choice_refgeo_PD_idealised), '"...'
         end if
+        call sync
 
         ! WIP
         call crash('choice_refgeo_PD - idealised not implemented yet...')
@@ -107,15 +108,16 @@ contains
         ! Realistic geometry
         if (par%master) then
           write(*,"(3A)") '  Initialising present-day     reference geometry from file ', &
-                             TRIM( filename_refgeo_PD), '...'
+                             trim( filename_refgeo_PD), '...'
         end if
+        call sync
 
         ! Initialise PD geometry from a file
         call initialise_reference_geometry_from_file( refgeo_PD, filename_refgeo_PD, region_name)
 
       case default
         ! Unkown option
-        call crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
+        call crash('unknown choice_refgeo_PD "' // trim( choice_refgeo_PD) // '"!')
 
     end select
 
@@ -129,8 +131,9 @@ contains
 
         if (par%master) then
           write(*,'(3A)') '  Initialising initial         reference geometry from idealised case "', &
-                             TRIM(C%choice_refgeo_init_idealised), '"...'
+                             trim(C%choice_refgeo_init_idealised), '"...'
         end if
+        call sync
 
         ! WIP
         call crash('choice_refgeo_init - idealised not implemented yet...')
@@ -140,8 +143,9 @@ contains
 
         if (par%master) then
           write(*,"(3A)") '  Initialising initial         reference geometry from file ', &
-                             TRIM( filename_refgeo_init), '...'
+                             trim( filename_refgeo_init), '...'
         end if
+        call sync
 
         ! Initialise initial geometry from a file
         call initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
@@ -154,7 +158,7 @@ contains
 
       case default
         ! Unkown option
-        call crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
+        call crash('unknown choice_refgeo_init "' // trim( choice_refgeo_init) // '"!')
 
     end select
 
@@ -168,8 +172,9 @@ contains
 
         if (par%master) then
           write(*,'(3A)') '  Initialising GIA equilibrium reference geometry from idealised case "', &
-                             TRIM(C%choice_refgeo_GIAeq_idealised), '"...'
+                             trim(C%choice_refgeo_GIAeq_idealised), '"...'
         end if
+        call sync
 
         ! WIP
         call crash('choice_refgeo_GIAeq - idealised not implemented yet...')
@@ -178,15 +183,16 @@ contains
         ! Realistic geometry
         if (par%master) then
           write(*,"(3A)") '  Initialising GIA equilibrium reference geometry from file ', &
-                             TRIM( filename_refgeo_GIAeq), '...'
+                             trim( filename_refgeo_GIAeq), '...'
         end if
+        call sync
 
         ! Initialise GIA-equilibrium geometry from a file
         call initialise_reference_geometry_from_file( refgeo_GIAeq, filename_refgeo_GIAeq, region_name)
 
       case default
         ! Unkown option
-        call crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_GIAeq) // '"!')
+        call crash('unknown choice_refgeo_init "' // trim( choice_refgeo_GIAeq) // '"!')
 
     end select
 
@@ -485,6 +491,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Mapping initial reference geometry to the mesh...'
     end if
+    call sync
 
     did_remap_init = .false.
 
@@ -516,6 +523,7 @@ contains
           if (par%master) then
             write(*,'(A)') '   Copying initial reference geometry from the restart mesh...'
           end if
+          call sync
 
           ! ! Get initial geometry from restart data
           ! region%refgeo_init%Hi( mesh%vi1:mesh%vi2) = region%restart%Hi( mesh%vi1:mesh%vi2)
@@ -528,6 +536,7 @@ contains
           if (par%master) then
             write(*,'(A)') '   Mapping initial reference geometry to the mesh...'
           end if
+          call sync
 
           ! Remap initial geometry data from the grid
           call calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
@@ -538,7 +547,7 @@ contains
 
       case default
         ! Unknown option
-        call crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
+        call crash('unknown choice_refgeo_init "' // trim( choice_refgeo_init) // '"!')
 
     end select
 
@@ -548,6 +557,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Mapping present-day reference geometry to the mesh...'
     end if
+    call sync
 
     did_remap_PD = .false.
 
@@ -589,7 +599,7 @@ contains
 
       case default
         ! Unknown option
-        call crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
+        call crash('unknown choice_refgeo_PD "' // trim( choice_refgeo_PD) // '"!')
 
     end select
 
@@ -599,6 +609,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Mapping GIA equilibrium reference geometry to the mesh...'
     end if
+    call sync
 
     did_remap_GIAeq = .false.
 
@@ -658,7 +669,7 @@ contains
 
       case default
         ! Unknown option
-        call crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
+        call crash('unknown choice_refgeo_GIAeq "' // trim( choice_refgeo_GIAeq) // '"!')
 
     end select
 

@@ -42,43 +42,41 @@ contains
 ! Main output functions
 ! =====================
 
-  SUBROUTINE create_output_files( region)
+  subroutine create_output_files( region)
     ! Create a new set of output NetCDF files (restart + help_fields + debug)
 
-    IMPLICIT NONE
+    implicit none
 
     ! Input variables:
-    TYPE(type_model_region),        INTENT(INOUT) :: region
+    type(type_model_region), intent(inout) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_output_files'
+    character(len=256), parameter          :: routine_name = 'create_output_files'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
+    if (par%master) then
 
-    IF (par%master) then
       write(*,"(A)") '  Creating new output files based on new mesh...'
+
+      ! Get output file names
+      call get_output_filenames( region)
+
+      ! Create the files
+      call create_restart_file_mesh(     region, region%restart_mesh)
+      call create_restart_file_grid(     region, region%restart_grid)
+      call create_help_fields_file_mesh( region, region%help_fields_mesh)
+      call create_help_fields_file_grid( region, region%help_fields_grid)
+      call create_debug_file(            region)
+
     end if
-
-    ! Get output file names
-    CALL get_output_filenames( region)
-
-    ! Create the files
-    CALL create_restart_file_mesh(     region, region%restart_mesh)
-    CALL create_restart_file_grid(     region, region%restart_grid)
-    CALL create_help_fields_file_mesh( region, region%help_fields_mesh)
-    CALL create_help_fields_file_grid( region, region%help_fields_grid)
-    CALL create_debug_file(            region)
+    call sync
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE create_output_files
+  end subroutine create_output_files
 
   SUBROUTINE write_to_output_files( region)
     ! Write the current model state to the existing output files
@@ -97,6 +95,7 @@ contains
     IF (par%master) then
       write(*,'(A,F8.3,A)') '  t = ', region%time/1e3, ' kyr - writing output...'
     end if
+    call sync
 
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
     CALL write_to_restart_file_grid(     region, region%restart_grid)
@@ -2940,6 +2939,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Initialising debug fields...'
     end if
+    call sync
 
     IF     (region%name == 'NAM') THEN
       CALL initialise_debug_fields_region( debug_NAM, region%mesh)

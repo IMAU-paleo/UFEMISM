@@ -66,7 +66,7 @@ contains
     allocate( dHs_dy_b( mesh%ti1:mesh%ti2), source=0._dp)
 
     allocate( A_flow_3D_a( 1:mesh%nV, C%nz), source=0._dp)
-    A_flow_3D_a(mesh%vi1:mesh%vi2,:) = C%uniform_flow_factor!ice%A_flow_3D_a
+    A_flow_3D_a(mesh%vi1:mesh%vi2,:) = ice%A_flow_3D_a
     call allgather_array(A_flow_3D_a)
 
     ! Get ice thickness, surface slopes, and ice flow factor on the b-grid
@@ -773,7 +773,7 @@ contains
                  C%DIVA_epsilon_sq_0
 
         ! Calculate effective viscosity
-        ice%visc_eff_3D_a( vi,k) = 0.5_dp * C%uniform_flow_factor**(-1._dp/C%n_flow) * (eps_sq)**((1._dp - C%n_flow)/(2._dp*C%n_flow))
+        ice%visc_eff_3D_a( vi,k) = 0.5_dp * ice%A_flow_3D_a( vi,k)**(-1._dp/C%n_flow) * (eps_sq)**((1._dp - C%n_flow)/(2._dp*C%n_flow))
 
         ! Safety
         ice%visc_eff_3D_a( vi,k) = MAX( ice%visc_eff_3D_a( vi,k), C%DIVA_visc_eff_min)

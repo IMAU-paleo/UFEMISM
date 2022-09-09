@@ -6,7 +6,7 @@ module climate_module
 
   use configuration_module,  only : dp, C, init_routine, finalise_routine, crash
   use parameters_module,     only : pi, T0, sec_per_year
-  use parallel_module,       only : par, partition_list
+  use parallel_module,       only : par, partition_list, sync
   use data_types_module,     only : type_climate_matrix_global, type_climate_snapshot_global, &
                                     type_climate_matrix_regional, type_climate_snapshot_regional, &
                                     type_model_region, type_mesh, type_ice_model, type_latlongrid, &
@@ -84,6 +84,7 @@ contains
     if (par%master) then
       write(*,'(3A)') ' Initialising global climate model "', trim(C%choice_climate_model), '"...'
     end if
+    call sync
 
     ! Pick selected method
     select case (C%choice_climate_model)
@@ -130,6 +131,7 @@ contains
     if (par%master) then
       write(*,'(3A)') '  Initialising regional climate model "', trim(C%choice_climate_model), '"...'
     end if
+    call sync
 
     ! Pick selected method
     select case (C%choice_climate_model)
@@ -285,6 +287,7 @@ contains
       write(*,'(3A)') '  Reading PD observed climate data from file ', &
                          trim(PD_obs%netcdf%filename), '...'
     end if
+    call sync
 
     ! Read data from the NetCDF file
     call read_PD_obs_global_climate_file( PD_obs)
@@ -660,6 +663,7 @@ contains
     if (par%master) then
       write(*,'(3A)') '   Mapping ', trim(cglob%name), ' data from global grid to mesh...'
     end if
+    call sync
 
     ! === Local allocation ===
     ! ========================

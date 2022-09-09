@@ -82,6 +82,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Initialising ice dynamics model...'
     end if
+    call sync
 
     ! === Memory allocation ===
     ! =========================
@@ -467,6 +468,7 @@ contains
     region%ice%Hi_tplusdt_a = MAX( 0._dp, region%ice%Hi_a + region%dt * region%ice%dHi_dt_a)
 
     ! IF (par%master) WRITE(*,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_adv = ', dt_crit_adv, ', dt_from_pc = ', dt_from_pc, ', dt = ', region%dt
+    ! CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

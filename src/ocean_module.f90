@@ -5,7 +5,7 @@ module ocean_module
 
   use mpi
   use configuration_module, only : dp, C, init_routine, finalise_routine, crash
-  use parallel_module,      only : par, partition_list, cerr, ierr
+  use parallel_module,      only : par, partition_list, cerr, ierr, sync
   use data_types_module,    only : type_ocean_matrix_global, type_ocean_snapshot_global, &
                                    type_ocean_matrix_regional, type_ocean_snapshot_regional, &
                                    type_model_region, type_mesh, type_highres_ocean_data
@@ -40,6 +40,7 @@ contains
     if (par%master) then
       write (*,'(3A)') ' Initialising global ocean model "', trim(C%choice_ocean_model), '"...'
     end if
+    call sync
 
     ! Initialise ocean vertical grid
     call initialise_ocean_vertical_grid
@@ -87,6 +88,7 @@ contains
     if (par%master) then
       write (*,'(3A)') '  Initialising regional ocean model "', trim(C%choice_ocean_model), '"...'
     end if
+    call sync
 
     select case (C%choice_ocean_model)
 
@@ -147,6 +149,7 @@ contains
       write(*,'(3A)') '  Reading PD observed ocean data from file ', &
                          trim(PD_obs%netcdf%filename), '...'
     end if
+    call sync
 
     ! Read data from the NetCDF file
     call read_PD_obs_global_ocean_file( PD_obs)
@@ -418,6 +421,7 @@ contains
     ! if (foundmatch) then
 
     !   if (par%master) WRITE(0,*) '   Found valid extrapolated ocean data in folder "', trim( ocean_reg%hires_ocean_foldername), '"'
+    !   call sync
     !   call get_hires_ocean_data_from_file( region%mesh, hires, ocean_reg%hires_ocean_foldername)
 
     ! else
@@ -427,6 +431,7 @@ contains
       if (par%master) then
         write(*,"(3A)") '   Creating new extrapolated ocean data in folder "', trim( ocean_reg%hires_ocean_foldername), '"...'
       end if
+      call sync
 
       call map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires)
       ! call write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
@@ -439,6 +444,7 @@ contains
     if (par%master) then
       write(*,"(A)") '    Mapping high-resolution extrapolated ocean data unto the ice-model mesh...'
     end if
+    call sync
 
     ! Tolerance; points lying within this distance of each other are treated as identical
     hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
@@ -449,24 +455,22 @@ contains
     allocate( hires%grid%ij2n (hires%grid%nx, hires%grid%ny))
     allocate( hires%grid%n2ij (hires%grid%n , 2            ))
 
-    if (par%master) then
-      n = 0
-      do i = 1, hires%grid%nx
-        if (mod(i,2) == 1) then
-          do j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          end do
-        else
-          do j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          end do
-        end if
-      end do
-    end if
+    n = 0
+    do i = 1, hires%grid%nx
+      if (mod(i,2) == 1) then
+        do j = 1, hires%grid%ny
+          n = n+1
+          hires%grid%ij2n( i,j) = n
+          hires%grid%n2ij( n,:) = [i,j]
+        end do
+      else
+        do j = hires%grid%ny, 1, -1
+          n = n+1
+          hires%grid%ij2n( i,j) = n
+          hires%grid%n2ij( n,:) = [i,j]
+        end do
+      end if
+    end do
 
     ! Map high-resolution ocean data to UFEMISM's mesh
     call calc_remapping_operator_grid2mesh( hires%grid, region%mesh)
@@ -708,6 +712,7 @@ contains
                            trim( hires%netcdf_geo%filename), '"...'
 
     end if
+    call sync
     call read_hires_geometry_file( hires)
 
     ! Projection parameters are of course identical to those used for this ice model region
@@ -780,6 +785,7 @@ contains
       write(*,"(A,F4.1,A)") '     Mapping ocean data from the global lat/lon-grid to the ', &
                                   hires%grid%dx / 1000._dp, ' km regional x/y-grid...'
     end if
+    call sync
 
     ! Allocate shared memory for high-resolution ocean data
     allocate( hires%T_ocean (hires%grid%nx, hires%grid%ny, C%nz_ocean))
@@ -801,6 +807,7 @@ contains
                                   hires%grid%dx / 1000._dp, &
                                   ' km regional x/y-grid...'
     end if
+    call sync
 
     ! Allocate shared memory for ice basins on the high-resolution grid
     allocate( hires%basin_ID (1:hires%grid%nx, 1:hires%grid%ny))
@@ -909,6 +916,7 @@ contains
       write(*,'(A,F4.1,A)') '     Performing ocean data extrapolation on the ', &
                                   hires%grid%dx / 1000._dp, ' km regional x/y-grid...'
     end if
+    call sync
 
     call extend_regional_ocean_data_to_cover_domain( hires)
 
@@ -1026,6 +1034,7 @@ contains
     if (par%master .and. verbose) then
       write(*,"(A)") '    extend_regional_ocean_data_to_cover_domain - step 1'
     end if
+    call sync
 
     ! Here, we start with the ocean data as provided (i.e. only for open ocean), and
     ! perform a horizontal extrapolation (so for each vertical layer separately) into
@@ -1106,6 +1115,7 @@ contains
     if (par%master .and. verbose) then
       write(*,"(A)") '    extend_regional_ocean_data_to_cover_domain - step 2'
     end if
+    call sync
 
     ! Here, we start with the ocean data that has been horizontally extrapolated into
     ! the shelf cavities, allowing for bedrock topography to block the fill, so that
@@ -1142,6 +1152,7 @@ contains
     if (par%master .and. verbose) then
       write(*,"(A)") '    extend_regional_ocean_data_to_cover_domain - step 3'
     end if
+    call sync
 
     ! Extrapolate data vertically into 3D grid boxes that are occupied by ice
     ! or bedrock (since they might turn into ocean at some point during a simulation)
@@ -1189,6 +1200,7 @@ contains
     if (par%master .and. verbose) then
       write(*,"(A)") '    extend_regional_ocean_data_to_cover_domain - step 4'
     end if
+    call sync
 
     ! In the last step, extrapolate data horizontally into 3D
     ! grid boxes that are occupied by ice or bedrock

@@ -144,6 +144,9 @@ contains
     character(len=256), parameter :: routine_name = 'initialise_CO2_record'
     integer                       :: i, ios, fp
 
+    ! === Initialisation ===
+    ! ======================
+
     ! Add routine to path
     call init_routine( routine_name)
 
@@ -156,6 +159,10 @@ contains
       write(*,"(3A)") ' Initialising CO2 record from ', &
                         TRIM(C%filename_CO2_record), '...'
     end if
+    call sync
+
+    ! === Read data ===
+    ! =================
 
     ! Read CO2 record (time and values) from specified text file
     open(  newunit=fp, file=C%filename_CO2_record, action='READ')
@@ -174,21 +181,31 @@ contains
 
     close( unit=fp)
 
-    if (C%start_time_of_run/1000._dp < forcing%CO2_time(1)) then
-      call warning(' Model time starts before start of CO2 record;' // &
-                    'constant extrapolation will be used in that case!')
-    end if
-
-    if (C%end_time_of_run/1000._dp > forcing%CO2_time(C%CO2_record_length)) then
-      call warning(' Model time will reach beyond end of CO2 record;' // &
-                    'constant extrapolation will be used in that case!')
-    end if
+    ! === Update CO2 ===
+    ! ==================
 
     ! Set the value for the current (starting) model time
     call update_CO2_at_model_time( C%start_time_of_run)
 
+    ! === Finalisation ===
+    ! ====================
+
+    ! Safety
+    if (par%master) then
+      if (C%start_time_of_run/1000._dp < forcing%CO2_time(1)) then
+        call warning('Model time starts before start of CO2 record;' // &
+                     ' constant extrapolation will be used in that case!')
+      end if
+
+      if (C%end_time_of_run/1000._dp > forcing%CO2_time(C%CO2_record_length)) then
+        call warning('Model time will reach beyond end of CO2 record;' // &
+                     ' constant extrapolation will be used in that case!')
+      end if
+    end if
+    call sync
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
   end subroutine initialise_CO2_record
 
@@ -437,8 +454,14 @@ contains
     ! Local variables:
     character(len=256), parameter :: routine_name = 'initialise_insolation_data'
 
+    ! === Initialisation ===
+    ! ======================
+
     ! Add routine to path
     call init_routine( routine_name)
+
+    ! === Read data ===
+    ! =================
 
     select case (C%choice_insolation_forcing)
 
@@ -450,8 +473,9 @@ contains
 
         if (par%master) then
           write(*,"(3A)") ' Initialising insolation data from ', &
-                            TRIM(C%filename_insolation), '...'
+                            trim(C%filename_insolation), '...'
         end if
+        call sync
 
         ! Name of file containing record
         forcing%netcdf_ins%filename = C%filename_insolation
@@ -475,21 +499,25 @@ contains
         ! Time-out-of-record warning/crash
         if (par%master) then
           if (C%start_time_of_run < forcing%ins_time(1)) then
-            call crash(' Model time starts before start of insolation' // &
-                        'record; the model will crash lol')
+            call crash('Model time starts before start of insolation' // &
+                       ' record; the model will crash lol')
           end if
           if (C%end_time_of_run > forcing%ins_time(forcing%ins_nyears)) then
-            call warning(' Model time will reach beyond end of insolation record;' // &
-                          'constant extrapolation will be used in that case!')
+            call warning('Model time will reach beyond end of insolation record;' // &
+                         ' constant extrapolation will be used in that case!')
           end if
         end if
+        call sync
 
       case default
         ! Unknown option
         call crash('unknown choice_insolation_forcing "' // &
-                    TRIM( C%choice_insolation_forcing) // '"!')
+                    trim( C%choice_insolation_forcing) // '"!')
 
     end select
+
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
     call finalise_routine( routine_name)
@@ -523,6 +551,7 @@ contains
           write(*,"(3A)") ' Initialising geothermal heat flux data from ', &
                             TRIM(C%filename_geothermal_heat_flux), '...'
         end if
+        call sync
 
         ! Name of file containing data
         forcing%netcdf_ghf%filename = C%filename_geothermal_heat_flux
@@ -566,6 +595,9 @@ contains
     character(len=256), parameter :: routine_name = 'initialise_sealevel_record'
     integer                       :: i,ios, fp
 
+    ! === Initialisation ===
+    ! ======================
+
     ! Add routine to path
     call init_routine( routine_name)
 
@@ -577,6 +609,10 @@ contains
       write(*,"(3A)") ' Initialising sea level record from ', &
                         TRIM(C%filename_sealevel_record), '...'
     end if
+    call sync
+
+    ! === Read data ===
+    ! =================
 
     ! Read CO2 record (time and values) from specified text file
     open(  newunit=fp, file=C%filename_sealevel_record, action='READ')
@@ -595,21 +631,30 @@ contains
 
     close( unit=fp)
 
-    if (C%start_time_of_run < forcing%sealevel_time(1)) then
-      call warning(' Model time starts before start of sea level record;' // &
-                    'constant extrapolation will be used in that case!')
-    end if
-
-    if (C%end_time_of_run > forcing%sealevel_time(C%sealevel_record_length)) then
-      call warning(' Model time will reach beyond end of sea level record;' // &
-                    'constant extrapolation will be used in that case!')
-    end if
+    ! === Update sea level ===
+    ! ========================
 
     ! Set the value for the current (starting) model time
     call update_sealevel_at_model_time( C%start_time_of_run)
 
+    ! === Finalisation ===
+    ! ====================
+
+    if (par%master) then
+      if (C%start_time_of_run < forcing%sealevel_time(1)) then
+        call warning('Model time starts before start of sea level record;' // &
+                     ' constant extrapolation will be used in that case!')
+      end if
+
+      if (C%end_time_of_run > forcing%sealevel_time(C%sealevel_record_length)) then
+        call warning('Model time will reach beyond end of sea level record;' // &
+                     ' constant extrapolation will be used in that case!')
+      end if
+    end if
+    call sync
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
   end subroutine initialise_sealevel_record
 
@@ -632,12 +677,11 @@ contains
     ! Add routine to path
     call init_routine( routine_name)
 
-
-    if (time < minval( forcing%sealevel_time)) then
+    if (time <= minval( forcing%sealevel_time)) then
       ! Model time before start of sea level record; using constant extrapolation
       forcing%sealevel_obs = forcing%sealevel_record( 1)
 
-    elseif (time > maxval( forcing%sealevel_time)) then
+    elseif (time >= maxval( forcing%sealevel_time)) then
       ! Model time beyond end of sea level record; using constant extrapolation
       forcing%sealevel_obs = forcing%sealevel_record( C%sealevel_record_length)
 
@@ -657,7 +701,7 @@ contains
     end if
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
   end subroutine update_sealevel_at_model_time
 

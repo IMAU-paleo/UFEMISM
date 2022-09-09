@@ -177,6 +177,7 @@ contains
       write (*,"(3A)") '  Initialising ice rheology "', &
                           trim(C%choice_ice_rheology), '"...'
     end if
+    call sync
 
     ! Initialise ice rheology
     call calc_ice_rheology( mesh, ice, C%start_time_of_run)
@@ -435,6 +436,7 @@ contains
       write (*,"(3A)") '  Initialising ice temperature profile "', &
                           trim(C%choice_initial_ice_temperature), '"...'
     end if
+    call sync
 
     ! === Temperature profile ===
     ! ===========================

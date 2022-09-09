@@ -329,6 +329,7 @@ MODULE mesh_creation_module
     CALL init_routine( routine_name)
 
     IF (par%master) WRITE(0,*) '  Creating the first mesh...'
+    call sync
 
     ! Orientation of domain partitioning: east-west for GRL, north-south everywhere else
     IF (region%name == 'GRL') THEN
@@ -431,8 +432,10 @@ MODULE mesh_creation_module
 
     ! Merge the process submeshes, create the final shared-memory mesh
     IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Merging submeshes...'
+    call sync
     CALL merge_all_submeshes( submesh, orientation)
     IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Creating final mesh...'
+    call sync
     CALL create_final_mesh_from_merged_submesh( submesh, region%mesh)
 
     ! IF (par%master) THEN
@@ -441,6 +444,7 @@ MODULE mesh_creation_module
     !   WRITE(0,'(A,I6)')             '    Triangles : ', region%mesh%nTri
     !   WRITE(0,'(A,F7.1,A,F7.1,A)')  '    Resolution: ', region%mesh%resolution_min/1000._dp, ' - ', region%mesh%resolution_max/1000._dp, ' km'
     ! END IF
+    ! call sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 110)
@@ -1317,6 +1321,7 @@ MODULE mesh_creation_module
     DO merge_it = 1, n_merge_it
 
       IF (debug_mesh_creation .AND. par%master) WRITE(0,*) '  Merging submeshes: iteration ', merge_it
+      call sync
 
       mergelist = 0
       nmerge    = 0

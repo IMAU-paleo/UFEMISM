@@ -3,8 +3,8 @@
   ! Time steps and range
   ! ====================
 
-    start_time_of_run_config                    = -100.0                           ! Start time (in years) of the simulations
-    end_time_of_run_config                      = 0.0                              ! End   time (in years) of the simulations
+    start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
+    end_time_of_run_config                      = 100.0                            ! End   time (in years) of the simulations
     dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
     dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
     dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
@@ -17,7 +17,7 @@
     dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
 
   ! Domains
-  !   =======
+  ! =======
 
     do_NAM_config                               = .false.                          ! North America
     do_EAS_config                               = .false.                          ! Eurasia
@@ -169,7 +169,7 @@
     DIVA_SOR_nit_config                         = 10000                            ! DIVA SOR   solver - maximum number of iterations
     DIVA_SOR_tol_config                         = 2.5                              ! DIVA SOR   solver - stop criterion, absolute difference
     DIVA_SOR_omega_config                       = 1.3                              ! DIVA SOR   solver - over-relaxation parameter
-    DIVA_PETSc_rtol_config                      = 0.01                             ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    DIVA_PETSc_rtol_config                      = 0.001                            ! DIVA PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
     DIVA_PETSc_abstol_config                    = 2.5                              ! DIVA PETSc solver - stop criterion, absolute difference
 
   ! Ice dynamics - time integration

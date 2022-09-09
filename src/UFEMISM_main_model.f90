@@ -28,6 +28,7 @@ module UFEMISM_main_model
   use reallocate_mod,                only : reallocate
   use utilities_module,              only : time_display, inverse_oblique_sg_projection
   use thermodynamics_module,         only : initialise_thermo_model
+  use general_sea_level_module,      only : calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
 
 ! ===== Preamble =====
 ! ====================
@@ -64,6 +65,7 @@ contains
             ' Running model region ', region%name, ' (', trim(region%long_name), &
             ') from t = ', region%time/1000._dp, ' to t = ', t_end/1000._dp, ' kyr'
     end if
+    call sync
 
     ! Set the intermediary pointers in "debug" to this region's debug data fields
     call associate_debug_fields(  region)
@@ -128,6 +130,7 @@ contains
       if (par%master .and. C%do_time_display) then
         call time_display(region, t_end, dt_ave, it)
       end if
+      call sync
 
       ! == Output
       ! =========
@@ -200,6 +203,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Reallocating and remapping after mesh update...'
     end if
+    call sync
 
     ! Update the mapping operators between the new mesh and the fixed square grids
     call deallocate_remapping_operators_mesh2grid( region%grid_output)
@@ -295,6 +299,7 @@ contains
       write(*,"(A)") '  Finished reallocating and remapping.'
       write(*,"(A)") '  Running again now...'
     end if
+    call sync
 
     ! Finalise routine path
     call finalise_routine( routine_name)
@@ -341,6 +346,7 @@ contains
       write(*,"(5A)") ' Initialising model region ', region%name, &
                       ' (', trim(region%long_name), ')...'
     end if
+    call sync
 
     ! ===== Allocate memory for timers and scalars =====
     ! ==================================================
@@ -386,6 +392,7 @@ contains
     if (par%master) then
       write(*,"(A)") '  Initialising square grids for output, GIA, and data smoothing...'
     end if
+    call sync
 
     call initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
     call initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
@@ -458,12 +465,24 @@ contains
     ! Initialise the ice temperature profile
     call initialise_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name)
 
+    ! ===== Scalar ice data =====
+    ! ===========================
+
+    ! Calculate ice sheet metadata (volume, area, GMSL contribution),
+    ! for writing to the first time point of the output file
+    call calculate_PD_sealevel_contribution( region)
+    call calculate_icesheet_volume_and_area( region)
+
     ! ===== Output files =====
     ! ========================
 
+    ! Create output file for regional 2-/3-D data
     call create_output_files( region)
     region%output_file_exists = .true.
     call sync
+
+    ! Write 2-/3-D data at time t=0
+    call write_to_output_files( region)
 
     ! ===== Finalisation =====
     ! ========================
@@ -471,8 +490,6 @@ contains
     if (par%master) then
       write(*,"(3A)") ' Finished initialising model region ', region%name, '.'
     end if
-
-    ! Make sure all processes reached this point
     call sync
 
     ! Finalise routine path

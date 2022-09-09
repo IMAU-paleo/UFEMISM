@@ -1,4 +1,4 @@
-MODULE data_types_module
+module data_types_module
   ! Contains all the different types for storing data. Put all together in a separate module so that
   ! all subroutines can use all types without interdependency conflicts, and also to make the
   ! modules with the actual physics code more readable.
@@ -7,7 +7,6 @@ MODULE data_types_module
 #include <petsc/finclude/petscksp.h>
   USE petscksp
   USE mpi
-  USE petscksp
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
@@ -15,7 +14,7 @@ MODULE data_types_module
                                          type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
                                          type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
                                          type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data, &
-                                         type_netcdf_resource_tracker
+                                         type_netcdf_resource_tracker, type_netcdf_scalars_global, type_netcdf_scalars_regional
 
   IMPLICIT NONE
 
@@ -1028,6 +1027,7 @@ MODULE data_types_module
     TYPE(type_netcdf_restart)               :: restart_grid
     TYPE(type_netcdf_help_fields)           :: help_fields_mesh
     TYPE(type_netcdf_help_fields)           :: help_fields_grid
+    TYPE(type_netcdf_scalars_regional)      :: scalars
 
     ! Different square grids
     TYPE(type_grid)                         :: grid_output                               ! For the "_grid" output files
@@ -1076,6 +1076,46 @@ MODULE data_types_module
 
   END TYPE type_restart_data
 
-CONTAINS
+  type type_global_scalar_data
+    ! Structure containing some global scalar values: sea level, CO2, d18O components, computation times, etc.
 
-END MODULE data_types_module
+    ! Netcdf file
+    type(type_netcdf_scalars_global)        :: netcdf
+
+    ! Sea level
+    real(dp)                                :: GMSL                                      ! Global mean sea level change
+    real(dp)                                :: GMSL_NAM                                  ! Global mean sea level change (contribution from ice in North America)
+    real(dp)                                :: GMSL_EAS                                  ! Global mean sea level change (contribution from ice in Eurasia)
+    real(dp)                                :: GMSL_GRL                                  ! Global mean sea level change (contribution from ice in Greenland)
+    real(dp)                                :: GMSL_ANT                                  ! Global mean sea level change (contribution from ice in Antarctica)
+
+    ! CO2
+    real(dp)                                :: CO2_obs                                   ! Observed atmospheric CO2
+    real(dp)                                :: CO2_mod                                   ! Modelled atmospheric CO2
+
+    ! d18O
+    real(dp)                                :: d18O_obs                                  ! Observed benthic d18O
+    real(dp)                                :: d18O_mod                                  ! Modelled benthic d18O
+    real(dp)                                :: d18O_ice                                  ! Contribution to benthic d18O from global ice volume
+    real(dp)                                :: d18O_Tdw                                  ! Contribution to benthic d18O from deep-water temperature
+    real(dp)                                :: d18O_NAM                                  ! Contribution to benthic d18O from ice in North America
+    real(dp)                                :: d18O_EAS                                  ! Contribution to benthic d18O from ice in Eurasia
+    real(dp)                                :: d18O_GRL                                  ! Contribution to benthic d18O from ice in Greenland
+    real(dp)                                :: d18O_ANT                                  ! Contribution to benthic d18O from ice in Antarctica
+
+    ! Temperature
+    real(dp)                                :: dT_glob                                   ! Global mean annual surface temperature change
+    real(dp)                                :: dT_dw                                     ! Deep-water temperature change
+
+    ! Computation times for all regions combined
+    real(dp)                                :: tcomp_total
+    real(dp)                                :: tcomp_ice
+    real(dp)                                :: tcomp_thermo
+    real(dp)                                :: tcomp_climate
+    real(dp)                                :: tcomp_GIA
+
+  end type type_global_scalar_data
+
+contains
+
+end module data_types_module

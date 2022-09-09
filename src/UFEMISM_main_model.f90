@@ -29,6 +29,7 @@ module UFEMISM_main_model
   use utilities_module,              only : time_display, inverse_oblique_sg_projection
   use thermodynamics_module,         only : initialise_thermo_model
   use general_sea_level_module,      only : calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
+  use scalar_data_output_module,     only : initialise_regional_scalar_data, write_regional_scalar_data
 
 ! ===== Preamble =====
 ! ====================
@@ -40,25 +41,32 @@ contains
 ! ===== Main routines =====
 ! =========================
 
-  subroutine run_model( region, t_end)
+  subroutine run_model( region, climate_matrix_global, t_end)
     ! Run the model region until the next coupling time
 
     implicit none
 
     ! In/output variables:
-    type(type_model_region), intent(inout) :: region
-    real(dp),                intent(in)    :: t_end
+    type(type_model_region),          intent(inout) :: region
+    type(type_climate_matrix_global), intent(inout) :: climate_matrix_global
+    real(dp),                         intent(in)    :: t_end
 
     ! Local variables:
-    character(len=256)                     :: routine_name
-    real(dp)                               :: meshfitness
-    integer                                :: it
-    real(dp)                               :: t1, t2, dt_ave
+    character(len=256)                              :: routine_name
+    real(dp)                                        :: meshfitness
+    integer                                         :: it
+    real(dp)                                        :: tstart, tstop, t1, t2, dt_ave
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Set routine's name
+    routine_name = 'run_model('  //  region%name  //  ')'
 
     ! Add routine to path
-    routine_name = 'run_model('  //  region%name  //  ')'
     call init_routine( routine_name)
 
+    ! Screen message
     if (par%master) then
       write(*,"(A)") ''
       write(*,"(5A,F9.3,A,F9.3,A)") &
@@ -78,6 +86,10 @@ contains
     region%tcomp_GIA     = 0._dp
     region%tcomp_mesh    = 0._dp
 
+    ! Initialise coupling-interval timer
+    tstart = MPI_WTIME()
+
+    ! Initialise sub-model timers
     t1 = MPI_WTIME()
     t2 = 0._dp
 
@@ -86,9 +98,8 @@ contains
     ! Initialise averaged time step
     dt_ave = 0._dp
 
-    ! ====================================
-    ! ===== The main model time loop =====
-    ! ====================================
+    ! === The main model time loop ===
+    ! ================================
 
     do while (region%time < t_end)
 
@@ -141,7 +152,6 @@ contains
         if (.not. region%output_file_exists) then
           call create_output_files( region)
           call sync
-          region%output_file_exists = .true.
         end if
         ! Write to regional NetCDF output files
         call write_to_output_files( region)
@@ -166,7 +176,6 @@ contains
       if (.not. region%output_file_exists) then
         call create_output_files( region)
         call sync
-        region%output_file_exists = .true.
       end if
       call write_to_output_files( region)
     end if
@@ -476,10 +485,14 @@ contains
     ! ===== Output files =====
     ! ========================
 
+    ! Create output file for regional scalar data
+    call initialise_regional_scalar_data( region)
+
+    ! Write regional scalar data at time t=0
+    CALL write_regional_scalar_data( region, C%start_time_of_run)
+
     ! Create output file for regional 2-/3-D data
     call create_output_files( region)
-    region%output_file_exists = .true.
-    call sync
 
     ! Write 2-/3-D data at time t=0
     call write_to_output_files( region)

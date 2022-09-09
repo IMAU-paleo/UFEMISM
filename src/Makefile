@@ -68,6 +68,7 @@ UFEMISM_program_objects = \
         ice_dynamics_module.o \
         BMB_module.o \
         SMB_module.o \
+        scalar_data_output_module.o \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 

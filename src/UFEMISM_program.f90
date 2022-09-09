@@ -50,18 +50,21 @@ program UFEMISM_program
 
   use mpi
   use petscksp
-  use data_types_module,     only: type_netcdf_resource_tracker, type_model_region, &
-                                   type_climate_matrix_global, type_ocean_matrix_global
-  use parallel_module,       only: initialise_parallelisation, par, sync, ierr
-  use petsc_module,          only: perr
-  use configuration_module,  only: dp, C, routine_path, write_total_model_time_to_screen, &
-                                   initialise_model_configuration, reset_resource_tracker
-  use netcdf_module,         only: create_resource_tracking_file, write_to_resource_tracking_file
-  use zeta_module,           only: initialise_zeta_discretisation
-  use forcing_module,        only: initialise_global_forcing
-  use climate_module,        only: initialise_climate_model_global
-  use ocean_module,          only: initialise_ocean_model_global
-  use UFEMISM_main_model,    only: initialise_model, run_model
+  use data_types_module,         only : type_netcdf_resource_tracker, type_model_region, &
+                                        type_climate_matrix_global, type_ocean_matrix_global, &
+                                        type_global_scalar_data
+  use parallel_module,           only : initialise_parallelisation, par, sync, ierr
+  use petsc_module,              only : perr
+  use configuration_module,      only : dp, C, routine_path, write_total_model_time_to_screen, &
+                                        initialise_model_configuration, reset_resource_tracker
+  use netcdf_module,             only : create_resource_tracking_file, write_to_resource_tracking_file
+  use zeta_module,               only : initialise_zeta_discretisation
+  use forcing_module,            only : forcing, initialise_global_forcing
+  use climate_module,            only : initialise_climate_model_global
+  use ocean_module,              only : initialise_ocean_model_global
+  use UFEMISM_main_model,        only : initialise_model, run_model
+  use general_sea_level_module,  only : update_regional_sea_level, determine_GMSL_contributions
+  use scalar_data_output_module, only : initialise_global_scalar_data, write_global_scalar_data
 
 ! ===== Main variables =====
 ! ==========================
@@ -83,6 +86,9 @@ program UFEMISM_program
   ! Computation time tracking
   type(type_netcdf_resource_tracker)   :: resources
   real(dp)                             :: tstart, tstop, t1, tcomp_loop
+
+  ! Global scalar data
+  TYPE(type_global_scalar_data)       :: global_data
 
 ! ===== START =====
 ! =================
@@ -117,12 +123,16 @@ program UFEMISM_program
   ! ===========================================
 
   call create_resource_tracking_file( resources)
-  call sync
 
   ! == Vertical scaled coordinate transformation
   ! ============================================
 
   call initialise_zeta_discretisation
+
+  ! == Create the global scalar output file
+  ! =======================================
+
+  call initialise_global_scalar_data( global_data)
 
   ! == Initialise global forcing data
   ! =================================
@@ -160,24 +170,43 @@ program UFEMISM_program
     end if
     call sync
 
+    ! == Regional sea level update
+    ! ============================
+
+    ! Update regional sea level
+    call update_regional_sea_level( NAM, EAS, GRL, ANT, global_data, t_coupling)
+
+    ! == Global sea level update
+    ! ==========================
+
+    ! Determine ice sheets GMSL contributions and new global sea level
+    call determine_GMSL_contributions( NAM, EAS, GRL, ANT, global_data, t_coupling)
+
+    ! == Global output
+    ! ================
+
+    ! Write global data to output file
+    call write_global_scalar_data( NAM, EAS, GRL, ANT, forcing, global_data, t_coupling)
+
     ! == Regional model runs
     ! ======================
 
-    ! Run all four model regions for 100 years
+    ! Run all four model regions for C%dt_coupling years
     t_end_models = min(C%end_time_of_run, t_coupling + C%dt_coupling)
 
-    if (C%do_NAM) call run_model( NAM, t_end_models)
-    if (C%do_EAS) call run_model( EAS, t_end_models)
-    if (C%do_GRL) call run_model( GRL, t_end_models)
-    if (C%do_ANT) call run_model( ANT, t_end_models)
+    if (C%do_NAM) call run_model( NAM, climate_matrix_global, t_end_models)
+    if (C%do_EAS) call run_model( EAS, climate_matrix_global, t_end_models)
+    if (C%do_GRL) call run_model( GRL, climate_matrix_global, t_end_models)
+    if (C%do_ANT) call run_model( ANT, climate_matrix_global, t_end_models)
 
-    ! Advance coupling time
+    ! == Advance coupling time
+    ! ========================
+
     t_coupling = t_end_models
 
     ! == Resource tracking output
     ! ===========================
 
-    ! Write resource use to the resource tracking file
     tcomp_loop = MPI_WTIME() - t1
     call write_to_resource_tracking_file( resources, t_coupling, tcomp_loop)
     t1 = MPI_WTIME()

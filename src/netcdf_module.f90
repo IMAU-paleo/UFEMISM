@@ -1,33 +1,28 @@
 MODULE netcdf_module
   ! Contains all the subroutines for reading, creating, and writing to NetCDF files.
 
-#include <petsc/finclude/petscksp.h>
-
 ! ===== Preamble =====
 ! ====================
 
-  ! use petscksp
   use mpi
   use mpi_module,               only: allgather_array
-  use configuration_module,     only: dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  use configuration_module,     only: dp, C, routine_path, init_routine, finalise_routine, crash, warning, resource_tracker
   use parameters_module,        only: sec_per_year
-  use petsc_module,             only: perr!, mat_petsc2CSR
   use parallel_module,          only: par, sync, ierr, cerr, partition_list
-  use data_types_netcdf_module, only: type_netcdf_restart, type_netcdf_help_fields
+  use data_types_netcdf_module, only: type_netcdf_restart, type_netcdf_help_fields, type_netcdf_scalars_global
   use data_types_module,        only: type_forcing_data, type_netcdf_resource_tracker, &
                                       type_reference_geometry, type_model_region, &
                                       type_debug_fields, type_mesh, type_grid, &
                                       type_restart_data, type_climate_snapshot_global, &
-                                      type_ocean_snapshot_global, type_highres_ocean_data
-                                      ! type_sparse_matrix_CSR_dp
+                                      type_ocean_snapshot_global, type_highres_ocean_data, &
+                                      type_global_scalar_data
   use netcdf,                   only: nf90_max_var_dims, nf90_create, nf90_close, nf90_clobber, nf90_share, nf90_unlimited , &
                                       nf90_enddef, nf90_put_var, nf90_sync, nf90_def_var, nf90_int, nf90_put_att, nf90_def_dim, &
                                       nf90_open, nf90_write, nf90_inq_dimid, nf90_inquire_dimension, nf90_inquire, nf90_double, &
                                       nf90_inq_varid, nf90_inquire_variable, nf90_get_var, nf90_noerr, nf90_strerror, nf90_float
   use mesh_mapping_module,      only: map_mesh2grid_2D, map_mesh2grid_3D
-  ! use sparse_matrix_module,     only: deallocate_matrix_CSR
 
-  ! implicit none
+  implicit none
 
   type(type_debug_fields) :: debug_NAM, debug_EAS, debug_GRL, debug_ANT, debug
 
@@ -72,6 +67,8 @@ contains
 
     end if
     call sync
+
+    region%output_file_exists = .true.
 
     ! Finalise routine path
     call finalise_routine( routine_name)
@@ -3266,8 +3263,6 @@ contains
   SUBROUTINE create_resource_tracking_file( netcdf)
     ! Create the resource tracking output file
 
-    USE configuration_module, ONLY: resource_tracker
-
     IMPLICIT NONE
 
     ! Input variables:
@@ -3280,134 +3275,137 @@ contains
     INTEGER                                           :: i,n
     CHARACTER(LEN=256)                                :: var_name, long_name
 
-    IF (.NOT. par%master) RETURN
+    IF (par%master) THEN
 
-    ! Set time frame index to 1
-    netcdf%ti = 1
+      ! Set time frame index to 1
+      netcdf%ti = 1
 
-    ! Create a new file if none exists and, to prevent loss of data,
-    ! stop with an error message if one already exists (not when differences are considered):
-    netcdf%filename = TRIM(C%output_dir) // '/resource_tracking.nc'
-    INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
-    IF (file_exists) THEN
-      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
-    END IF
-
-    ! Create netCDF file
-    !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
-    CALL handle_error( nf90_create( netcdf%filename, IOR( nf90_clobber, nf90_share), netcdf%ncid))
-
-    ! Define dimensions:
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_time       , nf90_unlimited, netcdf%id_dim_time       )
-    CALL create_dim( netcdf%ncid, netcdf%name_dim_name_length, 1024          , netcdf%id_dim_name_length)
-
-    ! Placeholders for the dimension ID's, for shorter code
-    t  = netcdf%id_dim_time
-    nl = netcdf%id_dim_name_length
-
-    ! Define variables:
-    ! The order of the CALL statements for the different variables determines their
-    ! order of appearence in the netcdf file.
-
-    ! Dimension variables: time
-    CALL create_double_var( netcdf%ncid, netcdf%name_var_time , [t], netcdf%id_var_time, long_name='Time', units='years'   )
-
-    ! Actual variables
-    ! ================
-
-    ! Total model resource use
-    CALL create_double_var( netcdf%ncid, 'tcomp_tot', [t], netcdf%id_var_tcomp_tot, long_name='Computation time', units='s'    )
-    CALL create_double_var( netcdf%ncid, 'mem_tot'  , [t], netcdf%id_var_mem_tot  , long_name='Memory use'      , units='bytes')
-
-    ! Per-subroutine resource use
-
-    n = SIZE( resource_tracker)
-
-    ALLOCATE( netcdf%id_var_names( n))
-    ALLOCATE( netcdf%id_var_tcomp( n))
-    ALLOCATE( netcdf%id_var_mem(   n))
-
-    DO i = 1, n
-
-      ! Subroutine name
-      ! ===============
-
-      ! Generate variable name (name_00001, name_00002, etc.)
-      var_name(  1:256) = ' '
-      long_name( 1:256) = ' '
-      IF     (i < 10) THEN
-        WRITE( var_name ,'(A,I1)') 'name_0000', i
-      ELSEIF (i < 100) THEN
-        WRITE( var_name,'(A,I2)') 'name_000', i
-      ELSEIF (i < 1000) THEN
-        WRITE( var_name,'(A,I3)') 'name_00', i
-      ELSEIF (i < 10000) THEN
-        WRITE( var_name,'(A,I4)') 'name_0', i
-      ELSEIF (i < 100000) THEN
-        WRITE( var_name,'(A,I5)') 'name_', i
+      ! Create a new file if none exists and, to prevent loss of data,
+      ! stop with an error message if one already exists (not when differences are considered):
+      netcdf%filename = TRIM(C%output_dir) // '/resource_tracking.nc'
+      INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
+      IF (file_exists) THEN
+        CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
       END IF
 
-      WRITE( long_name,'(A,I1)') 'Full name of subroutine #', i
+      ! Create netCDF file
+      !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
+      CALL handle_error( nf90_create( netcdf%filename, IOR( nf90_clobber, nf90_share), netcdf%ncid))
 
-      ! Create the variable in the NetCDF file
-      CALL create_int_var( netcdf%ncid, var_name, [nl], netcdf%id_var_names( i),  long_name = long_name)
+      ! Define dimensions:
+      CALL create_dim( netcdf%ncid, netcdf%name_dim_time       , nf90_unlimited, netcdf%id_dim_time       )
+      CALL create_dim( netcdf%ncid, netcdf%name_dim_name_length, 1024          , netcdf%id_dim_name_length)
 
-      ! Computation time
+      ! Placeholders for the dimension ID's, for shorter code
+      t  = netcdf%id_dim_time
+      nl = netcdf%id_dim_name_length
+
+      ! Define variables:
+      ! The order of the CALL statements for the different variables determines their
+      ! order of appearence in the netcdf file.
+
+      ! Dimension variables: time
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_time , [t], netcdf%id_var_time, long_name='Time', units='years'   )
+
+      ! Actual variables
       ! ================
 
-      ! Generate variable name (tcomp_00001, tcomp_00002, etc.)
-      var_name(  1:256) = ' '
-      long_name( 1:256) = ' '
-      IF     (i < 10) THEN
-        WRITE( var_name ,'(A,I1)') 'tcomp_0000', i
-      ELSEIF (i < 100) THEN
-        WRITE( var_name,'(A,I2)') 'tcomp_000', i
-      ELSEIF (i < 1000) THEN
-        WRITE( var_name,'(A,I3)') 'tcomp_00', i
-      ELSEIF (i < 10000) THEN
-        WRITE( var_name,'(A,I4)') 'tcomp_0', i
-      ELSEIF (i < 100000) THEN
-        WRITE( var_name,'(A,I5)') 'tcomp_', i
-      END IF
+      ! Total model resource use
+      CALL create_double_var( netcdf%ncid, 'tcomp_tot', [t], netcdf%id_var_tcomp_tot, long_name='Computation time', units='s'    )
+      CALL create_double_var( netcdf%ncid, 'mem_tot'  , [t], netcdf%id_var_mem_tot  , long_name='Memory use'      , units='bytes')
 
-      WRITE( long_name,'(A,I5)') 'Computation time for subroutine #', i
+      ! Per-subroutine resource use
 
-      ! Create the variable in the NetCDF file
-      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_tcomp( i),  long_name = long_name, units = 's', missing_value = 0._dp)
+      n = SIZE( resource_tracker)
 
-      ! Memory use
-      ! ==========
+      ALLOCATE( netcdf%id_var_names( n))
+      ALLOCATE( netcdf%id_var_tcomp( n))
+      ALLOCATE( netcdf%id_var_mem(   n))
 
-      ! Generate variable name (mem_00001, mem_00002, etc.)
-      var_name(  1:256) = ' '
-      long_name( 1:256) = ' '
-      IF     (i < 10) THEN
-        WRITE( var_name ,'(A,I1)') 'mem_0000', i
-      ELSEIF (i < 100) THEN
-        WRITE( var_name,'(A,I2)') 'mem_000', i
-      ELSEIF (i < 1000) THEN
-        WRITE( var_name,'(A,I3)') 'mem_00', i
-      ELSEIF (i < 10000) THEN
-        WRITE( var_name,'(A,I4)') 'mem_0', i
-      ELSEIF (i < 100000) THEN
-        WRITE( var_name,'(A,I5)') 'mem_', i
-      END IF
+      DO i = 1, n
 
-      WRITE( long_name,'(A,I5)') 'Memory use for subroutine #', i
+        ! Subroutine name
+        ! ===============
 
-      ! Create the variable in the NetCDF file
-      CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_mem( i),  long_name = long_name, units = 'bytes', missing_value = 0._dp)
+        ! Generate variable name (name_00001, name_00002, etc.)
+        var_name(  1:256) = ' '
+        long_name( 1:256) = ' '
+        IF     (i < 10) THEN
+          WRITE( var_name ,'(A,I1)') 'name_0000', i
+        ELSEIF (i < 100) THEN
+          WRITE( var_name,'(A,I2)') 'name_000', i
+        ELSEIF (i < 1000) THEN
+          WRITE( var_name,'(A,I3)') 'name_00', i
+        ELSEIF (i < 10000) THEN
+          WRITE( var_name,'(A,I4)') 'name_0', i
+        ELSEIF (i < 100000) THEN
+          WRITE( var_name,'(A,I5)') 'name_', i
+        END IF
 
-    END DO
+        WRITE( long_name,'(A,I1)') 'Full name of subroutine #', i
 
-    ! Leave definition mode:
-    CALL handle_error(nf90_enddef( netcdf%ncid))
+        ! Create the variable in the NetCDF file
+        CALL create_int_var( netcdf%ncid, var_name, [nl], netcdf%id_var_names( i),  long_name = long_name)
 
-    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-    CALL handle_error(nf90_sync( netcdf%ncid))
+        ! Computation time
+        ! ================
 
-    ! Close the file
-    CALL close_netcdf_file(netcdf%ncid)
+        ! Generate variable name (tcomp_00001, tcomp_00002, etc.)
+        var_name(  1:256) = ' '
+        long_name( 1:256) = ' '
+        IF     (i < 10) THEN
+          WRITE( var_name ,'(A,I1)') 'tcomp_0000', i
+        ELSEIF (i < 100) THEN
+          WRITE( var_name,'(A,I2)') 'tcomp_000', i
+        ELSEIF (i < 1000) THEN
+          WRITE( var_name,'(A,I3)') 'tcomp_00', i
+        ELSEIF (i < 10000) THEN
+          WRITE( var_name,'(A,I4)') 'tcomp_0', i
+        ELSEIF (i < 100000) THEN
+          WRITE( var_name,'(A,I5)') 'tcomp_', i
+        END IF
+
+        WRITE( long_name,'(A,I5)') 'Computation time for subroutine #', i
+
+        ! Create the variable in the NetCDF file
+        CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_tcomp( i),  long_name = long_name, units = 's', missing_value = 0._dp)
+
+        ! Memory use
+        ! ==========
+
+        ! Generate variable name (mem_00001, mem_00002, etc.)
+        var_name(  1:256) = ' '
+        long_name( 1:256) = ' '
+        IF     (i < 10) THEN
+          WRITE( var_name ,'(A,I1)') 'mem_0000', i
+        ELSEIF (i < 100) THEN
+          WRITE( var_name,'(A,I2)') 'mem_000', i
+        ELSEIF (i < 1000) THEN
+          WRITE( var_name,'(A,I3)') 'mem_00', i
+        ELSEIF (i < 10000) THEN
+          WRITE( var_name,'(A,I4)') 'mem_0', i
+        ELSEIF (i < 100000) THEN
+          WRITE( var_name,'(A,I5)') 'mem_', i
+        END IF
+
+        WRITE( long_name,'(A,I5)') 'Memory use for subroutine #', i
+
+        ! Create the variable in the NetCDF file
+        CALL create_double_var( netcdf%ncid, var_name, [t], netcdf%id_var_mem( i),  long_name = long_name, units = 'bytes', missing_value = 0._dp)
+
+      END DO
+
+      ! Leave definition mode:
+      CALL handle_error(nf90_enddef( netcdf%ncid))
+
+      ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+      CALL handle_error(nf90_sync( netcdf%ncid))
+
+      ! Close the file
+      CALL close_netcdf_file(netcdf%ncid)
+
+    END IF ! (par%master)
+    call sync
 
   END SUBROUTINE create_resource_tracking_file
 
@@ -3595,6 +3593,353 @@ contains
     END DO
 
   END SUBROUTINE encode_subroutine_path_as_integer
+
+! Create and write to global scalar output file
+! =============================================
+
+  subroutine create_global_scalar_output_file( netcdf)
+    ! Create a new global scalar output file
+
+    implicit none
+
+    ! Input variables:
+    type(type_netcdf_scalars_global), intent(inout) :: netcdf
+
+    ! Local variables:
+    character(len=256), parameter                   :: routine_name = 'create_global_scalar_output_file'
+    logical                                         :: file_exists
+    integer                                         :: t
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! === Create file ===
+    ! ===================
+
+    ! Set time frame index to 1
+    netcdf%ti = 1
+
+    ! Create a new restart file if none exists and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+
+    ! Filename
+    netcdf%filename = trim(C%output_dir) // '/scalar_output_global.nc'
+
+    ! Inquire if it already exists
+    inquire( exist = file_exists, file = trim(netcdf%filename))
+
+    ! If yes, kaput
+    if (file_exists) then
+      call crash('file "' // TRIM( netcdf%filename) // '" already exists!')
+    end if
+
+    ! Create netCDF file
+    call handle_error( nf90_create( netcdf%filename, IOR(nf90_clobber,nf90_share), netcdf%ncid))
+
+    ! Define dimensions for time frames
+    call create_dim( netcdf%ncid, netcdf%name_dim_time, nf90_unlimited, netcdf%id_dim_time)
+
+    ! Placeholders for the dimension ID, for shorter code
+    t = netcdf%id_dim_time
+
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+
+    ! Dimension variables: zeta, month, time
+    call create_double_var( netcdf%ncid, netcdf%name_var_time,          [t], netcdf%id_var_time,          long_name='Time', units='years'   )
+
+    ! Sea level
+    call create_double_var( netcdf%ncid, netcdf%name_var_GMSL,          [t], netcdf%id_var_GMSL,          long_name='Global mean sea level change', units='m')
+    call create_double_var( netcdf%ncid, netcdf%name_var_GMSL_NAM,      [t], netcdf%id_var_GMSL_NAM,      long_name='Global mean sea level change from ice in North America', units='m')
+    call create_double_var( netcdf%ncid, netcdf%name_var_GMSL_EAS,      [t], netcdf%id_var_GMSL_EAS,      long_name='Global mean sea level change from ice in Eurasia',       units='m')
+    call create_double_var( netcdf%ncid, netcdf%name_var_GMSL_GRL,      [t], netcdf%id_var_GMSL_GRL,      long_name='Global mean sea level change from ice in Greenland',       units='m')
+    call create_double_var( netcdf%ncid, netcdf%name_var_GMSL_ANT,      [t], netcdf%id_var_GMSL_ANT,      long_name='Global mean sea level change from ice in Antarctica',       units='m')
+
+    ! CO2
+    if (C%choice_forcing_method == 'none') then
+      ! Do nothing
+
+    elseif (C%choice_forcing_method == 'CO2_direct') then
+      call create_double_var( netcdf%ncid, netcdf%name_var_CO2_obs,     [t], netcdf%id_var_CO2_obs,       long_name='Observed atmospheric CO2 concentration', units='ppm')
+
+    elseif (C%choice_forcing_method == 'd18O_inverse_dT_glob') then
+      ! Do nothing
+
+    elseif (C%choice_forcing_method == 'd18O_inverse_CO2') then
+      call create_double_var( netcdf%ncid, netcdf%name_var_CO2_obs,     [t], netcdf%id_var_CO2_obs,       long_name='Observed atmospheric CO2 concentration', units='ppm')
+      call create_double_var( netcdf%ncid, netcdf%name_var_CO2_mod,     [t], netcdf%id_var_CO2_mod,       long_name='Modelled atmospheric CO2 concentration', units='ppm')
+
+    else
+      call crash('unknown choice_forcing_method "' // trim(C%choice_forcing_method) // '"!')
+    end if
+
+    ! d18O
+    if (C%do_calculate_benthic_d18O) then
+      call create_double_var( netcdf%ncid, netcdf%name_var_dT_glob,     [t], netcdf%id_var_dT_glob,       long_name='Global annual mean surface temperature change', units='K')
+      call create_double_var( netcdf%ncid, netcdf%name_var_dT_dw,       [t], netcdf%id_var_dT_dw,         long_name='Deep-water temperature change', units='K')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_mod,    [t], netcdf%id_var_d18O_mod,      long_name='Modelled benthic d18O', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_ice,    [t], netcdf%id_var_d18O_ice,      long_name='Modelled benthic d18O from global ice volume', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_Tdw,    [t], netcdf%id_var_d18O_Tdw,      long_name='Modelled benthic d18O from deep-water temperature', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_NAM,    [t], netcdf%id_var_d18O_NAM,      long_name='Modelled benthic d18O from ice in North America', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_EAS,    [t], netcdf%id_var_d18O_EAS,      long_name='Modelled benthic d18O from ice in Eurasia', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_GRL,    [t], netcdf%id_var_d18O_GRL,      long_name='Modelled benthic d18O from ice in Greenland', units='per mil')
+      call create_double_var( netcdf%ncid, netcdf%name_var_d18O_ANT,    [t], netcdf%id_var_d18O_ANT,      long_name='Modelled benthic d18O from ice in Antarctica', units='per mil')
+    end if
+
+    ! Computation time for different model components
+    call create_double_var( netcdf%ncid, netcdf%name_var_tcomp_total,   [t], netcdf%id_var_tcomp_total,   long_name='Total computation time', units='s')
+    call create_double_var( netcdf%ncid, netcdf%name_var_tcomp_ice,     [t], netcdf%id_var_tcomp_ice,     long_name='Total computation time for ice dynamics', units='s')
+    call create_double_var( netcdf%ncid, netcdf%name_var_tcomp_thermo,  [t], netcdf%id_var_tcomp_thermo,  long_name='Total computation time for thermodynamics', units='s')
+    call create_double_var( netcdf%ncid, netcdf%name_var_tcomp_climate, [t], netcdf%id_var_tcomp_climate, long_name='Total computation time for climate+SMB+BMB', units='s')
+    call create_double_var( netcdf%ncid, netcdf%name_var_tcomp_GIA,     [t], netcdf%id_var_tcomp_GIA,     long_name='Total computation time for GIA', units='s')
+
+    ! Leave definition mode:
+    call handle_error(nf90_enddef( netcdf%ncid))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    call handle_error(nf90_sync( netcdf%ncid))
+
+    ! Close the file
+    call close_netcdf_file(netcdf%ncid)
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine create_global_scalar_output_file
+
+  subroutine write_to_global_scalar_output_file( global_data, time)
+    ! Write data to the global scalar output file
+
+    implicit none
+
+    ! Input variables:
+    type(type_global_scalar_data), intent(inout) :: global_data
+    real(dp),                      intent(in)    :: time
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'write_to_global_scalar_output_file'
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Write data ===
+    ! ==================
+
+    ! Open the file for writing
+    call open_netcdf_file( global_data%netcdf%filename, global_data%netcdf%ncid)
+
+    ! Time
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_time, time, start = (/global_data%netcdf%ti/)))
+
+    ! Sea level
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_GMSL,      global_data%GMSL,     start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_GMSL_NAM,  global_data%GMSL_NAM, start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_GMSL_EAS,  global_data%GMSL_EAS, start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_GMSL_GRL,  global_data%GMSL_GRL, start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_GMSL_ANT,  global_data%GMSL_ANT, start = (/global_data%netcdf%ti/)))
+
+    ! CO2
+    if (C%choice_forcing_method == 'none') then
+      ! Do nothing
+    elseif (C%choice_forcing_method == 'CO2_direct') then
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_CO2_obs, global_data%CO2_obs, start = (/global_data%netcdf%ti/)))
+    elseif (C%choice_forcing_method == 'd18O_inverse_dT_glob') then
+      ! Do nothing
+    elseif (C%choice_forcing_method == 'd18O_inverse_CO2') then
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_CO2_obs, global_data%CO2_obs, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_CO2_mod, global_data%CO2_mod, start = (/global_data%netcdf%ti/)))
+    else
+      call crash('unknown choice_forcing_method "' // TRIM(C%choice_forcing_method) // '"!')
+    end if
+
+    ! d18O
+    if     (C%do_calculate_benthic_d18O) then
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_dT_glob,  global_data%dT_glob,  start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_dT_dw,    global_data%dT_dw,    start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_mod, global_data%d18O_mod, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_ice, global_data%d18O_ice, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_Tdw, global_data%d18O_Tdw, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_NAM, global_data%d18O_NAM, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_EAS, global_data%d18O_EAS, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_GRL, global_data%d18O_GRL, start = (/global_data%netcdf%ti/)))
+      call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_d18O_ANT, global_data%d18O_ANT, start = (/global_data%netcdf%ti/)))
+    end if
+
+    ! Computation time for different model components
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_tcomp_total,   global_data%tcomp_total,   start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_tcomp_ice,     global_data%tcomp_ice,     start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_tcomp_thermo,  global_data%tcomp_thermo,  start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_tcomp_climate, global_data%tcomp_climate, start = (/global_data%netcdf%ti/)))
+    call handle_error( nf90_put_var( global_data%netcdf%ncid, global_data%netcdf%id_var_tcomp_GIA  ,   global_data%tcomp_GIA,     start = (/global_data%netcdf%ti/)))
+
+    ! Close the file
+    call close_netcdf_file(global_data%netcdf%ncid)
+
+    ! Increase time frame counter
+    global_data%netcdf%ti = global_data%netcdf%ti + 1
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine write_to_global_scalar_output_file
+
+! Create and write to regional scalar output file
+! ===============================================
+
+  subroutine create_regional_scalar_output_file( region)
+    ! Create a new regional scalar output file
+
+    implicit none
+
+    ! Input variables:
+    type(type_model_region), intent(inout) :: region
+
+    ! Local variables:
+    character(len=256), parameter          :: routine_name = 'create_regional_scalar_output_file'
+    logical                                :: file_exists
+    integer                                :: t
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Create file ===
+    ! ===================
+
+    ! Set time frame index to 1
+    region%scalars%ti = 1
+
+    ! Generate filename
+    region%scalars%filename = trim( C%output_dir) // '/scalar_output_' // trim( region%name) // '.nc'
+
+    ! Inquire if file exists
+    inquire( exist = file_exists, file = trim( region%scalars%filename))
+    ! If yes, kaput!
+    if (file_exists) then
+      call crash('file "' // trim( region%scalars%filename) // '" already exists!')
+    end if
+
+    ! Create netCDF file
+    call handle_error( nf90_create( region%scalars%filename, IOR(nf90_clobber,nf90_share), region%scalars%ncid))
+
+    ! Define dimensions for time frames
+    call create_dim( region%scalars%ncid, region%scalars%name_dim_time, nf90_unlimited, region%scalars%id_dim_time)
+
+    ! Placeholders for the dimension ID, for shorter code
+    t = region%scalars%id_dim_time
+
+    ! Define variables:
+    ! The order of the call statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+
+    ! Dimension variables: zeta, month, time
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_time,          [t], region%scalars%id_var_time,          long_name='Time', units='years'   )
+
+    ! Variables
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_ice_volume,    [t], region%scalars%id_var_ice_volume,    long_name='Ice volume', units='m.s.l.e')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_ice_volume_af, [t], region%scalars%id_var_ice_volume_af, long_name='Ice volume above flotation', units='m.s.l.e')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_ice_area,      [t], region%scalars%id_var_ice_area,      long_name='Ice volume', units='km^2')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_T2m,           [t], region%scalars%id_var_T2m,           long_name='Regionally averaged annual mean surface temperature', units='K')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_SMB,           [t], region%scalars%id_var_SMB,           long_name='Ice-sheet integrated surface mass balance', units='Gigaton yr^-1')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_BMB,           [t], region%scalars%id_var_BMB,           long_name='Ice-sheet integrated basal mass balance', units='Gigaton yr^-1')
+    call create_double_var( region%scalars%ncid, region%scalars%name_var_MB,            [t], region%scalars%id_var_MB,            long_name='Ice-sheet integrated mass balance', units='Gigaton yr^-1')
+
+    ! Individual SMB components
+    if     (C%choice_SMB_model == 'uniform') then
+      ! Do nothing
+    elseif (C%choice_SMB_model == 'IMAU-ITM') then
+      call create_double_var( region%scalars%ncid, region%scalars%name_var_snowfall,    [t], region%scalars%id_var_snowfall,      long_name='Ice-sheet integrated snowfall', units='Gigaton yr^-1')
+      call create_double_var( region%scalars%ncid, region%scalars%name_var_rainfall,    [t], region%scalars%id_var_rainfall,      long_name='Ice-sheet integrated rainfall', units='Gigaton yr^-1')
+      call create_double_var( region%scalars%ncid, region%scalars%name_var_melt,        [t], region%scalars%id_var_melt,          long_name='Ice-sheet integrated melt', units='Gigaton yr^-1')
+      call create_double_var( region%scalars%ncid, region%scalars%name_var_refreezing,  [t], region%scalars%id_var_refreezing,    long_name='Ice-sheet integrated refreezing', units='Gigaton yr^-1')
+      call create_double_var( region%scalars%ncid, region%scalars%name_var_runoff,      [t], region%scalars%id_var_runoff,        long_name='Ice-sheet integrated runoff', units='Gigaton yr^-1')
+    else
+      call crash('unknown choice_SMB_model "' // TRIM(C%choice_SMB_model) // '"!')
+    end if
+
+    ! Leave definition mode:
+    call handle_error( nf90_enddef( region%scalars%ncid))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    call handle_error( nf90_sync( region%scalars%ncid))
+
+    ! Close the file
+    call close_netcdf_file( region%scalars%ncid)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine create_regional_scalar_output_file
+
+  subroutine write_to_regional_scalar_output_file( region, time)
+    ! Write data to the regional scalar output file
+
+    implicit none
+
+    ! Input variables:
+    type(type_model_region), intent(inout) :: region
+    real(dp),                intent(in)    :: time
+
+    ! Local variables:
+    character(len=256), parameter          :: routine_name = 'write_to_regional_scalar_output_file'
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Open the file for writing
+    call open_netcdf_file( region%scalars%filename, region%scalars%ncid)
+
+    ! Time
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_time, time, start = (/region%scalars%ti/)))
+
+    ! Variables
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_ice_volume,    region%ice_volume,                 start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_ice_volume_af, region%ice_volume_above_flotation, start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_ice_area,      region%ice_area,                   start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_T2m,           region%int_T2m,                    start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_SMB,           region%int_SMB,                    start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_BMB,           region%int_BMB,                    start = (/region%scalars%ti/)))
+    call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_MB,            region%int_MB,                     start = (/region%scalars%ti/)))
+
+    ! Individual SMB components
+    if     (C%choice_SMB_model == 'uniform') then
+      ! Do nothing
+    elseif (C%choice_SMB_model == 'IMAU-ITM') then
+      call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_snowfall,   region%int_snowfall,   start = (/region%scalars%ti/)))
+      call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_rainfall,   region%int_rainfall,   start = (/region%scalars%ti/)))
+      call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_melt,       region%int_melt,       start = (/region%scalars%ti/)))
+      call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_refreezing, region%int_refreezing, start = (/region%scalars%ti/)))
+      call handle_error( nf90_put_var( region%scalars%ncid, region%scalars%id_var_runoff,     region%int_runoff,     start = (/region%scalars%ti/)))
+    else
+      call crash('unknown choice_SMB_model "' // &
+                  trim(C%choice_SMB_model) // '"!')
+    end if
+
+    ! Close the file
+    call close_netcdf_file(region%scalars%ncid)
+
+    ! Increase time frame counter
+    region%scalars%ti = region%scalars%ti + 1
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine write_to_regional_scalar_output_file
 
 ! Reference geometries
 ! ====================
@@ -3938,6 +4283,54 @@ contains
 
   end subroutine read_PD_obs_global_ocean_file
 
+  subroutine inquire_hires_geometry_file( hires)
+    ! High-resolution geometry used for extrapolating ocean data
+
+    implicit none
+
+    ! Input variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
+
+    ! Open the netcdf file
+    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
+    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
+    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
+
+    ! Close the netcdf file
+    call close_netcdf_file( hires%netcdf_geo%ncid)
+
+  end subroutine inquire_hires_geometry_file
+
+  subroutine read_hires_geometry_file( hires)
+    ! Read the high-resolution geometry netcdf file
+
+    implicit none
+
+    ! In/output variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
+
+    ! Open the netcdf file
+    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
+
+    ! Read the data
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
+    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
+
+    ! Close the netcdf file
+    call close_netcdf_file( hires%netcdf_geo%ncid)
+
+  end subroutine read_hires_geometry_file
+
 ! Restart files
 ! =============
 
@@ -4134,112 +4527,6 @@ contains
     CALL close_netcdf_file( restart%netcdf%ncid)
 
   END SUBROUTINE read_restart_file_SMB
-
-! Sparse matrices
-! ===============
-
-  ! Write a sparse matrix to a NetCDF file
-  ! SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
-  !   ! Write a PETSc matrix to a NetCDF file
-
-  !   IMPLICIT NONE
-
-  !   ! In- and output variables:
-  !   TYPE(tMat),                          INTENT(IN)    :: A
-  !   CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
-  !   ! TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   call crash('Not implemented yet...')
-
-  !   ! ! Get matrix in CSR format using native Fortran arrays
-  !   ! CALL mat_petsc2CSR( A, A_CSR)
-
-  !   ! ! Write the CSR matrix to a file
-  !   ! CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
-
-  !   ! ! Clean up after yourself
-  !   ! CALL deallocate_matrix_CSR( A_CSR)
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE write_PETSc_matrix_to_NetCDF
-
-  ! SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
-  !   ! Write a CSR matrix to a NetCDF file
-
-  !   IMPLICIT NONE
-
-  !   ! In- and output variables:
-  !   TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
-  !   CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
-  !   ! LOGICAL                                            :: file_exists
-  !   ! INTEGER                                            :: ncid
-  !   ! INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
-  !   ! INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   call crash('Not implemented yet...')
-
-  !   ! IF (par%master) THEN
-
-  !   !   ! Safety
-  !   !   INQUIRE(EXIST=file_exists, FILE = TRIM( filename))
-  !   !   IF (file_exists) THEN
-  !   !     CALL crash('file "' // TRIM( filename) // '" already exists!')
-  !   !   END IF
-
-  !   !   WRITE(0,*) '   NOTE: writing CSR matrix to file "', TRIM(filename), '"'
-
-  !   !   ! Create netCDF file
-  !   !   CALL handle_error( nf90_create( TRIM(C%output_dir)//TRIM(filename), IOR(nf90_clobber,nf90_share), ncid))
-
-  !   !   ! Define dimensions:
-  !   !   CALL create_dim( ncid, 'm',      A_CSR%m  , id_dim_m  )
-  !   !   CALL create_dim( ncid, 'mplus1', A_CSR%m+1, id_dim_mp1)
-  !   !   CALL create_dim( ncid, 'n',      A_CSR%n  , id_dim_n  )
-  !   !   CALL create_dim( ncid, 'nnz',    A_CSR%nnz, id_dim_nnz)
-
-  !   !   ! Define variables:
-  !   !   ! The order of the CALL statements for the different variables determines their
-  !   !   ! order of appearence in the netcdf file.
-
-  !   !   CALL create_int_var(    ncid, 'ptr',   [id_dim_mp1], id_var_ptr  , long_name = 'ptr'  )
-  !   !   CALL create_int_var(    ncid, 'index', [id_dim_nnz], id_var_index, long_name = 'index')
-  !   !   CALL create_double_var( ncid, 'val',   [id_dim_nnz], id_var_val  , long_name = 'val'  )
-
-  !   !   ! Leave definition mode
-  !   !   CALL handle_error( nf90_enddef( ncid))
-
-  !   !   ! Write data
-  !   !   CALL handle_error( nf90_put_var( ncid, id_var_ptr  , A_CSR%ptr  ))
-  !   !   CALL handle_error( nf90_put_var( ncid, id_var_index, A_CSR%index))
-  !   !   CALL handle_error( nf90_put_var( ncid, id_var_val  , A_CSR%val  ))
-
-  !   !   ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-  !   !   CALL handle_error(nf90_sync( ncid))
-
-  !   !   ! Close the file
-  !   !   CALL close_netcdf_file( ncid)
-
-  !   ! END IF ! IF (par%master) THEN
-  !   ! CALL sync
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE write_CSR_matrix_to_NetCDF
 
 ! Basic NetCDF wrapper functions
 ! ==============================
@@ -4450,229 +4737,8 @@ contains
 
   END SUBROUTINE handle_error
 
-! TO DO stuff
-
-  ! ! GCM global climate (climate matrix snapshots)
-  ! SUBROUTINE inquire_GCM_global_climate_file( clim)
-  !   ! Check if the right dimensions and variables are present in the file.
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-  !   ! Local variables:
-  !   INTEGER                                     :: int_dummy
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( clim%netcdf%filename, clim%netcdf%ncid)
-
-  !   ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-  !   CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lat,     clim%nlat,  clim%netcdf%id_dim_lat)
-  !   CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_lon,     clim%nlon,  clim%netcdf%id_dim_lon)
-  !   CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
-
-  !   ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-  !   CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /),  clim%netcdf%id_var_lat)
-  !   CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /),  clim%netcdf%id_var_lon)
-  !   CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /),  clim%netcdf%id_var_Hs)
-  !   CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_T2m)
-  !   CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Precip)
-  !   !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_WE)
-  !   !CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /),  clim%netcdf%id_var_Wind_SN)
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file(clim%netcdf%ncid)
-
-  ! END SUBROUTINE inquire_GCM_global_climate_file
-  ! SUBROUTINE read_GCM_global_climate_file(    clim)
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_climate_snapshot_global), INTENT(INOUT) :: clim
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file(clim%netcdf%filename, clim%netcdf%ncid)
-
-  !   ! Read the data
-  !   CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lon,     clim%lon,     start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_lat,     clim%lat,     start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Hs,      clim%Hs,      start = (/ 1, 1    /) ))
-  !   CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_T2m,     clim%T2m,     start = (/ 1, 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Precip,  clim%Precip,  start = (/ 1, 1, 1 /) ))
-  !   !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_WE, clim%Wind_WE, start = (/ 1, 1, 1 /) ))
-  !   !CALL handle_error(nf90_get_var( clim%netcdf%ncid, clim%netcdf%id_var_Wind_SN, clim%Wind_SN, start = (/ 1, 1, 1 /) ))
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file(clim%netcdf%ncid)
-
-  ! END SUBROUTINE read_GCM_global_climate_file
-
-  ! ! Present-day observed global ocean (e.g. WOA18)
-  ! SUBROUTINE inquire_PD_obs_global_ocean_file( ocn)
-  !   ! Check if the right dimensions and variables are present in the file.
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-  !   ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
-
-  !   ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
-
-  !   CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_T_ocean)
-  !   CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /),  ocn%netcdf%id_var_S_ocean)
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  ! END SUBROUTINE inquire_PD_obs_global_ocean_file
-  ! SUBROUTINE read_PD_obs_global_ocean_file(    ocn)
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-  !   ! Read the data
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
-
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  ! END SUBROUTINE read_PD_obs_global_ocean_file
-
-  ! ! GCM global ocean (ocean matrix snapshots)
-  ! SUBROUTINE inquire_GCM_global_ocean_file( ocn)
-  !   ! Check if the right dimensions and variables are present in the file.
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-  !    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lat,     ocn%nlat,         ocn%netcdf%id_dim_lat    )
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_lon,     ocn%nlon,         ocn%netcdf%id_dim_lon    )
-  !   CALL inquire_dim( ocn%netcdf%ncid, ocn%netcdf%name_dim_z_ocean, ocn%nz_ocean_raw, ocn%netcdf%id_dim_z_ocean)
-
-  !   ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lat,     (/ ocn%netcdf%id_dim_lat     /), ocn%netcdf%id_var_lat    )
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_lon,     (/ ocn%netcdf%id_dim_lon     /), ocn%netcdf%id_var_lon    )
-  !   CALL inquire_double_var( ocn%netcdf%ncid, ocn%netcdf%name_var_z_ocean, (/ ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_z_ocean)
-
-  !   CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_temperature), (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_T_ocean)
-  !   CALL inquire_double_var( ocn%netcdf%ncid, TRIM(C%name_ocean_salinity)   , (/ ocn%netcdf%id_dim_lon, ocn%netcdf%id_dim_lat, ocn%netcdf%id_dim_z_ocean /), ocn%netcdf%id_var_S_ocean)
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  ! END SUBROUTINE inquire_GCM_global_ocean_file
-  ! SUBROUTINE read_GCM_global_ocean_file(    ocn)
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_ocean_snapshot_global), INTENT(INOUT) :: ocn
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( ocn%netcdf%filename, ocn%netcdf%ncid)
-
-  !   ! Read the data
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lon,     ocn%lon,         start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_lat,     ocn%lat,         start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_z_ocean, ocn%z_ocean_raw, start = (/ 1       /) ))
-
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_T_ocean, ocn%T_ocean_raw, start = (/ 1, 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( ocn%netcdf%ncid, ocn%netcdf%id_var_S_ocean, ocn%S_ocean_raw, start = (/ 1, 1, 1 /) ))
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( ocn%netcdf%ncid)
-
-  ! END SUBROUTINE read_GCM_global_ocean_file
-
-  ! High-resolution geometry used for extrapolating ocean data
-  subroutine inquire_hires_geometry_file( hires)
-    ! Check if the right dimensions and variables are present in the file.
-
-    implicit none
-
-    ! Input variables:
-    type(type_highres_ocean_data), intent(inout) :: hires
-
-    ! Open the netcdf file
-    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_x, hires%grid%nx, hires%netcdf_geo%id_dim_x)
-    call inquire_dim( hires%netcdf_geo%ncid, hires%netcdf_geo%name_dim_y, hires%grid%ny, hires%netcdf_geo%id_dim_y)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_x,  (/ hires%netcdf_geo%id_dim_x                        /), hires%netcdf_geo%id_var_x )
-    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_y,  (/ hires%netcdf_geo%id_dim_y                        /), hires%netcdf_geo%id_var_y )
-    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hi, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hi)
-    call inquire_double_var( hires%netcdf_geo%ncid, hires%netcdf_geo%name_var_Hb, (/ hires%netcdf_geo%id_dim_x, hires%netcdf_geo%id_dim_y /), hires%netcdf_geo%id_var_Hb)
-
-    ! Close the netcdf file
-    call close_netcdf_file( hires%netcdf_geo%ncid)
-
-  end subroutine inquire_hires_geometry_file
-
-  subroutine read_hires_geometry_file( hires)
-    ! Read the high-resolution geometry netcdf file
-
-    implicit none
-
-    ! In/output variables:
-    type(type_highres_ocean_data), intent(inout) :: hires
-
-    ! Open the netcdf file
-    call open_netcdf_file( hires%netcdf_geo%filename, hires%netcdf_geo%ncid)
-
-    ! Read the data
-    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_x,      hires%grid%x, start = (/ 1    /) ))
-    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_y,      hires%grid%y, start = (/ 1    /) ))
-    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hi,     hires%Hi,     start = (/ 1, 1 /) ))
-    call handle_error(nf90_get_var( hires%netcdf_geo%ncid, hires%netcdf_geo%id_var_Hb,     hires%Hb,     start = (/ 1, 1 /) ))
-
-    ! Close the netcdf file
-    call close_netcdf_file( hires%netcdf_geo%ncid)
-
-  end subroutine read_hires_geometry_file
+! TO DO
+! =====
 
   ! ! Create/read an extrapolated ocean data file
   ! SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)

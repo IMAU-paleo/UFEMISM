@@ -1373,7 +1373,7 @@ CONTAINS
         CALL getarg( 2, variation_filename)
         config_mode = 'template+variation'
 
-        write(*,"(4A))") ' Simulation settings from configuration files: ', trim(template_filename), ' & ', trim(variation_filename)
+        write(*,"(4A)") ' Simulation settings from configuration files: ', trim(template_filename), ' & ', trim(variation_filename)
 
       ELSE
 

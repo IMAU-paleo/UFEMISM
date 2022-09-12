@@ -879,27 +879,18 @@ MODULE data_types_module
   TYPE type_ISMIP_style_forcing
     ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
 
-    ! NetCDF files containing the baseline SMB and surface temperature
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_SMB_baseline
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_ST_baseline
+    ! The grid used by the raw data files
+    TYPE(type_grid)                         :: grid_raw
 
-    ! The baseline SMB and surface temperature (on the model mesh)
-    REAL(dp), DIMENSION(:    ), POINTER     :: SMB_baseline
-    REAL(dp), DIMENSION(:    ), POINTER     :: ST_baseline
-    INTEGER :: wSMB_baseline, wST_baseline
+    ! The baseline elevastion, SMB, and surface temperature
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hs_ref
+    REAL(dp), DIMENSION(:    ), POINTER     :: SMB_ref
+    REAL(dp), DIMENSION(:    ), POINTER     :: ST_ref
+    INTEGER :: wHs_ref, wSMB_ref, wST_ref
 
     ! Timestamps of the two timeframes
     REAL(dp),                   POINTER     :: t0, t1
     INTEGER :: wt0, wt1
-
-    ! NetCDF files containing the aSMB, dSMBdz, aST, and dTSdz for the two timeframes enveloping the current model time
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aSMB0  , netcdf_aSMB1
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSMBdz0, netcdf_dSMBdz1
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_aST0   , netcdf_aST1
-    TYPE(type_netcdf_ISMIP_style_forcing)   :: netcdf_dSTdz0 , netcdf_dSTdz1
-
-    ! The grid of the ISMIP forcing files
-    TYPE(type_grid)                         :: grid
 
     ! The two timeframes enveloping the model time (on the model mesh)
     REAL(dp), DIMENSION(:    ), POINTER     :: aSMB0  , aSMB1
@@ -919,7 +910,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: SMB
     REAL(dp), DIMENSION(:    ), POINTER     :: ST
     INTEGER :: wSMB, wST
-
 
   END TYPE type_ISMIP_style_forcing
 
@@ -945,7 +935,7 @@ MODULE data_types_module
     TYPE(type_direct_SMB_forcing_regional)     :: SMB_direct
 
     ! Data fields for the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    TYPE(type_ISMIP_style_forcing)          :: ISMIP_forcing
+    TYPE(type_ISMIP_style_forcing)          :: ISMIP_style
 
   END TYPE type_climate_matrix_regional
 

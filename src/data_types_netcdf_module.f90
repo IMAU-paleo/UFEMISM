@@ -1307,21 +1307,127 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
 
     ! Field variables
-    INTEGER :: id_var_SMB
-    INTEGER :: id_var_ST
     INTEGER :: id_var_aSMB
     INTEGER :: id_var_dSMBdz
     INTEGER :: id_var_aST
     INTEGER :: id_var_dSTdz
 
-    CHARACTER(LEN=256) :: name_var_SMB                   = 'SMB                  '
-    CHARACTER(LEN=256) :: name_var_ST                    = 'ST                   '
     CHARACTER(LEN=256) :: name_var_aSMB                  = 'aSMB                 '
     CHARACTER(LEN=256) :: name_var_dSMBdz                = 'dSMBdz               '
     CHARACTER(LEN=256) :: name_var_aST                   = 'aST                  '
     CHARACTER(LEN=256) :: name_var_dSTdz                 = 'dSTdz                '
 
   END TYPE type_netcdf_ISMIP_style_forcing
+
+  TYPE type_netcdf_ISMIP_style_baseline
+    ! NetCDF file containing the baseline climate and orography for the ISMIP-style climate forcing
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_x
+    INTEGER :: id_dim_y
+
+    CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
+
+  ! Variables
+  ! =========
+
+    ! Dimensions
+    INTEGER :: id_var_x
+    INTEGER :: id_var_y
+
+    CHARACTER(LEN=256) :: name_var_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
+
+    ! Field variables
+    INTEGER :: id_var_Hs
+    INTEGER :: id_var_SMB
+    INTEGER :: id_var_ST
+
+    CHARACTER(LEN=256) :: name_var_Hs                    = 'Hs                   '
+    CHARACTER(LEN=256) :: name_var_SMB                   = 'SMB                  '
+    CHARACTER(LEN=256) :: name_var_ST                    = 'ST                   '
+
+  END TYPE type_netcdf_ISMIP_style_baseline
+
+  TYPE type_netcdf_prescribed_retreat_mask
+    ! NetCDF files containing a prescribed retreat mask
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_x
+    INTEGER :: id_dim_y
+    INTEGER :: id_dim_time
+
+    CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
+    CHARACTER(LEN=256) :: name_dim_time                  = 'time                 '
+
+  ! Variables
+  ! =========
+
+    ! Dimensions
+    INTEGER :: id_var_x
+    INTEGER :: id_var_y
+    INTEGER :: id_var_time
+
+    CHARACTER(LEN=256) :: name_var_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
+    CHARACTER(LEN=256) :: name_var_time                  = 'time                 '
+
+    CHARACTER(LEN=256) :: time_units  ! ISMIP uses "days since XXX", paleo stuff just uses "years"
+
+    ! Field variables
+    INTEGER :: id_var_ice_fraction
+
+  END TYPE type_netcdf_prescribed_retreat_mask
+
+  TYPE type_netcdf_prescribed_retreat_mask_refice
+    ! NetCDF files containing the reference ice thickness for a prescribed retreat mask
+
+    CHARACTER(LEN=256) :: filename
+
+    ! ID for NetCDF file:
+    INTEGER :: ncid
+
+  ! Dimensions
+  ! ==========
+
+    INTEGER :: id_dim_x
+    INTEGER :: id_dim_y
+
+    CHARACTER(LEN=256) :: name_dim_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_dim_y                     = 'y                    '
+
+  ! Variables
+  ! =========
+
+    ! Dimensions
+    INTEGER :: id_var_x
+    INTEGER :: id_var_y
+
+    CHARACTER(LEN=256) :: name_var_x                     = 'x                    '
+    CHARACTER(LEN=256) :: name_var_y                     = 'y                    '
+
+    ! Field variables
+    INTEGER :: id_var_Hi
+
+    CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
+
+  END TYPE type_netcdf_prescribed_retreat_mask_refice
 
 CONTAINS
 

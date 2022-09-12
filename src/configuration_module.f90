@@ -603,8 +603,7 @@ MODULE configuration_module
   ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
   ! ==============================================================
 
-    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_SMB_baseline_config  = ''                              ! NetCDF file containing the baseline SMB
-    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_ST_baseline_config   = ''                              ! NetCDF file containing the baseline temperature
+    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_baseline_config      = ''                              ! NetCDF file containing the baseline climate
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aSMB_config        = ''                              ! Folder containing the single-year NetCDF files of the SMB anomaly
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aSMB_config      = ''                              ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSMBdz_config      = ''                              ! Folder containing the single-year NetCDF files of the SMB lapse rate
@@ -1341,8 +1340,7 @@ MODULE configuration_module
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
-    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_SMB_baseline
-    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_ST_baseline
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_baseline
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aSMB
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aSMB
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSMBdz
@@ -2195,8 +2193,7 @@ CONTAINS
                      SMB_IMAUITM_inv_C_abl_Q_max_config,              &
                      SMB_IMAUITM_inv_C_refr_min_config,               &
                      SMB_IMAUITM_inv_C_refr_max_config,               &
-                     ISMIP_forcing_filename_SMB_baseline_config,      &
-                     ISMIP_forcing_filename_ST_baseline_config,       &
+                     ISMIP_forcing_filename_baseline_config,          &
                      ISMIP_forcing_foldername_aSMB_config,            &
                      ISMIP_forcing_basefilename_aSMB_config,          &
                      ISMIP_forcing_foldername_dSMBdz_config,          &
@@ -3055,8 +3052,7 @@ CONTAINS
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
-    C%ISMIP_forcing_filename_SMB_baseline      = ISMIP_forcing_filename_SMB_baseline_config
-    C%ISMIP_forcing_filename_ST_baseline       = ISMIP_forcing_filename_ST_baseline_config
+    C%ISMIP_forcing_filename_baseline          = ISMIP_forcing_filename_baseline_config
     C%ISMIP_forcing_foldername_aSMB            = ISMIP_forcing_foldername_aSMB_config
     C%ISMIP_forcing_basefilename_aSMB          = ISMIP_forcing_basefilename_aSMB_config
     C%ISMIP_forcing_foldername_dSMBdz          = ISMIP_forcing_foldername_dSMBdz_config

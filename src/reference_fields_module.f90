@@ -218,11 +218,11 @@ CONTAINS
     IF (par%master) refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
 
     ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                   refgeo%grid%n           , refgeo%grid%wn           )
+    CALL allocate_shared_int_0D(                                 refgeo%grid%n    , refgeo%grid%wn           )
     IF (par%master) refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
     CALL sync
-    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n        , refgeo%grid%wij2n        )
-    CALL allocate_shared_int_2D( refgeo%grid%n , 2      , refgeo%grid%n2ij        , refgeo%grid%wn2ij        )
+    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n , refgeo%grid%wij2n        )
+    CALL allocate_shared_int_2D( refgeo%grid%n , 2             , refgeo%grid%n2ij , refgeo%grid%wn2ij        )
     IF (par%master) THEN
       n = 0
       DO i = 1, refgeo%grid%nx
@@ -255,6 +255,17 @@ CONTAINS
 
     ! Remove ice based on the no-ice masks (grid versions)
     CALL apply_mask_noice_grid( refgeo, region_name)
+
+    ! Remove very thin ice (particularly BedMachine Greenland, which inexplicably covers a lot of tundra with half a meter of ice)
+    DO i = refgeo%grid%i1, refgeo%grid%i2
+    DO j = 1, refgeo%grid%ny
+      IF (refgeo%Hi_grid( i,j) < C%refgeo_Hi_min) THEN
+        refgeo%Hi_grid( i,j) = 0._dp
+        refgeo%Hs_grid( i,j) = MAX( 0._dp, refgeo%Hb_grid( i,j))
+      END IF
+    END DO
+    END DO
+    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 16)

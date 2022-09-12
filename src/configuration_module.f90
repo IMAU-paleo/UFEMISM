@@ -205,6 +205,10 @@ MODULE configuration_module
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    REAL(dp)            :: refgeo_Hi_min_config                        = 2.0_dp                           ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
+    LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
+
     ! == Initial geometry
     ! ===================
 
@@ -252,8 +256,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
-
-    LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
 
   ! == Whether or not the simulation is a restart of a previous simulation
   ! ======================================================================
@@ -959,6 +961,10 @@ MODULE configuration_module
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    REAL(dp)                            :: refgeo_Hi_min
+    LOGICAL                             :: remove_Lake_Vostok
+
     ! Initial geometry
     CHARACTER(LEN=256)                  :: choice_refgeo_init_NAM
     CHARACTER(LEN=256)                  :: choice_refgeo_init_EAS
@@ -994,8 +1000,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_EAS
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_GRL
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_ANT
-
-    LOGICAL                             :: remove_Lake_Vostok
 
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
@@ -1895,6 +1899,8 @@ CONTAINS
                      ymax_ANT_config,                                 &
                      nz_config,                                       &
                      zeta_config,                                     &
+                     refgeo_Hi_min_config,                            &
+                     remove_Lake_Vostok_config,                       &
                      choice_refgeo_init_NAM_config,                   &
                      choice_refgeo_init_EAS_config,                   &
                      choice_refgeo_init_GRL_config,                   &
@@ -1925,7 +1931,6 @@ CONTAINS
                      filename_refgeo_GIAeq_EAS_config,                &
                      filename_refgeo_GIAeq_GRL_config,                &
                      filename_refgeo_GIAeq_ANT_config,                &
-                     remove_Lake_Vostok_config,                       &
                      is_restart_config,                               &
                      time_to_restart_from_NAM_config,                 &
                      time_to_restart_from_EAS_config,                 &
@@ -2674,6 +2679,10 @@ CONTAINS
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    C%refgeo_Hi_min                            = refgeo_Hi_min_config
+    C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
+
     ! Initial geometry
     C%choice_refgeo_init_NAM                   = choice_refgeo_init_NAM_config
     C%choice_refgeo_init_EAS                   = choice_refgeo_init_EAS_config
@@ -2709,8 +2718,6 @@ CONTAINS
     C%filename_refgeo_GIAeq_EAS                = filename_refgeo_GIAeq_EAS_config
     C%filename_refgeo_GIAeq_GRL                = filename_refgeo_GIAeq_GRL_config
     C%filename_refgeo_GIAeq_ANT                = filename_refgeo_GIAeq_ANT_config
-
-    C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
 
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================

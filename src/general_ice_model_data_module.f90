@@ -797,8 +797,8 @@ contains
     ice%basin_ID( mesh%vi1:mesh%vi2) = 1
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_basins
+  end subroutine initialise_basins
 
 end module general_ice_model_data_module

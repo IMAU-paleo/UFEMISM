@@ -10,13 +10,15 @@ module climate_module
   use data_types_module,     only : type_climate_matrix_global, type_climate_snapshot_global, &
                                     type_climate_matrix_regional, type_climate_snapshot_regional, &
                                     type_model_region, type_mesh, type_ice_model, type_latlongrid, &
-                                    type_remapping_latlon2mesh
+                                    type_remapping_latlon2mesh, type_remapping_mesh_mesh, &
+                                    type_reference_geometry, type_grid
   use netcdf_module,         only : inquire_PD_obs_global_climate_file, read_PD_obs_global_climate_file
   use forcing_module,        only : get_insolation_at_time
   use mesh_mapping_module,   only : create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, &
                                     deallocate_remapping_arrays_glob_mesh, map_latlon2mesh_3D
   use mesh_operators_module, only : ddx_a_to_a_2D, ddy_a_to_a_2D
   use utilities_module,      only : error_function
+  use reallocate_mod,        only : reallocate_bounds
 
   implicit none
 
@@ -757,5 +759,110 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine rotate_wind_to_model_mesh
+
+! ===== Remapping =====
+! =====================
+
+  subroutine remap_climate_model( mesh_new, climate_matrix, climate_matrix_global)
+    ! Reallocate all the data fields (no remapping needed, instead we just run
+    ! the climate model immediately after a mesh update)
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                    intent(inout) :: mesh_new
+    type(type_climate_matrix_regional), intent(inout) :: climate_matrix
+    type(type_climate_matrix_global),   intent(in)    :: climate_matrix_global
+
+    ! Local variables:
+    character(len=256), parameter                     :: routine_name = 'remap_climate_model'
+    integer                                           :: int_dummy, vi, m
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! To prevent compiler warnings for unused variables
+    int_dummy = mesh_new%nV
+
+    ! Reallocate memory for the 'applied' subclimate
+    ! ==============================================
+
+    call reallocate_subclimate( mesh_new, climate_matrix%applied)
+
+    ! Reallocate memory for the different methods
+    ! ===========================================
+
+    select case (C%choice_climate_model)
+
+      case ('none')
+        ! No need to do anything
+
+      case ('PD_obs')
+        ! Keep the climate fixed to present-day observed conditions
+
+        call reallocate_subclimate(  mesh_new, climate_matrix%PD_obs)
+        call map_subclimate_to_mesh( mesh_new, climate_matrix_global%PD_obs, climate_matrix%PD_obs)
+
+        ! Re-initialise insolation at present-day (needed for the IMAU-ITM SMB model)
+        call get_insolation_at_time( mesh_new, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+        ! Re-initialise applied insolation with present-day values
+        climate_matrix%applied%Q_TOA( mesh_new%vi1:mesh_new%vi2,:) = climate_matrix%PD_obs%Q_TOA( mesh_new%vi1:mesh_new%vi2,:)
+
+      case ('matrix_warm_cold')
+        ! Use the warm/cold climate matrix method
+          call crash(trim(C%choice_climate_model) // &
+                     ' not implemented yet...')
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_climate_model"' // &
+                      trim(C%choice_climate_model) // '"!')
+
+    end select
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine remap_climate_model
+
+  subroutine reallocate_subclimate( mesh_new, subclimate)
+    ! Reallocate data fields of a regional subclimate after a mesh update
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                      intent(in)    :: mesh_new
+    type(type_climate_snapshot_regional), intent(inout) :: subclimate
+
+    ! Local variables:
+    character(len=256), parameter                       :: routine_name = 'reallocate_subclimate'
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    call reallocate_bounds( subclimate%Hs,          mesh_new%vi1, mesh_new%vi2    )
+    call reallocate_bounds( subclimate%T2m,         mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Precip,      mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Wind_WE,     mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Wind_SN,     mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Wind_LR,     mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Wind_DU,     mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Mask_ice,    mesh_new%vi1, mesh_new%vi2    )
+
+    call reallocate_bounds( subclimate%lambda,      mesh_new%vi1, mesh_new%vi2    )
+
+    call reallocate_bounds( subclimate%T2m_corr,    mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Precip_corr, mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Hs_corr,     mesh_new%vi1, mesh_new%vi2    )
+
+    call reallocate_bounds( subclimate%Q_TOA,       mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%Albedo,      mesh_new%vi1, mesh_new%vi2, 12)
+    call reallocate_bounds( subclimate%I_abs,       mesh_new%vi1, mesh_new%vi2    )
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine reallocate_subclimate
 
 end module

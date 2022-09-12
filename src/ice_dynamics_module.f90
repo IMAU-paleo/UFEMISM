@@ -531,59 +531,39 @@ contains
 ! ===== Ice thickness update =====
 ! ================================
 
-  SUBROUTINE update_ice_thickness( mesh, ice)
+  subroutine update_ice_thickness( mesh, ice, refgeo_PD)
     ! Update the ice thickness at the end of a model time loop
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo_PD
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_ice_thickness'
+    character(len=256), parameter                :: routine_name = 'update_ice_thickness'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    ! ! Save the previous ice mask, for use in thermodynamics
-    ! ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
-    ! CALL sync
+    ! Save the previous ice mask, for use in thermodynamics
+    ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
+    call allgather_array(ice%mask_ice_a_prev)
 
-    ! ! Set ice thickness to new value
-    ! ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
-    ! CALL sync
+    ! Set ice thickness to new value
+    ice%Hi_a( mesh%vi1:mesh%vi2) = max( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
 
-    ! ! Apply calving law
-    ! !
-    ! ! NOTE: done twice, so that the calving front is also allowed to retreat
-    ! IF (.NOT. C%choice_calving_law == 'none') THEN
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL determine_floating_margin_fraction( mesh, ice)
-    !   CALL apply_calving_law(                  mesh, ice)
+    call update_general_ice_model_data(      mesh, ice)
 
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL determine_floating_margin_fraction( mesh, ice)
-    !   CALL apply_calving_law(                  mesh, ice)
-
-    !   ! Remove unconnected shelves
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL remove_unconnected_shelves(         mesh, ice)
-    ! END IF
-
-    ! CALL update_general_ice_model_data(      mesh, ice)
-
-    ! ! Compute ice thickness/elevation difference w.r.t PD
-    ! ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
-    ! ice%dHs_a( mesh%vi1:mesh%vi2) = ice%Hs_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hs( mesh%vi1:mesh%vi2)
+    ! Compute ice thickness/elevation difference w.r.t PD
+    ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
+    ice%dHs_a( mesh%vi1:mesh%vi2) = ice%Hs_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hs( mesh%vi1:mesh%vi2)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE update_ice_thickness
+  end subroutine update_ice_thickness
 
 ! ===== Time stepping =====
 ! =========================
@@ -1006,11 +986,14 @@ contains
       END IF
     END DO
 
+    ! Remap sea level
+    call remap_field_dp_2D( mesh_old, mesh_new, map, ice%SL_a, 'cons_2nd_order')
+
     ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
 
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,        'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a, 'cons_2nd_order')
     call reallocate_bounds( ice%Hb_a, mesh_new%vi1, mesh_new%vi2 )
     ice%Hb_a = refgeo_PD%Hb + ice%dHb_a
 

@@ -6,11 +6,11 @@ module thermodynamics_module
 
   use mpi
   use configuration_module,       only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parameters_module,          only : CC, T0, ice_density, pi, sec_per_year, R_gas
+  use parameters_module,          only : CC, T0, ice_density, pi, sec_per_year, R_gas, grav
   use parallel_module,            only : par, sync, ierr, cerr, partition_list
   use utilities_module,           only : check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                          check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                         vertical_average, interpolate_ocean_depth
+                                         vertical_average, interpolate_ocean_depth, tridiagonal_solve
   use netcdf_module,              only : debug
   use data_types_module,          only : type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                          type_climate_snapshot_regional, type_ocean_snapshot_regional, &
@@ -21,6 +21,7 @@ module thermodynamics_module
   use mesh_mapping_module,        only : remap_field_dp_3D
   use mpi_module,                 only : allgather_array
   use reallocate_mod,             only : reallocate_bounds
+  use zeta_module,                only : calculate_zeta_derivatives, p_zeta
 
   implicit none
 
@@ -29,127 +30,144 @@ contains
 ! ===== Main routines =====
 ! =========================
 
-  ! subroutine run_thermo_model( mesh, ice, climate, ocean, SMB, time, do_solve_heat_equation)
-  !   ! Run the thermodynamics model. If so specified, solve the heat equation;
-  !   ! if not, only prescribe a vertically uniform temperature to newly ice-covered grid cells.
+  subroutine run_thermo_model( mesh, ice, climate, ocean, SMB, time, do_solve_heat_equation)
+    ! Run the thermodynamics model. If so specified, solve the heat equation;
+    ! if not, only prescribe a vertically uniform temperature to newly ice-covered grid cells.
 
-  !   IMPLICIT NONE
+    implicit none
 
-  !   ! In/output variables
-  !   TYPE(type_mesh),                      INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-  !   TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-  !   TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
-  !   TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
-  !   REAL(dp),                             INTENT(IN)    :: time
-  !   LOGICAL,                              INTENT(IN)    :: do_solve_heat_equation
+    ! In/output variables
+    type(type_mesh),                      intent(in)    :: mesh
+    type(type_ice_model),                 intent(inout) :: ice
+    type(type_climate_snapshot_regional), intent(in)    :: climate
+    type(type_ocean_snapshot_regional),   intent(in)    :: ocean
+    type(type_SMB_model),                 intent(in)    :: SMB
+    real(dp),                             intent(in)    :: time
+    logical,                              intent(in)    :: do_solve_heat_equation
 
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                       :: routine_name = 'run_thermo_model'
-  !   INTEGER                                             :: vi, vvi, vj
-  !   LOGICAL                                             :: found_source_neighbour
-  !   INTEGER                                             ::  n_source_neighbours
-  !   REAL(dp), dimension(C%nz)                           :: Ti_source_neighbours
-  !   REAL(dp)                                            :: T_surf_annual
-  !   REAL(dp), dimension(:,:), allocatable               :: Ti_a
+    ! Local variables:
+    character(len=256), parameter                       :: routine_name = 'run_thermo_model'
+    integer                                             :: vi, vvi, vj
+    logical                                             :: found_source_neighbour
+    integer                                             :: n_source_neighbours
+    real(dp), dimension(C%nz)                           :: Ti_source_neighbours
+    real(dp)                                            :: T_surf_annual
+    real(dp), dimension(:,:), allocatable               :: Ti_a
 
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
+    ! === Initialisation ===
+    ! ======================
 
-  !   allocate(Ti_a(mesh%nV,C%nz))
-  !   Ti_a(mesh%vi1:mesh%vi2,:) = ice%Ti_a
-  !   call allgather_array(Ti_a)
+    ! Add routine to path
+    call init_routine( routine_name)
 
-  !   IF     (C%choice_thermo_model == 'none') THEN
-  !     ! No need to do anything
-  !     ! NOTE: choice_ice_rheology_model should be set to "uniform"!
-  !   ELSEIF (C%choice_thermo_model == '3D_heat_equation') THEN
-  !     ! Solve the 3-D heat equation
+    ! Allocate full temperature array
+    allocate(Ti_a(mesh%nV,C%nz))
 
-  !     ! NOTE: solved asynchronously from the ice dynamical equations.
-  !     !       Since newly ice-covered pixels won't have a temperature assigned
-  !     !       until the heat equation is solved again, treat these separately every time step.
+    ! Get data from each process
+    Ti_a(mesh%vi1:mesh%vi2,:) = ice%Ti_a
 
-  !     ! Prescribe a simple temperature profile to newly ice-covered grid cells.
-  !     DO vi = mesh%vi1, mesh%vi2
+    ! Gather the temperature across all processes
+    call allgather_array(Ti_a)
 
-  !       IF (ice%mask_ice_a( vi) == 1) THEN
+    ! === Pick a method ===
+    ! =====================
 
-  !         IF (ice%mask_ice_a_prev( vi) == 0) THEN
-  !           ! This grid cell is newly ice-covered
-  !           ! If one of its neighbours was already ice-covered, assume the temperature
-  !           ! profile here is equal to the profile from the upstream neighbour (due to advection).
-  !           ! If no neighbours were ice-covered, the new ice must come from accumulation;
-  !           ! just set a simple linear profile instead.
+    select case (C%choice_thermo_model)
 
-  !           found_source_neighbour = .FALSE.
-  !           Ti_source_neighbours   = 0._dp
-  !           n_source_neighbours    = 0
-  !           DO vvi = 1, mesh%nC( vi)
+    case ('none')
+      ! Do nothing: choice_ice_rheology_model should be set to "uniform"!
 
-  !             vj = mesh%C( vi,vvi)
+    case ('3D_heat_equation')
+      ! Solve the 3-D heat equation
 
-  !             IF (ice%mask_ice_a_prev( vj) == 1) THEN
-  !               found_source_neighbour = .TRUE.
-  !               n_source_neighbours    = n_source_neighbours  + 1
-  !               Ti_source_neighbours   = Ti_source_neighbours + Ti_a( vj,:)
-  !             END IF
+      ! NOTE: solved asynchronously from the ice dynamical equations.
+      !       Since newly ice-covered pixels won't have a temperature assigned
+      !       until the heat equation is solved again, treat these separately every time step.
 
-  !           END DO
+      ! Prescribe a simple temperature profile to newly ice-covered grid cells.
+      do vi = mesh%vi1, mesh%vi2
 
-  !           IF     (found_source_neighbour) THEN
-  !             ! Ice probably was advected from neighbouring grid cells; copy temperature profile from there
+        if (ice%mask_ice_a( vi) == 1) then
 
-  !             Ti_source_neighbours = Ti_source_neighbours / REAL( n_source_neighbours,dp)
-  !             ice%Ti_a( vi,:) = Ti_source_neighbours
+          if (ice%mask_ice_a_prev( vi) == 0) then
+            ! This grid cell is newly ice-covered
+            ! If one of its neighbours was already ice-covered, assume the temperature
+            ! profile here is equal to the profile from the upstream neighbour (due to advection).
+            ! If no neighbours were ice-covered, the new ice must come from accumulation;
+            ! just set a simple linear profile instead.
 
-  !           ELSE
-  !             ! Ice probably came from surface accumulation; set temperature profile to annual mean surface temperature
+            found_source_neighbour = .false.
+            Ti_source_neighbours   = 0._dp
+            n_source_neighbours    = 0
+            do vvi = 1, mesh%nC( vi)
 
-  !             !TODO T_surf_annual = MIN( SUM( climate%T2m( vi,:)) / 12._dp, T0)
-  !             T_surf_annual = T0!TODO replace with line above
+              vj = mesh%C( vi,vvi)
 
-  !             ice%Ti_a( vi,:) = T_surf_annual
+              if (ice%mask_ice_a_prev( vj) == 1) then
+                found_source_neighbour = .true.
+                n_source_neighbours    = n_source_neighbours  + 1
+                Ti_source_neighbours   = Ti_source_neighbours + Ti_a( vj,:)
+              end if
 
-  !           END IF
+            end do
 
-  !         ELSE
-  !           ! This grid cell was already ice-covered in the previous time step, no need to do anything
-  !         END IF ! IF (ice%mask_ice_a_prev( j,i) == 0) THEN
+            if (found_source_neighbour) then
+              ! Ice probably was advected from neighbouring grid cells; copy temperature profile from there
 
-  !       ELSE ! IF (ice%mask_ice_a( vi) == 1) THEN
-  !         ! This pixel is ice-free; set temperature profile to zero
+              Ti_source_neighbours = Ti_source_neighbours / real( n_source_neighbours,dp)
+              ice%Ti_a( vi,:) = Ti_source_neighbours
 
-  !         ice%Ti_a( vi,:) = 0._dp
+            else
+              ! Ice probably came from surface accumulation; set temperature profile to annual mean surface temperature
 
-  !       END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
+              T_surf_annual = min( sum( climate%T2m( vi,:)) / 12._dp, T0)
 
-  !     END DO
+              ice%Ti_a( vi,:) = T_surf_annual
 
-  !     deallocate(Ti_a)
+            end if
 
-  !     ! Calculate various physical terms
-  !     CALL calc_heat_capacity(          mesh, ice)
-  !     CALL calc_thermal_conductivity(   mesh, ice)
-  !     CALL calc_pressure_melting_point( mesh, ice)
+          else
+            ! This grid cell was already ice-covered in the previous time step, no need to do anything
+          end if ! (ice%mask_ice_a_prev( j,i) == 0)
 
-  !     ! If so specified, solve the heat equation
-  !  !TODO   IF (do_solve_heat_equation) CALL solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
+        else
+          ! This pixel is ice-free; set temperature profile to zero
 
-  !     ! Safety
-  !     CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
+          ice%Ti_a( vi,:) = 0._dp
 
-  !   ELSE
-  !     CALL crash('unknown choice_thermo_model "' // TRIM( C%choice_thermo_model) // '"!')
-  !   END IF
+        end if ! (ice%mask_ice_a( vi) == 1)
 
-  !   ! Calculate the ice flow factor for the new temperature solution
-  !   CALL calc_ice_rheology( mesh, ice, time)
+      end do ! vi = mesh%vi1, mesh%vi2
 
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
+      deallocate(Ti_a)
 
-  ! end subroutine run_thermo_model
+      ! Calculate various physical terms
+      call calc_heat_capacity(          mesh, ice)
+      call calc_thermal_conductivity(   mesh, ice)
+      call calc_pressure_melting_point( mesh, ice)
+
+      ! If so specified, solve the heat equation
+      if (do_solve_heat_equation) then
+        call solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
+      end if
+
+      ! Safety
+      call check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
+
+    case default
+      ! Unknown case
+      call crash('unknown choice_thermo_model "' // &
+                  trim( C%choice_thermo_model) // '"!')
+
+    end select
+
+    ! Calculate the ice flow factor for the new temperature solution
+    call calc_ice_rheology( mesh, ice, time)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine run_thermo_model
 
   subroutine initialise_thermo_model( mesh, ice, climate, ocean, SMB, region_name)
     ! Initialise the thermodynamics
@@ -190,222 +208,374 @@ contains
 ! ===== 3D heat-equation solver =====
 ! ===================================
 
-  ! SUBROUTINE solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
+  subroutine solve_3D_heat_equation( mesh, ice, climate, ocean, SMB)
 
-  !   IMPLICIT NONE
+    implicit none
 
-  !   ! In/output variables
-  !   TYPE(type_mesh),                      INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                 INTENT(INOUT) :: ice
-  !   TYPE(type_climate_snapshot_regional), INTENT(IN)    :: climate
-  !   TYPE(type_ocean_snapshot_regional),   INTENT(IN)    :: ocean
-  !   TYPE(type_SMB_model),                 INTENT(IN)    :: SMB
+    ! In/output variables
+    type(type_mesh),                      intent(in)    :: mesh
+    type(type_ice_model),                 intent(inout) :: ice
+    type(type_climate_snapshot_regional), intent(in)    :: climate
+    type(type_ocean_snapshot_regional),   intent(in)    :: ocean
+    type(type_SMB_model),                 intent(in)    :: SMB
 
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_3D_heat_equation'
-  !   INTEGER                                            :: vi, k
-  !   REAL(dp), dimension(:,:  ), POINTER                ::  u_times_dT_dx_upwind_a,  v_times_dT_dy_upwind_a
-  !   INTEGER                                            :: wu_times_dT_dx_upwind_a, wv_times_dT_dy_upwind_a
-  !   REAL(dp)                                           :: f1, f2, f3
-  !   REAL(dp), dimension(2:C%nz)                        :: alpha
-  !   REAL(dp), dimension(C%nz)                          :: beta
-  !   REAL(dp), dimension(C%nz-1)                        :: gamma
-  !   REAL(dp), dimension(C%nz)                          :: delta
-  !   REAL(dp), dimension(:,:  ), POINTER                ::  Ti_new
-  !   INTEGER                                            :: wTi_new
-  !   REAL(dp)                                           :: depth
-  !   REAL(dp), dimension(:    ), POINTER                ::  T_ocean_at_shelf_base
-  !   INTEGER                                            :: wT_ocean_at_shelf_base
-  !   INTEGER,  dimension(:    ), POINTER                ::  is_unstable
-  !   INTEGER                                            :: wis_unstable
-  !   INTEGER                                            :: n_unstable
-  !   LOGICAL                                            :: hasnan
+    ! Local variables:
+    character(len=256), parameter                       :: routine_name = 'solve_3D_heat_equation'
+    integer                                             :: vi, k, n_unstable
+    real(dp), dimension(:,:), allocatable               :: u_times_dT_dx_upwind_a,  v_times_dT_dy_upwind_a
+    real(dp), dimension(:,:), allocatable               :: Ti_new
+    real(dp), dimension(:  ), allocatable               :: T_ocean_at_shelf_base
+    integer,  dimension(:  ), allocatable               :: is_unstable
+    real(dp)                                            :: f1, f2, f3, depth
+    real(dp), dimension(2:C%nz)                         :: alpha
+    real(dp), dimension(C%nz)                           :: beta
+    real(dp), dimension(C%nz-1)                         :: gamma
+    real(dp), dimension(C%nz)                           :: delta
+    logical                                             :: hasnan
 
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
+    ! === Initialisation ===
+    ! ======================
 
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, u_times_dT_dx_upwind_a, wu_times_dT_dx_upwind_a)
-  !   CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, v_times_dT_dy_upwind_a, wv_times_dT_dy_upwind_a)
-  !   CALL allocate_shared_int_1D( mesh%nV  ,       is_unstable           , wis_unstable           )
-  !   CALL allocate_shared_dp_2D(  mesh%nV  , C%nz, Ti_new                , wTi_new                )
-  !   CALL allocate_shared_dp_1D(  mesh%nV  ,       T_ocean_at_shelf_base , wT_ocean_at_shelf_base )
+    ! Add routine to path
+    call init_routine( routine_name)
 
-  !   ! Calculate upwind heat flux
-  !   CALL calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
+    ! Allocate shared memory
+    allocate( u_times_dT_dx_upwind_a (mesh%nTri, C%nz) )
+    allocate( v_times_dT_dy_upwind_a (mesh%nTri, C%nz) )
+    allocate( is_unstable            (mesh%nV        ) )
+    allocate( Ti_new                 (mesh%nV,   C%nz) )
+    allocate( T_ocean_at_shelf_base  (mesh%nV        ) )
 
-  !   ! Calculate zeta derivatives required for solving the heat equation
-  !   CALL calculate_zeta_derivatives( mesh, ice)
+    ! === Derivatives ===
+    ! ===================
 
-  !   ! Calculate heating terms
-  !   CALL calc_internal_heating(   mesh, ice)
-  !   CALL calc_frictional_heating( mesh, ice)
+    ! Calculate upwind heat flux
+    call calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
 
-  !   ! Set ice surface temperature equal to annual mean 2m air temperature
-  !   DO vi = mesh%vi1, mesh%vi2
-  !     ice%Ti_a( vi,1) = MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
-  !   END DO
-  !   CALL sync
+    ! Calculate zeta derivatives required for solving the heat equation
+    call calculate_zeta_derivatives( mesh, ice)
 
-  !   ! Find ocean temperature at the shelf base
-  !   DO vi = mesh%vi1, mesh%vi2
+    ! === Heating terms ===
+    ! =====================
 
+    ! Calculate heating terms
+    call calc_internal_heating( mesh, ice)
+    call calc_frictional_heating( mesh, ice)
 
-  !    IF (ice%mask_shelf_a( vi) == 1) THEN
-  !      depth = MAX( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-  !      CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base( vi))
-  !    ELSE
-  !      T_ocean_at_shelf_base( vi) = 0._dp
-  !    END IF
+    ! === Surface temperatures ===
+    ! ============================
 
-  !    ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
-  !    T_ocean_at_shelf_base( vi) = T_ocean_at_shelf_base( vi) + T0
+    ! Set ice surface temperature equal to annual mean 2m air temperature
+    do vi = mesh%vi1, mesh%vi2
+      ice%Ti_a( vi,1) = min( T0, sum( climate%T2m( vi,:)) / 12._dp)
+    end do
 
-  !   END DO
-  !   CALL sync
+    ! === Ice shelf basal temperatures ===
+    ! ====================================
 
-  !   ! Solve the heat equation for all vertices
-  !   is_unstable( mesh%vi1:mesh%vi2) = 0
-  !   n_unstable                      = 0
-  !   DO vi = mesh%vi1, mesh%vi2
+    if (C%choice_ocean_model == 'none') then
+      ! No ocean data available; use local pressure melting point of ice
 
-  !     ! Skip ice-free vertices
-  !     IF (ice%mask_ice_a( vi) == 0) CYCLE
+      do vi = mesh%vi1, mesh%vi2
+        if (ice%mask_shelf_a( vi) == 1) then
+          T_ocean_at_shelf_base( vi) = ice%Ti_pmp_a( vi,C%nz)
+        else
+          T_ocean_at_shelf_base( vi) = T0
+        end if
+      end do
 
-  !     ! Ice surface boundary condition
-  !     beta(  1) = 1._dp
-  !     gamma( 1) = 0._dp
-  !     delta( 1) = ice%Ti_a( vi,1)
+    else
+      ! Calculate shelf base temperature from ocean data
 
-  !     ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
-  !     DO k = 2, C%nz-1
+      do vi = mesh%vi1, mesh%vi2
 
-  !       f1 = (ice%Ki_a( vi,k) * ice%dzeta_dz_a( vi)**2) / (ice_density * ice%Cpi_a( vi,k))
+        if (ice%mask_shelf_a( vi) == 1) then
+          depth = max( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+          call interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base( vi))
+        else
+          T_ocean_at_shelf_base( vi) = 0._dp
+        end if
 
-  !       f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a( vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
+        ! NOTE: ocean data gives temperature in Celsius, thermodynamics wants Kelvin!
+        T_ocean_at_shelf_base( vi) = T_ocean_at_shelf_base( vi) + T0
 
-  !       f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind_a( vi,k) + v_times_dT_dy_upwind_a( vi,k)) - ice%Ti_a( vi,k) / C%dt_thermo
+      end do
 
-  !       alpha(k) = f1 * p_zeta%a_zetazeta(k) - f2 * p_zeta%a_zeta(k)
-  !       beta (k) = f1 * p_zeta%b_zetazeta(k) - f2 * p_zeta%b_zeta(k) - 1._dp / C%dt_thermo
-  !       gamma(k) = f1 * p_zeta%c_zetazeta(k) - f2 * p_zeta%c_zeta(k)
-  !       delta(k) = f3
+    end if
 
-  !      ! ! DENK DROM - only vertical diffusion
-  !      ! alpha(k) = (p_zeta%a_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%a_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
-  !      ! beta( k) = (p_zeta%b_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%b_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2)) + (1._dp / C%dt_thermo)
-  !      ! gamma(k) = (p_zeta%c_zeta(k) * ice%dzeta_dt(vi,k)) - ((p_zeta%c_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
-  !      ! delta(k) = ice%Ti(vi,k) / C%dt_thermo
+    ! Solve the heat equation for all vertices
+    is_unstable( mesh%vi1:mesh%vi2) = 0
+    n_unstable                      = 0
 
-  !      ! ! DENK DROM - only vertical diffusion + vertical advection
-  !      ! alpha(k) = (p_zeta%a_zeta(k) * (ice%dzeta_dt(vi,k) - ice%W_3D(vi,k) / ice%Hi(vi))) - ((p_zeta%a_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
-  !      ! beta( k) = (p_zeta%b_zeta(k) * (ice%dzeta_dt(vi,k) - ice%W_3D(vi,k) / ice%Hi(vi))) - ((p_zeta%b_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2)) + (1._dp / C%dt_thermo)
-  !      ! gamma(k) = (p_zeta%c_zeta(k) * (ice%dzeta_dt(vi,k) - ice%W_3D(vi,k) / ice%Hi(vi))) - ((p_zeta%c_zetazeta(k) * ice%Ki(vi,k)) / (ice_density * ice%Cpi(vi,k) * ice%Hi(vi)**2))
-  !      ! delta(k) = ice%Ti(vi,k) / C%dt_thermo
+    do vi = mesh%vi1, mesh%vi2
 
-  !     END DO ! DO k = 2, C%nz-1
+      ! Skip ice-free vertices
+      if (ice%mask_ice_a( vi) == 0) then
+        cycle
+      end if
 
-  !     ! Boundary conditions at the surface: set ice temperature equal to annual mean surface temperature
-  !     beta(  1) = 1._dp
-  !     gamma( 1) = 0._dp
-  !     delta( 1) =  MIN( T0, SUM( climate%T2m( vi,:)) / 12._dp)
+      ! Ice surface boundary condition
+      beta(  1) = 1._dp
+      gamma( 1) = 0._dp
+      delta( 1) = ice%Ti_a( vi,1)
 
-  !     ! Boundary conditions at the base
-  !     IF (ice%mask_shelf_a( vi) == 1) THEN
-  !       ! Set ice bottom temperature equal to seawater temperature (limited to the PMP)
-  !       alpha( C%nz) = 0._dp
-  !       beta ( C%nz) = 1._dp
-  !       delta( C%nz) = MIN( T0, MIN( ice%Ti_pmp_a( vi,C%nz), T_ocean_at_shelf_base( vi) ))
-  !     ELSE
-  !       IF (ice%Ti_a( vi,C%nz) >= ice%Ti_pmp_a( vi,C%nz)) THEN
-  !         ! Ice is already at/above pressure melting point; set temperature equal to PMP
-  !         alpha( C%nz) = 0._dp
-  !         beta ( C%nz) = 1._dp
-  !         delta( C%nz) = ice%Ti_pmp_a( vi,C%nz)
-  !       ELSE
-  !         ! Set a Neumann BC so the temperature gradient at the base is equal to basal heating rate (= geothermal + friction)
-  !         alpha( C%nz) = 1._dp
-  !         beta ( C%nz) = -1._dp
-  !         delta( C%nz) = (C%zeta(C%nz) - C%zeta(C%nz-1)) * (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz))
-  !       END IF
-  !     END IF ! IF (ice%mask_shelf_a( vi) == 1) THEN
+      ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
+      do k = 2, C%nz-1
 
-  !     ! Solve the tridiagonal matrix equation representing the heat equation for this grid cell
-  !     Ti_new( vi,:) = tridiagonal_solve( alpha, beta, gamma, delta)
+        f1 = (ice%Ki_a( vi,k) * ice%dzeta_dz_a( vi)**2) / (ice_density * ice%Cpi_a( vi,k))
 
-  !     ! Make sure ice temperature doesn't exceed pressure melting point
-  !     DO k = 1, C%nz-1
-  !       Ti_new( vi,k) = MIN( Ti_new( vi,k), ice%Ti_pmp_a( vi,k))
-  !     END DO
+        f2 = ice%dzeta_dt_a( vi,k) + ice%dzeta_dx_a( vi,k) * ice%u_3D_a( vi,k) + ice%dzeta_dy_a( vi,k) * ice%v_3D_a( vi,k) + ice%dzeta_dz_a( vi) * ice%w_3D_a( vi,k)
 
-  !     IF (Ti_new( vi,C%nz) >= ice%Ti_pmp_a( vi,C%nz)) THEN
-  !       Ti_new( vi,C%nz) = MIN( ice%Ti_pmp_a( vi,C%nz), ice%Ti_a( vi,C%nz-1) - (C%zeta(C%nz) - C%zeta(C%nz-1)) * &
-  !         (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz)))
-  !     END IF
+        f3 = ice%internal_heating_a( vi,k) + (u_times_dT_dx_upwind_a( vi,k) + v_times_dT_dy_upwind_a( vi,k)) - ice%Ti_a( vi,k) / C%dt_thermo
 
-  !     ! Mark temperatures below 150 K or NaN as unstable, to be replaced with the Robin solution.
-  !     hasnan = .FALSE.
-  !     DO k = 1, C%nz
-  !       IF (Ti_new( vi,k) /= Ti_new( vi,k)) THEN
-  !         hasnan = .TRUE.
-  !       END IF
-  !     END DO
-  !     IF (MINVAL(Ti_new( vi,:)) < 150._dp .OR. hasnan) THEN
-  !       is_unstable( vi) = 1
-  !       n_unstable  = n_unstable + 1
-  !       !WRITE(0,*) 'instability detected; Hi = ', ice%Hi_a( j,i), ', dHi_dt = ', ice%dHi_dt_a( j,i)
-  !     END IF
+        alpha(k) = f1 * p_zeta%a_zetazeta(k) - f2 * p_zeta%a_zeta(k)
+        beta (k) = f1 * p_zeta%b_zetazeta(k) - f2 * p_zeta%b_zeta(k) - 1._dp / C%dt_thermo
+        gamma(k) = f1 * p_zeta%c_zetazeta(k) - f2 * p_zeta%c_zeta(k)
+        delta(k) = f3
 
-  !   END DO ! DO vi = mesh%vi1, mesh%vi2
-  !   CALL sync
+      end do ! k = 2, C%nz-1
 
-  !   ! Apply Neumann boundary conditions to the temperature field
-  !   CALL apply_Neumann_BC_direct_a_3D( mesh, Ti_new)
+      ! Boundary conditions at the surface: set ice temperature equal to annual mean surface temperature
+      beta(  1) = 1._dp
+      gamma( 1) = 0._dp
+      delta( 1) =  min( T0, sum( climate%T2m( vi,:)) / 12._dp)
 
-  !   ! Cope with instability
-  !   CALL MPI_ALLREDUCE( MPI_IN_PLACE, n_unstable, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-  !   IF (n_unstable < CEILING( REAL( mesh%nV) / 100._dp)) THEN
-  !     ! Instability is limited to an acceptably small number (< 1%) of grid cells;
-  !     ! replace the temperature profile in those cells with the Robin solution
+      ! Boundary conditions at the base
+      if (ice%mask_shelf_a( vi) == 1) then
+        ! Set ice bottom temperature equal to seawater temperature (limited to the PMP)
+        alpha( C%nz) = 0._dp
+        beta ( C%nz) = 1._dp
+        delta( C%nz) = min( T0, min( ice%Ti_pmp_a( vi,C%nz), T_ocean_at_shelf_base( vi) ))
+      else
+        if (ice%Ti_a( vi,C%nz) >= ice%Ti_pmp_a( vi,C%nz)) then
+          ! Ice is already at/above pressure melting point; set temperature equal to PMP
+          alpha( C%nz) = 0._dp
+          beta ( C%nz) = 1._dp
+          delta( C%nz) = ice%Ti_pmp_a( vi,C%nz)
+        else
+          ! Set a Neumann BC so the temperature gradient at the base is equal to basal heating rate (= geothermal + friction)
+          alpha( C%nz) = 1._dp
+          beta ( C%nz) = -1._dp
+          delta( C%nz) = (C%zeta(C%nz) - C%zeta(C%nz-1)) * (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz))
+        end if
+      end if
 
-  !     DO vi = mesh%vi1, mesh%vi2
-  !       IF (is_unstable( vi) == 1) CALL replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new(vi,:), vi)
-  !     END DO
-  !     CALL sync
+      ! Solve the tridiagonal matrix equation representing the heat equation for this grid cell
+      Ti_new( vi,:) = tridiagonal_solve( alpha, beta, gamma, delta)
 
-  !   ELSE
-  !     ! An unacceptably large number of grid cells was unstable; throw an error.
+      ! Make sure ice temperature doesn't exceed pressure melting point
+      do k = 1, C%nz-1
+        Ti_new( vi,k) = min( Ti_new( vi,k), ice%Ti_pmp_a( vi,k))
+      end do
 
-  !     IF (par%master) THEN
-  !       debug%dp_2D_a_01  = ice%Hi_a
-  !       debug%int_2D_a_01 = ice%mask_ice_a
-  !       debug%dp_3D_a_01  = ice%Ti_a
-  !       debug%dp_3D_a_02  = Ti_new
-  !       CALL write_to_debug_file
-  !       CALL crash('heat equation solver unstable for more than 1% of vertices!')
-  !     END IF
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      if (Ti_new( vi,C%nz) >= ice%Ti_pmp_a( vi,C%nz)) then
+        Ti_new( vi,C%nz) = min( ice%Ti_pmp_a( vi,C%nz), ice%Ti_a( vi,C%nz-1) - (C%zeta(C%nz) - C%zeta(C%nz-1)) * &
+          (ice%GHF_a( vi) + ice%frictional_heating_a( vi)) / (ice%dzeta_dz_a( vi) * ice%Ki_a( vi,C%nz)))
+      end if
 
-  !   END IF
+      ! Mark temperatures below 150 K or NaN as unstable, to be replaced with the Robin solution.
+      hasnan = .false.
+      do k = 1, C%nz
+        if (Ti_new( vi,k) /= Ti_new( vi,k)) then
+          hasnan = .true.
+        end if
+      end do
+      if (minval(Ti_new( vi,:)) < 150._dp .or. hasnan) then
+        is_unstable( vi) = 1
+        n_unstable  = n_unstable + 1
+        write(0,*) '3D heat equation - instability detected; Hi = ', ice%Hi_a( vi), ', dHi_dt = ', ice%dHi_dt_a( vi)
+      end if
 
-  !   ! Move the new temperature field to the ice data structure
-  !   ice%Ti_a( mesh%vi1:mesh%vi2,:) = Ti_new( mesh%vi1:mesh%vi2,:)
-  !   CALL sync
+    end do ! vi = mesh%vi1, mesh%vi2
 
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wu_times_dT_dx_upwind_a)
-  !   CALL deallocate_shared( wv_times_dT_dy_upwind_a)
-  !   CALL deallocate_shared( wTi_new                )
-  !   CALL deallocate_shared( wis_unstable           )
-  !   CALL deallocate_shared( wT_ocean_at_shelf_base )
+    ! Gather the new temperature across all processes
+    call allgather_array(Ti_new)
+    ! Apply Neumann boundary conditions to the temperature field
+    call apply_Neumann_BC_direct_a_3D( mesh, Ti_new)
 
-  !   ! Safety
-  !   CALL check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
+    ! Get total number of instabilities
+    call MPI_ALLREDUCE( MPI_IN_PLACE, n_unstable, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
 
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
+    ! Cope with instability
+    if (n_unstable < ceiling( real( mesh%nV, dp) / 100._dp)) then
+      ! Instability is limited to an acceptably small number (< 1%) of grid cells;
+      ! replace the temperature profile in those cells with the Robin solution
 
-  ! END SUBROUTINE solve_3D_heat_equation
+      do vi = mesh%vi1, mesh%vi2
+        if (is_unstable( vi) == 1) then
+          call replace_Ti_with_robin_solution( ice, climate, ocean, SMB, Ti_new(vi,:), vi)
+        end if
+      end do
+
+    else
+      ! An unacceptably large number of grid cells was unstable; throw an error.
+
+      ! ! Save to debug file
+      ! debug%dp_2D_a_01  = ice%Hi_a
+      ! debug%int_2D_a_01 = ice%mask_ice_a
+      ! debug%dp_3D_a_01  = ice%Ti_a
+      ! debug%dp_3D_a_02  = Ti_new
+      ! call write_to_debug_file
+
+      ! Stop
+      call crash('heat equation solver unstable for more than 1% of vertices!')
+
+    end if
+
+    ! Move the new temperature field to the ice data structure
+    ice%Ti_a( mesh%vi1:mesh%vi2,:) = Ti_new( mesh%vi1:mesh%vi2,:)
+
+    ! Clean up after yourself
+    deallocate( u_times_dT_dx_upwind_a)
+    deallocate( v_times_dT_dy_upwind_a)
+    deallocate( Ti_new                )
+    deallocate( is_unstable           )
+    deallocate( T_ocean_at_shelf_base )
+
+    ! Safety
+    call check_for_NaN_dp_2D( ice%Ti_a, 'ice%Ti_a')
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine solve_3D_heat_equation
+
+  subroutine calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
+    ! Calculate upwind heat flux derivatives at vertex vi, vertical layer k
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),            intent(in)  :: mesh
+    type(type_ice_model),       intent(in)  :: ice
+    real(dp), dimension(:,:),   intent(out) :: u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a
+
+    ! Local variables:
+    character(len=256), parameter           :: routine_name = 'calc_upwind_heat_flux_derivatives'
+    real(dp), dimension(:,:), allocatable   :: dTi_dx_3D_b, dTi_dy_3D_b, u_3D_b, v_3D_b
+    integer                                 :: vi, k, vti, ti, n1, n2, n3, vib, vic, ti_upwind
+    real(dp), dimension(2)                  :: u_upwind, ab, ac
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Temperature gradients ===
+    ! =============================
+
+    ! Allocate shared memory
+    allocate( dTi_dx_3D_b (1:mesh%nTri, C%nz) )
+    allocate( dTi_dy_3D_b (1:mesh%nTri, C%nz) )
+
+    ! Calculate temperature gradients on the b-grid
+    call ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b(mesh%ti1:mesh%ti2,:))
+    call ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b(mesh%ti1:mesh%ti2,:))
+
+    ! Gather the temperature gradients across all processes
+    call allgather_array(dTi_dx_3D_b)
+    call allgather_array(dTi_dy_3D_b)
+
+    ! === Full velocity array ===
+    ! ===========================
+
+    ! Allocate full velocity arrays
+    allocate(u_3D_b (1:mesh%nTri, C%nz) )
+    allocate(v_3D_b (1:mesh%nTri, C%nz) )
+
+    ! Get data from each process
+    u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_b
+    v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_b
+
+    ! Gather velocities across all processes
+    call allgather_array(u_3D_b)
+    call allgather_array(v_3D_b)
+
+    ! === Upwind derivatives ===
+    ! ==========================
+
+    ! Initialise
+    u_times_dT_dx_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
+    v_times_dT_dy_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
+
+    do vi = mesh%vi1, mesh%vi2
+
+      if (ice%mask_ice_a( vi) == 1) then
+
+        ! The upwind velocity vector
+        u_upwind = [-ice%u_vav_a( vi), -ice%v_vav_a( vi)]
+
+        ! Find the upwind triangle
+        ti_upwind = 0
+        do vti = 1, mesh%niTri( vi)
+
+          ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
+          ti  = mesh%iTri( vi,vti)
+          vib = 0
+          vic = 0
+          do n1 = 1, 3
+            n2 = n1 + 1
+            if (n2 == 4) n2 = 1
+            n3 = n2 + 1
+            if (n3 == 4) n3 = 1
+
+            if (mesh%Tri( ti,n1) == vi) then
+              vib = mesh%Tri( ti,n2)
+              vic = mesh%Tri( ti,n3)
+              exit
+            end if
+          end do
+
+          ! Check if the upwind velocity vector points into this triangle
+          ab = mesh%V( vib,:) - mesh%V( vi,:)
+          ac = mesh%V( vic,:) - mesh%V( vi,:)
+
+          if (CROSS2( ab, u_upwind) >= 0._dp .and. CROSS2( u_upwind, ac) >= 0._dp) then
+            ti_upwind = ti
+            exit
+          end if
+
+        end do ! iti = 1, mesh%niTri( vi)
+
+        ! Check if triangle was found
+        if (ti_upwind == 0) then
+          ! No triangle found
+
+          ! Check whether it matters
+          if (mesh%edge_index( vi) > 0) THEN
+            ! Border vertex: just forget about it
+            u_times_dT_dx_upwind_a( vi,:) = 0._dp
+            v_times_dT_dy_upwind_a( vi,:) = 0._dp
+          else
+            ! Interior vertex: uh oh...
+            call crash('couldnt find upwind triangle!')
+          end if
+
+        else
+          ! Triangle found: calculate u * dT/dx, v * dT/dy
+
+          do k = 1, C%nz
+            u_times_dT_dx_upwind_a( vi,k) = u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
+            v_times_dT_dy_upwind_a( vi,k) = v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
+          end do
+
+        end if
+
+      end if ! (ice%mask_ice_a( vi) == 1)
+
+    end do ! vi = mesh%vi1, mesh%vi2
+
+    ! Clean up after yourself
+    deallocate( dTi_dx_3D_b)
+    deallocate( dTi_dy_3D_b)
+    deallocate( u_3D_b)
+    deallocate( v_3D_b)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine calc_upwind_heat_flux_derivatives
 
 ! ===== Initial temperatures =====
 ! ================================
@@ -747,10 +917,19 @@ contains
     elseif( ice%mask_shelf_a(vi) == 1) then
       ! Ice shelf vertex
 
-      ! Use a linear profile between Ts and seawater temperature:
-      depth = max( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
-      !TODO needs initialized ocean! CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
-      T_ocean_at_shelf_base = 0 !TODO remove this statement!
+      if (C%choice_ocean_model == 'none') then
+        ! No ocean data available; use local pressure melting point of ice
+
+        T_ocean_at_shelf_base = ice%Ti_pmp_a( vi,C%nz)
+
+      else
+        ! Calculate shelf base temperature from ocean data
+
+        depth = max( 0.1_dp, ice%Hi_a( vi) - ice%Hs_a( vi))   ! Depth is positive when below the sea surface!
+        call interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, T_ocean_at_shelf_base)
+
+      end if
+
       Ti( :) = Ts + C%zeta(:) * (T0 + T_ocean_at_shelf_base - Ts)
 
     else
@@ -795,6 +974,187 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine calc_pressure_melting_point
+
+  subroutine calc_heat_capacity( mesh, ice)
+    ! Calculate the heat capacity of the ice
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'calc_heat_capacity'
+    integer                             :: vi
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    select case (C%choice_ice_heat_capacity)
+
+      case ('uniform')
+        ! Apply a uniform value for the heat capacity
+        ice%Cpi_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_heat_capacity
+
+      case ('Pounder1965')
+        ! Calculate the heat capacity of ice according to Pounder: The Physics of Ice (1965)
+        do vi = mesh%vi1, mesh%vi2
+          ice%Cpi_a( vi,:) = 2115.3_dp + 7.79293_dp * (ice%Ti_a( vi,:) - T0)
+        end do
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_ice_heat_capacity "' // &
+                    trim( C%choice_ice_heat_capacity) // '"!')
+
+    end select
+
+    ! Safety
+    call check_for_NaN_dp_2D( ice%Cpi_a, 'ice%Cpi_a')
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine calc_heat_capacity
+
+  subroutine calc_thermal_conductivity( mesh, ice)
+    ! Calculate the thermal conductivity of the ice
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'calc_thermal_conductivity'
+    integer                             :: vi
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    select case (C%choice_ice_thermal_conductivity)
+
+      case ('uniform')
+        ! Apply a uniform value for the thermal conductivity
+        ice%Ki_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_thermal_conductivity
+
+      case ('Ritz1987')
+        ! Calculate the thermal conductivity of ice according to Ritz (1987)
+        do vi = mesh%vi1, mesh%vi2
+          ice%Ki_a( vi,:) = 3.101E+08_dp * exp(-0.0057_dp * ice%Ti_a( vi,:))
+        end do
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_ice_thermal_conductivity "' // &
+                    trim( C%choice_ice_thermal_conductivity) // '"!')
+
+    end select
+
+    ! Safety
+    call check_for_NaN_dp_2D( ice%Ki_a, 'ice%Ki_a')
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine calc_thermal_conductivity
+
+  subroutine calc_internal_heating( mesh, ice)
+    ! Calculate internal heating due to deformation
+
+    implicit none
+
+    ! In- and output variables
+    type(type_ice_model), intent(inout) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'calc_internal_heating'
+    integer                             :: vi, k
+    real(dp), dimension(:), allocatable :: dHs_dx_a, dHs_dy_a
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Allocate shared memory
+    allocate( dHs_dx_a (mesh%vi1:mesh%vi2) )
+    allocate( dHs_dy_a (mesh%vi1:mesh%vi2) )
+
+    ! Calculate surface slopes
+    call ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
+    call ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
+
+    ! Calculate internal heating
+    do vi = mesh%vi1, mesh%vi2
+
+      ice%internal_heating_a( vi,:) = 0._dp
+
+      if (mesh%edge_index( vi) > 0) cycle ! Skip the domain boundary
+      if (ice%mask_ice_a( vi) == 0) cycle ! Skip ice-less elements
+
+      ! Loop over the whole vertical domain but not the surface (k=1) nor the bottom (k=nz):
+      do k = 2, C%nz-1
+        ice%internal_heating_a( vi,k) = ((- grav * C%zeta(k)) / ice%Cpi_a( vi,k)) * &
+                                        ((p_zeta%a_zeta(k) * ice%u_3D_a( vi,k-1) + &
+                                          p_zeta%b_zeta(k) * ice%u_3D_a( vi,k) + &
+                                          p_zeta%c_zeta(k) * ice%u_3D_a( vi,k+1)) * dHs_dx_a( vi) + &
+                                         (p_zeta%a_zeta(k) * ice%v_3D_a( vi,k-1) + &
+                                          p_zeta%b_zeta(k) * ice%v_3D_a( vi,k) + &
+                                          p_zeta%c_zeta(k) * ice%v_3D_a( vi,k+1)) * dHs_dy_a( vi))
+      end do
+
+    end do
+
+    ! Clean up after yourself
+    deallocate( dHs_dx_a)
+    deallocate( dHs_dy_a)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine calc_internal_heating
+
+  subroutine calc_frictional_heating( mesh, ice)
+    ! Calculate frictional heating at the base due to sliding
+
+    implicit none
+
+    ! In- and output variables
+    type(type_ice_model), intent(inout) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'calc_frictional_heating'
+    integer                             :: vi
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Exception for when no sliding can occur
+    if (C%choice_ice_dynamics == 'SIA' .or. &
+        C%choice_sliding_law == 'no_sliding') then
+
+      ice%frictional_heating_a( mesh%vi1:mesh%vi2) = 0._dp
+
+    else
+
+      ! Calculate frictional heating
+      do vi = mesh%vi1, mesh%vi2
+        if (ice%mask_sheet_a( vi) == 1) then
+          ice%frictional_heating_a( vi) = ice%beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
+        else
+          ice%frictional_heating_a( vi) = 0._dp
+        end if
+      end do
+
+    end if
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine calc_frictional_heating
 
 ! ===== Remapping =====
 ! =====================
@@ -995,274 +1355,3 @@ contains
   end subroutine remap_ice_temperature
 
 end module thermodynamics_module
-
-! ===== Pool =====
-! ================
-
-  ! SUBROUTINE calc_upwind_heat_flux_derivatives( mesh, ice, u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a)
-  !   ! Calculate upwind heat flux derivatives at vertex vi, vertical layer k
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(IN)    :: ice
-  !   REAL(dp), dimension(:,:  ),          INTENT(OUT)   :: u_times_dT_dx_upwind_a, v_times_dT_dy_upwind_a
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_upwind_heat_flux_derivatives'
-  !   REAL(dp), dimension(:,:  ), POINTER                ::  dTi_dx_3D_b,  dTi_dy_3D_b
-  !   INTEGER                                            :: wdTi_dx_3D_b, wdTi_dy_3D_b
-  !   INTEGER                                            :: vi, k, vti, ti, n1, n2, n3, vib, vic, ti_upwind
-  !   REAL(dp), dimension(2)                             :: u_upwind, ab, ac
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dx_3D_b, wdTi_dx_3D_b)
-  !   CALL allocate_shared_dp_2D(  mesh%nTri, C%nz, dTi_dy_3D_b, wdTi_dy_3D_b)
-
-  !   ! Calculate temperature gradients on the b-grid
-  !   CALL ddx_a_to_b_3D( mesh, ice%Ti_a, dTi_dx_3D_b)
-  !   CALL ddy_a_to_b_3D( mesh, ice%Ti_a, dTi_dy_3D_b)
-
-  !   ! Initialise
-  !   u_times_dT_dx_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
-  !   v_times_dT_dy_upwind_a( mesh%vi1:mesh%vi2,:) = 0._dp
-  !   CALL sync
-
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     IF (ice%mask_ice_a( vi) == 1) THEN
-
-  !       ! The upwind velocity vector
-  !       u_upwind = [-ice%u_vav_a( vi), -ice%v_vav_a( vi)]
-
-  !       ! Find the upwind triangle
-  !       ti_upwind = 0
-  !       DO vti = 1, mesh%niTri( vi)
-
-  !         ! Triangle ti is spanned counter-clockwise by vertices [vi,vib,vic]
-  !         ti  = mesh%iTri( vi,vti)
-  !         vib = 0
-  !         vic = 0
-  !         DO n1 = 1, 3
-  !           n2 = n1 + 1
-  !           IF (n2 == 4) n2 = 1
-  !           n3 = n2 + 1
-  !           IF (n3 == 4) n3 = 1
-
-  !           IF (mesh%Tri( ti,n1) == vi) THEN
-  !             vib = mesh%Tri( ti,n2)
-  !             vic = mesh%Tri( ti,n3)
-  !             EXIT
-  !           END IF
-  !         END DO
-
-  !         ! Check if the upwind velocity vector points into this triangle
-  !         ab = mesh%V( vib,:) - mesh%V( vi,:)
-  !         ac = mesh%V( vic,:) - mesh%V( vi,:)
-
-  !         IF (CROSS2( ab, u_upwind) >= 0._dp .AND. CROSS2( u_upwind, ac) >= 0._dp) THEN
-  !           ti_upwind = ti
-  !           EXIT
-  !         END IF
-
-  !       END DO ! DO iti = 1, mesh%niTri( vi)
-
-  !       ! Safety
-  !       IF (ti_upwind == 0) THEN
-  !         CALL crash('couldnt find upwind triangle!')
-  !       END IF
-
-  !       ! Calculate u * dT/dx, v * dT/dy
-  !       DO k = 1, C%nz
-  !         u_times_dT_dx_upwind_a( vi,k) = ice%u_3D_b( ti_upwind,k) * dTi_dx_3D_b( ti_upwind,k)
-  !         v_times_dT_dy_upwind_a( vi,k) = ice%v_3D_b( ti_upwind,k) * dTi_dy_3D_b( ti_upwind,k)
-  !       END DO
-
-  !     END IF ! IF (ice%mask_ice_a( vi) == 1) THEN
-
-  !   END DO ! DO vi = mesh%vi1, mesh%vi2
-  !   CALL sync
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wdTi_dx_3D_b)
-  !   CALL deallocate_shared( wdTi_dy_3D_b)
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE calc_upwind_heat_flux_derivatives
-
-  ! SUBROUTINE calc_internal_heating( mesh, ice)
-  !   ! Calculate internal heating due to deformation
-
-  !   IMPLICIT NONE
-
-  !   ! In- and output variables
-  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_internal_heating'
-  !   INTEGER                                            :: vi, k
-  !   REAL(dp), dimension(:    ), POINTER                ::  dHs_dx_a,  dHs_dy_a
-  !   INTEGER                                            :: wdHs_dx_a, wdHs_dy_a
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   ! Allocate shared memory
-  !   CALL allocate_shared_dp_1D( mesh%nV, dHs_dx_a, wdHs_dx_a)
-  !   CALL allocate_shared_dp_1D( mesh%nV, dHs_dy_a, wdHs_dy_a)
-
-  !   ! Calculate surface slopes
-  !   CALL ddx_a_to_a_2D( mesh, ice%Hs_a, dHs_dx_a)
-  !   CALL ddy_a_to_a_2D( mesh, ice%Hs_a, dHs_dy_a)
-
-  !   ! Calculate internal heating
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     ice%internal_heating_a( vi,:) = 0._dp
-
-  !     IF (mesh%edge_index( vi) > 0) CYCLE ! Skip the domain boundary
-  !     IF (ice%mask_ice_a( vi) == 0) CYCLE ! Skip ice-less elements
-
-  !     ! Loop over the whole vertical domain but not the surface (k=1) and the bottom (k=NZ):
-  !     DO k = 2, C%nz-1
-  !       ice%internal_heating_a( vi,k) = ((- grav * C%zeta(k)) / ice%Cpi_a( vi,k)) * ( &
-  !            (p_zeta%a_zeta(k) * ice%u_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%u_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%u_3D_a( vi,k+1)) * dHs_dx_a( vi) + &
-  !            (p_zeta%a_zeta(k) * ice%v_3D_a( vi,k-1) + p_zeta%b_zeta(k) * ice%v_3D_a( vi,k) + p_zeta%c_zeta(k) * ice%v_3D_a( vi,k+1)) * dHs_dy_a( vi) )
-  !     END DO
-
-  !   END DO
-  !   CALL sync
-
-  !   ! Clean up after yourself
-  !   CALL deallocate_shared( wdHs_dx_a)
-  !   CALL deallocate_shared( wdHs_dy_a)
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE calc_internal_heating
-
-  ! SUBROUTINE calc_frictional_heating( mesh, ice)
-  !   ! Calculate frictional heating at the base due to sliding
-
-  !   IMPLICIT NONE
-
-  !   ! In- and output variables
-  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_frictional_heating'
-  !   INTEGER                                            :: vi
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   ! Exception for when no sliding can occur
-  !   IF (C%choice_ice_dynamics == 'SIA' .OR. C%choice_sliding_law == 'no_sliding') THEN
-  !     ice%frictional_heating_a( mesh%vi1:mesh%vi2) = 0._dp
-  !     CALL sync
-  !     RETURN
-  !   END IF
-
-  !   ! Calculate frictional heating
-  !   DO vi = mesh%vi1, mesh%vi2
-  !     IF (ice%mask_sheet_a( vi) == 1) THEN
-  !       ice%frictional_heating_a( vi) = ice%beta_a( vi) * (ice%u_base_a( vi)**2 + ice%u_base_a( vi)**2)
-  !     ELSE
-  !       ice%frictional_heating_a( vi) = 0._dp
-  !     END IF
-  !   END DO
-  !   CALL sync
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE calc_frictional_heating
-
-  ! SUBROUTINE calc_heat_capacity( mesh, ice)
-  !   ! Calculate the heat capacity of the ice
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_heat_capacity'
-  !   INTEGER                                            :: vi
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   IF     (C%choice_ice_heat_capacity == 'uniform') THEN
-  !     ! Apply a uniform value for the heat capacity
-
-  !     ice%Cpi_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_heat_capacity
-
-  !   ELSEIF (C%choice_ice_heat_capacity == 'Pounder1965') THEN
-  !     ! Calculate the heat capacity of ice according to Pounder: The Physics of Ice (1965)
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !       ice%Cpi_a( vi,:) = 2115.3_dp + 7.79293_dp * (ice%Ti_a( vi,:) - T0)
-  !     END DO
-
-  !   ELSE
-  !     CALL crash('unknown choice_ice_heat_capacity "' // TRIM( C%choice_ice_heat_capacity) // '"!')
-  !   END IF
-
-  !   ! Safety
-  !   CALL check_for_NaN_dp_2D( ice%Cpi_a, 'ice%Cpi_a')
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE calc_heat_capacity
-
-  ! SUBROUTINE calc_thermal_conductivity( mesh, ice)
-  !   ! Calculate the thermal conductivity of the ice
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables
-  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh
-  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_thermal_conductivity'
-  !   INTEGER                                            :: vi
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   IF     (C%choice_ice_thermal_conductivity == 'uniform') THEN
-  !     ! Apply a uniform value for the thermal conductivity
-
-  !     ice%Ki_a( mesh%vi1:mesh%vi2,:) = C%uniform_ice_thermal_conductivity
-
-  !   ELSEIF (C%choice_ice_thermal_conductivity == 'Ritz1987') THEN
-  !     ! Calculate the thermal conductivity of ice according to Ritz (1987)
-
-  !     DO vi = mesh%vi1, mesh%vi2
-  !       ice%Ki_a( vi,:) = 3.101E+08_dp * EXP(-0.0057_dp * ice%Ti_a( vi,:))
-  !     END DO
-
-  !   ELSE
-  !     CALL crash('unknown choice_ice_thermal_conductivity "' // TRIM( C%choice_ice_thermal_conductivity) // '"!')
-  !   END IF
-
-  !   ! Safety
-  !   CALL check_for_NaN_dp_2D( ice%Ki_a, 'ice%Ki_a')
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE calc_thermal_conductivity

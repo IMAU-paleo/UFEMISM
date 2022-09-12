@@ -68,6 +68,12 @@ contains
     end if
     call sync
 
+    ! Set time frame index to 1
+    region%restart_mesh%ti     = 1
+    region%restart_grid%ti     = 1
+    region%help_fields_mesh%ti = 1
+    region%help_fields_grid%ti = 1
+
     region%output_file_exists = .true.
 
     ! Finalise routine path
@@ -75,56 +81,52 @@ contains
 
   end subroutine create_output_files
 
-  SUBROUTINE write_to_output_files( region)
+  subroutine write_to_output_files( region)
     ! Write the current model state to the existing output files
 
-    IMPLICIT NONE
+    implicit none
 
     ! Input variables:
-    TYPE(type_model_region), INTENT(INOUT) :: region
+    type(type_model_region), intent(inout) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_output_files'
+    character(len=256), parameter          :: routine_name = 'write_to_output_files'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    IF (par%master) then
-      write(*,'(A,F8.3,A)') '  t = ', region%time/1e3, ' kyr - writing output...'
+    if (par%master) then
+      write(*,'(A,F8.3,A)') '  t = ', region%time/1e3, &
+                            ' kyr - writing output...'
     end if
     call sync
 
-    CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    CALL write_to_restart_file_grid(     region, region%restart_grid)
-    CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
-    CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
+    call write_to_restart_file_mesh(     region, region%restart_mesh)
+    call write_to_restart_file_grid(     region, region%restart_grid)
+    call write_to_help_fields_file_mesh( region, region%help_fields_mesh)
+    call write_to_help_fields_file_grid( region, region%help_fields_grid)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE write_to_output_files
+  end subroutine write_to_output_files
 
-  SUBROUTINE get_output_filenames( region)
+  subroutine get_output_filenames( region)
 
-    IMPLICIT NONE
+    implicit none
 
     ! Input variables:
-    TYPE(type_model_region), INTENT(INOUT) :: region
+    type(type_model_region), intent(inout) :: region
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_output_filenames'
-    CHARACTER(LEN=256)          :: short_filename
-    LOGICAL                     :: ex
-    INTEGER                     :: n
-    CHARACTER(LEN=256)          :: ns
+    character(len=256), parameter          :: routine_name = 'get_output_filenames'
+    character(len=256)                     :: short_filename
+    logical                                :: ex
+    integer                                :: n
+    character(len=256)                     :: ns
 
     ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
+    call init_routine( routine_name)
 
     ! restart file (mesh)
     ! ===================
@@ -133,35 +135,35 @@ contains
     short_filename(9:11) = region%name
     n = 1
 
-    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+    inquire( file = (trim(C%output_dir) // trim(short_filename)), exist = ex)
 
-    DO WHILE (ex)
+    do while (ex)
 
      n=n+1
 
-     WRITE(ns,*) n
-     ns = ADJUSTL(ns)
+     write(ns,*) n
+     ns = adjustl(ns)
 
-     IF (n<10) THEN
-       short_filename = short_filename(1:12) // '0000' // TRIM(ns) // '.nc'
-     ELSEIF (n<100) THEN
-       short_filename = short_filename(1:12) // '000' // TRIM(ns) // '.nc'
-     ELSEIF (n<1000) THEN
-       short_filename = short_filename(1:12) // '00' // TRIM(ns) // '.nc'
-     ELSEIF (n<10000) THEN
-       short_filename = short_filename(1:12) // '0' // TRIM(ns) // '.nc'
-     ELSE
-       short_filename = short_filename(1:12) // TRIM(ns) // '.nc'
-     END IF
+     if (n<10) then
+       short_filename = short_filename(1:12) // '0000' // trim(ns) // '.nc'
+     elseif (n<100) then
+       short_filename = short_filename(1:12) // '000' // trim(ns) // '.nc'
+     elseif (n<1000) then
+       short_filename = short_filename(1:12) // '00' // trim(ns) // '.nc'
+     elseif (n<10000) then
+       short_filename = short_filename(1:12) // '0' // trim(ns) // '.nc'
+     else
+       short_filename = short_filename(1:12) // trim(ns) // '.nc'
+     end if
 
-     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+     inquire( file = (trim(C%output_dir) // trim(short_filename)), exist = ex)
 
-    END DO
+    end do
 
-    DO n = 1, 256
+    do n = 1, 256
       region%restart_mesh%filename(n:n) = ' '
-    END DO
-    region%restart_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+    end do
+    region%restart_mesh%filename = trim(C%output_dir) // trim(short_filename)
 
     ! help_fields file (mesh)
     ! =======================
@@ -170,60 +172,60 @@ contains
     short_filename(13:15) = region%name
     n = 1
 
-    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+    inquire( file = (trim(C%output_dir) // trim(short_filename)), exist = ex)
 
-    DO WHILE (ex)
+    do while (ex)
 
      n=n+1
 
-     WRITE(ns,*) n
-     ns = ADJUSTL(ns)
+     write(ns,*) n
+     ns = adjustl(ns)
 
-     IF (n<10) THEN
-       short_filename = short_filename(1:16) // '0000' // TRIM(ns) // '.nc'
-     ELSEIF (n<100) THEN
-       short_filename = short_filename(1:16) // '000' // TRIM(ns) // '.nc'
-     ELSEIF (n<1000) THEN
-       short_filename = short_filename(1:16) // '00' // TRIM(ns) // '.nc'
-     ELSEIF (n<10000) THEN
-       short_filename = short_filename(1:16) // '0' // TRIM(ns) // '.nc'
-     ELSE
-       short_filename = short_filename(1:16) // TRIM(ns) // '.nc'
-     END IF
+     if (n<10) then
+       short_filename = short_filename(1:16) // '0000' // trim(ns) // '.nc'
+     elseif (n<100) then
+       short_filename = short_filename(1:16) // '000' // trim(ns) // '.nc'
+     elseif (n<1000) then
+       short_filename = short_filename(1:16) // '00' // trim(ns) // '.nc'
+     elseif (n<10000) then
+       short_filename = short_filename(1:16) // '0' // trim(ns) // '.nc'
+     else
+       short_filename = short_filename(1:16) // trim(ns) // '.nc'
+     end if
 
-     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+     inquire( FILE = (trim(C%output_dir) // trim(short_filename)), exist = ex)
 
-    END DO
+    end do
 
-    DO n = 1, 256
+    do n = 1, 256
       region%help_fields_mesh%filename(n:n) = ' '
-    END DO
-    region%help_fields_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+    end do
+    region%help_fields_mesh%filename = trim(C%output_dir) // trim(short_filename)
 
-    ! restart file (grid)
+    ! Restart file (grid)
     ! ===================
 
     short_filename = 'restart_grid_NAM.nc'
     short_filename(14:16) = region%name
-    DO n = 1, 256
+    do n = 1, 256
       region%restart_grid%filename(n:n) = ' '
-    END DO
-    region%restart_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+    end do
+    region%restart_grid%filename = trim(C%output_dir) // trim(short_filename)
 
     ! help_fields file (grid)
     ! =======================
 
     short_filename = 'help_fields_grid_NAM.nc'
     short_filename(18:20) = region%name
-    DO n = 1, 256
+    do n = 1, 256
       region%help_fields_grid%filename(n:n) = ' '
-    END DO
-    region%help_fields_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+    end do
+    region%help_fields_grid%filename = trim(C%output_dir) // trim(short_filename)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE get_output_filenames
+  end subroutine get_output_filenames
 
 ! Create and write to output NetCDF files (mesh versions)
 ! =======================================================
@@ -248,16 +250,17 @@ contains
       CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
       ! Time
-      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,                    start = (/        netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start = (/netcdf%ti/)))
     endif
+    call sync
     ! Write data
 
     ! Geometry
-    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hi, region%ice%Hi_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
-    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hb, region%ice%Hb_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
-    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hs, region%ice%Hs_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
-    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_SL, region%ice%SL_a, region%mesh%nV, start = (/ 1,     netcdf%ti/))
-    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_dHb,region%ice%dHb_a,region%mesh%nV, start = (/ 1,     netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hi, region%ice%Hi_a, region%mesh%nV, start = (/ 1, netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hb, region%ice%Hb_a, region%mesh%nV, start = (/ 1, netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_Hs, region%ice%Hs_a, region%mesh%nV, start = (/ 1, netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_SL, region%ice%SL_a, region%mesh%nV, start = (/ 1, netcdf%ti/))
+    CALL gather_and_put_var( netcdf%ncid, netcdf%id_var_dHb,region%ice%dHb_a,region%mesh%nV, start = (/ 1, netcdf%ti/))
 
     ! ! Temperature
     ! CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Ti,               region%ice%Ti_a,                start = (/ 1, 1,  netcdf%ti/)))
@@ -270,6 +273,7 @@ contains
     if (par%master) then
       CALL close_netcdf_file(netcdf%ncid)
     endif
+    call sync
 
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
@@ -289,7 +293,7 @@ contains
     TYPE(type_netcdf_help_fields), INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_help_fields_file_mesh'
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'write_to_help_fields_file_mesh'
     integer :: n
 
     ! Add routine to path
@@ -303,6 +307,7 @@ contains
       ! Time
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
     endif
+    call sync
 
     ! Write data
     do n = 1, size(C%help_fields)
@@ -313,6 +318,7 @@ contains
       ! Close the file
       CALL close_netcdf_file(netcdf%ncid)
     endif
+    call sync
 
     ! Increase time frame counter
     netcdf%ti = netcdf%ti + 1
@@ -690,14 +696,6 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Set time frame index to 1
-    netcdf%ti = 1
-
     ! Create a new restart file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
@@ -840,14 +838,6 @@ contains
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Set time frame index to 1
-    netcdf%ti = 1
 
     ! Create a new restart file if none exists and, to prevent loss of data,
     ! stop with an error message if one already exists (not when differences are considered):
@@ -1221,11 +1211,13 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Open the file for writing
-    IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-
-    ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time,             region%time,      start=(/         netcdf%ti/)))
+    IF (par%master) then
+      ! Open the file for writing
+      CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+      ! Time
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/netcdf%ti/)))
+    end if
+    call sync
 
     ! Map and write data
 
@@ -1249,11 +1241,13 @@ contains
     ! CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%MeltPreviousYear, netcdf%id_var_MeltPreviousYear, netcdf%ti      )
 
     ! Close the file
-    IF (par%master) CALL close_netcdf_file(netcdf%ncid)
+    IF (par%master) then
+      CALL close_netcdf_file(netcdf%ncid)
+    end if
+    call sync
 
     ! Increase time frame counter
-    IF (par%master) netcdf%ti = netcdf%ti + 1
-    CALL sync
+    netcdf%ti = netcdf%ti + 1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1275,11 +1269,13 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Open the file for writing
-    IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-
-    ! Time
-    IF (par%master) CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    IF (par%master) then
+      ! Open the file for writing
+      CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+      ! Time
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_time, region%time, start=(/ netcdf%ti/)))
+    end if
+    call sync
 
     ! Write data
     do n = 1, size(C%help_fields)
@@ -1287,11 +1283,13 @@ contains
     end do
 
     ! Close the file
-    IF (par%master) CALL close_netcdf_file(netcdf%ncid)
+    IF (par%master) then
+      CALL close_netcdf_file(netcdf%ncid)
+    end if
+    call sync
 
     ! Increase time frame counter
-    IF (par%master) netcdf%ti = netcdf%ti + 1
-    CALL sync
+    netcdf%ti = netcdf%ti + 1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1577,11 +1575,6 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
     ! If the file already exists, return.
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
@@ -1592,9 +1585,6 @@ contains
     ! Create netCDF file
     ! WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-
-    ! Set time frame index to 1
-    netcdf%ti = 1
 
     ! Define dimensions:
     CALL create_dim( netcdf%ncid, netcdf%name_dim_x,         region%grid_output%nx, netcdf%id_dim_x    )
@@ -1674,11 +1664,6 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
     ! If the file already exists, return.
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
@@ -1689,9 +1674,6 @@ contains
     ! Create netCDF file
     !WRITE(0,*) ' Creating new NetCDF output file at ', TRIM( netcdf%filename)
     CALL handle_error(nf90_create(netcdf%filename,IOR(nf90_clobber,nf90_share),netcdf%ncid))
-
-    ! Set time frame index to 1
-    netcdf%ti = 1
 
     ! Define dimensions:
     CALL create_dim( netcdf%ncid, netcdf%name_dim_x,     region%grid_output%nx, netcdf%id_dim_x    )
@@ -2200,11 +2182,6 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
     IF (.NOT. C%do_write_debug_data) THEN
       CALL finalise_routine( routine_name)
       RETURN
@@ -2423,7 +2400,6 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE create_debug_file
-
 
   SUBROUTINE associate_debug_fields( region)
     ! Manage memory for the debug data fields.
@@ -4331,6 +4307,137 @@ contains
 
   end subroutine read_hires_geometry_file
 
+  ! Create/read an extrapolated ocean data file
+  SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)
+    ! Create a new folder extrapolated ocean data file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
+    CHARACTER(LEN=256),                  INTENT(IN)    :: hires_ocean_filename
+
+    ! Local variables:
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: x, y, z
+
+    ! Create a new file and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+
+    hires%netcdf%filename = hires_ocean_filename
+    INQUIRE(EXIST=file_exists, FILE = TRIM( hires%netcdf%filename))
+    IF (file_exists) THEN
+      WRITE(0,*) '  create_restart_file - ERROR: ', TRIM(hires%netcdf%filename), ' already exists!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Create hires%netcdf file
+    ! WRITE(0,*) '    Creating new hires%netcdf file at ', TRIM( hires%netcdf%filename)
+    CALL handle_error(nf90_create( hires%netcdf%filename, IOR(nf90_clobber,nf90_share), hires%netcdf%ncid))
+
+    ! Define dimensions:
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx, hires%netcdf%id_dim_x      )
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny, hires%netcdf%id_dim_y      )
+    CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, C%nz_ocean,    hires%netcdf%id_dim_z_ocean)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    x = hires%netcdf%id_dim_x
+    y = hires%netcdf%id_dim_y
+    z = hires%netcdf%id_dim_z_ocean
+
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the hires%netcdf file.
+
+    ! Dimension variables
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       [x      ], hires%netcdf%id_var_x,       long_name='X-coordinate', units='m')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       [   y   ], hires%netcdf%id_var_y,       long_name='Y-coordinate', units='m')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, [      z], hires%netcdf%id_var_z_ocean, long_name='Depth in ocean', units='m')
+
+    ! Extrapolated ocean data
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, [x, y, z], hires%netcdf%id_var_T_ocean, long_name='3-D ocean temperature', units='K')
+    CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, [x, y, z], hires%netcdf%id_var_S_ocean, long_name='3-D ocean salinity', units='PSU')
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( hires%netcdf%ncid))
+
+    ! Write the data
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_x,        hires%grid%x ))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_y,        hires%grid%y ))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_z_ocean,  C%z_ocean    ))
+
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start=(/ 1,1,1 /)))
+    CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start=(/ 1,1,1 /)))
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( hires%netcdf%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE create_extrapolated_ocean_file
+
+  SUBROUTINE inquire_extrapolated_ocean_file( hires)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    ! Local variables:
+    INTEGER                                      :: int_dummy
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx,   hires%netcdf%id_dim_x      )
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny,   hires%netcdf%id_dim_y      )
+    CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, int_dummy,  hires%netcdf%id_dim_z_ocean)
+
+    ! Safety
+    IF (int_dummy /= C%nz_ocean) THEN
+      WRITE(0,*) 'inquire_extrapolated_ocean_file - ERROR: nz_ocean in file "', TRIM( hires%netcdf%filename), '" doesnt match ice model settings!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    END IF
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       (/ hires%netcdf%id_dim_x                                                     /), hires%netcdf%id_var_x      )
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       (/                        hires%netcdf%id_dim_y                              /), hires%netcdf%id_var_y      )
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, (/                                               hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_z_ocean)
+
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_T_ocean)
+    CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_S_ocean)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE inquire_extrapolated_ocean_file
+
+  SUBROUTINE read_extrapolated_ocean_file(    hires)
+    ! Read the extrapolated ocean data netcdf file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_x,       hires%grid%x,  start = (/ 1       /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_y,       hires%grid%y,  start = (/ 1       /) ))
+
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start = (/ 1, 1, 1 /) ))
+    CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start = (/ 1, 1, 1 /) ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( hires%netcdf%ncid)
+
+  END SUBROUTINE read_extrapolated_ocean_file
+
 ! Restart files
 ! =============
 
@@ -4736,145 +4843,5 @@ contains
     END IF
 
   END SUBROUTINE handle_error
-
-! TO DO
-! =====
-
-  ! ! Create/read an extrapolated ocean data file
-  ! SUBROUTINE create_extrapolated_ocean_file(  hires, hires_ocean_filename)
-  !   ! Create a new folder extrapolated ocean data file
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
-  !   CHARACTER(LEN=256),                  INTENT(IN)    :: hires_ocean_filename
-
-  !   ! Local variables:
-  !   LOGICAL                                            :: file_exists
-  !   INTEGER                                            :: x, y, z
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Create a new file and, to prevent loss of data,
-  !   ! stop with an error message if one already exists (not when differences are considered):
-
-  !   hires%netcdf%filename = hires_ocean_filename
-  !   INQUIRE(EXIST=file_exists, FILE = TRIM( hires%netcdf%filename))
-  !   IF (file_exists) THEN
-  !     WRITE(0,*) '  create_restart_file - ERROR: ', TRIM(hires%netcdf%filename), ' already exists!'
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF
-
-  !   ! Create hires%netcdf file
-  !   ! WRITE(0,*) '    Creating new hires%netcdf file at ', TRIM( hires%netcdf%filename)
-  !   CALL handle_error(nf90_create( hires%netcdf%filename, IOR(nf90_clobber,nf90_share), hires%netcdf%ncid))
-
-  !   ! Define dimensions:
-  !   CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx, hires%netcdf%id_dim_x      )
-  !   CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny, hires%netcdf%id_dim_y      )
-  !   CALL create_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, C%nz_ocean,    hires%netcdf%id_dim_z_ocean)
-
-  !   ! Placeholders for the dimension ID's, for shorter code
-  !   x = hires%netcdf%id_dim_x
-  !   y = hires%netcdf%id_dim_y
-  !   z = hires%netcdf%id_dim_z_ocean
-
-  !   ! Define variables:
-  !   ! The order of the CALL statements for the different variables determines their
-  !   ! order of appearence in the hires%netcdf file.
-
-  !   ! Dimension variables
-  !   CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       [x      ], hires%netcdf%id_var_x,       long_name='X-coordinate', units='m')
-  !   CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       [   y   ], hires%netcdf%id_var_y,       long_name='Y-coordinate', units='m')
-  !   CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, [      z], hires%netcdf%id_var_z_ocean, long_name='Depth in ocean', units='m')
-
-  !   ! Extrapolated ocean data
-  !   CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, [x, y, z], hires%netcdf%id_var_T_ocean, long_name='3-D ocean temperature', units='K')
-  !   CALL create_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, [x, y, z], hires%netcdf%id_var_S_ocean, long_name='3-D ocean salinity', units='PSU')
-
-  !   ! Leave definition mode:
-  !   CALL handle_error(nf90_enddef( hires%netcdf%ncid))
-
-  !   ! Write the data
-  !   CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_x,        hires%grid%x ))
-  !   CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_y,        hires%grid%y ))
-  !   CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_z_ocean,  C%z_ocean    ))
-
-  !   CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start=(/ 1,1,1 /)))
-  !   CALL handle_error( nf90_put_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start=(/ 1,1,1 /)))
-
-  !   ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
-  !   CALL handle_error(nf90_sync( hires%netcdf%ncid))
-
-  !   ! Close the file
-  !   CALL close_netcdf_file( hires%netcdf%ncid)
-
-  ! END SUBROUTINE create_extrapolated_ocean_file
-
-  ! SUBROUTINE inquire_extrapolated_ocean_file( hires)
-  !   ! Check if the right dimensions and variables are present in the file.
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-  !   ! Local variables:
-  !   INTEGER                                      :: int_dummy
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
-
-  !   ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
-  !   CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_x,       hires%grid%nx,   hires%netcdf%id_dim_x      )
-  !   CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_y,       hires%grid%ny,   hires%netcdf%id_dim_y      )
-  !   CALL inquire_dim( hires%netcdf%ncid, hires%netcdf%name_dim_z_ocean, int_dummy,  hires%netcdf%id_dim_z_ocean)
-
-  !   ! Safety
-  !   IF (int_dummy /= C%nz_ocean) THEN
-  !     WRITE(0,*) 'inquire_extrapolated_ocean_file - ERROR: nz_ocean in file "', TRIM( hires%netcdf%filename), '" doesnt match ice model settings!'
-  !     CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-  !   END IF
-
-  !   ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-  !   CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_x,       (/ hires%netcdf%id_dim_x                                                     /), hires%netcdf%id_var_x      )
-  !   CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_y,       (/                        hires%netcdf%id_dim_y                              /), hires%netcdf%id_var_y      )
-  !   CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_z_ocean, (/                                               hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_z_ocean)
-
-  !   CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_T_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_T_ocean)
-  !   CALL inquire_double_var( hires%netcdf%ncid, hires%netcdf%name_var_S_ocean, (/ hires%netcdf%id_dim_x, hires%netcdf%id_dim_y, hires%netcdf%id_dim_z_ocean /), hires%netcdf%id_var_S_ocean)
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( hires%netcdf%ncid)
-
-  ! END SUBROUTINE inquire_extrapolated_ocean_file
-
-  ! SUBROUTINE read_extrapolated_ocean_file(    hires)
-  !   ! Read the extrapolated ocean data netcdf file
-
-  !   IMPLICIT NONE
-
-  !   ! Input variables:
-  !   TYPE(type_highres_ocean_data), INTENT(INOUT) :: hires
-
-  !   IF (.NOT. par%master) RETURN
-
-  !   ! Open the netcdf file
-  !   CALL open_netcdf_file( hires%netcdf%filename, hires%netcdf%ncid)
-
-  !   ! Read the data
-  !   CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_x,       hires%grid%x,  start = (/ 1       /) ))
-  !   CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_y,       hires%grid%y,  start = (/ 1       /) ))
-
-  !   CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_T_ocean, hires%T_ocean, start = (/ 1, 1, 1 /) ))
-  !   CALL handle_error(nf90_get_var( hires%netcdf%ncid, hires%netcdf%id_var_S_ocean, hires%S_ocean, start = (/ 1, 1, 1 /) ))
-
-  !   ! Close the netcdf file
-  !   CALL close_netcdf_file( hires%netcdf%ncid)
-
-  ! END SUBROUTINE read_extrapolated_ocean_file
 
 END MODULE netcdf_module

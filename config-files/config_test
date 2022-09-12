@@ -7,7 +7,7 @@
     end_time_of_run_config                      = 100.0                            ! End   time (in years) of the simulations
     dt_coupling_config                          = 100.0                            ! Interval of coupling (in years) between the four ice-sheets
     dt_max_config                               = 1.0                              ! Maximum time step (in years) of the ice model
-    dt_thermo_config                            = 10.0                             ! Time step (in years) for updating thermodynamics
+    dt_thermo_config                            = 1.0                              ! Time step (in years) for updating thermodynamics
     dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
     dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
     dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
@@ -141,7 +141,7 @@
   ! Ice dynamics - velocity
   ! =======================
 
-    choice_ice_dynamics_config                  = 'SIA'                            ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+    choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
     n_flow_config                               = 3.0                              ! Exponent in Glen`s flow law
     m_enh_sheet_config                          = 1.0                              ! Ice flow enhancement factor for grounded ice
     m_enh_shelf_config                          = 1.0                              ! Ice flow enhancement factor for floating ice

@@ -2432,337 +2432,340 @@ contains
 
   end subroutine initialise_SSADIVA_stiffness_matrix
 
-  SUBROUTINE remap_velocities( mesh_old, mesh_new, map, ice)
+  subroutine remap_velocities( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),                intent(in)    :: mesh_old
+    type(type_mesh),                intent(in)    :: mesh_new
+    type(type_remapping_mesh_mesh), intent(in)    :: map
+    type(type_ice_model),           intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities'
+    character(len=256), parameter                 :: routine_name = 'remap_velocities'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    IF     (C%choice_ice_dynamics == 'SIA') THEN
-      call crash('todo, implement SIA')
-      !CALL remap_velocities_SIA( mesh_old, mesh_new, map, ice)
-    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-      call crash('todo, implement SSA')
-      !CALL remap_velocities_SSA( mesh_old, mesh_new, map, ice)
-    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-      call crash('todo, implement SIA/SSA')
-      !CALL remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
-    ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-      CALL remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
-    ELSE
-      CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-    END IF
+    select case (C%choice_ice_dynamics)
+
+      case ('SIA')
+        ! Remap SIA stuff
+        call remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+
+      case ('SSA')
+        ! Remap SSA stuff
+        call crash('todo, implement SSA')
+        !call remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+
+      case ('SIA/SSA')
+        ! Remap hybrid stuff
+        call crash('todo, implement SIA/SSA')
+        !call remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+
+      case ('DIVA')
+        ! Remap DIVA stuff
+        call remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_ice_dynamics "' // &
+                    trim( C%choice_ice_dynamics) // '"!')
+
+    end select
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE remap_velocities
+  end subroutine remap_velocities
 
-#if 0
-
-  SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+  subroutine remap_velocities_SIA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),                intent(in)    :: mesh_old
+    type(type_mesh),                intent(in)    :: mesh_new
+    type(type_remapping_mesh_mesh), intent(in)    :: map
+    type(type_ice_model),           intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_SIA'
-    REAL(dp)                                           :: dp_dummy
+    character(len=256), parameter                 :: routine_name = 'remap_velocities_SIA'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! To prevent compiler warnings
-    dp_dummy = mesh_old%V(   1,1)
-    dp_dummy = mesh_new%V(   1,1)
-    dp_dummy = map%int_dummy
-    dp_dummy = ice%Hi_a( 1)
+    call init_routine( routine_name)
 
     ! No need to remap anything, just reallocate
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+    call reallocate_bounds( ice%u_3D_a, mesh_new%vi1, mesh_new%vi2, C%nz )
+    call reallocate_bounds( ice%v_3D_a, mesh_new%vi1, mesh_new%vi2, C%nz )
+    call reallocate_bounds( ice%u_3D_b, mesh_new%ti1, mesh_new%ti2, C%nz )
+    call reallocate_bounds( ice%v_3D_b, mesh_new%ti1, mesh_new%ti2, C%nz )
+    call reallocate_bounds( ice%w_3D_a, mesh_new%vi1, mesh_new%vi2, C%nz )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+    call reallocate_bounds( ice%u_vav_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%v_vav_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%u_vav_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%v_vav_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%uabs_vav_a, mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%uabs_vav_b, mesh_new%ti1, mesh_new%ti2 )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+    call reallocate_bounds( ice%u_surf_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%v_surf_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%u_surf_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%v_surf_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%uabs_surf_a, mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%uabs_surf_b, mesh_new%ti1, mesh_new%ti2 )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+    call reallocate_bounds( ice%u_base_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%v_base_a,    mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%u_base_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%v_base_b,    mesh_new%ti1, mesh_new%ti2 )
+    call reallocate_bounds( ice%uabs_base_a, mesh_new%vi1, mesh_new%vi2 )
+    call reallocate_bounds( ice%uabs_base_b, mesh_new%ti1, mesh_new%ti2 )
 
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+    call reallocate_bounds( ice%u_3D_SIA_b, mesh_new%ti1, mesh_new%ti2, C%nz )
+    call reallocate_bounds( ice%v_3D_SIA_b, mesh_new%ti1, mesh_new%ti2, C%nz )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE remap_velocities_SIA
-  SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, map, ice)
-    ! Remap or reallocate all the data fields
+  end subroutine remap_velocities_SIA
 
-    IMPLICIT NONE
+  ! SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+  !   ! Remap or reallocate all the data fields
 
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+  !   IMPLICIT NONE
 
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_SSA'
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
-    INTEGER                                            :: wu_a, wv_a
+  !   ! In/output variables:
+  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+  !   TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
-    ! Add routine to path
-    CALL init_routine( routine_name)
+  !   ! Local variables:
+  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_SSA'
+  !   REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
+  !   INTEGER                                            :: wu_a, wv_a
 
-  ! == Remap SSA velocities
-  ! =======================
+  !   ! Add routine to path
+  !   CALL init_routine( routine_name)
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
-    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+  !   ! == Remap SSA velocities
+  !   ! =======================
 
-    ! Map velocities to the a-grid
-    CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
-    CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
+  !   ! Allocate shared memory
+  !   CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+  !   CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
 
-    ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+  !   ! Map velocities to the a-grid
+  !   CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
+  !   CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
 
-    ! Reallocate b-grid velocities
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
+  !   ! Remap a-grid velocities
+  !   CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+  !   CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
 
-    ! Map remapped velocities to the b-grid
-    CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
-    CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
+  !   ! Reallocate b-grid velocities
+  !   CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
+  !   CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
 
-    ! Clean up after yourself
-    CALL deallocate_shared( wu_a)
-    CALL deallocate_shared( wv_a)
+  !   ! Map remapped velocities to the b-grid
+  !   CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
+  !   CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
 
-  ! == Reallocate everything else
-  ! =============================
+  !   ! Clean up after yourself
+  !   CALL deallocate_shared( wu_a)
+  !   CALL deallocate_shared( wv_a)
 
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+  !   ! == Reallocate everything else
+  !   ! =============================
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
 
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-   !CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
 
-    ! Physical terms in the SSA/DIVA
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
+  !   ! CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+  !   ! CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+  !   ! CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+  !   ! CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
 
-    ! Some administrative stuff to make solving the SSA/DIVA more efficient
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
-    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
-    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
+  !   ! Physical terms in the SSA/DIVA
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
 
-    CALL initialise_matrix_conversion_lists(  mesh_new, ice)
-    CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+  !   ! Some administrative stuff to make solving the SSA/DIVA more efficient
+  !   CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
+  !   CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
+  !   CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+  !   CALL deallocate_matrix_CSR( ice%M_SSADIVA)
 
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
+  !   CALL initialise_matrix_conversion_lists(  mesh_new, ice)
+  !   CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
 
-  END SUBROUTINE remap_velocities_SSA
-  SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
-    ! Remap or reallocate all the data fields
+  !   ! Finalise routine path
+  !   CALL finalise_routine( routine_name)
 
-    IMPLICIT NONE
+  ! END SUBROUTINE remap_velocities_SSA
 
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+  ! SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+  !   ! Remap or reallocate all the data fields
 
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_SIASSA'
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
-    INTEGER                                            :: wu_a, wv_a
+  !   IMPLICIT NONE
 
-    ! Add routine to path
-    CALL init_routine( routine_name)
+  !   ! In/output variables:
+  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
+  !   TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
+  !   TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+  !   TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
-  ! == Remap SSA velocities
-  ! =======================
+  !   ! Local variables:
+  !   CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remap_velocities_SIASSA'
+  !   REAL(dp), DIMENSION(:    ), POINTER                ::  u_a,  v_a
+  !   INTEGER                                            :: wu_a, wv_a
 
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
-    CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
+  !   ! Add routine to path
+  !   CALL init_routine( routine_name)
 
-    ! Map velocities to the a-grid
-    CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
-    CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
+  !   ! == Remap SSA velocities
+  !   ! =======================
 
-    ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+  !   ! Allocate shared memory
+  !   CALL allocate_shared_dp_1D( mesh_old%nV, u_a, wu_a)
+  !   CALL allocate_shared_dp_1D( mesh_old%nV, v_a, wv_a)
 
-    ! Reallocate b-grid velocities
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
-    CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
+  !   ! Map velocities to the a-grid
+  !   CALL map_b_to_a_2D( mesh_old, ice%u_base_SSA_b, u_a)
+  !   CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
 
-    ! Map remapped velocities to the b-grid
-    CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
-    CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
+  !   ! Remap a-grid velocities
+  !   CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
+  !   CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
 
-    ! Clean up after yourself
-    CALL deallocate_shared( wu_a)
-    CALL deallocate_shared( wv_a)
+  !   ! Reallocate b-grid velocities
+  !   CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
+  !   CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%v_base_SSA_b, ice%wv_base_SSA_b)
 
-  ! == Reallocate everything else
-  ! =============================
+  !   ! Map remapped velocities to the b-grid
+  !   CALL map_a_to_b_2D( mesh_new, u_a, ice%u_base_SSA_b)
+  !   CALL map_a_to_b_2D( mesh_new, u_a, ice%v_base_SSA_b)
 
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
+  !   ! Clean up after yourself
+  !   CALL deallocate_shared( wu_a)
+  !   CALL deallocate_shared( wv_a)
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
+  !   ! == Reallocate everything else
+  !   ! =============================
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%u_3D_a                , ice%wu_3D_a               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%v_3D_a                , ice%wv_3D_a               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_b                , ice%wu_3D_b               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_b                , ice%wv_3D_b               )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz           , ice%w_3D_a                , ice%ww_3D_a               )
 
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_vav_a               , ice%wu_vav_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_vav_a               , ice%wv_vav_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_vav_b               , ice%wu_vav_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_vav_b               , ice%wv_vav_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_vav_a            , ice%wuabs_vav_a           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_vav_b            , ice%wuabs_vav_b           )
 
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
-   !CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_surf_a              , ice%wu_surf_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_surf_a              , ice%wv_surf_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_surf_b              , ice%wu_surf_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_surf_b              , ice%wv_surf_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_surf_a           , ice%wuabs_surf_a          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_surf_b           , ice%wuabs_surf_b          )
 
-    ! Physical terms in the SSA/DIVA
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
-    CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
-    CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
-    CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%u_base_a              , ice%wu_base_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%v_base_a              , ice%wv_base_a             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_b              , ice%wu_base_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_b              , ice%wv_base_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%uabs_base_a           , ice%wuabs_base_a          )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%uabs_base_b           , ice%wuabs_base_b          )
 
-    ! Some administrative stuff to make solving the SSA/DIVA more efficient
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
-    CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
-    CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
-    CALL deallocate_matrix_CSR( ice%M_SSADIVA)
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%u_3D_SIA_b            , ice%wu_3D_SIA_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz           , ice%v_3D_SIA_b            , ice%wv_3D_SIA_b           )
+  !   ! CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
+  !   ! CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
 
-    CALL initialise_matrix_conversion_lists(  mesh_new, ice)
-    CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+  !   ! Physical terms in the SSA/DIVA
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudx_b               , ice%wtaudx_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taudy_b               , ice%wtaudy_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dx_a               , ice%wdu_dx_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%du_dy_a               , ice%wdu_dy_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dx_a               , ice%wdv_dx_a              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%dv_dy_a               , ice%wdv_dy_a              )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%du_dz_3D_b            , ice%wdu_dz_3D_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nTri, C%nz,            ice%dv_dz_3D_b            , ice%wdv_dz_3D_b           )
+  !   CALL reallocate_shared_dp_2D(   mesh_new%nV  , C%nz,            ice%visc_eff_3D_a         , ice%wvisc_eff_3D_a        )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%visc_eff_int_a        , ice%wvisc_eff_int_a       )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%N_a                   , ice%wN_a                  )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_a                , ice%wbeta_a               )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%beta_eff_a            , ice%wbeta_eff_a           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%beta_eff_b            , ice%wbeta_eff_b           )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%taubx_b               , ice%wtaubx_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%tauby_b               , ice%wtauby_b              )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nV  ,                  ice%F2_a                  , ice%wF2_a                 )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%u_prev_b              , ice%wu_prev_b             )
+  !   CALL reallocate_shared_dp_1D(   mesh_new%nTri,                  ice%v_prev_b              , ice%wv_prev_b             )
 
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
+  !   ! Some administrative stuff to make solving the SSA/DIVA more efficient
+  !   CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_u                , ice%wti2n_u               )
+  !   CALL reallocate_shared_int_1D(  mesh_new%nTri,                  ice%ti2n_v                , ice%wti2n_v               )
+  !   CALL reallocate_shared_int_2D(2*mesh_new%nTri, 2              , ice%n2ti_uv               , ice%wn2ti_uv              )
+  !   CALL deallocate_matrix_CSR( ice%M_SSADIVA)
 
-  END SUBROUTINE remap_velocities_SIASSA
-#endif
+  !   CALL initialise_matrix_conversion_lists(  mesh_new, ice)
+  !   CALL initialise_SSADIVA_stiffness_matrix( mesh_new, ice)
+
+  !   ! Finalise routine path
+  !   CALL finalise_routine( routine_name)
+
+  ! END SUBROUTINE remap_velocities_SIASSA
+
   SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields
 
@@ -2781,8 +2784,8 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! == Remap SSA velocities
-  ! =======================
+    ! == Remap SSA velocities
+    ! =======================
 
     ! Allocate shared memory
     allocate( u_a( mesh_old%vi1:mesh_old%vi2))
@@ -2808,8 +2811,8 @@ contains
     deallocate( u_a)
     deallocate( v_a)
 
-  ! == Reallocate everything else
-  ! =============================
+    ! == Reallocate everything else
+    ! =============================
 
     call reallocate_bounds( ice%u_3D_a        , mesh_new%vi1, mesh_new%vi2  , C%nz )
     call reallocate_bounds( ice%v_3D_a        , mesh_new%vi1, mesh_new%vi2  , C%nz )
@@ -2819,8 +2822,8 @@ contains
 
     call reallocate_bounds( ice%u_vav_a       , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%v_vav_a       , mesh_new%vi1, mesh_new%vi2         )
-   !call reallocate_bounds( ice%u_vav_b       , mesh_new%ti1, mesh_new%ti2         )
-   !call reallocate_bounds( ice%v_vav_b       , mesh_new%ti1, mesh_new%ti2         )
+    ! call reallocate_bounds( ice%u_vav_b       , mesh_new%ti1, mesh_new%ti2         )
+    ! call reallocate_bounds( ice%v_vav_b       , mesh_new%ti1, mesh_new%ti2         )
     call reallocate_bounds( ice%uabs_vav_a    , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%uabs_vav_b    , mesh_new%ti1, mesh_new%ti2         )
 
@@ -2838,10 +2841,10 @@ contains
     call reallocate_bounds( ice%uabs_base_a   , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%uabs_base_b   , mesh_new%ti1, mesh_new%ti2         )
 
-   !call reallocate_bounds( ice%u_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
-   !call reallocate_bounds( ice%v_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
-   !call reallocate_bounds( ice%u_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
-   !call reallocate_bounds( ice%v_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
+    ! call reallocate_bounds( ice%u_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    ! call reallocate_bounds( ice%v_3D_SIA_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
+    ! call reallocate_bounds( ice%u_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
+    ! call reallocate_bounds( ice%v_base_SSA_b  , mesh_new%ti1, mesh_new%ti2         )
 
     ! Physical terms in the SSA/DIVA
     call reallocate_bounds( ice%taudx_b       , mesh_new%ti1, mesh_new%ti2         )

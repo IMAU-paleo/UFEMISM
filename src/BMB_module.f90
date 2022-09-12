@@ -22,7 +22,7 @@ contains
 ! ===== Main =====
 ! ================
 
-  subroutine run_BMB_model( mesh, ice, ocean, BMB, region_name, time)
+  subroutine run_BMB_model( mesh, ice, ocean, BMB)
     ! Run the selected BMB model
 
     implicit none
@@ -32,8 +32,6 @@ contains
     type(type_ice_model),               intent(in)    :: ice
     type(type_ocean_snapshot_regional), intent(inout) :: ocean
     type(type_BMB_model),               intent(inout) :: BMB
-    character(len=3),                   intent(in)    :: region_name
-    real(dp),                           intent(in)    :: time
 
     ! Local variables:
     character(len=256), parameter                     :: routine_name = 'run_BMB_model'
@@ -343,7 +341,7 @@ contains
         ! Find ocean temperature at this depth
         call interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
 
-      end if ! IF (ice%mask_shelf_a( vi) == 1) THEN
+      end if
 
     end do
 

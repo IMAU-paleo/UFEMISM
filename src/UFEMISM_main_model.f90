@@ -19,17 +19,17 @@ module UFEMISM_main_model
   use mesh_single_module,            only : create_new_mesh_single, create_single_mesh_from_cart_data
   use netcdf_module,                 only : initialise_debug_fields, create_output_files, associate_debug_fields, &
                                             write_to_output_files, create_debug_file, reallocate_debug_fields
-  use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model
-  use climate_module,                only : initialise_climate_model_regional, run_climate_model
-  use ocean_module,                  only : initialise_ocean_model_regional
-  use BMB_module,                    only : initialise_BMB_model, remap_bmb_model
+  use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model, update_ice_thickness
+  use climate_module,                only : initialise_climate_model_regional, remap_climate_model, run_climate_model
+  use ocean_module,                  only : initialise_ocean_model_regional, remap_ocean_model, run_ocean_model
+  use BMB_module,                    only : initialise_BMB_model, remap_bmb_model, run_BMB_model
   use SMB_module,                    only : initialise_SMB_model, remap_smb_model, run_SMB_model
   use general_ice_model_data_module, only : initialise_mask_noice, initialise_basins
-  use reallocate_mod,                only : reallocate
   use utilities_module,              only : time_display, inverse_oblique_sg_projection
-  use thermodynamics_module,         only : initialise_thermo_model
+  use thermodynamics_module,         only : initialise_thermo_model, run_thermo_model
   use general_sea_level_module,      only : calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
   use scalar_data_output_module,     only : initialise_regional_scalar_data, write_regional_scalar_data
+  use forcing_module,                only : forcing, update_sealevel_at_model_time
 
 ! ===== Preamble =====
 ! ====================
@@ -66,6 +66,9 @@ contains
     ! Add routine to path
     call init_routine( routine_name)
 
+    ! Initialise coupling-interval timer
+    tstart = MPI_WTIME()
+
     ! Screen message
     if (par%master) then
       write(*,"(A)") ''
@@ -86,11 +89,8 @@ contains
     region%tcomp_GIA     = 0._dp
     region%tcomp_mesh    = 0._dp
 
-    ! Initialise coupling-interval timer
-    tstart = MPI_WTIME()
-
     ! Initialise sub-model timers
-    t1 = MPI_WTIME()
+    t1 = 0._dp
     t2 = 0._dp
 
     ! Initialise iteration counter
@@ -106,56 +106,156 @@ contains
       ! Update iteration counter
       it = it + 1
 
+      ! Sea-level
+      ! =========
+
+      if (C%choice_sealevel_model == 'prescribed') then
+        ! Update global sea level based on record
+        call update_sealevel_at_model_time( region%time)
+        ! Update regional sea level based on record
+        region%ice%SL_a( region%mesh%vi1:region%mesh%vi2) = forcing%sealevel_obs
+      else
+        ! Updated during coupling interval, or update not needed
+      end if
+
+      ! GIA
+      ! ===
+
+      ! Set timer
+      t1 = MPI_WTIME()
+
+      ! Pick the GIA model
+      select case (C%choice_GIA_model)
+        case ('none')
+          ! Nothing to be done
+        case ('ELRA')
+          ! ELRA model
+          call crash('ELRA model not implemented yet!')
+        case ('SELEN')
+          ! SELEN model
+          call crash('SELEN model not implemented yet!')
+        case default
+          ! Unknown case
+          call crash('unknown choice_GIA_model "' // &
+                      trim(C%choice_GIA_model) // '"!')
+      end select
+
+      ! Record computation time
+      t2 = MPI_WTIME()
+      region%tcomp_GIA = region%tcomp_GIA + t2 - t1
+
       ! Mesh update
       ! ===========
 
-      ! Check if the mesh needs to be updated
-      t2 = MPI_WTIME()
+      ! Set timer
+      t1 = MPI_WTIME()
+
+      !Default value
       meshfitness = 1._dp
+
+      ! Check if the mesh needs to be updated
       if (region%time > region%t_last_mesh + C%dt_mesh_min) then
         call determine_mesh_fitness(region%mesh, region%ice, meshfitness)
       end if
-      region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
 
       ! If required, update the mesh
       if (meshfitness < C%mesh_fitness_threshold) then
         region%t_last_mesh = region%time
-        t2 = MPI_WTIME()
-        call run_model_update_mesh( region)
-        region%tcomp_mesh = region%tcomp_mesh + MPI_WTIME() - t2
+        call run_model_update_mesh( region, climate_matrix_global)
       end if
+
+      ! Record computation time
+      t2 = MPI_WTIME()
+      region%tcomp_mesh = region%tcomp_mesh + t2 - t1
 
       ! Ice dynamics
       ! ============
 
+      ! Set timer
+      t1 = MPI_WTIME()
+
       ! Calculate ice velocities and the resulting change in ice geometry
       ! NOTE: geometry is not updated yet; this happens at the end of the time loop
-      t1 = MPI_WTIME()
       call run_ice_model( region, t_end)
+
+      ! Record computation time
       t2 = MPI_WTIME()
       region%tcomp_ice = region%tcomp_ice + t2 - t1
 
-      ! == Time display
-      ! ===============
+      ! Time display
+      ! ============
 
       if (par%master .and. C%do_time_display) then
         call time_display(region, t_end, dt_ave, it)
       end if
       call sync
 
-      ! == Output
-      ! =========
+      ! Climate, ocean, SMB and BMB
+      ! ===========================
+
+      ! Set timer
+      t1 = MPI_WTIME()
+
+      ! Run the climate model
+      if (region%do_climate) then
+        call run_climate_model( region, climate_matrix_global, region%time)
+      end if
+
+      ! Run the ocean model
+      if (region%do_ocean) then
+        call run_ocean_model( region%mesh, region%ocean_matrix)
+      end if
+
+      ! Run the SMB model
+      if (region%do_SMB) then
+        call run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
+      end if
+
+      ! Run the BMB model
+      if (region%do_BMB) then
+        call run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB)
+      end if
+
+      ! Record computation time
+      t2 = MPI_WTIME()
+      region%tcomp_climate = region%tcomp_climate + t2 - t1
+
+      ! Thermodynamics
+      ! ==============
+
+      ! Set timer
+      t1 = MPI_WTIME()
+
+      ! Run the thermodynamics model
+      CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%time, region%do_thermo)
+
+      ! Record computation time
+      t2 = MPI_WTIME()
+      region%tcomp_thermo = region%tcomp_thermo + t2 - t1
+
+      ! Output
+      ! ======
 
       ! Write NetCDF output
       if (region%do_output) then
-        ! If the mesh has been updated, create a new NetCDF file
+        ! Check if the mesh has been updated
         if (.not. region%output_file_exists) then
+          ! Create a new NetCDF file
           call create_output_files( region)
-          call sync
         end if
         ! Write to regional NetCDF output files
         call write_to_output_files( region)
       end if
+
+      ! Update ice sheet area and volume
+      call calculate_icesheet_volume_and_area( region)
+      ! Write to regional scalar output
+      call write_regional_scalar_data( region, region%time)
+
+      ! == Update ice geometry
+      ! ======================
+
+      call update_ice_thickness( region%mesh, region%ice, region%refgeo_PD)
 
       ! Advance region time
       ! ===================
@@ -170,22 +270,32 @@ contains
     ! ===== End of the main model time loop =====
     ! ===========================================
 
+    ! Determine total ice sheet area, volume, volume-above-flotation
+    ! and GMSL contribution, used for global scalar output
+    call calculate_icesheet_volume_and_area( region)
+
     ! Write to NetCDF output one last time at the end of the simulation
     if (region%time == C%end_time_of_run) then
       ! If the mesh has been updated, create a new NetCDF file
       if (.not. region%output_file_exists) then
         call create_output_files( region)
-        call sync
       end if
+      ! Write to regional 2-/3-D output
       call write_to_output_files( region)
+      ! Write to regional scalar output
+      call write_regional_scalar_data( region, region%time)
     end if
+
+    ! Record coupling-interval computation time
+    tstop = MPI_WTIME()
+    region%tcomp_total = tstop - tstart
 
     ! Finalise routine path
     call finalise_routine( routine_name)
 
   end subroutine run_model
 
-  subroutine run_model_update_mesh( region)
+  subroutine run_model_update_mesh( region, climate_matrix_global)
     ! Perform a mesh update: create a new mesh based on the current modelled ice-sheet
     ! geometry, map all the model data from the old to the new mesh. Deallocate the
     ! old mesh, update the output files and the square grid maps.
@@ -193,7 +303,8 @@ contains
     implicit none
 
     ! In- and output variables
-    type(type_model_region),        intent(inout) :: region
+    type(type_model_region),          intent(inout) :: region
+    type(type_climate_matrix_global), intent(inout) :: climate_matrix_global
 
     ! Local variables:
     character(len=256), parameter                 :: routine_name = 'run_model_update_mesh'
@@ -261,11 +372,31 @@ contains
     allocate( region%refgeo_GIAeq%Hb(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
     allocate( region%refgeo_GIAeq%Hs(region%mesh_new%vi1:region%mesh_new%vi2), source=0.0_dp)
 
+    ! Recalculate the "no ice" mask
+    call initialise_mask_noice( region, region%mesh_new)
+
+    ! Redefine the ice basins
+    call initialise_basins( region%mesh, region%ice)
+
     ! Map reference geometries from the square grids to the mesh
     call map_reference_geometries_to_mesh( region, region%mesh_new)
 
-    ! Remap all the submodels
+    ! Remap de GIA submodel
+    select case (C%choice_GIA_model)
+      case ('none')
+        ! Nothing to do
+      case ('ELRA')
+        ! ELRA model
+        call crash('choice_GIA_model "' // trim(C%choice_GIA_model) // '" not implemented yet!')
+      case default
+        ! Unknown case
+        call crash('unknown choice_GIA_model "' // trim(C%choice_GIA_model) // '"!')
+    end select
+
+    ! Remap all other submodels
     call remap_ice_model( region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
+    call remap_climate_model( region%mesh_new, region%climate_matrix, climate_matrix_global)
+    CALL remap_ocean_model( region%mesh_new, region%ocean_matrix)
     call remap_SMB_model( region%mesh, region%mesh_new, map, region%SMB)
     call remap_BMB_model( region%mesh, region%mesh_new, map, region%BMB)
 
@@ -282,6 +413,9 @@ contains
     ! Reallocate the debug fields for the new mesh, create a new debug file
     call reallocate_debug_fields( region)
     call create_debug_file(       region)
+
+    ! Recompute the PD sea level contribution on the new mesh
+    call calculate_PD_sealevel_contribution( region)
 
     ! Run all model components again after updating the mesh
     region%t_next_SIA     = region%time
@@ -460,11 +594,11 @@ contains
 
       case ('ELRA')
         ! ELRA model
-        call crash('choice_GIA_model "' // TRIM(C%choice_GIA_model) // '" not implemented yet!')
+        call crash('choice_GIA_model "' // trim(C%choice_GIA_model) // '" not implemented yet!')
 
       case default
         ! Unknown case
-        call crash('unknown choice_GIA_model "' // TRIM(C%choice_GIA_model) // '"!')
+        call crash('unknown choice_GIA_model "' // trim(C%choice_GIA_model) // '"!')
 
     end select
 

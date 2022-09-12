@@ -10,18 +10,66 @@ module ocean_module
                                    type_ocean_matrix_regional, type_ocean_snapshot_regional, &
                                    type_model_region, type_mesh, type_highres_ocean_data
   use netcdf_module,        only : inquire_PD_obs_global_ocean_file, read_PD_obs_global_ocean_file, &
-                                   inquire_hires_geometry_file, read_hires_geometry_file
+                                   inquire_hires_geometry_file, read_hires_geometry_file, &
+                                   inquire_extrapolated_ocean_file, read_extrapolated_ocean_file, &
+                                   create_extrapolated_ocean_file
   use utilities_module,     only : remap_cons_2nd_order_1D, inverse_oblique_sg_projection, &
                                    map_glob_to_grid_3D, extrapolate_Gaussian_floodfill
   use mesh_mapping_module,  only : calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
                                    calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
                                    deallocate_remapping_operators_mesh2grid
   use utilities_module,     only : surface_elevation
+  use reallocate_mod,       only : reallocate_bounds
 
 contains
 
 ! ===== Main routines =====
 ! =========================
+
+  subroutine run_ocean_model( mesh, ocean_matrix)
+    ! Run the regional ocean model
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                    intent(in)    :: mesh
+    type(type_ocean_matrix_regional),   intent(inout) :: ocean_matrix
+
+    ! Local variables:
+    character(len=256), parameter                     :: routine_name = 'run_ocean_model'
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Pick a method ===
+    ! =====================
+
+    select case (C%choice_ocean_model)
+
+      case ('none')
+        ! Do nothing
+
+      case ('PD_obs')
+        ! Keep the ocean fixed to present-day observed conditions
+        call run_ocean_model_PD_obs( mesh, ocean_matrix)
+
+      case ('matrix_warm_cold')
+        ! Run the warm/cold ocean matrix
+        call crash(trim(C%choice_ocean_model) // ' not implemented yet...')
+
+      case default
+        ! Unknown option
+        call crash('unknown choice_ocean_model "' // trim( C%choice_ocean_model) // '"!')
+
+    end select
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine run_ocean_model
 
   subroutine initialise_ocean_model_global( ocean_matrix)
     ! Initialise the global ocean model
@@ -53,7 +101,8 @@ contains
 
       case('PD_obs')
         ! Keep the ocean fixed to present-day observed conditions
-        call initialise_ocean_model_global_PD_obs( ocean_matrix%PD_obs)
+        call crash(trim(C%choice_ocean_model) // ' needs a good revision on process distribution!')
+        ! call initialise_ocean_model_global_PD_obs( ocean_matrix%PD_obs)
 
       case('matrix_warm_cold')
         ! Allocate all global snapshots used in the warm/cold ocean matrix
@@ -116,6 +165,38 @@ contains
 
 ! ===== Observational PD ocean =====
 ! ==================================
+
+  subroutine run_ocean_model_PD_obs( mesh, ocean_matrix)
+    ! Use the present-day observed ocean data
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                  intent(in)    :: mesh
+    type(type_ocean_matrix_regional), intent(inout) :: ocean_matrix
+
+    ! Local variables:
+    character(len=256), parameter                   :: routine_name = 'run_ocean_model_PD_obs'
+    integer                                         :: vi,k
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    do vi = mesh%vi1, mesh%vi2
+    do k = 1, C%nz_ocean
+      ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
+      ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
+      ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
+      ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%PD_obs%S_ocean(          vi,k)
+      ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
+      ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
+    end do
+    end do
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine run_ocean_model_PD_obs
 
   subroutine initialise_ocean_model_global_PD_obs( PD_obs)
     ! Initialise the present-day observed global ocean snapshot
@@ -409,6 +490,9 @@ contains
     ! Add routine to path
     call init_routine( routine_name)
 
+    ! WIP
+    call crash('the extrapolation of ocean data is not (fully) implemented yet!')
+
     ! ===== Initial check =====
     ! =========================
 
@@ -418,13 +502,15 @@ contains
     ! If a valid preprocessed file exists, read data from there. If not, perform
     ! the preprocessing and save the result to a file to save on future work
 
-    ! if (foundmatch) then
+    if (foundmatch) then
 
-    !   if (par%master) WRITE(0,*) '   Found valid extrapolated ocean data in folder "', trim( ocean_reg%hires_ocean_foldername), '"'
-    !   call sync
-    !   call get_hires_ocean_data_from_file( region%mesh, hires, ocean_reg%hires_ocean_foldername)
+      if (par%master)then
+        write(*,"(3A)") '   Found valid extrapolated ocean data in folder "', trim( ocean_reg%hires_ocean_foldername), '"'
+      end if
+      call sync
+      call get_hires_ocean_data_from_file( region%mesh, hires, ocean_reg%hires_ocean_foldername)
 
-    ! else
+    else
 
       ! No header fitting the current ice model set-up was found. Create a new one describing
       ! the current set-up, and generate extrapolated ocean data files from scratch.
@@ -434,9 +520,9 @@ contains
       call sync
 
       call map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires)
-      ! call write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
+      call write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
 
-    ! end if
+    end if
 
     ! ===== Map extrapolated data from the high-resolution grid to the actual ice-model mesh =====
     ! ============================================================================================
@@ -901,7 +987,7 @@ contains
         end do
 
       case default
-        ! Unknown case
+        ! Unknown option
         call crash('unknown choice_basin_scheme "' // TRIM(choice_basin_scheme) // '"!')
 
     end select
@@ -1341,6 +1427,176 @@ contains
 
   end subroutine extend_regional_ocean_data_to_cover_domain
 
+  subroutine write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, hires_foldername)
+    ! 1. Create a new folder inside the "extrapolated_ocean_files" folder
+    ! 2. Create a header file inside this new folder listing the current model settings
+    ! 3. Create a NetCDF file inside this new folder
+    ! 4. Write the high-resolution extrapolated ocean data to this NetCDF file
+
+    implicit none
+
+    ! In/output variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
+    character(len=256),            intent(in)    :: filename_ocean_glob
+    character(len=256),            intent(in)    :: hires_foldername
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'write_hires_extrapolated_ocean_data_to_file'
+    character(len=256)                           :: hires_ocean_filename
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Create a new folder where the new extrapolated ocean file will be stored.
+    if (par%master) then
+      call system('mkdir ' // trim(hires_foldername))
+    end if
+    call sync
+
+    ! Create a header file describing the current ice-model set-up.
+    call write_ocean_header( hires, filename_ocean_glob, hires_foldername)
+
+    ! Create a NetCDF file and write data to it
+    hires_ocean_filename = trim(hires_foldername)//'/extrapolated_ocean_data.nc'
+    if (par%master) then
+      write(*,"(3A)") '    Writing extrapolated ocean data to file "', trim(hires_ocean_filename), '"...'
+      call create_extrapolated_ocean_file( hires, hires_ocean_filename)
+    end if
+    call sync
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine write_hires_extrapolated_ocean_data_to_file
+
+  subroutine write_ocean_header( hires, filename_ocean_glob, hires_foldername)
+
+    implicit none
+
+    ! In/output variables:
+    type(type_highres_ocean_data), intent(inout) :: hires
+    character(len=256),            intent(in)    :: filename_ocean_glob
+    character(len=256),            intent(in)    :: hires_foldername
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'write_ocean_header'
+    integer, dimension(8)                        :: datevec
+    character(len=256)                           :: header_filename
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Let the Master do the work
+    if (par%master) then
+
+      header_filename = trim( hires_foldername)//'/header.txt'
+
+      open( unit = 1337, file = header_filename, status = 'NEW')
+
+      call date_and_time( values = datevec)
+
+      write(UNIT = 1337, FMT = '(A)') '&HEADER'
+      write(UNIT = 1337, FMT = '(A)') ''
+      write(UNIT = 1337, FMT = '(A,I4,A,I2,A,I2)') '! Icemodel-ocean header file, created on ', datevec(1), '-', datevec(2), '-', datevec(3)
+      write(UNIT = 1337, FMT = '(A)') '!'
+      write(UNIT = 1337, FMT = '(A)') '! This header describes the icemodel set-up that was used to created this'
+      write(UNIT = 1337, FMT = '(A)') '! extrapolated ocean data file. Since creating these is computationally intensive,'
+      write(UNIT = 1337, FMT = '(A)') '! reading them from files is preferred. These header files make ice model'
+      write(UNIT = 1337, FMT = '(A)') '! a bit more flexible when using different input files for the four model regions.'
+      write(UNIT = 1337, FMT = '(A)') ''
+
+      write(UNIT = 1337, FMT = '(A)')       '! The original global ocean file that was extrapolated'
+      write(UNIT = 1337, FMT = '(A,A,A)')   'original_ocean_filename       = ''', trim(filename_ocean_glob), ''''
+      write(UNIT = 1337, FMT = '(A)') ''
+      write(UNIT = 1337, FMT = '(A)')       '! The vertical grid the ocean data was projected to'
+      write(UNIT = 1337, FMT = '(A,A,A)')   'choice_ocean_vertical_grid    = ''', trim(C%choice_ocean_vertical_grid), ''''
+      write(UNIT = 1337, FMT = '(A,I5)')    'nz_ocean                      = ', C%nz_ocean
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'ocean_vertical_grid_max_depth = ', C%ocean_vertical_grid_max_depth
+      write(UNIT = 1337, FMT = '(A)') ''
+      write(UNIT = 1337, FMT = '(A)')       '! Resolution and Gaussian smoothing radius used for the high-resolution extrapolation'
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'ocean_extrap_res              = ', C%ocean_extrap_res
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'ocean_extrap_Gauss_sigma      = ', C%ocean_extrap_Gauss_sigma
+      write(UNIT = 1337, FMT = '(A)') ''
+      write(UNIT = 1337, FMT = '(A)')       '! Parameters of the high-resolution grid'
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'lambda_M                      = ', hires%grid%lambda_M
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'phi_M                         = ', hires%grid%phi_M
+      write(UNIT = 1337, FMT = '(A,F14.4)') 'alpha_stereo                  = ', hires%grid%alpha_stereo
+
+      write(UNIT = 1337, FMT = '(A)') ''
+      write(UNIT = 1337, FMT = '(A)') '/'
+
+      close(unit = 1337)
+
+    end if
+    call sync
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine write_ocean_header
+
+  subroutine get_hires_ocean_data_from_file( mesh, hires, hires_foldername)
+    ! Read high-resolution extrapolated ocean data from an external file
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_highres_ocean_data), intent(inout) :: hires
+    character(len=256),            intent(in)    :: hires_foldername
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'get_hires_ocean_data_from_file'
+    integer                                      :: i,j
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Check if the NetCDF file has all the required dimensions and variables
+    hires%netcdf%filename = trim( hires_foldername)//'/extrapolated_ocean_data.nc'
+    call inquire_extrapolated_ocean_file( hires)
+
+    ! Allocate shared memory for x,y and the actual data
+    allocate( hires%grid%x  (hires%grid%nx) )
+    allocate( hires%grid%y  (hires%grid%ny) )
+    allocate( hires%T_ocean (hires%grid%nx, hires%grid%ny, C%nz_ocean) )
+    allocate( hires%S_ocean (hires%grid%nx, hires%grid%ny, C%nz_ocean) )
+
+    ! Read the data from the NetCDF file
+    if (par%master) then
+      write(*,"(3A)") '    Reading high-resolution extrapolated ocean data from file "', TRIM( hires%netcdf%filename), '"...'
+    end if
+    call sync
+
+    call read_extrapolated_ocean_file( hires)
+
+    ! Projection parameters are of course identical to those used for this ice model region
+    hires%grid%lambda_M     = mesh%lambda_M
+    hires%grid%phi_M        = mesh%phi_M
+    hires%grid%alpha_stereo = mesh%alpha_stereo
+
+    ! But the resolution is different
+    hires%grid%dx           = hires%grid%x( 2) - hires%grid%x( 1)
+
+    ! Assign range to each processor
+    call partition_list( hires%grid%nx, par%i, par%n, hires%grid%i1, hires%grid%i2)
+    call partition_list( hires%grid%ny, par%i, par%n, hires%grid%j1, hires%grid%j2)
+
+    ! Lat,lon coordinates
+    allocate( hires%grid%lat (hires%grid%nx, hires%grid%ny) )
+    allocate( hires%grid%lon (hires%grid%nx, hires%grid%ny) )
+
+    do j = 1, hires%grid%ny
+    do i = hires%grid%i1, hires%grid%i2
+      call inverse_oblique_sg_projection( hires%grid%x( i), hires%grid%y( j), hires%grid%lambda_M, hires%grid%phi_M, hires%grid%alpha_stereo, hires%grid%lon( i,j), hires%grid%lat( i,j))
+    end do
+    end do
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine get_hires_ocean_data_from_file
+
 ! ===== Administration =====
 ! ==========================
 
@@ -1374,5 +1630,201 @@ contains
     call finalise_routine( routine_name, n_extra_windows_expected=6)
 
   end subroutine allocate_ocean_snapshot_regional
+
+! ===== Remapping =====
+! =====================
+
+  subroutine remap_ocean_model( mesh_new, ocean_matrix)
+    ! Reallocate all the data fields (no remapping needed, instead we just run
+    ! the climate model immediately after a mesh update)
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                  intent(inout) :: mesh_new
+    type(type_ocean_matrix_regional), intent(inout) :: ocean_matrix
+
+    ! Local variables:
+    character(len=256), parameter                   :: routine_name = 'remap_ocean_model'
+    integer                                         :: vi,k
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    if (par%master) then
+      write (*,"(A)") '   Reallocating regional ocean model...'
+    end if
+    call sync
+
+    select case (C%choice_ocean_model)
+
+    case ('none')
+      ! No need to do anything
+
+    case ('PD_obs')
+      ! Keep the ocean fixed to present-day observed conditions
+
+      ! Allocate the PD_obs and applied snapshots
+      call reallocate_subocean( mesh_new, ocean_matrix%PD_obs )
+      call reallocate_subocean( mesh_new, ocean_matrix%applied)
+
+      ! Map high-resolution extrapolated ocean data to the new model mesh
+      call remap_ocean_data( mesh_new, ocean_matrix%PD_obs)
+
+      do k = 1, C%nz_ocean
+      do vi = mesh_new%vi1, mesh_new%vi2
+
+        ! PD_obs doesn't have a bias-corrected version
+        ocean_matrix%PD_obs%T_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%T_ocean_ext( vi,k)
+        ocean_matrix%PD_obs%S_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%S_ocean_ext( vi,k)
+
+        ! Initialise applied ocean forcing with present-day observations
+        ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
+        ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
+        ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
+        ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%PD_obs%S_ocean(          vi,k)
+        ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
+        ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
+
+      end do
+      end do
+
+    case ('matrix_warm_cold')
+      ! Run the warm/cold ocean matrix
+        call crash(trim(C%choice_ocean_model) // &
+                   ' not implemented yet...')
+
+    case default
+      ! Unknown option
+      call crash('unknown choice_ocean_model "' // &
+                  trim(C%choice_ocean_model) // '"!')
+
+    end select
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine remap_ocean_model
+
+  subroutine reallocate_subocean( mesh_new, ocean_reg)
+    ! Reallocate data fields of a regional ocean snapshot after a mesh update
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                    intent(in)    :: mesh_new
+    type(type_ocean_snapshot_regional), intent(inout) :: ocean_reg
+
+    ! Local variables:
+    character(len=256), parameter                     :: routine_name = 'reallocate_subocean'
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Reallocate shared memory
+    call reallocate_bounds( ocean_reg%T_ocean,          mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+    call reallocate_bounds( ocean_reg%S_ocean,          mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+    call reallocate_bounds( ocean_reg%T_ocean_ext,      mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+    call reallocate_bounds( ocean_reg%S_ocean_ext,      mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+    call reallocate_bounds( ocean_reg%T_ocean_corr_ext, mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+    call reallocate_bounds( ocean_reg%S_ocean_corr_ext, mesh_new%vi1, mesh_new%vi2, C%nz_ocean)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine reallocate_subocean
+
+  subroutine remap_ocean_data( mesh_new, ocean_reg)
+    ! Check if extrapolated ocean files for the current ice model
+    ! setting exist, based on the header found/created during
+    ! initialistion. If so, read those. If not, throw an error, as
+    ! those files should be there.
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),                    intent(inout) :: mesh_new
+    type(type_ocean_snapshot_regional), intent(inout) :: ocean_reg
+
+    ! Local variables:
+    character(len=256), parameter                     :: routine_name = 'remap_ocean_data'
+    logical                                           :: folder_exists
+    type(type_highres_ocean_data)                     :: hires
+    integer                                           :: i,j,n
+    real(dp), parameter                               :: tol = 1E-9_dp
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! ===== Read the high-resolution extrapolated ocean data =====
+    ! ============================================================
+
+    inquire( file = ocean_reg%hires_ocean_foldername, exist = folder_exists)
+
+    if (folder_exists) then
+      if (par%master) then
+        write(*,"(3A)") '   Found extrapolated ocean data in folder "', trim( ocean_reg%hires_ocean_foldername), '"'
+      end if
+      call sync
+      call get_hires_ocean_data_from_file( mesh_new, hires, ocean_reg%hires_ocean_foldername)
+    else
+      ! No header fitting the current ice model set-up was found.
+      ! This should not occur, so throw an error and abort.
+      call crash('no valid extrapolated ocean data found during mesh update!')
+    end if
+
+    ! ===== Map extrapolated data from the high-resolution grid to the actual ice-model mesh =====
+    ! ============================================================================================
+
+    if (par%master) then
+      write(*,"(A)") '    Mapping high-resolution extrapolated ocean data onto the new mesh...'
+    end if
+
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
+
+    ! Set up grid-to-vector translation tables
+    hires%grid%n  = hires%grid%nx * hires%grid%ny
+
+    allocate( hires%grid%ij2n (hires%grid%nx, hires%grid%ny) )
+    allocate( hires%grid%n2ij (hires%grid%n , 2            ) )
+
+    n = 0
+    do i = 1, hires%grid%nx
+      if (mod(i,2) == 1) then
+        do j = 1, hires%grid%ny
+          n = n+1
+          hires%grid%ij2n( i,j) = n
+          hires%grid%n2ij( n,:) = [i,j]
+        end do
+      else
+        do j = hires%grid%ny, 1, -1
+          n = n+1
+          hires%grid%ij2n( i,j) = n
+          hires%grid%n2ij( n,:) = [i,j]
+        end do
+      end if
+    end do
+
+    ! Map high-resolution ocean data to UFEMISM's mesh
+    call calc_remapping_operator_grid2mesh( hires%grid, mesh_new)
+    call map_grid2mesh_3D( hires%grid, mesh_new, hires%T_ocean, ocean_reg%T_ocean_ext)
+    call map_grid2mesh_3D( hires%grid, mesh_new, hires%S_ocean, ocean_reg%S_ocean_ext)
+    call deallocate_remapping_operators_mesh2grid( hires%grid)
+
+    ! Clean up after yourself
+    deallocate( hires%grid%x            )
+    deallocate( hires%grid%y            )
+    deallocate( hires%grid%lat          )
+    deallocate( hires%grid%lon          )
+    deallocate( hires%grid%ij2n         )
+    deallocate( hires%grid%n2ij         )
+    deallocate( hires%T_ocean           )
+    deallocate( hires%S_ocean           )
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine remap_ocean_data
 
 end module

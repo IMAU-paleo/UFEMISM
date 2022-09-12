@@ -194,12 +194,12 @@ contains
     total_SMB = 0._dp
     total_BMB = 0._dp
 
-    DO vi = region%mesh%vi1, region%mesh%vi2
+    do vi = region%mesh%vi1, region%mesh%vi2
       if (region%ice%mask_ice_a( vi) == 1) then
         total_SMB = total_SMB + (region%SMB%SMB_year( vi) * region%mesh%A( vi) / 1E9_dp)
         total_BMB = total_BMB + (region%BMB%BMB(      vi) * region%mesh%A( vi) / 1E9_dp)
       end if
-    END DO
+    end do
 
     call MPI_ALLREDUCE( MPI_IN_PLACE, T2m_mean , 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
     call MPI_ALLREDUCE( MPI_IN_PLACE, total_SMB, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)

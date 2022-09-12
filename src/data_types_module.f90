@@ -102,11 +102,15 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_b
+    REAL(dp), DIMENSION(:    ), POINTER     :: f_grndx_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: f_grndx_b
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_x
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_y
     INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
     INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b
-    INTEGER :: wbasin_ID, wnbasins
+    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b, wf_grndx_a, wf_grndx_b
+    INTEGER :: wbasin_ID, wnbasins, wgfrac_x, wgfrac_y
 
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
@@ -1445,6 +1449,7 @@ MODULE data_types_module
     REAL(dp), POINTER                       :: t_last_ELRA,    t_next_ELRA
     REAL(dp), POINTER                       :: t_last_basal,   t_next_basal
     REAL(dp), POINTER                       :: t_last_SMB_inv, t_next_SMB_inv
+    REAL(dp), POINTER                       :: t_last_f_grnd,  t_next_f_grnd
     LOGICAL,  POINTER                       :: do_mesh
     LOGICAL,  POINTER                       :: do_SIA
     LOGICAL,  POINTER                       :: do_SSA
@@ -1458,10 +1463,11 @@ MODULE data_types_module
     LOGICAL,  POINTER                       :: do_ELRA
     LOGICAL,  POINTER                       :: do_basal
     LOGICAL,  POINTER                       :: do_SMB_inv
+    LOGICAL,  POINTER                       :: do_f_grnd
     INTEGER :: wdt_crit_SIA, wdt_crit_SSA, wdt_crit_ice, wdt_crit_ice_prev
-    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_basal, wt_last_SMB_inv
-    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_basal, wt_next_SMB_inv
-    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_basal,     wdo_SMB_inv
+    INTEGER :: wt_last_mesh, wt_last_SIA, wt_last_SSA, wt_last_DIVA, wt_last_thermo, wt_last_output, wt_last_climate, wt_last_ocean, wt_last_SMB, wt_last_BMB, wt_last_ELRA, wt_last_basal, wt_last_SMB_inv, wt_last_f_grnd
+    INTEGER :: wt_next_mesh, wt_next_SIA, wt_next_SSA, wt_next_DIVA, wt_next_thermo, wt_next_output, wt_next_climate, wt_next_ocean, wt_next_SMB, wt_next_BMB, wt_next_ELRA, wt_next_basal, wt_next_SMB_inv, wt_next_f_grnd
+    INTEGER ::     wdo_mesh,     wdo_SIA,     wdo_SSA,     wdo_DIVA,     wdo_thermo,     wdo_output,     wdo_climate,     wdo_ocean,     wdo_SMB,     wdo_BMB,     wdo_ELRA,     wdo_basal,     wdo_SMB_inv,     wdo_f_grnd
 
     ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
     REAL(dp), POINTER                       :: ice_area

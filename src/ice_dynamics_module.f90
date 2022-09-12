@@ -166,7 +166,7 @@ CONTAINS
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice)
+        CALL solve_SSA( region%mesh, region%ice, region%SMB)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
@@ -215,7 +215,7 @@ CONTAINS
       IF (region%time == region%t_next_SSA) THEN
 
         ! Calculate new ice velocities
-        CALL solve_SSA( region%mesh, region%ice)
+        CALL solve_SSA( region%mesh, region%ice, region%SMB)
 
         ! Calculate critical time step
         CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
@@ -428,7 +428,7 @@ CONTAINS
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
 
         ! Calculate velocities
-        CALL solve_SSA(  region%mesh, region%ice)
+        CALL solve_SSA(  region%mesh, region%ice, region%SMB)
 
         ! Update timer
         IF (par%master) region%t_last_SSA = region%time
@@ -439,7 +439,7 @@ CONTAINS
 
         ! Calculate velocities
         CALL solve_SIA(  region%mesh, region%ice)
-        CALL solve_SSA(  region%mesh, region%ice)
+        CALL solve_SSA(  region%mesh, region%ice, region%SMB)
 
         ! Update timer
         IF (par%master) region%t_last_SIA = region%time
@@ -451,7 +451,7 @@ CONTAINS
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
 
         ! Calculate velocities
-        CALL solve_DIVA( region%mesh, region%ice)
+        CALL solve_DIVA( region%mesh, region%ice, region%SMB)
 
         ! Update timer
         IF (par%master) region%t_last_DIVA = region%time
@@ -1484,6 +1484,10 @@ CONTAINS
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_a                , ice%wmask_a               )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grnd_a              , ice%wf_grnd_a             )
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grnd_b              , ice%wf_grnd_b             )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grndx_a             , ice%wf_grndx_a            )
+    CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grndx_b             , ice%wf_grndx_b            )
+    CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_x               , ice%wgfrac_x              )
+    CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_y               , ice%wgfrac_y              )
 
     ! Ice physical properties
     CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )
@@ -1672,6 +1676,10 @@ CONTAINS
     CALL reallocate_shared_int_1D( mesh_new%nV,                  ice%mask_a,               ice%wmask_a              )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%f_grnd_a,             ice%wf_grnd_a            )
     CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grnd_b,             ice%wf_grnd_b            )
+    CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%f_grndx_a,            ice%wf_grndx_a           )
+    CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grndx_b,            ice%wf_grndx_b           )
+    CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_x,              ice%wgfrac_x             )
+    CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_y,              ice%wgfrac_y             )
 
     ! Ice physical properties
     CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%A_flow_3D_a,          ice%wA_flow_3D_a         )

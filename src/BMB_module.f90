@@ -2279,8 +2279,12 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
 
-      ! Invert only where the reference or model is shelf or ocean
-      IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. ice%mask_shelf_a( vi) == 1 ) THEN
+      ! Invert only over shelf or ocean points, identified from
+      ! the reference topography (on the mesh), the model mask,
+      ! or the sub-grid grounded area fraction
+      IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. &
+           ice%mask_shelf_a( vi) == 1 .OR. &
+           ice%f_grndx_a( vi) < 1.0_dp) THEN
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
           h_scale = 1.0_dp/C%BMB_inv_scale_shelf

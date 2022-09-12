@@ -867,6 +867,8 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHi_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'dHs') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'f_grnd') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%f_grndx_a, start=(/1, netcdf%ti /) ))
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -879,6 +881,8 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a(:,C%nZ), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_pmp_a, start=(/1, 1, netcdf%ti /) ))
+    ELSEIF (field_name == 'Ti_hom_basal') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%Ti_a(:,C%nZ) - region%ice%Ti_pmp_a(:,C%nZ), start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'A_flow_3D') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%A_flow_3D_a, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'A_flow_vav') THEN
@@ -984,7 +988,7 @@ CONTAINS
     ELSEIF (field_name == 'Runoff') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Runoff, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Runoff_year') THEN
-      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%AddedFirn,2), start=(/1,  netcdf%ti /) ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, SUM(region%SMB%Runoff,2), start=(/1,  netcdf%ti /) ))
     ELSEIF (field_name == 'Albedo') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%Albedo, start=(/1, 1, netcdf%ti /) ))
     ELSEIF (field_name == 'Albedo_year') THEN
@@ -1499,6 +1503,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHi',                      [vi,    t], id_var, long_name='Ice thickness difference w.r.t PD', units='m')
     ELSEIF (field_name == 'dHs') THEN
       CALL create_double_var( netcdf%ncid, 'dHs',                      [vi,    t], id_var, long_name='Ice elevation difference w.r.t PD', units='m')
+    ELSEIF (field_name == 'f_grnd') THEN
+      CALL create_double_var( netcdf%ncid, 'f_grnd',                   [vi,    t], id_var, long_name='Sub-grid grounded area fraction', units='-')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1511,6 +1517,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Ti_basal',                 [vi,    t], id_var, long_name='Ice basal temperature', units='K')
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL create_double_var( netcdf%ncid, 'Ti_pmp',                   [vi, z, t], id_var, long_name='Ice pressure melting point temperature', units='K')
+    ELSEIF (field_name == 'Ti_hom_basal') THEN
+      CALL create_double_var( netcdf%ncid, 'Ti_hom_basal',             [vi,    t], id_var, long_name='Ice basal temperature w.r.t. local melting point', units='K')
     ELSEIF (field_name == 'A_flow_3D') THEN
       CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [vi, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
     ELSEIF (field_name == 'A_flow_vav') THEN
@@ -1618,9 +1626,9 @@ CONTAINS
     ELSEIF (field_name == 'Runoff_year') THEN
       CALL create_double_var( netcdf%ncid, 'Runoff_year',              [vi,    t], id_var, long_name='Annual total runoff', units='m water equivalent')
     ELSEIF (field_name == 'Albedo') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo',                   [vi, m, t], id_var, long_name='Monthly mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo',                   [vi, m, t], id_var, long_name='Monthly mean albedo', units='-')
     ELSEIF (field_name == 'Albedo_year') THEN
-      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [vi,    t], id_var, long_name='Annual mean albedo')
+      CALL create_double_var( netcdf%ncid, 'Albedo_year',              [vi,    t], id_var, long_name='Annual mean albedo', units='-')
     ELSEIF (field_name == 'FirnDepth') THEN
       CALL create_double_var( netcdf%ncid, 'FirnDepth',                [vi, m, t], id_var, long_name='Monthly mean firn layer depth', units='m water equivalent')
     ELSEIF (field_name == 'FirnDepth_year') THEN
@@ -1704,6 +1712,11 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    IF (.NOT. C%do_write_grid_data) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -1792,6 +1805,11 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    IF (.NOT. C%do_write_grid_data) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
 
     ! Open the file for writing
     IF (par%master) CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
@@ -1924,6 +1942,8 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'dHs') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'f_grnd') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%f_grndx_a, id_var, netcdf%ti)
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1936,6 +1956,8 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a(:,C%nZ), id_var, netcdf%ti)
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_pmp_a, id_var, netcdf%ti, C%nZ)
+    ELSEIF (field_name == 'Ti_hom_basal') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%Ti_a(:,C%nZ) - region%ice%Ti_pmp_a(:,C%nZ), id_var, netcdf%ti)
     ELSEIF (field_name == 'A_flow_3D') THEN
       CALL map_and_write_to_grid_netcdf_dp_3D( netcdf%ncid, region%mesh, region%grid_output, region%ice%A_flow_3D_a, id_var, netcdf%ti, C%nZ)
     ELSEIF (field_name == 'A_flow_vav') THEN
@@ -2169,6 +2191,11 @@ CONTAINS
       RETURN
     END IF
 
+    IF (.NOT. C%do_write_grid_data) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
     ! If the file already exists, return.
     INQUIRE(EXIST=file_exists, FILE = TRIM(netcdf%filename))
     IF (file_exists) THEN
@@ -2294,6 +2321,11 @@ CONTAINS
     CALL init_routine( routine_name)
 
     IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    IF (.NOT. C%do_write_grid_data) THEN
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -2466,6 +2498,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHi',                      [x, y,    t], id_var, long_name='Ice thickness difference w.r.t. PD', units='m')
     ELSEIF (field_name == 'dHs') THEN
       CALL create_double_var( netcdf%ncid, 'dHs',                      [x, y,    t], id_var, long_name='Ice elevation difference w.r.t. PD', units='m')
+    ELSEIF (field_name == 'f_grnd') THEN
+      CALL create_double_var( netcdf%ncid, 'f_grnd',                   [x, y,    t], id_var, long_name='Sub-grid grounded area fraction', units='-')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -2478,6 +2512,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'Ti_basal',                 [x, y,    t], id_var, long_name='Ice basal temperature', units='K')
     ELSEIF (field_name == 'Ti_pmp') THEN
       CALL create_double_var( netcdf%ncid, 'Ti_pmp',                   [x, y, z, t], id_var, long_name='Ice pressure melting point temperature', units='K')
+    ELSEIF (field_name == 'Ti_hom_basal') THEN
+      CALL create_double_var( netcdf%ncid, 'Ti_hom_basal',             [x, y,    t], id_var, long_name='Ice basal temperature w.r.t. local melting point', units='K')
     ELSEIF (field_name == 'A_flow_3D') THEN
       CALL create_double_var( netcdf%ncid, 'A_flow_3D',                [x, y, z, t], id_var, long_name='Ice flow factor', units='Pa^-3 y^-1')
     ELSEIF (field_name == 'A_flow_vav') THEN
@@ -5277,7 +5313,7 @@ CONTAINS
       ! ==========
 
       IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
-        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**2
+        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**.5_dp
       END IF
 
       ! Calving and front melting fluxes

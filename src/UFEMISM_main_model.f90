@@ -25,7 +25,8 @@ MODULE UFEMISM_main_model
                                                  initialise_debug_fields, associate_debug_fields, reallocate_debug_fields, &
                                                  create_debug_file, write_PETSc_matrix_to_NetCDF, create_regional_scalar_output_file
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
-                                                 type_climate_matrix_global, type_ocean_matrix_global
+                                                 type_climate_matrix_global, type_ocean_matrix_global, &
+                                                 type_reference_geometry, type_ice_model
   USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,                  ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
@@ -195,6 +196,11 @@ CONTAINS
 
       END IF
 
+      ! == Grounded fractions
+      ! =====================
+
+      CALL compute_subgrid_grounded(region%mesh, region%refgeo_PD, region%ice)
+
       ! == Ice dynamics
       ! ===============
 
@@ -258,7 +264,7 @@ CONTAINS
 
       IF (C%do_basal_sliding_inversion .AND. region%do_basal) THEN
         ! Adjust bed roughness
-        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%time)
+        CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
       END IF
 
       ! == SBM IMAU-ITM inversion
@@ -453,6 +459,11 @@ CONTAINS
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
 
+    ! Grounded fractions
+    IF (par%master) WRITE(0,*) '   Re-commputing sub-grid grounded area fractions...'
+    CALL scan_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+    CALL compute_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+
     ! Run the sub-models once to fill them in
     CALL run_climate_model( region, climate_matrix_global, region%time)
     CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
@@ -477,6 +488,7 @@ CONTAINS
     ! Recompute the PD sea level contribution on the new mesh
     CALL calculate_PD_sealevel_contribution( region)
 
+    ! Request to run everything immediately after the mesh update
     region%t_next_SIA     = region%time
     region%t_next_SSA     = region%time
     region%t_next_DIVA    = region%time
@@ -630,6 +642,14 @@ CONTAINS
 
     CALL initialise_ice_model( region%mesh, region%ice, region%refgeo_init, region%refgeo_PD, region%restart)
 
+    ! ===== Grounded fractions =====
+    ! ==============================
+
+    IF (par%master) WRITE(0,*) '  Initialising sub-grid grounded area fractions...'
+
+    CALL scan_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+    CALL compute_subgrid_grounded( region%mesh, region%refgeo_PD, region%ice)
+
     ! ===== Ice basins =====
     ! ======================
 
@@ -704,7 +724,7 @@ CONTAINS
     ! once during initialisation (so that the thermodynamics are solved correctly)
     IF (C%choice_ice_dynamics == 'none') THEN
       C%choice_ice_dynamics = 'DIVA'
-      CALL solve_DIVA( region%mesh, region%ice)
+      CALL solve_DIVA( region%mesh, region%ice, region%SMB)
       C%choice_ice_dynamics = 'none'
     END IF
 
@@ -1240,5 +1260,220 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_model_windup
+
+  SUBROUTINE scan_subgrid_grounded( mesh, refgeo, ice)
+    ! Scan them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded'
+    INTEGER                                   :: vi, i, j
+    INTEGER                                   :: grid_count
+    REAL(dp)                                  :: radius, rmax_ref_vs_mem
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ice%gfrac_x = 0
+    ice%gfrac_y = 0
+
+    ! === Scan ===
+    ! ============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      IF (ice%mask_land_a( vi) == 0 .OR. &
+          mesh%edge_index( vi)  > 0) THEN
+        CYCLE
+      END IF
+
+      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
+
+      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
+
+      grid_count = 0
+
+      DO j = 1, refgeo%grid%ny
+      DO i = refgeo%grid%i1, refgeo%grid%i2
+
+        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
+
+          grid_count = grid_count + 1
+
+          ice%gfrac_x( vi,grid_count) = i
+          ice%gfrac_y( vi,grid_count) = j
+
+        END IF
+
+      END DO
+      END DO
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE scan_subgrid_grounded
+
+  SUBROUTINE compute_subgrid_grounded( mesh, refgeo, ice)
+    ! Compute them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded'
+    INTEGER                                   :: vi, n
+    INTEGER                                   :: grid_count, ground_count
+    REAL(dp)                                  :: hb_float, hb_local
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! === Compute ===
+    ! ===============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density
+
+      IF (ice%gfrac_x( vi,1) == 0 .OR. &
+          ice%gfrac_y( vi,1) == 0 .OR. &
+          mesh%edge_index( vi) > 0) THEN
+
+        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
+        CYCLE
+
+      END IF
+
+      n = 0
+      DO WHILE (ice%gfrac_x(vi,n+1) > 0 .AND. ice%gfrac_y(vi,n+1) > 0)
+        n = n + 1
+      END DO
+      grid_count = n
+
+      ground_count = 0
+
+      DO n = 1, grid_count
+
+        hb_local = refgeo%Hb_grid( ice%gfrac_x( vi,n), ice%gfrac_y( vi,n)) + ice%dHb_a( vi)
+
+        IF ( hb_local >= hb_float) THEN
+
+          ground_count = ground_count + 1
+
+        END IF
+
+      END DO
+
+      IF (grid_count > 0) THEN
+        ice%f_grndx_a( vi) = REAL(ground_count,dp) / REAL(grid_count,dp)
+      ELSE
+        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
+      END IF
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE compute_subgrid_grounded
+
+  ! SUBROUTINE compute_grounded_factions( mesh, refgeo, ice)
+  !   ! Compute them.
+
+  !   IMPLICIT NONE
+
+  !   ! In/output variables:
+  !   TYPE(type_mesh),               INTENT(IN) :: mesh
+  !   TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+  !   TYPE(type_ice_model),          INTENT(IN) :: ice
+
+  !   ! Local variables:
+  !   CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_grounded_factions'
+  !   INTEGER                                   :: vi, i, j
+  !   INTEGER                                   :: grid_count, ground_count
+  !   REAL(dp)                                  :: radius
+  !   REAL(dp)                                  :: hb_float
+
+  !   ! === Initialisation ===
+  !   ! ======================
+
+  !   ! Add routine to path
+  !   CALL init_routine( routine_name)
+
+  !   ! === Scan ===
+  !   ! ============
+
+  !   DO vi = mesh%vi1, mesh%vi2
+
+  !     IF (ice%mask_land_a( vi) == 0) THEN
+  !       ice%f_grndx_a( vi) = 0._dp
+  !       CYCLE
+  !     END IF
+
+  !     radius = mesh%R( vi) * 2.0_dp
+
+  !     hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density
+
+  !     grid_count  = 0
+  !     ground_count = 0
+
+  !     DO j = 1, refgeo%grid%ny
+  !     DO i = refgeo%grid%i1, refgeo%grid%i2
+
+  !       IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
+
+  !         grid_count = grid_count + 1
+
+  !         IF (refgeo%Hb_grid(i,j) + ice%dHb_a( vi) >= hb_float) THEN
+  !           ground_count =  ground_count + 1
+  !         END IF
+
+  !       END IF
+
+  !     END DO
+  !     END DO
+
+  !     IF (grid_count > 0) THEN
+  !       ice%f_grndx_a( vi) = REAL(ground_count,dp) / REAL(grid_count, dp)
+  !     ELSE
+  !       ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
+  !     END IF
+
+  !   END DO
+  !   CALL sync
+
+  !   ! === Finalisation ===
+  !   ! ====================
+
+  !   ! Finalise routine path
+  !   CALL finalise_routine( routine_name)
+
+  ! END SUBROUTINE compute_grounded_factions
 
 END MODULE UFEMISM_main_model

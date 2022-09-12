@@ -1,3 +1,10 @@
+# Assumes that the following modules have been loaded:
+
+# Environment: module load 2021
+# MPI and LAPACK: module load foss/2021a
+# NetCDF: module load netCDF-Fortran/4.5.3-gompi-2021a
+# PETSc: module load PETSc/3.15.1-foss-2021a
+
 # Compiler names:
   F90 = mpifort
 
@@ -19,9 +26,11 @@
   endif
 
   F90FLAGS               = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} ${COMPILER_FLAGS_SELEN} \
-                           ${NCINC} -I${PETSC_DIR}/include
+                           ${NCINC} \
+                           -I${PETSC_DIR}/include \
+                           -I${EBROOTFLEXIBLAS}/include/flexiblas
 
 # Linking flags of libaries:
   LDFLAGS                = -g ${NCLIB} \
-                           -lpetsc \
-                           -lmkl_rt
+                           -L${PETSC_DIR}/lib -lpetsc \
+                           -L${EBROOTFLEXIBLAS}/lib  -lflexiblas

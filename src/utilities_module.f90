@@ -250,11 +250,11 @@ CONTAINS
   END SUBROUTINE error_function
 
 ! == The oblique stereographic projection
-  SUBROUTINE oblique_sg_projection(lambda, phi, lambda_M_deg, phi_M_deg, alpha_deg, x_IM_P_prime, y_IM_P_prime, k_P)
+  SUBROUTINE oblique_sg_projection( lambda, phi, lambda_M_deg, phi_M_deg, beta_deg, x_IM_P_prime, y_IM_P_prime, k_P)
     ! This subroutine projects with an oblique stereographic projection the longitude-latitude
     ! coordinates to a rectangular coordinate system, with coordinates (x,y).
     !
-    ! For more information about M, alpha_deg, the center of projection and the used
+    ! For more information about M, beta_deg, the center of projection and the used
     ! projection method see: Reerink et al. (2010), Mapping technique of climate fields
     ! between GCM's and ice models, GMD
 
@@ -270,7 +270,7 @@ CONTAINS
     ! Polar stereographic projection parameters
     REAL(dp), INTENT(IN)            :: lambda_M_deg  ! in degrees
     REAL(dp), INTENT(IN)            :: phi_M_deg     ! in degrees
-    REAL(dp), INTENT(IN)            :: alpha_deg     ! in degrees
+    REAL(dp), INTENT(IN)            :: beta_deg      ! in degrees
 
     ! Output variables:
     REAL(dp), INTENT(OUT)           :: x_IM_P_prime  ! in metres
@@ -278,10 +278,14 @@ CONTAINS
     REAL(dp), INTENT(OUT), OPTIONAL :: k_P           ! Length scale factor [-],  k in Snyder (1987)
 
     ! Local variables:
+    REAL(dp)                        :: alpha_deg     ! in degrees
     REAL(dp)                        :: phi_P         ! in radians
     REAL(dp)                        :: lambda_P      ! in radians
     REAL(dp)                        :: t_P_prime
     REAL(dp)                        :: lambda_M, phi_M, alpha
+
+    ! Convert beta to alpha
+    alpha_deg = 90._dp - beta_deg
 
     ! Convert longitude-latitude coordinates to radians:
     phi_P    = (pi / 180._dp) * phi
@@ -303,8 +307,7 @@ CONTAINS
     IF(PRESENT(k_P)) k_P = (1._dp + COS(alpha)) / (1._dp + SIN(phi_M) * SIN(phi_P) + COS(phi_M) * COS(phi_P) * COS(lambda_P - lambda_M))
 
   END SUBROUTINE oblique_sg_projection
-
-  SUBROUTINE inverse_oblique_sg_projection(x_IM_P_prime, y_IM_P_prime, lambda_M_deg, phi_M_deg, alpha_deg, lambda_P, phi_P)
+  SUBROUTINE inverse_oblique_sg_projection( x_IM_P_prime, y_IM_P_prime, lambda_M_deg, phi_M_deg, beta_deg, lambda_P, phi_P)
     ! This subroutine projects with an inverse oblique stereographic projection the
     ! (x,y) coordinates to a longitude-latitude coordinate system, with coordinates (lambda, phi) in degrees.
     !
@@ -321,13 +324,14 @@ CONTAINS
     ! Polar stereographic projection parameters
     REAL(dp), INTENT(IN)  :: lambda_M_deg  ! in degrees
     REAL(dp), INTENT(IN)  :: phi_M_deg     ! in degrees
-    REAL(dp), INTENT(IN)  :: alpha_deg     ! in degrees
+    REAL(dp), INTENT(IN)  :: beta_deg      ! in degrees
 
     ! Output variables:
     REAL(dp), INTENT(OUT) :: lambda_P      ! in degrees
     REAL(dp), INTENT(OUT) :: phi_P         ! in degrees
 
     ! Local variables:
+    REAL(dp)              :: alpha_deg     ! in degrees
     REAL(dp)              :: x_3D_P_prime  ! in metres
     REAL(dp)              :: y_3D_P_prime  ! in metres
     REAL(dp)              :: z_3D_P_prime  ! in metres
@@ -337,6 +341,9 @@ CONTAINS
     REAL(dp)              :: y_3D_P        ! in metres
     REAL(dp)              :: z_3D_P        ! in metres
     REAL(dp)              :: lambda_M, phi_M, alpha
+
+    ! Convert beta to alpha
+    alpha_deg = 90._dp - beta_deg
 
     ! Convert projection parameters to radians:
     lambda_M = (pi / 180._dp) * lambda_M_deg

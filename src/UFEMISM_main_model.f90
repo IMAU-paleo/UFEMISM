@@ -886,7 +886,7 @@ CONTAINS
     CALL allocate_shared_dp_0D(  grid%dx,           grid%wdx          )
     CALL allocate_shared_dp_0D(  grid%lambda_M,     grid%wlambda_M    )
     CALL allocate_shared_dp_0D(  grid%phi_M,        grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  grid%alpha_stereo, grid%walpha_stereo)
+    CALL allocate_shared_dp_0D(  grid%beta_stereo, grid%wbeta_stereo)
     CALL allocate_shared_dp_0D(  grid%xmin,         grid%wxmin        )
     CALL allocate_shared_dp_0D(  grid%xmax,         grid%wxmax        )
     CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
@@ -907,19 +907,19 @@ CONTAINS
       IF     (region%name == 'NAM') THEN
         grid%lambda_M     = C%lambda_M_NAM
         grid%phi_M        = C%phi_M_NAM
-        grid%alpha_stereo = C%alpha_stereo_NAM
+        grid%beta_stereo = C%beta_stereo_NAM
       ELSEIF (region%name == 'EAS') THEN
         grid%lambda_M     = C%lambda_M_EAS
         grid%phi_M        = C%phi_M_EAS
-        grid%alpha_stereo = C%alpha_stereo_EAS
+        grid%beta_stereo = C%beta_stereo_EAS
       ELSEIF (region%name == 'GRL') THEN
         grid%lambda_M     = C%lambda_M_GRL
         grid%phi_M        = C%phi_M_GRL
-        grid%alpha_stereo = C%alpha_stereo_GRL
+        grid%beta_stereo = C%beta_stereo_GRL
       ELSEIF (region%name == 'ANT') THEN
         grid%lambda_M     = C%lambda_M_ANT
         grid%phi_M        = C%phi_M_ANT
-        grid%alpha_stereo = C%alpha_stereo_ANT
+        grid%beta_stereo = C%beta_stereo_ANT
       END IF
 
       ! Determine the center of the model domain
@@ -1029,7 +1029,7 @@ CONTAINS
     ! point using the mesh projection parameters
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
+      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%beta_stereo, grid%lon( i,j), grid%lat( i,j))
     END DO
     END DO
     CALL sync

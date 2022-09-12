@@ -171,6 +171,11 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), POINTER     :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
+    INTEGER                                 :: DIVA_SOR_nit
+    REAL(dp)                                :: DIVA_SOR_tol
+    REAL(dp)                                :: DIVA_SOR_omega
+    REAL(dp)                                :: DIVA_PETSc_rtol
+    REAL(dp)                                :: DIVA_PETSc_abstol
     INTEGER :: wti2n_u, wti2n_v, wn2ti_uv
 
     ! Ice dynamics - ice thickness calculation
@@ -265,7 +270,7 @@ MODULE data_types_module
     CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
     REAL(dp),                   POINTER     :: lambda_M                      ! Oblique stereographic projection parameters
     REAL(dp),                   POINTER     :: phi_M
-    REAL(dp),                   POINTER     :: alpha_stereo
+    REAL(dp),                   POINTER     :: beta_stereo
     REAL(dp),                   POINTER     :: xmin                          ! X and Y range of the square covered by the mesh
     REAL(dp),                   POINTER     :: xmax
     REAL(dp),                   POINTER     :: ymin
@@ -288,7 +293,7 @@ MODULE data_types_module
     REAL(dp),                   POINTER     :: res_min                       ! Minimum resolution anywhere ( = MINVAL([res_max_margin, res_max_gl, res_max_cf]))
     REAL(dp),                   POINTER     :: resolution_min                ! Finest   resolution of the mesh ( = MINVAL(R), where R = distance to nearest neighbour)
     REAL(dp),                   POINTER     :: resolution_max                ! Coarsest resolution of the mesh
-    INTEGER :: wlambda_M, wphi_M, walpha_stereo, wxmin, wxmax, wymin, wymax, wtol_dist, wnV_mem, wnTri_mem, wnC_mem, wnV, wnTri, wperturb_dir
+    INTEGER :: wlambda_M, wphi_M, wbeta_stereo, wxmin, wxmax, wymin, wymax, wtol_dist, wnV_mem, wnTri_mem, wnC_mem, wnV, wnTri, wperturb_dir
     INTEGER :: walpha_min, wdz_max_ice, wres_max, wres_max_margin, wres_max_gl, wres_max_cf, wres_max_mountain, wres_max_coast, wres_min, wresolution_min, wresolution_max
 
     ! Primary mesh data (needed for mesh creation & refinement)
@@ -452,8 +457,8 @@ MODULE data_types_module
     ! Projection parameters for the grid
     REAL(dp),                   POINTER     :: lambda_M
     REAL(dp),                   POINTER     :: phi_M
-    REAL(dp),                   POINTER     :: alpha_stereo
-    INTEGER :: wlambda_M, wphi_M, walpha_stereo
+    REAL(dp),                   POINTER     :: beta_stereo
+    INTEGER :: wlambda_M, wphi_M, wbeta_stereo
 
   END TYPE type_grid
 

@@ -58,6 +58,8 @@ MODULE configuration_module
     REAL(dp)            :: end_time_of_run_config                      = 50000.0_dp                       ! End   time (in years) of the simulations
     REAL(dp)            :: dt_coupling_config                          = 100._dp                          ! Interval of coupling (in years) between the four ice-sheets
     REAL(dp)            :: dt_max_config                               = 10.0_dp                          ! Maximum time step (in years) of the ice model
+    REAL(dp)            :: dt_min_config                               = 10.0_dp                          ! Minimum time step (in years) of the ice model
+    REAL(dp)            :: dt_startup_phase_config                     = 10._dp                           ! Length of time window (in years) after start_time and before end_time when dt = dt_min, to ensure smooth restarts
     REAL(dp)            :: dt_thermo_config                            = 10.0_dp                          ! Time step (in years) for updating thermodynamics
     REAL(dp)            :: dt_climate_config                           = 10._dp                           ! Time step (in years) for updating the climate
     REAL(dp)            :: dt_ocean_config                             = 10._dp                           ! Time step (in years) for updating the ocean
@@ -113,24 +115,40 @@ MODULE configuration_module
     LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
     LOGICAL             :: do_time_display_config                      = .FALSE.                          ! Print current model time to screen
 
-  ! == Domain size for the four regions
-  ! ===================================
+  ! == The four model regions
+  ! =========================
 
-    REAL(dp)            :: xmin_NAM_config                             = -3600000._dp                     ! Western  boundary     of the North America domain [m]
+    ! North America
+    REAL(dp)            :: lambda_M_NAM_config                         = 265._dp                          ! Longitude of the pole of the stereographic projection for the North America domain [degrees east]
+    REAL(dp)            :: phi_M_NAM_config                            = 62._dp                           ! Latitude  of the pole of the stereographic projection for the North America domain [degrees north]
+    REAL(dp)            :: beta_stereo_NAM_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the North America domain [degrees]
+    REAL(dp)            :: xmin_NAM_config                             = -3600000._dp                     ! Western  boundary        of the North America domain [m]
     REAL(dp)            :: xmax_NAM_config                             =  3600000._dp                     ! Eastern  boundary     of the North America domain [m]
     REAL(dp)            :: ymin_NAM_config                             = -2400000._dp                     ! Southern boundary     of the North America domain [m]
     REAL(dp)            :: ymax_NAM_config                             =  2400000._dp                     ! Northern boundary     of the North America domain [m]
 
+    ! Eurasia
+    REAL(dp)            :: lambda_M_EAS_config                         = 40._dp                           ! Longitude of the pole of the stereographic projection for the Eurasia domain [degrees east]
+    REAL(dp)            :: phi_M_EAS_config                            = 70._dp                           ! Latitude  of the pole of the stereographic projection for the Eurasia domain [degrees north]
+    REAL(dp)            :: beta_stereo_EAS_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the Eurasia domain [degrees]
     REAL(dp)            :: xmin_EAS_config                             = -3400000._dp                     ! Western  boundary     of the Eurasia domain [m]
     REAL(dp)            :: xmax_EAS_config                             =  3400000._dp                     ! Eastern  boundary     of the Eurasia domain [m]
     REAL(dp)            :: ymin_EAS_config                             = -2080000._dp                     ! Southern boundary     of the Eurasia domain [m]
     REAL(dp)            :: ymax_EAS_config                             =  2080000._dp                     ! Northern boundary     of the Eurasia domain [m]
 
-    REAL(dp)            :: xmin_GRL_config                             =  -830000._dp                     ! Western  boundary     of the Greenland domain [m]
-    REAL(dp)            :: xmax_GRL_config                             =   830000._dp                     ! Eastern  boundary     of the Greenland domain [m]
-    REAL(dp)            :: ymin_GRL_config                             = -1430000._dp                     ! Southern boundary     of the Greenland domain [m]
-    REAL(dp)            :: ymax_GRL_config                             =  1430000._dp                     ! Northern boundary     of the Greenland domain [m]
+    ! Greenland
+    REAL(dp)            :: lambda_M_GRL_config                         = -45._dp                          ! Longitude of the pole of the stereographic projection for the Greenland domain [degrees east]
+    REAL(dp)            :: phi_M_GRL_config                            = 90._dp                           ! Latitude  of the pole of the stereographic projection for the Greenland domain [degrees north]
+    REAL(dp)            :: beta_stereo_GRL_config                      = 70._dp                           ! Standard parallel     of the stereographic projection for the Greenland domain [degrees]
+    REAL(dp)            :: xmin_GRL_config                             =  -720000._dp                     ! Western  boundary     of the Greenland domain [m]
+    REAL(dp)            :: xmax_GRL_config                             =   960000._dp                     ! Eastern  boundary     of the Greenland domain [m]
+    REAL(dp)            :: ymin_GRL_config                             = -3450000._dp                     ! Southern boundary     of the Greenland domain [m]
+    REAL(dp)            :: ymax_GRL_config                             =  -570000._dp                     ! Northern boundary     of the Greenland domain [m]
 
+    ! Antarctica
+    REAL(dp)            :: lambda_M_ANT_config                         = 0._dp                            ! Longitude of the pole of the stereographic projection for the Antarctica domain [degrees east]
+    REAL(dp)            :: phi_M_ANT_config                            = -90._dp                          ! Latitude  of the pole of the stereographic projection for the Antarctica domain [degrees north]
+    REAL(dp)            :: beta_stereo_ANT_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the Antarctica domain [degrees]
     REAL(dp)            :: xmin_ANT_config                             = -3300000._dp                     ! Western  boundary     of the Antarctica domain [m]
     REAL(dp)            :: xmax_ANT_config                             =  3300000._dp                     ! Eastern  boundary     of the Antarctica domain [m]
     REAL(dp)            :: ymin_ANT_config                             = -3300000._dp                     ! Southern boundary     of the Antarctica domain [m]
@@ -371,7 +389,6 @@ MODULE configuration_module
     REAL(dp)            :: pc_eta_min_config                           = 1E-8_dp                          ! Normalisation term in estimation of the truncation error (Robinson et al., Eq. 32)
     INTEGER             :: pc_max_timestep_iterations_config           = 5                                ! Maximum number of iterations of each time step
     REAL(dp)            :: pc_redo_tol_config                          = 10._dp                           ! Maximum allowed truncation error (any higher and the timestep is decreased)
-    REAL(dp)            :: dt_min_config                               = 0.01_dp                          ! Smallest allowed time step [yr]
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)  :: ice_thickness_west_BC_config                = 'zero'                           ! Choice of boundary conditions for ice thickness at the domain boundary: "infinite", "periodic", "zero", "ISMIP_HOM_F"
@@ -833,6 +850,8 @@ MODULE configuration_module
     REAL(dp)                            :: end_time_of_run
     REAL(dp)                            :: dt_coupling
     REAL(dp)                            :: dt_max
+    REAL(dp)                            :: dt_min
+    REAL(dp)                            :: dt_startup_phase
     REAL(dp)                            :: dt_thermo
     REAL(dp)                            :: dt_climate
     REAL(dp)                            :: dt_ocean
@@ -881,24 +900,40 @@ MODULE configuration_module
     LOGICAL                             :: do_check_for_NaN
     LOGICAL                             :: do_time_display
 
-    ! Domain size for the four regions
-    ! ================================
+    ! == The four model regions
+    ! =========================
 
+    ! North America
+    REAL(dp)                            :: lambda_M_NAM
+    REAL(dp)                            :: phi_M_NAM
+    REAL(dp)                            :: beta_stereo_NAM
     REAL(dp)                            :: xmin_NAM
     REAL(dp)                            :: xmax_NAM
     REAL(dp)                            :: ymin_NAM
     REAL(dp)                            :: ymax_NAM
 
+    ! Eurasia
+    REAL(dp)                            :: lambda_M_EAS
+    REAL(dp)                            :: phi_M_EAS
+    REAL(dp)                            :: beta_stereo_EAS
     REAL(dp)                            :: xmin_EAS
     REAL(dp)                            :: xmax_EAS
     REAL(dp)                            :: ymin_EAS
     REAL(dp)                            :: ymax_EAS
 
+    ! Greenland
+    REAL(dp)                            :: lambda_M_GRL
+    REAL(dp)                            :: phi_M_GRL
+    REAL(dp)                            :: beta_stereo_GRL
     REAL(dp)                            :: xmin_GRL
     REAL(dp)                            :: xmax_GRL
     REAL(dp)                            :: ymin_GRL
     REAL(dp)                            :: ymax_GRL
 
+    ! Antarctica
+    REAL(dp)                            :: lambda_M_ANT
+    REAL(dp)                            :: phi_M_ANT
+    REAL(dp)                            :: beta_stereo_ANT
     REAL(dp)                            :: xmin_ANT
     REAL(dp)                            :: xmax_ANT
     REAL(dp)                            :: ymin_ANT
@@ -1108,7 +1143,6 @@ MODULE configuration_module
     REAL(dp)                            :: pc_eta_min
     INTEGER                             :: pc_max_timestep_iterations
     REAL(dp)                            :: pc_redo_tol
-    REAL(dp)                            :: dt_min
 
     ! Ice thickness boundary conditions
     CHARACTER(LEN=256)                  :: ice_thickness_west_BC
@@ -1566,23 +1600,6 @@ MODULE configuration_module
     INTEGER                             :: type_groundingline
     INTEGER                             :: type_calvingfront
 
-   ! Parameters of the polar stereographic projections of the four model regions
-   ! (These have to match the values used to create the input files!)
-   ! ===========================================================================
-
-    REAL(dp)                            :: lambda_M_NAM
-    REAL(dp)                            :: lambda_M_EAS
-    REAL(dp)                            :: lambda_M_GRL
-    REAL(dp)                            :: lambda_M_ANT
-    REAL(dp)                            :: phi_M_NAM
-    REAL(dp)                            :: phi_M_EAS
-    REAL(dp)                            :: phi_M_GRL
-    REAL(dp)                            :: phi_M_ANT
-    REAL(dp)                            :: alpha_stereo_NAM
-    REAL(dp)                            :: alpha_stereo_EAS
-    REAL(dp)                            :: alpha_stereo_GRL
-    REAL(dp)                            :: alpha_stereo_ANT
-
     ! The output directory
     ! ====================
 
@@ -1848,6 +1865,8 @@ CONTAINS
                      end_time_of_run_config,                          &
                      dt_coupling_config,                              &
                      dt_max_config,                                   &
+                     dt_min_config,                                   &
+                     dt_startup_phase_config,                         &
                      dt_thermo_config,                                &
                      dt_climate_config,                               &
                      dt_ocean_config,                                 &
@@ -1879,18 +1898,30 @@ CONTAINS
                      do_write_debug_data_config,                      &
                      do_check_for_NaN_config,                         &
                      do_time_display_config,                          &
+                     lambda_M_NAM_config,                             &
+                     phi_M_NAM_config,                                &
+                     beta_stereo_NAM_config,                          &
                      xmin_NAM_config,                                 &
                      xmax_NAM_config,                                 &
                      ymin_NAM_config,                                 &
                      ymax_NAM_config,                                 &
+                     lambda_M_EAS_config,                             &
+                     phi_M_EAS_config,                                &
+                     beta_stereo_EAS_config,                          &
                      xmin_EAS_config,                                 &
                      xmax_EAS_config,                                 &
                      ymin_EAS_config,                                 &
                      ymax_EAS_config,                                 &
+                     lambda_M_GRL_config,                             &
+                     phi_M_GRL_config,                                &
+                     beta_stereo_GRL_config,                          &
                      xmin_GRL_config,                                 &
                      xmax_GRL_config,                                 &
                      ymin_GRL_config,                                 &
                      ymax_GRL_config,                                 &
+                     lambda_M_ANT_config,                             &
+                     phi_M_ANT_config,                                &
+                     beta_stereo_ANT_config,                          &
                      xmin_ANT_config,                                 &
                      xmax_ANT_config,                                 &
                      ymin_ANT_config,                                 &
@@ -2002,7 +2033,6 @@ CONTAINS
                      pc_eta_min_config,                               &
                      pc_max_timestep_iterations_config,               &
                      pc_redo_tol_config,                              &
-                     dt_min_config,                                   &
                      ice_thickness_west_BC_config,                    &
                      ice_thickness_east_BC_config,                    &
                      ice_thickness_south_BC_config,                   &
@@ -2546,6 +2576,8 @@ CONTAINS
     C%end_time_of_run                          = end_time_of_run_config
     C%dt_coupling                              = dt_coupling_config
     C%dt_max                                   = dt_max_config
+    C%dt_min                                   = dt_min_config
+    C%dt_startup_phase                         = dt_startup_phase_config
     C%dt_thermo                                = dt_thermo_config
     C%dt_climate                               = dt_climate_config
     C%dt_ocean                                 = dt_ocean_config
@@ -2594,24 +2626,40 @@ CONTAINS
     C%do_check_for_NaN                         = do_check_for_NaN_config
     C%do_time_display                          = do_time_display_config
 
-    ! Domain size for the four regions
-    ! ================================
+    ! == The four model regions
+    ! =========================
 
+    ! North America
+    C%lambda_M_NAM                             = lambda_M_NAM_config
+    C%phi_M_NAM                                = phi_M_NAM_config
+    C%beta_stereo_NAM                          = beta_stereo_NAM_config
     C%xmin_NAM                                 = xmin_NAM_config
     C%xmax_NAM                                 = xmax_NAM_config
     C%ymin_NAM                                 = ymin_NAM_config
     C%ymax_NAM                                 = ymax_NAM_config
 
+    ! Eurasia
+    C%lambda_M_EAS                             = lambda_M_EAS_config
+    C%phi_M_EAS                                = phi_M_EAS_config
+    C%beta_stereo_EAS                          = beta_stereo_EAS_config
     C%xmin_EAS                                 = xmin_EAS_config
     C%xmax_EAS                                 = xmax_EAS_config
     C%ymin_EAS                                 = ymin_EAS_config
     C%ymax_EAS                                 = ymax_EAS_config
 
+    ! Greenland
+    C%lambda_M_GRL                             = lambda_M_GRL_config
+    C%phi_M_GRL                                = phi_M_GRL_config
+    C%beta_stereo_GRL                          = beta_stereo_GRL_config
     C%xmin_GRL                                 = xmin_GRL_config
     C%xmax_GRL                                 = xmax_GRL_config
     C%ymin_GRL                                 = ymin_GRL_config
     C%ymax_GRL                                 = ymax_GRL_config
 
+    ! Antarctica
+    C%lambda_M_ANT                             = lambda_M_ANT_config
+    C%phi_M_ANT                                = phi_M_ANT_config
+    C%beta_stereo_ANT                          = beta_stereo_ANT_config
     C%xmin_ANT                                 = xmin_ANT_config
     C%xmax_ANT                                 = xmax_ANT_config
     C%ymin_ANT                                 = ymin_ANT_config
@@ -3280,23 +3328,6 @@ CONTAINS
     C%type_margin                              = 6
     C%type_groundingline                       = 7
     C%type_calvingfront                        = 8
-
-   ! Parameters of the polar stereographic projections of the four model regions
-   ! (These have to match the values used to create the input files!)
-   ! ===========================================================================
-
-    C%lambda_M_NAM                             = 265._dp
-    C%lambda_M_EAS                             =  40._dp
-    C%lambda_M_GRL                             = 315._dp
-    C%lambda_M_ANT                             =   0._dp
-    C%phi_M_NAM                                =  62._dp
-    C%phi_M_EAS                                =  70._dp
-    C%phi_M_GRL                                =  90._dp
-    C%phi_M_ANT                                = -90._dp
-    C%alpha_stereo_NAM                         =  19._dp
-    C%alpha_stereo_EAS                         =  19._dp
-    C%alpha_stereo_GRL                         =  20._dp
-    C%alpha_stereo_ANT                         =  19._dp
 
   END SUBROUTINE copy_variables_to_struct
 

@@ -169,7 +169,7 @@ CONTAINS
     ! If so specified, remove all floating ice beyond the present-day calving front
     IF (C%remove_shelves_larger_than_PD) THEN
       DO vi = mesh%vi1, mesh%vi2
-        IF (refgeo_PD%Hi( vi) == 0._dp .AND. refgeo_PD%Hb( vi) < 0._dp) THEN
+        IF (refgeo_PD%Hi( vi) == 0._dp) THEN ! .AND. refgeo_PD%Hb( vi) < 0._dp) THEN
           ice%Hi_a( vi) = 0._dp
         END IF
       END DO

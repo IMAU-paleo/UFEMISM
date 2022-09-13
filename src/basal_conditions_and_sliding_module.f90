@@ -25,10 +25,14 @@ MODULE basal_conditions_and_sliding_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_1D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              SSA_Schoof2006_analytical_solution, extrapolate_Gaussian_floodfill_mesh
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_module,                   ONLY: debug, write_to_debug_file, create_BIV_bed_roughness_file_mesh, &
+                                             create_BIV_bed_roughness_file_grid, inquire_BIV_target_velocity, &
+                                             read_BIV_target_velocity, get_grid_from_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                              type_reference_geometry, type_grid, type_restart_data
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D
+  USE data_types_netcdf_module,        ONLY: type_netcdf_BIV_target_velocity
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D, calc_remapping_operator_grid2mesh, &
+                                             deallocate_remapping_operators_grid2mesh, map_grid2mesh_2D
   USE mesh_help_functions_module,      ONLY: mesh_bilinear_dp, find_containing_vertex
 
   IMPLICIT NONE
@@ -85,6 +89,11 @@ CONTAINS
 
     ! Bed roughness
     CALL initialise_bed_roughness( mesh, ice, restart)
+
+    ! Basal inversion
+    IF (C%do_BIVgeo) THEN
+      CALL initialise_basal_inversion( mesh, ice)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
@@ -343,7 +352,7 @@ CONTAINS
     ! Inversion-stuff allocation
     ! ==========================
 
-    IF (C%do_basal_sliding_inversion) THEN
+    IF (C%do_BIVgeo) THEN
       IF (C%choice_sliding_law == 'Weertman' .OR. &
           C%choice_sliding_law == 'Tsai2015' .OR. &
           C%choice_sliding_law == 'Schoof2005') THEN
@@ -430,7 +439,7 @@ CONTAINS
     ! Inversion initialisation
     ! ========================
 
-    IF (C%do_basal_sliding_inversion) THEN
+    IF (C%do_BIVgeo) THEN
       IF (C%choice_sliding_law == 'Weertman' .OR. &
           C%choice_sliding_law == 'Tsai2015' .OR. &
           C%choice_sliding_law == 'Schoof2005') THEN
@@ -1551,9 +1560,9 @@ CONTAINS
 
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Power-law sliding law
-      IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
+      IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
-        IF (C%do_basal_sliding_inversion) THEN
+        IF (C%do_BIVgeo) THEN
           CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
@@ -1563,10 +1572,10 @@ CONTAINS
     ELSEIF (C%choice_sliding_law == 'Tsai2015' .OR. &
             C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation
-      IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
+      IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
-        IF (C%do_basal_sliding_inversion) THEN
+        IF (C%do_BIVgeo) THEN
           CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
@@ -1578,10 +1587,10 @@ CONTAINS
             C%choice_sliding_law == 'Coulomb_regularised' .OR. &
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Yield-stress sliding law
-      IF (C%do_basal_sliding_inversion .OR. C%choice_basal_roughness == 'restart') THEN
+      IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
         CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
-        IF (C%do_basal_sliding_inversion) THEN
+        IF (C%do_BIVgeo) THEN
           CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
         END IF
       ELSE
@@ -1596,7 +1605,7 @@ CONTAINS
     ! == Reinitialise values
     ! ======================
 
-    IF (.NOT. C%do_basal_sliding_inversion) THEN
+    IF (.NOT. C%do_BIVgeo) THEN
       ! Do not reset the values if we are doing an inversion (values from previous
       ! time-step and mesh remapped in the previous step above)
 
@@ -1637,7 +1646,17 @@ CONTAINS
       END IF ! (C%choice_basal_roughness)
       CALL sync
 
-    END IF ! (.NOT. C%do_basal_sliding_inversion)
+    END IF ! (.NOT. C%do_BIVgeo)
+
+    ! Basal inversion target velocity
+    ! ===============================
+
+    IF (C%do_BIVgeo) THEN
+      IF (C%choice_BIVgeo_method == 'Berends2022') THEN
+        CALL deallocate_shared( ice%wBIV_uabs_surf_target)
+        CALL initialise_basal_inversion_target_velocity( mesh_new, ice)
+      END IF
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1708,7 +1727,7 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
 
     ! Define the ice thickness factor for scaling of inversion
-    h_scale = 1.0_dp/C%basal_sliding_inv_scale
+    h_scale = 1.0_dp/C%BIVgeo_Bernales_scale
 
     DO vi = mesh%vi1, mesh%vi2
 
@@ -1731,8 +1750,8 @@ CONTAINS
         END IF
 
         ! If the difference/fraction is outside the specified tolerance
-        IF (ABS(h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
-            ABS(h_dfrac) >= C%basal_sliding_inv_tol_frac) THEN
+        IF (ABS(h_delta) >= C%BIVgeo_Bernales_tol_diff .OR. &
+            ABS(h_dfrac) >= C%BIVgeo_Bernales_tol_frac) THEN
 
           ! Scale the difference and restrict it to the [-1.5 1.5] range
           h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
@@ -1765,7 +1784,7 @@ CONTAINS
               ! Adjust based on scaled ice thickness difference
               new_val = new_val * (10._dp ** (-h_delta))
               ! Constrain adjusted value to roughness limits
-              new_val = MIN(MAX(new_val, C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+              new_val = MIN(MAX(new_val, C%BIVgeo_Bernales_phi_min), C%BIVgeo_Bernales_phi_max)
               ! Replace old bed roughness value with the adjusted one
               ice%phi_fric_inv_a( vi) = new_val
 
@@ -1790,7 +1809,7 @@ CONTAINS
     ! Smoothing
     ! =========
 
-    IF (C%do_basal_sliding_smoothing) THEN
+    IF (C%BIVgeo_Bernales_do_smooth) THEN
       ! Smooth the resulting field
 
       IF (C%choice_sliding_law == 'Weertman' .OR. &
@@ -1802,11 +1821,11 @@ CONTAINS
         CALL sync
 
         ! Smooth the local variable
-        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%basal_sliding_inv_rsmooth)
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%BIVgeo_Bernales_rsmooth)
 
         ! Combined the smoothed and raw inverted parameter through a weighed average
         DO vi = mesh%vi1, mesh%vi2
-            ice%beta_sq_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%beta_sq_inv_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+            ice%beta_sq_a( vi) = (1._dp - C%BIVgeo_Bernales_wsmooth) * ice%beta_sq_inv_a( vi) + C%BIVgeo_Bernales_wsmooth * rough_smoothed( vi)
             ! Make sure the variable stays within the prescribed limits
             ice%beta_sq_a( vi) = MIN(MAX(ice%beta_sq_a( vi), 1._dp), 10._dp)
         END DO
@@ -1821,13 +1840,13 @@ CONTAINS
         CALL sync
 
         ! Smooth the local variable
-        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%basal_sliding_inv_rsmooth)
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%BIVgeo_Bernales_rsmooth)
 
         ! Combined the smoothed and raw inverted parameter through a weighed average
         DO vi = mesh%vi1, mesh%vi2
-            ice%phi_fric_a( vi) = (1._dp - C%basal_sliding_inv_wsmooth) * ice%phi_fric_inv_a( vi) + C%basal_sliding_inv_wsmooth * rough_smoothed( vi)
+            ice%phi_fric_a( vi) = (1._dp - C%BIVgeo_Bernales_wsmooth) * ice%phi_fric_inv_a( vi) + C%BIVgeo_Bernales_wsmooth * rough_smoothed( vi)
             ! Make sure the variable stays within the prescribed limits
-            ice%phi_fric_a( vi) = MIN(MAX(ice%phi_fric_a( vi), C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+            ice%phi_fric_a( vi) = MIN(MAX(ice%phi_fric_a( vi), C%BIVgeo_Bernales_phi_min), C%BIVgeo_Bernales_phi_max)
         END DO
         CALL sync
 
@@ -1856,7 +1875,7 @@ CONTAINS
         CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
       END IF
 
-    END IF ! (C%do_basal_sliding_smoothing)
+    END IF ! (C%BIVgeo_Bernales_do_smooth)
     CALL sync
 
     ! Extrapolate the resulting field
@@ -2002,8 +2021,8 @@ CONTAINS
       h_dfrac = h_delta / MAX( refgeo%Hi( vi), 1._dp)
 
       ! If the difference/fraction is outside the specified tolerance
-      IF (ABS( h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
-          ABS( h_dfrac) >= C%basal_sliding_inv_tol_frac) THEN
+      IF (ABS( h_delta) >= C%BIVgeo_Bernales_tol_diff .OR. &
+          ABS( h_dfrac) >= C%BIVgeo_Bernales_tol_frac) THEN
 
         ! Further adjust only where the previous value is not improving the result
         IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0.0_dp) .OR. &
@@ -2186,6 +2205,167 @@ CONTAINS
     END IF
 
   END SUBROUTINE trace_flowline_downstream
+
+  SUBROUTINE write_inverted_bed_roughness_to_file( mesh, grid, ice)
+    ! Create a new NetCDF file and write the inverted bed roughness to it
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_inverted_bed_roughness_to_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    CALL create_BIV_bed_roughness_file_mesh( mesh,       ice)
+    CALL create_BIV_bed_roughness_file_grid( mesh, grid, ice)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_inverted_bed_roughness_to_file
+
+  SUBROUTINE initialise_basal_inversion( mesh, ice)
+    ! Fill in the initial guess for the bed roughness
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_inversion'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! If needed, initialise target velocity fields
+    ! ============================================
+
+    IF     (C%choice_BIVgeo_method == 'PDC2012' .OR. &
+            C%choice_BIVgeo_method == 'Lipscomb2021' .OR. &
+            C%choice_BIVgeo_method == 'Bernales2017') THEN
+      ! Not needed in these methods
+    ELSEIF (C%choice_BIVgeo_method == 'CISM+' .OR. &
+            C%choice_BIVgeo_method == 'Berends2022') THEN
+      ! Needed in these methods
+
+      CALL initialise_basal_inversion_target_velocity( mesh, ice)
+
+    ELSE
+      CALL crash('unknown choice_BIVgeo_method "' // TRIM(C%choice_BIVgeo_method) // '"!')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_basal_inversion
+  SUBROUTINE initialise_basal_inversion_target_velocity( mesh, ice)
+    ! Initialise the target velocity fields used in a velocity-based basal inversion routine
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_inversion_target_velocity'
+    TYPE(type_netcdf_BIV_target_velocity)              :: netcdf
+    TYPE(type_grid)                                    :: grid_raw
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_surf_raw,  v_surf_raw,  uabs_surf_raw
+    INTEGER                                            :: wu_surf_raw, wv_surf_raw, wuabs_surf_raw
+    INTEGER                                            :: i,j
+    REAL(dp)                                           :: NaN
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine filename
+    IF     (C%choice_BIVgeo_method == 'CISM+' .OR. &
+            C%choice_BIVgeo_method == 'Berends2022') THEN
+      netcdf%filename = C%BIVgeo_target_velocity_filename
+    ELSE
+      CALL crash('unknown choice_BIVgeo_method "' // TRIM(C%choice_BIVgeo_method) // '"!')
+    END IF
+
+    IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( netcdf%filename), '...'
+
+    ! Set up the grid for this input file
+    CALL get_grid_from_file( netcdf%filename, grid_raw)
+
+    ! Calculate the mapping operator between this grid and the mesh
+    CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
+
+    ! Inquire if all the required fields are present in the specified NetCDF file
+    CALL inquire_BIV_target_velocity( netcdf)
+    CALL sync
+
+    ! Allocate memory for raw data
+    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, u_surf_raw   , wu_surf_raw   )
+    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, v_surf_raw   , wv_surf_raw   )
+    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, uabs_surf_raw, wuabs_surf_raw)
+
+    ! Read data from input file
+    CALL read_BIV_target_velocity( netcdf, u_surf_raw, v_surf_raw)
+    CALL sync
+
+    ! NOTE: do not check for NaNs in the target velocity field. The Rignot 2011 Antarctica velocity product
+    !       has a lot of missing data points, indicated by NaN values. This is acceptable, the basal inversion
+    !       routine can handle that.
+
+!    ! Safety
+!    CALL check_for_NaN_dp_2D( u_surf_raw, 'u_surf_raw')
+!    CALL check_for_NaN_dp_2D( v_surf_raw, 'v_surf_raw')
+
+    ! Set missing values to NaN
+    NaN = 0._dp
+    NaN = 0._dp / NaN
+    DO i = grid_raw%i1, grid_raw%i2
+    DO j = 1, grid_raw%ny
+      IF (u_surf_raw( i,j) == 0._dp .AND. v_surf_raw( i,j) == 0._dp) THEN
+        u_surf_raw( i,j) = NaN
+        v_surf_raw( i,j) = NaN
+      END IF
+    END DO
+    END DO
+    CALL sync
+
+    ! Get absolute velocity
+    DO i = grid_raw%i1, grid_raw%i2
+    DO j = 1, grid_raw%ny
+      uabs_surf_raw( i,j) = SQRT( u_surf_raw( i,j)**2 + v_surf_raw( i,j)**2)
+    END DO
+    END DO
+    CALL sync
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( mesh%nV, ice%BIV_uabs_surf_target, ice%wBIV_uabs_surf_target)
+
+    ! Map (transposed) raw data to the model mesh
+    CALL map_grid2mesh_2D( grid_raw, mesh, uabs_surf_raw, ice%BIV_uabs_surf_target)
+
+    ! Deallocate raw data
+    CALL deallocate_shared( grid_raw%wnx  )
+    CALL deallocate_shared( grid_raw%wny  )
+    CALL deallocate_shared( grid_raw%wdx  )
+    CALL deallocate_shared( grid_raw%wx   )
+    CALL deallocate_shared( grid_raw%wy   )
+    CALL deallocate_remapping_operators_grid2mesh( grid_raw)
+    CALL deallocate_shared( wu_surf_raw   )
+    CALL deallocate_shared( wv_surf_raw   )
+    CALL deallocate_shared( wuabs_surf_raw)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_basal_inversion_target_velocity
 
 
 END MODULE basal_conditions_and_sliding_module

@@ -45,7 +45,7 @@ MODULE UFEMISM_main_model
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
 
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
-  USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
+  USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion, write_inverted_bed_roughness_to_file
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
@@ -217,9 +217,9 @@ CONTAINS
       ! == Basal sliding inversion
       ! ==========================
 
-      IF (C%do_basal_sliding_inversion) THEN
+      IF (C%do_BIVgeo) THEN
         IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, C%dt_basal)
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, C%BIVgeo_dt)
         END IF
       END IF
 
@@ -288,6 +288,7 @@ CONTAINS
       IF (C%choice_SMB_model == 'IMAU-ITM') THEN
         CALL write_regional_text_output( region)
       END IF
+      IF (C%do_BIVgeo) CALL write_inverted_bed_roughness_to_file( region%mesh, region%grid_output, region%ice)
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
@@ -802,7 +803,7 @@ CONTAINS
       END IF
 
       region%t_last_basal   = C%start_time_of_run
-      region%t_next_basal   = C%start_time_of_run + C%dt_basal
+      region%t_next_basal   = C%start_time_of_run + C%BIVgeo_Dt
       region%do_basal       = .FALSE.
 
       region%t_last_SMB_inv = C%start_time_of_run

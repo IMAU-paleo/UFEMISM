@@ -902,7 +902,7 @@ CONTAINS
       IF (region%time == region%t_next_basal) THEN
         region%do_basal       = .TRUE.
         region%t_last_basal   = region%time
-        region%t_next_basal   = region%t_last_basal + C%dt_basal
+        region%t_next_basal   = region%t_last_basal + C%BIVgeo_dt
       END IF
       t_next = MIN( t_next, region%t_next_basal)
 

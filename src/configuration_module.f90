@@ -69,7 +69,6 @@ MODULE configuration_module
     REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
     REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
-    REAL(dp)            :: dt_basal_config                             = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
     REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! == Which ice sheets do we simulate?
@@ -439,17 +438,21 @@ MODULE configuration_module
     REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
 
-    ! Basal sliding inversion
+    ! Basal inversion
+    LOGICAL             :: do_BIVgeo_config                            = .FALSE.                          ! Whether or not to perform a geometry-based basal inversion (following Pollard & DeConto, 2012)
+    REAL(dp)            :: BIVgeo_t_start_config                       = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+    REAL(dp)            :: BIVgeo_t_end_config                         = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
     CHARACTER(LEN=256)  :: choice_BIVgeo_method_config                 = 'Berends2022'                    ! Choice of geometry-based inversion method: "PDC2012", "Lipscomb2021", "CISM+", "Berends2022", "Bernales2017"
-    LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-    LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
-    REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
-    REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
-    REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
-    REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
-    REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
-    REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
-    REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+    REAL(dp)            :: BIVgeo_dt_config                            = 5._dp                            ! Time step      for bed roughness updates in the PDC2012 geometry-based basal inversion method [yr]
+    CHARACTER(LEN=256)  :: BIVgeo_filename_output_config               = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
+    LOGICAL             :: BIVgeo_Bernales_do_smooth_config            = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
+    REAL(dp)            :: BIVgeo_Bernales_scale_config                = 10000._dp                        ! Scaling constant for inversion procedure [m]
+    REAL(dp)            :: BIVgeo_Bernales_rsmooth_config              = 500._dp                          ! Smoothing radius for inversion procedure [m]
+    REAL(dp)            :: BIVgeo_Bernales_wsmooth_config              = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
+    REAL(dp)            :: BIVgeo_Bernales_phi_min_config              = 2._dp                            ! Minimum value of phi_fric allowed during inversion
+    REAL(dp)            :: BIVgeo_Bernales_phi_max_config              = 30._dp                           ! Maximum value of phi_fric allowed during inversion
+    REAL(dp)            :: BIVgeo_Bernales_tol_diff_config             = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
+    REAL(dp)            :: BIVgeo_Bernales_tol_frac_config             = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
     REAL(dp)            :: BIVgeo_Berends2022_tauc_config              = 10._dp                           ! Timescale       in the Berends2022 geometry/velocity-based basal inversion method [yr]
     REAL(dp)            :: BIVgeo_Berends2022_H0_config                = 100._dp                          ! First  thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
     REAL(dp)            :: BIVgeo_Berends2022_u0_config                = 250._dp                          ! First  velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
@@ -861,7 +864,6 @@ MODULE configuration_module
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
-    REAL(dp)                            :: dt_basal
     REAL(dp)                            :: dt_SMB_inv
 
     ! Which ice sheets do we simulate?
@@ -1194,16 +1196,20 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: basal_roughness_filename
 
     ! Basal roughness inversion
+    LOGICAL                             :: do_BIVgeo
+    REAL(dp)                            :: BIVgeo_t_start
+    REAL(dp)                            :: BIVgeo_t_end
     CHARACTER(LEN=256)                  :: choice_BIVgeo_method
-    LOGICAL                             :: do_basal_sliding_inversion
-    LOGICAL                             :: do_basal_sliding_smoothing
-    REAL(dp)                            :: basal_sliding_inv_scale
-    REAL(dp)                            :: basal_sliding_inv_rsmooth
-    REAL(dp)                            :: basal_sliding_inv_wsmooth
-    REAL(dp)                            :: basal_sliding_inv_phi_min
-    REAL(dp)                            :: basal_sliding_inv_phi_max
-    REAL(dp)                            :: basal_sliding_inv_tol_diff
-    REAL(dp)                            :: basal_sliding_inv_tol_frac
+    REAL(dp)                            :: BIVgeo_dt
+    CHARACTER(LEN=256)                  :: BIVgeo_filename_output
+    LOGICAL                             :: BIVgeo_Bernales_do_smooth
+    REAL(dp)                            :: BIVgeo_Bernales_scale
+    REAL(dp)                            :: BIVgeo_Bernales_rsmooth
+    REAL(dp)                            :: BIVgeo_Bernales_wsmooth
+    REAL(dp)                            :: BIVgeo_Bernales_phi_min
+    REAL(dp)                            :: BIVgeo_Bernales_phi_max
+    REAL(dp)                            :: BIVgeo_Bernales_tol_diff
+    REAL(dp)                            :: BIVgeo_Bernales_tol_frac
     REAL(dp)                            :: BIVgeo_Berends2022_tauc
     REAL(dp)                            :: BIVgeo_Berends2022_H0
     REAL(dp)                            :: BIVgeo_Berends2022_u0
@@ -1876,7 +1882,6 @@ CONTAINS
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
                      dt_SELEN_config,                                 &
-                     dt_basal_config,                                 &
                      dt_SMB_inv_config,                               &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
@@ -2069,16 +2074,20 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
+                     do_BIVgeo_config,                                &
+                     BIVgeo_t_start_config,                           &
+                     BIVgeo_t_end_config,                             &
                      choice_BIVgeo_method_config,                     &
-                     do_basal_sliding_inversion_config,               &
-                     do_basal_sliding_smoothing_config,               &
-                     basal_sliding_inv_scale_config,                  &
-                     basal_sliding_inv_rsmooth_config,                &
-                     basal_sliding_inv_wsmooth_config,                &
-                     basal_sliding_inv_phi_min_config,                &
-                     basal_sliding_inv_phi_max_config,                &
-                     basal_sliding_inv_tol_diff_config,               &
-                     basal_sliding_inv_tol_frac_config,               &
+                     BIVgeo_dt_config,                                &
+                     BIVgeo_filename_output_config,                   &
+                     BIVgeo_Bernales_do_smooth_config,                &
+                     BIVgeo_Bernales_scale_config,                    &
+                     BIVgeo_Bernales_rsmooth_config,                  &
+                     BIVgeo_Bernales_wsmooth_config,                  &
+                     BIVgeo_Bernales_phi_min_config,                  &
+                     BIVgeo_Bernales_phi_max_config,                  &
+                     BIVgeo_Bernales_tol_diff_config,                 &
+                     BIVgeo_Bernales_tol_frac_config,                 &
                      BIVgeo_Berends2022_tauc_config,                  &
                      BIVgeo_Berends2022_H0_config,                    &
                      BIVgeo_Berends2022_u0_config,                    &
@@ -2587,7 +2596,6 @@ CONTAINS
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
-    C%dt_basal                                 = dt_basal_config
     C%dt_SMB_inv                               = dt_SMB_inv_config
 
     ! Which ice sheets do we simulate?
@@ -2921,17 +2929,21 @@ CONTAINS
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
 
-    ! Basal roughness inversion
+    ! Basal inversion
+    C%do_BIVgeo                                = do_BIVgeo_config
+    C%BIVgeo_t_start                           = BIVgeo_t_start_config
+    C%BIVgeo_t_end                             = BIVgeo_t_end_config
     C%choice_BIVgeo_method                     = choice_BIVgeo_method_config
-    C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
-    C%do_basal_sliding_smoothing               = do_basal_sliding_smoothing_config
-    C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
-    C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
-    C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
-    C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
-    C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
-    C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
-    C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
+    C%BIVgeo_dt                                = BIVgeo_dt_config
+    C%BIVgeo_filename_output                   = BIVgeo_filename_output_config
+    C%BIVgeo_Bernales_do_smooth                = BIVgeo_Bernales_do_smooth_config
+    C%BIVgeo_Bernales_scale                    = BIVgeo_Bernales_scale_config
+    C%BIVgeo_Bernales_rsmooth                  = BIVgeo_Bernales_rsmooth_config
+    C%BIVgeo_Bernales_wsmooth                  = BIVgeo_Bernales_wsmooth_config
+    C%BIVgeo_Bernales_phi_min                  = BIVgeo_Bernales_phi_min_config
+    C%BIVgeo_Bernales_phi_max                  = BIVgeo_Bernales_phi_max_config
+    C%BIVgeo_Bernales_tol_diff                 = BIVgeo_Bernales_tol_diff_config
+    C%BIVgeo_Bernales_tol_frac                 = BIVgeo_Bernales_tol_frac_config
     C%BIVgeo_Berends2022_tauc                  = BIVgeo_Berends2022_tauc_config
     C%BIVgeo_Berends2022_H0                    = BIVgeo_Berends2022_H0_config
     C%BIVgeo_Berends2022_u0                    = BIVgeo_Berends2022_u0_config

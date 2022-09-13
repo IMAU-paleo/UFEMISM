@@ -27,7 +27,8 @@ MODULE basal_conditions_and_sliding_module
                                              SSA_Schoof2006_analytical_solution, extrapolate_Gaussian_floodfill_mesh
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
-                                             type_reference_geometry, type_grid, type_restart_data
+                                             type_reference_geometry, type_grid, type_restart_data, &
+                                             type_SMB_model
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, smooth_Gaussian_2D
 
   IMPLICIT NONE
@@ -1038,7 +1039,7 @@ CONTAINS
 ! ===== Sliding laws =====
 ! ========================
 
-  SUBROUTINE calc_sliding_law( mesh, ice, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law( mesh, ice, SMB, u_a, v_a, beta_a)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
 
     IMPLICIT NONE
@@ -1046,6 +1047,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
@@ -1071,7 +1073,7 @@ CONTAINS
       CALL calc_sliding_law_Coulomb(             mesh, ice, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Coulomb_regularised') THEN
       ! Regularised Coulomb-type sliding law
-      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
+      CALL calc_sliding_law_Coulomb_regularised( mesh, ice, SMB, u_a, v_a, beta_a)
     ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
       ! Modified power-law relation according to Tsai et al. (2015)
       CALL calc_sliding_law_Tsai2015(            mesh, ice, u_a, v_a, beta_a)
@@ -1175,7 +1177,7 @@ CONTAINS
 
   END SUBROUTINE calc_sliding_law_Coulomb
 
-  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
+  SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, SMB, u_a, v_a, beta_a)
     ! Regularised Coulomb-type sliding law
 
     IMPLICIT NONE
@@ -1183,6 +1185,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_a
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_a
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: beta_a
@@ -1190,14 +1193,56 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_Coulomb_regularised'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: uabs
+    REAL(dp)                                           :: uabs, tauc_max, ti_diff
+    REAL(dp)                                           :: w_ti, w_pwp, w_run, w_tot
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Calculate the till yield stress from the till friction angle and the effective pressure
     DO vi = mesh%vi1, mesh%vi2
+
+      ! Predictor step
+      ! ==============
+
+      ! Compute the modelled till yield stress
       ice%tauc_a( vi) = TAN((pi / 180._dp) * ice%phi_fric_a( vi)) * ice%Neff_a( vi)
+
+      ! Weights
+      ! =======
+
+      ! Compute ice basal temperature relative to the pressure melting point of ice
+      ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
+      ! Compute weight based on temperature difference
+      ! w_ti = EXP((-0.6931_dp/C%slid_submelt_halfpoint) * ti_diff)
+      w_ti = 1._dp - (ti_diff**5._dp / 10._dp**5._dp)
+      ! Limit weight to [0 1] interval, just in case
+      w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
+
+      ! Compute cubic-root-of-complementary-weight based on pore water pressure
+      w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
+      ! Compute weight, where 1: saturated and 0: dry
+      w_pwp = 1._dp - w_pwp**3._dp
+      ! Limit weight to [0 1] interval (required)
+      w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
+
+      ! Compute weight based on runoff, as an estimator for percolation
+      w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**2.0_dp) / (.1_dp**2.0_dp) )
+      ! Limit weight to [0 1] interval, just in case
+      w_run = MAX( 0._dp, MIN( 1._dp, w_run))
+
+      ! Compute final weight
+      w_tot = 1._dp!MAX( w_ti, w_pwp, w_run)
+
+      ! Corrector step
+      ! ==============
+
+      ! Compute the maximum till yield stress possible based on inversion limits
+      tauc_max = TAN((pi / 180._dp) * C%basal_sliding_inv_phi_max) * ice%Neff_a( vi)
+
+      ! Compute weighed average between max and modelled till yield stress
+      ice%tauc_a( vi) = w_tot * ice%tauc_a( vi) + (1._dp - w_tot) * tauc_max
+
     END DO
     CALL sync
 
@@ -1715,7 +1760,7 @@ CONTAINS
 ! ===== Inversion =====
 ! =====================
 
-  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo, time)
+  SUBROUTINE basal_sliding_inversion( mesh, grid, ice, refgeo, SMB, time)
     ! Iteratively invert for basal friction conditions under the grounded ice sheet,
     ! and extrapolate the resulting field over the rest of the domain
 
@@ -1726,6 +1771,7 @@ CONTAINS
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables
@@ -1733,6 +1779,7 @@ CONTAINS
     INTEGER                                            :: vi
     REAL(dp)                                           :: h_scale, h_delta, h_dfrac
     REAL(dp)                                           :: new_val, min_lim, w_smooth
+    REAL(dp)                                           :: ti_diff, w_ti, w_pwp, w_run, w_tot
     INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
     REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
     INTEGER                                            :: wmask, wmask_filled, wrough_smoothed
@@ -1795,9 +1842,35 @@ CONTAINS
           ! Scale the difference and restrict it to the [-1.5 1.5] range
           h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
 
+          ! Compute ice basal temperature relative to the pressure melting point of ice
+          ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
+          ! Compute scaling factor based on temperature difference
+          ! w_ti = EXP((-0.6931_dp/C%slid_submelt_halfpoint) * ti_diff)
+          w_ti = 1._dp - (ti_diff**2._dp / 10._dp**2._dp)
+          ! Limit scaling factor to [0 1] interval, just in case
+          w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
+
+          ! Compute cubic-root-of-complementary-weight based on pore water pressure
+          w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
+          ! Compute weight, where 1: saturated and 0: dry
+          w_pwp = 1._dp - w_pwp**3._dp
+          ! Limit weight to [0 1] interval
+          w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
+
+          ! Compute weight based on runoff
+          w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**3.0_dp) / (.5_dp**3.0_dp) )
+          ! Limit weight to [0 1] interval, just in case
+          w_run = MAX( 0._dp, MIN( 1._dp, w_run))
+
+          ! Compute final weight
+          w_tot = MAX( w_ti, w_pwp, w_run)
+
+          ! Reduce the adjustment based on (low) basal temperatures, (poor) till saturation, and (low) percolation
+          h_delta = h_delta * w_tot
+
           ! Further adjust only where the previous value is not significantly improving the result
-          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -0.0_dp) .OR. &
-               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  0.0_dp) ) THEN
+          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0.0_dp) .OR. &
+               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0.0_dp) ) THEN
 
             ! Power-law-style sliding laws
             IF (C%choice_sliding_law == 'Weertman' .OR. &

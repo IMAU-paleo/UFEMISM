@@ -122,6 +122,7 @@ MODULE configuration_module
   ! ============
 
     LOGICAL             :: do_write_debug_data_config                  = .FALSE.                          ! Whether or not the debug NetCDF file should be created and written to
+    LOGICAL             :: do_write_grid_data_config                   = .FALSE.                          ! Whether or not the grid NetCDF files should be created and written to
     LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
     LOGICAL             :: do_time_display_config                      = .FALSE.                          ! Print current model time to screen
 
@@ -338,11 +339,13 @@ MODULE configuration_module
   ! == Ice dynamics - velocity
   ! ==========================
 
-    CHARACTER(LEN=256)  :: choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamica approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+    CHARACTER(LEN=256)  :: choice_ice_dynamics_config                  = 'DIVA'                           ! Choice of ice-dynamical approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
     REAL(dp)            :: n_flow_config                               = 3.0_dp                           ! Exponent in Glen's flow law
     REAL(dp)            :: m_enh_sheet_config                          = 1.0_dp                           ! Ice flow enhancement factor for grounded ice
     REAL(dp)            :: m_enh_shelf_config                          = 1.0_dp                           ! Ice flow enhancement factor for floating ice
     CHARACTER(LEN=256)  :: choice_ice_margin_config                    = 'infinite_slab'                  ! Choice of ice margin boundary conditions: "BC", "infinite_slab"
+    LOGICAL             :: do_hybrid_Bernales2017_config               = .TRUE.                           ! Apply SStA + reduced SIA hybrid scheme when using the SIA/SSA method
+    REAL(dp)            :: vel_ref_Bernales2017_config                 = 30._dp                           ! Reference "onset" velocity for an ice stream (point of half SIA reduction)
     LOGICAL             :: include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
     LOGICAL             :: do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
     LOGICAL             :: do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
@@ -449,6 +452,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
     CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'average'                        ! Values from previous run: "last" (last output) or "average" (running average)
     LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
+    REAL(dp)            :: slid_submelt_halfpoint_config               = 0.6931_dp                        ! Basal temp w.r.t. local melt point at which sliding is reduced by 50% in exp function
 
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
@@ -899,6 +903,7 @@ MODULE configuration_module
     ! =========
 
     LOGICAL                             :: do_write_debug_data
+    LOGICAL                             :: do_write_grid_data
     LOGICAL                             :: do_check_for_NaN
     LOGICAL                             :: do_time_display
 
@@ -1085,6 +1090,8 @@ MODULE configuration_module
     REAL(dp)                            :: m_enh_sheet
     REAL(dp)                            :: m_enh_shelf
     CHARACTER(LEN=256)                  :: choice_ice_margin
+    LOGICAL                             :: do_hybrid_Bernales2017
+    REAL(dp)                            :: vel_ref_Bernales2017
     LOGICAL                             :: include_SSADIVA_crossterms
     LOGICAL                             :: do_GL_subgrid_friction
     LOGICAL                             :: do_smooth_geometry
@@ -1191,6 +1198,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: basal_roughness_filename
     CHARACTER(LEN=256)                  :: basal_roughness_restart_type
     LOGICAL                             :: do_basal_roughness_remap_adjustment
+    REAL                                :: slid_submelt_halfpoint
 
     ! Basal roughness inversion
     LOGICAL                             :: do_basal_sliding_inversion
@@ -1904,6 +1912,7 @@ CONTAINS
                      do_write_regional_scalar_output_config,          &
                      do_write_global_scalar_output_config,            &
                      do_write_debug_data_config,                      &
+                     do_write_grid_data_config,                       &
                      do_check_for_NaN_config,                         &
                      do_time_display_config,                          &
                      xmin_NAM_config,                                 &
@@ -1989,6 +1998,8 @@ CONTAINS
                      m_enh_sheet_config,                              &
                      m_enh_shelf_config,                              &
                      choice_ice_margin_config,                        &
+                     do_hybrid_Bernales2017_config,                   &
+                     vel_ref_Bernales2017_config,                     &
                      include_SSADIVA_crossterms_config,               &
                      do_GL_subgrid_friction_config,                   &
                      do_smooth_geometry_config,                       &
@@ -2070,6 +2081,7 @@ CONTAINS
                      basal_roughness_filename_config,                 &
                      basal_roughness_restart_type_config,             &
                      do_basal_roughness_remap_adjustment_config,      &
+                     slid_submelt_halfpoint_config,                   &
                      do_basal_sliding_inversion_config,               &
                      do_basal_sliding_smoothing_config,               &
                      basal_sliding_inv_t_start_config,                &
@@ -2390,17 +2402,17 @@ CONTAINS
 
     IF (config_filename == '') RETURN
 
-    ! Write the CONFIG namelist to a temporary file
-    namelist_filename = 'config_namelist_temp.txt'
-    OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
-    WRITE( UNIT = namelist_unit, NML  = CONFIG)
-    CLOSE( UNIT = namelist_unit)
+    ! ! Write the CONFIG namelist to a temporary file
+    ! namelist_filename = 'config_namelist_temp.txt'
+    ! OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
+    ! WRITE( UNIT = namelist_unit, NML  = CONFIG)
+    ! CLOSE( UNIT = namelist_unit)
 
-    ! Check the config file for validity
-    CALL check_config_file_validity( config_filename, namelist_filename)
+    ! ! Check the config file for validity
+    ! CALL check_config_file_validity( config_filename, namelist_filename)
 
-    ! Delete the temporary CONFIG namelist file
-    CALL system('rm -f ' // TRIM( namelist_filename))
+    ! ! Delete the temporary CONFIG namelist file
+    ! CALL system('rm -f ' // TRIM( namelist_filename))
 
     ! Open the config file
     OPEN(  UNIT = config_unit, FILE = TRIM( config_filename), STATUS = 'OLD', ACTION = 'READ', IOSTAT = ios)
@@ -2623,6 +2635,7 @@ CONTAINS
     ! =========
 
     C%do_write_debug_data                      = do_write_debug_data_config
+    C%do_write_grid_data                       = do_write_grid_data_config
     C%do_check_for_NaN                         = do_check_for_NaN_config
     C%do_time_display                          = do_time_display_config
 
@@ -2809,6 +2822,8 @@ CONTAINS
     C%m_enh_sheet                              = m_enh_sheet_config
     C%m_enh_shelf                              = m_enh_shelf_config
     C%choice_ice_margin                        = choice_ice_margin_config
+    C%do_hybrid_Bernales2017                   = do_hybrid_Bernales2017_config
+    C%vel_ref_Bernales2017                     = vel_ref_Bernales2017_config
     C%include_SSADIVA_crossterms               = include_SSADIVA_crossterms_config
     C%do_GL_subgrid_friction                   = do_GL_subgrid_friction_config
     C%do_smooth_geometry                       = do_smooth_geometry_config
@@ -2915,6 +2930,7 @@ CONTAINS
     C%basal_roughness_filename                 = basal_roughness_filename_config
     C%basal_roughness_restart_type             = basal_roughness_restart_type_config
     C%do_basal_roughness_remap_adjustment      = do_basal_roughness_remap_adjustment_config
+    C%slid_submelt_halfpoint                   = slid_submelt_halfpoint_config
 
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config

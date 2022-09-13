@@ -23,7 +23,8 @@ MODULE ice_velocity_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
+                                             type_remapping_mesh_mesh, type_SMB_model
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
@@ -137,7 +138,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_SIA
-  SUBROUTINE solve_SSA(  mesh, ice)
+  SUBROUTINE solve_SSA(  mesh, ice, SMB)
     ! Calculate ice velocities using the SSA
 
     IMPLICIT NONE
@@ -145,6 +146,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSA'
@@ -207,18 +209,21 @@ CONTAINS
       CALL calc_effective_viscosity( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
 
       ! Calculate the sliding term beta
-      CALL calc_sliding_term_beta( mesh, ice, ice%u_base_SSA_b, ice%v_base_SSA_b)
+      CALL calc_sliding_term_beta( mesh, ice, SMB, ice%u_base_SSA_b, ice%v_base_SSA_b)
 
       ! Set beta_eff equal to beta; this turns the DIVA into the SSA
       ice%beta_eff_a( mesh%vi1:mesh%vi2) = ice%beta_a( mesh%vi1:mesh%vi2)
       CALL sync
 
-      ! Map beta_eff from the a-grid to the cx/cy-grids
+      ! Map beta_eff from the a-grid to the b-grid
       CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
+
+      ! Map sub-grid grounded fraction from the a-grid to the b-grid
+      CALL map_a_to_b_2D( mesh, ice%f_grndx_a, ice%f_grndx_b)
 
       ! Apply the sub-grid grounded fraction
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grnd_b( ti)**2
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**.5_dp
       END DO
       CALL sync
 
@@ -259,7 +264,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE solve_SSA
-  SUBROUTINE solve_DIVA(  mesh, ice)
+  SUBROUTINE solve_DIVA(  mesh, ice, SMB)
     ! Calculate ice velocities using the DIVA
 
     IMPLICIT NONE
@@ -267,6 +272,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_DIVA'
@@ -328,7 +334,7 @@ CONTAINS
       CALL calc_effective_viscosity( mesh, ice, ice%u_vav_b, ice%v_vav_b)
 
       ! Calculate the sliding term beta
-      CALL calc_sliding_term_beta( mesh, ice, ice%u_vav_b, ice%v_vav_b)
+      CALL calc_sliding_term_beta( mesh, ice, SMB, ice%u_vav_b, ice%v_vav_b)
 
       ! Calculate the F-integral F2
       CALL calc_F_integral( mesh, ice, n = 2._dp)
@@ -391,6 +397,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_secondary_velocities'
     INTEGER                                            :: ti, vi, k
     REAL(dp), DIMENSION(C%nz)                          :: prof
+    REAL(dp)                                           :: w_sia_u, w_sia_v
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -448,39 +455,89 @@ CONTAINS
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
       ! Hybrid SIA/SSA
 
-      ! Set basal velocity equal to SSA answer
-      ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
-      ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
-      CALL sync
+      IF (C%do_hybrid_Bernales2017) THEN
 
-      ! Set 3-D velocities equal to the SIA solution
-      ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
-      ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
-      CALL sync
+        ! Set basal velocity equal to SSA solution
+        ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
+        ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
+        CALL sync
 
-      ! Add the SSA contributions to the 3-D velocities
-      DO k = 1, C%nz
-        ice%u_3D_b( mesh%ti1:mesh%ti2,k) = ice%u_3D_b( mesh%ti1:mesh%ti2,k) + ice%u_base_b( mesh%ti1:mesh%ti2)
-        ice%v_3D_b( mesh%ti1:mesh%ti2,k) = ice%v_3D_b( mesh%ti1:mesh%ti2,k) + ice%v_base_b( mesh%ti1:mesh%ti2)
-      END DO
-      CALL sync
+        DO k = 1, C%nz
+         ! Set 3-D velocities equal to the SSA solution
+          ice%u_3D_b( mesh%ti1:mesh%ti2,k) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
+          ice%v_3D_b( mesh%ti1:mesh%ti2,k) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
+        END DO
+        CALL sync
 
-      ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
-      CALL calc_3D_vertical_velocities( mesh, ice)
+        DO ti = mesh%ti1, mesh%ti2
 
-      ! Copy surface velocity from the 3D fields
-      ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
-      ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
-      CALL sync
+          ! Compute the SIA fraction that will be added to the SSA solution
+          w_sia_u = (2.0_dp/pi) * ATAN( (ABS(ice%u_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
+          w_sia_v = (2.0_dp/pi) * ATAN( (ABS(ice%v_base_SSA_b( ti))**2.0_dp) / (C%vel_ref_Bernales2017**2.0_dp) )
 
-      ! Calculate vertically averaged velocities
-      DO ti = mesh%ti1, mesh%ti2
-        prof = ice%u_3D_b( ti,:)
-        CALL vertical_average( prof, ice%u_vav_b( ti))
-        prof = ice%v_3D_b( ti,:)
-        CALL vertical_average( prof, ice%v_vav_b( ti))
-      END DO
-      CALL sync
+          ! Add the SIA fractions to the 3-D velocities
+          DO k = 1, C%nz
+            ice%u_3D_b( ti,k) = ice%u_3D_b( ti,k) + (1._dp - w_sia_u) * ice%u_3D_SIA_b( ti,k)
+            ice%v_3D_b( ti,k) = ice%v_3D_b( ti,k) + (1._dp - w_sia_v) * ice%v_3D_SIA_b( ti,k)
+          END DO
+
+        END DO
+        CALL sync
+
+        ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
+        CALL calc_3D_vertical_velocities( mesh, ice)
+
+        ! Copy surface velocity from the 3D fields
+        ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+        ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
+        CALL sync
+
+        ! Calculate vertically averaged velocities
+        DO ti = mesh%ti1, mesh%ti2
+          prof = ice%u_3D_b( ti,:)
+          CALL vertical_average( prof, ice%u_vav_b( ti))
+          prof = ice%v_3D_b( ti,:)
+          CALL vertical_average( prof, ice%v_vav_b( ti))
+        END DO
+        CALL sync
+
+      ELSE
+
+        ! Set basal velocity equal to SSA answer
+        ice%u_base_b( mesh%ti1:mesh%ti2) = ice%u_base_SSA_b( mesh%ti1:mesh%ti2)
+        ice%v_base_b( mesh%ti1:mesh%ti2) = ice%v_base_SSA_b( mesh%ti1:mesh%ti2)
+        CALL sync
+
+        ! Set 3-D velocities equal to the SIA solution
+        ice%u_3D_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:)
+        ice%v_3D_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:)
+        CALL sync
+
+        ! Add the SSA contributions to the 3-D velocities
+        DO k = 1, C%nz
+          ice%u_3D_b( mesh%ti1:mesh%ti2,k) = ice%u_3D_b( mesh%ti1:mesh%ti2,k) + ice%u_base_b( mesh%ti1:mesh%ti2)
+          ice%v_3D_b( mesh%ti1:mesh%ti2,k) = ice%v_3D_b( mesh%ti1:mesh%ti2,k) + ice%v_base_b( mesh%ti1:mesh%ti2)
+        END DO
+        CALL sync
+
+        ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
+        CALL calc_3D_vertical_velocities( mesh, ice)
+
+        ! Copy surface velocity from the 3D fields
+        ice%u_surf_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,1)
+        ice%v_surf_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,1)
+        CALL sync
+
+        ! Calculate vertically averaged velocities
+        DO ti = mesh%ti1, mesh%ti2
+          prof = ice%u_3D_b( ti,:)
+          CALL vertical_average( prof, ice%u_vav_b( ti))
+          prof = ice%v_3D_b( ti,:)
+          CALL vertical_average( prof, ice%v_vav_b( ti))
+        END DO
+        CALL sync
+
+      END IF
 
     ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
       ! DIVA
@@ -802,7 +859,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_effective_viscosity
-  SUBROUTINE calc_sliding_term_beta( mesh, ice, u_b, v_b)
+  SUBROUTINE calc_sliding_term_beta( mesh, ice, SMB, u_b, v_b)
     ! Calculate the sliding term beta in the SSA/DIVA using the specified sliding law
 
     IMPLICIT NONE
@@ -810,6 +867,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: v_b
 
@@ -831,7 +889,7 @@ CONTAINS
     CALL map_b_to_a_2D( mesh, v_b, v_a)
 
     ! Calculate the basal friction coefficients beta on the a-grid
-    CALL calc_sliding_law( mesh, ice, u_a, v_a, ice%beta_a)
+    CALL calc_sliding_law( mesh, ice, SMB, u_a, v_a, ice%beta_a)
 
     ! Limit beta to improve stability
     DO vi = mesh%vi1, mesh%vi2
@@ -936,10 +994,13 @@ CONTAINS
     ! Map beta_eff from the a-grid to the b-grid
     CALL map_a_to_b_2D( mesh, ice%beta_eff_a, ice%beta_eff_b)
 
+    ! Map sub-grid grounded fraction from the a-grid to the b-grid
+    CALL map_a_to_b_2D( mesh, ice%f_grndx_a, ice%f_grndx_b)
+
     ! Apply the sub-grid grounded fraction
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grnd_b( ti)**2
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**.5_dp
       END DO
       CALL sync
     END IF

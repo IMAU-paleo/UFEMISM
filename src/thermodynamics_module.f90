@@ -214,9 +214,11 @@ CONTAINS
     ! Find ocean temperature at the shelf base
 
     IF (C%choice_ocean_model == 'none') THEN
-      ! No ocean data available; use constant PD value
+      ! No ocean data available; use local pressure melting point of ice
 
-      T_ocean_at_shelf_base( mesh%vi1:mesh%vi2) = T0 + C%T_ocean_mean_PD_ANT
+      DO vi = mesh%vi1, mesh%vi2
+        T_ocean_at_shelf_base( vi) = ice%Ti_pmp_a( vi,C%nz)
+      END DO
       CALL sync
 
     ELSE
@@ -560,9 +562,9 @@ CONTAINS
       ! Use a linear profile between Ts and seawater temperature:
 
       IF (C%choice_ocean_model == 'none') THEN
-        ! No ocean data available; use constant PD value
+        ! No ocean data available; use local pressure melting point of ice
 
-        T_ocean_at_shelf_base = T0 + C%T_ocean_mean_PD_ANT
+        T_ocean_at_shelf_base = ice%Ti_pmp_a( vi,C%nz)
 
       ELSE
         ! Calculate shelf base temperature from ocean data

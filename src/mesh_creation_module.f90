@@ -118,14 +118,6 @@ CONTAINS
       RETURN
     END IF
 
-    ! Finest allowed resolution
-    ! =========================
-
-    IF (dmax < mesh%res_min * 1.5_dp * 1000._dp) THEN
-      is_good = .TRUE.
-      RETURN
-    END IF
-
     ! Resolution at points of interest
     ! ================================
 
@@ -136,6 +128,14 @@ CONTAINS
         RETURN
       END IF
     END DO
+
+    ! Finest allowed resolution
+    ! =========================
+
+    IF (dmax < mesh%res_min * 1.5_dp * 1000._dp) THEN
+      is_good = .TRUE.
+      RETURN
+    END IF
 
     ! Determine what's inside the triangle
     ! ====================================

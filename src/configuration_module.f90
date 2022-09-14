@@ -457,6 +457,7 @@ MODULE configuration_module
     ! Basal sliding inversion
     LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
     LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
+    LOGICAL             :: do_basal_sliding_extrapole_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
     REAL(dp)            :: basal_sliding_inv_t_start_config            = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
     REAL(dp)            :: basal_sliding_inv_t_end_config              = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
     REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
@@ -1203,6 +1204,7 @@ MODULE configuration_module
     ! Basal roughness inversion
     LOGICAL                             :: do_basal_sliding_inversion
     LOGICAL                             :: do_basal_sliding_smoothing
+    LOGICAL                             :: do_basal_sliding_extrapole
     REAL(dp)                            :: basal_sliding_inv_t_start
     REAL(dp)                            :: basal_sliding_inv_t_end
     REAL(dp)                            :: basal_sliding_inv_scale
@@ -2084,6 +2086,7 @@ CONTAINS
                      slid_submelt_halfpoint_config,                   &
                      do_basal_sliding_inversion_config,               &
                      do_basal_sliding_smoothing_config,               &
+                     do_basal_sliding_extrapole_config,               &
                      basal_sliding_inv_t_start_config,                &
                      basal_sliding_inv_t_end_config,                  &
                      basal_sliding_inv_scale_config,                  &
@@ -2935,6 +2938,7 @@ CONTAINS
     ! Basal roughness inversion
     C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
     C%do_basal_sliding_smoothing               = do_basal_sliding_smoothing_config
+    C%do_basal_sliding_extrapole               = do_basal_sliding_extrapole_config
     C%basal_sliding_inv_t_start                = basal_sliding_inv_t_start_config
     C%basal_sliding_inv_t_end                  = basal_sliding_inv_t_end_config
     C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config

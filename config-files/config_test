@@ -312,6 +312,7 @@
   ! Basal sliding inversion
   do_basal_sliding_inversion_config           = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
   do_basal_sliding_smoothing_config           = .TRUE.                           ! If set to TRUE, inverted basal roughness is smoothed
+  do_basal_sliding_extrapole_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
   basal_sliding_inv_t_start_config            = 0.0                              ! Minimum model time when the inversion is allowed
   basal_sliding_inv_t_end_config              = 25000                            ! Maximum model time when the inversion is allowed
   basal_sliding_inv_scale_config              = 10000.0                          ! Scaling constant for inversion procedure [m]

@@ -956,7 +956,7 @@ CONTAINS
     CALL allocate_shared_dp_3D( snapshot%nlon, snapshot%nlat, snapshot%nz_ocean_raw, snapshot%S_ocean_raw, snapshot%wS_ocean_raw)
 
     ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading GCM ocean snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Reading GCM ocean snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
     IF (par%master) CALL read_GCM_global_ocean_file( snapshot)
     CALL sync
 

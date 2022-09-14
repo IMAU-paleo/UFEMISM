@@ -1513,7 +1513,7 @@ CONTAINS
     CALL allocate_shared_dp_2D( snapshot%nlon, snapshot%nlat,     snapshot%Mask_ice, snapshot%wMask_ice)
 
     ! Read data from the NetCDF file
-    IF (par%master) WRITE(0,*) '   Reading GCM snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Reading GCM snapshot ', TRIM(snapshot%name), ' from file ', TRIM(snapshot%netcdf%filename), '...'
     IF (par%master) CALL read_GCM_global_climate_file( snapshot)
     CALL sync
 

@@ -2011,7 +2011,7 @@ CONTAINS
     ! ===============================
 
     ! Perform the extrapolation
-    IF (par%master) THEN
+    IF (par%master .AND. C%do_basal_sliding_extrapole) THEN
       CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_a, 10000._dp, mask_filled)
     END IF
     CALL sync

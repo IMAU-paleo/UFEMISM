@@ -2119,6 +2119,10 @@ CONTAINS
       ! Move the tracer upstream
       pt = pt - u * dx_trace
 
+      ! If the new tracer location is outside the domain, end the trace
+      IF (pt( 1) <= mesh%xmin .OR. pt( 2) >= mesh%xmax .OR. &
+          pt( 2) <= mesh%ymin .OR. pt( 2) >= mesh%ymax) EXIT
+
       ! Safety
       it = it + 1
       IF (it > nmax) EXIT
@@ -2191,6 +2195,10 @@ CONTAINS
 
       ! Move the tracer downstream
       pt = pt + u * dx_trace
+
+      ! If the new tracer location is outside the domain, end the trace
+      IF (pt( 1) <= mesh%xmin .OR. pt( 2) >= mesh%xmax .OR. &
+          pt( 2) <= mesh%ymin .OR. pt( 2) >= mesh%ymax) EXIT
 
       ! Safety
       it = it + 1

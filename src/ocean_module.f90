@@ -1268,8 +1268,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_extrapolated_ocean_data'
     LOGICAL                                            :: foundmatch
     TYPE(type_highres_ocean_data)                      :: hires
-    INTEGER                                            :: i,j,n
-    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+    INTEGER                                            :: i,j
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1298,36 +1297,6 @@ CONTAINS
     ! ============================================================================================
 
     IF (par%master) WRITE(0,*) '    Mapping high-resolution extrapolated ocean data unto the ice-model mesh...'
-
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
-    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                               hires%grid%n,    hires%grid%wn)
-    IF (par%master) hires%grid%n  = hires%grid%nx * hires%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
-    CALL allocate_shared_int_2D( hires%grid%n , 2            , hires%grid%n2ij, hires%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, hires%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
 
     ! Map high-resolution ocean data to UFEMISM's mesh
     CALL calc_remapping_operator_grid2mesh( hires%grid, region%mesh)
@@ -1374,7 +1343,8 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_hires_ocean_data_from_file'
-    INTEGER                                            :: i,j
+    INTEGER                                            :: i,j,n
+    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1419,6 +1389,40 @@ CONTAINS
       hires%grid%alpha_stereo = mesh%alpha_stereo
       ! But the resolution is different
       hires%grid%dx           = hires%grid%x( 2) - hires%grid%x( 1)
+      hires%grid%xmin         = hires%grid%x( 1            )
+      hires%grid%xmax         = hires%grid%x( hires%grid%nx)
+      hires%grid%ymin         = hires%grid%y( 1            )
+      hires%grid%ymax         = hires%grid%y( hires%grid%ny)
+    END IF
+    CALL sync
+
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
+    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
+
+    ! Set up grid-to-vector translation tables
+    CALL allocate_shared_int_0D(                               hires%grid%n,    hires%grid%wn)
+    IF (par%master) hires%grid%n  = hires%grid%nx * hires%grid%ny
+    CALL sync
+    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
+    CALL allocate_shared_int_2D( hires%grid%n , 2            , hires%grid%n2ij, hires%grid%wn2ij)
+    IF (par%master) THEN
+      n = 0
+      DO i = 1, hires%grid%nx
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, hires%grid%ny
+            n = n+1
+            hires%grid%ij2n( i,j) = n
+            hires%grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = hires%grid%ny, 1, -1
+            n = n+1
+            hires%grid%ij2n( i,j) = n
+            hires%grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
     END IF
     CALL sync
 

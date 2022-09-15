@@ -29,6 +29,7 @@ MODULE ocean_module
                                              deallocate_remapping_operators_mesh2grid, &
                                              deallocate_remapping_operators_grid2mesh, &
                                              smooth_Gaussian_2D, remap_field_dp_3D
+  USE general_ice_model_data_module,   ONLY: initialise_basins_grid
 
   IMPLICIT NONE
 
@@ -87,6 +88,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model
+
   SUBROUTINE initialise_ocean_model_regional( region, ocean_matrix_global)
     ! Initialise the regional ocean model
 
@@ -136,6 +138,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=37)
 
   END SUBROUTINE initialise_ocean_model_regional
+
   SUBROUTINE initialise_ocean_model_global( ocean_matrix)
     ! Initialise the global ocean model
 
@@ -180,8 +183,8 @@ CONTAINS
 
   END SUBROUTINE initialise_ocean_model_global
 
-  ! == Idealised ocean configurations
-  ! =================================
+! == Idealised ocean configurations
+! =================================
 
   SUBROUTINE run_ocean_model_idealised( mesh, ice, ocean, region_name, time)
     ! Run the regional ocean model
@@ -225,6 +228,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised
+
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD( mesh, ocean)
     ! Run the regional ocean model
     !
@@ -274,6 +278,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_COLD
+
   SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM( mesh, ocean)
     ! Run the regional ocean model
     !
@@ -323,6 +328,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISMIPplus_WARM
+
   SUBROUTINE run_ocean_model_idealised_MISOMIP1( mesh, ocean, time)
     ! Run the regional ocean model
     !
@@ -377,6 +383,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ocean_model_idealised_MISOMIP1
+
   SUBROUTINE run_ocean_model_idealised_Reese2018_ANT( mesh, ice, ocean, region_name)
     ! Run the regional ocean model
     !
@@ -485,8 +492,8 @@ CONTAINS
 
   END SUBROUTINE run_ocean_model_idealised_Reese2018_ANT
 
-  ! == Uniform warm/cold ocean model (the old ANICE way)
-  ! ====================================================
+! == Uniform warm/cold ocean model (the old ANICE way)
+! ====================================================
 
   SUBROUTINE run_ocean_model_uniform_warm_cold( mesh, ocean_matrix, time)
     ! Run the regional ocean model
@@ -518,8 +525,8 @@ CONTAINS
 
   END SUBROUTINE run_ocean_model_uniform_warm_cold
 
-  ! == Static present-day observed ocean
-  ! ====================================
+! == Static present-day observed ocean
+! ====================================
 
   SUBROUTINE run_ocean_model_PD_obs( mesh, ocean_matrix)
     ! Run the regional ocean model
@@ -826,7 +833,6 @@ CONTAINS
 
   END SUBROUTINE run_ocean_model_matrix_warm_cold
 
-! == Initialise the global ocean matrix
   SUBROUTINE initialise_ocean_matrix_global( ocean_matrix)
     ! Initialise the global warm/cold ocean matrix
 
@@ -977,7 +983,6 @@ CONTAINS
 
   END SUBROUTINE initialise_ocean_snapshot_global
 
-  ! == Initialising the regional ocean matrix
   SUBROUTINE initialise_ocean_matrix_regional( region, ocean_matrix_global)
     ! Initialise the regional warm/cold ocean matrix
 
@@ -1215,6 +1220,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_ocean_vertical_grid
+
   SUBROUTINE initialise_ocean_vertical_grid_regular
     ! Set up the vertical grid used for ocean data - regular grid
 
@@ -1288,7 +1294,7 @@ CONTAINS
     ELSE
       ! No header fitting the current ice model set-up was found. Create a new one describing
       ! the current set-up, and generate extrapolated ocean data files from scratch.
-      IF (par%master) WRITE(0,*) '   Creating new extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
+      IF (par%master) WRITE(0,*) '   Creating new extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"...'
       CALL map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires)
       CALL write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
     END IF ! IF (.NOT. foundmatch) THEN
@@ -1594,6 +1600,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE check_for_matching_ocean_header
+
   SUBROUTINE read_ocean_header( &
             header_filename,                    &
             original_ocean_filename,       &
@@ -1658,6 +1665,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_ocean_header
+
   SUBROUTINE write_ocean_header( hires, filename_ocean_glob, hires_foldername)
 
     IMPLICIT NONE
@@ -1894,16 +1902,12 @@ CONTAINS
     IF (par%master) hires%nbasins = region%ice%nbasins
     CALL sync
 
-    ! Instead of doing the "proper" basin definition on high resolution (which is insanely slow),
-    ! just downscale the basin ID field from the ice model (using some tricks to get accurate values near the boundaries)
-
-    ! Allocate shared memory
-    CALL allocate_shared_dp_1D( region%mesh%nV,                 basin_ID_dp_lores,     wbasin_ID_dp_lores    )
-    CALL allocate_shared_dp_2D( hires%grid%nx,  hires%grid%ny,  basin_ID_dp_hires,     wbasin_ID_dp_hires    )
-    CALL allocate_shared_dp_2D( hires%grid%nx,  hires%grid%ny,  basin_ID_dp_hires_ext, wbasin_ID_dp_hires_ext)
-
     IF     (choice_basin_scheme == 'none') THEN
       ! No basins are defined (i.e. the whole region is one big, big basin)
+
+      IF (par%master) THEN
+        hires%nbasins = 1
+      END IF
 
       DO j = 1, hires%grid%ny
       DO i = hires%grid%i1, hires%grid%i2
@@ -1913,83 +1917,15 @@ CONTAINS
       CALL sync
 
     ELSEIF (choice_basin_scheme == 'file') THEN
+      ! Read and define basins on the high resolution grid. These
+      ! will be used during extrapolation to avoid mixing ocean
+      ! properties from different basins.
 
-      ! Convert basin ID field to double precision (for remapping)
-      DO vi = region%mesh%vi1, region%mesh%vi2
-        basin_ID_dp_lores( vi) = REAL( region%ice%basin_ID( vi), dp)
-      END DO
-      CALL sync
-
-      ! Map double-precision basin ID from ice-model mesh to high-resolution grid
-      CALL calc_remapping_operator_mesh2grid( region%mesh, hires%grid)
-      CALL map_mesh2grid_2D( region%mesh, hires%grid, basin_ID_dp_lores, basin_ID_dp_hires)
-      CALL deallocate_remapping_operators_mesh2grid( hires%grid)
-
-      ! Remove all near-boundary cells
-      DO j = 1, hires%grid%ny
-      DO i = hires%grid%i1, hires%grid%i2
-        IF (MODULO( basin_ID_dp_hires( i,j), 1._dp) > 0.01_dp) THEN
-          basin_ID_dp_hires( i,j) = -1._dp
-        END IF
-      END DO
-      END DO
-      CALL sync
-
-      ! For those, use extrapolation instead
-      basin_ID_dp_hires_ext( hires%grid%i1:hires%grid%i2,:) = basin_ID_dp_hires( hires%grid%i1:hires%grid%i2,:)
-      CALL sync
-
-      DO j = 1, hires%grid%ny
-      DO i = hires%grid%i1, hires%grid%i2
-        IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
-
-            n = 0
-            foundit = .FALSE.
-            DO WHILE (.NOT. foundit)
-
-              n = n+1
-
-              ! Take the value of the nearest non-boundary cell
-              DO jj = MAX(1,j-n), MIN(hires%grid%ny,j+n)
-              DO ii = MAX(1,i-n), MIN(hires%grid%nx,i+n)
-                IF (basin_ID_dp_hires( ii,jj) > -1._dp) THEN
-                  basin_ID_dp_hires_ext( i,j) = basin_ID_dp_hires( ii,jj)
-                  foundit = .TRUE.
-                  EXIT
-                END IF
-              END DO
-              IF (foundit) EXIT
-              END DO
-
-              ! Safety
-              IF (n > MAX(hires%grid%nx, hires%grid%ny)) THEN
-                WRITE(0,*) 'map_and_extrapolate_ocean_data - ERROR: basin ID downscaling got stuck!'
-                CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-              END IF
-
-            END DO ! DO WHILE (.NOT. foundit)
-
-          END IF ! IF (basin_ID_dp_hires_ext( i,j) == -1._dp) THEN
-        END DO
-        END DO
-      CALL sync
-
-      ! Convert hi-resolution basin ID field back to integer precision
-      DO j = 1, hires%grid%ny
-      DO i = hires%grid%i1, hires%grid%i2
-        hires%basin_ID( i,j) = NINT( basin_ID_dp_hires_ext( i,j))
-      END DO
-      END DO
-      CALL sync
+      CALL initialise_basins_grid( hires%grid, hires%basin_ID, hires%nbasins, region%name)
 
     ELSE
       CALL crash('unknown choice_basin_scheme "' // TRIM(choice_basin_scheme) // '"!')
     END IF
-
-    ! Clean up after yourself
-    CALL deallocate_shared( wbasin_ID_dp_lores)
-    CALL deallocate_shared( wbasin_ID_dp_hires)
-    CALL deallocate_shared( wbasin_ID_dp_hires_ext)
 
     ! Perform the extrapolation on the high-resolution grid
     IF (par%master) WRITE(0,'(A,F4.1,A)') '     Performing ocean data extrapolation on the ', hires%grid%dx / 1000._dp, ' km regional x/y-grid...'
@@ -2005,6 +1941,7 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected=20)
 
   END SUBROUTINE map_and_extrapolate_hires_ocean_data
+
   SUBROUTINE extend_regional_ocean_data_to_cover_domain( hires)
     ! Extend global ocean data over the whole grid, based on the procedure outlined in
     ! Jourdain, N. C., Asay-Davis, X., Hattermann, T., Straneo, F., Seroussi, H., Little, C. M., & Nowicki, S. (2020).

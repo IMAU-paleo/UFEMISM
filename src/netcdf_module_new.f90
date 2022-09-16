@@ -99,11 +99,20 @@ CONTAINS
 
     CALL allocate_shared_dp_1D( mesh%nV, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/results_test/restart_GRL_00001.nc'
+    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/BedMachine_Greenland_v4_20km_xflip.nc'
     field_name_options = var_name_options_Hi
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     IF (par%master) THEN
       debug%dp_2D_a_01 = d
+      CALL write_to_debug_file
+    END IF
+    CALL sync
+
+    filename = '/Users/berends/Documents/Models/UFEMISM/results_test/restart_GRL_00001.nc'
+    field_name_options = var_name_options_Hi
+    CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name, time_to_read = -10._dp)
+    IF (par%master) THEN
+      debug%dp_2D_a_02 = d
       CALL write_to_debug_file
     END IF
     CALL sync
@@ -118,7 +127,7 @@ CONTAINS
 ! ===== Top-level functions =====
 ! ===============================
 
-  SUBROUTINE read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
+  SUBROUTINE read_field_from_file_2D( filename, field_name_options, mesh, d, region_name, time_to_read)
     ! Read a data field from a NetCDF file, and map it to the model mesh.
     !
     ! Ultimate flexibility; the file can provide the data on a global lon/lat-grid,
@@ -134,11 +143,12 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_file_2D'
     LOGICAL                                            :: file_exists
-    LOGICAL                                            :: has_xy_grid, has_lonlat_grid, has_mesh
+    LOGICAL                                            :: has_xy_grid, has_lonlat_grid, has_mesh, has_time
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -159,13 +169,19 @@ CONTAINS
     IF (has_xy_grid     .AND. has_mesh       ) CALL crash('file "' // TRIM( filename) // '" contains both an x/y-grid and a mesh!')
     IF (has_lonlat_grid .AND. has_mesh       ) CALL crash('file "' // TRIM( filename) // '" contains both a lon/lat-grid and a mesh!')
 
+    ! If a want data from a specific timeframe, check if the file actually has a time dimension
+    IF (PRESENT( time_to_read)) THEN
+      CALL inquire_time( filename, has_time)
+      IF (.NOT. has_time) CALL crash('file "' // TRIM( filename) // '" does not have a (recognisable) time dimension!')
+    END IF
+
     ! Choose the appropriate subroutine
     IF (has_xy_grid) THEN
-      CALL read_field_from_xy_file_2D(     filename, field_name_options, mesh, d)
+      CALL read_field_from_xy_file_2D(     filename, field_name_options, mesh, d             , time_to_read)
     ELSEIF (has_lonlat_grid) THEN
-      CALL read_field_from_lonlat_file_2D( filename, field_name_options, mesh, d)
+      CALL read_field_from_lonlat_file_2D( filename, field_name_options, mesh, d             , time_to_read)
     ELSEIF (has_mesh) THEN
-      CALL read_field_from_mesh_file_2D(   filename, field_name_options, mesh, d, region_name)
+      CALL read_field_from_mesh_file_2D(   filename, field_name_options, mesh, d, region_name, time_to_read)
     ELSE
       CALL crash('file "' // TRIM( filename) // '" does not contain a recognised x/y-grid, lon/lat-grid, or mesh!')
     END IF
@@ -178,7 +194,7 @@ CONTAINS
 ! ===== Separate versions for reading from x/y-grid, lon/lat-grid, or mesh files =====
 ! ====================================================================================
 
-  SUBROUTINE read_field_from_xy_file_2D( filename, field_name_options, mesh, d)
+  SUBROUTINE read_field_from_xy_file_2D( filename, field_name_options, mesh, d, time_to_read)
     ! Read a data field from a NetCDF file, and map it to the model mesh.
     !
     ! Assumes the file contains data on an x/y-grid.
@@ -190,17 +206,18 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_2D'
     TYPE(type_grid)                                    :: grid
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid
     INTEGER                                            :: wd_grid
-    INTEGER                                            :: ncid
     INTEGER                                            :: ndims_of_var
     INTEGER, DIMENSION(NF90_MAX_VAR_DIMS)              ::  dims_of_var
-    INTEGER                                            :: nx, ny, id_dim_x, id_dim_y
+    INTEGER                                            :: nx, ny, nt, id_dim_x, id_dim_y, id_dim_time
     CHARACTER(LEN=256)                                 :: indexing, xdir, ydir
     INTEGER                                            :: i,j,iopp,jopp
 
@@ -210,41 +227,54 @@ CONTAINS
     ! Set up the grid from the file
     CALL setup_xy_grid_from_file( filename, grid)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( ncid, field_name_options, id_var)
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var)
 
     ! If we couldn't find it, crash the model
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
-    ! Check if the field is given as [x,y] or [y,x], and in which direction x and y run
-    CALL inquire_dim_x( ncid, nx, id_dim_x)
-    CALL inquire_dim_y( ncid, ny, id_dim_y)
+    ! Inquire file dimensions
+    CALL inquire_dim_multiple_options( filename, dim_name_options_x, nx, id_dim_x)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_y, ny, id_dim_y)
+    IF (PRESENT( time_to_read)) CALL inquire_dim_multiple_options( filename, dim_name_options_time, nt, id_dim_time)
 
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
+    ! Inquire dimension info of this variable
     IF (par%master) THEN
-
-      ! Inquire dimension info of this variable
       nerr = NF90_INQUIRE_VARIABLE( ncid, id_var, dimids = dims_of_var, ndims = ndims_of_var)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_INQUIRE_VARIABLE failed!')
-
-      ! Safety
-      IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" has more than two dimensions!')
-
-      ! Check dimensions
-      IF     (dims_of_var( 1) == id_dim_x .AND. dims_of_var( 2) == id_dim_y) THEN
-        indexing = 'xy'
-      ELSEIF (dims_of_var( 1) == id_dim_y .AND. dims_of_var( 2) == id_dim_x) THEN
-        indexing = 'yx'
-      ELSE
-        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have x and y as dimensions!')
-      END IF
-
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_INQUIRE_VARIABLE failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
-    CALL MPI_BCAST( indexing, 256, MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( ndims_of_var, 1                , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( dims_of_var , NF90_MAX_VAR_DIMS, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
-    ! Check directions
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+
+    ! Check if the dimensions are correct
+    IF (.NOT. PRESENT( time_to_read)) THEN
+      ! We expect a field without a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 2 .AND. ANY( dims_of_var == id_dim_x) .AND. ANY( dims_of_var == id_dim_y))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    ELSE
+      ! We expect a field with a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 3 .AND. ANY( dims_of_var == id_dim_x) .AND. ANY( dims_of_var == id_dim_y) .AND. ANY( dims_of_var == id_dim_time))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    END IF
+
+    ! Determine the indexing of this field
+    IF     (dims_of_var( 1) == id_dim_x .AND. dims_of_var( 2) == id_dim_y) THEN
+      indexing = 'xy'
+    ELSEIF (dims_of_var( 1) == id_dim_y .AND. dims_of_var( 2) == id_dim_x) THEN
+      indexing = 'yx'
+    ELSE
+      CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have x and y as dimensions!')
+    END IF
+
+    ! Determine dimension directions
     IF (grid%x( 2) > grid%x( 1)) THEN
       xdir = 'normal'
     ELSE
@@ -264,10 +294,7 @@ CONTAINS
     END IF
 
     ! Read the data from the file
-    CALL read_var_multiple_options_dp_2D( ncid, field_name_options, d_grid)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_2D( filename, field_name_options, d_grid, time_to_read)
 
     ! Perform necessary corrections to the gridded data
 
@@ -331,7 +358,7 @@ CONTAINS
 
   END SUBROUTINE read_field_from_xy_file_2D
 
-  SUBROUTINE read_field_from_lonlat_file_2D( filename, field_name_options, mesh, d)
+  SUBROUTINE read_field_from_lonlat_file_2D( filename, field_name_options, mesh, d, time_to_read)
     ! Read a data field from a NetCDF file, and map it to the model mesh.
     !
     ! Assumes the file contains data on a lon/lat-grid.
@@ -343,17 +370,18 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_2D'
     TYPE(type_grid_lonlat)                             :: grid_lonlat
+    INTEGER                                            :: ncid
     INTEGER                                            :: id_var
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_grid
     INTEGER                                            :: wd_grid
-    INTEGER                                            :: ncid
     INTEGER                                            :: ndims_of_var
     INTEGER, DIMENSION(NF90_MAX_VAR_DIMS)              ::  dims_of_var
-    INTEGER                                            :: nlon, nlat, id_dim_lon, id_dim_lat
+    INTEGER                                            :: nlon, nlat, nt, id_dim_lon, id_dim_lat, id_dim_time
     CHARACTER(LEN=256)                                 :: indexing, londir, latdir
     INTEGER                                            :: i,j,iopp,jopp
     TYPE(type_remapping_lonlat2mesh)                   :: map
@@ -364,41 +392,54 @@ CONTAINS
     ! Set up the grid from the file
     CALL setup_lonlat_grid_from_file( filename, grid_lonlat)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( ncid, field_name_options, id_var)
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var)
 
     ! If we couldn't find it, crash the model
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
 
-    ! Check if the field is given as [lon,lat] or [lat,lon], and in which direction x and y run
-    CALL inquire_dim_lon( ncid, nlon, id_dim_lon)
-    CALL inquire_dim_lat( ncid, nlat, id_dim_lat)
+    ! Inquire file dimensions
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lon, nlon, id_dim_lon)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lat, nlat, id_dim_lat)
+    IF (PRESENT( time_to_read)) CALL inquire_dim_multiple_options( filename, dim_name_options_time, nt, id_dim_time)
 
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
+    ! Inquire dimension info of this variable
     IF (par%master) THEN
-
-      ! Inquire dimension info of this variable
       nerr = NF90_INQUIRE_VARIABLE( ncid, id_var, dimids = dims_of_var, ndims = ndims_of_var)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_INQUIRE_VARIABLE failed!')
-
-      ! Safety
-      IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" has more than two dimensions!')
-
-      ! Check dimensions
-      IF     (dims_of_var( 1) == id_dim_lon .AND. dims_of_var( 2) == id_dim_lat) THEN
-        indexing = 'lonlat'
-      ELSEIF (dims_of_var( 1) == id_dim_lat .AND. dims_of_var( 2) == id_dim_lon) THEN
-        indexing = 'latlon'
-      ELSE
-        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have lon and lat as dimensions!')
-      END IF
-
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_INQUIRE_VARIABLE failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
-    CALL MPI_BCAST( indexing, 256, MPI_CHARACTER, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( ndims_of_var, 1                , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( dims_of_var , NF90_MAX_VAR_DIMS, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
-    ! Check directions
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+
+    ! Check if the dimensions are correct
+    IF (.NOT. PRESENT( time_to_read)) THEN
+      ! We expect a field without a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 2 .AND. ANY( dims_of_var == id_dim_lon) .AND. ANY( dims_of_var == id_dim_lat))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    ELSE
+      ! We expect a field with a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 3 .AND. ANY( dims_of_var == id_dim_lon) .AND. ANY( dims_of_var == id_dim_lat) .AND. ANY( dims_of_var == id_dim_time))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    END IF
+
+    ! Determine the indexing of this field
+    IF     (dims_of_var( 1) == id_dim_lon .AND. dims_of_var( 2) == id_dim_lat) THEN
+      indexing = 'lonlat'
+    ELSEIF (dims_of_var( 1) == id_dim_lat .AND. dims_of_var( 2) == id_dim_lon) THEN
+      indexing = 'latlon'
+    ELSE
+      CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have lon and lat as dimensions!')
+    END IF
+
+    ! Determine dimension directions
     IF (grid_lonlat%lon( 2) > grid_lonlat%lon( 1)) THEN
       londir = 'normal'
     ELSE
@@ -418,10 +459,7 @@ CONTAINS
     END IF
 
     ! Read the data from the file
-    CALL read_var_multiple_options_dp_2D( ncid, field_name_options, d_grid)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_2D( filename, field_name_options, d_grid, time_to_read)
 
     ! Perform necessary corrections to the gridded data
 
@@ -565,7 +603,7 @@ CONTAINS
 
   END SUBROUTINE correct_longitude_shifts_and_range
 
-  SUBROUTINE read_field_from_mesh_file_2D( filename, field_name_options, mesh, d, region_name)
+  SUBROUTINE read_field_from_mesh_file_2D( filename, field_name_options, mesh, d, region_name, time_to_read)
     ! Read a data field from a NetCDF file, and map it to the model mesh.
     !
     ! Assumes the file contains data on a mesh.
@@ -578,12 +616,17 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_2D'
     TYPE(type_mesh)                                    :: mesh_from_file
     INTEGER                                            :: ncid
     INTEGER                                            :: id_var
+    TYPE(type_netcdf_mesh)                             :: netcdf
+    INTEGER                                            :: nV, nt, id_dim_time
+    INTEGER                                            :: ndims_of_var
+    INTEGER, DIMENSION(NF90_MAX_VAR_DIMS)              ::  dims_of_var
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_mesh_from_file
     INTEGER                                            :: wd_mesh_from_file
     TYPE(type_remapping_mesh_mesh)                     :: map
@@ -594,23 +637,48 @@ CONTAINS
     ! Set up the mesh from the file
     CALL setup_mesh_from_file( filename, mesh_from_file, region_name)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Look for the specified variable in the file
-    CALL inquire_var_multiple_options( ncid, field_name_options, id_var)
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var)
 
     ! If we couldn't find it, crash the model
     IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
+    ! Inquire file dimensions
+    CALL inquire_dim( ncid, netcdf%name_dim_vi, nV, netcdf%id_dim_vi)
+    IF (PRESENT( time_to_read)) CALL inquire_dim_multiple_options( filename, dim_name_options_time, nt, id_dim_time)
+
+    ! Inquire dimension info of this variable
+    IF (par%master) THEN
+      nerr = NF90_INQUIRE_VARIABLE( ncid, id_var, dimids = dims_of_var, ndims = ndims_of_var)
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_INQUIRE_VARIABLE failed for file "' // TRIM( filename) // '"!')
+    END IF ! IF (par%master) THEN
+    CALL MPI_BCAST( ndims_of_var, 1                , MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+    CALL MPI_BCAST( dims_of_var , NF90_MAX_VAR_DIMS, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+
+    ! Check if the dimensions are correct
+    IF (.NOT. PRESENT( time_to_read)) THEN
+      ! We expect a field without a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 1 .AND. ANY( dims_of_var == netcdf%id_dim_vi))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    ELSE
+      ! We expect a field with a time dimension; check if this is the case
+      IF (.NOT. (ndims_of_var == 2 .AND. ANY( dims_of_var == netcdf%id_dim_vi) .AND. ANY( dims_of_var == id_dim_time))) THEN
+        CALL crash('variable "' // TRIM( field_name_options) // '" in file "' // TRIM( filename) // '" does not have the right dimensions!')
+      END IF
+    END IF
 
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh_from_file%nV, d_mesh_from_file, wd_mesh_from_file)
 
     ! Read the data from the file
-    CALL read_var_multiple_options_dp_1D( ncid, field_name_options, d_mesh_from_file)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_1D( filename, field_name_options, d_mesh_from_file, time_to_read)
 
     ! Calculate remapping operator for this mesh
     CALL calc_remapping_operators_mesh_mesh( mesh_from_file, mesh, map)
@@ -649,33 +717,27 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_xy_grid_from_file'
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
-    INTEGER                                            :: ncid, id_dim_x, id_dim_y, id_var_x, id_var_y
+    INTEGER                                            :: id_dim_x, id_dim_y, id_var_x, id_var_y
     INTEGER                                            :: i,j,n
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Allocate memory for the grid size
     CALL allocate_shared_int_0D( grid%nx, grid%wnx)
     CALL allocate_shared_int_0D( grid%ny, grid%wny)
 
     ! Read the x and y grid size
-    CALL inquire_dim_x( ncid, grid%nx, id_dim_x)
-    CALL inquire_dim_y( ncid, grid%ny, id_dim_y)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_x, grid%nx, id_dim_x)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_y, grid%ny, id_dim_y)
 
     ! Allocate memory for x and y
     CALL allocate_shared_dp_1D( grid%nx, grid%x , grid%wx )
     CALL allocate_shared_dp_1D( grid%ny, grid%y , grid%wy )
 
     ! Inquire variable IDs
-    CALL read_var_multiple_options_dp_1D( ncid, var_name_options_x, grid%x)
-    CALL read_var_multiple_options_dp_1D( ncid, var_name_options_y, grid%y)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_1D( filename, var_name_options_x, grid%x)
+    CALL read_var_multiple_options_dp_1D( filename, var_name_options_y, grid%y)
 
     ! Allocate memory for, and calculate, some secondary grid properties
     CALL allocate_shared_dp_0D(                    grid%xmin    , grid%wxmin    )
@@ -756,34 +818,28 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_lonlat_grid_from_file'
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
-    INTEGER                                            :: ncid, id_dim_lon, id_dim_lat, id_var_lon, id_var_lat
+    INTEGER                                            :: id_dim_lon, id_dim_lat, id_var_lon, id_var_lat
     INTEGER                                            :: i,j,n
     REAL(dp)                                           :: dlon
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Allocate memory for the grid size
     CALL allocate_shared_int_0D( grid_lonlat%nlon, grid_lonlat%wnlon)
     CALL allocate_shared_int_0D( grid_lonlat%nlat, grid_lonlat%wnlat)
 
     ! Read the lon and lat grid size
-    CALL inquire_dim_lon( ncid, grid_lonlat%nlon, id_dim_lon)
-    CALL inquire_dim_lat( ncid, grid_lonlat%nlat, id_dim_lat)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lon, grid_lonlat%nlon, id_dim_lon)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lat, grid_lonlat%nlat, id_dim_lat)
 
     ! Allocate memory for lon and lat
     CALL allocate_shared_dp_1D( grid_lonlat%nlon, grid_lonlat%lon, grid_lonlat%wlon)
     CALL allocate_shared_dp_1D( grid_lonlat%nlat, grid_lonlat%lat, grid_lonlat%wlat)
 
     ! Inquire variable IDs
-    CALL read_var_multiple_options_dp_1D( ncid, var_name_options_lon, grid_lonlat%lon)
-    CALL read_var_multiple_options_dp_1D( ncid, var_name_options_lat, grid_lonlat%lat)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_1D( filename, var_name_options_lon, grid_lonlat%lon)
+    CALL read_var_multiple_options_dp_1D( filename, var_name_options_lat, grid_lonlat%lat)
 
     ! Allocate memory for, and calculate, some secondary grid properties
     CALL allocate_shared_dp_0D(                                  grid_lonlat%lonmin    , grid_lonlat%wlonmin    )
@@ -807,7 +863,8 @@ CONTAINS
         IF (ABS( 1._dp - dlon / grid_lonlat%dlon) > 1E-6_dp) CALL crash('file "' // TRIM( filename) // '" has an irregular longitude dimension!')
       END DO
       DO j = 1, grid_lonlat%nlat - 1
-        IF (ABS( 1._dp - ABS( grid_lonlat%lat( j+1) - grid_lonlat%lat( j)) / grid_lonlat%dlat) > 1E-6_dp) CALL crash('file "' // TRIM( filename) // '" has an irregular latitude dimension!')
+        IF (ABS( 1._dp - ABS( grid_lonlat%lat( j+1) - grid_lonlat%lat( j)) / grid_lonlat%dlat) > 1E-6_dp) &
+          CALL crash('file "' // TRIM( filename) // '" has an irregular latitude dimension!')
       END DO
 
       ! Domain size
@@ -844,7 +901,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_mesh_from_file'
     TYPE(type_netcdf_mesh)                             :: netcdf
     INTEGER                                            :: ncid
-    INTEGER                                            :: nV_mem, nTri_mem, nC_mem
+    INTEGER                                            :: nV_mem, nTri_mem, nC_mem, n_two, n_three
     REAL(dp), PARAMETER                                :: tol = 1E-9_dp
 
     ! Add routine to path
@@ -854,27 +911,27 @@ CONTAINS
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Get the mesh size from the file
-    CALL inquire_dim( ncid, netcdf%name_dim_vi , nV_mem  , netcdf%id_dim_vi)
-    CALL inquire_dim( ncid, netcdf%name_dim_ti , nTri_mem, netcdf%id_dim_ti)
-    CALL inquire_dim( ncid, netcdf%name_dim_ci , nC_mem  , netcdf%id_dim_ci)
+    CALL inquire_dim( ncid, netcdf%name_dim_vi, nV_mem  , netcdf%id_dim_vi)
+    CALL inquire_dim( ncid, netcdf%name_dim_ti, nTri_mem, netcdf%id_dim_ti)
+    CALL inquire_dim( ncid, netcdf%name_dim_ci, nC_mem  , netcdf%id_dim_ci)
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Allocate memory for the mesh
     CALL allocate_mesh_primary( mesh, region_name, nV_mem, nTri_mem, nC_mem)
 
     ! Read primary mesh data
-    CALL read_var_multiple_options_dp_2D(  ncid, netcdf%name_var_V             , mesh%V             )
-    CALL read_var_multiple_options_int_1D( ncid, netcdf%name_var_nC            , mesh%nC            )
-    CALL read_var_multiple_options_int_2D( ncid, netcdf%name_var_C             , mesh%C             )
-    CALL read_var_multiple_options_int_1D( ncid, netcdf%name_var_niTri         , mesh%niTri         )
-    CALL read_var_multiple_options_int_2D( ncid, netcdf%name_var_iTri          , mesh%iTri          )
-    CALL read_var_multiple_options_int_1D( ncid, netcdf%name_var_edge_index    , mesh%edge_index    )
-    CALL read_var_multiple_options_int_2D( ncid, netcdf%name_var_Tri           , mesh%Tri           )
-    CALL read_var_multiple_options_dp_2D(  ncid, netcdf%name_var_Tricc         , mesh%Tricc         )
-    CALL read_var_multiple_options_int_2D( ncid, netcdf%name_var_TriC          , mesh%TriC          )
-    CALL read_var_multiple_options_int_1D( ncid, netcdf%name_var_Tri_edge_index, mesh%Tri_edge_index)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
+    CALL read_var_multiple_options_dp_2D(  filename, netcdf%name_var_V             , mesh%V             )
+    CALL read_var_multiple_options_int_1D( filename, netcdf%name_var_nC            , mesh%nC            )
+    CALL read_var_multiple_options_int_2D( filename, netcdf%name_var_C             , mesh%C             )
+    CALL read_var_multiple_options_int_1D( filename, netcdf%name_var_niTri         , mesh%niTri         )
+    CALL read_var_multiple_options_int_2D( filename, netcdf%name_var_iTri          , mesh%iTri          )
+    CALL read_var_multiple_options_int_1D( filename, netcdf%name_var_edge_index    , mesh%edge_index    )
+    CALL read_var_multiple_options_int_2D( filename, netcdf%name_var_Tri           , mesh%Tri           )
+    CALL read_var_multiple_options_dp_2D(  filename, netcdf%name_var_Tricc         , mesh%Tricc         )
+    CALL read_var_multiple_options_int_2D( filename, netcdf%name_var_TriC          , mesh%TriC          )
+    CALL read_var_multiple_options_int_1D( filename, netcdf%name_var_Tri_edge_index, mesh%Tri_edge_index)
 
     ! Calculate secondary mesh data
 
@@ -915,9 +972,10 @@ CONTAINS
 ! ===== Flexible looking for dimensions and variables =====
 ! =========================================================
 
+  ! Look for grids and meshes
   SUBROUTINE inquire_xy_grid( filename, has_xy_grid)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! data on an x/y-grid.
+    ! Inquire if a NetCDF file contains all the dimensions and variables
+    ! describing a regular x/y-grid.
 
     IMPLICIT NONE
 
@@ -927,7 +985,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_xy_grid'
-    INTEGER                                            :: ncid
     INTEGER                                            :: id_dim_x, id_dim_y
     INTEGER                                            :: nx, ny
     INTEGER                                            :: id_var_x, id_var_y
@@ -935,21 +992,15 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Look for x and y dimensions and variables
-    CALL inquire_dim_x( ncid, nx, id_dim_x)
-    CALL inquire_dim_y( ncid, ny, id_dim_y)
-    CALL inquire_var_x( ncid,     id_var_x)
-    CALL inquire_var_y( ncid,     id_var_y)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_x, nx, id_dim_x)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_y, ny, id_dim_y)
+    CALL inquire_var_multiple_options( filename, var_name_options_x,     id_var_x)
+    CALL inquire_var_multiple_options( filename, var_name_options_y,     id_var_y)
 
     ! Check if everything is there
     has_xy_grid = .TRUE.
     IF (id_dim_x == -1 .OR. id_dim_y == -1 .OR. id_var_x == -1 .OR. id_var_y == -1) has_xy_grid = .FALSE.
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -957,8 +1008,8 @@ CONTAINS
   END SUBROUTINE inquire_xy_grid
 
   SUBROUTINE inquire_lonlat_grid( filename, has_lonlat_grid)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! data on a lon/lat-grid.
+    ! Inquire if a NetCDF file contains all the dimensions and variables
+    ! describing a regular lon/lat-grid.
 
     IMPLICIT NONE
 
@@ -976,21 +1027,15 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
-
     ! Look for x and y dimensions and variables
-    CALL inquire_dim_lon( ncid, nlon, id_dim_lon)
-    CALL inquire_dim_lat( ncid, nlat, id_dim_lat)
-    CALL inquire_var_lon( ncid,       id_var_lon)
-    CALL inquire_var_lat( ncid,       id_var_lat)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lon, nlon, id_dim_lon)
+    CALL inquire_dim_multiple_options( filename, dim_name_options_lat, nlat, id_dim_lat)
+    CALL inquire_var_multiple_options( filename, var_name_options_lon,       id_var_lon)
+    CALL inquire_var_multiple_options( filename, var_name_options_lat,       id_var_lat)
 
     ! Check if everything is there
     has_lonlat_grid = .TRUE.
     IF (id_dim_lon == -1 .OR. id_dim_lat == -1 .OR. id_var_lon == -1 .OR. id_var_lat == -1) has_lonlat_grid = .FALSE.
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -998,8 +1043,8 @@ CONTAINS
   END SUBROUTINE inquire_lonlat_grid
 
   SUBROUTINE inquire_mesh( filename, has_mesh)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! data on a UFEMISM mesh.
+    ! Inquire if a NetCDF file contains all the dimensions and variables
+    ! describing a mesh.
 
     IMPLICIT NONE
 
@@ -1064,203 +1109,45 @@ CONTAINS
 
   END SUBROUTINE inquire_mesh
 
-  SUBROUTINE inquire_dim_x( ncid, nx, id_dim_x)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! an x-dimension, and return its identifier.
-    ! If no matching dimension is found, return -1 for the identifier.
+  SUBROUTINE inquire_time( filename, has_time)
+    ! Inquire if a NetCDF file contains a time dimension and variable
 
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: nx
-    INTEGER,                             INTENT(OUT)   :: id_dim_x
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    LOGICAL,                             INTENT(OUT)   :: has_time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_dim_x'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_time'
+    INTEGER                                            :: ncid, nt, id_dim_time, id_var_time
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL inquire_dim_multiple_options( ncid, dim_name_options_x, nx, id_dim_x)
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
+    has_time = .TRUE.
+
+    ! Check if the file contains a time dimension
+    CALL inquire_dim_multiple_options( filename, dim_name_options_time, nt, id_dim_time)
+    IF (nt < 1 .OR. id_dim_time == -1) has_time = .FALSE.
+
+    ! Check if the file contains a time variable
+    CALL inquire_var_multiple_options( filename, var_name_options_time,     id_var_time)
+    IF (id_var_time == -1) has_time = .FALSE.
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE inquire_dim_x
+  END SUBROUTINE inquire_time
 
-  SUBROUTINE inquire_dim_y( ncid, ny, id_dim_y)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! an y-dimension, and return its identifier.
-    ! If no matching dimension is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: ny
-    INTEGER,                             INTENT(OUT)   :: id_dim_y
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_dim_y'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_dim_multiple_options( ncid, dim_name_options_y, ny, id_dim_y)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_dim_y
-
-  SUBROUTINE inquire_dim_lon( ncid, nlon, id_dim_lon)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! a longitude dimension, and return its identifier.
-    ! If no matching dimension is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: nlon
-    INTEGER,                             INTENT(OUT)   :: id_dim_lon
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_dim_lon'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_dim_multiple_options( ncid, dim_name_options_lon, nlon, id_dim_lon)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_dim_lon
-
-  SUBROUTINE inquire_dim_lat( ncid, nlat, id_dim_lat)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! a latitude dimension, and return its identifier.
-    ! If no matching dimension is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: nlat
-    INTEGER,                             INTENT(OUT)   :: id_dim_lat
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_dim_lat'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_dim_multiple_options( ncid, dim_name_options_lat, nlat, id_dim_lat)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_dim_lat
-
-  SUBROUTINE inquire_var_x( ncid, id_var_x)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! an x-variable, and return its identifier.
-    ! If no matching variable is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: id_var_x
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_var_x'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_var_multiple_options( ncid, var_name_options_x, id_var_x)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_var_x
-
-  SUBROUTINE inquire_var_y( ncid, id_var_y)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! an y-variable, and return its identifier.
-    ! If no matching variable is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: id_var_y
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_var_y'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_var_multiple_options( ncid, var_name_options_y, id_var_y)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_var_y
-
-  SUBROUTINE inquire_var_lon( ncid, id_var_lon)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! a longitude variable, and return its identifier.
-    ! If no matching variable is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: id_var_lon
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_var_lon'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_var_multiple_options( ncid, var_name_options_lon, id_var_lon)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_var_lon
-
-  SUBROUTINE inquire_var_lat( ncid, id_var_lat)
-    ! Inquire if the (open) NetCDF file indicated by port ncid contains
-    ! a latitude variable, and return its identifier.
-    ! If no matching variable is found, return -1 for the identifier.
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
-    INTEGER,                             INTENT(OUT)   :: id_var_lat
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_var_lat'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    CALL inquire_var_multiple_options( ncid, var_name_options_lat, id_var_lat)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_var_lat
-
-  SUBROUTINE inquire_dim_multiple_options( ncid, dim_name_options, dim_length, id_dim)
+  ! Look for dimensions
+  SUBROUTINE inquire_dim_multiple_options( filename, dim_name_options, dim_length, id_dim)
     ! Inquire if the (open) NetCDF file indicated by port ncid contains
     ! a dimension by name of dim_name. If so, return its length and identifier.
     ! If not, return -1 for both.
@@ -1275,18 +1162,22 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: dim_name_options
     INTEGER,                             INTENT(OUT)   :: dim_length
     INTEGER,                             INTENT(OUT)   :: id_dim
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_dim_multiple_options'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( dim_name_options))              :: dim_name_options_redux, dim_name
     INTEGER                                            :: i, n_matches, dim_length_loc, id_dim_loc
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in dim_name_options
 
@@ -1334,17 +1225,21 @@ CONTAINS
       id_dim     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided dimension names were found in the NetCDF file!')
+      CALL crash('more than one of the provided dimension names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE inquire_dim_multiple_options
 
-  SUBROUTINE inquire_var_multiple_options( ncid, var_name_options, id_var)
+  ! Look for variables
+  SUBROUTINE inquire_var_multiple_options( filename, var_name_options, id_var)
     ! Inquire if the (open) NetCDF file indicated by port ncid contains
     ! a variable by name of var_name. If so, return its identifier.
     ! If not, return -1.
@@ -1359,17 +1254,21 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     INTEGER,                             INTENT(OUT)   :: id_var
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'inquire_var_multiple_options'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1415,18 +1314,21 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE inquire_var_multiple_options
 
-  SUBROUTINE read_var_multiple_options_dp_1D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_dp_1D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1438,17 +1340,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     REAL(dp), DIMENSION(:    ),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_dp_1D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1494,28 +1402,41 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_dp_1D
 
-  SUBROUTINE read_var_multiple_options_dp_2D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_dp_2D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1527,17 +1448,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_dp_2D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1583,28 +1510,41 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_dp_2D
 
-  SUBROUTINE read_var_multiple_options_dp_3D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_dp_3D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1616,17 +1556,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     REAL(dp), DIMENSION(:,:,:),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_dp_3D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1672,28 +1618,41 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, 1, 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_dp_3D
 
-  SUBROUTINE read_var_multiple_options_int_1D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_int_1D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1705,17 +1664,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     INTEGER,  DIMENSION(:    ),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_int_1D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1761,28 +1726,41 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_int_1D
 
-  SUBROUTINE read_var_multiple_options_int_2D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_int_2D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1794,17 +1772,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     INTEGER,  DIMENSION(:,:  ),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_int_2D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1850,28 +1834,41 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_int_2D
 
-  SUBROUTINE read_var_multiple_options_int_3D( ncid, var_name_options, d)
-    ! Read a variable by ane of the names in var_name_options from the file.
+  SUBROUTINE read_var_multiple_options_int_3D( filename, var_name_options, d, time_to_read)
+    ! Read a variable by any of the names in var_name_options from the file.
     !
     ! Supports providing multiple options for the variable name, separated by two
     ! vertical bars || e.g. if we're looking for an X-variable, we could do something like:
@@ -1883,17 +1880,23 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    INTEGER,                             INTENT(IN)    :: ncid
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: var_name_options
     INTEGER,  DIMENSION(:,:,:),          INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_var_multiple_options_int_3D'
+    INTEGER                                            :: ncid
     CHARACTER(LEN=LEN( var_name_options))              :: var_name_options_redux, var_name
     INTEGER                                            :: i, n_matches, id_var_loc, id_var
+    INTEGER                                            :: ti
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
 
     ! Try all options provided in var_name_options
 
@@ -1939,25 +1942,113 @@ CONTAINS
       id_var     = -1
     ELSEIF (n_matches > 1) THEN
       ! More than one match was found
-      CALL crash('more than one of the provided variable names were found in the NetCDF file!')
+      CALL crash('more than one of the provided variable names were found in file "' // TRIM( filename) // '"!')
     ELSE
       ! We found exactly one match; hurray!
     END IF
 
     ! Safety
-    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '"!')
+    IF (id_var == -1) CALL crash('no match found for variable "' // TRIM( var_name_options) // '" for file "' // TRIM( filename) // '"!')
+
+    ! If needed, determine which timeframe to read
+    IF (PRESENT( time_to_read)) CALL find_timeframe( filename, time_to_read, ti)
 
     ! Read the variable
     IF (par%master) THEN
-      nerr = NF90_GET_VAR( ncid, id_var, d)
-      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed!')
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        ! Read timeless data
+        nerr = NF90_GET_VAR( ncid, id_var, d)
+      ELSE
+        ! Read data from the determined timeframe
+        nerr = NF90_GET_VAR( ncid, id_var, d, start = (/ 1, 1, 1, ti /) )
+      END IF
+      ! Safety
+      IF (nerr /= NF90_NOERR) CALL crash('NF90_GET_VAR failed for file "' // TRIM( filename) // '"!')
     END IF ! IF (par%master) THEN
     CALL sync
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE read_var_multiple_options_int_3D
+
+  ! Find timeframe
+  SUBROUTINE find_timeframe( filename, time_to_read, ti)
+    ! Find the timeframe in the file that is closest to the desired time.
+    ! If the file has no time dimension or variable, throw an error.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    REAL(dp),                            INTENT(IN)    :: time_to_read
+    INTEGER,                             INTENT(OUT)   :: ti
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'find_timeframe'
+    INTEGER                                            :: ncid
+    INTEGER                                            :: nt, id_dim_time, id_var_time
+    REAL(dp), DIMENSION(:    ), POINTER                ::  time
+    INTEGER                                            :: wtime
+    INTEGER                                            :: tii
+    REAL(dp)                                           :: dt_min
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Open the file
+    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+
+    ! Check if the file contains a time dimension
+    CALL inquire_dim_multiple_options( filename, dim_name_options_time, nt, id_dim_time)
+    IF (nt < 1 .OR. id_dim_time == -1) CALL crash('no valid time dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Check if the file contains a time variable
+    CALL inquire_var_multiple_options( filename, var_name_options_time, id_var_time)
+    IF (id_var_time == -1) CALL crash('no valid time variable could be found in file "' // TRIM( filename) // '"!')
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( nt, time, wtime)
+
+    ! Read time from file (technically recursive, hopefully this works!)
+    CALL read_var_multiple_options_dp_1D( filename, var_name_options_time, time)
+
+    ! Find timeframe closest to desired time
+    IF (time( 1) > time_to_read) THEN
+      ! Desired time beyond lower limit
+      CALL warning('desired timeframe at t = {dp_01} before start of file time for file "' // TRIM( filename) // '"; reading data from t = {dp_02} instead!', dp_01 = time_to_read, dp_02 = time( 1))
+      ti = 1
+    ELSEIF (time( nt) < time_to_read) THEN
+      ! Desired time beyond upper limit
+      CALL warning('desired timeframe at t = {dp_01} after end of file time for file "' // TRIM( filename) // '"; reading data from t = {dp_02} instead!', dp_01 = time_to_read, dp_02 = time( nt))
+      ti = nt
+    ELSE
+      ! Desired time is within the file time
+      dt_min = HUGE( 1._dp)
+      DO tii = 1, nt
+        IF (ABS( time( tii) - time_to_read) < dt_min) THEN
+          ti = tii
+          dt_min = ABS( time( tii) - time_to_read)
+        END IF
+      END DO
+      IF (dt_min > 0._dp) THEN
+        CALL warning('desired timeframe at t = {dp_01} not present in file "' // TRIM( filename) // '"; reading data from closest match at t = {dp_02} instead!', dp_01 = time_to_read, dp_02 = time( ti))
+      END IF
+    END IF
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wtime)
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE find_timeframe
 
 ! ===== Basic NetCDF wrapper functions =====
 ! ==========================================

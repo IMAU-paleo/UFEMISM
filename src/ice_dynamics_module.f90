@@ -1009,9 +1009,9 @@ CONTAINS
 
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
 
-    USE data_types_module,          ONLY: type_remapping_latlon2mesh
+    USE data_types_module,          ONLY: type_remapping_lonlat2mesh
     USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
+    USE mesh_mapping_module,        ONLY: create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, deallocate_remapping_arrays_lonlat_mesh
 
     IMPLICIT NONE
 
@@ -1021,19 +1021,19 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
-    TYPE(type_remapping_latlon2mesh)                   :: map
+    TYPE(type_remapping_lonlat2mesh)                   :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Calculate mapping arrays
-    CALL create_remapping_arrays_glob_mesh( mesh, forcing%grid_ghf, map)
+    CALL create_remapping_arrays_lonlat_mesh( mesh, forcing%grid_ghf, map)
 
     ! Map global climate data to the mesh
-    CALL map_latlon2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
+    CALL map_lonlat2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
 
     ! Deallocate mapping arrays
-    CALL deallocate_remapping_arrays_glob_mesh( map)
+    CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

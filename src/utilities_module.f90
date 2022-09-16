@@ -1587,9 +1587,13 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: wd
 
     ! Local variables:
-    INTEGER                                      :: i,j,nx,ny,i1,i2
-    REAL(dp), DIMENSION(:,:  ), POINTER          ::  d_temp
-    INTEGER                                      :: wd_temp
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'transpose_dp_2D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_temp
+    INTEGER                                            :: wd_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     nx = SIZE( d,1)
     ny = SIZE( d,2)
@@ -1623,6 +1627,9 @@ CONTAINS
     ! Deallocate temporary memory
     CALL deallocate_shared( wd_temp)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE transpose_dp_2D
   SUBROUTINE transpose_dp_3D( d, wd)
     ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
@@ -1634,9 +1641,13 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: wd
 
     ! Local variables:
-    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
-    REAL(dp), DIMENSION(:,:,:), POINTER          ::  d_temp
-    INTEGER                                      :: wd_temp
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'transpose_dp_3D'
+    INTEGER                                            :: i,j,k,nx,ny,nz,i1,i2
+    REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_temp
+    INTEGER                                            :: wd_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     nx = SIZE( d,1)
     ny = SIZE( d,2)
@@ -1675,6 +1686,9 @@ CONTAINS
     ! Deallocate temporary memory
     CALL deallocate_shared( wd_temp)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE transpose_dp_3D
   SUBROUTINE transpose_int_2D( d, wd)
     ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
@@ -1686,9 +1700,13 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: wd
 
     ! Local variables:
-    INTEGER                                      :: i,j,nx,ny,i1,i2
-    INTEGER,  DIMENSION(:,:  ), POINTER          ::  d_temp
-    INTEGER                                      :: wd_temp
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'transpose_int_2D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2
+    INTEGER,  DIMENSION(:,:  ), POINTER                ::  d_temp
+    INTEGER                                            :: wd_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     nx = SIZE( d,1)
     ny = SIZE( d,2)
@@ -1722,6 +1740,9 @@ CONTAINS
     ! Deallocate temporary memory
     CALL deallocate_shared( wd_temp)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE transpose_int_2D
   SUBROUTINE transpose_int_3D( d, wd)
     ! Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
@@ -1733,9 +1754,13 @@ CONTAINS
     INTEGER,                             INTENT(INOUT) :: wd
 
     ! Local variables:
-    INTEGER                                      :: i,j,k,nx,ny,nz,i1,i2
-    INTEGER,  DIMENSION(:,:,:), POINTER          ::  d_temp
-    INTEGER                                      :: wd_temp
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'transpose_int_3D'
+    INTEGER                                            :: i,j,k,nx,ny,nz,i1,i2
+    INTEGER,  DIMENSION(:,:,:), POINTER                ::  d_temp
+    INTEGER                                            :: wd_temp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
 
     nx = SIZE( d,1)
     ny = SIZE( d,2)
@@ -1774,7 +1799,292 @@ CONTAINS
     ! Deallocate temporary memory
     CALL deallocate_shared( wd_temp)
 
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
   END SUBROUTINE transpose_int_3D
+
+  ! == Flip a data field in one dimension
+  SUBROUTINE flip_x_dp_2D( d)
+    ! Flip a 2-D data field in the x-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_x_dp_2D'
+    INTEGER                                            :: i,j,nx,ny,j1,j2,iopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( ny, par%i, par%n, j1, j2)
+
+    ! Flip the data
+    DO j = j1,j2
+      DO i = 1, nx
+        iopp = nx + 1 - i
+        IF (iopp <= i) EXIT               ! [a  ] [b  ]
+        d( i   ,j) = d( i,j) + d( iopp,j) ! [a+b] [b  ]
+        d( iopp,j) = d( i,j) - d( iopp,j) ! [a+b] [a  ]
+        d( i   ,j) = d( i,j) - d( iopp,j) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_x_dp_2D
+  SUBROUTINE flip_x_dp_3D( d)
+    ! Flip a 3-D data field in the x-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:,:),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_x_dp_3D'
+    INTEGER                                            :: i,j,nx,ny,j1,j2,iopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( ny, par%i, par%n, j1, j2)
+
+    ! Flip the data
+    DO j = j1,j2
+      DO i = 1, nx
+        iopp = nx + 1 - i
+        IF (iopp <= i) EXIT                     ! [a  ] [b  ]
+        d( i   ,j,:) = d( i,j,:) + d( iopp,j,:) ! [a+b] [b  ]
+        d( iopp,j,:) = d( i,j,:) - d( iopp,j,:) ! [a+b] [a  ]
+        d( i   ,j,:) = d( i,j,:) - d( iopp,j,:) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_x_dp_3D
+  SUBROUTINE flip_x_int_2D( d)
+    ! Flip a 2-D data field in the x-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:  ),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_x_int_2D'
+    INTEGER                                            :: i,j,nx,ny,j1,j2,iopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( ny, par%i, par%n, j1, j2)
+
+    ! Flip the data
+    DO j = j1,j2
+      DO i = 1, nx
+        iopp = nx + 1 - i
+        IF (iopp <= i) EXIT               ! [a  ] [b  ]
+        d( i   ,j) = d( i,j) + d( iopp,j) ! [a+b] [b  ]
+        d( iopp,j) = d( i,j) - d( iopp,j) ! [a+b] [a  ]
+        d( i   ,j) = d( i,j) - d( iopp,j) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_x_int_2D
+  SUBROUTINE flip_x_int_3D( d)
+    ! Flip a 3-D data field in the x-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:,:),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_x_int_3D'
+    INTEGER                                            :: i,j,nx,ny,j1,j2,iopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( ny, par%i, par%n, j1, j2)
+
+    ! Flip the data
+    DO j = j1,j2
+      DO i = 1, nx
+        iopp = nx + 1 - i
+        IF (iopp <= i) EXIT                     ! [a  ] [b  ]
+        d( i   ,j,:) = d( i,j,:) + d( iopp,j,:) ! [a+b] [b  ]
+        d( iopp,j,:) = d( i,j,:) - d( iopp,j,:) ! [a+b] [a  ]
+        d( i   ,j,:) = d( i,j,:) - d( iopp,j,:) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_x_int_3D
+  SUBROUTINE flip_y_dp_2D( d)
+    ! Flip a 2-D data field in the y-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_y_dp_2D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2,jopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Flip the data
+    DO i = i1,i2
+      DO j = 1, ny
+        jopp = ny + 1 - j
+        IF (jopp <= j) EXIT               ! [a  ] [b  ]
+        d( i,j   ) = d( i,j) + d( i,jopp) ! [a+b] [b  ]
+        d( i,jopp) = d( i,j) - d( i,jopp) ! [a+b] [a  ]
+        d( i,j   ) = d( i,j) - d( i,jopp) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_y_dp_2D
+  SUBROUTINE flip_y_dp_3D( d)
+    ! Flip a 3-D data field in the y-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:,:),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_y_dp_3D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2,jopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Flip the data
+    DO i = i1,i2
+      DO j = 1, ny
+        jopp = ny + 1 - j
+        IF (jopp <= j) EXIT                     ! [a  ] [b  ]
+        d( i,j   ,:) = d( i,j,:) + d( i,jopp,:) ! [a+b] [b  ]
+        d( i,jopp,:) = d( i,j,:) - d( i,jopp,:) ! [a+b] [a  ]
+        d( i,j   ,:) = d( i,j,:) - d( i,jopp,:) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_y_dp_3D
+  SUBROUTINE flip_y_int_2D( d)
+    ! Flip a 2-D data field in the y-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:  ),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_y_int_2D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2,jopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Flip the data
+    DO i = i1,i2
+      DO j = 1, ny
+        jopp = ny + 1 - j
+        IF (jopp <= j) EXIT               ! [a  ] [b  ]
+        d( i,j   ) = d( i,j) + d( i,jopp) ! [a+b] [b  ]
+        d( i,jopp) = d( i,j) - d( i,jopp) ! [a+b] [a  ]
+        d( i,j   ) = d( i,j) - d( i,jopp) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_y_int_2D
+  SUBROUTINE flip_y_int_3D( d)
+    ! Flip a 3-D data field in the y-dimension
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    INTEGER,  DIMENSION(:,:,:),          INTENT(INOUT) :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'flip_y_int_3D'
+    INTEGER                                            :: i,j,nx,ny,i1,i2,jopp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    nx = SIZE( d,1)
+    ny = SIZE( d,2)
+    CALL partition_list( nx, par%i, par%n, i1, i2)
+
+    ! Flip the data
+    DO i = i1,i2
+      DO j = 1, ny
+        jopp = ny + 1 - j
+        IF (jopp <= j) EXIT                     ! [a  ] [b  ]
+        d( i,j   ,:) = d( i,j,:) + d( i,jopp,:) ! [a+b] [b  ]
+        d( i,jopp,:) = d( i,j,:) - d( i,jopp,:) ! [a+b] [a  ]
+        d( i,j   ,:) = d( i,j,:) - d( i,jopp,:) ! [b  ] [a  ]
+      END DO
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE flip_y_int_3D
 
   ! == 2nd-order conservative remapping of a 1-D variable
   SUBROUTINE remap_cons_2nd_order_1D( z_src, mask_src, d_src, z_dst, mask_dst, d_dst)

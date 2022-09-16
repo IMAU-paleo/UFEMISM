@@ -46,6 +46,7 @@ ifeq ($(DO_SELEN),yes)
 UFEMISM_program_objects = \
         configuration_module.o \
         data_types_netcdf_module.o \
+        data_types_netcdf_module_new.o \
         data_types_module.o \
         parallel_module.o \
         petsc_module.o \
@@ -62,6 +63,7 @@ UFEMISM_program_objects = \
         mesh_update_module.o \
         zeta_module.o \
         netcdf_module.o \
+        netcdf_module_new.o \
         restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
@@ -98,6 +100,7 @@ else
 UFEMISM_program_objects = \
         configuration_module.o \
         data_types_netcdf_module.o \
+        data_types_netcdf_module_new.o \
         data_types_module.o \
         parallel_module.o \
         petsc_module.o \
@@ -114,6 +117,7 @@ UFEMISM_program_objects = \
         mesh_update_module.o \
         zeta_module.o \
         netcdf_module.o \
+        netcdf_module_new.o \
         restart_module.o \
         forcing_module.o \
         reference_fields_module.o \

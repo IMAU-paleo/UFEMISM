@@ -424,8 +424,8 @@ MODULE data_types_module
 
   END TYPE type_mesh
 
-  ! == Regular grid
-  ! ===============
+  ! == Regular x/y-grid
+  ! ===================
 
   TYPE type_grid
     ! A regular square grid covering a model region
@@ -461,6 +461,30 @@ MODULE data_types_module
     INTEGER :: wlambda_M, wphi_M, wbeta_stereo
 
   END TYPE type_grid
+
+  ! == Regular lon/lat-grid
+  ! =======================
+
+  TYPE type_grid_lonlat
+    ! A regular square lon/lat-grid
+
+    ! Basic grid data
+    INTEGER,                    POINTER     :: nlon, nlat
+    REAL(dp),                   POINTER     :: dlon, dlat
+    REAL(dp), DIMENSION(:    ), POINTER     :: lon, lat
+    REAL(dp),                   POINTER     :: lonmin, lonmax, latmin, latmax
+    INTEGER :: wnlon, wnlat, wn, wdlon, wdlat, wlon, wlat, wlonmin, wlonmax, wlatmin, wlatmax
+
+    ! Parallelisation by domain decomposition
+    INTEGER                                 :: i1, i2, j1, j2
+
+    ! Projection parameters for the grid
+    REAL(dp),                   POINTER     :: lambda_M
+    REAL(dp),                   POINTER     :: phi_M
+    REAL(dp),                   POINTER     :: beta_stereo
+    INTEGER :: wlambda_M, wphi_M, wbeta_stereo
+
+  END TYPE type_grid_lonlat
 
   ! == Reference geometries
   ! =======================
@@ -523,26 +547,14 @@ MODULE data_types_module
 
   END TYPE type_remapping_mesh_mesh
 
-  TYPE type_remapping_latlon2mesh
-    ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
+  TYPE type_remapping_lonlat2mesh
+    ! Indices and weights for mapping data from a global lon/lat-grid to the model mesh using bilinear interpolation
 
     INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
     REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
     INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
 
-  END TYPE type_remapping_latlon2mesh
-
-  TYPE type_latlongrid
-    ! A global lat-lon grid
-
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat, lon
-    REAL(dp),                   POINTER     :: dlat, dlon
-    INTEGER :: wnlat, wnlon, wlat, wlon, wdlat, wdlon
-
-    INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
-
-  END TYPE type_latlongrid
+  END TYPE type_remapping_lonlat2mesh
 
   ! == Forcing
   ! ==========
@@ -597,7 +609,7 @@ MODULE data_types_module
 
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_latlongrid)                   :: grid_ghf
+    TYPE(type_grid_lonlat)                  :: grid_ghf
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
     INTEGER :: wghf_ghf
 

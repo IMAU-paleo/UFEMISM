@@ -39,15 +39,15 @@ MODULE climate_module
                                              inquire_ISMIP_forcing_aST_file, read_ISMIP_forcing_aST_file, &
                                              inquire_ISMIP_forcing_dSTdz_file, read_ISMIP_forcing_dSTdz_file
   USE data_types_module,               ONLY: type_mesh, type_grid, type_ice_model, type_reference_geometry, &
-                                             type_remapping_mesh_mesh, type_remapping_latlon2mesh, type_SMB_model, &
+                                             type_remapping_mesh_mesh, type_remapping_lonlat2mesh, type_SMB_model, &
                                              type_climate_matrix_global, type_climate_snapshot_global, &
                                              type_climate_matrix_regional, type_climate_snapshot_regional, &
-                                             type_model_region, type_latlongrid, &
+                                             type_model_region, type_grid_lonlat, &
                                              type_direct_climate_forcing_global,   type_direct_SMB_forcing_global, &
                                              type_direct_climate_forcing_regional, type_direct_SMB_forcing_regional
   USE data_types_netcdf_module,        ONLY: type_netcdf_ISMIP_style_baseline, type_netcdf_ISMIP_style_forcing
-  USE mesh_mapping_module,             ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, map_latlon2mesh_3D, &
-                                             deallocate_remapping_arrays_glob_mesh, smooth_Gaussian_2D, map_grid2mesh_2D, &
+  USE mesh_mapping_module,             ONLY: create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, map_lonlat2mesh_3D, &
+                                             deallocate_remapping_arrays_lonlat_mesh, smooth_Gaussian_2D, map_grid2mesh_2D, &
                                              calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh, &
                                              map_grid2mesh_3D
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time, update_CO2_at_model_time
@@ -1626,8 +1626,8 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_direct_climate_global'
     REAL(dp)                                           :: wt0, wt1
     INTEGER                                            :: vi,m
-    TYPE(type_latlongrid)                              :: grid
-    TYPE(type_remapping_latlon2mesh)                   :: map
+    TYPE(type_grid_lonlat)                             :: grid
+    TYPE(type_remapping_lonlat2mesh)                   :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1658,23 +1658,23 @@ CONTAINS
       grid%lat  = clim_glob%lat
 
       ! Calculate mapping arrays
-      CALL create_remapping_arrays_glob_mesh( mesh, grid, map)
+      CALL create_remapping_arrays_lonlat_mesh( mesh, grid, map)
 
       ! Map global climate data to the mesh
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%Hs0,      climate_matrix%direct%Hs0     )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%T2m0,     climate_matrix%direct%T2m0    )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Precip0,  climate_matrix%direct%Precip0 )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Wind_WE0, climate_matrix%direct%Wind_WE0)
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Wind_SN0, climate_matrix%direct%Wind_SN0)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%Hs0,      climate_matrix%direct%Hs0     )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%T2m0,     climate_matrix%direct%T2m0    )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Precip0,  climate_matrix%direct%Precip0 )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Wind_WE0, climate_matrix%direct%Wind_WE0)
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Wind_SN0, climate_matrix%direct%Wind_SN0)
 
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%Hs1,      climate_matrix%direct%Hs1     )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%T2m1,     climate_matrix%direct%T2m1    )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Precip1,  climate_matrix%direct%Precip1 )
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Wind_WE1, climate_matrix%direct%Wind_WE1)
-      CALL map_latlon2mesh_3D( mesh, map, clim_glob%Wind_SN1, climate_matrix%direct%Wind_SN1)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%Hs1,      climate_matrix%direct%Hs1     )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%T2m1,     climate_matrix%direct%T2m1    )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Precip1,  climate_matrix%direct%Precip1 )
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Wind_WE1, climate_matrix%direct%Wind_WE1)
+      CALL map_lonlat2mesh_3D( mesh, map, clim_glob%Wind_SN1, climate_matrix%direct%Wind_SN1)
 
       ! Deallocate mapping arrays
-      CALL deallocate_remapping_arrays_glob_mesh( map)
+      CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
       ! Clean up after yourself
       CALL deallocate_shared( grid%wnlon)
@@ -2239,8 +2239,8 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_direct_SMB_global'
     REAL(dp)                                           :: wt0, wt1
     INTEGER                                            :: vi,m
-    TYPE(type_latlongrid)                              :: grid
-    TYPE(type_remapping_latlon2mesh)                   :: map
+    TYPE(type_grid_lonlat)                             :: grid
+    TYPE(type_remapping_lonlat2mesh)                   :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -2271,17 +2271,17 @@ CONTAINS
       grid%lat  = clim_glob%lat
 
       ! Calculate mapping arrays
-      CALL create_remapping_arrays_glob_mesh( mesh, grid, map)
+      CALL create_remapping_arrays_lonlat_mesh( mesh, grid, map)
 
       ! Map global climate data to the mesh
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%T2m_year0, climate_matrix%SMB_direct%T2m_year0)
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%SMB_year0, climate_matrix%SMB_direct%SMB_year0)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%T2m_year0, climate_matrix%SMB_direct%T2m_year0)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%SMB_year0, climate_matrix%SMB_direct%SMB_year0)
 
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%T2m_year1, climate_matrix%SMB_direct%T2m_year1)
-      CALL map_latlon2mesh_2D( mesh, map, clim_glob%SMB_year1, climate_matrix%SMB_direct%SMB_year1)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%T2m_year1, climate_matrix%SMB_direct%T2m_year1)
+      CALL map_lonlat2mesh_2D( mesh, map, clim_glob%SMB_year1, climate_matrix%SMB_direct%SMB_year1)
 
       ! Deallocate mapping arrays
-      CALL deallocate_remapping_arrays_glob_mesh( map)
+      CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
       ! Clean up after yourself
       CALL deallocate_shared( grid%wnlon)
@@ -3346,8 +3346,8 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_subclimate_to_mesh'
-    TYPE(type_latlongrid)                              :: grid
-    TYPE(type_remapping_latlon2mesh)                   :: map
+    TYPE(type_grid_lonlat)                             :: grid
+    TYPE(type_remapping_lonlat2mesh)                   :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -3371,17 +3371,17 @@ CONTAINS
     grid%lat  = cglob%lat
 
     ! Calculate mapping arrays
-    CALL create_remapping_arrays_glob_mesh( mesh, grid, map)
+    CALL create_remapping_arrays_lonlat_mesh( mesh, grid, map)
 
     ! Map global climate data to the mesh
-    CALL map_latlon2mesh_2D( mesh, map, cglob%Hs,      creg%Hs     )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%T2m,     creg%T2m    )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Precip,  creg%Precip )
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_WE, creg%Wind_WE)
-    CALL map_latlon2mesh_3D( mesh, map, cglob%Wind_SN, creg%Wind_SN)
+    CALL map_lonlat2mesh_2D( mesh, map, cglob%Hs,      creg%Hs     )
+    CALL map_lonlat2mesh_3D( mesh, map, cglob%T2m,     creg%T2m    )
+    CALL map_lonlat2mesh_3D( mesh, map, cglob%Precip,  creg%Precip )
+    CALL map_lonlat2mesh_3D( mesh, map, cglob%Wind_WE, creg%Wind_WE)
+    CALL map_lonlat2mesh_3D( mesh, map, cglob%Wind_SN, creg%Wind_SN)
 
     ! Deallocate mapping arrays
-    CALL deallocate_remapping_arrays_glob_mesh( map)
+    CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
     ! Rotate zonal/meridional wind to x,y wind
     CALL rotate_wind_to_model_mesh( mesh, creg%wind_WE, creg%wind_SN, creg%wind_LR, creg%wind_DU)
@@ -4632,7 +4632,7 @@ CONTAINS
   !   INTEGER                                            :: vi
   !   REAL(dp), DIMENSION(:    ), POINTER                ::  Hi_ICE5G,  Hb_ICE5G,  Hb_ICE5G_PD,  mask_ice_ICE5G,  dHb_ICE5G
   !   INTEGER                                            :: wHi_ICE5G, wHb_ICE5G, wHb_ICE5G_PD, wmask_ice_ICE5G, wdHb_ICE5G
-  !   TYPE(type_remapping_latlon2mesh)                   :: map
+  !   TYPE(type_remapping_lonlat2mesh)                   :: map
 
   !   ! Downscale the GCM snapshot from the (coarse) GCM geometry to the (fine) ISM geometry
   !   ! Store the downscaled climate in temporary memory.
@@ -4646,16 +4646,16 @@ CONTAINS
   !   CALL allocate_shared_dp_1D(     mesh%nV, dHb_ICE5G,      wdHb_ICE5G     )
 
   !   ! Get mapping arrays
-  !   CALL create_remapping_arrays_glob_mesh( mesh, ICE5G%grid, map)
+  !   CALL create_remapping_arrays_lonlat_mesh( mesh, ICE5G%grid, map)
 
   !   ! First, map the two ICE5G timeframes to the model grid
-  !   CALL map_latlon2mesh_2D( mesh, map, ICE5G%Hi,       Hi_ICE5G)
-  !   CALL map_latlon2mesh_2D( mesh, map, ICE5G%Hb,       Hb_ICE5G)
-  !   CALL map_latlon2mesh_2D( mesh, map, ICE5G_PD%Hb,    Hb_ICE5G_PD)
-  !   CALL map_latlon2mesh_2D( mesh, map, ICE5G%mask_ice, mask_ice_ICE5G)
+  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%Hi,       Hi_ICE5G)
+  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%Hb,       Hb_ICE5G)
+  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G_PD%Hb,    Hb_ICE5G_PD)
+  !   CALL map_lonlat2mesh_2D( mesh, map, ICE5G%mask_ice, mask_ice_ICE5G)
 
   !   ! Deallocate mapping arrays
-  !   CALL deallocate_remapping_arrays_glob_mesh( map)
+  !   CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
   !   ! Define sea level (no clear way to do this automatically)
   !   snapshot%sealevel = 0._dp

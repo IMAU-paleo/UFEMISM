@@ -17,7 +17,8 @@ module ocean_module
                                    map_glob_to_grid_3D, extrapolate_Gaussian_floodfill
   use mesh_mapping_module,  only : calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
                                    calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
-                                   deallocate_remapping_operators_mesh2grid
+                                   deallocate_remapping_operators_mesh2grid, &
+                                   deallocate_remapping_operators_grid2mesh
   use utilities_module,     only : surface_elevation
   use reallocate_mod,       only : reallocate_bounds
 
@@ -562,7 +563,7 @@ contains
     call calc_remapping_operator_grid2mesh( hires%grid, region%mesh)
     call map_grid2mesh_3D( hires%grid, region%mesh, hires%T_ocean, ocean_reg%T_ocean_ext)
     call map_grid2mesh_3D( hires%grid, region%mesh, hires%S_ocean, ocean_reg%S_ocean_ext)
-    call deallocate_remapping_operators_mesh2grid( hires%grid)
+    call deallocate_remapping_operators_grid2mesh( hires%grid)
 
     ! Clean up after yourself
     deallocate( hires%grid%x              )
@@ -1810,7 +1811,7 @@ contains
     call calc_remapping_operator_grid2mesh( hires%grid, mesh_new)
     call map_grid2mesh_3D( hires%grid, mesh_new, hires%T_ocean, ocean_reg%T_ocean_ext)
     call map_grid2mesh_3D( hires%grid, mesh_new, hires%S_ocean, ocean_reg%S_ocean_ext)
-    call deallocate_remapping_operators_mesh2grid( hires%grid)
+    call deallocate_remapping_operators_grid2mesh( hires%grid)
 
     ! Clean up after yourself
     deallocate( hires%grid%x            )

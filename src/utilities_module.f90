@@ -172,56 +172,53 @@ CONTAINS
 
   END FUNCTION thickness_above_floatation
 
-! ! == The error function (used in the Roe&Lindzen precipitation model)
-!   SUBROUTINE error_function(X, ERR)
-!     ! Purpose: Compute error function erf(x)
-!     ! Input:   x   --- Argument of erf(x)
-!     ! Output:  ERR --- erf(x)
+! == The error function (used in the Roe&Lindzen precipitation model)
+  subroutine error_function(X, ERR)
+    ! Purpose: Compute error function erf(x)
+    ! Input:   x   --- Argument of erf(x)
+    ! Output:  ERR --- erf(x)
 
-!     IMPLICIT NONE
+    implicit none
 
-!     ! Input variables:
-!     REAL(dp), INTENT(IN)  :: X
+    ! Input/Output variables:
+    real(dp), intent(in)  :: X
+    real(dp), intent(out) :: ERR
 
-!     ! Output variables:
-!     REAL(dp), INTENT(OUT) :: ERR
+    ! Local variables:
+    real(dp)              :: EPS
+    real(dp)              :: X2
+    real(dp)              :: ER
+    real(dp)              :: R
+    real(dp)              :: C0
+    integer               :: k
 
-!     ! Local variables:
-!     REAL(dp)              :: EPS
-!     REAL(dp)              :: X2
-!     REAL(dp)              :: ER
-!     REAL(dp)              :: R
-!     REAL(dp)              :: C0
-!     INTEGER               :: k
+    EPS = 1.0E-15_dp
+    X2  = X * X
+    if ( abs(X) < 3.5_dp) then
+     ER = 1.0_dp
+     R  = 1.0_dp
+     do k = 1, 50
+       R  = R * X2 / (real(k, dp) + 0.5_dp)
+       ER = ER+R
+       if ( abs(R) < abs(ER) * EPS) then
+        C0  = 2.0_dp / sqrt(pi) * X * exp(-X2)
+        ERR = C0 * ER
+        exit
+       end if
+     end do
+    else
+     ER = 1.0_dp
+     R  = 1.0_dp
+     do k = 1, 12
+       R  = -R * (real(k, dp) - 0.5_dp) / X2
+       ER = ER + R
+       C0  = exp(-X2) / (abs(X) * sqrt(pi))
+       ERR = 1.0_dp - C0 * ER
+       if ( X < 0.0_dp) ERR = -ERR
+     end do
+    end if
 
-!     EPS = 1.0E-15_dp
-!     X2  = X * X
-!     IF(ABS(X) < 3.5_dp) THEN
-!      ER = 1.0_dp
-!      R  = 1.0_dp
-!      DO k = 1, 50
-!        R  = R * X2 / (REAL(k, dp) + 0.5_dp)
-!        ER = ER+R
-!        IF(ABS(R) < ABS(ER) * EPS) THEN
-!         C0  = 2.0_dp / SQRT(pi) * X * EXP(-X2)
-!         ERR = C0 * ER
-!         EXIT
-!        END IF
-!      END DO
-!     ELSE
-!      ER = 1.0_dp
-!      R  = 1.0_dp
-!      DO k = 1, 12
-!        R  = -R * (REAL(k, dp) - 0.5_dp) / X2
-!        ER = ER + R
-!        C0  = EXP(-X2) / (ABS(X) * SQRT(pi))
-!        ERR = 1.0_dp - C0 * ER
-!        IF(X < 0.0_dp) ERR = -ERR
-!      END DO
-!     ENDIF
-
-!     RETURN
-!   END SUBROUTINE error_function
+  end subroutine error_function
 
 ! ===== The oblique stereographic projection =====
 ! ================================================
@@ -1055,48 +1052,48 @@ CONTAINS
 
   END SUBROUTINE SSA_Schoof2006_analytical_solution
 
-! ! == Some wrappers for LAPACK matrix functionality
-!   FUNCTION tridiagonal_solve( ldiag, diag, udiag, rhs) RESULT(x)
-!     ! Lapack tridiagnal solver (in double precision):
-!     ! Matrix system solver for tridiagonal matrices.
-!     ! Used e.g. in solving the ADI scheme.
-!     ! ldiag = lower diagonal elements (j,j-1) of the matrix
-!     ! diag  = diagonal elements (j,j) of the matrix
-!     ! udiag = upper diagonal elements (j,j+1) of the matrix
-!     ! rhs   = right hand side of the matrix equation in the ADI scheme
+! == Some wrappers for LAPACK matrix functionality
+  function tridiagonal_solve( ldiag, diag, udiag, rhs) result(x)
+    ! Lapack tridiagnal solver (in double precision):
+    ! Matrix system solver for tridiagonal matrices.
+    ! Used e.g. in solving the ADI scheme.
+    ! ldiag = lower diagonal elements (j,j-1) of the matrix
+    ! diag  = diagonal elements (j,j) of the matrix
+    ! udiag = upper diagonal elements (j,j+1) of the matrix
+    ! rhs   = right hand side of the matrix equation in the ADI scheme
 
-!     IMPLICIT NONE
+    implicit none
 
-!     ! Input variables:
-!     REAL(dp), DIMENSION(:),            INTENT(IN) :: diag
-!     REAL(dp), DIMENSION(SIZE(diag)-1), INTENT(IN) :: udiag, ldiag
-!     REAL(dp), DIMENSION(SIZE(diag)),   INTENT(IN) :: rhs
+    ! Input variables:
+    real(dp), dimension(:),            intent(in) :: diag
+    real(dp), dimension(size(diag)-1), intent(in) :: udiag, ldiag
+    real(dp), dimension(size(diag)),   intent(in) :: rhs
 
-!     ! Result variable:
-!     REAL(dp), DIMENSION(SIZE(diag))               :: x
+    ! Result variable:
+    real(dp), dimension(size(diag))               :: x
 
-!     ! Local variables:
-!     INTEGER                                       :: info
-!     REAL(dp), DIMENSION(SIZE(diag))               :: diag_copy
-!     REAL(dp), DIMENSION(SIZE(udiag))              :: udiag_copy, ldiag_copy
+    ! Local variables:
+    integer                                       :: info
+    real(dp), dimension(size(diag))               :: diag_copy
+    real(dp), dimension(size(udiag))              :: udiag_copy, ldiag_copy
 
-!     ! The LAPACK solver will overwrite the rhs with the solution x. Therefore we
-!     ! first copy the rhs in the solution vector x:
-!     x = rhs
+    ! The LAPACK solver will overwrite the rhs with the solution x. Therefore we
+    ! first copy the rhs in the solution vector x:
+    x = rhs
 
-!     ! The LAPACK solver will change the elements in the matrix, therefore we copy them:
-!     diag_copy  =  diag
-!     udiag_copy = udiag
-!     ldiag_copy = ldiag
+    ! The LAPACK solver will change the elements in the matrix, therefore we copy them:
+    diag_copy  =  diag
+    udiag_copy = udiag
+    ldiag_copy = ldiag
 
-!     CALL DGTSV(SIZE(diag), 1, ldiag_copy, diag_copy, udiag_copy, x, SIZE(diag), info)
+    call DGTSV(size(diag), 1, ldiag_copy, diag_copy, udiag_copy, x, size(diag), info)
 
-!     IF (info /= 0) THEN
-!       WRITE(0,*) 'tridiagonal_solve - ERROR: LAPACK solver DGTSV returned error message info = ', info
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
+    if (info /= 0) then
+      write(0,*) 'tridiagonal_solve - ERROR: LAPACK solver DGTSV returned error message info = ', info
+      call MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    end if
 
-!   END FUNCTION tridiagonal_solve
+  end function tridiagonal_solve
 
 ! == Finding inverses of some very small matrices
   SUBROUTINE calc_matrix_inverse_2_by_2( A, Ainv)
@@ -1743,169 +1740,169 @@ CONTAINS
 
 !   END SUBROUTINE transpose_int_3D
 
-!   ! == 2nd-order conservative remapping of a 1-D variable
-!   SUBROUTINE remap_cons_2nd_order_1D( z_src, mask_src, d_src, z_dst, mask_dst, d_dst)
-!     ! 2nd-order conservative remapping of a 1-D variable
-!     !
-!     ! Used to remap ocean data from the provided vertical grid to the UFEMISM ocean vertical grid
-!     !
-!     ! Both z_src and z_dst can be irregular.
-!     !
-!     ! Both the src and dst data have a mask, with 0 indicating grid points where no data is defined.
-!     !
-!     ! This subroutine is serial, as it will be applied to single grid cells when remapping 3-D data fields,
-!     !   with the parallelisation being done by distributing the 2-D grid cells over the processes.
+  ! == 2nd-order conservative remapping of a 1-D variable
+  SUBROUTINE remap_cons_2nd_order_1D( z_src, mask_src, d_src, z_dst, mask_dst, d_dst)
+    ! 2nd-order conservative remapping of a 1-D variable
+    !
+    ! Used to remap ocean data from the provided vertical grid to the UFEMISM ocean vertical grid
+    !
+    ! Both z_src and z_dst can be irregular.
+    !
+    ! Both the src and dst data have a mask, with 0 indicating grid points where no data is defined.
+    !
+    ! This subroutine is serial, as it will be applied to single grid cells when remapping 3-D data fields,
+    !   with the parallelisation being done by distributing the 2-D grid cells over the processes.
 
-!     IMPLICIT NONE
+    IMPLICIT NONE
 
-!     ! In/output variables:
-!     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_src
-!     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_src
-!     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_src
-!     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_dst
-!     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_dst
-!     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_dst
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_src
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_src
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d_src
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: z_dst
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: mask_dst
+    REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_dst
 
-!     ! Local variables:
-!     LOGICAL                                            :: all_are_masked
-!     INTEGER                                            :: nz_src, nz_dst
-!     INTEGER                                            :: k
-!     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: ddz_src
-!     INTEGER                                            :: k_src, k_dst
-!     REAL(dp)                                           :: zl_src, zu_src, zl_dst, zu_dst, z_lo, z_hi, z, d
-!     REAL(dp)                                           :: dz_overlap, dz_overlap_tot, d_int, d_int_tot
-!     REAL(dp)                                           :: dist_to_dst, dist_to_dst_min, max_dist
-!     INTEGER                                            :: k_src_nearest_to_dst
+    ! Local variables:
+    LOGICAL                                            :: all_are_masked
+    INTEGER                                            :: nz_src, nz_dst
+    INTEGER                                            :: k
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: ddz_src
+    INTEGER                                            :: k_src, k_dst
+    REAL(dp)                                           :: zl_src, zu_src, zl_dst, zu_dst, z_lo, z_hi, z, d
+    REAL(dp)                                           :: dz_overlap, dz_overlap_tot, d_int, d_int_tot
+    REAL(dp)                                           :: dist_to_dst, dist_to_dst_min, max_dist
+    INTEGER                                            :: k_src_nearest_to_dst
 
-!     ! Initialise
-!     d_dst = 0._dp
+    ! Initialise
+    d_dst = 0._dp
 
-!     ! Sizes
-!     nz_src = SIZE( z_src,1)
-!     nz_dst = SIZE( z_dst,1)
+    ! Sizes
+    nz_src = SIZE( z_src,1)
+    nz_dst = SIZE( z_dst,1)
 
-!     ! Maximum distance on combined grids
-!     max_dist = MAXVAL([ ABS( z_src( nz_src) - z_src( 1)), &
-!                         ABS( z_dst( nz_dst) - z_dst( 1)), &
-!                         ABS( z_src( nz_src) - z_dst( 1)), &
-!                         ABS( z_dst( nz_dst) - z_src( 1))])
+    ! Maximum distance on combined grids
+    max_dist = MAXVAL([ ABS( z_src( nz_src) - z_src( 1)), &
+                        ABS( z_dst( nz_dst) - z_dst( 1)), &
+                        ABS( z_src( nz_src) - z_dst( 1)), &
+                        ABS( z_dst( nz_dst) - z_src( 1))])
 
-!     ! Exception for when the entire src field is masked
-!     all_are_masked = .TRUE.
-!     DO k = 1, nz_src
-!       IF (mask_src( k) == 1) all_are_masked = .FALSE.
-!     END DO
-!     IF (all_are_masked) RETURN
+    ! Exception for when the entire src field is masked
+    all_are_masked = .TRUE.
+    DO k = 1, nz_src
+      IF (mask_src( k) == 1) all_are_masked = .FALSE.
+    END DO
+    IF (all_are_masked) RETURN
 
-!     ! Exception for when the entire dst field is masked
-!     all_are_masked = .TRUE.
-!     DO k = 1, nz_dst
-!       IF (mask_dst( k) == 1) all_are_masked = .FALSE.
-!     END DO
-!     IF (all_are_masked) RETURN
+    ! Exception for when the entire dst field is masked
+    all_are_masked = .TRUE.
+    DO k = 1, nz_dst
+      IF (mask_dst( k) == 1) all_are_masked = .FALSE.
+    END DO
+    IF (all_are_masked) RETURN
 
-!     ! Calculate derivative d_src/dz (one-sided differencing at the boundary, central differencing everywhere else)
-!     ALLOCATE( ddz_src( nz_src))
-!     DO k = 2, nz_src-1
-!       ddz_src( k    ) = (d_src( k+1   ) - d_src( k-1     )) / (z_src( k+1   ) - z_src( k-1     ))
-!     END DO
-!     ddz_src(  1     ) = (d_src( 2     ) - d_src( 1       )) / (z_src( 2     ) - z_src( 1       ))
-!     ddz_src(  nz_src) = (d_src( nz_src) - d_src( nz_src-1)) / (z_src( nz_src) - z_src( nz_src-1))
+    ! Calculate derivative d_src/dz (one-sided differencing at the boundary, central differencing everywhere else)
+    ALLOCATE( ddz_src( nz_src))
+    DO k = 2, nz_src-1
+      ddz_src( k    ) = (d_src( k+1   ) - d_src( k-1     )) / (z_src( k+1   ) - z_src( k-1     ))
+    END DO
+    ddz_src(  1     ) = (d_src( 2     ) - d_src( 1       )) / (z_src( 2     ) - z_src( 1       ))
+    ddz_src(  nz_src) = (d_src( nz_src) - d_src( nz_src-1)) / (z_src( nz_src) - z_src( nz_src-1))
 
-!     ! Perform conservative remapping by finding regions of overlap
-!     ! between source and destination grid cells
+    ! Perform conservative remapping by finding regions of overlap
+    ! between source and destination grid cells
 
-!     DO k_dst = 1, nz_dst
+    DO k_dst = 1, nz_dst
 
-!       ! Skip masked grid cells
-!       IF (mask_dst( k_dst) == 0) THEN
-!         d_dst( k_dst) = 0._dp
-!         CYCLE
-!       END IF
+      ! Skip masked grid cells
+      IF (mask_dst( k_dst) == 0) THEN
+        d_dst( k_dst) = 0._dp
+        CYCLE
+      END IF
 
-!       ! Find z range covered by this dst grid cell
-!       IF (k_dst > 1) THEN
-!         zl_dst = 0.5_dp * (z_dst( k_dst - 1) + z_dst( k_dst))
-!       ELSE
-!         zl_dst = z_dst( 1) - 0.5_dp * (z_dst( 2) - z_dst( 1))
-!       END IF
-!       IF (k_dst < nz_dst) THEN
-!         zu_dst = 0.5_dp * (z_dst( k_dst + 1) + z_dst( k_dst))
-!       ELSE
-!         zu_dst = z_dst( nz_dst) + 0.5_dp * (z_dst( nz_dst) - z_dst( nz_dst-1))
-!       END IF
+      ! Find z range covered by this dst grid cell
+      IF (k_dst > 1) THEN
+        zl_dst = 0.5_dp * (z_dst( k_dst - 1) + z_dst( k_dst))
+      ELSE
+        zl_dst = z_dst( 1) - 0.5_dp * (z_dst( 2) - z_dst( 1))
+      END IF
+      IF (k_dst < nz_dst) THEN
+        zu_dst = 0.5_dp * (z_dst( k_dst + 1) + z_dst( k_dst))
+      ELSE
+        zu_dst = z_dst( nz_dst) + 0.5_dp * (z_dst( nz_dst) - z_dst( nz_dst-1))
+      END IF
 
-!       ! Find all overlapping src grid cells
-!       d_int_tot      = 0._dp
-!       dz_overlap_tot = 0._dp
-!       DO k_src = 1, nz_src
+      ! Find all overlapping src grid cells
+      d_int_tot      = 0._dp
+      dz_overlap_tot = 0._dp
+      DO k_src = 1, nz_src
 
-!         ! Skip masked grid cells
-!         IF (mask_src( k_src) == 0) CYCLE
+        ! Skip masked grid cells
+        IF (mask_src( k_src) == 0) CYCLE
 
-!         ! Find z range covered by this src grid cell
-!         IF (k_src > 1) THEN
-!           zl_src = 0.5_dp * (z_src( k_src - 1) + z_src( k_src))
-!         ELSE
-!           zl_src = z_src( 1) - 0.5_dp * (z_src( 2) - z_src( 1))
-!         END IF
-!         IF (k_src < nz_src) THEN
-!           zu_src = 0.5_dp * (z_src( k_src + 1) + z_src( k_src))
-!         ELSE
-!           zu_src = z_src( nz_src) + 0.5_dp * (z_src( nz_src) - z_src( nz_src-1))
-!         END IF
+        ! Find z range covered by this src grid cell
+        IF (k_src > 1) THEN
+          zl_src = 0.5_dp * (z_src( k_src - 1) + z_src( k_src))
+        ELSE
+          zl_src = z_src( 1) - 0.5_dp * (z_src( 2) - z_src( 1))
+        END IF
+        IF (k_src < nz_src) THEN
+          zu_src = 0.5_dp * (z_src( k_src + 1) + z_src( k_src))
+        ELSE
+          zu_src = z_src( nz_src) + 0.5_dp * (z_src( nz_src) - z_src( nz_src-1))
+        END IF
 
-!         ! Find region of overlap
-!         z_lo = MAX( zl_src, zl_dst)
-!         z_hi = MIN( zu_src, zu_dst)
-!         dz_overlap = MAX( 0._dp, z_hi - z_lo)
+        ! Find region of overlap
+        z_lo = MAX( zl_src, zl_dst)
+        z_hi = MIN( zu_src, zu_dst)
+        dz_overlap = MAX( 0._dp, z_hi - z_lo)
 
-!         ! Calculate integral over region of overlap and add to sum
-!         IF (dz_overlap > 0._dp) THEN
-!           z = 0.5_dp * (z_lo + z_hi)
-!           d = d_src( k_src) + ddz_src( k_src) * (z - z_src( k_src))
-!           d_int = d * dz_overlap
+        ! Calculate integral over region of overlap and add to sum
+        IF (dz_overlap > 0._dp) THEN
+          z = 0.5_dp * (z_lo + z_hi)
+          d = d_src( k_src) + ddz_src( k_src) * (z - z_src( k_src))
+          d_int = d * dz_overlap
 
-!           d_int_tot      = d_int_tot      + d_int
-!           dz_overlap_tot = dz_overlap_tot + dz_overlap
-!         END IF
+          d_int_tot      = d_int_tot      + d_int
+          dz_overlap_tot = dz_overlap_tot + dz_overlap
+        END IF
 
-!       END DO ! DO k_src = 1, nz_src
+      END DO ! DO k_src = 1, nz_src
 
-!       IF (dz_overlap_tot > 0._dp) THEN
-!         ! Calculate dst value
-!         d_dst( k_dst) = d_int_tot / dz_overlap_tot
-!       ELSE
-!         ! Exception for when no overlapping src grid cells were found; use nearest-neighbour extrapolation
+      IF (dz_overlap_tot > 0._dp) THEN
+        ! Calculate dst value
+        d_dst( k_dst) = d_int_tot / dz_overlap_tot
+      ELSE
+        ! Exception for when no overlapping src grid cells were found; use nearest-neighbour extrapolation
 
-!         k_src_nearest_to_dst = 0._dp
-!         dist_to_dst_min      = max_dist
-!         DO k_src = 1, nz_src
-!           IF (mask_src( k_src) == 1) THEN
-!             dist_to_dst = ABS( z_src( k_src) - z_dst( k_dst))
-!             IF (dist_to_dst < dist_to_dst_min) THEN
-!               dist_to_dst_min      = dist_to_dst
-!               k_src_nearest_to_dst = k_src
-!             END IF
-!           END IF
-!         END DO
+        k_src_nearest_to_dst = 0._dp
+        dist_to_dst_min      = max_dist
+        DO k_src = 1, nz_src
+          IF (mask_src( k_src) == 1) THEN
+            dist_to_dst = ABS( z_src( k_src) - z_dst( k_dst))
+            IF (dist_to_dst < dist_to_dst_min) THEN
+              dist_to_dst_min      = dist_to_dst
+              k_src_nearest_to_dst = k_src
+            END IF
+          END IF
+        END DO
 
-!         ! Safety
-!         IF (k_src_nearest_to_dst == 0) THEN
-!           WRITE(0,*) '  remap_cons_2nd_order_1D - ERROR: couldnt find nearest neighbour on source grid!'
-!           CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!         END IF
+        ! Safety
+        IF (k_src_nearest_to_dst == 0) THEN
+          WRITE(0,*) '  remap_cons_2nd_order_1D - ERROR: couldnt find nearest neighbour on source grid!'
+          CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+        END IF
 
-!         d_dst( k_dst) = d_src( k_src_nearest_to_dst)
+        d_dst( k_dst) = d_src( k_src_nearest_to_dst)
 
-!       END IF ! IF (dz_overlap_tot > 0._dp) THEN
+      END IF ! IF (dz_overlap_tot > 0._dp) THEN
 
-!     END DO ! DO k_dst = 1, nz_dst
+    END DO ! DO k_dst = 1, nz_dst
 
-!     ! Clean up after yourself
-!     DEALLOCATE( ddz_src)
+    ! Clean up after yourself
+    DEALLOCATE( ddz_src)
 
-!   END SUBROUTINE remap_cons_2nd_order_1D
+  END SUBROUTINE remap_cons_2nd_order_1D
 
 !   ! == Map data from a global lon/lat-grid to the model y/x-grid
 !   SUBROUTINE map_glob_to_grid_2D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
@@ -1964,254 +1961,254 @@ CONTAINS
 !     CALL sync
 
 !   END SUBROUTINE map_glob_to_grid_2D
-!   SUBROUTINE map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
-!     ! Map a data field from a global lat-lon grid to the regional square grid
 
-!     IMPLICIT NONE
+  subroutine map_glob_to_grid_3D( nlat, nlon, lat, lon, grid, d_glob, d_grid)
+    ! Map a data field from a global lat-lon grid to the regional square grid
 
-!     ! In/output variables:
-!     INTEGER,                         INTENT(IN)  :: nlat
-!     INTEGER,                         INTENT(IN)  :: nlon
-!     REAL(dp), DIMENSION(nlat),       INTENT(IN)  :: lat
-!     REAL(dp), DIMENSION(nlon),       INTENT(IN)  :: lon
-!     TYPE(type_grid),                 INTENT(IN)  :: grid
-!     REAL(dp), DIMENSION(:,:,:),      INTENT(IN)  :: d_glob
-!     REAL(dp), DIMENSION(:,:,:),      INTENT(OUT) :: d_grid
+    implicit none
 
-!     ! Local variables:
-!     INTEGER                                      :: i, j, il, iu, jl, ju, k, nz
-!     REAL(dp)                                     :: wil, wiu, wjl, wju
+    ! In/output variables:
+    integer,                    intent(in)  :: nlat
+    integer,                    intent(in)  :: nlon
+    real(dp), dimension(nlat),  intent(in)  :: lat
+    real(dp), dimension(nlon),  intent(in)  :: lon
+    type(type_grid),            intent(in)  :: grid
+    real(dp), dimension(:,:,:), intent(in)  :: d_glob
+    real(dp), dimension(:,:,:), intent(out) :: d_grid
 
-!     nz = SIZE( d_glob,3)
+    ! Local variables:
+    integer                                 :: i, j, il, iu, jl, ju, k, nz
+    real(dp)                                :: wil, wiu, wjl, wju
 
-!     ! Safety
-!     IF (SIZE(d_grid,3) /= nz) THEN
-!       WRITE(0,*) 'map_glob_to_grid_3D - ERROR: Z-dimensions of global data (', SIZE(d_glob,3), ') and grid data (', SIZE(d_grid,3), ') fields do not match!'
-!       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!     END IF
+    nz = size( d_glob,3)
 
-!     DO j = 1, grid%ny
-!     DO i = grid%i1, grid%i2
+    ! Safety
+    if (size(d_grid,3) /= nz) then
+      call crash('Z-dimensions of global data and grid data fields do not match!')
+    end if
 
-!       ! Find enveloping lat-lon indices
-!       il  = MAX(1,MIN(nlon-1, 1 + FLOOR((grid%lon(i,j)-MINVAL(lon)) / (lon(2)-lon(1)))))
-!       iu  = il+1
-!       wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
-!       wiu = 1-wil
+    do j = 1, grid%ny
+    do i = grid%i1, grid%i2
 
-!       ! Exception for pixels near the zero meridian
-!       IF (grid%lon(i,j) < MINVAL(lon)) THEN
-!         il = nlon
-!         iu = 1
-!         wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
-!         wiu = 1-wil
-!       ELSEIF (grid%lon(i,j) > MAXVAL(lon)) THEN
-!         il = nlon
-!         iu = 1
-!         wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
-!         wil = 1-wiu
-!       END IF
+      ! Find enveloping lat-lon indices
+      il  = max(1,min(nlon-1, 1 + floor((grid%lon(i,j)-minval(lon)) / (lon(2)-lon(1)))))
+      iu  = il+1
+      wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+      wiu = 1-wil
 
-!       jl  = MAX(1,MIN(nlat-1, 1 + FLOOR((grid%lat(i,j)-MINVAL(lat)) / (lat(2)-lat(1)))))
-!       ju  = jl+1
-!       wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
-!       wju = 1-wjl
+      ! Exception for pixels near the zero meridian
+      if (grid%lon(i,j) < minval(lon)) then
+        il = nlon
+        iu = 1
+        wil = (lon(iu) - grid%lon(i,j))/(lon(2)-lon(1))
+        wiu = 1-wil
+      elseif (grid%lon(i,j) > maxval(lon)) then
+        il = nlon
+        iu = 1
+        wiu = (grid%lon(i,j) - lon(il))/(lon(2)-lon(1))
+        wil = 1-wiu
+      end if
 
-!       ! Interpolate data
-!       DO k = 1, nz
-!         d_grid( i,j,k) = (d_glob( il,jl,k) * wil * wjl) + &
-!                          (d_glob( il,ju,k) * wil * wju) + &
-!                          (d_glob( iu,jl,k) * wiu * wjl) + &
-!                          (d_glob( iu,ju,k) * wiu * wju)
-!       END DO
+      jl  = max(1,min(nlat-1, 1 + floor((grid%lat(i,j)-minval(lat)) / (lat(2)-lat(1)))))
+      ju  = jl+1
+      wjl = (lat(ju) - grid%lat(i,j))/(lat(2)-lat(1))
+      wju = 1-wjl
 
-!     END DO
-!     END DO
-!     CALL sync
+      ! Interpolate data
+      do k = 1, nz
+        d_grid( i,j,k) = (d_glob( il,jl,k) * wil * wjl) + &
+                         (d_glob( il,ju,k) * wil * wju) + &
+                         (d_glob( iu,jl,k) * wiu * wjl) + &
+                         (d_glob( iu,ju,k) * wiu * wju)
+      end do
 
-!   END SUBROUTINE map_glob_to_grid_3D
+    end do
+    end do
 
-!   ! == Gaussian extrapolation (used for ocean data)
-!   SUBROUTINE extrapolate_Gaussian_floodfill( grid, mask, d, sigma, mask_filled)
-!     ! Extrapolate the data field d into the area designated by the mask,
-!     ! using Gaussian extrapolation of sigma
-!     !
-!     ! NOTE: not parallelised! This is done instead by dividing vertical
-!     !       ocean layers over the processes.
-!     !
-!     ! Note about the mask:
-!     !    2 = data provided
-!     !    1 = no data provided, fill allowed
-!     !    0 = no fill allowed
-!     ! (so basically this routine extrapolates data from the area
-!     !  where mask == 2 into the area where mask == 1)
+  end subroutine map_glob_to_grid_3D
 
-!     IMPLICIT NONE
+  ! == Gaussian extrapolation (used for ocean data)
+  subroutine extrapolate_Gaussian_floodfill( grid, mask, d, sigma, mask_filled)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! NOTE: not parallelised! This is done instead by dividing vertical
+    !       ocean layers over the processes.
+    !
+    ! Note about the mask:
+    !    2 = data provided
+    !    1 = no data provided, fill allowed
+    !    0 = no fill allowed
+    ! (so basically this routine extrapolates data from the area
+    !  where mask == 2 into the area where mask == 1)
 
-!     ! In/output variables:
-!     TYPE(type_grid),                     INTENT(IN)    :: grid
-!     INTEGER,  DIMENSION(:,:  ),          INTENT(IN)    :: mask
-!     REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
-!     REAL(dp),                            INTENT(IN)    :: sigma
-!     INTEGER,  DIMENSION(:,:  ),          INTENT(OUT)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
+    implicit none
 
-!     ! Local variables:
-!     INTEGER                                            :: i,j,k,ii,jj,it
-!     INTEGER                                            :: stackN1, stackN2
-!     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: stack1, stack2
-!     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE            :: map
-!     INTEGER                                            :: n_search
-!     LOGICAL                                            :: has_filled_neighbours
-!     INTEGER                                            :: n
-!     REAL(dp)                                           :: sum_d, w, sum_w
+    ! In/output variables:
+    type(type_grid),            intent(in)    :: grid
+    integer,  dimension(:,:  ), intent(in)    :: mask
+    real(dp), dimension(:,:  ), intent(inout) :: d
+    real(dp),                   intent(in)    :: sigma
+    integer,  dimension(:,:  ), intent(out)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
 
-!     n_search = 1 + CEILING( 2._dp * sigma / grid%dx)
+    ! Local variables:
+    integer                                   :: i,j,k,ii,jj,it
+    integer                                   :: stackN1, stackN2
+    integer,  dimension(:,:  ), allocatable   :: stack1, stack2
+    integer,  dimension(:,:  ), allocatable   :: map
+    integer                                   :: n_search
+    logical                                   :: has_filled_neighbours
+    integer                                   :: n
+    real(dp)                                  :: sum_d, w, sum_w
 
-!     ! Allocate map and stacks. Amount for memory is an estimation; if there
-!     ! are out-of-bounds errors, increase the memory for the stacks.
-!     ALLOCATE( map(       grid%nx,  grid%ny))
-!     ALLOCATE( stack1( 8*(grid%nx + grid%ny),2))
-!     ALLOCATE( stack2( 8*(grid%nx + grid%ny),2))
+    n_search = 1 + ceiling( 2._dp * sigma / grid%dx)
 
-!     map         = 0
-!     stack1      = 0
-!     stack2      = 0
-!     stackN1     = 0
-!     stackN2     = 0
-!     mask_filled = 0
+    ! Allocate map and stacks. Amount for memory is an estimation; if there
+    ! are out-of-bounds errors, increase the memory for the stacks.
+    allocate( map(       grid%nx,  grid%ny))
+    allocate( stack1( 8*(grid%nx + grid%ny),2))
+    allocate( stack2( 8*(grid%nx + grid%ny),2))
 
-!     ! Initialise the map from the mask
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
-!       IF (mask( i,j) == 2) THEN
-!         map( i,j) = 2
-!       END IF
-!     END DO
-!     END DO
+    map         = 0
+    stack1      = 0
+    stack2      = 0
+    stackN1     = 0
+    stackN2     = 0
+    mask_filled = 0
 
-!     ! Initialise the stack with all empty-next-to-filled grid cells
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
+    ! Initialise the map from the mask
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      if (mask( i,j) == 2) then
+        map( i,j) = 2
+      end if
+    end do
+    end do
 
-!       IF (mask( i,j) == 1) THEN
-!         ! This grid cell is empty and should be filled
+    ! Initialise the stack with all empty-next-to-filled grid cells
+    do j = 1, grid%ny
+    do i = 1, grid%nx
 
-!         has_filled_neighbours = .FALSE.
-!         DO jj = MAX(1 ,j-1), MIN(grid%ny,j+1)
-!         DO ii = MAX(1 ,i-1), MIN(grid%nx,i+1)
-!           IF (mask( ii,jj) == 2) THEN
-!             has_filled_neighbours = .TRUE.
-!             EXIT
-!           END IF
-!         END DO
-!         IF (has_filled_neighbours) EXIT
-!         END DO
+      if (mask( i,j) == 1) then
+        ! This grid cell is empty and should be filled
 
-!         IF (has_filled_neighbours) THEN
-!           ! Add this empty-with-filled-neighbours grid cell to the stack,
-!           ! and mark it as stacked on the map
-!           map( i,j) = 1
-!           stackN2 = stackN2 + 1
-!           stack2( stackN2,:) = [i,j]
-!         END IF
+        has_filled_neighbours = .false.
+        do jj = max(1 ,j-1), min(grid%ny,j+1)
+        do ii = max(1 ,i-1), min(grid%nx,i+1)
+          if (mask( ii,jj) == 2) then
+            has_filled_neighbours = .true.
+            exit
+          end if
+        end do
+        if (has_filled_neighbours) then
+          exit
+        end if
+        end do
 
-!       END IF ! IF (map( i,j) == 0) THEN
+        if (has_filled_neighbours) then
+          ! Add this empty-with-filled-neighbours grid cell to the stack,
+          ! and mark it as stacked on the map
+          map( i,j) = 1
+          stackN2 = stackN2 + 1
+          stack2( stackN2,:) = [i,j]
+        end if
 
-!     END DO
-!     END DO
+      end if
 
-!     ! Perform the flood-fill
-!     it = 0
-!     DO WHILE (stackN2 > 0)
+    end do
+    end do
 
-!       it = it + 1
+    ! Perform the flood-fill
+    it = 0
+    do while (stackN2 > 0)
 
-!       ! Go over all the stacked empty-next-to-filled grid cells, perform the
-!       ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
-!       DO k = 1, stackN2
+      it = it + 1
 
-!         ! Get grid cell indices
-!         i = stack2( k,1)
-!         j = stack2( k,2)
+      ! Go over all the stacked empty-next-to-filled grid cells, perform the
+      ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
+      do k = 1, stackN2
 
-!         ! Find Gaussian-weighted average value over nearby filled pixels within the basin
-!         n     = 0
-!         sum_d = 0._dp
-!         sum_w = 0._dp
+        ! Get grid cell indices
+        i = stack2( k,1)
+        j = stack2( k,2)
 
-!         DO jj = MAX( 1 ,j - n_search), MIN( grid%ny,j + n_search)
-!         DO ii = MAX( 1 ,i - n_search), MIN( grid%nx,i + n_search)
+        ! Find Gaussian-weighted average value over nearby filled pixels within the basin
+        n     = 0
+        sum_d = 0._dp
+        sum_w = 0._dp
 
-!           IF (map( ii,jj) == 2) THEN
-!             n     = n + 1
-!             w     = EXP( -0.5_dp * (SQRT(REAL(ii-i,dp)**2 + REAL(jj-j,dp)**2) / sigma)**2)
-!             sum_w = sum_w + w
-!             sum_d = sum_d + w * d( ii,jj)
-!           END IF
+        do jj = max( 1 ,j - n_search), min( grid%ny,j + n_search)
+        do ii = max( 1 ,i - n_search), min( grid%nx,i + n_search)
 
-!         END DO
-!         END DO
+          if (map( ii,jj) == 2) then
+            n     = n + 1
+            w     = exp( -0.5_dp * (sqrt(real(ii-i,dp)**2 + real(jj-j,dp)**2) / sigma)**2)
+            sum_w = sum_w + w
+            sum_d = sum_d + w * d( ii,jj)
+          end if
 
-!         ! Fill in averaged value
-!         d( i,j) = sum_d / sum_w
+        end do
+        end do
 
-!         ! Mark grid cell as filled
-!         map( i,j) = 2
-!         mask_filled( i,j) = 1
+        ! Fill in averaged value
+        d( i,j) = sum_d / sum_w
 
-!       END DO ! DO k = 1, stackN2
+        ! Mark grid cell as filled
+        map( i,j) = 2
+        mask_filled( i,j) = 1
 
-!       ! Cycle the stacks
-!       stack1  = stack2
-!       stackN1 = stackN2
-!       stack2  = 0
-!       stackN2 = 0
+      end do ! k = 1, stackN2
 
-!       ! List new empty-next-to-filled grid cells
-!       DO k = 1, stackN1
+      ! Cycle the stacks
+      stack1  = stack2
+      stackN1 = stackN2
+      stack2  = 0
+      stackN2 = 0
 
-!         ! Get grid cell indices
-!         i = stack1( k,1)
-!         j = stack1( k,2)
+      ! List new empty-next-to-filled grid cells
+      do k = 1, stackN1
 
-!         ! Find empty neighbours; if unlisted, list them and mark them on the map
-!         DO jj = MAX( 1, j-1), MIN( grid%ny, j+1)
-!         DO ii = MAX( 1, i-1), MIN( grid%nx, i+1)
+        ! Get grid cell indices
+        i = stack1( k,1)
+        j = stack1( k,2)
 
-!           IF (map( ii,jj) == 0 .AND. mask( ii,jj) == 1) THEN
-!             map( ii,jj) = 1
-!             stackN2 = stackN2 + 1
-!             stack2( stackN2,:) = [ii,jj]
-!           END IF
+        ! Find empty neighbours; if unlisted, list them and mark them on the map
+        do jj = max( 1, j-1), min( grid%ny, j+1)
+        do ii = max( 1, i-1), min( grid%nx, i+1)
 
-!         END DO
-!         END DO
+          if (map( ii,jj) == 0 .and. mask( ii,jj) == 1) then
+            map( ii,jj) = 1
+            stackN2 = stackN2 + 1
+            stack2( stackN2,:) = [ii,jj]
+          end if
 
-!       END DO ! DO k = 1, stackN1
+        end do
+        end do
 
-!       ! Safety
-!       IF (it > 2 * MAX( grid%ny, grid%nx)) THEN
-!         WRITE(0,*) '  extrapolate_Gaussian_floodfill - ERROR: flood-fill got stuck!'
-!         CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-!       END IF
+      end do ! k = 1, stackN1
 
-!     END DO ! DO WHILE (stackN2 > 0)
+      ! Safety
+      if (it > 2 * max( grid%ny, grid%nx)) then
+        call crash('flood-fill got stuck!')
+      end if
 
-!     ! Mark grid cells that could not be filled
-!     DO j = 1, grid%ny
-!     DO i = 1, grid%nx
-!       IF (mask_filled( i,j) == 0 .AND. mask( i,j) == 1) THEN
-!         mask_filled( i,j) = 2
-!       END IF
-!     END DO
-!     END DO
+    end do ! while (stackN2 > 0)
 
-!     ! Clean up after yourself
-!     DEALLOCATE( map   )
-!     DEALLOCATE( stack1)
-!     DEALLOCATE( stack2)
+    ! Mark grid cells that could not be filled
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      if (mask_filled( i,j) == 0 .and. mask( i,j) == 1) then
+        mask_filled( i,j) = 2
+      end if
+    end do
+    end do
 
-!   END SUBROUTINE extrapolate_Gaussian_floodfill
+    ! Clean up after yourself
+    deallocate( map   )
+    deallocate( stack1)
+    deallocate( stack2)
+
+  end subroutine extrapolate_Gaussian_floodfill
 
 !   ! == Interpolate ocean column data to a queried depth
   SUBROUTINE interpolate_ocean_depth( nz_ocean, z_ocean, f_ocean, z_query, f_query)
@@ -2329,7 +2326,7 @@ CONTAINS
       r_adv = "yes"
       write(r_time,"(F8.3)") min(region%time,t_end) / 1000._dp
       write(r_step, "(F6.3)") dt_ave / real(it-1,dp)
-      write(*,"(A)",advance=trim(r_adv)) '\r'// & 
+      write(*,"(A)",advance=trim(r_adv)) '\r'// &
             "  t = " // trim(r_time) // " kyr - dt_ave = " // trim(r_step) // " yr"
     end if
     if (region%do_output) then

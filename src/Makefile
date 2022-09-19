@@ -4,8 +4,8 @@
 #     http://www.gnu.org/software/make/manual/make.html
 
 # For compiling setting, Makefile will point to the uncommented file below:
-include Makefile_include_local.txt
-#include Makefile_include_mac.txt
+#include Makefile_include_local.txt
+include Makefile_include_mac.txt
 #include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
@@ -56,15 +56,19 @@ UFEMISM_program_objects = \
         zeta_module.o \
         netcdf_module.o \
         forcing_module.o \
+        climate_module.o \
+        ocean_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \
+        general_sea_level_module.o \
         thermodynamics_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
         ice_dynamics_module.o \
         BMB_module.o \
         SMB_module.o \
+        scalar_data_output_module.o \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 

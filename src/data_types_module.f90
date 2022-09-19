@@ -1,13 +1,12 @@
-MODULE data_types_module
+module data_types_module
   ! Contains all the different types for storing data. Put all together in a separate module so that
-  ! all subroutines can use all types without interdependency conflicts, and also to make the 
+  ! all subroutines can use all types without interdependency conflicts, and also to make the
   ! modules with the actual physics code more readable.
   ! If only Types could be collapsed in BBEdit...
-  
+
 #include <petsc/finclude/petscksp.h>
   USE petscksp
   USE mpi
-  USE petscksp
   USE configuration_module,        ONLY: dp, C
   USE data_types_netcdf_module,    ONLY: type_netcdf_climate_data, type_netcdf_reference_geometry, &
                                          type_netcdf_insolation, type_netcdf_restart, type_netcdf_help_fields, &
@@ -15,25 +14,25 @@ MODULE data_types_module
                                          type_netcdf_direct_climate_forcing_global, type_netcdf_direct_SMB_forcing_global, &
                                          type_netcdf_direct_climate_forcing_regional, type_netcdf_direct_SMB_forcing_regional, &
                                          type_netcdf_ocean_data, type_netcdf_extrapolated_ocean_data, &
-                                         type_netcdf_resource_tracker
+                                         type_netcdf_resource_tracker, type_netcdf_scalars_global, type_netcdf_scalars_regional
 
   IMPLICIT NONE
-  
+
   TYPE type_sparse_matrix_CSR_dp
     ! Compressed Sparse Row (CSR) format matrix
-    
+
     INTEGER                                 :: m,n                         ! A = [m-by-n]
     INTEGER                                 :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
     INTEGER                                 :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
     INTEGER,  DIMENSION(:    ), allocatable :: ptr
     INTEGER,  DIMENSION(:    ), allocatable :: index
     REAL(dp), DIMENSION(:    ), allocatable :: val
-    
+
   END TYPE type_sparse_matrix_CSR_dp
-  
+
   TYPE type_ice_model
     ! The ice dynamics sub-model data structure.
-    
+
     ! Basic data - ice thickness, bedrock & surface elevation, sea level (geoid elevation), englacial temperature, and ice velocities
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_a                        ! Ice thickness [m]
     REAL(dp), DIMENSION(:    ), allocatable :: Hb_a                        ! Bedrock elevation [m w.r.t. PD sea level]
@@ -41,7 +40,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: SL_a                        ! Sea level (geoid elevation) [m w.r.t. PD sea level]
     REAL(dp), DIMENSION(:    ), allocatable :: TAF_a                       ! Thickness above flotation [m]
     REAL(dp), DIMENSION(:,:  ), allocatable :: Ti_a                        ! Englacial temperature [K]
-    
+
     ! Ice velocities
     REAL(dp), DIMENSION(:,:  ), allocatable :: u_3D_a                      ! 3-D ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_a
@@ -49,33 +48,33 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_b
     REAL(dp), DIMENSION(:,:  ), allocatable :: w_3D_a
     REAL(dp), DIMENSION(:,:  ), allocatable :: w_3D_b
-    
+
     REAL(dp), DIMENSION(:    ), allocatable :: u_vav_a                     ! Vertically averaged ice velocity [m yr^-1]
     REAL(dp), DIMENSION(:    ), allocatable :: v_vav_a
     REAL(dp), DIMENSION(:    ), allocatable :: u_vav_b
     REAL(dp), DIMENSION(:    ), allocatable :: v_vav_b
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_vav_a
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_vav_b
-    
+
     REAL(dp), DIMENSION(:    ), allocatable :: u_surf_a                    ! Ice velocity at the surface [m yr^-1]
     REAL(dp), DIMENSION(:    ), allocatable :: v_surf_a
     REAL(dp), DIMENSION(:    ), allocatable :: u_surf_b
     REAL(dp), DIMENSION(:    ), allocatable :: v_surf_b
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_surf_a
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_surf_b
-    
+
     REAL(dp), DIMENSION(:    ), allocatable :: u_base_a                    ! Ice velocity at the base [m yr^-1]
     REAL(dp), DIMENSION(:    ), allocatable :: v_base_a
     REAL(dp), DIMENSION(:    ), allocatable :: u_base_b
     REAL(dp), DIMENSION(:    ), allocatable :: v_base_b
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_base_a
     REAL(dp), DIMENSION(:    ), allocatable :: uabs_base_b
-    
+
     REAL(dp), DIMENSION(:,:  ), allocatable :: u_3D_SIA_b
     REAL(dp), DIMENSION(:,:  ), allocatable :: v_3D_SIA_b
     REAL(dp), DIMENSION(:    ), allocatable :: u_base_SSA_b
     REAL(dp), DIMENSION(:    ), allocatable :: v_base_SSA_b
-    
+
     ! Different masks
     INTEGER,  DIMENSION(:    ), allocatable :: mask_land_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_ocean_a
@@ -92,31 +91,31 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: f_grnd_b
     INTEGER,  DIMENSION(:    ), allocatable :: basin_ID                    ! The drainage basin to which each grid cell belongs
     INTEGER                                 :: nbasins                     ! Total number of basins defined for this region
-    
+
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), allocatable :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
     REAL(dp), DIMENSION(:    ), allocatable :: A_flow_vav_a
     REAL(dp), DIMENSION(:,:  ), allocatable :: Ti_pmp_a                    ! The pressure melting point temperature [K]
     REAL(dp), DIMENSION(:,:  ), allocatable :: Cpi_a                       ! Specific heat capacity of ice [J kg^-1 K^-1].
     REAL(dp), DIMENSION(:,:  ), allocatable :: Ki_a                        ! Conductivity of ice [J m^-1 K^-1 yr^-1].
-    
+
     ! Zeta derivatives
     REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dt_a
     REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dx_a
     REAL(dp), DIMENSION(:,:  ), allocatable :: dzeta_dy_a
     REAL(dp), DIMENSION(:    ), allocatable :: dzeta_dz_a
-    
+
     ! Ice dynamics - basal hydroallocatable
     REAL(dp), DIMENSION(:    ), allocatable :: overburden_pressure_a       ! Overburden pressure ( = H * rho_i * g) [Pa]
     REAL(dp), DIMENSION(:    ), allocatable :: pore_water_pressure_a       ! Pore water pressure (determined by basal hydrology model) [Pa]
     REAL(dp), DIMENSION(:    ), allocatable :: Neff_a                      ! Effective pressure ( = overburden pressure - pore water pressure) [Pa]
-    
+
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), allocatable :: phi_fric_a                  ! Till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), allocatable :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), allocatable :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), allocatable :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
-    
+
     ! Ice dynamics - physical terms in the SSA/DIVA
     REAL(dp), DIMENSION(:    ), allocatable :: taudx_b                     ! x-component of the driving stress
     REAL(dp), DIMENSION(:    ), allocatable :: taudy_b                     ! x-component of the driving stress
@@ -137,18 +136,18 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: F2_a                        ! F2, appearing in the DIVA
     REAL(dp), DIMENSION(:    ), allocatable :: u_prev_b
     REAL(dp), DIMENSION(:    ), allocatable :: v_prev_b
-    
+
     ! Ice dynamics - some administrative stuff to make solving the SSA/DIVA more efficient
     INTEGER,  DIMENSION(:    ), allocatable :: ti2n_u, ti2n_v
     INTEGER,  DIMENSION(:,:  ), allocatable :: n2ti_uv
     TYPE(type_sparse_matrix_CSR_dp)         :: M_SSADIVA
-    
+
     ! Ice dynamics - ice thickness calculation
     REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_in
-    ! REAL(dp), DIMENSION(:,:  ), allocatable :: dVi_out ! Unused
-    REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+    REAL(dp), DIMENSION(:    ), allocatable :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
-    
+    REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp)                                :: pc_zeta
     REAL(dp), DIMENSION(:    ), allocatable :: pc_tau
@@ -166,13 +165,13 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_old
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_pred
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_corr
-    
+
     ! Thermodynamics
     INTEGER,  DIMENSION(:    ), allocatable :: mask_ice_a_prev        ! Ice mask from previous time step
     REAL(dp), DIMENSION(:,:  ), allocatable :: internal_heating_a     ! Internal heating due to deformation
     REAL(dp), DIMENSION(:    ), allocatable :: frictional_heating_a   ! Friction heating due to basal sliding
     REAL(dp), DIMENSION(:    ), allocatable :: GHF_a                  ! Geothermal heat flux
-    
+
     ! Isotope content
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_a_prev
     REAL(dp), DIMENSION(:    ), allocatable :: IsoRef
@@ -180,7 +179,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: MB_iso
     REAL(dp), DIMENSION(:    ), allocatable :: IsoIce
     REAL(dp), DIMENSION(:    ), allocatable :: IsoIce_new
-    
+
     ! ELRA GIA model
     INTEGER                                 :: flex_prof_rad
     REAL(dp), DIMENSION(:,:  ), allocatable :: flex_prof_grid
@@ -195,11 +194,15 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: dHb_a
     REAL(dp), DIMENSION(:    ), allocatable :: dHb_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: dSL_dt_a
-    
+
     ! Mesh adaptation data
     REAL(dp), DIMENSION(:    ), allocatable :: surf_curv
     REAL(dp), DIMENSION(:    ), allocatable :: log_velocity
-          
+
+    ! Useful extra stuff
+    REAL(dp), DIMENSION(:    ), allocatable :: dHi_a   ! Ice thickness difference w.r.t. PD
+    REAL(dp), DIMENSION(:    ), allocatable :: dHs_a   ! Ice elevation difference w.r.t. PD
+
   END TYPE type_ice_model
 
   TYPE type_mesh
@@ -207,7 +210,7 @@ MODULE data_types_module
 
     ! Basic meta properties
     ! =====================
-    
+
     CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
     REAL(dp)                                :: lambda_M                      ! Oblique stereographic projection parameters
     REAL(dp)                                :: phi_M
@@ -237,7 +240,7 @@ MODULE data_types_module
 
     ! Primary mesh data (needed for mesh creation & refinement)
     ! =========================================================
-    
+
     ! Vertex data
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: V                             ! The X and Y coordinates of all the vertices
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: nC                            ! The number of other vertices this vertex is connected to
@@ -251,7 +254,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Tri                           ! The triangle array: Tri(ti) = [vi1, vi2, vi3] (vertices ordered counter-clockwise)
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: TriCC                         ! The X,Y-coordinates of each triangle's circumcenter
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: TriC                          ! The (up to) three neighbour triangles (order across from 1st, 2nd and 3d vertex, respectively)
-    
+
     ! Refinement lists
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Triflip                       ! List of triangles to flip, used in updating Delaunay triangulation
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: RefMap                        ! Map   of which triangles      have been marked for refining
@@ -263,7 +266,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: TriMap, TriStack1, TriStack2
     INTEGER                                 :: VStackN1, VStackN2
     INTEGER                                 :: TriStackN1, TriStackN2
-    
+
     ! Points-of-Interest
     INTEGER,                    ALLOCATABLE :: nPOI                          ! Number of Points of Interest (POI) in this mesh
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: POI_coordinates               ! Lat-lon coordinates of a POI
@@ -271,10 +274,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: POI_resolutions               ! Resolution          of a POI (km)
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: POI_vi                        ! The three vertices surrounding a POI
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: POI_w                         ! Their relative weights in trilinear interpolation
-    
+
     ! Secondary mesh data
     ! ===================
-    
+
     ! Derived geometry data
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: A                             ! The area             of each vertex's Voronoi cell
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: VorGC                         ! The geometric centre of each vertex's Voronoi cell
@@ -283,14 +286,14 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: TriGC                         ! The X,Y-coordinates of each triangle's geometric centre
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: Tri_edge_index                ! Same as for vertices, only NE, SE, etc. aren't used
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: TriA                          ! The area of each triangle
-    
+
     ! Staggered (Arakawa C) meshALLOCATABLE
     INTEGER,                    ALLOCATABLE :: nAc                           ! The number of Ac vertices
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: VAc                           ! x,y coordinates of the Ac vertices
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: Aci                           ! Mapping array from the Aa to the Ac mesh
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: iAci                          ! Mapping array from the Ac to the Aa mesh
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: edge_index_Ac
-    
+
     ! Matrix operators: mapping
     TYPE(tMat)                              :: M_map_a_b                     ! Operation: map     from the a-grid to the b-grid
     TYPE(tMat)                              :: M_map_a_c                     ! Operation: map     from the a-grid to the c-grid
@@ -298,7 +301,7 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_map_b_c                     ! Operation: map     from the b-grid to the c-grid
     TYPE(tMat)                              :: M_map_c_a                     ! Operation: map     from the c-grid to the a-grid
     TYPE(tMat)                              :: M_map_c_b                     ! Operation: map     from the c-grid to the b-grid
-   
+
     ! Matrix operators: d/dx
     TYPE(tMat)                              :: M_ddx_a_a                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_a_b                     ! Operation: d/dx    from the a-grid to the a-grid
@@ -309,7 +312,7 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_ddx_c_a                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_c_b                     ! Operation: d/dx    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddx_c_c                     ! Operation: d/dx    from the a-grid to the a-grid
-   
+
     ! Matrix operators: d/dy
     TYPE(tMat)                              :: M_ddy_a_a                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_a_b                     ! Operation: d/dy    from the a-grid to the a-grid
@@ -320,46 +323,46 @@ MODULE data_types_module
     TYPE(tMat)                              :: M_ddy_c_a                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_c_b                     ! Operation: d/dy    from the a-grid to the a-grid
     TYPE(tMat)                              :: M_ddy_c_c                     ! Operation: d/dy    from the a-grid to the a-grid
-    
+
     ! 2nd-order accurate matrix operators on the b-grid
     TYPE(tMat)                              :: M2_ddx_b_b                    ! Operation: d/dx    from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_ddy_b_b                    ! Operation: d/dy    from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dx2_b_b                  ! Operation: d2/dx2  from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dxdy_b_b                 ! Operation: d2/dxdy from the b-grid to the b-grid
     TYPE(tMat)                              :: M2_d2dy2_b_b                  ! Operation: d2/dy2  from the b-grid to the b-grid
-    
+
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b_CSR                ! Operation: d/dx    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b_CSR                ! Operation: d/dy    from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_b_b_CSR              ! Operation: d2/dx2  from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_b_b_CSR             ! Operation: d2/dxdy from the b-grid to the b-grid
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_b_b_CSR              ! Operation: d2/dy2  from the b-grid to the b-grid
-    
+
     ! Matrix operator for applying Neumann boundary conditions to triangles at the domain border
     TYPE(tMat)                              :: M_Neumann_BC_b
     TYPE(type_sparse_matrix_CSR_dp)         :: M_Neumann_BC_b_CSR
-    
+
     ! Lat/lon coordinates
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: lat
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: lon
-    
+
     ! Transect
     INTEGER                                 :: nV_transect                   ! Number of vertex pairs for the transect
     INTEGER,  DIMENSION(:,:  ), ALLOCATABLE :: vi_transect                   ! List   of vertex pairs for the transect
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: w_transect                    ! Interpolation weights for the vertex pairs
-    
+
     ! Parallelisation
     INTEGER                                 :: vi1, vi2                      ! Vertices
     INTEGER                                 :: ti1, ti2                      ! Triangles
     INTEGER                                 :: ci1, ci2                      ! Edges
 
   END TYPE type_mesh
-  
+
   TYPE type_debug_fields
     ! Dummy variables for debugging
-    
+
     ! NetCDF debug file
     TYPE(type_netcdf_debug)                 :: netcdf
-    
+
     ! Data
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_a_01
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_a_02
@@ -371,7 +374,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_a_08
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_a_09
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_a_10
-    
+
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_01
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_02
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_03
@@ -382,7 +385,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_08
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_09
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_b_10
-    
+
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_01
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_02
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_03
@@ -393,7 +396,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_08
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_09
     INTEGER,  DIMENSION(:    ), pointer     :: int_2D_c_10
-    
+
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_01
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_02
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_03
@@ -404,7 +407,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_08
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_09
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_a_10
-    
+
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_01
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_02
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_03
@@ -415,7 +418,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_08
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_09
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_b_10
-    
+
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_01
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_02
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_03
@@ -426,7 +429,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_08
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_09
     REAL(dp), DIMENSION(:    ), pointer     :: dp_2D_c_10
-    
+
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_01
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_02
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_03
@@ -437,7 +440,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_08
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_09
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_3D_a_10
-    
+
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_01
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_02
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_03
@@ -448,50 +451,50 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_08
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_09
     REAL(dp), DIMENSION(:,:  ), pointer     :: dp_2D_monthly_a_10
-    
+
   END TYPE type_debug_fields
-  
+
   TYPE type_single_row_mapping_matrices
     ! Results from integrating a single set of lines
-    
+
     INTEGER                                 :: n_max
     INTEGER                                 :: n
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: index_left
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
-    
+
   END TYPE type_single_row_mapping_matrices
-  
+
   TYPE type_remapping_mesh_mesh
     ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
-    
+
     INTEGER                                 :: int_dummy
     TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
     TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
     TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
     TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
-  
+
   END TYPE type_remapping_mesh_mesh
-  
+
   TYPE type_grid
     ! A regular square grid covering a model region
-    
+
     ! Basic grid data
     INTEGER                                 :: nx, ny, n
     REAL(dp),                   allocatable :: dx
     REAL(dp), DIMENSION(:    ), allocatable :: x, y
     REAL(dp)                                :: xmin, xmax, ymin, ymax
-    
+
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
-    
+
     ! Sparse matrices representing the remapping operations between a mesh and a grid
     TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
     TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
     REAL(dp)                                :: tol_dist
-    
+
     ! Conversion tables for grid-form vs. vector-form data
     INTEGER,  DIMENSION(:,:  ), allocatable :: ij2n, n2ij
-    
+
     ! Lat-lon coordinates
     REAL(dp), DIMENSION(:,:  ), allocatable :: lat, lon
 
@@ -499,37 +502,37 @@ MODULE data_types_module
     REAL(dp)                                :: lambda_M
     REAL(dp)                                :: phi_M
     REAL(dp)                                :: alpha_stereo
-  
+
   END TYPE type_grid
-  
+
   TYPE type_remapping_latlon2mesh
     ! Indices and weights for mapping data from a global lat-lon grid to the model mesh using bilinear interpolation
-    
+
     INTEGER,  DIMENSION(:    ), ALLOCATABLE :: ilat1, ilat2, ilon1, ilon2
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: wlat1, wlat2, wlon1, wlon2
-    
+
   END TYPE type_remapping_latlon2mesh
-  
+
   TYPE type_latlongrid
     ! A global lat-lon grid
-    
+
     INTEGER                                 :: nlat, nlon
     REAL(dp), DIMENSION(:    ), allocatable :: lat, lon
     REAL(dp)                                :: dlat, dlon
-    
+
     INTEGER                                 :: i1, i2 ! Parallelisation by domain decomposition
-    
+
   END TYPE type_latlongrid
 
   TYPE type_SMB_model
     ! The different SMB components, calculated from the prescribed climate
-    
+
     ! Tuning parameters (different for each region, set from config)
     REAL(dp)                                :: C_abl_constant
     REAL(dp)                                :: C_abl_Ts
     REAL(dp)                                :: C_abl_Q
     REAL(dp)                                :: C_refr
-    
+
     ! Data fields
     REAL(dp), DIMENSION(:,:  ), allocatable :: Q_TOA                         ! The prescribed monthly insolation, from an external forcing file
     REAL(dp), DIMENSION(:    ), allocatable :: AlbedoSurf                    ! Surface albedo underneath the snow layer (water, rock or ice)
@@ -618,19 +621,19 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: dist_open                     ! distance to open ocean for the sub-shelf melt parameterisation
 
   END TYPE type_BMB_model
-  
+
   TYPE type_reference_geometry
     ! Data structure containing a reference ice-sheet geometry (either schematic or read from an external file).
-    
+
     ! NetCDF file containing the data
     TYPE(type_netcdf_reference_geometry)    :: netcdf
-    
+
     ! Raw data as read from a NetCDF file
     TYPE(type_grid)                         :: grid
     REAL(dp), DIMENSION(:,:  ), allocatable :: Hi_grid
     REAL(dp), DIMENSION(:,:  ), allocatable :: Hb_grid
     REAL(dp), DIMENSION(:,:  ), allocatable :: Hs_grid
-    
+
     ! Derived data on the grid (allocatablevature and masks, needed for mesh creation)
     REAL(dp), DIMENSION(:,:  ), allocatable :: surf_curv
     INTEGER,  DIMENSION(:,:  ), allocatable :: mask_land
@@ -642,28 +645,28 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:,:  ), allocatable :: mask_gl
     INTEGER,  DIMENSION(:,:  ), allocatable :: mask_cf
     INTEGER,  DIMENSION(:,:  ), allocatable :: mask_coast
-    
+
     ! Data on the model mesh
     REAL(dp), DIMENSION(:    ), allocatable :: Hi
     REAL(dp), DIMENSION(:    ), allocatable :: Hb
     REAL(dp), DIMENSION(:    ), allocatable :: Hs
-              
+
   END TYPE type_reference_geometry
-  
+
   TYPE type_forcing_data
     ! Data structure containing model forcing data - CO2 record, d18O record, (global) insolation record
-    
+
     ! Data for the inverse routine
     REAL(dp)                                :: dT_glob                                   ! Modelled global mean annual surface temperature anomaly w.r.t. PD
     REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_history                           ! Time window (length set in config) listing previous dT_glob values
     INTEGER                                 :: ndT_glob_history                          ! Number of entries (= length of time window / dt_coupling)
     REAL(dp)                                :: dT_deepwater                              ! Modelled deep-water temperature anomaly (= window averaged dT_glob * scaling factor), scaling factor set in config
-    
+
     REAL(dp)                                :: d18O_NAM, d18O_EAS, d18O_GRL, d18O_ANT    ! Modelled benthic d18O contributions from ice volume in the model regions
     REAL(dp)                                :: d18O_from_ice_volume_mod                  ! Modelled benthic d18O contribution from global ice volume
     REAL(dp)                                :: d18O_from_temperature_mod                 ! Modelled benthic d18O contribution from deep-water temperature change
     REAL(dp)                                :: d18O_mod                                  ! Modelled benthic d18O
-    
+
     REAL(dp)                                :: dT_glob_inverse                           ! Global mean annual surface temperature anomaly resulting from the inverse method
     REAL(dp), DIMENSION(:    ), allocatable :: dT_glob_inverse_history                   ! Time window (length set in config) listing previous dT_glob values
     INTEGER                                 :: ndT_glob_inverse_history                  ! Number of entries (= length of time window / dt_coupling)
@@ -671,18 +674,18 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: CO2_inverse_history                       ! Time window (length set in config) listing previous CO2_inverse values
     INTEGER                                 :: nCO2_inverse_history                      ! Number of entries (= length of time window / dt_coupling)
     REAL(dp)                                :: CO2_mod                                   ! Either equal to CO2_obs or to CO2_inverse, for easier writing to output.
-    
+
     ! External forcing: CO2 record
     REAL(dp), DIMENSION(:    ), allocatable :: CO2_time
     REAL(dp), DIMENSION(:    ), allocatable :: CO2_record
     REAL(dp)                                :: CO2_obs
-    
+
     ! External forcing: d18O record
     REAL(dp), DIMENSION(:    ), allocatable :: d18O_time
     REAL(dp), DIMENSION(:    ), allocatable :: d18O_record
     REAL(dp)                                :: d18O_obs
     REAL(dp)                                :: d18O_obs_PD
-    
+
     ! External forcing: insolation
     TYPE(type_netcdf_insolation)            :: netcdf_ins
     INTEGER                                 :: ins_nyears
@@ -691,25 +694,27 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: ins_lat
     REAL(dp)                                :: ins_t0, ins_t1
     REAL(dp), DIMENSION(:,:  ), allocatable :: ins_Q_TOA0, ins_Q_TOA1
-    
+
     ! External forcing: geothermal heat flux
     TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
     TYPE(type_latlongrid)                   :: grid_ghf
     REAL(dp), DIMENSION(:,:  ), allocatable :: ghf_ghf
-    
+
+    ! External forcing: sea level record
+    real(dp), dimension(:    ), allocatable :: sealevel_time
+    real(dp), dimension(:    ), allocatable :: sealevel_record
+    real(dp)                                :: sealevel_obs
+
   END TYPE type_forcing_data
 
   TYPE type_memory_use_tracker
-  
+
     ! Memory use history
     INTEGER(KIND=MPI_ADDRESS_KIND)      :: total                     ! Total amount of allocated shared memory (in bytes)
     INTEGER                             :: n                         ! Number of entries
     INTEGER(KIND=MPI_ADDRESS_KIND), DIMENSION(:), ALLOCATABLE :: h   ! Memory use history over the past coupling interval
 
   END TYPE type_memory_use_tracker
-
-  !===============================
-  !===============================
 
   ! Global climate types
   !=====================
@@ -740,61 +745,15 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:,:), allocatable :: Precip                        ! Monthly mean precipitation (m)
     REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE                       ! Monthly mean west-east wind speed (m/s)
     REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN                       ! Monthly mean south_north wind speed (m/s)
+    REAL(dp), DIMENSION(:,:  ), allocatable :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
 
     ! Paralelisation
     INTEGER                                 :: i1, i2                        ! Grid domain (:,i1:i2) of each process
 
   END TYPE type_climate_snapshot_global
 
-  TYPE type_direct_climate_forcing_global
-    ! Direct global climate forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_climate_forcing_global) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), allocatable :: lat
-    REAL(dp), DIMENSION(:    ), allocatable :: lon
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframeallocatableg the model time)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Hs0,      Hs1                 ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: T2m0,     T2m1                ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Precip0,  Precip1             ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE0, Wind_WE1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN0, Wind_SN1            ! Monthly mean south_north wind speed (m/s)
-
-  END TYPE type_direct_climate_forcing_global
-
-  TYPE type_direct_SMB_forcing_global
-    ! Direct global SMB forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_SMB_forcing_global) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), allocatable :: lat
-    REAL(dp), DIMENSION(:    ), allocatable :: lon
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframeallocatableg the model time)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_year0, T2m_year1          ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: SMB_year0, SMB_year1          ! Yearly total SMB (m.i.e.)
-
-  END TYPE type_direct_SMB_forcing_global
-
   TYPE type_climate_matrix_global
-    ! The climate matrix data structure. Contains all the different global GCM snapshots.
+    ! The climate matrix data structure. Contains all the different global climate snapshots.
 
     ! The present-day observed climate (e.g. ERA40)
     TYPE(type_climate_snapshot_global)       :: PD_obs
@@ -803,10 +762,6 @@ MODULE data_types_module
     TYPE(type_climate_snapshot_global)       :: GCM_PI
     TYPE(type_climate_snapshot_global)       :: GCM_warm
     TYPE(type_climate_snapshot_global)       :: GCM_cold
-
-    ! ! Direct climate forcing
-    TYPE(type_direct_climate_forcing_global) :: direct
-    TYPE(type_direct_SMB_forcing_global)     :: SMB_direct
 
   END TYPE type_climate_matrix_global
 
@@ -834,79 +789,22 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_SN                       ! Monthly mean south-north wind speed (m/s)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_LR                       ! Monthly mean wind speed in the x-direction (m/s)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_DU                       ! Monthly mean wind speed in the y-direction (m/s)
-                                
+    REAL(dp), DIMENSION(:    ), allocatable :: Mask_ice                      ! Ice mask: 1 ice, 0 no ice
+
     ! Spatially variable lapse rallocatable snapshots (see Berends et al., 2018)
     REAL(dp), DIMENSION(:    ), allocatable :: lambda
-                                
+
     ! Bias-corrected GCM data   allocatable
     REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_corr                      ! Bias-corrected monthly mean 2m air temperature (K)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Precip_corr                   ! Bias-corrected monthly mean precipitation (m)
-                                
+    REAL(dp), DIMENSION(:    ), allocatable :: Hs_corr                       ! Bias-corrected surface elevation (m)
+
     ! Reference absorbed insolatallocatableM snapshots), or insolation at model time for the applied climate
     REAL(dp), DIMENSION(:,:  ), allocatable :: Q_TOA                         ! Monthly mean insolation at the top of the atmosphere (W/m2) (taken from the prescribed insolation solution at orbit_time)
     REAL(dp), DIMENSION(:,:  ), allocatable :: Albedo                        ! Monthly mean surface albedo (calculated using our own SMB scheme for consistency)
     REAL(dp), DIMENSION(:    ), allocatable :: I_abs                         ! Total yearly absorbed insolation, used in the climate matrix for interpolation
 
   END TYPE type_climate_snapshot_regional
-
-  TYPE type_direct_climate_forcing_regional
-    ! Direct regional climate forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_climate_forcing_regional) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), allocatable :: x_raw, y_raw
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframes enveloping the model time) on the source grid
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Hs0_raw,      Hs1_raw         ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: T2m0_raw,     T2m1_raw        ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Precip0_raw,  Precip1_raw     ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_WE0_raw, Wind_WE1_raw    ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_SN0_raw, Wind_SN1_raw    ! Monthly mean south_north wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_LR0_raw, Wind_LR1_raw    ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:,:), allocatable :: Wind_DU0_raw, Wind_DU1_raw    ! Monthly mean south_north wind speed (m/s)
-
-    ! Actual data (two timeframeallocatableg the model time) on the model mesh
-    REAL(dp), DIMENSION(:    ), allocatable :: Hs0,      Hs1                 ! Orography that was used to force the GCM (m w.r.t. PD sea-level)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m0,     T2m1                ! Monthly mean 2m air temperature (K)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Precip0,  Precip1             ! Monthly mean precipitation (m)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_WE0, Wind_WE1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_SN0, Wind_SN1            ! Monthly mean south_north wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_LR0, Wind_LR1            ! Monthly mean west-east wind speed (m/s)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: Wind_DU0, Wind_DU1            ! Monthly mean south_north wind speed (m/s)
-  END TYPE type_direct_climate_forcing_regional
-
-  TYPE type_direct_SMB_forcing_regional
-    ! Direct regional SMB forcing from a provided NetCDF file
-
-    ! NetCDF file containing the data
-    TYPE(type_netcdf_direct_SMB_forcing_regional) :: netcdf
-
-    ! Grid
-    INTEGER                                 :: nx_raw, ny_raw
-    REAL(dp), DIMENSION(:    ), allocatable :: x_raw, y_raw
-
-    ! Time dimension
-    INTEGER                                 :: nyears
-    REAL(dp), DIMENSION(:    ), allocatable :: time
-    REAL(dp)                                :: t0, t1
-
-    ! Actual data (two timeframes enveloping the model time) on the source grid
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T2m_year0_raw, T2m_year1_raw  ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: SMB_year0_raw, SMB_year1_raw  ! Yearly total SMB (m.i.e.)
-
-    ! Actual data (two timeframeallocatableg the model time) on the model mesh
-    REAL(dp), DIMENSION(:    ), allocatable :: T2m_year0, T2m_year1          ! Monthly mean 2m air temperature [K] (needed for thermodynamics)
-    REAL(dp), DIMENSION(:    ), allocatable :: SMB_year0, SMB_year1          ! Yearly total SMB (m.i.e.)
-
-  END TYPE type_direct_SMB_forcing_regional
 
   TYPE type_climate_matrix_regional
     ! All the relevant climate data fields (PD observations, GCM snapshots, and final, applied climate) on the model region grid
@@ -923,10 +821,6 @@ MODULE data_types_module
     ! GCM bias
     REAL(dp), DIMENSION(:,:  ), allocatable :: GCM_bias_T2m                  ! GCM temperature   bias (= [modelled PI temperature  ] - [observed PI temperature  ])
     REAL(dp), DIMENSION(:,:  ), allocatable :: GCM_bias_Precip               ! GCM precipitation bias (= [modelled PI precipitation] / [observed PI precipitation])
-
-    ! Direct climate/SMB forcing
-    TYPE(type_direct_climate_forcing_regional) :: direct
-    TYPE(type_direct_SMB_forcing_regional)     :: SMB_direct
 
   END TYPE type_climate_matrix_regional
 
@@ -1057,7 +951,7 @@ MODULE data_types_module
     REAL(dp)                                :: time
     REAL(dp)                                :: dt
     REAL(dp)                                :: dt_prev
-    
+
     ! Timers and switches for determining which modules need to be called at what points in time during the simulation
     REAL(dp)                                :: dt_crit_SIA
     REAL(dp)                                :: dt_crit_SSA
@@ -1084,7 +978,7 @@ MODULE data_types_module
     LOGICAL                                 :: do_BMB
     LOGICAL                                 :: do_output
     LOGICAL                                 :: do_ELRA
-    
+
     ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
     REAL(dp)                                :: ice_area
     REAL(dp)                                :: ice_volume
@@ -1092,7 +986,7 @@ MODULE data_types_module
     REAL(dp)                                :: ice_volume_above_flotation
     REAL(dp)                                :: ice_volume_above_flotation_PD
     REAL(dp)                                :: GMSL_contribution
-    
+
     ! Regionally integrated mass balance components
     REAL(dp)                                :: int_T2m
     REAL(dp)                                :: int_snowfall
@@ -1103,13 +997,13 @@ MODULE data_types_module
     REAL(dp)                                :: int_SMB
     REAL(dp)                                :: int_BMB
     REAL(dp)                                :: int_MB
-    
+
     ! Variables related to the englacial isotope content
     REAL(dp)                                :: mean_isotope_content
     REAL(dp)                                :: mean_isotope_content_PD
     REAL(dp)                                :: d18O_contribution
     REAL(dp)                                :: d18O_contribution_PD
-        
+
     ! Reference geometries
     TYPE(type_reference_geometry)           :: refgeo_init                               ! Initial         ice-sheet geometry
     TYPE(type_reference_geometry)           :: refgeo_PD                                 ! Present-day     ice-sheet geometry
@@ -1117,7 +1011,7 @@ MODULE data_types_module
 
     ! Mask where ice is not allowed to form (so Greenland is not included in NAM and EAS, and Ellesmere is not included in GRL)
     INTEGER,  DIMENSION(:), allocatable     :: mask_noice
-        
+
     ! Sub-models
     TYPE(type_mesh)                         :: mesh                                      ! The finite element mesh for this model region
     TYPE(type_mesh)                         :: mesh_new                                  ! The new mesh after updating (so that the old one can be kept until data has been mapped)
@@ -1133,6 +1027,7 @@ MODULE data_types_module
     TYPE(type_netcdf_restart)               :: restart_grid
     TYPE(type_netcdf_help_fields)           :: help_fields_mesh
     TYPE(type_netcdf_help_fields)           :: help_fields_grid
+    TYPE(type_netcdf_scalars_regional)      :: scalars
 
     ! Different square grids
     TYPE(type_grid)                         :: grid_output                               ! For the "_grid" output files
@@ -1146,7 +1041,7 @@ MODULE data_types_module
     REAL(dp)                                :: tcomp_climate
     REAL(dp)                                :: tcomp_GIA
     REAL(dp)                                :: tcomp_mesh
-    
+
   END TYPE type_model_region
 
   TYPE type_restart_data
@@ -1181,6 +1076,46 @@ MODULE data_types_module
 
   END TYPE type_restart_data
 
-CONTAINS
+  type type_global_scalar_data
+    ! Structure containing some global scalar values: sea level, CO2, d18O components, computation times, etc.
 
-END MODULE data_types_module
+    ! Netcdf file
+    type(type_netcdf_scalars_global)        :: netcdf
+
+    ! Sea level
+    real(dp)                                :: GMSL                                      ! Global mean sea level change
+    real(dp)                                :: GMSL_NAM                                  ! Global mean sea level change (contribution from ice in North America)
+    real(dp)                                :: GMSL_EAS                                  ! Global mean sea level change (contribution from ice in Eurasia)
+    real(dp)                                :: GMSL_GRL                                  ! Global mean sea level change (contribution from ice in Greenland)
+    real(dp)                                :: GMSL_ANT                                  ! Global mean sea level change (contribution from ice in Antarctica)
+
+    ! CO2
+    real(dp)                                :: CO2_obs                                   ! Observed atmospheric CO2
+    real(dp)                                :: CO2_mod                                   ! Modelled atmospheric CO2
+
+    ! d18O
+    real(dp)                                :: d18O_obs                                  ! Observed benthic d18O
+    real(dp)                                :: d18O_mod                                  ! Modelled benthic d18O
+    real(dp)                                :: d18O_ice                                  ! Contribution to benthic d18O from global ice volume
+    real(dp)                                :: d18O_Tdw                                  ! Contribution to benthic d18O from deep-water temperature
+    real(dp)                                :: d18O_NAM                                  ! Contribution to benthic d18O from ice in North America
+    real(dp)                                :: d18O_EAS                                  ! Contribution to benthic d18O from ice in Eurasia
+    real(dp)                                :: d18O_GRL                                  ! Contribution to benthic d18O from ice in Greenland
+    real(dp)                                :: d18O_ANT                                  ! Contribution to benthic d18O from ice in Antarctica
+
+    ! Temperature
+    real(dp)                                :: dT_glob                                   ! Global mean annual surface temperature change
+    real(dp)                                :: dT_dw                                     ! Deep-water temperature change
+
+    ! Computation times for all regions combined
+    real(dp)                                :: tcomp_total
+    real(dp)                                :: tcomp_ice
+    real(dp)                                :: tcomp_thermo
+    real(dp)                                :: tcomp_climate
+    real(dp)                                :: tcomp_GIA
+
+  end type type_global_scalar_data
+
+contains
+
+end module data_types_module

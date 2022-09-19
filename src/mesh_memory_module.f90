@@ -17,25 +17,25 @@ MODULE mesh_memory_module
   IMPLICIT NONE
 
 CONTAINS
-  
+
   SUBROUTINE allocate_mesh_primary(       mesh, region_name, nV_mem, nTri_mem, nC_mem)
     ! Allocate memory for mesh data
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     CHARACTER(LEN=3),                INTENT(IN)        :: region_name
     INTEGER,                         INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_mesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     mesh%region_name = region_name
-    
+
     IF (mesh%region_name     == 'NAM') THEN
       mesh%lambda_M     = C%lambda_M_NAM
       mesh%phi_M        = C%phi_M_NAM
@@ -53,7 +53,7 @@ CONTAINS
       mesh%phi_M        = C%phi_M_ANT
       mesh%alpha_stereo = C%alpha_stereo_ANT
     END IF
-    
+
       mesh%nV_mem   = nV_mem
       mesh%nTri_mem = nTri_mem
       mesh%nC_mem   = nC_mem
@@ -85,7 +85,7 @@ CONTAINS
     if ( allocated(mesh%POI_resolutions   )) deallocate(mesh%POI_resolutions   )
     if ( allocated(mesh%POI_vi            )) deallocate(mesh%POI_vi            )
     if ( allocated(mesh%POI_w             )) deallocate(mesh%POI_w             )
-    
+
     allocate( mesh%V              (nV_mem,   2     ), source=0._dp)
     allocate( mesh%nC             (nV_mem          ), source=0)
     allocate( mesh%C              (nV_mem,   nC_mem), source=0)
@@ -96,13 +96,13 @@ CONTAINS
 
     allocate( mesh%Tri            (nTri_mem, 3     ), source=0)
     allocate( mesh%Tricc          (nTri_mem, 2     ), source=0._dp)
-    allocate( mesh%TriC           (nTri_mem, 3     ), source=0) 
-    allocate( mesh%Tri_edge_index (nTri_mem        ), source=0) 
-                                                     
+    allocate( mesh%TriC           (nTri_mem, 3     ), source=0)
+    allocate( mesh%Tri_edge_index (nTri_mem        ), source=0)
+
     allocate( mesh%Triflip        (nTri_mem, 2     ), source=0)
     allocate( mesh%RefMap         (nTri_mem        ), source=0)
     allocate( mesh%RefStack       (nTri_mem        ), source=0)
-    
+
     ! Distributed shared memory for FloodFill maps and stacks
     allocate( mesh%VMap           (nV_mem          ), source=0)
     allocate( mesh%VStack1        (nV_mem          ), source=0)
@@ -110,7 +110,7 @@ CONTAINS
     allocate( mesh%TriMap         (nTri_mem        ), source=0)
     allocate( mesh%TriStack1      (nTri_mem        ), source=0)
     allocate( mesh%TriStack2      (nTri_mem        ), source=0)
-    
+
     ! POI stuff
     IF (mesh%region_name == 'NAM') THEN
       mesh%nPOI = C%nPOI_NAM
@@ -121,12 +121,12 @@ CONTAINS
     ELSEIF (mesh%region_name == 'ANT') THEN
       mesh%nPOI = C%nPOI_ANT
     END IF
-    
-    allocate( mesh%POI_coordinates    ( mesh%nPOI, 2 )) 
-    allocate( mesh%POI_XY_coordinates ( mesh%nPOI, 2 )) 
+
+    allocate( mesh%POI_coordinates    ( mesh%nPOI, 2 ))
+    allocate( mesh%POI_XY_coordinates ( mesh%nPOI, 2 ))
     allocate( mesh%POI_resolutions    ( mesh%nPOI    ))
-    allocate( mesh%POI_vi             ( mesh%nPOI, 3 )) 
-    allocate( mesh%POI_w              ( mesh%nPOI, 3 )) 
+    allocate( mesh%POI_vi             ( mesh%nPOI, 3 ))
+    allocate( mesh%POI_w              ( mesh%nPOI, 3 ))
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 52)
@@ -135,19 +135,19 @@ CONTAINS
   SUBROUTINE extend_mesh_primary(         mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_mesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     mesh%nV_mem   = nV_mem_new
     mesh%nTri_mem = nTri_mem_new
 
@@ -159,9 +159,9 @@ CONTAINS
     call reallocate(mesh%iTri          , nV_mem_new, mesh%nC_mem)
     call reallocate(mesh%edge_index    , nV_mem_new             )
     call reallocate(mesh%mesh_old_ti_in, nV_mem_new             )
-    
+
     mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
-    
+
     call reallocate( mesh%Tri,            nTri_mem_new, 3)
     call reallocate( mesh%Tricc,          nTri_mem_new, 2)
     call reallocate( mesh%TriC,           nTri_mem_new, 3)
@@ -170,7 +170,7 @@ CONTAINS
     call reallocate( mesh%Triflip,        nTri_mem_new, 2)
     call reallocate( mesh%RefMap,         nTri_mem_new   )
     call reallocate( mesh%RefStack,       nTri_mem_new   )
-    
+
     ! Distributed shared memory for FloodFill maps and stacks
     call reallocate( mesh%VMap,      nV_mem_new   )
     call reallocate( mesh%VStack1,   nV_mem_new   )
@@ -178,29 +178,29 @@ CONTAINS
     call reallocate( mesh%TriMap,    nTri_mem_new )
     call reallocate( mesh%TriStack1, nTri_mem_new )
     call reallocate( mesh%TriStack2, nTri_mem_new )
-       
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE extend_mesh_primary
   SUBROUTINE crop_mesh_primary(           mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (smaller) one, and copy the data back.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'crop_mesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-   
+
     mesh%nV_mem   = mesh%nV
     mesh%nTri_mem = mesh%nTri
-       
+
     call reallocate( mesh%V             , mesh%nV,   2          )
     call reallocate( mesh%nC            , mesh%nV               )
     call reallocate( mesh%C             , mesh%nV,   mesh%nC_mem)
@@ -225,66 +225,66 @@ CONTAINS
     call reallocate( mesh%TriMap        , mesh%nTri)
     call reallocate( mesh%TriStack1     , mesh%nTri)
     call reallocate( mesh%TriStack2     , mesh%nTri)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE crop_mesh_primary
   SUBROUTINE allocate_mesh_secondary(     mesh)
     ! Allocate memory for mesh data
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_mesh_secondary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
-    if (allocated(mesh% A    )) deallocate(mesh% A    ) 
-    if (allocated(mesh% VorGC)) deallocate(mesh% VorGC) 
-    if (allocated(mesh% R    )) deallocate(mesh% R    ) 
-    if (allocated(mesh% Cw   )) deallocate(mesh% Cw   ) 
-    if (allocated(mesh% TriA )) deallocate(mesh% TriA ) 
-    if (allocated(mesh% TriGC)) deallocate(mesh% TriGC) 
-    if (allocated(mesh% lat  )) deallocate(mesh% lat  ) 
-    if (allocated(mesh% lon  )) deallocate(mesh% lon  ) 
 
-    allocate(mesh% A    ( 1       :mesh%nV    )) ! Globally used kinda
-    allocate(mesh% VorGC( mesh%vi1:mesh%vi2,2 ))
-    allocate(mesh% R    ( 1       :mesh%nV    )) ! Globally used kinda
-    allocate(mesh% Cw   ( mesh%vi1:mesh%vi2,mesh%nC_mem ))
-        
-    allocate(mesh% TriA ( mesh%ti1:mesh%ti2   ))
-    allocate(mesh% TriGC( 1:mesh%nTri,2       )) ! Globally needed
+    if (allocated(mesh% A    )) deallocate(mesh% A    )
+    if (allocated(mesh% VorGC)) deallocate(mesh% VorGC)
+    if (allocated(mesh% R    )) deallocate(mesh% R    )
+    if (allocated(mesh% Cw   )) deallocate(mesh% Cw   )
+    if (allocated(mesh% TriA )) deallocate(mesh% TriA )
+    if (allocated(mesh% TriGC)) deallocate(mesh% TriGC)
+    if (allocated(mesh% lat  )) deallocate(mesh% lat  )
+    if (allocated(mesh% lon  )) deallocate(mesh% lon  )
 
-    allocate(mesh% lat  ( mesh%vi1:mesh%vi2   ))
-    allocate(mesh% lon  ( mesh%vi1:mesh%vi2   ))
-    
+    allocate(mesh%A    ( 1       :mesh%nV    )) ! Globally used kinda
+    allocate(mesh%VorGC( mesh%vi1:mesh%vi2,2 ))
+    allocate(mesh%R    ( 1       :mesh%nV    )) ! Globally used kinda
+    allocate(mesh%Cw   ( mesh%vi1:mesh%vi2,mesh%nC_mem ))
+
+    allocate(mesh%TriA ( mesh%ti1:mesh%ti2   ))
+    allocate(mesh%TriGC( 1:mesh%nTri,2       )) ! Globally needed
+
+    allocate(mesh%lat  ( mesh%vi1:mesh%vi2   ))
+    allocate(mesh%lon  ( mesh%vi1:mesh%vi2   ))
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
-    
+
   END SUBROUTINE allocate_mesh_secondary
   SUBROUTINE deallocate_mesh_all(         mesh)
     ! Deallocate memory for mesh data
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_mesh_all'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Basic meta properties
     ! =====================
-    
+
 !   CALL deallocate_shared( mesh%wlambda_M)
 !   CALL deallocate_shared( mesh%wphi_M)
 !   CALL deallocate_shared( mesh%walpha_stereo)
@@ -313,7 +313,7 @@ CONTAINS
 
 !   ! Primary mesh data (needed for mesh creation & refinement)
 !   ! =========================================================
-!   
+!
 !   CALL deallocate_shared( mesh%wV)
 !   CALL deallocate_shared( mesh%wnC)
 !   CALL deallocate_shared( mesh%wC)
@@ -321,31 +321,31 @@ CONTAINS
 !   CALL deallocate_shared( mesh%wiTri)
 !   CALL deallocate_shared( mesh%wedge_index)
 !   CALL deallocate_shared( mesh%wmesh_old_ti_in)
-!   
+!
 !   CALL deallocate_shared( mesh%wTri)
 !   CALL deallocate_shared( mesh%wTricc)
 !   CALL deallocate_shared( mesh%wTriC)
 !   CALL deallocate_shared( mesh%wTri_edge_index)
-!   
+!
 !   CALL deallocate_shared( mesh%wTriflip)
 !   CALL deallocate_shared( mesh%wRefMap)
 !   CALL deallocate_shared( mesh%wRefStack)
 !   CALL deallocate_shared( mesh%wRefStackN)
-!   
+!
 !   CALL deallocate_shared( mesh%wVMap)
 !   CALL deallocate_shared( mesh%wVStack1)
 !   CALL deallocate_shared( mesh%wVStack2)
 !   CALL deallocate_shared( mesh%wTriMap)
 !   CALL deallocate_shared( mesh%wTriStack1)
 !   CALL deallocate_shared( mesh%wTriStack2)
-!   
+!
 !   CALL deallocate_shared( mesh%wnPOI               )
 !   CALL deallocate_shared( mesh%wPOI_coordinates    )
 !   CALL deallocate_shared( mesh%wPOI_XY_coordinates )
 !   CALL deallocate_shared( mesh%wPOI_resolutions    )
 !   CALL deallocate_shared( mesh%wPOI_vi             )
 !   CALL deallocate_shared( mesh%wPOI_w              )
-!   
+!
 !   ! Secondary mesh data
 !   ! ===================
 
@@ -355,10 +355,10 @@ CONTAINS
 !   CALL deallocate_shared( mesh%wCw)
 !   CALL deallocate_shared( mesh%wTriGC)
 !   CALL deallocate_shared( mesh%wTriA)
-!   
+!
 !   CALL deallocate_shared( mesh%wlat)
 !   CALL deallocate_shared( mesh%wlon)
-!   
+!
 !   CALL deallocate_shared( mesh%wnAc)
 !   CALL deallocate_shared( mesh%wVAc)
 !   CALL deallocate_shared( mesh%wAci)
@@ -371,7 +371,7 @@ CONTAINS
     CALL MatDestroy( mesh%M_map_b_c             , perr)
     CALL MatDestroy( mesh%M_map_c_a             , perr)
     CALL MatDestroy( mesh%M_map_c_b             , perr)
-    
+
     CALL MatDestroy( mesh%M_ddx_a_a             , perr)
     CALL MatDestroy( mesh%M_ddx_a_b             , perr)
     CALL MatDestroy( mesh%M_ddx_a_c             , perr)
@@ -381,7 +381,7 @@ CONTAINS
     CALL MatDestroy( mesh%M_ddx_c_a             , perr)
     CALL MatDestroy( mesh%M_ddx_c_b             , perr)
     CALL MatDestroy( mesh%M_ddx_c_c             , perr)
-    
+
     CALL MatDestroy( mesh%M_ddy_a_a             , perr)
     CALL MatDestroy( mesh%M_ddy_a_b             , perr)
     CALL MatDestroy( mesh%M_ddy_a_c             , perr)
@@ -391,47 +391,47 @@ CONTAINS
     CALL MatDestroy( mesh%M_ddy_c_a             , perr)
     CALL MatDestroy( mesh%M_ddy_c_b             , perr)
     CALL MatDestroy( mesh%M_ddy_c_c             , perr)
-    
+
     CALL MatDestroy( mesh%M2_ddx_b_b            , perr)
     CALL MatDestroy( mesh%M2_ddy_b_b            , perr)
     CALL MatDestroy( mesh%M2_d2dx2_b_b          , perr)
     CALL MatDestroy( mesh%M2_d2dxdy_b_b         , perr)
     CALL MatDestroy( mesh%M2_d2dy2_b_b          , perr)
-    
+
     CALL deallocate_matrix_CSR( mesh%M2_ddx_b_b_CSR    )
     CALL deallocate_matrix_CSR( mesh%M2_ddy_b_b_CSR    )
     CALL deallocate_matrix_CSR( mesh%M2_d2dx2_b_b_CSR  )
     CALL deallocate_matrix_CSR( mesh%M2_d2dxdy_b_b_CSR )
     CALL deallocate_matrix_CSR( mesh%M2_d2dy2_b_b_CSR  )
-    
+
     CALL MatDestroy( mesh%M_Neumann_BC_b        , perr)
     CALL deallocate_matrix_CSR( mesh%M_Neumann_BC_b_CSR)
-    
+
 !    CALL deallocate_shared( mesh%wnV_transect)
 !    CALL deallocate_shared( mesh%wvi_transect)
 !    CALL deallocate_shared( mesh%ww_transect )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
- 
+
    END SUBROUTINE deallocate_mesh_all
-  
+
   SUBROUTINE allocate_submesh_primary(    mesh, region_name, nV_mem, nTri_mem, nC_mem)
     ! Allocate memory for mesh data
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     CHARACTER(LEN=3),                INTENT(IN)        :: region_name
     INTEGER,                         INTENT(IN)        :: nV_mem, nTri_mem, nC_mem
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_submesh_primary'
-    
+
     ! Add routine to path
     mesh%region_name = region_name
-    
+
     IF (mesh%region_name     == 'NAM') THEN
       mesh%lambda_M     = C%lambda_M_NAM
       mesh%phi_M        = C%phi_M_NAM
@@ -449,7 +449,7 @@ CONTAINS
       mesh%phi_M        = C%phi_M_ANT
       mesh%alpha_stereo = C%alpha_stereo_ANT
     END IF
-    
+
     mesh%nV_mem   = nV_mem
     mesh%nTri_mem = nTri_mem
     mesh%nC_mem   = nC_mem
@@ -463,13 +463,13 @@ CONTAINS
 
     allocate( mesh%Tri            (nTri_mem, 3     ), source=0)
     allocate( mesh%Tricc          (nTri_mem, 2     ), source=0._dp)
-    allocate( mesh%TriC           (nTri_mem, 3     ), source=0) 
-    allocate( mesh%Tri_edge_index (nTri_mem        ), source=0) 
-                                                     
+    allocate( mesh%TriC           (nTri_mem, 3     ), source=0)
+    allocate( mesh%Tri_edge_index (nTri_mem        ), source=0)
+
     allocate( mesh%Triflip        (nTri_mem, 2     ), source=0)
     allocate( mesh%RefMap         (nTri_mem        ), source=0)
     allocate( mesh%RefStack       (nTri_mem        ), source=0)
-    
+
     ! Distributed shared memory for FloodFill maps and stacks
     allocate( mesh%VMap           (nV_mem          ), source=0)
     allocate( mesh%VStack1        (nV_mem          ), source=0)
@@ -477,7 +477,7 @@ CONTAINS
     allocate( mesh%TriMap         (nTri_mem        ), source=0)
     allocate( mesh%TriStack1      (nTri_mem        ), source=0)
     allocate( mesh%TriStack2      (nTri_mem        ), source=0)
-    
+
     ! POI stuff
     IF (mesh%region_name == 'NAM') THEN
       mesh%nPOI = C%nPOI_NAM
@@ -488,33 +488,33 @@ CONTAINS
     ELSEIF (mesh%region_name == 'ANT') THEN
       mesh%nPOI = C%nPOI_ANT
     END IF
-    
-    allocate( mesh%POI_coordinates    ( mesh%nPOI, 2 )) 
-    allocate( mesh%POI_XY_coordinates ( mesh%nPOI, 2 )) 
+
+    allocate( mesh%POI_coordinates    ( mesh%nPOI, 2 ))
+    allocate( mesh%POI_XY_coordinates ( mesh%nPOI, 2 ))
     allocate( mesh%POI_resolutions    ( mesh%nPOI    ))
-    allocate( mesh%POI_vi             ( mesh%nPOI, 3 )) 
-    allocate( mesh%POI_w              ( mesh%nPOI, 3 )) 
+    allocate( mesh%POI_vi             ( mesh%nPOI, 3 ))
+    allocate( mesh%POI_w              ( mesh%nPOI, 3 ))
 
   END SUBROUTINE allocate_submesh_primary
   SUBROUTINE extend_submesh_primary(      mesh, nV_mem_new, nTri_mem_new)
     ! For when we didn't allocate enough. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (bigger) one, and copy the data back.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     INTEGER,                         INTENT(IN)        :: nV_mem_new, nTri_mem_new
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'extend_submesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
- 
+
     mesh%nV_mem   = nV_mem_new
     mesh%nTri_mem = nTri_mem_new
-       
+
     call reallocate(mesh%V             , nv_mem_new,           2)
     call reallocate(mesh%V             , nV_mem_new,           2)
     call reallocate(mesh%nC            , nV_mem_new             )
@@ -523,9 +523,9 @@ CONTAINS
     call reallocate(mesh%iTri          , nV_mem_new, mesh%nC_mem)
     call reallocate(mesh%edge_index    , nV_mem_new             )
     call reallocate(mesh%mesh_old_ti_in, nV_mem_new             )
-    
+
     mesh%mesh_old_ti_in(mesh%nV+1:nV_mem_new) = 1
-    
+
     call reallocate( mesh%Tri,            nTri_mem_new, 3)
     call reallocate( mesh%Tricc,          nTri_mem_new, 2)
     call reallocate( mesh%TriC,           nTri_mem_new, 3)
@@ -534,7 +534,7 @@ CONTAINS
     call reallocate( mesh%Triflip,        nTri_mem_new, 2)
     call reallocate( mesh%RefMap,         nTri_mem_new   )
     call reallocate( mesh%RefStack,       nTri_mem_new   )
-    
+
     ! Distributed shared memory for FloodFill maps and stacks
     call reallocate( mesh%VMap,      nV_mem_new   )
     call reallocate( mesh%VStack1,   nV_mem_new   )
@@ -542,29 +542,29 @@ CONTAINS
     call reallocate( mesh%TriMap,    nTri_mem_new )
     call reallocate( mesh%TriStack1, nTri_mem_new )
     call reallocate( mesh%TriStack2, nTri_mem_new )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE extend_submesh_primary
   SUBROUTINE crop_submesh_primary(        mesh)
     ! For when we allocated too much. Field by field, copy the data to a temporary array,
     ! deallocate the old field, allocate a new (smaller) one, and copy the data back.
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'crop_submesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-   
+
     mesh%nV_mem = mesh%nV
     mesh%nTri_mem = mesh%nTri
-    
+
     call reallocate( mesh%V             , mesh%nV,   2          )
     call reallocate( mesh%nC            , mesh%nV               )
     call reallocate( mesh%C             , mesh%nV,   mesh%nC_mem)
@@ -589,25 +589,25 @@ CONTAINS
     call reallocate( mesh%TriMap        , mesh%nTri)
     call reallocate( mesh%TriStack1     , mesh%nTri)
     call reallocate( mesh%TriStack2     , mesh%nTri)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE crop_submesh_primary
   SUBROUTINE deallocate_submesh_primary(  mesh)
     ! Deallocate memory for mesh data
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_submesh_primary'
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
 ! Because we switch to allocatable, it will be automatically deallocated when going out of scope, bonus!
 !   deallocate(mesh%V)
 !   deallocate(mesh%nC)
@@ -616,7 +616,7 @@ CONTAINS
 !   deallocate(mesh%iTri)
 !   deallocate(mesh%edge_index)
 !   deallocate(mesh%mesh_old_ti_in)
-!   
+!
 !   deallocate(mesh%Tri)
 !   deallocate(mesh%Tricc)
 !   deallocate(mesh%TriC)
@@ -639,28 +639,28 @@ CONTAINS
 !   deallocate(mesh%POI_resolutions    )
 !   deallocate(mesh%POI_vi             )
 !   deallocate(mesh%POI_w              )
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
- 
+
   END SUBROUTINE deallocate_submesh_primary
   SUBROUTINE share_submesh_access( p_left, p_right, submesh, submesh_right)
     ! Give process p_left access to the submesh memory of p_right
     ! Used in submesh merging
-    
+
     IMPLICIT NONE
- 
+
     ! In/output variables:
     INTEGER,                         INTENT(IN)        :: p_left
     INTEGER,                         INTENT(IN)        :: p_right
     INTEGER                                       :: status(MPI_STATUS_SIZE)
     TYPE(type_mesh),                 INTENT(IN)        :: submesh
     TYPE(type_mesh),                 INTENT(INOUT)     :: submesh_right
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'share_submesh_access'
     INTEGER                                            :: nV, nTri, nconmax
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -677,7 +677,7 @@ CONTAINS
       call mpi_recv( submesh_right%nV,      1, MPI_INTEGER, p_right, 8, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%nTri,    1, MPI_INTEGER, p_right, 9, MPI_COMM_WORLD, status, ierr )
     else
-    ! Sending 
+    ! Sending
       ! these could be combined ...
       call mpi_send( submesh      %xmin,    1, MPI_REAL8  , p_left , 1, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %xmax,    1, MPI_REAL8  , p_left , 2, MPI_COMM_WORLD,         ierr )
@@ -728,11 +728,11 @@ CONTAINS
       allocate( submesh_right%TriMap        (   nTri         ), source=0)
       allocate( submesh_right%TriStack1     (   nTri         ), source=0)
       allocate( submesh_right%TriStack2     (   nTri         ), source=0)
-      
+
       ! ok now we can receive
       call mpi_recv( submesh_right%V,              nV*2      , mpi_real8  , p_right, 1, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%nC,             nV        , mpi_integer, p_right, 2, MPI_COMM_WORLD, status, ierr )
-      call mpi_recv( submesh_right%C,              nV*nconmax, mpi_integer, p_right, 3, MPI_COMM_WORLD, status, ierr ) 
+      call mpi_recv( submesh_right%C,              nV*nconmax, mpi_integer, p_right, 3, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%niTri,          nV        , mpi_integer, p_right, 4, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%iTri,           nV*nconmax, mpi_integer, p_right, 5, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%edge_index,     nV        , mpi_integer, p_right, 6, MPI_COMM_WORLD, status, ierr )
@@ -755,11 +755,11 @@ CONTAINS
       call mpi_recv( submesh_right%TriMap,         nTri      , mpi_integer, p_right,20, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%TriStack1,      nTri      , mpi_integer, p_right,21, MPI_COMM_WORLD, status, ierr )
       call mpi_recv( submesh_right%TriStack2,      nTri      , mpi_integer, p_right,22, MPI_COMM_WORLD, status, ierr )
-    else 
+    else
    ! the right must send
       call mpi_send( submesh      %V,              nV*2      , mpi_real8  , p_left , 1, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %nC,             nV        , mpi_integer, p_left , 2, MPI_COMM_WORLD,         ierr )
-      call mpi_send( submesh      %C,              nV*nconmax, mpi_integer, p_left , 3, MPI_COMM_WORLD,         ierr ) 
+      call mpi_send( submesh      %C,              nV*nconmax, mpi_integer, p_left , 3, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %niTri,          nV        , mpi_integer, p_left , 4, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %iTri,           nV*nconmax, mpi_integer, p_left , 5, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %edge_index,     nV        , mpi_integer, p_left , 6, MPI_COMM_WORLD,         ierr )
@@ -783,31 +783,31 @@ CONTAINS
       call mpi_send( submesh      %TriStack1,      nTri      , mpi_integer, p_left ,21, MPI_COMM_WORLD,         ierr )
       call mpi_send( submesh      %TriStack2,      nTri      , mpi_integer, p_left ,22, MPI_COMM_WORLD,         ierr )
     endif
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE share_submesh_access
-  
+
   SUBROUTINE move_data_from_submesh_to_mesh( mesh, submesh)
     use mpi_f08
-    
+
     IMPLICIT NONE
-  
+
     ! In/output variables:
     TYPE(type_mesh),                 INTENT(INOUT)     :: mesh
     TYPE(type_mesh),                 INTENT(INOUT)     :: submesh ! We pointer move from here, so must be inout
-    
+
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'move_data_from_submesh_to_mesh'
     type(mpi_request)                                  :: reqs(15)
     integer                                            :: nconmax
 
     nconmax = C%nconmax
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    if (par% master) then  
+    if (par% master) then
 
       call crop_submesh_primary(submesh) !make sure nv_mem == nv and ntri == ntri_mem
       if ((submesh%nv /= submesh%nv_mem) .or. (submesh%ntri /= submesh%ntri_mem)) then
@@ -820,13 +820,13 @@ CONTAINS
       mesh%nV_mem      = submesh%nV_mem
       mesh%nTri_mem    = submesh%nTri_mem
       mesh%nC_mem      = submesh%nC_mem
-      
+
       mesh%xmin        = submesh%xmin
       mesh%xmax        = submesh%xmax
       mesh%ymin        = submesh%ymin
       mesh%ymax        = submesh%ymax
       mesh%tol_dist    = submesh%tol_dist
-      
+
       mesh%perturb_dir = submesh%perturb_dir
     endif
 
@@ -848,8 +848,8 @@ CONTAINS
 
     CALL allocate_mesh_primary( mesh, submesh%region_name, mesh%nV, mesh%nTri, mesh%nC_mem)
 
-    ! Fill the good data 
-    if (par% master) then  
+    ! Fill the good data
+    if (par% master) then
       call move_alloc(submesh%V, mesh%V)
       call move_alloc(submesh%nC, mesh%nC)
       call move_alloc(submesh%C, mesh%C)
@@ -889,10 +889,10 @@ CONTAINS
     call mpi_ibcast( mesh%RefStackN  , 1              , MPI_INTEGER, 0, MPI_COMM_WORLD, reqs(15), ierr )
 
     call mpi_waitall( 15, reqs, MPI_STATUSES_IGNORE, ierr)
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE move_data_from_submesh_to_mesh
 
 END MODULE mesh_memory_module

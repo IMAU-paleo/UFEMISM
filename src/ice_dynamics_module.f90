@@ -1,41 +1,35 @@
 MODULE ice_dynamics_module
 
-  ! Contains all the routines needed to calculate ice-sheet geometry at the next time
-  ! step, including routines to determine said time step.
-  ! NOTE: routines for calculating ice velocities             have been moved to the ice_velocity_module;
-  !       routines for integrating the ice thickness equation have been moved to the ice_thickness_module.
-
-#include <petsc/finclude/petscksp.h>
+  ! Contains all the routines needed to calculate ice-sheet geometry at
+  ! the next time step, including routines to determine said time step.
 
 ! ===== Preamble =====
 ! ====================
 
   use mpi
-  use configuration_module,                only: dp, C, routine_path, init_routine, &
-                                                 finalise_routine, crash, warning
-  use parameters_module
-  use petsc_module,                        only: perr
-  use parallel_module,                     only: par, sync, ierr, cerr, partition_list
-  use data_types_module,                   only: type_mesh, type_ice_model, type_model_region, &
-                                                 type_reference_geometry, type_remapping_mesh_mesh
-  use utilities_module,                    only: surface_elevation
-  use reallocate_mod,                      only: reallocate_bounds
-  use mesh_mapping_module,                 only: remap_field_dp_2D
-  use general_ice_model_data_module,       only: update_general_ice_model_data
-  ! use mesh_operators_module,               only: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
-  use ice_velocity_module,                 only: solve_DIVA
-  use ice_velocity_module,                 only: map_velocities_b_to_c_2D, remap_velocities, initialise_velocity_solver
-  use ice_thickness_module,                only: calc_dHi_dt
-  use basal_conditions_and_sliding_module, only: initialise_basal_conditions, remap_basal_conditions
-  use thermodynamics_module,               only: calc_ice_rheology, remap_ice_temperature
-  use mpi_module,                          only: allgather_array
+  use configuration_module,                only : dp, C, routine_path, init_routine, &
+                                                  finalise_routine, crash, warning
+  use parallel_module,                     only : par, sync, ierr, cerr, partition_list
+  use data_types_module,                   only : type_mesh, type_ice_model, type_model_region, &
+                                                  type_reference_geometry, type_remapping_mesh_mesh
+  use utilities_module,                    only : surface_elevation, thickness_above_floatation
+  use reallocate_mod,                      only : reallocate_bounds
+  use mesh_mapping_module,                 only : remap_field_dp_2D
+  use general_ice_model_data_module,       only : update_general_ice_model_data, determine_masks
+  use ice_velocity_module,                 only : solve_SIA, solve_SSA, solve_DIVA, remap_velocities, &
+                                                  map_velocities_b_to_c_2D, initialise_velocity_solver
+  use ice_thickness_module,                only : calc_dHi_dt
+  use basal_conditions_and_sliding_module, only : initialise_basal_conditions, remap_basal_conditions
+  use thermodynamics_module,               only : calc_ice_rheology, remap_ice_temperature
+  use mpi_module,                          only : allgather_array
+  use forcing_module,                      only : forcing
 
   implicit none
 
 contains
 
-! ===== Run ice dynamics =====
-! ============================
+! ===== Main =====
+! ================
 
   SUBROUTINE run_ice_model( region, t_end)
     ! Calculate ice velocities and the resulting change in ice geometry
@@ -65,6 +59,149 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ice_model
+
+  subroutine initialise_ice_model( mesh, ice, refgeo_init, refgeo_PD)
+    ! Allocate shared memory for all the data fields of the ice dynamical module, and
+    ! initialise some of them
+
+    implicit none
+
+    ! In- and output variables
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo_init
+    type(type_reference_geometry), intent(in)    :: refgeo_PD
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'initialise_ice_model'
+    integer                                      :: vi
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    if (par%master) then
+      write(*,"(A)") '  Initialising ice dynamics model...'
+    end if
+    call sync
+
+    ! === Memory allocation ===
+    ! =========================
+
+    ! Allocate shared memory
+    call allocate_ice_model( mesh, ice)
+
+    ! === Predictor-corrector method ===
+    ! ==================================
+
+    ! Initialise some numbers for the predictor/corrector ice thickness update method
+    ice%pc_zeta        = 1._dp
+    ice%pc_eta         = C%pc_epsilon
+    ice%pc_eta_prev    = C%pc_epsilon
+
+    ! === Sea level ===
+    ! =================
+
+    if (C%is_restart) then
+
+      ! Get sea level from restart data
+      call crash('Sea level initialisation: restart not implement yet!')
+      ! ice%SL_a( mesh%vi1:mesh%vi2) = restart%SL( mesh%vi1:mesh%vi2)
+
+    else
+
+      ! Get sea level at initial time
+      select case (C%choice_sealevel_model)
+
+        case ('fixed')
+          ! Fixed sea level
+          ice%SL_a( mesh%vi1:mesh%vi2) = C%fixed_sealevel
+
+        case ('prescribed')
+          ! Sea-level prescribed from external record file
+          ice%SL_a( mesh%vi1:mesh%vi2) = forcing%sealevel_obs
+
+        case ('eustatic')
+          ! Eustatic sea level
+          call crash('Sea level initialisation: eustatic method not implement yet!')
+          ! ice%SL_a( mesh%vi1:mesh%vi2) = C%initial_guess_sealevel
+
+        case ('SELEN')
+          ! Sea level from SELEN
+          call crash('Sea level initialisation: SELEN method not implement yet!')
+          ! ice%SL_a( mesh%vi1:mesh%vi2) = C%initial_guess_sealevel
+
+        case default
+          ! Unknown case
+          call crash('unknown choice_sealevel_model "' // &
+                      TRIM( C%choice_sealevel_model) // '"!')
+
+      end select
+
+    end if
+
+    ! Initialise with data from initial file
+    do vi = mesh%vi1, mesh%vi2
+      ! Main quantities
+      ice%Hi_a( vi)   = refgeo_init%Hi( vi)
+      ice%Hb_a( vi)   = refgeo_init%Hb( vi)
+
+      if (C%is_restart) then
+        ice%Hs_a( vi) = refgeo_init%Hs( vi)
+      else
+        ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+      end if
+
+      ice%TAF_a( vi)  = thickness_above_floatation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+
+      ! Differences w.r.t. present-day
+      ice%dHi_a( vi)  = ice%Hi_a( vi) - refgeo_PD%Hi( vi)
+      ice%dHb_a( vi)  = ice%Hb_a( vi) - refgeo_PD%Hb( vi)
+      ice%dHs_a( vi)  = ice%Hs_a( vi) - refgeo_PD%Hs( vi)
+    end do
+
+    ! Determine masks
+    call determine_masks( mesh, ice)
+
+    ice%dHb_dt_a = 0._dp
+    ice%dHi_dt_a = 0._dp
+    ice%dHs_dt_a = 0._dp
+
+    ! Initialise the "previous ice mask", so that the first call to thermodynamics works correctly
+    ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
+    call allgather_array(ice%mask_ice_a_prev)
+
+    ! Allocate and initialise basal conditions
+    call initialise_basal_conditions( mesh, ice)
+
+    ! Geothermal heat flux
+    select case (C%choice_geothermal_heat_flux)
+
+      case ('constant')
+        ! Uniform value over whole domain
+        ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
+
+      case ('spatial')
+        ! Spatially variable field
+        call crash ('spatially variable GHF not yet implemented!')
+        ! call map_geothermal_heat_flux_to_mesh( mesh, ice)
+
+      case default
+        ! Unknown case
+        call crash('unknown choice_geothermal_heat_flux "' // &
+                    trim( C%choice_geothermal_heat_flux) // '"!')
+
+    end select
+
+    ! Initialise data and matrices for the velocity solver(s)
+    call initialise_velocity_solver( mesh, ice)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
+
+  end subroutine initialise_ice_model
+
+! ===== Direct method =====
+! =========================
 
   SUBROUTINE run_ice_dynamics_direct( region, t_end)
     ! Ice dynamics and time-stepping with the "direct" method
@@ -187,6 +324,9 @@ contains
 
   END SUBROUTINE run_ice_dynamics_direct
 
+! ===== Predictor-corrector method =====
+! ======================================
+
   SUBROUTINE run_ice_dynamics_pc( region, t_end)
     ! Ice dynamics and time-stepping with the predictor/correct method
     ! (adopted from Yelmo, originally based on Cheng et al., 2017)
@@ -260,37 +400,34 @@ contains
 
       IF     (C%choice_ice_dynamics == 'SIA') THEN
 
-        call crash('todo, implement'//C%choice_ice_dynamics)
         ! Calculate velocities
-      !  CALL solve_SIA(  region%mesh, region%ice)
+       call solve_SIA( region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SIA = region%time
-      !  region%t_next_SIA = region%time + region%dt_crit_ice
+       ! Update timer
+       region%t_last_SIA = region%time
+       region%t_next_SIA = region%time + region%dt_crit_ice
 
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
- 
-        call crash('todo, implement'//C%choice_ice_dynamics)
-        ! Calculate velocities
-      !  CALL solve_SSA(  region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SSA = region%time
-      !  region%t_next_SSA = region%time + region%dt_crit_ice
+        ! Calculate velocities
+       CALL solve_SSA( region%mesh, region%ice)
+
+       ! Update timer
+       region%t_last_SSA = region%time
+       region%t_next_SSA = region%time + region%dt_crit_ice
 
 
       ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
 
-        call crash('todo, implement'//C%choice_ice_dynamics)
         ! Calculate velocities
-      !  CALL solve_SIA(  region%mesh, region%ice)
-      !  CALL solve_SSA(  region%mesh, region%ice)
+       CALL solve_SIA(  region%mesh, region%ice)
+       CALL solve_SSA(  region%mesh, region%ice)
 
-      !  ! Update timer
-      !  region%t_last_SIA = region%time
-      !  region%t_last_SSA = region%time
-      !  region%t_next_SIA = region%time + region%dt_crit_ice
-      !  region%t_next_SSA = region%time + region%dt_crit_ice
+       ! Update timer
+       region%t_last_SIA = region%time
+       region%t_last_SSA = region%time
+       region%t_next_SIA = region%time + region%dt_crit_ice
+       region%t_next_SSA = region%time + region%dt_crit_ice
 
       ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
 
@@ -331,64 +468,102 @@ contains
     region%ice%Hi_tplusdt_a = MAX( 0._dp, region%ice%Hi_a + region%dt * region%ice%dHi_dt_a)
 
     ! IF (par%master) WRITE(*,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_adv = ', dt_crit_adv, ', dt_from_pc = ', dt_from_pc, ', dt = ', region%dt
+    ! CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_ice_dynamics_pc
 
-! ===== Ice thickness update =====
-! ================================
-
-  SUBROUTINE update_ice_thickness( mesh, ice)
-    ! Update the ice thickness at the end of a model time loop
+  SUBROUTINE calc_pc_truncation_error( mesh, ice, dt, dt_prev)
+    ! Calculate the truncation error in the ice thickness rate of change (Robinson et al., 2020, Eq. 32)
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp),                            INTENT(IN)    :: dt, dt_prev
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'update_ice_thickness'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pc_truncation_error'
+    INTEGER                                            :: vi, ci, vc
+    LOGICAL                                            :: has_GL_neighbour
+    REAL(dp)                                           :: zeta, eta_proc
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Save the previous ice mask, for use in thermodynamics
-    ! ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
-    ! CALL sync
+    ! ! Ratio of time steps
+    ! zeta = dt / dt_prev
 
-    ! ! Set ice thickness to new value
-    ! ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
-    ! CALL sync
+    ! ! Find maximum truncation error
+    ! eta_proc = C%pc_eta_min
 
-    ! ! Apply calving law
-    ! !
-    ! ! NOTE: done twice, so that the calving front is also allowed to retreat
-    ! IF (.NOT. C%choice_calving_law == 'none') THEN
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL determine_floating_margin_fraction( mesh, ice)
-    !   CALL apply_calving_law(                  mesh, ice)
+    ! DO vi = mesh%vi1, mesh%vi2
 
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL determine_floating_margin_fraction( mesh, ice)
-    !   CALL apply_calving_law(                  mesh, ice)
+    !   ! Calculate truncation error (Robinson et al., 2020, Eq. 32)
+    !   ice%pc_tau( vi) = ABS( zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / ((3._dp * zeta + 3._dp) * dt))
 
-    !   ! Remove unconnected shelves
-    !   CALL determine_masks_ice(                mesh, ice)
-    !   CALL determine_masks_transitions(        mesh, ice)
-    !   CALL remove_unconnected_shelves(         mesh, ice)
-    ! END IF
+    !   IF (ice%mask_sheet_a( vi) == 1) THEN
 
-    ! CALL update_general_ice_model_data(      mesh, ice)
+    !     has_GL_neighbour = .FALSE.
+    !     DO ci = 1, mesh%nC( vi)
+    !       vc = mesh%C( vi,ci)
+    !       IF (ice%mask_gl_a( vc) == 1) THEN
+    !         has_GL_neighbour = .TRUE.
+    !         EXIT
+    !       END IF
+    !     END DO
+
+    !     IF (.NOT.has_GL_neighbour) eta_proc = MAX( eta_proc, ice%pc_tau( vi))
+
+    !   END IF
+
+    ! END DO
+    ! CALL MPI_REDUCE( eta_proc, ice%pc_eta, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE update_ice_thickness
+  END SUBROUTINE calc_pc_truncation_error
+
+! ===== Ice thickness update =====
+! ================================
+
+  subroutine update_ice_thickness( mesh, ice, refgeo_PD)
+    ! Update the ice thickness at the end of a model time loop
+
+    implicit none
+
+    ! In- and output variables:
+    type(type_mesh),               intent(in)    :: mesh
+    type(type_ice_model),          intent(inout) :: ice
+    type(type_reference_geometry), intent(in)    :: refgeo_PD
+
+    ! Local variables:
+    character(len=256), parameter                :: routine_name = 'update_ice_thickness'
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Save the previous ice mask, for use in thermodynamics
+    ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
+    call allgather_array(ice%mask_ice_a_prev)
+
+    ! Set ice thickness to new value
+    ice%Hi_a( mesh%vi1:mesh%vi2) = max( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
+
+    call update_general_ice_model_data(      mesh, ice)
+
+    ! Compute ice thickness/elevation difference w.r.t PD
+    ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
+    ice%dHs_a( mesh%vi1:mesh%vi2) = ice%Hs_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hs( mesh%vi1:mesh%vi2)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine update_ice_thickness
 
 ! ===== Time stepping =====
 ! =========================
@@ -533,59 +708,6 @@ contains
 
   END SUBROUTINE calc_critical_timestep_adv
 
-  SUBROUTINE calc_pc_truncation_error( mesh, ice, dt, dt_prev)
-    ! Calculate the truncation error in the ice thickness rate of change (Robinson et al., 2020, Eq. 32)
-
-    IMPLICIT NONE
-
-    ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp),                            INTENT(IN)    :: dt, dt_prev
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pc_truncation_error'
-    INTEGER                                            :: vi, ci, vc
-    LOGICAL                                            :: has_GL_neighbour
-    REAL(dp)                                           :: zeta, eta_proc
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! ! Ratio of time steps
-    ! zeta = dt / dt_prev
-
-    ! ! Find maximum truncation error
-    ! eta_proc = C%pc_eta_min
-
-    ! DO vi = mesh%vi1, mesh%vi2
-
-    !   ! Calculate truncation error (Robinson et al., 2020, Eq. 32)
-    !   ice%pc_tau( vi) = ABS( zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / ((3._dp * zeta + 3._dp) * dt))
-
-    !   IF (ice%mask_sheet_a( vi) == 1) THEN
-
-    !     has_GL_neighbour = .FALSE.
-    !     DO ci = 1, mesh%nC( vi)
-    !       vc = mesh%C( vi,ci)
-    !       IF (ice%mask_gl_a( vc) == 1) THEN
-    !         has_GL_neighbour = .TRUE.
-    !         EXIT
-    !       END IF
-    !     END DO
-
-    !     IF (.NOT.has_GL_neighbour) eta_proc = MAX( eta_proc, ice%pc_tau( vi))
-
-    !   END IF
-
-    ! END DO
-    ! CALL MPI_REDUCE( eta_proc, ice%pc_eta, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calc_pc_truncation_error
-
   SUBROUTINE determine_timesteps_and_actions( region, t_end)
     ! Determine how long we can run just ice dynamics before another "action" (thermodynamics,
     ! GIA, output writing, inverse routine, etc.) has to be performed, and adjust the time step accordingly.
@@ -694,112 +816,23 @@ contains
 
   END SUBROUTINE determine_timesteps_and_actions
 
-! ===== Administration: allocation, initialisation, and remapping =====
-! =====================================================================
+! ===== Allocation and remapping =====
+! ====================================
 
-  SUBROUTINE initialise_ice_model( mesh, ice, refgeo_init)
-    ! Allocate shared memory for all the data fields of the ice dynamical module, and
-    ! initialise some of them
-
-    IMPLICIT NONE
-
-    ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_model'
-    INTEGER                                            :: vi
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (par%master) then
-      write(*,"(A)") '  Initialising ice dynamics model...'
-    end if
-
-    ! Allocate shared memory
-    CALL allocate_ice_model( mesh, ice)
-
-    ! Initialise with data from initial file (works for both "raw" initial data and model restarts)
-    DO vi = mesh%vi1, mesh%vi2
-      ice%Hi_a( vi) = refgeo_init%Hi( vi)
-      ice%Hb_a( vi) = refgeo_init%Hb( vi)
-      ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), 0._dp)
-    END DO
-    CALL sync
-
-    ! Initialise masks and slopes
-    CALL update_general_ice_model_data( mesh, ice)
-
-    ! Allocate and initialise basal conditions
-    CALL initialise_basal_conditions( mesh, ice)
-
-    ! Geothermal heat flux
-    IF     (C%choice_geothermal_heat_flux == 'constant') THEN
-      ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
-    ! ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
-    !   CALL map_geothermal_heat_flux_to_mesh( mesh, ice)
-    ELSE
-      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
-    END IF
-
-    ! ! Initialise data and matrices for the velocity solver(s)
-    CALL initialise_velocity_solver( mesh, ice)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
-
-  END SUBROUTINE initialise_ice_model
-
-  SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
-
-    USE data_types_module,          ONLY: type_remapping_latlon2mesh
-    USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
-
-    IMPLICIT NONE
-
-    ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
-    TYPE(type_remapping_latlon2mesh)                   :: map
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! ! Calculate mapping arrays
-    ! CALL create_remapping_arrays_glob_mesh( mesh, forcing%grid_ghf, map)
-
-    ! ! Map global climate data to the mesh
-    ! CALL map_latlon2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
-
-    ! ! Deallocate mapping arrays
-    ! CALL deallocate_remapping_arrays_glob_mesh( map)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE map_geothermal_heat_flux_to_mesh
-
-  SUBROUTINE allocate_ice_model( mesh, ice)
+  subroutine allocate_ice_model( mesh, ice)
     ! Allocate ice model variables
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_ice_model'
+    character(len=256), parameter       :: routine_name = 'allocate_ice_model'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Allocate memory
     ! ===============
@@ -871,9 +904,9 @@ contains
 
     ! Ice dynamics - ice thickness calculation
     allocate(  ice%dVi_in              (       1:mesh%nV  , mesh%nC_mem ))
-    ! allocate(  ice%dVi_out             (mesh%vi1:mesh%vi2 , mesh%nC_mem ))
     allocate(  ice%dHi_dt_a            (mesh%vi1:mesh%vi2               ))
     allocate(  ice%Hi_tplusdt_a        (mesh%vi1:mesh%vi2               ))
+    allocate(  ice%dHs_dt_a            (mesh%vi1:mesh%vi2               ))
 
     ! Ice dynamics - predictor/corrector ice thickness update
     allocate(  ice%pc_tau              (mesh%vi1:mesh%vi2               ))
@@ -902,10 +935,16 @@ contains
     allocate(  ice%dHb_dt_a            (mesh%vi1:mesh%vi2               ))
     allocate(  ice%dSL_dt_a            (mesh%vi1:mesh%vi2               ))
 
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
+    ! Useful extra stuff
+    allocate(  ice%dHi_a               (mesh%vi1:mesh%vi2               ))
+    ice%dHi_a = 0d0
+    allocate(  ice%dHs_a               (mesh%vi1:mesh%vi2               ))
+    ice%dHs_a = 0d0
 
-  END SUBROUTINE allocate_ice_model
+    ! Finalise routine path
+    call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
+
+  end subroutine allocate_ice_model
 
   SUBROUTINE remap_ice_model( mesh_old, mesh_new, map, ice, refgeo_PD, time)
     ! Remap or reallocate all the data fields
@@ -924,6 +963,9 @@ contains
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! === Remapping ===
+    ! =================
 
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , 'cons_2nd_order')
@@ -944,11 +986,14 @@ contains
       END IF
     END DO
 
-    ! ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
+    ! Remap sea level
+    call remap_field_dp_2D( mesh_old, mesh_new, map, ice%SL_a, 'cons_2nd_order')
+
+    ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
     CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
 
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,        'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a, 'cons_2nd_order')
     call reallocate_bounds( ice%Hb_a, mesh_new%vi1, mesh_new%vi2 )
     ice%Hb_a = refgeo_PD%Hb + ice%dHb_a
 
@@ -965,13 +1010,26 @@ contains
     ! Basal conditions
     CALL remap_basal_conditions( mesh_old, mesh_new, map, ice)
 
+    ! Update the three elevation differences
+    CALL reallocate_bounds( ice%Hs_a,  mesh_new%vi1, mesh_new%vi2)
+    CALL reallocate_bounds( ice%dHi_a, mesh_new%vi1, mesh_new%vi2)
+    CALL reallocate_bounds( ice%dHs_a, mesh_new%vi1, mesh_new%vi2)
+
+    DO vi = mesh_new%vi1, mesh_new%vi2
+      ice%Hs_a( vi) = surface_elevation( ice%Hi_a( vi), ice%Hb_a( vi), ice%SL_a( vi))
+    END DO
+
+    ice%dHi_a( mesh_new%vi1:mesh_new%vi2) = ice%Hi_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hi( mesh_new%vi1:mesh_new%vi2)
+    ice%dHs_a( mesh_new%vi1:mesh_new%vi2) = ice%Hs_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hs( mesh_new%vi1:mesh_new%vi2)
+    ice%dHb_a( mesh_new%vi1:mesh_new%vi2) = ice%Hb_a( mesh_new%vi1:mesh_new%vi2) - refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2)
+
     ! Simple memory reallocation for all the rest
     ! ===========================================
 
     ! Basic data - surface height, regional sea level, and thickness above floatation
-    CALL reallocate_bounds ( ice%Hs_a  , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%SL_a  , mesh_new%vi1, mesh_new%vi2 )
-    CALL reallocate_bounds ( ice%TAF_a , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%Hs_a         , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%SL_a         , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%TAF_a        , mesh_new%vi1, mesh_new%vi2 )
 
     ! Different masks
     CALL reallocate_bounds ( ice%mask_land_a  ,            1, mesh_new%nV  )
@@ -1003,34 +1061,31 @@ contains
 
     ! Ice dynamics - ice thickness calculation
     CALL reallocate_bounds ( ice%dVi_in       ,            1, mesh_new%nV , mesh_new%nC_mem )
-    ! CALL reallocate_bounds ( ice%dVi_out      , mesh_new%vi1, mesh_new%vi2, mesh_new%nC_mem )
+    CALL reallocate_bounds ( ice%dHs_dt_a     , mesh_new%vi1, mesh_new%vi2       )
 
     ! Ice dynamics - predictor/corrector ice thickness update
-    CALL reallocate_bounds ( ice%pc_tau       , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%pc_fcb       , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%pc_f1        , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%pc_f2        , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%pc_f3        , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%pc_f4        , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%Hi_old       , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%Hi_pred      , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%Hi_corr      , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%pc_tau       , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%pc_fcb       , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%pc_f1        , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%pc_f2        , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%pc_f3        , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%pc_f4        , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%Hi_old       , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%Hi_pred      , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%Hi_corr      , mesh_new%vi1, mesh_new%vi2 )
 
     ! Thermodynamics
     CALL reallocate_bounds ( ice%internal_heating_a  , mesh_new%vi1, mesh_new%vi2, C%nz )
     CALL reallocate_bounds ( ice%frictional_heating_a, mesh_new%vi1, mesh_new%vi2       )
 
     ! Mesh adaptation data
-    CALL reallocate_bounds ( ice%surf_curv       ,            1, mesh_new%nV        )
-    CALL reallocate_bounds ( ice%log_velocity    , mesh_new%vi1, mesh_new%vi2       )
+    CALL reallocate_bounds ( ice%surf_curv    ,            1, mesh_new%nV  )
+    CALL reallocate_bounds ( ice%log_velocity , mesh_new%vi1, mesh_new%vi2 )
 
     ! GIA
-    CALL reallocate_bounds ( ice%dHb_a           , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%dHb_dt_a        , mesh_new%vi1, mesh_new%vi2       )
-    CALL reallocate_bounds ( ice%dSL_dt_a        , mesh_new%vi1, mesh_new%vi2       )
-
-    ! End of memory reallocation
-    ! ==========================
+    CALL reallocate_bounds ( ice%dHb_a        , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%dHb_dt_a     , mesh_new%vi1, mesh_new%vi2 )
+    CALL reallocate_bounds ( ice%dSL_dt_a     , mesh_new%vi1, mesh_new%vi2 )
 
     ! Remap velocities
     ! ================
@@ -1060,5 +1115,38 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_ice_model
+
+  SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
+
+    USE data_types_module,          ONLY: type_remapping_latlon2mesh
+    USE forcing_module,             ONLY: forcing
+    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
+    TYPE(type_remapping_latlon2mesh)                   :: map
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! ! Calculate mapping arrays
+    ! CALL create_remapping_arrays_glob_mesh( mesh, forcing%grid_ghf, map)
+
+    ! ! Map global climate data to the mesh
+    ! CALL map_latlon2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
+
+    ! ! Deallocate mapping arrays
+    ! CALL deallocate_remapping_arrays_glob_mesh( map)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE map_geothermal_heat_flux_to_mesh
 
 END MODULE ice_dynamics_module

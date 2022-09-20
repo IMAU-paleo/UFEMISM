@@ -13,7 +13,7 @@ MODULE mesh_operators_module
 
   ! Import specific functionality
   USE data_types_module,               ONLY: type_mesh, type_grid
-  USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_general
+  USE utilities_module,                ONLY: calc_matrix_inverse_2_by_2, calc_matrix_inverse_3_by_3, calc_matrix_inverse_5_by_5
   USE petsc_module,                    ONLY: multiply_PETSc_matrix_with_vector_1D, multiply_PETSc_matrix_with_vector_2D, mat_petsc2CSR
 
   IMPLICIT NONE
@@ -3363,7 +3363,7 @@ CONTAINS
     END DO
 
     ! Invert ATWTWA to find M
-    CALL calc_matrix_inverse_general( ATWTWA, M)
+    CALL calc_matrix_inverse_5_by_5( ATWTWA, M)
 
     ! Calculate neighbour functions    
     DO ci = 1, n

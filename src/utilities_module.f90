@@ -1112,9 +1112,10 @@ CONTAINS
     detA = A( 1,1) * A( 2,2) - A( 1,2) * A( 2,1)
 
     ! Safety
-    IF (ABS( detA) < TINY( detA)) THEN
-      !PRINT *, A(1,1), A(1,2)
-      !PRINT *, A(2,1), A(2,2)
+    IF (detA == 0.0d0 ) THEN
+      PRINT *, A(1,1), ',', A(1,2)
+      PRINT *, A(2,1), ',', A(2,2)
+      write(0,*) 'determinant:', detA 
       WRITE(0,*) 'calc_matrix_inverse_2_by_2 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1155,10 +1156,11 @@ CONTAINS
     detA = A( 1,1) * Ainv( 1,1) - A( 1,2) * Ainv( 1,2) + A( 1,3) * Ainv( 1,3)
 
     ! Safety
-    IF (ABS( detA) < TINY( detA)) THEN
-      ! PRINT *, A(1,1), A(1,2), A(1,3)
-      ! PRINT *, A(2,1), A(2,2), A(2,3)
-      ! PRINT *, A(3,1), A(3,2), A(3,3)
+    IF (detA == 0.0d0 ) THEN
+      PRINT *, A(1,1), ',', A(1,2), ',', A(1,3)
+      PRINT *, A(2,1), ',', A(2,2), ',', A(2,3)
+      PRINT *, A(3,1), ',', A(3,2), ',', A(3,3)
+      write(0,*) 'determinant:', detA 
       WRITE(0,*) 'calc_matrix_inverse_3_by_3 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1186,51 +1188,35 @@ CONTAINS
     Ainv = Ainv / detA
 
   END SUBROUTINE calc_matrix_inverse_3_by_3
-  SUBROUTINE calc_matrix_inverse_general( A, Ainv)
+  SUBROUTINE calc_matrix_inverse_5_by_5( A, Ainv)
     ! Calculate the inverse Ainv of an n-by-n matrix A using LAPACK
 
     IMPLICIT NONE
 
     ! In/output variables:
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: A
-    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Ainv
+    REAL(dp), DIMENSION(5,5  )            , INTENT(IN)    :: A
+    REAL(dp), DIMENSION(5,5  )            , INTENT(OUT)   :: Ainv
 
     ! Local variables:
-    REAL(dp), DIMENSION( SIZE( A,1))                   :: work     ! work array for LAPACK
-    INTEGER,  DIMENSION( SIZE( A,1))                   :: ipiv     ! pivot indices
-    INTEGER                                            :: n,info
+    integer                                            :: n
+    logical                                            :: ok_flag
+    real(dp)                                           :: detA
 
-    n = size( A,1)
-
-    ! Store A in Ainv to prevent it from being overwritten by LAPACK
-    Ainv = A
-
-    ! DGETRF computes an LU factorization of a general M-by-N matrix A using partial pivoting with row interchanges.
-    CALL DGETRF( n, n, Ainv, n, ipiv, info)
+    call m55inv(A,Ainv,detA,ok_flag)
 
     ! Safety
-    IF (info /= 0) THEN
-      ! IF (n == 5) THEN
-        ! PRINT *, A(1,1), A(1,2), A(1,3), A(1,4), A(1,5)
-        ! PRINT *, A(2,1), A(2,2), A(2,3), A(2,4), A(2,5)
-        ! PRINT *, A(3,1), A(3,2), A(3,3), A(3,4), A(3,5)
-        ! PRINT *, A(4,1), A(4,2), A(4,3), A(4,4), A(4,5)
-        ! PRINT *, A(5,1), A(5,2), A(5,3), A(5,4), A(5,5)
-      ! END IF
-      WRITE(0,*) 'calc_matrix_inverse_general - DGETRF error: matrix is numerically singular!'
+    IF (.not. ok_flag) THEN
+      do n = 1, 5
+        write(0,*) A(1,n), ',', A(2,n), ',', A(3,n), ',', A(4,n), ',', A(5,n)
+      end do
+      write(0,*) 'determinant:', detA 
+      write(0,*) 'calc_matrix_inverse_5_by_5 - error: matrix inversion failed (singular matrix)!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
+  contains
+    include 'm55inv.f90'
 
-    ! DGETRI computes the inverse of a matrix using the LU factorization computed by DGETRF.
-    CALL DGETRI( n, Ainv, n, ipiv, work, n, info)
-
-    ! Safety
-    IF (info /= 0) THEN
-      WRITE(0,*) 'calc_matrix_inverse_general - DGETRI error: matrix inversion failed!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
-
-  END SUBROUTINE calc_matrix_inverse_general
+  END SUBROUTINE calc_matrix_inverse_5_by_5
 
 ! == Debugging
   SUBROUTINE check_for_NaN_dp_1D(  d, d_name)

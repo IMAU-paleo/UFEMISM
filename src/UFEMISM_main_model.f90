@@ -608,6 +608,8 @@ contains
     ! Initialise the ice temperature profile
     call initialise_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name)
 
+    call run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB)
+
     ! ===== Scalar ice data =====
     ! ===========================
 
@@ -615,6 +617,7 @@ contains
     ! for writing to the first time point of the output file
     call calculate_PD_sealevel_contribution( region)
     call calculate_icesheet_volume_and_area( region)
+
 
     ! ===== Output files =====
     ! ========================

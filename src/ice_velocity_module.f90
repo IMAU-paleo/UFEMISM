@@ -520,6 +520,15 @@ contains
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
 
+      ! Calculate vertically averaged velocities
+      DO ti = mesh%ti1, mesh%ti2
+        prof = ice%u_3D_b( ti,:)
+        CALL vertical_average( prof, ice%u_vav_b( ti))
+        prof = ice%v_3D_b( ti,:)
+        CALL vertical_average( prof, ice%v_vav_b( ti))
+      END DO
+
+
     ELSE
       CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
     END IF
@@ -1075,7 +1084,6 @@ contains
       CALL vertical_integration_from_bottom_to_zeta( prof, F1_3D)
       F1_3D_b( ti,:) = F1_3D
     END DO
-    CALL sync
 
     ! Calculate 3D horizontal velocity components
     DO ti = mesh%ti1, mesh%ti2
@@ -1906,7 +1914,7 @@ contains
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(1       :mesh%nAc), INTENT(IN)    :: u_b, v_b
     REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)   :: u_c, v_c
 
     ! Local variables:
@@ -2073,6 +2081,7 @@ contains
         ! Velocity fields containing the SSA solution on the b-grid
         allocate( ice%u_base_SSA_b ( mesh%ti1:mesh%ti2 ))
         allocate( ice%v_base_SSA_b ( mesh%ti1:mesh%ti2 ))
+
       end if
 
       ! Physical terms in the SSA/DIVA
@@ -2100,6 +2109,13 @@ contains
       allocate( ice%ti2n_u         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%ti2n_v         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%n2ti_uv     ( 2*(mesh%ti1-1)+1:2*mesh%ti2, 2    ))
+
+      ! Circular dependency on u_vav_b -> u_3d_b -> u_vav_b, set u_vav_b etal to zero
+      ice%taubx_b = 0.
+      ice%tauby_b = 0.
+      ice%u_vav_b = 0.
+      ice%v_vav_b = 0.
+
       call initialise_matrix_conversion_lists(  mesh, ice)
       call initialise_SSADIVA_stiffness_matrix( mesh, ice)
 
@@ -2239,6 +2255,7 @@ contains
       elseif (C%choice_ice_dynamics == 'DIVA') then
         ice%u_vav_b(      mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
       end if
+
 
       ! Clean up after yourself
       deallocate( u_ISMIP_HOM)

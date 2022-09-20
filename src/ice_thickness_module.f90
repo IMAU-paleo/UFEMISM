@@ -170,7 +170,6 @@ CONTAINS
 
     ! Correct outfluxes for possible resulting negative ice thicknesses
     ! =================================================================
-
     Vi_SMB( mesh%vi1:mesh%vi2) = (SMB%SMB_year( mesh%vi1:mesh%vi2) + BMB%BMB( mesh%vi1:mesh%vi2))  * mesh%A( mesh%vi1:mesh%vi2) * dt
 
     DO vi = mesh%vi1, mesh%vi2

@@ -347,6 +347,10 @@ contains
 
     ! Gather sizes that will be sent
     call partition_list(total_size, par%i, par%n, i1, i2)
+    IF (i2-i1+1 /= SIZE( partial_array,1)) THEN
+      write(0,*) 'total_size:', total_size, 'partial_array size:', size(partial_array,1)
+      CALL crash('partial array has incorrect size (is the total size correct?)')
+    END IF
     call mpi_gather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
 
     ! Calculate offsets through the sizes
@@ -389,6 +393,10 @@ contains
 
     ! Gather sizes that will be sent
     call partition_list(total_size, par%i, par%n, i1, i2)
+    IF (i2-i1+1 /= SIZE( partial_array,1)) THEN
+      write(0,*) 'total_size:', total_size, 'partial_array size:', size(partial_array,1)
+      CALL crash('partial array has incorrect size (is the total size correct?)')
+    END IF
     call mpi_gather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
 
     ! Calculate offsets through the sizes
@@ -429,17 +437,21 @@ contains
       allocate(output(0,0)) ! not used but needs allocation
     endif
 
+    ! Gather sizes that will be sent
+    call partition_list(total_size, par%i, par%n, i1, i2)
+    IF (i2-i1+1 /= SIZE( partial_array,1)) THEN
+      write(0,*) 'total_size:', total_size, 'partial_array size:', size(partial_array,1)
+      CALL crash('partial array has incorrect size (is the total size correct?)')
+    END IF
+    call mpi_gather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
+
+    ! Calculate offsets through the sizes
+    displs(1) = 0
+    do n=2,size(displs)
+      displs(n) = displs(n-1) + counts(n-1)
+    end do
+
     do m = 1, size(partial_array,2)
-      ! Gather sizes that will be sent
-      call partition_list(total_size, par%i, par%n, i1, i2)
-      call mpi_gather( i2-i1+1, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, err)
-
-      ! Calculate offsets through the sizes
-      displs(1) = 0
-      do n=2,size(displs)
-        displs(n) = displs(n-1) + counts(n-1)
-      end do
-
       ! Send everything to master
       call mpi_gatherv( partial_array(:,m), i2-i1+1, MPI_REAL8 &
                       , output(:,m), counts, displs, MPI_REAL8, 0, MPI_COMM_WORLD, err)
@@ -530,9 +542,9 @@ contains
     ELSEIF (field_name == 'v_3D') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_3D_a, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'u_3D_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_3D_b, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_3D_b, region%mesh%nTri, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'v_3D_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_3D_b, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_3D_b, region%mesh%nTri, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'w_3D') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%w_3D_a, region%mesh%nV, start=(/1, 1, netcdf%ti /) )
     ELSEIF (field_name == 'u_vav') THEN
@@ -540,37 +552,37 @@ contains
     ELSEIF (field_name == 'v_vav') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_vav_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'u_vav_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_vav_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_vav_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'v_vav_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_vav_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_vav_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_vav') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_vav_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_vav_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_vav_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_vav_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'u_surf') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_surf_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'v_surf') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_surf_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'u_surf_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_surf_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_surf_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'v_surf_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_surf_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_surf_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_surf') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_surf_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_surf_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_surf_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_surf_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'u_base') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_base_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'v_base') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_base_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'u_base_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_base_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%u_base_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'v_base_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_base_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%v_base_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_base') THEN
       CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_base_a, region%mesh%nV, start=(/1, netcdf%ti /) )
     ELSEIF (field_name == 'uabs_base_b') THEN
-      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_base_b, region%mesh%nV, start=(/1, netcdf%ti /) )
+      CALL gather_and_put_var(netcdf%ncid, id_var, region%ice%uabs_base_b, region%mesh%nTri, start=(/1, netcdf%ti /) )
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN

@@ -44,6 +44,11 @@ MODULE utilities_module
     procedure :: check_for_NaN_int_2D
     procedure :: check_for_NaN_int_3D
   end interface
+
+  interface check_for_zero
+    procedure :: check_for_zero_dp_1d
+    procedure :: check_for_zero_dp_2d
+  end interface
 CONTAINS
 
 ! == Some operations on the scaled vertical coordinate
@@ -1229,7 +1234,6 @@ CONTAINS
 ! == Debugging
   SUBROUTINE check_for_NaN_dp_1D(  d, d_name)
     ! Check if NaN values occur in the 1-D dp data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1238,7 +1242,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,i,i1,i2
+    INTEGER                                                :: nx,i
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1246,9 +1250,6 @@ CONTAINS
 
     ! Field size
     nx = SIZE(d,1)
-
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
 
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
@@ -1258,7 +1259,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
 
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
@@ -1272,12 +1273,10 @@ CONTAINS
       END IF
 
     END DO
-    CALL sync
 
   END SUBROUTINE check_for_NaN_dp_1D
   SUBROUTINE check_for_NaN_dp_2D(  d, d_name)
     ! Check if NaN values occur in the 2-D dp data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1286,7 +1285,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,ny,i,j,i1,i2
+    INTEGER                                                :: nx,ny,i,j
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1296,9 +1295,6 @@ CONTAINS
     nx = SIZE(d,2)
     ny = SIZE(d,1)
 
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
-
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
@@ -1307,7 +1303,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
     DO j = 1, ny
 
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
@@ -1323,12 +1319,10 @@ CONTAINS
 
     END DO
     END DO
-    CALL sync
 
   END SUBROUTINE check_for_NaN_dp_2D
   SUBROUTINE check_for_NaN_dp_3D(  d, d_name)
     ! Check if NaN values occur in the 3-D dp data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1337,7 +1331,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,ny,nz,i,j,k,i1,i2
+    INTEGER                                                :: nx,ny,nz,i,j,k
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1348,9 +1342,6 @@ CONTAINS
     ny = SIZE(d,2)
     nz = SIZE(d,1)
 
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
-
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
@@ -1359,7 +1350,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
     DO j = 1, ny
     DO k = 1, nz
 
@@ -1382,7 +1373,6 @@ CONTAINS
   END SUBROUTINE check_for_NaN_dp_3D
   SUBROUTINE check_for_NaN_int_1D( d, d_name)
     ! Check if NaN values occur in the 1-D int data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1391,7 +1381,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,i,i1,i2
+    INTEGER                                                :: nx,i
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1399,9 +1389,6 @@ CONTAINS
 
     ! Field size
     nx = SIZE(d,1)
-
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
 
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
@@ -1411,7 +1398,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
 
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
       ! you use the property that a NaN is never equal to anything, including itself...
@@ -1425,12 +1412,10 @@ CONTAINS
       END IF
 
     END DO
-    CALL sync
 
   END SUBROUTINE check_for_NaN_int_1D
   SUBROUTINE check_for_NaN_int_2D( d, d_name)
     ! Check if NaN values occur in the 2-D int data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1439,7 +1424,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,ny,i,j,i1,i2
+    INTEGER                                                :: nx,ny,i,j
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1449,9 +1434,6 @@ CONTAINS
     nx = SIZE(d,2)
     ny = SIZE(d,1)
 
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
-
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
@@ -1460,7 +1442,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
     DO j = 1, ny
 
       ! Strangely enough, Fortran doesn't have an "isnan" function; instead,
@@ -1476,12 +1458,10 @@ CONTAINS
 
     END DO
     END DO
-    CALL sync
 
   END SUBROUTINE check_for_NaN_int_2D
   SUBROUTINE check_for_NaN_int_3D( d, d_name)
     ! Check if NaN values occur in the 3-D int data field d
-    ! NOTE: parallelised!
 
     IMPLICIT NONE
 
@@ -1490,7 +1470,7 @@ CONTAINS
     CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
 
     ! Local variables:
-    INTEGER                                                :: nx,ny,nz,i,j,k,i1,i2
+    INTEGER                                                :: nx,ny,nz,i,j,k
     CHARACTER(LEN=256)                                     :: d_name_loc
 
     ! Only do this when so specified in the config
@@ -1501,9 +1481,6 @@ CONTAINS
     ny = SIZE(d,2)
     nz = SIZE(d,1)
 
-    ! Parallelisation range
-    CALL partition_list( nx, par%i, par%n, i1, i2)
-
     ! Variable name and routine name
     IF (PRESENT( d_name)) THEN
       d_name_loc = TRIM(d_name)
@@ -1512,7 +1489,7 @@ CONTAINS
     END IF
 
     ! Inspect data field
-    DO i = i1, i2
+    DO i = 1, nx
     DO j = 1, ny
     DO k = 1, nz
 
@@ -1530,9 +1507,81 @@ CONTAINS
     END DO
     END DO
     END DO
-    CALL sync
 
   END SUBROUTINE check_for_NaN_int_3D
+
+  subroutine check_for_zero_dp_1d( d, d_name)
+    ! Check if zero values occur in the 1-D dp data field d
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:    ),              INTENT(IN)    :: d
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
+
+    ! Local variables:
+    INTEGER                                                :: nx,i
+    CHARACTER(LEN=256)                                     :: d_name_loc
+
+    ! Only do this when so specified in the config
+    IF (.NOT. C%do_check_for_NaN) RETURN
+
+    ! Field size
+    nx = SIZE(d,1)
+
+    ! Variable name and routine name
+    IF (PRESENT( d_name)) THEN
+      d_name_loc = TRIM(d_name)
+    ELSE
+      d_name_loc = '?'
+    END IF
+
+    ! Inspect data field
+    DO i = 1, nx
+      IF     (d( i) == 0d0 ) THEN
+        CALL crash(  ('detected Zero in variable "' // TRIM( d_name_loc) // '" at [{int_01}]' ), int_01 = i)
+      END IF
+    END DO
+
+  END SUBROUTINE check_for_zero_dp_1d
+
+  subroutine check_for_zero_dp_2d( d, d_name)
+    ! Check if zero values occur in the 1-D dp data field d
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), DIMENSION(:,:  ),              INTENT(IN)    :: d
+    CHARACTER(LEN=*),           OPTIONAL,    INTENT(IN)    :: d_name
+
+    ! Local variables:
+    INTEGER                                                :: nx,ny,i,j
+    CHARACTER(LEN=256)                                     :: d_name_loc
+
+    ! Only do this when so specified in the config
+    IF (.NOT. C%do_check_for_NaN) RETURN
+
+    ! Field size
+    nx = SIZE(d,2)
+    ny = SIZE(d,1)
+
+    ! Variable name and routine name
+    IF (PRESENT( d_name)) THEN
+      d_name_loc = TRIM(d_name)
+    ELSE
+      d_name_loc = '?'
+    END IF
+
+    ! Inspect data field
+    DO i = 1, nx
+    DO j = 1, ny
+      IF     (d( j, i) == 0d0 ) THEN
+        CALL crash(  ('detected Zero in variable "' // TRIM( d_name_loc) // '" at [{int_01},{int_02}]'), int_01 = j, int_02 = i)
+      END IF
+    END DO
+    end do
+
+  END SUBROUTINE check_for_zero_dp_2d
 
 !   ! == Transpose a data field (i.e. go from [i,j] to [j,i] indexing or the other way round)
 !   SUBROUTINE transpose_dp_2D( d, wd)

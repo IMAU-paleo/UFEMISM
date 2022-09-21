@@ -10,7 +10,7 @@ module ice_velocity_module
   use configuration_module,                only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
   use parameters_module
   use parallel_module,                     only : par, sync, ierr, cerr, partition_list
-  use utilities_module,                    only : check_for_nan, &
+  use utilities_module,                    only : check_for_nan, check_for_zero, &
                                                   vertical_average, vertical_integration_from_bottom_to_zeta, &
                                                   vertical_integrate, SSA_Schoof2006_analytical_solution
   use data_types_module,                   only : type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
@@ -1176,16 +1176,16 @@ contains
       IF (mesh%Tri_edge_index( ti) == 0) THEN
         ! Free triangle: fill in matrix row for the SSA/DIVA
         IF (C%include_SSADIVA_crossterms) THEN
-          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
         ELSE
-          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
         END IF
       ELSE
         ! Border triangle: apply boundary conditions
-        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
-        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
       END IF
 
     END DO
@@ -1198,6 +1198,9 @@ contains
     ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
     call allgather_array(b_buv,t21,t22)
     call allgather_array(uv_buv,t21,t22)
+
+    call check_for_nan(b_buv, 'b_buv')
+    call check_for_nan(uv_buv, 'uv_buv')
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
@@ -1226,6 +1229,9 @@ contains
     deallocate( dN_dy_b)
     deallocate( b_buv  )
     deallocate( uv_buv )
+
+    call check_for_nan(u_b, "u_b")
+    call check_for_nan(v_b, "v_b")
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2118,8 +2124,8 @@ contains
       ice%dv_dy_a = 0.
       ice%du_dz_3D_b = 0.
       ice%dv_dz_3D_b = 0.
-      ice%visc_eff_3D_a  = 0.
-      ice%visc_eff_int_a = 0.
+      ice%visc_eff_3D_a  = 1d100 ! solid as a rock
+      ice%visc_eff_int_a = 1.
       ice%N_a            = 0.
       ice%beta_a         = 0.
       ice%beta_eff_a   = 0. 
@@ -2131,7 +2137,6 @@ contains
 
       call initialise_matrix_conversion_lists(  mesh, ice)
       call initialise_SSADIVA_stiffness_matrix( mesh, ice)
-
     end if
 
     ! Initialise the ISMIP-HOM experiments for faster convergence

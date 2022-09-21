@@ -20,7 +20,7 @@ $(OBJ_PATH)/%.o : %.f90 Makefile_include_local.txt
 # init-integer=-42 : same, but for integers
 # init-character=33 : same, but for characters, 33 is equal to "!" (so look for those)
   COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og \
-                            -finit-real=snan -finit-integer=-42 -finit-character=33
+                            -finit-real=nan -finit-integer=-42 -finit-character=33
                             -ffpe-trap=invalid,zero,overflow,underflow
 
   F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \

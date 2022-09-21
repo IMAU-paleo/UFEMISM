@@ -245,6 +245,7 @@ contains
     allocate( is_unstable            (mesh%nV        ) )
     allocate( Ti_new                 (mesh%nV,   C%nz) )
     allocate( T_ocean_at_shelf_base  (mesh%nV        ) )
+    Ti_new = 0d0
 
     ! === Derivatives ===
     ! ===================

@@ -10,8 +10,7 @@ module ice_velocity_module
   use configuration_module,                only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
   use parameters_module
   use parallel_module,                     only : par, sync, ierr, cerr, partition_list
-  use utilities_module,                    only : check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                                  check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+  use utilities_module,                    only : check_for_nan, &
                                                   vertical_average, vertical_integration_from_bottom_to_zeta, &
                                                   vertical_integrate, SSA_Schoof2006_analytical_solution
   use data_types_module,                   only : type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
@@ -728,8 +727,8 @@ contains
     deallocate( visc_eff_3D_b)
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%du_dz_3D_b, 'ice%du_dz_3D_b')
-    CALL check_for_NaN_dp_2D( ice%dv_dz_3D_b, 'ice%dv_dz_3D_b')
+    CALL check_for_nan( ice%du_dz_3D_b, 'ice%du_dz_3D_b')
+    CALL check_for_nan( ice%dv_dz_3D_b, 'ice%dv_dz_3D_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -813,9 +812,9 @@ contains
     deallocate(N_a)
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
-    CALL check_for_NaN_dp_1D( ice%visc_eff_int_a, 'ice%visc_eff_int_a')
-    CALL check_for_NaN_dp_1D( ice%N_a,            'ice%N_a'           )
+    CALL check_for_nan( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
+    CALL check_for_nan( ice%visc_eff_int_a, 'ice%visc_eff_int_a')
+    CALL check_for_nan( ice%N_a,            'ice%N_a'           )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -868,7 +867,7 @@ contains
     deallocate( v_a)
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%beta_a, 'ice%beta_a')
+    CALL check_for_nan( ice%beta_a, 'ice%beta_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -907,7 +906,7 @@ contains
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%F2_a, 'ice%F2_a')
+    CALL check_for_nan( ice%F2_a, 'ice%F2_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -961,8 +960,8 @@ contains
     END IF
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%beta_eff_a, 'ice%beta_eff_a')
-    CALL check_for_NaN_dp_1D( ice%beta_eff_b, 'ice%beta_eff_b')
+    CALL check_for_nan( ice%beta_eff_a, 'ice%beta_eff_a')
+    CALL check_for_nan( ice%beta_eff_b, 'ice%beta_eff_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -992,8 +991,8 @@ contains
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%taubx_b, 'ice%taubx_b')
-    CALL check_for_NaN_dp_1D( ice%tauby_b, 'ice%tauby_b')
+    CALL check_for_nan( ice%taubx_b, 'ice%taubx_b')
+    CALL check_for_nan( ice%tauby_b, 'ice%tauby_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1043,8 +1042,8 @@ contains
     deallocate( F2_b )
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%u_base_b, 'ice%u_base_b')
-    CALL check_for_NaN_dp_1D( ice%v_base_b, 'ice%v_base_b')
+    CALL check_for_nan( ice%u_base_b, 'ice%u_base_b')
+    CALL check_for_nan( ice%v_base_b, 'ice%v_base_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1092,8 +1091,8 @@ contains
     END DO
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%u_3D_b, 'ice%u_3D_b')
-    CALL check_for_NaN_dp_2D( ice%v_3D_b, 'ice%v_3D_b')
+    CALL check_for_nan( ice%u_3D_b, 'ice%u_3D_b')
+    CALL check_for_nan( ice%v_3D_b, 'ice%v_3D_b')
 
     ! Clean up after yourself
     deallocate( Hi_b         )
@@ -2111,6 +2110,20 @@ contains
       allocate( ice%n2ti_uv     ( 2*(mesh%ti1-1)+1:2*mesh%ti2, 2    ))
 
       ! Circular dependency on u_vav_b -> u_3d_b -> u_vav_b, set u_vav_b etal to zero
+      ice%taudx_b = 0.
+      ice%taudy_b = 0.
+      ice%du_dx_a = 0.
+      ice%du_dy_a = 0.
+      ice%dv_dx_a = 0.
+      ice%dv_dy_a = 0.
+      ice%du_dz_3D_b = 0.
+      ice%dv_dz_3D_b = 0.
+      ice%visc_eff_3D_a  = 0.
+      ice%visc_eff_int_a = 0.
+      ice%N_a            = 0.
+      ice%beta_a         = 0.
+      ice%beta_eff_a   = 0. 
+      ice%beta_eff_b   = 0.
       ice%taubx_b = 0.
       ice%tauby_b = 0.
       ice%u_vav_b = 0.

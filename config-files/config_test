@@ -366,4 +366,6 @@
     help_field_11_config                        = 'SMB_year'
     help_field_12_config                        = 'none'
 
+    do_check_for_nan_config                     = True
+
 /

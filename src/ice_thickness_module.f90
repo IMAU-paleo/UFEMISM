@@ -100,8 +100,8 @@ CONTAINS
     Vi_SMB         = 0._dp
 
     ! Calculate vertically averaged ice velocities along vertex connections
-    allocate(u_c ( 1:mesh%nAc))
-    allocate(v_c ( 1:mesh%nAc))
+    allocate(u_c ( mesh%ci1:mesh%ci2))
+    allocate(v_c ( mesh%ci1:mesh%ci2))
     allocate(up_c( 1:mesh%nAc))
     allocate(uo_c( 1:mesh%nAc))
 
@@ -121,7 +121,10 @@ CONTAINS
 
 
     CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
-    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
+    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c(mesh%ci1:mesh%ci2), uo_c(mesh%ci1:mesh%ci2))
+
+    call allgather_array(up_c)
+    call allgather_array(uo_c)
 
     ! Calculate ice fluxes across all Aa vertex connections
     ! based on ice velocities calculated on Ac mesh
@@ -166,7 +169,7 @@ CONTAINS
       ice%dVi_in( vi, ci) = -dVi ! m3
       ice%dVi_in( vj, cj) =  dVi ! m3
 
-    END DO ! DO aci = mesh%ci1, mesh%ci2
+    END DO ! DO aci = 1, mesh%nAc
 
     ! Correct outfluxes for possible resulting negative ice thicknesses
     ! =================================================================

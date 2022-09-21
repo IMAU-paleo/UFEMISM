@@ -1035,12 +1035,12 @@ module data_types_module
     TYPE(type_grid)                         :: grid_smooth                               ! For smoothing data fields (used in the climate matrix)
 
     ! Computation times
-    REAL(dp)                                :: tcomp_total
-    REAL(dp)                                :: tcomp_ice
-    REAL(dp)                                :: tcomp_thermo
-    REAL(dp)                                :: tcomp_climate
-    REAL(dp)                                :: tcomp_GIA
-    REAL(dp)                                :: tcomp_mesh
+    REAL(dp)                                :: tcomp_total    = 0.
+    REAL(dp)                                :: tcomp_ice      = 0.
+    REAL(dp)                                :: tcomp_thermo   = 0.
+    REAL(dp)                                :: tcomp_climate  = 0.
+    REAL(dp)                                :: tcomp_GIA      = 0.
+    REAL(dp)                                :: tcomp_mesh     = 0.
 
   END TYPE type_model_region
 
@@ -1108,11 +1108,11 @@ module data_types_module
     real(dp)                                :: dT_dw                                     ! Deep-water temperature change
 
     ! Computation times for all regions combined
-    real(dp)                                :: tcomp_total
-    real(dp)                                :: tcomp_ice
-    real(dp)                                :: tcomp_thermo
-    real(dp)                                :: tcomp_climate
-    real(dp)                                :: tcomp_GIA
+    real(dp)                                :: tcomp_total    = 0.
+    real(dp)                                :: tcomp_ice      = 0.
+    real(dp)                                :: tcomp_thermo   = 0.
+    real(dp)                                :: tcomp_climate  = 0.
+    real(dp)                                :: tcomp_GIA      = 0.
 
   end type type_global_scalar_data
 

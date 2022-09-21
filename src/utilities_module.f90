@@ -36,6 +36,14 @@ MODULE utilities_module
     END SUBROUTINE
   end interface
 
+  interface check_for_nan
+    procedure :: check_for_NaN_dp_1D
+    procedure :: check_for_NaN_dp_2D
+    procedure :: check_for_NaN_dp_3D
+    procedure :: check_for_NaN_int_1D
+    procedure :: check_for_NaN_int_2D
+    procedure :: check_for_NaN_int_3D
+  end interface
 CONTAINS
 
 ! == Some operations on the scaled vertical coordinate

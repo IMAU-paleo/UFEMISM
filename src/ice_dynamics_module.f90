@@ -848,31 +848,54 @@ contains
 
     ! Ice velocities
     allocate(  ice%u_3D_a              (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%u_3D_a = 0d0
     allocate(  ice%v_3D_a              (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%v_3D_a = 0d0
     allocate(  ice%u_3D_b              (mesh%ti1:mesh%ti2 , C%nz        ))
+    ice%u_3D_b = 0d0
     allocate(  ice%v_3D_b              (mesh%ti1:mesh%ti2 , C%nz        ))
+    ice%v_3D_b = 0d0
     allocate(  ice%w_3D_a              (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%w_3D_a = 0d0
 
     allocate(  ice%u_vav_a             (mesh%vi1:mesh%vi2               ))
+    ice%u_vav_a = 0d0
     allocate(  ice%v_vav_a             (mesh%vi1:mesh%vi2               ))
+    ice%v_vav_a = 0d0
     allocate(  ice%u_vav_b             (mesh%ti1:mesh%ti2               ))
+    ice%u_vav_b = 0d0
     allocate(  ice%v_vav_b             (mesh%ti1:mesh%ti2               ))
+    ice%v_vav_b = 0d0
     allocate(  ice%uabs_vav_a          (mesh%vi1:mesh%vi2               ))
+    ice%uabs_vav_a = 0d0
     allocate(  ice%uabs_vav_b          (mesh%ti1:mesh%ti2               ))
+    ice%uabs_vav_b = 0d0
 
     allocate(  ice%u_surf_a            (mesh%vi1:mesh%vi2               ))
+    ice%u_surf_a = 0d0
     allocate(  ice%v_surf_a            (mesh%vi1:mesh%vi2               ))
+    ice%v_surf_a = 0d0
     allocate(  ice%u_surf_b            (mesh%ti1:mesh%ti2               ))
+    ice%u_surf_b = 0d0
     allocate(  ice%v_surf_b            (mesh%ti1:mesh%ti2               ))
+    ice%v_surf_b = 0d0
     allocate(  ice%uabs_surf_a         (mesh%vi1:mesh%vi2               ))
+    ice%uabs_surf_a = 0d0
     allocate(  ice%uabs_surf_b         (mesh%ti1:mesh%ti2               ))
+    ice%uabs_surf_b = 0d0
 
     allocate(  ice%u_base_a            (mesh%vi1:mesh%vi2               ))
+    ice%u_base_a = 0d0
     allocate(  ice%v_base_a            (mesh%vi1:mesh%vi2               ))
+    ice%v_base_a = 0d0
     allocate(  ice%u_base_b            (mesh%ti1:mesh%ti2               ))
+    ice%u_base_b = 0d0
     allocate(  ice%v_base_b            (mesh%ti1:mesh%ti2               ))
+    ice%v_base_b = 0d0
     allocate(  ice%uabs_base_a         (mesh%vi1:mesh%vi2               ))
+    ice%uabs_base_a = 0d0
     allocate(  ice%uabs_base_b         (mesh%ti1:mesh%ti2               ))
+    ice%uabs_base_b = 0d0
 
     ! Different masks
     allocate(  ice%mask_land_a         (       1:mesh%nV                ))
@@ -891,49 +914,79 @@ contains
 
     ! Ice physical properties
     allocate(  ice%A_flow_3D_a         (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%A_flow_3D_a = 0d0
     allocate(  ice%A_flow_vav_a        (mesh%vi1:mesh%vi2               ))
+    ice%A_flow_vav_a = 0d0
     allocate(  ice%Ti_pmp_a            (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%Ti_pmp_a = 0d0
     allocate(  ice%Cpi_a               (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%Cpi_a = 0d0
     allocate(  ice%Ki_a                (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%Ki_a = 0d0
 
     ! Zeta derivatives
     allocate(  ice%dzeta_dt_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%dzeta_dt_a = 0d0
     allocate(  ice%dzeta_dx_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%dzeta_dx_a = 0d0
     allocate(  ice%dzeta_dy_a          (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%dzeta_dy_a = 0d0
     allocate(  ice%dzeta_dz_a          (mesh%vi1:mesh%vi2               ))
+    ice%dzeta_dz_a = 0d0
 
     ! Ice dynamics - ice thickness calculation
     allocate(  ice%dVi_in              (       1:mesh%nV  , mesh%nC_mem ))
+    ice%dVi_in = 0d0
     allocate(  ice%dHi_dt_a            (mesh%vi1:mesh%vi2               ))
+    ice%dHi_dt_a = 0d0
     allocate(  ice%Hi_tplusdt_a        (mesh%vi1:mesh%vi2               ))
+    ice%Hi_tplusdt_a = 0d0
     allocate(  ice%dHs_dt_a            (mesh%vi1:mesh%vi2               ))
+    ice%dHs_dt_a = 0d0
 
     ! Ice dynamics - predictor/corrector ice thickness update
     allocate(  ice%pc_tau              (mesh%vi1:mesh%vi2               ))
+    ice%pc_tau = 0d0
     allocate(  ice%pc_fcb              (mesh%vi1:mesh%vi2               ))
+    ice%pc_fcb = 0d0
     allocate(  ice%pc_f1               (mesh%vi1:mesh%vi2               ))
+    ice%pc_f1 = 0d0
     allocate(  ice%pc_f2               (mesh%vi1:mesh%vi2               ))
+    ice%pc_f2 = 0d0
     allocate(  ice%pc_f3               (mesh%vi1:mesh%vi2               ))
+    ice%pc_f3 = 0d0
     allocate(  ice%pc_f4               (mesh%vi1:mesh%vi2               ))
+    ice%pc_f4 = 0d0
     allocate(  ice%Hi_old              (mesh%vi1:mesh%vi2               ))
+    ice%Hi_old = 0d0
     allocate(  ice%Hi_pred             (mesh%vi1:mesh%vi2               ))
+    ice%Hi_pred = 0d0
     allocate(  ice%Hi_corr             (mesh%vi1:mesh%vi2               ))
+    ice%Hi_corr = 0d0
 
     ! Thermodynamics
     allocate(  ice%mask_ice_a_prev     (       1:mesh%nV                ))
+    ice%mask_ice_a_prev = 0d0
     allocate(  ice%internal_heating_a  (mesh%vi1:mesh%vi2 , C%nz        ))
+    ice%internal_heating_a = 0d0
     allocate(  ice%frictional_heating_a(mesh%vi1:mesh%vi2               ))
+    ice%frictional_heating_a = 0d0
     allocate(  ice%GHF_a               (mesh%vi1:mesh%vi2               ))
+    ice%GHF_a = 0d0
 
     ! Mesh adaptation data
     allocate(  ice%surf_curv           (       1:mesh%nV                ))
+    ice%surf_curv = 0d0
     allocate(  ice%log_velocity        (mesh%vi1:mesh%vi2               ))
+    ice%log_velocity = 0d0
 
     ! GIA
     allocate(  ice%dHb_a               (mesh%vi1:mesh%vi2               ))
     ice%dHb_a = 0d0
     allocate(  ice%dHb_dt_a            (mesh%vi1:mesh%vi2               ))
+    ice%dHb_dt_a = 0d0
     allocate(  ice%dSL_dt_a            (mesh%vi1:mesh%vi2               ))
+    ice%dSL_dt_a = 0d0
 
     ! Useful extra stuff
     allocate(  ice%dHi_a               (mesh%vi1:mesh%vi2               ))

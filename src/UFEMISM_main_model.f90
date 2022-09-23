@@ -43,7 +43,7 @@ MODULE UFEMISM_main_model
   USE climate_module,                      ONLY: initialise_climate_model_regional,       remap_climate_model,  run_climate_model
   USE ocean_module,                        ONLY: initialise_ocean_model_regional,         remap_ocean_model,    run_ocean_model
   USE SMB_module,                          ONLY: initialise_SMB_model,                    remap_SMB_model,      run_SMB_model,      SMB_IMAUITM_inversion
-  USE BMB_module,                          ONLY: initialise_BMB_model,                    remap_BMB_model,      run_BMB_model
+  USE BMB_module,                          ONLY: initialise_BMB_model,                    remap_BMB_model,      run_BMB_model,      ocean_temperature_inversion
   USE isotopes_module,                     ONLY: initialise_isotopes_model,               remap_isotopes_model, run_isotopes_model, calculate_reference_isotopes
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
 
@@ -265,6 +265,14 @@ CONTAINS
       IF (C%do_basal_sliding_inversion .AND. region%do_basal) THEN
         ! Adjust bed roughness
         CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
+      END IF
+
+      ! == Ocean temperature inversion
+      ! ==============================
+
+      IF (C%do_ocean_temperature_inversion) THEN! .AND. region%do_ocean_inv) THEN
+        ! Adjust ocean temperatures
+        CALL ocean_temperature_inversion( region%mesh, region%ice, region%BMB, region%refgeo_PD, region%time)
       END IF
 
       ! == SBM IMAU-ITM inversion
@@ -678,7 +686,7 @@ CONTAINS
     ! ===== The BMB model =====
     ! =========================
 
-    CALL initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name, region%restart)
+    CALL initialise_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%restart)
 
     ! ===== The GIA model =====
     ! =========================
@@ -1402,78 +1410,5 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE compute_subgrid_grounded
-
-  ! SUBROUTINE compute_grounded_factions( mesh, refgeo, ice)
-  !   ! Compute them.
-
-  !   IMPLICIT NONE
-
-  !   ! In/output variables:
-  !   TYPE(type_mesh),               INTENT(IN) :: mesh
-  !   TYPE(type_reference_geometry), INTENT(IN) :: refgeo
-  !   TYPE(type_ice_model),          INTENT(IN) :: ice
-
-  !   ! Local variables:
-  !   CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_grounded_factions'
-  !   INTEGER                                   :: vi, i, j
-  !   INTEGER                                   :: grid_count, ground_count
-  !   REAL(dp)                                  :: radius
-  !   REAL(dp)                                  :: hb_float
-
-  !   ! === Initialisation ===
-  !   ! ======================
-
-  !   ! Add routine to path
-  !   CALL init_routine( routine_name)
-
-  !   ! === Scan ===
-  !   ! ============
-
-  !   DO vi = mesh%vi1, mesh%vi2
-
-  !     IF (ice%mask_land_a( vi) == 0) THEN
-  !       ice%f_grndx_a( vi) = 0._dp
-  !       CYCLE
-  !     END IF
-
-  !     radius = mesh%R( vi) * 2.0_dp
-
-  !     hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density
-
-  !     grid_count  = 0
-  !     ground_count = 0
-
-  !     DO j = 1, refgeo%grid%ny
-  !     DO i = refgeo%grid%i1, refgeo%grid%i2
-
-  !       IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
-
-  !         grid_count = grid_count + 1
-
-  !         IF (refgeo%Hb_grid(i,j) + ice%dHb_a( vi) >= hb_float) THEN
-  !           ground_count =  ground_count + 1
-  !         END IF
-
-  !       END IF
-
-  !     END DO
-  !     END DO
-
-  !     IF (grid_count > 0) THEN
-  !       ice%f_grndx_a( vi) = REAL(ground_count,dp) / REAL(grid_count, dp)
-  !     ELSE
-  !       ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
-  !     END IF
-
-  !   END DO
-  !   CALL sync
-
-  !   ! === Finalisation ===
-  !   ! ====================
-
-  !   ! Finalise routine path
-  !   CALL finalise_routine( routine_name)
-
-  ! END SUBROUTINE compute_grounded_factions
 
 END MODULE UFEMISM_main_model

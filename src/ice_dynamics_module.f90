@@ -1480,6 +1480,7 @@ CONTAINS
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_coast_a          , ice%wmask_coast_a         )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_margin_a         , ice%wmask_margin_a        )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_gl_a             , ice%wmask_gl_a            )
+    CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_glf_a            , ice%wmask_glf_a           )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_cf_a             , ice%wmask_cf_a            )
     CALL allocate_shared_int_1D(  mesh%nV  ,              ice%mask_a                , ice%wmask_a               )
     CALL allocate_shared_dp_1D(   mesh%nV  ,              ice%f_grnd_a              , ice%wf_grnd_a             )

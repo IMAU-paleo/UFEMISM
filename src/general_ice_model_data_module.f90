@@ -272,8 +272,18 @@ CONTAINS
         END DO
       END IF
 
+      IF (ice%mask_shelf_a( vi) == 1) THEN
+        ! Shelf bordering sheet equals floating side of grounding line
+        DO ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          IF (ice%mask_sheet_a( vc) == 1) THEN
+            ice%mask_glf_a( vi) =  1
+          END IF
+        END DO
+      END IF
+
       IF (ice%mask_ice_a( vi) == 1) THEN
-        ! Ice (sheet or shelf) bordering open ocean equals calvingfront
+        ! Ice (sheet or shelf) bordering open ocean equals calving front
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           IF (ice%mask_ocean_a( vc) == 1 .AND. ice%mask_ice_a( vc) == 0) THEN

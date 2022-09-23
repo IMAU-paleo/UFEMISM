@@ -23,7 +23,7 @@ MODULE BMB_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             interpolate_ocean_depth, is_floating
+                                             interpolate_ocean_depth, is_floating, extrapolate_Gaussian_floodfill_mesh
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
@@ -98,6 +98,8 @@ CONTAINS
       CALL run_BMB_model_PICOP(                mesh, ice, ocean, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL run_BMB_model_shelf_inversion(      mesh, ice, BMB, refgeo)
+    ELSEIF (C%choice_BMB_shelf_model == 'Bernales202X') THEN
+      CALL run_BMB_model_Bernales202X( mesh, ice, ocean, BMB, refgeo)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -188,7 +190,7 @@ CONTAINS
 
   END SUBROUTINE run_BMB_model
 
-  SUBROUTINE initialise_BMB_model( mesh, ice, BMB, region_name, restart)
+  SUBROUTINE initialise_BMB_model( mesh, ice, ocean, BMB, region_name, restart)
     ! Allocate memory for the data fields of the SMB model.
 
     IMPLICIT NONE
@@ -196,6 +198,7 @@ CONTAINS
     ! In/output variables
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
     TYPE(type_restart_data),             INTENT(IN)    :: restart
@@ -231,6 +234,8 @@ CONTAINS
       CALL initialise_BMB_model_PICOP( mesh, ice, BMB)
     ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL initialise_BMB_model_inversion( mesh, BMB, restart)
+    ELSEIF (C%choice_BMB_shelf_model == 'Bernales202X') THEN
+      CALL initialise_BMB_model_Bernales202X( mesh, ice, ocean, BMB)
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')
     END IF
@@ -913,7 +918,7 @@ CONTAINS
       ! Initialise at zero
       BMB%T_ocean_base( vi) = 0._dp
 
-      IF (ice%mask_shelf_a( vi) == 1) THEN
+      IF (ice%mask_ocean_a( vi) == 1) THEN
 
         ! Calculate depth
         depth = MAX( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
@@ -921,7 +926,7 @@ CONTAINS
         ! Find ocean temperature at this depth
         CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
 
-      END IF ! IF (ice%mask_shelf_a( vi) == 1) THEN
+      END IF
 
     END DO
     CALL sync
@@ -2253,6 +2258,361 @@ CONTAINS
 
   END SUBROUTINE initialise_BMB_model_PICOP
 
+! ===== The Bernales et al. (202X) sub-shelf parameterisation =====
+! =================================================================
+
+  SUBROUTINE run_BMB_model_Bernales202X( mesh, ice, ocean, BMB, refgeo)
+    ! Calculate sub-shelf melt with Bernales et al. (202X) parameterisation
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_BMB_model_Bernales202X'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: t_melt, t_force, q_factor
+    REAL(dp)                                           :: qsh_g, qsh_w, dist_gl, gl_w
+    REAL(dp), PARAMETER                                :: gamma_t = 1.0E-04_dp
+    REAL(dp), DIMENSION(:), POINTER                    ::  F_melt
+    INTEGER                                            :: wF_melt
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Initialise ice shelf basal melt
+    BMB%BMB_shelf = 0._dp
+
+    ! Allocate melt factor
+    CALL allocate_shared_dp_1D( mesh%nV, F_melt, wF_melt)
+
+    ! Initialise melt factor
+    F_melt =  0.0_dp
+
+    ! === Basal ocean temperatures [K] ===
+    ! ====================================
+
+    IF (.NOT. C%do_ocean_temperature_inversion) THEN
+      ! Calculate ocean temperature at the base of the ice shelf
+      CALL calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
+    END IF
+
+    ! Calculate ocean salinity at the base of the ice shelf
+    CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
+
+    ! === Melt factor ===
+    ! ===================
+
+    ! Loop over all ice shelf and ocean points
+    DO vi = mesh%vi1, mesh%vi2
+
+      IF (ice%mask_shelf_a( vi) == 1 .OR. &
+          ice%mask_ocean_a( vi) == 1 .OR. &
+          is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) ) THEN
+
+        ! = Flux through floating ice [weight]
+        ! ====================================
+
+        qsh_g = ice%uabs_vav_a( vi) * ice%Hi_a( vi)
+
+        qsh_w = (2.0_dp/pi) * ATAN( qsh_g**2.0_dp / 2.0E5_dp**2.0_dp)
+
+        ! = Distance to grounding line [weight]
+        ! =====================================
+
+        CALL calc_distance_to_grounding_line( mesh, ice, vi, dist_gl)
+
+        gl_w = EXP(-dist_gl / 20000._dp)
+
+        ! = Weighed-averaged F_melt [K^-1]
+        ! ================================
+
+        F_melt( vi) = 1.0E-02_dp * (1.0_dp - qsh_w * gl_w) + &
+                      1.0E-00_dp *           qsh_w * gl_w
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! === Basal melt ===
+    ! ==================
+
+    ! = Merge all constants into one [m/a K^-1]
+    ! =========================================
+
+    q_factor = seawater_density * cp_ocean * gamma_t * sec_per_year / (ice_density * L_fusion)
+
+    ! Loop over all ice shelf and ocean points
+    DO vi = mesh%vi1, mesh%vi2
+
+      IF (ice%mask_shelf_a( vi) == 1 .OR. &
+          ice%mask_ocean_a( vi) == 1 .OR. &
+          is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) THEN
+
+        ! = Pressure melting point at the bottom of the ice shelf [K]
+        ! ===========================================================
+
+        t_melt = 0.0939_dp - 0.057_dp * 35._dp - &
+                 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+
+        ! = Thermal forcing [K]
+        ! =====================
+
+        t_force = BMB%T_ocean_base( vi) - t_melt
+
+        ! = Sub-shelf basal melt [m/a]
+        ! ============================
+
+        IF (ice%mask_sheet_a( vi) == 1 .AND. &
+            (.NOT. C%do_ocean_temperature_inversion) ) THEN
+
+          BMB%BMB_shelf( vi) = 0.0_dp
+
+        ELSE
+
+          BMB%BMB_shelf( vi) = q_factor * F_melt( vi) * (-t_force) * ABS(t_force)
+
+        END IF
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Clean after yourself
+    CALL deallocate_shared( wF_melt)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE run_BMB_model_Bernales202X
+
+  SUBROUTINE initialise_BMB_model_Bernales202X( mesh, ice, ocean, BMB)
+    ! Allocate memory for the data fields of the Bernales et al. (202X) shelf BMB parameterisation.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_Bernales202X'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Variables
+    CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
+    CALL allocate_shared_dp_1D( mesh%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
+
+    ! Initialise ocean temperature and salinity at the base of the ice shelf
+    CALL calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
+    CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
+
+  END SUBROUTINE initialise_BMB_model_Bernales202X
+
+  SUBROUTINE calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
+    ! Calculate ocean temperature at the base of the shelf by interpolating
+    ! the 3-D ocean temperature field in the vertical column
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ocean_salinity_at_shelf_base'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: depth
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Initialise at zero
+      BMB%S_ocean_base( vi) = 0._dp
+
+      IF (ice%mask_ocean_a( vi) == 1) THEN
+
+        ! Calculate depth
+        depth = MAX( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
+
+        ! Find ocean temperature at this depth
+        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%S_ocean_corr_ext( vi,:), depth, BMB%S_ocean_base( vi))
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_ocean_salinity_at_shelf_base
+
+  SUBROUTINE calc_distance_to_grounding_line( mesh, ice, vi, dist_gl)
+    ! Calculate distance-to-grouding-line of a vertex.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),      INTENT(IN)    :: mesh
+    TYPE(type_ice_model), INTENT(IN)    :: ice
+    INTEGER,              INTENT(IN)    :: vi
+    REAL(dp),             INTENT(OUT)   :: dist_gl
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER       :: routine_name = 'calc_distance_to_grounding_line'
+    INTEGER                             :: thetai
+    REAL(dp)                            :: theta
+    INTEGER,  PARAMETER                 :: ntheta = 16 ! Number of directions we'll look into
+    INTEGER,  DIMENSION(:), ALLOCATABLE :: sees_gl_in_dir
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: dist_gl_in_dir
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (ice%mask_glf_a( vi) == 1) THEN
+      ! Ice shelf next to a grounding line
+
+      dist_gl = 0._dp
+
+    ELSEIF (ice%mask_ocean_a( vi) == 1) THEN
+      ! Ice shelf away from grounding line or ice-free ocean
+
+      ! Look in 16 directions
+      ALLOCATE( sees_gl_in_dir( ntheta))
+      ALLOCATE( dist_gl_in_dir( ntheta))
+
+      DO thetai = 1, ntheta
+        theta = (thetai-1) * 2._dp * pi / ntheta
+        CALL look_for_grounding_line( mesh, ice, vi, theta, sees_gl_in_dir( thetai), dist_gl_in_dir( thetai))
+      END DO
+
+      dist_gl = MINVAL( dist_gl_in_dir)
+
+      DEALLOCATE( sees_gl_in_dir)
+      DEALLOCATE( dist_gl_in_dir)
+
+    ELSE
+      ! Neither ice shelf nor ocean
+
+      dist_gl = 1.0E-20_dp
+
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_distance_to_grounding_line
+
+  SUBROUTINE look_for_grounding_line( mesh, ice, vi, theta, sees_gl, dist_gl)
+    ! Look outward from vertex vi in direction theta and check if we can "see"
+    ! a grounding line without any land or grounded ice in between, return true
+    ! and the distance to this groudning line point.
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    INTEGER,                             INTENT(IN)    :: vi
+    REAL(dp),                            INTENT(IN)    :: theta
+    INTEGER,                             INTENT(OUT)   :: sees_gl
+    REAL(dp),                            INTENT(OUT)   :: dist_gl
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'look_for_grounding_line'
+    REAL(dp), PARAMETER                                :: max_look_distance = 750000._dp
+    REAL(dp), DIMENSION(2)                             :: p, q
+    REAL(dp)                                           :: d_min, d, distance_along_line
+    INTEGER                                            :: vi_prev, vi_cur, vi_next, ci, vc
+    LOGICAL                                            :: Finished
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    sees_gl = 0
+    dist_gl = mesh%xmax + mesh%ymax - mesh%xmin - mesh%ymin
+
+    ! End points of trace
+    p = mesh%V( vi,:)
+    q = [mesh%V( vi,1) + max_look_distance * COS( theta), &
+         mesh%V( vi,2) + max_look_distance * SIN( theta)]
+
+    vi_prev = 0
+    vi_cur  = vi
+
+    Finished = .FALSE.
+    DO WHILE (.NOT. Finished)
+
+      ! Find the next vertex point the trace. Instead of doing a "real"
+      ! mesh transect, just take the neighbour vertex closest to q,
+      ! which is good enough for this and is MUCH faster.
+
+      vi_next = 0
+      d_min   = mesh%xmax + mesh%ymax - mesh%xmin - mesh%ymin
+      DO ci = 1, mesh%nC( vi_cur)
+        vc = mesh%C( vi_cur,ci)
+        p  = mesh%V( vc,:)
+        d  = NORM2( q-p)
+        IF (d < d_min) THEN
+          d_min = d
+          vi_next = vc
+        END IF
+      END DO
+
+      distance_along_line = NORM2( mesh%V( vi_next,:) - mesh%V( vi,:) )
+
+      ! Check if we've finished the trace
+      IF (ice%mask_gl_a( vi_next) == 1) THEN
+        sees_gl = 1
+        dist_gl = distance_along_line
+        Finished = .TRUE.
+      ELSEIF (ice%mask_shelf_a( vi_next) == 0) THEN
+        sees_gl = 0
+        Finished = .TRUE.
+      ELSEIF (distance_along_line > max_look_distance) THEN
+        sees_gl = 0
+        Finished = .TRUE.
+      ELSEIF (mesh%edge_index( vi_next) > 0) THEN
+        sees_gl = 0
+        Finished = .TRUE.
+      ELSEIF (vi_prev == vi_next) THEN
+        sees_gl = 0
+        Finished = .TRUE.
+      END IF
+
+      ! Move to next vertex
+      vi_prev = vi_cur
+      vi_cur  = vi_next
+
+    END DO ! WHILE (.NOT. Finished)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE look_for_grounding_line
+
 ! ===== Inversion of ice shelf basal melt rates =====
 ! ===================================================
 
@@ -2284,7 +2644,7 @@ CONTAINS
       ! or the sub-grid grounded area fraction
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. &
            ice%mask_shelf_a( vi) == 1 .OR. &
-           ice%f_grndx_a( vi) < 1.0_dp) THEN
+           ice%f_grnd_a( vi) < 1.0_dp) THEN
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
           h_scale = 1.0_dp/C%BMB_inv_scale_shelf
@@ -2352,6 +2712,110 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_BMB_model_inversion
+
+! ===== Inversion of ocean temperatures =====
+! ===========================================
+
+  SUBROUTINE ocean_temperature_inversion( mesh, ice, BMB, refgeo, time)
+    ! Invert basal ocean temps using the reference topography
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),               INTENT(IN)    :: mesh
+    TYPE(type_ice_model),          INTENT(IN)    :: ice
+    TYPE(type_BMB_model),          INTENT(INOUT) :: BMB
+    TYPE(type_reference_geometry), INTENT(IN)    :: refgeo
+    REAL(dp),                      INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'ocean_temperature_inversion'
+    INTEGER                                      :: vi
+    REAL(dp)                                     :: h_delta, h_scale, t_melt
+    INTEGER,  DIMENSION(:    ), POINTER          ::  mask,  mask_filled
+    INTEGER                                      :: wmask, wmask_filled
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (time < C%ocean_temperature_inv_t_start) THEN
+      ! Nothing to do for now. Just return.
+      CALL finalise_routine( routine_name)
+      RETURN
+    ELSEIF (time >= C%ocean_temperature_inv_t_end) THEN
+      ! Nothing to do for now. Just return.
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Allocate masks for extrapolation
+    CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
+    CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+
+      ! Invert only over shelf vertices
+      IF ( ice%mask_shelf_a( vi) == 1 .OR. &
+           is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) ) THEN
+
+        ! Ice shelf, use it during extrapolation
+        mask( vi) = 2
+
+        IF (refgeo%Hi( vi) > 0._dp) THEN
+          h_scale = 1.0_dp/C%BMB_inv_scale_shelf
+        ELSE
+          h_scale = 1.0_dp/C%BMB_inv_scale_ocean
+        END IF
+
+        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+        ! Further adjust only where the previous value is not improving the result
+        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+
+          BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + 1.72476_dp * TAN(h_delta)
+                                                          ! The hardcoded jorjonian constant yeah baby.
+
+        END IF ! else T_ocean_base does not change from previous time step
+
+      ELSE
+
+        ! Not ice shelf, so mark it for extrapolation
+        mask( vi) = 1
+
+      END IF ! else the reference is grounded ice sheet, so leave it alone
+
+    END DO
+    CALL sync
+
+    ! Limit basal melt
+    DO vi = mesh%vi1, mesh%vi2
+      t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
+               7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+
+      BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)! - .5_dp)
+      BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
+    END DO
+    CALL sync
+
+    ! ! Extrapolate the resulting field
+    ! ! ===============================
+
+    ! ! Perform the extrapolation
+    ! IF (par%master) THEN
+    !   CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 10000._dp, mask_filled)
+    ! END IF
+    ! CALL sync
+
+    CALL deallocate_shared( wmask)
+    CALL deallocate_shared( wmask_filled)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE ocean_temperature_inversion
 
 ! ===== Some generally useful tools =====
 ! =======================================
@@ -2502,7 +2966,6 @@ CONTAINS
 
   END SUBROUTINE look_for_ocean
 
-  ! Extrapolate melt field from the regular (FCMP) mask to the extended (PMP) mask
   SUBROUTINE extrapolate_melt_from_FCMP_to_PMP( mesh, ice, BMB)
     ! All the BMB parameterisations are implicitly run using the FCMP sub-grid scheme
     ! (i.e. they are only applied to grid cells whose centre is floating).
@@ -2576,8 +3039,8 @@ CONTAINS
 
           BMB_shelf_extra( vi) = BMB_av
 
-        END IF ! IF (mask_FCMP( vi) == 1) THEN
-      END IF ! IF (mask_PMP( vi) == 1) THEN
+        END IF ! (mask_FCMP( vi) == 1)
+      END IF ! (mask_PMP( vi) == 1)
 
     END DO
     CALL sync
@@ -2705,6 +3168,18 @@ CONTAINS
     ELSEIF (C%choice_BMB_shelf_model == 'inversion') THEN
 
       ! Nothing else needs to be done for now. Main stuff was done at the start of this routine.
+
+    ELSEIF (C%choice_BMB_shelf_model == 'Bernales202X') THEN
+
+      ! Exception for iterative inversion of ocean temperatures, to avoid resetting it.
+      IF (C%do_ocean_temperature_inversion) THEN
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%T_ocean_base, BMB%wT_ocean_base, 'cons_2nd_order')
+      ELSE
+        CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
+      END IF
+
+      CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
+
 
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')

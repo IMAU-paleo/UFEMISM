@@ -186,10 +186,10 @@ CONTAINS
     END IF
 
     IF (par%master) THEN
-      IF     (time < MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
+      IF     (time <= MINVAL( forcing%CO2_time) * 1000._dp) THEN ! times 1000 because forcing%CO2_time is in kyr
         ! Model time before start of CO2 record; using constant extrapolation
         forcing%CO2_obs = forcing%CO2_record( 1)
-      ELSEIF (time > MAXVAL( forcing%CO2_time) * 1000._dp) THEN
+      ELSEIF (time >= MAXVAL( forcing%CO2_time) * 1000._dp) THEN
         ! Model time beyond end of CO2 record; using constant extrapolation
         forcing%CO2_obs = forcing%CO2_record( C%CO2_record_length)
       ELSE
@@ -825,11 +825,11 @@ CONTAINS
     CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, Q_TOA_int, wQ_TOA_int)
 
     ! Calculate timeframe interpolation weights + safety net
-    IF (time_applied < forcing%ins_t0) THEN
+    IF (time_applied <= forcing%ins_t0) THEN
       ! If applied time is still before the first timeframe (out of data record)
       wt0 = 1.0_dp
       wt1 = 0.0_dp
-    ELSEIF (time_applied > forcing%ins_t1) THEN
+    ELSEIF (time_applied >= forcing%ins_t1) THEN
       ! If applied time is still after the second timeframe (out of data record)
       wt0 = 0.0_dp
       wt1 = 1.0_dp
@@ -1206,10 +1206,10 @@ CONTAINS
     END IF
 
     IF (par%master) THEN
-      IF     (time < MINVAL( forcing%sealevel_time)) THEN ! Remember: forcing%sealevel_time is in YEARS, not kyr
+      IF     (time <= MINVAL( forcing%sealevel_time)) THEN ! Remember: forcing%sealevel_time is in YEARS, not kyr
         ! Model time before start of sea level record; using constant extrapolation
         forcing%sealevel_obs = forcing%sealevel_record( 1)
-      ELSEIF (time > MAXVAL( forcing%sealevel_time)) THEN
+      ELSEIF (time >= MAXVAL( forcing%sealevel_time)) THEN
         ! Model time beyond end of sea level record; using constant extrapolation
         forcing%sealevel_obs = forcing%sealevel_record( C%sealevel_record_length)
       ELSE

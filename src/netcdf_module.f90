@@ -711,6 +711,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_BMB_shelf, region%BMB%BMB_shelf, start = (/ 1, netcdf%ti/)))
     END IF
+    IF (C%do_ocean_temperature_inversion) THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_T_ocean_base, region%BMB%T_ocean_base, start = (/ 1, netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_S_ocean_base, region%BMB%S_ocean_base, start = (/ 1, netcdf%ti/)))
+    END IF
 
     ! Close the file
     CALL close_netcdf_file(netcdf%ncid)
@@ -1005,6 +1009,10 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_abl_Q_inv, start=(/1,  netcdf%ti /) ))
     ELSEIF (field_name == 'C_refr_inv') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%SMB%C_refr_inv, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'T_ocean_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%T_ocean_base, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'S_ocean_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%S_ocean_base, start=(/1,  netcdf%ti /) ))
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -1027,8 +1035,14 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_margin_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_gl') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_gl_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'mask_glf') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_glf_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'mask_cf') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%mask_cf_a, start=(/1, netcdf%ti /) ))
+
+    ! Basins
+    ELSEIF (field_name == 'basin_ID') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%basin_ID, start=(/1, netcdf%ti /) ))
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
@@ -1205,6 +1219,10 @@ CONTAINS
     ! BMB
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [vi, time], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
+    END IF
+    IF (C%do_ocean_temperature_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, [vi, time], netcdf%id_var_T_ocean_base, long_name='Ice shelf basal ocean temperature', units='K')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, [vi, time], netcdf%id_var_S_ocean_base, long_name='Ice shelf basal ocean salinity', units='PSU')
     END IF
 
     ! Leave definition mode
@@ -1641,6 +1659,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [vi,    t], id_var, long_name='Insolation ablation factor', units='-')
     ELSEIF (field_name == 'C_refr_inv') THEN
       CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [vi,    t], id_var, long_name='Refreezing factor', units='-')
+    ELSEIF (field_name == 'T_ocean_base') THEN
+      CALL create_double_var( netcdf%ncid, 'T_ocean_base',             [vi,    t], id_var, long_name='Basal ocean temperature', units='K')
+    ELSEIF (field_name == 'S_ocean_base') THEN
+      CALL create_double_var( netcdf%ncid, 'S_ocean_base',             [vi,    t], id_var, long_name='Basal ocean salinity', units='PSU')
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -1663,8 +1685,14 @@ CONTAINS
       CALL create_int_var(    netcdf%ncid, 'mask_margin',              [vi,    t], id_var, long_name='Margin mask')
     ELSEIF (field_name == 'mask_gl') THEN
       CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [vi,    t], id_var, long_name='Grounding-line mask')
+    ELSEIF (field_name == 'mask_glf') THEN
+      CALL create_int_var(    netcdf%ncid, 'mask_glf',                 [vi,    t], id_var, long_name='Grounding-line floating-side mask')
     ELSEIF (field_name == 'mask_cf') THEN
       CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [vi,    t], id_var, long_name='Calving-front mask')
+
+    ! Basins
+    ELSEIF (field_name == 'basin_ID') THEN
+      CALL create_int_var(    netcdf%ncid, 'basin_ID',                 [vi,    t], id_var, long_name='Ice basin ID', units='-')
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
@@ -1778,6 +1806,10 @@ CONTAINS
     ! BMB
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%BMB_shelf, netcdf%id_var_BMB_shelf, netcdf%ti)
+    END IF
+    IF (C%do_ocean_temperature_inversion) THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%T_ocean_base, netcdf%id_var_T_ocean_base, netcdf%ti)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%S_ocean_base, netcdf%id_var_S_ocean_base, netcdf%ti)
     END IF
 
     ! Close the file
@@ -2116,6 +2148,10 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_abl_Q_inv, id_var, netcdf%ti)
     ELSEIF (field_name == 'C_refr_inv') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%SMB%C_refr_inv, id_var, netcdf%ti)
+    ELSEIF (field_name == 'T_ocean_base') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%T_ocean_base, id_var, netcdf%ti)
+    ELSEIF (field_name == 'S_ocean_base') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%S_ocean_base, id_var, netcdf%ti)
 
     ! Masks
     ! NOTE: not meant to be included, as mapping masks between grids is meaningless. These lines are needed so the model can output
@@ -2130,7 +2166,13 @@ CONTAINS
     ELSEIF (field_name == 'mask_coast' ) THEN
     ELSEIF (field_name == 'mask_margin') THEN
     ELSEIF (field_name == 'mask_gl'    ) THEN
+    ELSEIF (field_name == 'mask_glf'   ) THEN
     ELSEIF (field_name == 'mask_cf'    ) THEN
+
+    ! Basins
+    ELSEIF (field_name == 'basin_ID') THEN
+      dp_2D_a( region%mesh%vi1:region%mesh%vi2) = region%ice%basin_ID( region%mesh%vi1:region%mesh%vi2)
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, dp_2D_a, id_var, netcdf%ti)
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
@@ -2281,6 +2323,10 @@ CONTAINS
     ! BMB
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [x, y, t], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
+    END IF
+    IF (C%do_ocean_temperature_inversion) THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, [x, y, t], netcdf%id_var_T_ocean_base, long_name='Ice shelf basal ocean temperature', units='K')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, [x, y, t], netcdf%id_var_S_ocean_base, long_name='Ice shelf basal ocean salinity', units='PSU')
     END IF
 
     ! Leave definition mode
@@ -2636,6 +2682,10 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'C_abl_Q_inv',              [x, y,    t], id_var, long_name='Insolation ablation factor', units='-')
     ELSEIF (field_name == 'C_refr_inv') THEN
       CALL create_double_var( netcdf%ncid, 'C_refr_inv',               [x, y,    t], id_var, long_name='Refreezing factor', units='-')
+    ELSEIF (field_name == 'T_ocean_base') THEN
+      CALL create_double_var( netcdf%ncid, 'T_ocean_base',             [x, y,    t], id_var, long_name='Basal ocean temperature', units='K')
+    ELSEIF (field_name == 'S_ocean_base') THEN
+      CALL create_double_var( netcdf%ncid, 'S_ocean_base',             [x, y,    t], id_var, long_name='Basal ocean salinity', units='PSU')
 
     ! NOTE: masks commented out; mapping masks between grids is meaningless
 
@@ -2660,8 +2710,14 @@ CONTAINS
       ! CALL create_int_var(    netcdf%ncid, 'mask_margin',              [x, y,    t], id_var, long_name='margin mask')
     ELSEIF (field_name == 'mask_gl') THEN
       ! CALL create_int_var(    netcdf%ncid, 'mask_gl',                  [x, y,    t], id_var, long_name='grounding-line mask')
+    ELSEIF (field_name == 'mask_glf') THEN
+      ! CALL create_int_var(    netcdf%ncid, 'mask_glf',                 [x, y,    t], id_var, long_name='grounding-line mask')
     ELSEIF (field_name == 'mask_cf') THEN
       ! CALL create_int_var(    netcdf%ncid, 'mask_cf',                  [x, y,    t], id_var, long_name='calving-front mask')
+
+    ! Basins
+    ELSEIF (field_name == 'basin_ID') THEN
+      CALL create_double_var( netcdf%ncid, 'basin_ID',                 [x, y,    t], id_var, long_name='Ice basin ID', units='-')
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
@@ -2948,6 +3004,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_BMB_shelf)
     END IF
+    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_T_ocean_base)
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_S_ocean_base)
+    END IF
 
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
@@ -3102,6 +3162,10 @@ CONTAINS
     ! BMB
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_BMB_shelf, restart%BMB_shelf, start = (/ 1, ti /) ))
+    END IF
+    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_T_ocean_base, restart%T_ocean_base, start = (/ 1, ti /) ))
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_S_ocean_base, restart%S_ocean_base, start = (/ 1, ti /) ))
     END IF
 
     ! Close the netcdf file

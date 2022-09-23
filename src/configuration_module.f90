@@ -540,8 +540,9 @@ MODULE configuration_module
 
     ! NetCDF file containing the present-day observed ocean (WOA18) (NetCDF)
     CHARACTER(LEN=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
-    CHARACTER(LEN=256)  :: name_ocean_temperature_obs_config           = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
-    CHARACTER(LEN=256)  :: name_ocean_salinity_obs_config              = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+    CHARACTER(LEN=256)  :: name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+    CHARACTER(LEN=256)  :: name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+    LOGICAL             :: do_combine_data_and_inverted_ocean_config   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values
 
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
@@ -646,6 +647,10 @@ MODULE configuration_module
     REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
+    LOGICAL             :: do_ocean_temperature_inversion_config       = .FALSE.                          ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
+    REAL(dp)            :: ocean_temperature_inv_t_start_config        = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+    REAL(dp)            :: ocean_temperature_inv_t_end_config          = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+
     LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
     REAL(dp)            :: BMB_inv_scale_ocean_config                  = 100._dp                          ! Scaling constant for inversion procedure over open ocean [m]
@@ -661,7 +666,7 @@ MODULE configuration_module
     LOGICAL             :: do_merge_basins_ANT_config                  = .TRUE.                           ! Whether or not to merge some of the Antarctic basins
     LOGICAL             :: do_merge_basins_GRL_config                  = .TRUE.                           ! Whether or not to merge some of the Greenland basins
 
-    CHARACTER(LEN=256)       ::  choice_BMB_shelf_amplification_config        = 'basin'                   ! Choice of method to determine BMB amplification factors: "uniform", "basin"
+    CHARACTER(LEN=256)       ::  choice_BMB_shelf_amplification_config        = 'uniform'                 ! Choice of method to determine BMB amplification factors: "uniform", "basin"
     INTEGER                  ::  basin_BMB_amplification_n_ANT_config         = 17                        ! Number of basins used for ANT
     REAL(dp), DIMENSION(17)  ::  basin_BMB_amplification_factor_ANT_config    = &                         ! BMB amplification factor for each basin for ANT
     (/ 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, 1._dp, &
@@ -1289,6 +1294,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_PD_obs_ocean
     CHARACTER(LEN=256)                  :: name_ocean_temperature_obs
     CHARACTER(LEN=256)                  :: name_ocean_salinity_obs
+    LOGICAL                             :: do_combine_data_and_inverted_ocean
 
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_PI
@@ -1392,6 +1398,10 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_BMB_subgrid
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
+
+    LOGICAL                             :: do_ocean_temperature_inversion
+    REAL(dp)                            :: ocean_temperature_inv_t_start
+    REAL(dp)                            :: ocean_temperature_inv_t_end
 
     LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
@@ -2175,6 +2185,7 @@ CONTAINS
                      filename_PD_obs_ocean_config,                    &
                      name_ocean_temperature_obs_config,               &
                      name_ocean_salinity_obs_config,                  &
+                     do_combine_data_and_inverted_ocean_config,       &
                      filename_GCM_ocean_snapshot_PI_config,           &
                      filename_GCM_ocean_snapshot_warm_config,         &
                      filename_GCM_ocean_snapshot_cold_config,         &
@@ -2252,6 +2263,9 @@ CONTAINS
                      choice_BMB_subgrid_config,                       &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
+                     do_ocean_temperature_inversion_config,           &
+                     ocean_temperature_inv_t_start_config,            &
+                     ocean_temperature_inv_t_end_config,              &
                      BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
@@ -3023,6 +3037,7 @@ CONTAINS
     C%filename_PD_obs_ocean                    = filename_PD_obs_ocean_config
     C%name_ocean_temperature_obs               = name_ocean_temperature_obs_config
     C%name_ocean_salinity_obs                  = name_ocean_salinity_obs_config
+    C%do_combine_data_and_inverted_ocean       = do_combine_data_and_inverted_ocean_config
 
     ! GCM snapshots in the matrix_warm_cold option
     C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config
@@ -3124,6 +3139,10 @@ CONTAINS
     C%choice_BMB_subgrid                       = choice_BMB_subgrid_config
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
+
+    C%do_ocean_temperature_inversion           = do_ocean_temperature_inversion_config
+    C%ocean_temperature_inv_t_start            = ocean_temperature_inv_t_start_config
+    C%ocean_temperature_inv_t_end              = ocean_temperature_inv_t_end_config
 
     C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config

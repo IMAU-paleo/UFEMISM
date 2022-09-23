@@ -98,6 +98,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_coast_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_margin_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_gl_a
+    INTEGER,  DIMENSION(:    ), POINTER     :: mask_glf_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_cf_a
     INTEGER,  DIMENSION(:    ), POINTER     :: mask_a
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grnd_a
@@ -109,7 +110,7 @@ MODULE data_types_module
     INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
     INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
-    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b, wf_grndx_a, wf_grndx_b
+    INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_glf_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b, wf_grndx_a, wf_grndx_b
     INTEGER :: wbasin_ID, wnbasins, wgfrac_x, wgfrac_y
 
     ! Ice physical properties
@@ -1147,6 +1148,12 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: PICO_mk                       ! Average melt rate           within each basin-box
     INTEGER :: wPICO_T, wPICO_Tk, wPICO_S, wPICO_Sk, wPICO_p, wPICO_pk, wPICO_m, wPICO_mk
 
+    ! The Bernales et al. (202X) model
+    ! ================================
+
+    REAL(dp), DIMENSION(:    ), POINTER     :: S_ocean_base                  ! Ocean salinity at the ice shelf base
+    INTEGER :: wS_ocean_base
+
     ! Additional data fields
     !=======================
 
@@ -1408,7 +1415,9 @@ MODULE data_types_module
 
     ! BMB
     REAL(dp), DIMENSION(:    ), POINTER     :: BMB_shelf
-    INTEGER :: wBMB_shelf
+    REAL(dp), DIMENSION(:    ), POINTER     :: T_ocean_base
+    REAL(dp), DIMENSION(:    ), POINTER     :: S_ocean_base
+    INTEGER :: wBMB_shelf, wT_ocean_base, wS_ocean_base
 
     ! Isotopes
     REAL(dp), DIMENSION(:,:  ), POINTER     :: IsoIce

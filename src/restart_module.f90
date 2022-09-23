@@ -219,6 +219,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL allocate_shared_dp_1D( restart%mesh%nV, restart%BMB_shelf, restart%wBMB_shelf)
     END IF
+    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
+      CALL allocate_shared_dp_1D( restart%mesh%nV, restart%T_ocean_base, restart%wT_ocean_base)
+      CALL allocate_shared_dp_1D( restart%mesh%nV, restart%S_ocean_base, restart%wS_ocean_base)
+    END IF
 
     ! Read data from the restart file
     IF (par%master) CALL read_restart_file_init( region_name, restart, restart%netcdf)

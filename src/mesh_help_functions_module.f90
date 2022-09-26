@@ -18,20 +18,6 @@ MODULE mesh_help_functions_module
 
   IMPLICIT NONE
 
-  ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
-  ! LAPACK source)
-  !  *
-  !  *  -- LAPACK routine (version 3.1) --
-  !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
-  !  *     November 2006
-  interface
-    SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-      INTEGER            INFO, LDA, LDB, N, NRHS
-      INTEGER            IPIV( * )
-      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-    END SUBROUTINE
-  end interface
-
   CONTAINS
 
 ! == Calculating some extra mesh data: Voronoi cell areas, connection widths,
@@ -1863,8 +1849,8 @@ MODULE mesh_help_functions_module
     ! Local variables:
     REAL(dp), DIMENSION(2,2)                      :: A
     REAL(dp), DIMENSION(2)                        :: x, b
-    INTEGER,  DIMENSION(2)                        :: IPIV
-    INTEGER                                       :: info
+    ! INTEGER,  DIMENSION(2)                        :: IPIV
+    ! INTEGER                                       :: info
 
     ! If pq and rs are colinear, define them as not intersecting
     IF ( ABS( cross2( [q(1)-p(1), q(2)-p(2)], [s(1)-r(1), s(2)-r(2)] )) < tol_dist) THEN
@@ -1879,10 +1865,12 @@ MODULE mesh_help_functions_module
 
     ! The LAPACK solver will overwrite the right-hand side b with the solution x. Therefore we
     ! first copy the rhs in the solution vector x:
-    x = b
-
+    !x = b
     ! Solve Ax = b using LAPACK
-    CALL DGESV( 2, 1, A, 2, IPIV, x, 2, info)
+    ! CALL DGESV( 2, 1, A, 2, IPIV, x, 2, info)
+    ! Its very small, we can compute it directly
+    x(1) = (A(2,2)*b(1)-A(1,2)*b(2)) / (A(2,2)*A(1,1)-A(1,2)*A(2,1)) 
+    x(2) = (A(2,1)*b(1)-A(1,1)*b(2)) / (A(1,2)*A(2,1)-A(1,1)*A(2,2))
 
     llis = [q(1) + x(1) * (p(1)-q(1)), q(2) + x(1) * (p(2)-q(2))]
 

@@ -21,7 +21,8 @@ module ice_velocity_module
   use mesh_operators_module,               only : ddx_a_to_b_2D, ddx_b_to_a_2D, ddy_a_to_b_2D, ddy_b_to_a_2D
   use mesh_operators_module,               only : apply_Neumann_BC_direct_a_2D
   use sparse_matrix_module,                only : allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, &
-                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR
+                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR, &
+                                                  write_csr
   use basal_conditions_and_sliding_module, only : calc_basal_conditions, calc_sliding_law
   use general_ice_model_data_module,       only : determine_grounded_fractions
   use reallocate_mod,                      only : reallocate_bounds
@@ -1148,6 +1149,7 @@ contains
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSADIVA_linearised'
+    CHARACTER(LEN=256)                                 :: filename
     INTEGER                                            :: ti, nu, nv, t21,t22, pti1, pti2
     REAL(dp), DIMENSION(:    ), allocatable            ::  N_b,  dN_dx_b,  dN_dy_b
     REAL(dp), DIMENSION(:    ), allocatable            ::  b_buv,  uv_buv
@@ -1205,8 +1207,11 @@ contains
     call allgather_array(b_buv,t21,t22)
     call allgather_array(uv_buv,t21,t22)
 
-    call check_for_nan(b_buv, 'b_buv')
-    call check_for_nan(uv_buv, 'uv_buv')
+
+    !write(filename,'(A,I1)') 'M_SSADIVA.',par%i
+    !call write_csr(ice%M_SSADIVA, filename)
+    !call check_for_nan(b_buv, 'b_buv')
+    !call check_for_nan(uv_buv, 'uv_buv')
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
@@ -1215,6 +1220,10 @@ contains
       C%DIVA_SOR_omega           , &
       C%DIVA_PETSc_rtol          , &
       C%DIVA_PETSc_abstol)
+
+    call check_for_nan(uv_buv(pti1:pti2), "uv_buv")
+
+    call allgather_array(uv_buv)
 
   ! Get solution back on the b-grid
   ! ================================
@@ -2138,8 +2147,8 @@ contains
       ice%beta_eff_b   = 0.
       ice%taubx_b = 0.
       ice%tauby_b = 0.
-      ice%u_vav_b = 0.
-      ice%v_vav_b = 0.
+      ice%u_vav_b = 1. ! very slow
+      ice%v_vav_b = 1. ! very slow
 
       call initialise_matrix_conversion_lists(  mesh, ice)
       call initialise_SSADIVA_stiffness_matrix( mesh, ice)
@@ -2899,7 +2908,7 @@ contains
     ! Remap a-grid velocities
     ! call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
     ! Circular dependency, so we must not set it to zero
-    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, 'cons_2nd_order')
+    call remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, 'cons_2nd_order')
     call reallocate_bounds( ice%visc_eff_int_a, mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%N_a           , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%beta_a        , mesh_new%vi1, mesh_new%vi2         )

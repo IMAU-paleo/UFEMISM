@@ -1298,6 +1298,24 @@ CONTAINS
   
   END SUBROUTINE finalise_matrix_CSR_dist
   
+  subroutine write_csr( AA, filename )
+    IMPLICIT NONE
+    
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: AA
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    
+    integer                                            :: unit
+    open(file=filename,newunit=unit, action='write')
+    write(unit, *) "m:       ",AA%m
+    write(unit, *) "n:       ",AA%n
+    write(unit, *) "nnz_max: ",AA%nnz_max
+    write(unit, *) "ptr:     ",AA%ptr
+    write(unit, *) "index:   ",AA%index
+    write(unit, *) "size_val:",size(AA%val)
+    write(unit, *) "val:     ",AA%val
+    close(unit=unit)
+  end subroutine
 #if 0
 ! == Safety checks
   SUBROUTINE check_CSR( AA, matname)

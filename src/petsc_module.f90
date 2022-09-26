@@ -334,7 +334,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_CSR2petsc'
-    INTEGER                                            :: i1, i2, nrows_proc, nrows_scan, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
+    INTEGER                                            :: i1, i2, nrows_proc, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: ptr_proc, index_proc
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_proc
     
@@ -342,14 +342,9 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Determine process domains
-    ! NOTE: slightly different from how it's done in partition_list, this is needed
-    !       because otherwise PETSc will occasionally throw errors because the 
-    !       process domains are different from what it expects.
-    nrows_proc = PETSC_DECIDE
-    CALL PetscSplitOwnership( PETSC_COMM_WORLD, nrows_proc, A_CSR%m, perr)
-    CALL MPI_Scan( nrows_proc, nrows_scan, 1, MPI_INTEGER, MPI_SUM, PETSC_COMM_WORLD, ierr)
-    i1 = nrows_scan + 1 - nrows_proc
-    i2 = i1 + nrows_proc - 1
+    call partition_list(A_CSR%m, par%i, par%n, i1, i2)
+
+    nrows_proc = i2+1-i1
     
     ! Determine number of non-zeros for this process
     nnz_proc = 0
@@ -359,8 +354,7 @@ CONTAINS
       nnz_row = k2 + 1 - k1
       nnz_proc = nnz_proc + nnz_row
     END DO
-    CALL sync
-    
+
     ! Allocate memory for local CSR-submatrix
     ALLOCATE( ptr_proc(   0:nrows_proc    ))
     ALLOCATE( index_proc( 0:nnz_proc   - 1))

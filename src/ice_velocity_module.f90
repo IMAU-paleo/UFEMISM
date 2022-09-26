@@ -15,7 +15,7 @@ module ice_velocity_module
                                                   vertical_integrate, SSA_Schoof2006_analytical_solution
   use data_types_module,                   only : type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
                                                   type_remapping_mesh_mesh
-  use mesh_mapping_module,                 only : remap_field_dp_2D
+  use mesh_mapping_module,                 only : remap_field_dp_2D, remap_field_dp_3D
   use mesh_operators_module,               only : map_a_to_b_2d, map_b_to_a_2d, map_a_to_b_3d, map_b_to_a_3D
   use mesh_operators_module,               only : ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D
   use mesh_operators_module,               only : ddx_a_to_b_2D, ddx_b_to_a_2D, ddy_a_to_b_2D, ddy_b_to_a_2D
@@ -341,7 +341,8 @@ contains
 
     do while (.not. has_converged)
       viscosity_iteration_i = viscosity_iteration_i + 1
-
+      
+      ! TODO: calc_vertical_shear_strain_rates and calc_effective_viscosity have a circular dependency...
       ! Calculate the vertical shear strain rates
       call calc_vertical_shear_strain_rates( mesh, ice)
 
@@ -712,6 +713,9 @@ contains
     ! Allocate shared memory
     allocate( visc_eff_3D_b( mesh%ti1:mesh%ti2, C%nz))
 
+    ! Safety
+    call check_for_zero(ice%visc_eff_3D_a, 'ice%visc_eff_3D_a')
+
     ! Map 3-D effective viscosity to the b-grid
     CALL map_a_to_b_3D( mesh, ice%visc_eff_3D_a, visc_eff_3D_b)
 
@@ -812,7 +816,9 @@ contains
     deallocate(N_a)
 
     ! Safety
+    CALL check_for_zero( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
     CALL check_for_nan( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
+    CALL check_for_zero( ice%visc_eff_int_a,  'ice%visc_eff_int_a' )
     CALL check_for_nan( ice%visc_eff_int_a, 'ice%visc_eff_int_a')
     CALL check_for_nan( ice%N_a,            'ice%N_a'           )
 
@@ -2890,7 +2896,10 @@ contains
     call reallocate_bounds( ice%dv_dy_a       , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%du_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
     call reallocate_bounds( ice%dv_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
-    call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    ! Remap a-grid velocities
+    ! call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    ! Circular dependency, so we must not set it to zero
+    CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, 'cons_2nd_order')
     call reallocate_bounds( ice%visc_eff_int_a, mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%N_a           , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%beta_a        , mesh_new%vi1, mesh_new%vi2         )

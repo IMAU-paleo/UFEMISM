@@ -7,18 +7,20 @@
 !***********************************************************************************************************************************
 
       pure SUBROUTINE M55INV (A, AINV, DET, OK_FLAG)
+        use iso_fortran_env, only: real128
+        USE configuration_module,          ONLY: dp
 
       IMPLICIT NONE
 
-      DOUBLE PRECISION, DIMENSION(5,5), INTENT(IN)  :: A
-      DOUBLE PRECISION, DIMENSION(5,5), INTENT(OUT) :: AINV
-      DOUBLE PRECISION,                 INTENT(OUT) :: DET
+      real(dp), DIMENSION(5,5),         INTENT(IN)  :: A
+      real(dp), dimension(5,5),         INTENT(OUT) :: AINV
+      real(dp),                         INTENT(OUT) :: DET
       LOGICAL, INTENT(OUT) :: OK_FLAG
 
-      DOUBLE PRECISION :: A11, A12, A13, A14, A15, A21, A22, A23, A24, &
+      real(real128) :: A11, A12, A13, A14, A15, A21, A22, A23, A24, &
          A25, A31, A32, A33, A34, A35, A41, A42, A43, A44, A45,   &
          A51, A52, A53, A54, A55
-      DOUBLE PRECISION, DIMENSION(5,5) :: COFACTOR
+      real(real128), DIMENSION(5,5) :: COFACTOR
 
 
       A11=A(1,1); A12=A(1,2); A13=A(1,3); A14=A(1,4); A15=A(1,5)
@@ -27,7 +29,8 @@
       A41=A(4,1); A42=A(4,2); A43=A(4,3); A44=A(4,4); A45=A(4,5)
       A51=A(5,1); A52=A(5,2); A53=A(5,3); A54=A(5,4); A55=A(5,5)
 
-      DET = A15*A24*A33*A42*A51-A14*A25*A33*A42*A51-A15*A23*A34*A42*A51+    &
+      DET = real(                                                           &
+         A15*A24*A33*A42*A51-A14*A25*A33*A42*A51-A15*A23*A34*A42*A51+       &
          A13*A25*A34*A42*A51+A14*A23*A35*A42*A51-A13*A24*A35*A42*A51-       &
          A15*A24*A32*A43*A51+A14*A25*A32*A43*A51+A15*A22*A34*A43*A51-       &
          A12*A25*A34*A43*A51-A14*A22*A35*A43*A51+A12*A24*A35*A43*A51+       &
@@ -66,7 +69,7 @@
          A14*A22*A31*A43*A55-A12*A24*A31*A43*A55-A14*A21*A32*A43*A55+       &
          A11*A24*A32*A43*A55+A12*A21*A34*A43*A55-A11*A22*A34*A43*A55-       &
          A13*A22*A31*A44*A55+A12*A23*A31*A44*A55+A13*A21*A32*A44*A55-       &
-         A11*A23*A32*A44*A55-A12*A21*A33*A44*A55+A11*A22*A33*A44*A55
+         A11*A23*A32*A44*A55-A12*A21*A33*A44*A55+A11*A22*A33*A44*A55, dp)
 
       IF (ABS(DET) == 0.0d0) THEN
          AINV = 0.0D0
@@ -274,7 +277,7 @@
          A12*A23*A31*A44+A13*A21*A32*A44-A11*A23*A32*A44-A12*A21*A33*A44+   &
          A11*A22*A33*A44
 
-      AINV = TRANSPOSE(COFACTOR) / DET
+      AINV = real(TRANSPOSE(COFACTOR),dp) / DET
 
       OK_FLAG = .TRUE.
 

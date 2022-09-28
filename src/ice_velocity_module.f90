@@ -22,7 +22,7 @@ module ice_velocity_module
   use mesh_operators_module,               only : apply_Neumann_BC_direct_a_2D
   use sparse_matrix_module,                only : allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, &
                                                   solve_matrix_equation_CSR, deallocate_matrix_CSR, &
-                                                  write_csr
+                                                  resync_csr_dist
   use basal_conditions_and_sliding_module, only : calc_basal_conditions, calc_sliding_law
   use general_ice_model_data_module,       only : determine_grounded_fractions
   use reallocate_mod,                      only : reallocate_bounds
@@ -1149,7 +1149,6 @@ contains
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_SSADIVA_linearised'
-    CHARACTER(LEN=256)                                 :: filename
     INTEGER                                            :: ti, nu, nv, t21,t22, pti1, pti2
     REAL(dp), DIMENSION(:    ), allocatable            ::  N_b,  dN_dx_b,  dN_dy_b
     REAL(dp), DIMENSION(:    ), allocatable            ::  b_buv,  uv_buv
@@ -1206,12 +1205,7 @@ contains
     ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
     call allgather_array(b_buv,t21,t22)
     call allgather_array(uv_buv,t21,t22)
-
-
-    !write(filename,'(A,I1)') 'M_SSADIVA.',par%i
-    !call write_csr(ice%M_SSADIVA, filename)
-    !call check_for_nan(b_buv, 'b_buv')
-    !call check_for_nan(uv_buv, 'uv_buv')
+    call resync_csr_dist(ice%M_SSADIVA, t21, t22)
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &

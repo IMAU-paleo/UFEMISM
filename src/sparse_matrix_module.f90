@@ -1297,7 +1297,14 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 5)
   
   END SUBROUTINE finalise_matrix_CSR_dist
+  subroutine resync_csr_dist( AA, i1, i2)
+    implicit none
+
+    type(type_sparse_matrix_CSR_dp),     intent(inout) :: AA
+    integer,                             intent(in)    :: i1, i2
   
+    call allgather_array(AA%val,AA%ptr(i1),AA%ptr(i2+1) -1)
+  end subroutine
   subroutine write_csr( AA, filename )
     IMPLICIT NONE
     
@@ -1305,7 +1312,8 @@ CONTAINS
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: AA
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     
-    integer                                            :: unit
+    integer                                            :: unit, n
+
     open(file=filename,newunit=unit, action='write')
     write(unit, *) "m:       ",AA%m
     write(unit, *) "n:       ",AA%n
@@ -1313,7 +1321,10 @@ CONTAINS
     write(unit, *) "ptr:     ",AA%ptr
     write(unit, *) "index:   ",AA%index
     write(unit, *) "size_val:",size(AA%val)
-    write(unit, *) "val:     ",AA%val
+    write(unit, *) "val:     "
+    do n=1,size(AA%val)
+      write(unit,*) AA%val(n)
+    end do
     close(unit=unit)
   end subroutine
 #if 0

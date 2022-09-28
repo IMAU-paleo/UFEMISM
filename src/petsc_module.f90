@@ -334,7 +334,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'mat_CSR2petsc'
-    INTEGER                                            :: i1, i2, nrows_proc, i, k1, k2, nnz_row, nnz_proc, ii, k, kk
+    INTEGER                                            :: i1, i2, nrows_proc, i, k1, k2, nnz_proc, ii, k, kk
     INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: ptr_proc, index_proc
     REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: val_proc
     
@@ -347,13 +347,7 @@ CONTAINS
     nrows_proc = i2+1-i1
     
     ! Determine number of non-zeros for this process
-    nnz_proc = 0
-    DO i = i1, i2
-      k1 = A_CSR%ptr( i)
-      k2 = A_CSR%ptr( i+1) - 1
-      nnz_row = k2 + 1 - k1
-      nnz_proc = nnz_proc + nnz_row
-    END DO
+    nnz_proc = A_CSR%ptr(i2+1)+1-A_CSR%ptr(i1)
 
     ! Allocate memory for local CSR-submatrix
     ALLOCATE( ptr_proc(   0:nrows_proc    ))

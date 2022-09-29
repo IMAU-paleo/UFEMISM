@@ -1827,12 +1827,12 @@ CONTAINS
     ! Set up the resource tracker
     ! ===========================
 
-    ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
+    ! Allocate space to track up to 2,000 subroutines. That should be enough for a while...
     n = 0
-    IF (C%do_NAM) n = n + 1000
-    IF (C%do_EAS) n = n + 1000
-    IF (C%do_GRL) n = n + 1000
-    IF (C%do_ANT) n = n + 1000
+    IF (C%do_NAM) n = n + 2000
+    IF (C%do_EAS) n = n + 2000
+    IF (C%do_GRL) n = n + 2000
+    IF (C%do_ANT) n = n + 2000
     ALLOCATE( resource_tracker( n))
 
     ! Initialise values

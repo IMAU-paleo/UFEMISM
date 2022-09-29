@@ -34,12 +34,9 @@ MODULE netcdf_input_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_debug_fields, type_mesh, type_grid, type_grid_lonlat, type_remapping_lonlat2mesh, &
-                                             type_remapping_mesh_mesh, type_ice_model, type_model_region
-  USE netcdf,                          ONLY: NF90_NOERR, NF90_OPEN, NF90_CLOSE, NF90_NOWRITE, NF90_INQ_DIMID, NF90_INQUIRE_DIMENSION, &
-                                             NF90_INQ_VARID, NF90_INQUIRE_VARIABLE, NF90_MAX_VAR_DIMS, NF90_GET_VAR, &
-                                             NF90_CREATE, NF90_NOCLOBBER, NF90_NETCDF4, NF90_ENDDEF, NF90_REDEF, NF90_DEF_DIM, NF90_DEF_VAR, &
-                                             NF90_PUT_ATT, NF90_WRITE, NF90_INT, NF90_DOUBLE, NF90_PUT_VAR, NF90_UNLIMITED
+  USE data_types_module,               ONLY: type_mesh, type_grid, type_grid_lonlat, type_remapping_lonlat2mesh, &
+                                             type_remapping_mesh_mesh, type_model_region
+  USE netcdf,                          ONLY: NF90_MAX_VAR_DIMS
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary, deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: calc_triangle_geometric_centres, find_Voronoi_cell_areas, calc_lat_lon_coordinates, &
                                              find_triangle_areas, find_connection_widths, determine_mesh_resolution, check_mesh, &
@@ -49,9 +46,7 @@ MODULE netcdf_input_module
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh, &
                                              map_grid2mesh_2D, map_grid2mesh_3D, create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, &
                                              map_lonlat2mesh_3D, deallocate_remapping_arrays_lonlat_mesh, calc_remapping_operators_mesh_mesh, &
-                                             remap_field_dp_2D, remap_field_dp_3D, deallocate_remapping_operators_mesh_mesh, &
-                                             calc_remapping_operator_mesh2grid, map_mesh2grid_2D, deallocate_remapping_operators_mesh2grid, &
-                                             map_mesh2grid_3D
+                                             remap_field_dp_2D, remap_field_dp_3D, deallocate_remapping_operators_mesh_mesh
   USE utilities_module,                ONLY: flip_1D_dp, flip_2D_x1_dp, flip_2D_x2_dp, flip_3D_x1_dp, flip_3D_x2_dp, flip_3D_x3_dp, &
                                              permute_2D_dp, permute_3D_dp, permute_2D_int, permute_3D_int, inverse_oblique_sg_projection, &
                                              deallocate_grid, deallocate_grid_lonlat, remap_zeta_grid_dp, remap_zeta_mesh_dp

@@ -39,7 +39,8 @@ MODULE netcdf_basic_module
   USE netcdf,                          ONLY: NF90_NOERR, NF90_OPEN, NF90_CLOSE, NF90_NOWRITE, NF90_INQ_DIMID, NF90_INQUIRE_DIMENSION, &
                                              NF90_INQ_VARID, NF90_INQUIRE_VARIABLE, NF90_MAX_VAR_DIMS, NF90_GET_VAR, &
                                              NF90_CREATE, NF90_NOCLOBBER, NF90_NETCDF4, NF90_ENDDEF, NF90_REDEF, NF90_DEF_DIM, NF90_DEF_VAR, &
-                                             NF90_PUT_ATT, NF90_WRITE, NF90_INT, NF90_FLOAT, NF90_DOUBLE, NF90_PUT_VAR, NF90_UNLIMITED
+                                             NF90_PUT_ATT, NF90_WRITE, NF90_INT, NF90_FLOAT, NF90_DOUBLE, NF90_PUT_VAR, NF90_UNLIMITED, &
+                                             NF90_INQUIRE_ATTRIBUTE
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
   USE mesh_help_functions_module,      ONLY: calc_triangle_geometric_centres, find_Voronoi_cell_areas, calc_lat_lon_coordinates, &
                                              find_triangle_areas, find_connection_widths, determine_mesh_resolution, check_mesh, &
@@ -122,7 +123,7 @@ CONTAINS
     INTEGER                                            :: id_var_x, id_var_y
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for x and y dimensions and variables
     CALL inquire_dim_multiple_options( filename, field_name_options_x, id_dim_x)
@@ -161,7 +162,7 @@ CONTAINS
     INTEGER                                            :: id_var_lon, id_var_lat
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for x and y dimensions and variables
     CALL inquire_dim_multiple_options( filename, field_name_options_lon, id_dim_lon)
@@ -199,7 +200,7 @@ CONTAINS
     INTEGER                                            :: id_var_Tri, id_var_Tricc, id_var_TriC, id_var_Tri_edge_index
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire mesh dimensions
     CALL inquire_dim_multiple_options( filename, field_name_options_dim_nV        , id_dim_vi            )
@@ -261,7 +262,7 @@ CONTAINS
     INTEGER                                            :: id_dim_zeta, id_var_zeta
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for zeta dimension and variable
     CALL inquire_dim_multiple_options( filename, field_name_options_zeta, id_dim_zeta)
@@ -292,7 +293,7 @@ CONTAINS
     INTEGER                                            :: id_dim_z_ocean, id_var_z_ocean
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for z_ocean dimension and variable
     CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean)
@@ -323,7 +324,7 @@ CONTAINS
     INTEGER                                            :: id_dim_month, id_var_month
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for month dimension and variable
     CALL inquire_dim_multiple_options( filename, field_name_options_month, id_dim_month)
@@ -354,7 +355,7 @@ CONTAINS
     INTEGER                                            :: id_dim_time, id_var_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Look for time dimension and variable
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
@@ -391,7 +392,7 @@ CONTAINS
     REAL(dp)                                           :: dt_min
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file contains a valid time dimension and variable
     CALL check_time( filename)
@@ -467,7 +468,7 @@ CONTAINS
     INTEGER                                            :: i
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_x, id_dim, dim_length = n, dim_name = dim_name)
@@ -537,7 +538,7 @@ CONTAINS
     INTEGER                                            :: i
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_y, id_dim, dim_length = n, dim_name = dim_name)
@@ -608,7 +609,7 @@ CONTAINS
     INTEGER                                            :: i
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_lon, id_dim, dim_length = n, dim_name = dim_name)
@@ -673,7 +674,7 @@ CONTAINS
     INTEGER                                            :: i
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_lat, id_dim, dim_length = n, dim_name = dim_name)
@@ -735,7 +736,7 @@ CONTAINS
     INTEGER,  DIMENSION( NF90_MAX_VAR_DIMS)            :: dims_of_var
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimensions
     CALL inquire_dim_multiple_options( filename, field_name_options_dim_nV    , id_dim_vi   , dim_length = nV     , dim_name = dim_name_vi   )
@@ -892,7 +893,7 @@ CONTAINS
     INTEGER                                            :: k
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_zeta, id_dim, dim_length = n, dim_name = dim_name)
@@ -948,7 +949,7 @@ CONTAINS
     CHARACTER(LEN=256)                                 :: dim_name
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_month, id_dim, dim_length = n, dim_name = dim_name)
@@ -985,14 +986,13 @@ CONTAINS
     INTEGER                                            :: wtime
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim, dim_length = n, dim_name = dim_name)
 
     ! Safety checks on dimension
     IF (id_dim == -1) CALL crash('no valid time dimension could be found in file "' // TRIM( filename) // '"!')
-    IF (n == NF90_UNLIMITED) CALL crash('time dimension in file "' // TRIM( filename) // '" is unlimited!')
     IF (n < 0) CALL crash('time dimension in file "' // TRIM( filename) // '" has length n = {int_01}!', int_01  = n)
 
     ! Inquire variable
@@ -1044,7 +1044,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid x and y dimensions and variables
     CALL check_x( filename)
@@ -1144,7 +1144,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid x and y dimensions and variables
     CALL check_x( filename)
@@ -1244,7 +1244,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid x and y dimensions and variables
     CALL check_x(     filename)
@@ -1347,7 +1347,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid x and y dimensions and variables
     CALL check_x(    filename)
@@ -1451,7 +1451,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid lon and lat dimensions and variables
     CALL check_lon( filename)
@@ -1551,7 +1551,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid lon and lat dimensions and variables
     CALL check_lon( filename)
@@ -1651,7 +1651,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid lon and lat dimensions and variables
     CALL check_lon(   filename)
@@ -1754,7 +1754,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid lon and lat dimensions and variables
     CALL check_lon(  filename)
@@ -1860,7 +1860,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid mesh dimensions and variables
     CALL check_mesh_dimensions( filename)
@@ -1959,7 +1959,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid mesh dimensions and variables
     CALL check_mesh_dimensions( filename)
@@ -2058,7 +2058,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid mesh dimensions and variables
     CALL check_mesh_dimensions( filename)
@@ -2160,7 +2160,7 @@ CONTAINS
     LOGICAL                                            :: file_has_time
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if the file has valid mesh dimensions and variables
     CALL check_mesh_dimensions( filename)
@@ -2276,7 +2276,7 @@ CONTAINS
     CHARACTER(LEN=256)                                 :: dim_name_try, dim_name_match
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Parse field name options
     CALL parse_field_name_options( dim_name_options, dim_name_options_parsed)
@@ -2375,7 +2375,7 @@ CONTAINS
     CHARACTER(LEN=256)                                 :: var_name_try, var_name_match
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Parse field name options
     CALL parse_field_name_options( var_name_options, var_name_options_parsed)
@@ -2455,7 +2455,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'parse_field_name_options'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     field_name_options_parsed = field_name_options
 
@@ -2543,7 +2543,7 @@ CONTAINS
     INTEGER                                            :: ndims_of_var
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var)
@@ -2597,7 +2597,7 @@ CONTAINS
     INTEGER,  DIMENSION( 1)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -2682,7 +2682,7 @@ CONTAINS
     INTEGER,  DIMENSION( 2)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -2767,7 +2767,7 @@ CONTAINS
     INTEGER,  DIMENSION( 3)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -2852,7 +2852,7 @@ CONTAINS
     INTEGER,  DIMENSION( 4)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -2931,7 +2931,7 @@ CONTAINS
     INTEGER                                            :: ndims_of_var
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var)
@@ -2985,7 +2985,7 @@ CONTAINS
     INTEGER,  DIMENSION( 1)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3070,7 +3070,7 @@ CONTAINS
     INTEGER,  DIMENSION( 2)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3155,7 +3155,7 @@ CONTAINS
     INTEGER,  DIMENSION( 3)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3240,7 +3240,7 @@ CONTAINS
     INTEGER,  DIMENSION( 4)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3322,7 +3322,7 @@ CONTAINS
     INTEGER                                            :: ndims_of_var
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var)
@@ -3335,7 +3335,7 @@ CONTAINS
     IF (ndims_of_var /= 0) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
@@ -3376,7 +3376,7 @@ CONTAINS
     INTEGER,  DIMENSION( 1)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3420,11 +3420,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3461,7 +3461,7 @@ CONTAINS
     INTEGER,  DIMENSION( 2)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3505,11 +3505,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3546,7 +3546,7 @@ CONTAINS
     INTEGER,  DIMENSION( 3)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3590,11 +3590,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3631,7 +3631,7 @@ CONTAINS
     INTEGER,  DIMENSION( 4)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3675,11 +3675,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3710,7 +3710,7 @@ CONTAINS
     INTEGER                                            :: ndims_of_var
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var)
@@ -3723,7 +3723,7 @@ CONTAINS
     IF (ndims_of_var /= 0) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
@@ -3764,7 +3764,7 @@ CONTAINS
     INTEGER,  DIMENSION( 1)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3802,17 +3802,20 @@ CONTAINS
         '": count({int_01}) = {int_02}, but SIZE(d,{int_03}) = {int_04}!', int_01 = di, int_02 = count_applied( di), int_03 = di, int_04 = SIZE( d,di))
 
       ! Check if this dimension is large enough to read this amount of data
-      IF (start_applied( di) + count_applied( di) - 1 > dim_length) CALL crash('error for dimension "' // TRIM( dim_name) // '" of variable "' // TRIM( var_name) // '" in file "' // &
-        TRIM( filename) // '"start + count - 1 = {int_01}, but dim_length = {int_02}!', int_01 = start_applied( di) + count_applied( di) - 1, int_02 = dim_length)
+      IF (var_name /= 'time') THEN
+        ! Exception for time, because there the dimension is usually unlimited
+        IF (start_applied( di) + count_applied( di) - 1 > dim_length) CALL crash('error for dimension "' // TRIM( dim_name) // '" of variable "' // TRIM( var_name) // '" in file "' // &
+          TRIM( filename) // '"start + count - 1 = {int_01}, but dim_length = {int_02}!', int_01 = start_applied( di) + count_applied( di) - 1, int_02 = dim_length)
+      END IF
 
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3849,7 +3852,7 @@ CONTAINS
     INTEGER,  DIMENSION( 2)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3893,11 +3896,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -3934,7 +3937,7 @@ CONTAINS
     INTEGER,  DIMENSION( 3)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -3978,11 +3981,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -4019,7 +4022,7 @@ CONTAINS
     INTEGER,  DIMENSION( 4)                            :: start_applied, count_applied
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Inquire some info on this variable
     CALL inquire_var_info( filename, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
@@ -4063,11 +4066,11 @@ CONTAINS
     END DO
 
     ! Open the file
-    CALL open_existing_netcdf_file_for_reading( filename, ncid)
+    CALL open_existing_netcdf_file_in_data_mode( filename, ncid)
 
     ! Write the data
     IF (par%master) THEN
-      nerr = NF90_PUT_VAR( ncid, id_var, d, start, count)
+      nerr = NF90_PUT_VAR( ncid, id_var, d, start_applied, count_applied)
       IF (nerr /= NF90_NOERR) CALL crash('NF90_PUT_VAR failed for variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
@@ -4099,7 +4102,7 @@ CONTAINS
     LOGICAL                                            :: file_exists
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if this file actually exists
     INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
@@ -4137,7 +4140,7 @@ CONTAINS
     LOGICAL                                            :: file_exists
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if this file actually exists
     INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
@@ -4182,7 +4185,7 @@ CONTAINS
     LOGICAL                                            :: file_exists
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if this file actually exists
     INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
@@ -4215,7 +4218,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'close_netcdf_file'
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Close netCDF file:
     IF (par%master) THEN
@@ -4247,7 +4250,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the file
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
@@ -4298,7 +4301,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the file
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
@@ -4336,7 +4339,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the file
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
@@ -4383,7 +4386,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the file
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
@@ -4422,7 +4425,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Check if this file already exists
     IF (par%master) THEN
@@ -4461,10 +4464,14 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_dimension'
-    INTEGER                                            :: ncid
+    INTEGER                                            :: dim_length_present, ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Safety: check if a dimension by this name is already present in this file
+    CALL inquire_dim( filename, dim_name, dim_length_present, id_dim)
+    IF (id_dim /= -1) CALL crash('file "' // TRIM( filename) // '" already contains dimension "' // TRIM( dim_name) // '"!')
 
     ! Open the NetCDF file in define mode
     CALL open_existing_netcdf_file_in_define_mode( filename, ncid)
@@ -4475,6 +4482,8 @@ CONTAINS
       IF (nerr /= NF90_NOERR) CALL crash('NF90_DEF_DIM failed for file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
+
+    CALL MPI_BCAST( id_dim, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
     ! Close the NetCDF file
     CALL close_netcdf_file( ncid)
@@ -4501,7 +4510,11 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Safety: check if a variable by this name is already present in this file
+    CALL inquire_var( filename, var_name, id_var)
+    IF (id_var /= -1) CALL crash('file "' // TRIM( filename) // '" already contains variable "' // TRIM( var_name) // '"!')
 
     ! Open the NetCDF file in define mode
     CALL open_existing_netcdf_file_in_define_mode( filename, ncid)
@@ -4512,6 +4525,8 @@ CONTAINS
       IF (nerr /= NF90_NOERR) CALL crash('NF90_DEF_VAR failed for file "' // TRIM( filename) // '"!')
     END IF
     CALL sync
+
+    CALL MPI_BCAST( id_var, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
     ! Close the NetCDF file
     CALL close_netcdf_file( ncid)
@@ -4539,7 +4554,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the NetCDF file in define mode
     CALL open_existing_netcdf_file_in_define_mode( filename, ncid)
@@ -4577,7 +4592,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the NetCDF file in define mode
     CALL open_existing_netcdf_file_in_define_mode( filename, ncid)
@@ -4615,7 +4630,7 @@ CONTAINS
     INTEGER                                            :: ncid
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
     ! Open the NetCDF file in define mode
     CALL open_existing_netcdf_file_in_define_mode( filename, ncid)

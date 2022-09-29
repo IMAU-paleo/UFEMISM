@@ -38,7 +38,7 @@ MODULE configuration_module
 
   TYPE subroutine_resource_tracker
     ! Track the resource use (computation time, memory) of a single subroutine
-    CHARACTER(LEN = 1024) :: routine_path
+    CHARACTER(LEN = 2048) :: routine_path
     REAL(dp)              :: tstart, tcomp
     INTEGER               :: n_MPI_windows_init, n_MPI_windows_final
     REAL(dp)              :: mem_use, mem_use_max
@@ -1827,12 +1827,12 @@ CONTAINS
     ! Set up the resource tracker
     ! ===========================
 
-    ! Allocate space to track up to 2,000 subroutines. That should be enough for a while...
+    ! Allocate space to track up to 1,000 subroutines. That should be enough for a while...
     n = 0
-    IF (C%do_NAM) n = n + 2000
-    IF (C%do_EAS) n = n + 2000
-    IF (C%do_GRL) n = n + 2000
-    IF (C%do_ANT) n = n + 2000
+    IF (C%do_NAM) n = n + 1000
+    IF (C%do_EAS) n = n + 1000
+    IF (C%do_GRL) n = n + 1000
+    IF (C%do_ANT) n = n + 1000
     ALLOCATE( resource_tracker( n))
 
     ! Initialise values
@@ -3610,18 +3610,20 @@ CONTAINS
 ! ===== Extended error messaging / debugging system =====
 ! =======================================================
 
-  SUBROUTINE init_routine( routine_name)
+  SUBROUTINE init_routine( routine_name, do_track_resource_use)
     ! Initialise an IMAU-ICE subroutine; update the routine path
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=256),                  INTENT(IN)    :: routine_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: do_track_resource_use
 
     ! Local variables:
     INTEGER                                            :: len_path_tot, len_path_used, len_name
     INTEGER                                            :: ierr, cerr
     INTEGER                                            :: i
+    LOGICAL                                            :: do_track_resource_use_loc
 
     ! Check if routine_name has enough memory
     len_path_tot  = LEN(      routine_path)
@@ -3636,12 +3638,31 @@ CONTAINS
     ! Append this routine to the routine path
     routine_path = TRIM( routine_path) // '/' // TRIM( routine_name)
 
-    ! Initialise the computation time tracker
-    CALL find_subroutine_in_resource_tracker( i)
-    resource_tracker( i)%tstart = MPI_WTIME()
+    ! Check if resource use for this subroutine should be tracked
+    ! (especially for the NetCDF routines we don't want to do this, as there are
+    ! a great many of them and the resource tracker output file will become annoyingly big)
 
-    ! Check maximum MPI window at the start of the routine
-    resource_tracker( i)%n_MPI_windows_init = n_MPI_windows
+    IF (PRESENT( do_track_resource_use)) THEN
+      do_track_resource_use_loc = do_track_resource_use
+    ELSE
+      do_track_resource_use_loc = .TRUE.
+    END IF
+
+    IF (do_track_resource_use_loc) THEN
+
+      ! Initialise the computation time tracker
+      CALL find_subroutine_in_resource_tracker( i)
+      resource_tracker( i)%tstart = MPI_WTIME()
+
+      ! Check maximum MPI window at the start of the routine
+      resource_tracker( i)%n_MPI_windows_init = n_MPI_windows
+
+    ELSE
+
+      routine_path = TRIM( routine_path) // '_NOTRACK'
+
+    END IF
+
 
   END SUBROUTINE init_routine
 
@@ -3655,42 +3676,71 @@ CONTAINS
     INTEGER,  INTENT(IN), OPTIONAL                     :: n_extra_windows_expected
 
     ! Local variables:
+    LOGICAL                                            :: do_track_resource_use
     INTEGER                                            :: len_path_tot, i, ii
     INTEGER                                            :: ierr, cerr
     REAL(dp)                                           :: dt
     INTEGER                                            :: n_extra_windows_expected_loc, n_extra_windows_found
 
-    ! Add computation time to the resource tracker
-    CALL find_subroutine_in_resource_tracker( i)
-    dt = MPI_WTIME() - resource_tracker( i)%tstart
-    resource_tracker( i)%tcomp = resource_tracker( i)%tcomp + dt
-
-    ! Check maximum MPI window at the end of the routine
-    resource_tracker( i)%n_MPI_windows_final = n_MPI_windows
-
-    ! If it is larger than expected, warn that there might be a memory leak
-    n_extra_windows_expected_loc = 0
-    IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
-    n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
-
-    ii = INDEX( routine_path, 'UFEMISM_program/initialise_')
-    IF (ii == 0 .AND. n_extra_windows_found > n_extra_windows_expected_loc) THEN
-      ! This subroutine has more memory allocated at the start than at the beginning.
-      CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
-        int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)
+    ! Check if resource use should be tracked for this subroutine
+    i = INDEX( routine_path, '_NOTRACK')
+    IF ( i == 0) THEN
+      do_track_resource_use = .TRUE.
+    ELSE
+      do_track_resource_use = .FALSE.
     END IF
 
-    ! Find where in the string exactly the current routine name is located
-    len_path_tot = LEN( routine_path)
-    i = INDEX( routine_path, routine_name)
+    IF (do_track_resource_use) THEN
+      ! Resource use for this subroutine should be tracked
 
-    IF (i == 0) THEN
-      WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
+      ! Add computation time to the resource tracker
+      CALL find_subroutine_in_resource_tracker( i)
+      dt = MPI_WTIME() - resource_tracker( i)%tstart
+      resource_tracker( i)%tcomp = resource_tracker( i)%tcomp + dt
 
-    ! Remove the current routine name from the routine path
-    routine_path( i-1:len_path_tot) = ' '
+      ! Check maximum MPI window at the end of the routine
+      resource_tracker( i)%n_MPI_windows_final = n_MPI_windows
+
+      ! If it is larger than expected, warn that there might be a memory leak
+      n_extra_windows_expected_loc = 0
+      IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
+      n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
+
+      ii = INDEX( routine_path, 'UFEMISM_program/initialise_')
+      IF (ii == 0 .AND. n_extra_windows_found > n_extra_windows_expected_loc) THEN
+        ! This subroutine has more memory allocated at the start than at the beginning.
+        CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
+          int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)
+      END IF
+
+      ! Find where in the string exactly the current routine name is located
+      i = INDEX( routine_path, routine_name)
+
+      IF (i == 0) THEN
+        WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      ! Remove the current routine name from the routine path
+      len_path_tot = LEN( routine_path)
+      routine_path( i-1:len_path_tot) = ' '
+
+    ELSE ! IF (do_track_resource_use) THEN
+      ! Resource use for this subroutine should not be tracked
+
+      ! Find where in the string exactly the current routine name is located
+      i = INDEX( routine_path, TRIM( routine_name) // '_NOTRACK')
+
+      IF (i == 0) THEN
+        WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      ! Remove the current routine name from the routine path
+      len_path_tot = LEN( routine_path)
+      routine_path( i-1:len_path_tot) = ' '
+
+    END IF ! IF (do_track_resource_use) THEN
 
   END SUBROUTINE finalise_routine
 

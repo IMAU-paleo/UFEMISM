@@ -9,7 +9,9 @@
   LAPACK_DIR = /opt/homebrew/Cellar/lapack/3.10.1
 
 # Compiler flags:
-  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -ffree-line-length-none -cpp
+  COMPILER_FLAGS_BASIC    = -O3 -Wall -ffree-line-length-none -cpp \
+                            -Werror=implicit-interface -fimplicit-none -g -march=native
+
   COMPILER_FLAGS_CHECK    = -fbounds-check -fcheck-array-temporaries -fimplicit-none
 
   F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \

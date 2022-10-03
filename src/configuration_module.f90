@@ -134,6 +134,7 @@ MODULE configuration_module
   REAL(dp)            :: res_max_mountain_config                     = 40._dp                           !                                 mountains             [km]
   REAL(dp)            :: res_max_coast_config                        = 40._dp                           !                                 coastline             [km]
   REAL(dp)            :: mesh_fitness_threshold_config               = 0.95_dp                          ! Minimum allowed mesh fitness (fraction of triangles that are not Bad) before mesh updating
+  logical             :: use_submesh_config                          = .true.
 
   ! Resolutions of the different square grids
   ! =========================================
@@ -400,7 +401,6 @@ MODULE configuration_module
   REAL(dp)            :: uniform_ice_heat_capacity_config            = 2009._dp                         ! Uniform ice heat capacity (applied when choice_ice_heat_capacity_config = "uniform")
   CHARACTER(LEN=256)  :: choice_ice_thermal_conductivity_config      = 'Ritz1987'                       ! Choice of ice heat capacity model: "uniform", "Ritz1987"
   REAL(dp)            :: uniform_ice_thermal_conductivity_config     = 6.626958E7_dp                    ! Uniform ice thermal conductivity (applied when choice_ice_thermal_conductivity_config = "uniform")
-  logical             :: use_submesh_config                          = .true.
 
   ! == Climate
   ! ==========
@@ -540,64 +540,6 @@ MODULE configuration_module
   REAL(dp)            :: BMB_Favier2019_quad_GammaT_config           = 111.6E-5_dp    ! 99.32E-5_dp     ! Commented values are from Favier et al. (2019), Table 3
   REAL(dp)            :: BMB_Favier2019_Mplus_GammaT_config          = 108.6E-5_dp    ! 132.9E-5_dp     ! Actual value are re-tuned for IMAU-ICE, following the same approach (see Asay-Davis et al., 2016, ISOMIP+)
 
-  ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
-  REAL(dp)            :: BMB_Lazeroms2018_GammaT_config              = 3.7506E-04_dp  ! 1.1E-3_dp       ! Thermal exchange velocity; tuned following ISOMIP+ protocol (Asay-Davis et al., 2016, Sect. 3.2.1), commented value from Lazeroms et al. (2018)
-  CHARACTER(LEN=256)  :: BMB_Lazeroms2018_find_GL_scheme_config      = 'along_ice_flow'                 ! How to determine the GL origin of a plume: "GL_average", "along_ice_flow"
-
-  ! Parameters for the PICO BMB model
-  INTEGER             :: BMB_PICO_nboxes_config                      = 5                                ! Number of sub-shelf ocean boxes used by PICO
-  REAL(dp)            :: BMB_PICO_GammaTstar_config                  = 3.6131E-05_dp  ! 2.0E-5_dp       ! Effective turbulent temperature exchange velocity [m s^-1]; tuned following ISOMIP+ protocol (Asay-Davis et al., 2016, Sect. 3.2.1), commented value from Reese et al. (2018)
-
-  ! Parameters for the ANICE_legacy sub-shelf melt model
-  REAL(dp)            :: T_ocean_mean_PD_NAM_config                  = -1.7_dp                          ! Present day temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_PD_EAS_config                  = -1.7_dp
-  REAL(dp)            :: T_ocean_mean_PD_GRL_config                  =  2.0_dp
-  REAL(dp)            :: T_ocean_mean_PD_ANT_config                  = -1.7_dp
-  REAL(dp)            :: T_ocean_mean_cold_NAM_config                = -5.0_dp                          ! Cold period temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_cold_EAS_config                = -5.0_dp
-  REAL(dp)            :: T_ocean_mean_cold_GRL_config                =  0.0_dp
-  REAL(dp)            :: T_ocean_mean_cold_ANT_config                = -5.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_NAM_config                =  2.0_dp                          ! Warm period temperature of the ocean beneath the shelves [Celcius]
-  REAL(dp)            :: T_ocean_mean_warm_EAS_config                =  2.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_GRL_config                =  4.0_dp
-  REAL(dp)            :: T_ocean_mean_warm_ANT_config                =  2.0_dp
-
-  REAL(dp)            :: BMB_deepocean_PD_NAM_config                 =  -5._dp                          ! Present-day sub-shelf melt rate for deep-ocean areas [m/year]
-  REAL(dp)            :: BMB_deepocean_PD_EAS_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_PD_GRL_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_PD_ANT_config                 =  -5._dp
-  REAL(dp)            :: BMB_deepocean_cold_NAM_config               =  -2._dp                          ! Cold period sub-shelf melt rate for deep-ocean areas [m/year]
-  REAL(dp)            :: BMB_deepocean_cold_EAS_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_cold_GRL_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_cold_ANT_config               =  -2._dp
-  REAL(dp)            :: BMB_deepocean_warm_NAM_config               = -10._dp                          ! Warm period sub-shelf melt rate for deep-ocean areas [m/year]
-  REAL(dp)            :: BMB_deepocean_warm_EAS_config               = -10._dp
-  REAL(dp)            :: BMB_deepocean_warm_GRL_config               = -10._dp
-  REAL(dp)            :: BMB_deepocean_warm_ANT_config               = -10._dp
-
-  REAL(dp)            :: BMB_shelf_exposed_PD_NAM_config             =  -3._dp                          ! Present-day sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_PD_EAS_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_PD_GRL_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_PD_ANT_config             =  -3._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_NAM_config           =  -0._dp                          ! Cold period sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_cold_EAS_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_GRL_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_cold_ANT_config           =  -0._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_NAM_config           =  -6._dp                          ! Warm period sub-shelf melt rate for exposed areas    [m/year]
-  REAL(dp)            :: BMB_shelf_exposed_warm_EAS_config           =  -6._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_GRL_config           =  -6._dp
-  REAL(dp)            :: BMB_shelf_exposed_warm_ANT_config           =  -6._dp
-
-  REAL(dp)            :: subshelf_melt_factor_NAM_config             = 0.005_dp                         ! Overall tuning factor for sub-shelf melt rate
-  REAL(dp)            :: subshelf_melt_factor_EAS_config             = 0.005_dp
-  REAL(dp)            :: subshelf_melt_factor_GRL_config             = 0.005_dp
-  REAL(dp)            :: subshelf_melt_factor_ANT_config             = 0.005_dp
-
-  REAL(dp)            :: deep_ocean_threshold_depth_NAM_config       = 1200._dp                         ! Threshold water depth for "deep ocean" (as opposed to continental shelf);
-  REAL(dp)            :: deep_ocean_threshold_depth_EAS_config       = 800._dp                          ! this mostly prevents ice shelves from growing beyond the continental shelf
-  REAL(dp)            :: deep_ocean_threshold_depth_GRL_config       = 800._dp                          ! Different depths for different regions is a bit ad hoc, but in reality
-  REAL(dp)            :: deep_ocean_threshold_depth_ANT_config       = 1800._dp                         ! the different surface ocean temperatures probably result in the same effect...
-
   ! Sea level and GIA
   ! =================
 
@@ -611,26 +553,6 @@ MODULE configuration_module
   REAL(dp)            :: ELRA_lithosphere_flex_rigidity_config       = 1.0E+25_dp                       ! Lithospheric flexural rigidity [kg m^2 s^-2]
   REAL(dp)            :: ELRA_bedrock_relaxation_time_config         = 3000.0_dp                        ! Relaxation time for bedrock adjustment [yr]
   REAL(dp)            :: ELRA_mantle_density_config                  = 3300.0_dp                        ! Mantle density [kg m^-3]
-
-  ! SMB tuning
-  ! ==========
-
-  REAL(dp)            :: C_abl_constant_NAM_config                   = -49._dp                          ! 34._dp    (commented values are old ANICE defaults, but since refreezing was not calculated right
-  REAL(dp)            :: C_abl_constant_EAS_config                   = -49._dp                          !            and this has since been fixed, these values will still not give the same results as
-  REAL(dp)            :: C_abl_constant_GRL_config                   = -49._dp                          !            they used to in ANICE.)
-  REAL(dp)            :: C_abl_constant_ANT_config                   = -49._dp
-  REAL(dp)            :: C_abl_Ts_NAM_config                         = 10._dp                           ! 10._dp
-  REAL(dp)            :: C_abl_Ts_EAS_config                         = 10._dp
-  REAL(dp)            :: C_abl_Ts_GRL_config                         = 10._dp
-  REAL(dp)            :: C_abl_Ts_ANT_config                         = 10._dp
-  REAL(dp)            :: C_abl_Q_NAM_config                          = 0.0227_dp                        ! 0.513_dp
-  REAL(dp)            :: C_abl_Q_EAS_config                          = 0.0227_dp
-  REAL(dp)            :: C_abl_Q_GRL_config                          = 0.0227_dp
-  REAL(dp)            :: C_abl_Q_ANT_config                          = 0.0227_dp
-  REAL(dp)            :: C_refr_NAM_config                           = 0.051_dp                         ! 0.012_dp
-  REAL(dp)            :: C_refr_EAS_config                           = 0.051_dp
-  REAL(dp)            :: C_refr_GRL_config                           = 0.051_dp
-  REAL(dp)            :: C_refr_ANT_config                           = 0.051_dp
 
   ! Which data fields will be written to the help_fields output file
   ! ================================================================
@@ -788,6 +710,7 @@ MODULE configuration_module
     REAL(dp)                            :: res_max_mountain
     REAL(dp)                            :: res_max_coast
     REAL(dp)                            :: mesh_fitness_threshold
+    logical                             :: use_submesh
 
     ! Resolutions of the different square grids
     ! =========================================
@@ -1034,7 +957,6 @@ MODULE configuration_module
     REAL(dp)                            :: uniform_ice_heat_capacity
     CHARACTER(LEN=256)                  :: choice_ice_thermal_conductivity
     REAL(dp)                            :: uniform_ice_thermal_conductivity
-    logical                             :: use_submesh
 
     ! Climate
     ! =======
@@ -1173,64 +1095,6 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_Favier2019_quad_GammaT
     REAL(dp)                            :: BMB_Favier2019_Mplus_GammaT
 
-    ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
-    REAL(dp)                            :: BMB_Lazeroms2018_GammaT
-    CHARACTER(LEN=256)                  :: BMB_Lazeroms2018_find_GL_scheme
-
-    ! Parameters for the PICO BMB model
-    INTEGER                             :: BMB_PICO_nboxes
-    REAL(dp)                            :: BMB_PICO_GammaTstar
-
-    ! Parameters for the ANICE_legacy sub-shelf melt model
-    REAL(dp)                            :: T_ocean_mean_PD_NAM
-    REAL(dp)                            :: T_ocean_mean_PD_EAS
-    REAL(dp)                            :: T_ocean_mean_PD_GRL
-    REAL(dp)                            :: T_ocean_mean_PD_ANT
-    REAL(dp)                            :: T_ocean_mean_cold_NAM
-    REAL(dp)                            :: T_ocean_mean_cold_EAS
-    REAL(dp)                            :: T_ocean_mean_cold_GRL
-    REAL(dp)                            :: T_ocean_mean_cold_ANT
-    REAL(dp)                            :: T_ocean_mean_warm_NAM
-    REAL(dp)                            :: T_ocean_mean_warm_EAS
-    REAL(dp)                            :: T_ocean_mean_warm_GRL
-    REAL(dp)                            :: T_ocean_mean_warm_ANT
-
-    REAL(dp)                            :: BMB_deepocean_PD_NAM
-    REAL(dp)                            :: BMB_deepocean_PD_EAS
-    REAL(dp)                            :: BMB_deepocean_PD_GRL
-    REAL(dp)                            :: BMB_deepocean_PD_ANT
-    REAL(dp)                            :: BMB_deepocean_cold_NAM
-    REAL(dp)                            :: BMB_deepocean_cold_EAS
-    REAL(dp)                            :: BMB_deepocean_cold_GRL
-    REAL(dp)                            :: BMB_deepocean_cold_ANT
-    REAL(dp)                            :: BMB_deepocean_warm_NAM
-    REAL(dp)                            :: BMB_deepocean_warm_EAS
-    REAL(dp)                            :: BMB_deepocean_warm_GRL
-    REAL(dp)                            :: BMB_deepocean_warm_ANT
-
-    REAL(dp)                            :: BMB_shelf_exposed_PD_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_PD_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_PD_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_PD_ANT
-    REAL(dp)                            :: BMB_shelf_exposed_cold_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_cold_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_cold_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_cold_ANT
-    REAL(dp)                            :: BMB_shelf_exposed_warm_NAM
-    REAL(dp)                            :: BMB_shelf_exposed_warm_EAS
-    REAL(dp)                            :: BMB_shelf_exposed_warm_GRL
-    REAL(dp)                            :: BMB_shelf_exposed_warm_ANT
-
-    REAL(dp)                            :: subshelf_melt_factor_NAM
-    REAL(dp)                            :: subshelf_melt_factor_EAS
-    REAL(dp)                            :: subshelf_melt_factor_GRL
-    REAL(dp)                            :: subshelf_melt_factor_ANT
-
-    REAL(dp)                            :: deep_ocean_threshold_depth_NAM
-    REAL(dp)                            :: deep_ocean_threshold_depth_EAS
-    REAL(dp)                            :: deep_ocean_threshold_depth_GRL
-    REAL(dp)                            :: deep_ocean_threshold_depth_ANT
-
     ! Sea level and GIA
     ! =================
 
@@ -1244,26 +1108,6 @@ MODULE configuration_module
     REAL(dp)                            :: ELRA_lithosphere_flex_rigidity
     REAL(dp)                            :: ELRA_bedrock_relaxation_time
     REAL(dp)                            :: ELRA_mantle_density
-
-    ! SMB melt tuning
-    ! ===============
-
-    REAL(dp)                            :: C_abl_constant_NAM
-    REAL(dp)                            :: C_abl_constant_EAS
-    REAL(dp)                            :: C_abl_constant_GRL
-    REAL(dp)                            :: C_abl_constant_ANT
-    REAL(dp)                            :: C_abl_Ts_NAM
-    REAL(dp)                            :: C_abl_Ts_EAS
-    REAL(dp)                            :: C_abl_Ts_GRL
-    REAL(dp)                            :: C_abl_Ts_ANT
-    REAL(dp)                            :: C_abl_Q_NAM
-    REAL(dp)                            :: C_abl_Q_EAS
-    REAL(dp)                            :: C_abl_Q_GRL
-    REAL(dp)                            :: C_abl_Q_ANT
-    REAL(dp)                            :: C_refr_NAM
-    REAL(dp)                            :: C_refr_EAS
-    REAL(dp)                            :: C_refr_GRL
-    REAL(dp)                            :: C_refr_ANT
 
     ! Which data fields will be written to the help_fields output file
     ! ================================================================
@@ -1734,6 +1578,7 @@ CONTAINS
                      res_max_mountain_config,                         &
                      res_max_coast_config,                            &
                      mesh_fitness_threshold_config,                   &
+                     use_submesh_config,                              &
                      dx_grid_output_config,                           &
                      dx_grid_GIA_config,                              &
                      dx_grid_smooth_config,                           &
@@ -1758,7 +1603,6 @@ CONTAINS
                      uniform_ice_heat_capacity_config,                &
                      choice_ice_thermal_conductivity_config,          &
                      uniform_ice_thermal_conductivity_config,         &
-                     use_submesh_config,                              &
                      choice_climate_model_config,                     &
                      choice_idealised_climate_config,                 &
                      filename_direct_global_climate_config,           &
@@ -1851,54 +1695,6 @@ CONTAINS
                      BMB_Favier2019_lin_GammaT_config,                &
                      BMB_Favier2019_quad_GammaT_config,               &
                      BMB_Favier2019_Mplus_GammaT_config,              &
-                     BMB_Lazeroms2018_GammaT_config,                  &
-                     BMB_Lazeroms2018_find_GL_scheme_config,          &
-                     BMB_PICO_nboxes_config,                          &
-                     BMB_PICO_GammaTstar_config,                      &
-                     T_ocean_mean_PD_NAM_config,                      &
-                     T_ocean_mean_PD_EAS_config,                      &
-                     T_ocean_mean_PD_GRL_config,                      &
-                     T_ocean_mean_PD_ANT_config,                      &
-                     T_ocean_mean_cold_NAM_config,                    &
-                     T_ocean_mean_cold_EAS_config,                    &
-                     T_ocean_mean_cold_GRL_config,                    &
-                     T_ocean_mean_cold_ANT_config,                    &
-                     T_ocean_mean_warm_NAM_config,                    &
-                     T_ocean_mean_warm_EAS_config,                    &
-                     T_ocean_mean_warm_GRL_config,                    &
-                     T_ocean_mean_warm_ANT_config,                    &
-                     BMB_deepocean_PD_NAM_config,                     &
-                     BMB_deepocean_PD_EAS_config,                     &
-                     BMB_deepocean_PD_GRL_config,                     &
-                     BMB_deepocean_PD_ANT_config,                     &
-                     BMB_deepocean_cold_NAM_config,                   &
-                     BMB_deepocean_cold_EAS_config,                   &
-                     BMB_deepocean_cold_GRL_config,                   &
-                     BMB_deepocean_cold_ANT_config,                   &
-                     BMB_deepocean_warm_NAM_config,                   &
-                     BMB_deepocean_warm_EAS_config,                   &
-                     BMB_deepocean_warm_GRL_config,                   &
-                     BMB_deepocean_warm_ANT_config,                   &
-                     BMB_shelf_exposed_PD_NAM_config,                 &
-                     BMB_shelf_exposed_PD_EAS_config,                 &
-                     BMB_shelf_exposed_PD_GRL_config,                 &
-                     BMB_shelf_exposed_PD_ANT_config,                 &
-                     BMB_shelf_exposed_cold_NAM_config,               &
-                     BMB_shelf_exposed_cold_EAS_config,               &
-                     BMB_shelf_exposed_cold_GRL_config,               &
-                     BMB_shelf_exposed_cold_ANT_config,               &
-                     BMB_shelf_exposed_warm_NAM_config,               &
-                     BMB_shelf_exposed_warm_EAS_config,               &
-                     BMB_shelf_exposed_warm_GRL_config,               &
-                     BMB_shelf_exposed_warm_ANT_config,               &
-                     subshelf_melt_factor_NAM_config,                 &
-                     subshelf_melt_factor_EAS_config,                 &
-                     subshelf_melt_factor_GRL_config,                 &
-                     subshelf_melt_factor_ANT_config,                 &
-                     deep_ocean_threshold_depth_NAM_config,           &
-                     deep_ocean_threshold_depth_EAS_config,           &
-                     deep_ocean_threshold_depth_GRL_config,           &
-                     deep_ocean_threshold_depth_ANT_config,           &
                      do_ocean_floodfill_config,                       &
                      choice_sealevel_model_config,                    &
                      fixed_sealevel_config,                           &
@@ -1908,23 +1704,6 @@ CONTAINS
                      ELRA_lithosphere_flex_rigidity_config,           &
                      ELRA_bedrock_relaxation_time_config,             &
                      ELRA_mantle_density_config,                      &
-                     constant_lapserate_config,                       &
-                     C_abl_constant_NAM_config,                       &
-                     C_abl_constant_EAS_config,                       &
-                     C_abl_constant_GRL_config,                       &
-                     C_abl_constant_ANT_config,                       &
-                     C_abl_Ts_NAM_config,                             &
-                     C_abl_Ts_EAS_config,                             &
-                     C_abl_Ts_GRL_config,                             &
-                     C_abl_Ts_ANT_config,                             &
-                     C_abl_Q_NAM_config,                              &
-                     C_abl_Q_EAS_config,                              &
-                     C_abl_Q_GRL_config,                              &
-                     C_abl_Q_ANT_config,                              &
-                     C_refr_NAM_config,                               &
-                     C_refr_EAS_config,                               &
-                     C_refr_GRL_config,                               &
-                     C_refr_ANT_config,                               &
                      help_field_01_config,                            &
                      help_field_02_config,                            &
                      help_field_03_config,                            &
@@ -2092,6 +1871,7 @@ CONTAINS
     C%res_max_mountain                         = res_max_mountain_config
     C%res_max_coast                            = res_max_coast_config
     C%mesh_fitness_threshold                   = mesh_fitness_threshold_config
+    C%use_submesh                              = use_submesh_config
 
     ! The smallest allowed resolution
     C%res_min = MIN( MIN( MIN( MIN( C%res_max_margin, C%res_max_gl), C%res_max_cf), C%res_max_mountain), C%res_max_coast)
@@ -2341,7 +2121,6 @@ CONTAINS
     C%uniform_ice_heat_capacity                = uniform_ice_heat_capacity_config
     C%choice_ice_thermal_conductivity          = choice_ice_thermal_conductivity_config
     C%uniform_ice_thermal_conductivity         = uniform_ice_thermal_conductivity_config
-    C%use_submesh                              = use_submesh_config
 
     ! Climate
     ! =======
@@ -2480,64 +2259,6 @@ CONTAINS
     C%BMB_Favier2019_quad_GammaT               = BMB_Favier2019_quad_GammaT_config
     C%BMB_Favier2019_Mplus_GammaT              = BMB_Favier2019_Mplus_GammaT_config
 
-    ! Parameters for the Lazeroms et al. (2018) plume-parameterisation BMB model
-    C%BMB_Lazeroms2018_GammaT                  = BMB_Lazeroms2018_GammaT_config
-    C%BMB_Lazeroms2018_find_GL_scheme          = BMB_Lazeroms2018_find_GL_scheme_config
-
-    ! Parameters for the PICO BMB model
-    C%BMB_PICO_nboxes                          = BMB_PICO_nboxes_config
-    C%BMB_PICO_GammaTstar                      = BMB_PICO_GammaTstar_config
-
-    ! Parameters for the ANICE_legacy sub-shelf melt model
-    C%T_ocean_mean_PD_NAM                      = T_ocean_mean_PD_NAM_config
-    C%T_ocean_mean_PD_EAS                      = T_ocean_mean_PD_EAS_config
-    C%T_ocean_mean_PD_GRL                      = T_ocean_mean_PD_GRL_config
-    C%T_ocean_mean_PD_ANT                      = T_ocean_mean_PD_ANT_config
-    C%T_ocean_mean_cold_NAM                    = T_ocean_mean_cold_NAM_config
-    C%T_ocean_mean_cold_EAS                    = T_ocean_mean_cold_EAS_config
-    C%T_ocean_mean_cold_GRL                    = T_ocean_mean_cold_GRL_config
-    C%T_ocean_mean_cold_ANT                    = T_ocean_mean_cold_ANT_config
-    C%T_ocean_mean_warm_NAM                    = T_ocean_mean_warm_NAM_config
-    C%T_ocean_mean_warm_EAS                    = T_ocean_mean_warm_EAS_config
-    C%T_ocean_mean_warm_GRL                    = T_ocean_mean_warm_GRL_config
-    C%T_ocean_mean_warm_ANT                    = T_ocean_mean_warm_ANT_config
-
-    C%BMB_deepocean_PD_NAM                     = BMB_deepocean_PD_NAM_config
-    C%BMB_deepocean_PD_EAS                     = BMB_deepocean_PD_EAS_config
-    C%BMB_deepocean_PD_GRL                     = BMB_deepocean_PD_GRL_config
-    C%BMB_deepocean_PD_ANT                     = BMB_deepocean_PD_ANT_config
-    C%BMB_deepocean_cold_NAM                   = BMB_deepocean_cold_NAM_config
-    C%BMB_deepocean_cold_EAS                   = BMB_deepocean_cold_EAS_config
-    C%BMB_deepocean_cold_GRL                   = BMB_deepocean_cold_GRL_config
-    C%BMB_deepocean_cold_ANT                   = BMB_deepocean_cold_ANT_config
-    C%BMB_deepocean_warm_NAM                   = BMB_deepocean_warm_NAM_config
-    C%BMB_deepocean_warm_EAS                   = BMB_deepocean_warm_EAS_config
-    C%BMB_deepocean_warm_GRL                   = BMB_deepocean_warm_GRL_config
-    C%BMB_deepocean_warm_ANT                   = BMB_deepocean_warm_ANT_config
-
-    C%BMB_shelf_exposed_PD_NAM                 = BMB_shelf_exposed_PD_NAM_config
-    C%BMB_shelf_exposed_PD_EAS                 = BMB_shelf_exposed_PD_EAS_config
-    C%BMB_shelf_exposed_PD_GRL                 = BMB_shelf_exposed_PD_GRL_config
-    C%BMB_shelf_exposed_PD_ANT                 = BMB_shelf_exposed_PD_ANT_config
-    C%BMB_shelf_exposed_cold_NAM               = BMB_shelf_exposed_cold_NAM_config
-    C%BMB_shelf_exposed_cold_EAS               = BMB_shelf_exposed_cold_EAS_config
-    C%BMB_shelf_exposed_cold_GRL               = BMB_shelf_exposed_cold_GRL_config
-    C%BMB_shelf_exposed_warm_NAM               = BMB_shelf_exposed_warm_NAM_config
-    C%BMB_shelf_exposed_cold_ANT               = BMB_shelf_exposed_cold_ANT_config
-    C%BMB_shelf_exposed_warm_EAS               = BMB_shelf_exposed_warm_EAS_config
-    C%BMB_shelf_exposed_warm_GRL               = BMB_shelf_exposed_warm_GRL_config
-    C%BMB_shelf_exposed_warm_ANT               = BMB_shelf_exposed_warm_ANT_config
-
-    C%subshelf_melt_factor_NAM                 = subshelf_melt_factor_NAM_config
-    C%subshelf_melt_factor_EAS                 = subshelf_melt_factor_EAS_config
-    C%subshelf_melt_factor_GRL                 = subshelf_melt_factor_GRL_config
-    C%subshelf_melt_factor_ANT                 = subshelf_melt_factor_ANT_config
-
-    C%deep_ocean_threshold_depth_NAM           = deep_ocean_threshold_depth_NAM_config
-    C%deep_ocean_threshold_depth_EAS           = deep_ocean_threshold_depth_EAS_config
-    C%deep_ocean_threshold_depth_GRL           = deep_ocean_threshold_depth_GRL_config
-    C%deep_ocean_threshold_depth_ANT           = deep_ocean_threshold_depth_ANT_config
-
     ! Sea level and GIA
     ! =================
 
@@ -2551,26 +2272,6 @@ CONTAINS
     C%ELRA_lithosphere_flex_rigidity           = ELRA_lithosphere_flex_rigidity_config
     C%ELRA_bedrock_relaxation_time             = ELRA_bedrock_relaxation_time_config
     C%ELRA_mantle_density                      = ELRA_mantle_density_config
-
-    ! SMB melt tuning
-    ! ===============
-
-    C%C_abl_constant_NAM                       = C_abl_constant_NAM_config
-    C%C_abl_constant_EAS                       = C_abl_constant_EAS_config
-    C%C_abl_constant_GRL                       = C_abl_constant_GRL_config
-    C%C_abl_constant_ANT                       = C_abl_constant_ANT_config
-    C%C_abl_Ts_NAM                             = C_abl_Ts_NAM_config
-    C%C_abl_Ts_EAS                             = C_abl_Ts_EAS_config
-    C%C_abl_Ts_GRL                             = C_abl_Ts_GRL_config
-    C%C_abl_Ts_ANT                             = C_abl_Ts_ANT_config
-    C%C_abl_Q_NAM                              = C_abl_Q_NAM_config
-    C%C_abl_Q_EAS                              = C_abl_Q_EAS_config
-    C%C_abl_Q_GRL                              = C_abl_Q_GRL_config
-    C%C_abl_Q_ANT                              = C_abl_Q_ANT_config
-    C%C_refr_NAM                               = C_refr_NAM_config
-    C%C_refr_EAS                               = C_refr_EAS_config
-    C%C_refr_GRL                               = C_refr_GRL_config
-    C%C_refr_ANT                               = C_refr_ANT_config
 
     ! Which data fields will be written to the help_fields output file
     ! ================================================================

@@ -53,7 +53,8 @@ MODULE netcdf_output_module
                                              write_var_dp_0D , write_var_dp_1D , write_var_dp_2D , write_var_dp_3D , write_var_dp_4D, &
                                              check_xy_grid_field_int_2D, check_xy_grid_field_dp_2D, check_xy_grid_field_dp_2D_monthly, check_xy_grid_field_dp_3D, &
                                              check_lonlat_grid_field_int_2D, check_lonlat_grid_field_dp_2D, check_lonlat_grid_field_dp_2D_monthly, check_lonlat_grid_field_dp_3D, &
-                                             check_mesh_field_int_2D, check_mesh_field_dp_2D, check_mesh_field_dp_2D_monthly, check_mesh_field_dp_3D
+                                             check_mesh_field_int_2D, check_mesh_field_dp_2D, check_mesh_field_dp_2D_monthly, check_mesh_field_dp_3D, &
+                                             check_mesh_field_int_2D_b, check_mesh_field_int_2D_c, check_mesh_field_dp_2D_b, check_mesh_field_dp_2D_c
   USE netcdf_input_module,             ONLY: setup_xy_grid_from_file
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, map_mesh2grid_2D, map_mesh2grid_3D
   USE utilities_module,                ONLY: deallocate_grid
@@ -792,14 +793,14 @@ CONTAINS
     ! ================
 
     ! Geometry
-    CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, field_name_options_Hi , region%ice%Hi_a )
-    CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, field_name_options_Hb , region%ice%Hb_a )
-    CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, field_name_options_Hs , region%ice%Hs_a )
-    CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, field_name_options_dHb, region%ice%dHb_a)
-    CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, field_name_options_SL , region%ice%SL_a )
+    CALL write_to_field_multiple_options_mesh_dp_2D( filename, field_name_options_Hi , region%ice%Hi_a )
+    CALL write_to_field_multiple_options_mesh_dp_2D( filename, field_name_options_Hb , region%ice%Hb_a )
+    CALL write_to_field_multiple_options_mesh_dp_2D( filename, field_name_options_Hs , region%ice%Hs_a )
+    CALL write_to_field_multiple_options_mesh_dp_2D( filename, field_name_options_dHb, region%ice%dHb_a)
+    CALL write_to_field_multiple_options_mesh_dp_2D( filename, field_name_options_SL , region%ice%SL_a )
 
     ! Englacial temperature
-    CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, field_name_options_Ti , region%ice%Ti_a )
+    CALL write_to_field_multiple_options_mesh_dp_3D( filename, field_name_options_Ti , region%ice%Ti_a )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1031,182 +1032,182 @@ CONTAINS
 
     ! Geothermal heat flux
     ELSEIF (field_name == 'GHF') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, region%mesh, 'GHF', region%ice%GHF_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, 'GHF', region%ice%GHF_a)
 
     ! Fields with a time dimension
     ! ============================
 
     ! Geometry
     ELSEIF (field_name == 'Hi') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Hi', region%ice%Hi_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Hi', region%ice%Hi_a)
     ELSEIF (field_name == 'Hb') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Hb', region%ice%Hb_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Hb', region%ice%Hb_a)
     ELSEIF (field_name == 'Hs') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Hs', region%ice%Hs_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Hs', region%ice%Hs_a)
     ELSEIF (field_name == 'SL') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'SL', region%ice%SL_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'SL', region%ice%SL_a)
     ELSEIF (field_name == 'dHi') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'dHi', region%ice%dHi_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'dHi', region%ice%dHi_a)
     ELSEIF (field_name == 'dHb') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'dHb', region%ice%dHb_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'dHb', region%ice%dHb_a)
     ELSEIF (field_name == 'dHs') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'dHs', region%ice%dHs_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'dHs', region%ice%dHs_a)
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'Ti', region%ice%Ti_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'Ti', region%ice%Ti_a)
     ELSEIF (field_name == 'Cpi') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'Cpi', region%ice%Cpi_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'Cpi', region%ice%Cpi_a)
     ELSEIF (field_name == 'Ki') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'Ki', region%ice%Ki_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'Ki', region%ice%Ki_a)
     ELSEIF (field_name == 'Ti_basal') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Ti_basal', region%ice%Ti_a( :,C%nz))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Ti_basal', region%ice%Ti_a( :,C%nz))
     ELSEIF (field_name == 'Ti_pmp') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'Ti_pmp', region%ice%Ti_pmp_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'Ti_pmp', region%ice%Ti_pmp_a)
     ELSEIF (field_name == 'A_flow_3D') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'A_flow_3D', region%ice%A_flow_3D_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'A_flow_3D', region%ice%A_flow_3D_a)
     ELSEIF (field_name == 'A_flow_vav') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'A_flow_vav', region%ice%A_flow_vav_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'A_flow_vav', region%ice%A_flow_vav_a)
 
     ! Velocity fields
     ELSEIF (field_name == 'u_3D') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'u_3D', region%ice%u_3D_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'u_3D', region%ice%u_3D_a)
     ELSEIF (field_name == 'v_3D') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'v_3D', region%ice%v_3D_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'v_3D', region%ice%v_3D_a)
     ELSEIF (field_name == 'w_3D') THEN
-      CALL write_to_field_multiple_options_mesh_dp_3D( filename, region%mesh, 'w_3D', region%ice%w_3D_a)
+      CALL write_to_field_multiple_options_mesh_dp_3D( filename, 'w_3D', region%ice%w_3D_a)
     ELSEIF (field_name == 'u_vav') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'u_vav', region%ice%u_vav_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'u_vav', region%ice%u_vav_a)
     ELSEIF (field_name == 'v_vav') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'v_vav', region%ice%v_vav_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'v_vav', region%ice%v_vav_a)
     ELSEIF (field_name == 'uabs_vav') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'uabs_vav', region%ice%uabs_vav_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'uabs_vav', region%ice%uabs_vav_a)
     ELSEIF (field_name == 'u_surf') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'u_surf', region%ice%u_surf_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'u_surf', region%ice%u_surf_a)
     ELSEIF (field_name == 'v_surf') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'v_surf', region%ice%v_surf_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'v_surf', region%ice%v_surf_a)
     ELSEIF (field_name == 'uabs_surf') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'uabs_surf', region%ice%uabs_surf_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'uabs_surf', region%ice%uabs_surf_a)
     ELSEIF (field_name == 'u_base') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'u_base', region%ice%u_base_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'u_base', region%ice%u_base_a)
     ELSEIF (field_name == 'v_base') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'v_base', region%ice%v_base_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'v_base', region%ice%v_base_a)
     ELSEIF (field_name == 'uabs_base') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'uabs_base', region%ice%uabs_base_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'uabs_base', region%ice%uabs_base_a)
 
     ! Climate
     ELSEIF (field_name == 'T2m') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'T2m', region%climate_matrix%applied%T2m)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'T2m', region%climate_matrix%applied%T2m)
     ELSEIF (field_name == 'T2m_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'T2m_year', SUM( region%climate_matrix%applied%T2m,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'T2m_year', SUM( region%climate_matrix%applied%T2m,2) / 12._dp)
     ELSEIF (field_name == 'Precip') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Precip', region%climate_matrix%applied%Precip)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Precip', region%climate_matrix%applied%Precip)
     ELSEIF (field_name == 'Precip_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Precip_year', SUM( region%climate_matrix%applied%Precip,2) )
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Precip_year', SUM( region%climate_matrix%applied%Precip,2) )
     ELSEIF (field_name == 'Wind_WE') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Wind_WE', region%climate_matrix%applied%Wind_WE)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Wind_WE', region%climate_matrix%applied%Wind_WE)
     ELSEIF (field_name == 'Wind_WE_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Wind_WE_year', SUM( region%climate_matrix%applied%Wind_WE,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Wind_WE_year', SUM( region%climate_matrix%applied%Wind_WE,2) / 12._dp)
     ELSEIF (field_name == 'Wind_SN') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Wind_SN', region%climate_matrix%applied%Wind_SN)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Wind_SN', region%climate_matrix%applied%Wind_SN)
     ELSEIF (field_name == 'Wind_SN_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Wind_SN_year', SUM( region%climate_matrix%applied%Wind_SN,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Wind_SN_year', SUM( region%climate_matrix%applied%Wind_SN,2) / 12._dp)
     ELSEIF (field_name == 'Wind_LR') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Wind_LR', region%climate_matrix%applied%Wind_LR)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Wind_LR', region%climate_matrix%applied%Wind_LR)
     ELSEIF (field_name == 'Wind_LR_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Wind_LR_year', SUM( region%climate_matrix%applied%Wind_LR,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Wind_LR_year', SUM( region%climate_matrix%applied%Wind_LR,2) / 12._dp)
     ELSEIF (field_name == 'Wind_DU') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Wind_DU', region%climate_matrix%applied%Wind_DU)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Wind_DU', region%climate_matrix%applied%Wind_DU)
     ELSEIF (field_name == 'Wind_DU_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Wind_DU_year', SUM( region%climate_matrix%applied%Wind_DU,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Wind_DU_year', SUM( region%climate_matrix%applied%Wind_DU,2) / 12._dp)
 
     ! Surface mass balance
     ELSEIF (field_name == 'SMB') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'SMB', region%SMB%SMB)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'SMB', region%SMB%SMB)
     ELSEIF (field_name == 'SMB_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'SMB_year', SUM( region%SMB%SMB,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'SMB_year', SUM( region%SMB%SMB,2))
     ELSEIF (field_name == 'Snowfall') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Snowfall', region%SMB%Snowfall)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Snowfall', region%SMB%Snowfall)
     ELSEIF (field_name == 'Snowfall_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Snowfall_year', SUM( region%SMB%Snowfall,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Snowfall_year', SUM( region%SMB%Snowfall,2))
     ELSEIF (field_name == 'Rainfall') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Rainfall', region%SMB%Rainfall)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Rainfall', region%SMB%Rainfall)
     ELSEIF (field_name == 'Rainfall_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Rainfall_year', SUM( region%SMB%Rainfall,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Rainfall_year', SUM( region%SMB%Rainfall,2))
     ELSEIF (field_name == 'AddedFirn') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'AddedFirn', region%SMB%AddedFirn)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'AddedFirn', region%SMB%AddedFirn)
     ELSEIF (field_name == 'AddedFirn_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'AddedFirn_year', SUM( region%SMB%AddedFirn,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'AddedFirn_year', SUM( region%SMB%AddedFirn,2))
     ELSEIF (field_name == 'Refreezing') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Refreezing', region%SMB%Refreezing)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Refreezing', region%SMB%Refreezing)
     ELSEIF (field_name == 'Refreezing_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Refreezing_year', SUM( region%SMB%Refreezing,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Refreezing_year', SUM( region%SMB%Refreezing,2))
     ELSEIF (field_name == 'Melt') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Melt', region%SMB%Melt)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Melt', region%SMB%Melt)
     ELSEIF (field_name == 'Melt_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Melt_year', SUM( region%SMB%Melt,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Melt_year', SUM( region%SMB%Melt,2))
     ELSEIF (field_name == 'Runoff') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Runoff', region%SMB%Runoff)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Runoff', region%SMB%Runoff)
     ELSEIF (field_name == 'Runoff_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Runoff_year', SUM( region%SMB%Runoff,2))
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Runoff_year', SUM( region%SMB%Runoff,2))
     ELSEIF (field_name == 'Albedo') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'Albedo', region%SMB%Albedo)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'Albedo', region%SMB%Albedo)
     ELSEIF (field_name == 'Albedo_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'Albedo_year', SUM( region%SMB%Albedo,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'Albedo_year', SUM( region%SMB%Albedo,2) / 12._dp)
     ELSEIF (field_name == 'FirnDepth') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, region%mesh, 'FirnDepth', region%SMB%FirnDepth)
+      CALL write_to_field_multiple_options_mesh_dp_2D_monthly( filename, 'FirnDepth', region%SMB%FirnDepth)
     ELSEIF (field_name == 'FirnDepth_year') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'FirnDepth_year', SUM( region%SMB%FirnDepth,2) / 12._dp)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'FirnDepth_year', SUM( region%SMB%FirnDepth,2) / 12._dp)
 
     ! Basal mass balance
     ELSEIF (field_name == 'BMB') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'BMB', region%BMB%BMB)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'BMB', region%BMB%BMB)
     ELSEIF (field_name == 'BMB_sheet') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'BMB_sheet', region%BMB%BMB_sheet)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'BMB_sheet', region%BMB%BMB_sheet)
     ELSEIF (field_name == 'BMB_shelf') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'BMB_shelf', region%BMB%BMB_shelf)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'BMB_shelf', region%BMB%BMB_shelf)
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask', region%ice%mask_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask', region%ice%mask_a)
     ELSEIF (field_name == 'mask_land') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_land', region%ice%mask_land_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_land', region%ice%mask_land_a)
     ELSEIF (field_name == 'mask_ocean') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_ocean', region%ice%mask_ocean_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_ocean', region%ice%mask_ocean_a)
     ELSEIF (field_name == 'mask_lake') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_lake', region%ice%mask_lake_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_lake', region%ice%mask_lake_a)
     ELSEIF (field_name == 'mask_ice') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_ice', region%ice%mask_ice_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_ice', region%ice%mask_ice_a)
     ELSEIF (field_name == 'mask_sheet') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_sheet', region%ice%mask_sheet_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_sheet', region%ice%mask_sheet_a)
     ELSEIF (field_name == 'mask_shelf') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_shelf', region%ice%mask_shelf_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_shelf', region%ice%mask_shelf_a)
     ELSEIF (field_name == 'mask_coast') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_coast', region%ice%mask_coast_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_coast', region%ice%mask_coast_a)
     ELSEIF (field_name == 'mask_margin') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_margin', region%ice%mask_margin_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_margin', region%ice%mask_margin_a)
     ELSEIF (field_name == 'mask_gl') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_gl', region%ice%mask_gl_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_gl', region%ice%mask_gl_a)
     ELSEIF (field_name == 'mask_cf') THEN
-      CALL write_to_field_multiple_options_mesh_int_2D( filename, region%mesh, 'mask_cf', region%ice%mask_cf_a)
+      CALL write_to_field_multiple_options_mesh_int_2D( filename, 'mask_cf', region%ice%mask_cf_a)
 
     ! Basal conditions
     ELSEIF (field_name == 'phi_fric') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'phi_fric', region%ice%phi_fric_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'phi_fric', region%ice%phi_fric_a)
     ELSEIF (field_name == 'tau_yield') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'tau_yield', region%ice%tauc_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'tau_yield', region%ice%tauc_a)
 
     ! Isotopes
     ELSEIF (field_name == 'iso_ice') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'iso_ice', region%ice%IsoIce)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'iso_ice', region%ice%IsoIce)
     ELSEIF (field_name == 'iso_surf') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'iso_surf', region%ice%IsoSurf)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'iso_surf', region%ice%IsoSurf)
 
     ! GIA
     ELSEIF (field_name == 'dHb_dt') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'dHb_dt', region%ice%dHb_dt_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'dHb_dt', region%ice%dHb_dt_a)
     ELSEIF (field_name == 'dSL_dt') THEN
-      CALL write_to_field_multiple_options_mesh_dp_2D( filename, region%mesh, 'dSL_dt', region%ice%dSL_dt_a)
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename, 'dSL_dt', region%ice%dSL_dt_a)
 
     ! Safety
     ELSE
@@ -1833,7 +1834,7 @@ CONTAINS
   END SUBROUTINE write_to_field_multiple_options_grid_dp_3D_notime
 
   ! Write data to a mesh output file
-  SUBROUTINE write_to_field_multiple_options_mesh_int_2D( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_int_2D(               filename, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
     !
@@ -1843,7 +1844,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: d
 
@@ -1851,6 +1851,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_int_2D'
     INTEGER                                            :: id_var, id_dim_time, ti
     CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: nV, vi1, vi2
     INTEGER,  DIMENSION(:,:  ), POINTER                ::  d_with_time
     INTEGER                                            :: wd_with_time
 
@@ -1868,14 +1869,16 @@ CONTAINS
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
 
     ! Allocate shared memory
-    CALL allocate_shared_int_2D( mesh%nV, 1, d_with_time, wd_with_time)
+    nV = SIZE( d,1)
+    CALL allocate_shared_int_2D( nV, 1, d_with_time, wd_with_time)
 
     ! Copy data
-    d_with_time( mesh%vi1:mesh%vi2,1) = d( mesh%vi1:mesh%vi2)
+    CALL partition_list( nV, par%i, par%n, vi1, vi2)
+    d_with_time( vi1:vi2,1) = d( vi1:vi2)
     CALL sync
 
     ! Write data to the variable
-    CALL write_var_int_2D( filename, id_var, d_with_time, start = (/ 1, ti /), count = (/ mesh%nV, 1 /) )
+    CALL write_var_int_2D( filename, id_var, d_with_time, start = (/ 1, ti /), count = (/ nV, 1 /) )
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_with_time)
@@ -1885,7 +1888,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_int_2D
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D(                filename, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
     !
@@ -1895,7 +1898,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
 
@@ -1903,6 +1905,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_2D'
     INTEGER                                            :: id_var, id_dim_time, ti
     CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: nV, vi1, vi2
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_with_time
     INTEGER                                            :: wd_with_time
 
@@ -1920,14 +1923,16 @@ CONTAINS
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_2D( mesh%nV, 1, d_with_time, wd_with_time)
+    nV = SIZE( d,1)
+    CALL allocate_shared_dp_2D( nV, 1, d_with_time, wd_with_time)
 
     ! Copy data
-    d_with_time( mesh%vi1:mesh%vi2,1) = d( mesh%vi1:mesh%vi2)
+    CALL partition_list( nV, par%i, par%n, vi1, vi2)
+    d_with_time( vi1:vi2,1) = d( vi1:vi2)
     CALL sync
 
     ! Write data to the variable
-    CALL write_var_dp_2D( filename, id_var, d_with_time, start = (/ 1, ti /), count = (/ mesh%nV, 1 /) )
+    CALL write_var_dp_2D( filename, id_var, d_with_time, start = (/ 1, ti /), count = (/ nV, 1 /) )
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_with_time)
@@ -1937,7 +1942,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly(        filename, field_name_options, d)
     ! Write a 2-D monthly data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D monthly in the physical sense, so a 2-D array!)
     !
@@ -1947,7 +1952,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
 
@@ -1955,6 +1959,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_2D_monthly'
     INTEGER                                            :: id_var, id_dim_time, ti
     CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: nV, vi1, vi2
     REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
     INTEGER                                            :: wd_with_time
 
@@ -1972,14 +1977,16 @@ CONTAINS
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_3D( mesh%nV, 12, 1, d_with_time, wd_with_time)
+    nV = SIZE( d,1)
+    CALL allocate_shared_dp_3D( nV, 12, 1, d_with_time, wd_with_time)
 
     ! Copy data
-    d_with_time( mesh%vi1:mesh%vi2,:,1) = d( mesh%vi1:mesh%vi2,:)
+    CALL partition_list( nV, par%i, par%n, vi1, vi2)
+    d_with_time( vi1:vi2,:,1) = d( vi1:vi2,:)
     CALL sync
 
     ! Write data to the variable
-    CALL write_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, 12, 1 /) )
+    CALL write_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ nV, 12, 1 /) )
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_with_time)
@@ -1989,7 +1996,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D(                filename, field_name_options, d)
     ! Write a 3-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 3-D in the physical sense, so a 2-D array!)
     !
@@ -1999,7 +2006,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
 
@@ -2007,6 +2013,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_3D'
     INTEGER                                            :: id_var, id_dim_time, ti
     CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: nV, vi1, vi2
     REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
     INTEGER                                            :: wd_with_time
 
@@ -2024,14 +2031,16 @@ CONTAINS
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
 
     ! Allocate shared memory
-    CALL allocate_shared_dp_3D( mesh%nV, C%nz, 1, d_with_time, wd_with_time)
+    nV = SIZE( d,1)
+    CALL allocate_shared_dp_3D( nV, C%nz, 1, d_with_time, wd_with_time)
 
     ! Copy data
-    d_with_time( mesh%vi1:mesh%vi2,:,1) = d( mesh%vi1:mesh%vi2,:)
+    CALL partition_list( nV, par%i, par%n, vi1, vi2)
+    d_with_time( vi1:vi2,:,1) = d( vi1:vi2,:)
     CALL sync
 
     ! Write data to the variable
-    CALL write_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, C%nz, 1 /) )
+    CALL write_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ nV, C%nz, 1 /) )
 
     ! Clean up after yourself
     CALL deallocate_shared( wd_with_time)
@@ -2041,7 +2050,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_3D
 
-  SUBROUTINE write_to_field_multiple_options_mesh_int_2D_notime( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_int_2D_notime(        filename, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
     !
@@ -2051,7 +2060,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: d
 
@@ -2078,7 +2086,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_int_2D_notime
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_notime( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_int_2D_b_notime(      filename, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
     !
@@ -2088,7 +2096,78 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_int_2D_b_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_int_2D_b( filename, var_name, should_have_time = .FALSE.)
+
+    ! Write data to the variable
+    CALL write_var_int_1D( filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_int_2D_b_notime
+
+  SUBROUTINE write_to_field_multiple_options_mesh_int_2D_c_notime(      filename, field_name_options, d)
+    ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    INTEGER,  DIMENSION(:    ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_int_2D_c_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_int_2D_c( filename, var_name, should_have_time = .FALSE.)
+
+    ! Write data to the variable
+    CALL write_var_int_1D( filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_int_2D_c_notime
+
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_notime(         filename, field_name_options, d)
+    ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
 
@@ -2115,7 +2194,79 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_notime
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly_notime( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_b_notime(       filename, field_name_options, d)
+    ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_2D_b_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_dp_2D_b( filename, var_name, should_have_time = .FALSE.)
+
+    ! Write data to the variable
+    CALL write_var_dp_1D( filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_b_notime
+
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_c_notime(       filename, field_name_options, d)
+    ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 2-D in the physical sense, so a 1-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_2D_c_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_dp_2D_c( filename, var_name, should_have_time = .FALSE.)
+
+    ! Write data to the variable
+    CALL write_var_dp_1D( filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_c_notime
+
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly_notime( filename, field_name_options, d)
     ! Write a 2-D monthly data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 2-D monthly in the physical sense, so a 2-D array!)
     !
@@ -2125,7 +2276,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
 
@@ -2152,7 +2302,7 @@ CONTAINS
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_2D_monthly_notime
 
-  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_notime( filename, mesh, field_name_options, d)
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_notime(         filename, field_name_options, d)
     ! Write a 3-D data field defined on a mesh to a NetCDF file variable on the same mesh
     ! (Mind you, that's 3-D in the physical sense, so a 2-D array!)
     !
@@ -2162,7 +2312,6 @@ CONTAINS
 
     ! In/output variables:
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
     CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
 
@@ -2793,16 +2942,16 @@ CONTAINS
 
     ! R
     CALL add_field_mesh_dp_2D_notime( filename, get_first_option_from_list( field_name_options_R             ), long_name = 'Resolution', units = 'm')
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, mesh, field_name_options_R  , mesh%R  )
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, field_name_options_R  , mesh%R  )
     ! A
     CALL add_field_mesh_dp_2D_notime( filename, get_first_option_from_list( field_name_options_A             ), long_name = 'Voronoi cell area', units = 'm^2')
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, mesh, field_name_options_A  , mesh%A  )
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, field_name_options_A  , mesh%A  )
     ! lon
     CALL add_field_mesh_dp_2D_notime( filename, get_first_option_from_list( field_name_options_lon           ), long_name = 'Longitude', units = 'degrees east')
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, mesh, field_name_options_lon, mesh%lon)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, field_name_options_lon, mesh%lon)
     ! lat
     CALL add_field_mesh_dp_2D_notime( filename, get_first_option_from_list( field_name_options_lat           ), long_name = 'Latitude' , units = 'degrees north')
-    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, mesh, field_name_options_lat, mesh%lat)
+    CALL write_to_field_multiple_options_mesh_dp_2D_notime( filename, field_name_options_lat, mesh%lat)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -3033,6 +3182,90 @@ CONTAINS
 
   END SUBROUTINE add_field_mesh_int_2D_notime
 
+  SUBROUTINE add_field_mesh_int_2D_b_notime( filename, var_name, long_name, units)
+    ! Add a 2-D variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_int_2D_b_notime'
+    INTEGER                                            :: id_dim_ti, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nTri, id_dim_ti  )
+
+    ! Safety
+    IF (id_dim_ti   == -1) CALL crash('no ti dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_INT, (/ id_dim_ti /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_int_2D_b( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_int_2D_b_notime
+
+  SUBROUTINE add_field_mesh_int_2D_c_notime( filename, var_name, long_name, units)
+    ! Add a 2-D variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_int_2D_c_notime'
+    INTEGER                                            :: id_dim_aci, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nAc, id_dim_aci  )
+
+    ! Safety
+    IF (id_dim_aci   == -1) CALL crash('no aci dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_INT, (/ id_dim_aci /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_int_2D_b( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_int_2D_c_notime
+
   SUBROUTINE add_field_mesh_dp_2D_notime( filename, var_name, long_name, units)
     ! Add a 2-D variable to an existing NetCDF file with a mesh
 
@@ -3074,6 +3307,90 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE add_field_mesh_dp_2D_notime
+
+  SUBROUTINE add_field_mesh_dp_2D_b_notime( filename, var_name, long_name, units)
+    ! Add a 2-D variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_dp_2D_b_notime'
+    INTEGER                                            :: id_dim_ti, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nTri, id_dim_ti  )
+
+    ! Safety
+    IF (id_dim_ti   == -1) CALL crash('no ti dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_ti /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_dp_2D( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_dp_2D_b_notime
+
+  SUBROUTINE add_field_mesh_dp_2D_c_notime( filename, var_name, long_name, units)
+    ! Add a 2-D variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_dp_2D_c_notime'
+    INTEGER                                            :: id_dim_aci, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nAc, id_dim_aci  )
+
+    ! Safety
+    IF (id_dim_aci   == -1) CALL crash('no aci dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_aci /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_dp_2D( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_dp_2D_c_notime
 
   SUBROUTINE add_field_mesh_dp_2D_monthly_notime( filename, var_name, long_name, units)
     ! Add a 2-D monthly variable to an existing NetCDF file with a mesh

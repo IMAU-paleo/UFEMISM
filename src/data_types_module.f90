@@ -1523,6 +1523,9 @@ MODULE data_types_module
     ! NetCDF debug file
     TYPE(type_netcdf_debug)                 :: netcdf
 
+    ! NetCDF debug file name
+    CHARACTER(LEN=256)                      :: filename
+
     ! Data
     INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_01
     INTEGER,  DIMENSION(:    ), POINTER     :: int_2D_a_02

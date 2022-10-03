@@ -65,6 +65,7 @@ UFEMISM_program_objects = \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \
+        netcdf_debug_module.o \
         restart_module.o \
         forcing_module.o \
         reference_fields_module.o \
@@ -120,6 +121,7 @@ UFEMISM_program_objects = \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \
+        netcdf_debug_module.o \
         restart_module.o \
         forcing_module.o \
         reference_fields_module.o \

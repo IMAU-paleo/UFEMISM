@@ -1938,6 +1938,204 @@ CONTAINS
 
   END SUBROUTINE check_mesh_field_int_2D
 
+  SUBROUTINE check_mesh_field_int_2D_b(               filename, var_name, should_have_time)
+    ! Check if this file contains a 2-D mesh variable by this name
+    !
+    ! NOTE: this is 2-D in the physical sense, so a 1-D array!
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: should_have_time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_mesh_field_int_2D_b'
+    INTEGER                                            :: id_dim_ti, id_dim_time, id_var
+    INTEGER                                            :: var_type
+    INTEGER                                            :: ndims_of_var
+    INTEGER, DIMENSION( NF90_MAX_VAR_DIMS)             :: dims_of_var
+    LOGICAL                                            :: file_has_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Check if the file has valid mesh dimensions and variables
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire mesh dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nTri, id_dim_ti)
+
+    ! Inquire variable
+    CALL inquire_var( filename, var_name, id_var)
+    IF (id_var == -1) CALL crash('variable "' // TRIM( var_name) // '" could not be found in file "' // TRIM( filename) // '"!')
+
+    ! Inquire variable info
+    CALL inquire_var_info( filename, id_var, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
+
+    ! Check variable type
+    IF (.NOT. var_type == NF90_INT) THEN
+      CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" is not of type NF90_INT!')
+    END IF
+
+    ! Check mesh dimensions
+    IF (.NOT. ANY( dims_of_var == id_dim_ti)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have ti as a dimension!')
+
+    IF (.NOT. PRESENT( should_have_time)) THEN
+      ! This variable is allowed to either have or not have a time dimension
+
+      ! Check if the file contains a time dimension
+      CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+      IF (id_dim_time == -1) THEN
+        file_has_time = .FALSE.
+      ELSE
+        file_has_time = .TRUE.
+      END IF
+
+      IF (file_has_time) THEN
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var == 1) THEN
+          ! The variable only has vi as a dimension
+        ELSE
+          IF (ndims_of_var == 2) THEN
+            IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' &
+              // TRIM( filename) // '" has two dimensions, but the second one is not time!')
+          ELSE
+            CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+          END IF
+        END IF
+      ELSE ! IF (file_has_time) THEN
+        ! The file does not have a time dimension; the variable should only have vi as a dimension
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+      END IF ! IF (file_has_time) THEN
+
+    ELSE ! IF (.NOT. PRESENT( should_have_time)) THEN
+      IF (should_have_time) THEN
+        ! This variable should have a time dimension
+
+        ! Check if the file has a valid time dimension
+        CALL check_time( filename)
+
+        ! Inquire the time dimension
+        CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+        IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have time as a dimension!')
+
+      ELSE ! IF (should_have_time) THEN
+        ! This variable should not have a time dimension; the variable should only have vi as a dimension
+
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+
+      END IF ! IF (should_have_time) THEN
+    END IF ! IF (.NOT. PRESENT( should_have_time)) THEN
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE check_mesh_field_int_2D_b
+
+  SUBROUTINE check_mesh_field_int_2D_c(               filename, var_name, should_have_time)
+    ! Check if this file contains a 2-D mesh variable by this name
+    !
+    ! NOTE: this is 2-D in the physical sense, so a 1-D array!
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: should_have_time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_mesh_field_int_2D_c'
+    INTEGER                                            :: id_dim_aci, id_dim_time, id_var
+    INTEGER                                            :: var_type
+    INTEGER                                            :: ndims_of_var
+    INTEGER, DIMENSION( NF90_MAX_VAR_DIMS)             :: dims_of_var
+    LOGICAL                                            :: file_has_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Check if the file has valid mesh dimensions and variables
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire mesh dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nAc, id_dim_aci)
+
+    ! Inquire variable
+    CALL inquire_var( filename, var_name, id_var)
+    IF (id_var == -1) CALL crash('variable "' // TRIM( var_name) // '" could not be found in file "' // TRIM( filename) // '"!')
+
+    ! Inquire variable info
+    CALL inquire_var_info( filename, id_var, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
+
+    ! Check variable type
+    IF (.NOT. var_type == NF90_INT) THEN
+      CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" is not of type NF90_INT!')
+    END IF
+
+    ! Check mesh dimensions
+    IF (.NOT. ANY( dims_of_var == id_dim_aci)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have aci as a dimension!')
+
+    IF (.NOT. PRESENT( should_have_time)) THEN
+      ! This variable is allowed to either have or not have a time dimension
+
+      ! Check if the file contains a time dimension
+      CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+      IF (id_dim_time == -1) THEN
+        file_has_time = .FALSE.
+      ELSE
+        file_has_time = .TRUE.
+      END IF
+
+      IF (file_has_time) THEN
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var == 1) THEN
+          ! The variable only has vi as a dimension
+        ELSE
+          IF (ndims_of_var == 2) THEN
+            IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' &
+              // TRIM( filename) // '" has two dimensions, but the second one is not time!')
+          ELSE
+            CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+          END IF
+        END IF
+      ELSE ! IF (file_has_time) THEN
+        ! The file does not have a time dimension; the variable should only have vi as a dimension
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+      END IF ! IF (file_has_time) THEN
+
+    ELSE ! IF (.NOT. PRESENT( should_have_time)) THEN
+      IF (should_have_time) THEN
+        ! This variable should have a time dimension
+
+        ! Check if the file has a valid time dimension
+        CALL check_time( filename)
+
+        ! Inquire the time dimension
+        CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+        IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have time as a dimension!')
+
+      ELSE ! IF (should_have_time) THEN
+        ! This variable should not have a time dimension; the variable should only have vi as a dimension
+
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+
+      END IF ! IF (should_have_time) THEN
+    END IF ! IF (.NOT. PRESENT( should_have_time)) THEN
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE check_mesh_field_int_2D_c
+
   SUBROUTINE check_mesh_field_dp_2D(                filename, var_name, should_have_time)
     ! Check if this file contains a 2-D mesh variable by this name
     !
@@ -2036,6 +2234,204 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE check_mesh_field_dp_2D
+
+  SUBROUTINE check_mesh_field_dp_2D_b(                filename, var_name, should_have_time)
+    ! Check if this file contains a 2-D mesh variable by this name
+    !
+    ! NOTE: this is 2-D in the physical sense, so a 1-D array!
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: should_have_time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_mesh_field_dp_2D_b'
+    INTEGER                                            :: id_dim_ti, id_dim_time, id_var
+    INTEGER                                            :: var_type
+    INTEGER                                            :: ndims_of_var
+    INTEGER, DIMENSION( NF90_MAX_VAR_DIMS)             :: dims_of_var
+    LOGICAL                                            :: file_has_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Check if the file has valid mesh dimensions and variables
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire mesh dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nTri, id_dim_ti)
+
+    ! Inquire variable
+    CALL inquire_var( filename, var_name, id_var)
+    IF (id_var == -1) CALL crash('variable "' // TRIM( var_name) // '" could not be found in file "' // TRIM( filename) // '"!')
+
+    ! Inquire variable info
+    CALL inquire_var_info( filename, id_var, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
+
+    ! Check variable type
+    IF (.NOT. (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE)) THEN
+      CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" is not of type NF90_FLOAT or NF90_DOUBLE!')
+    END IF
+
+    ! Check mesh dimensions
+    IF (.NOT. ANY( dims_of_var == id_dim_ti)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have ti as a dimension!')
+
+    IF (.NOT. PRESENT( should_have_time)) THEN
+      ! This variable is allowed to either have or not have a time dimension
+
+      ! Check if the file contains a time dimension
+      CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+      IF (id_dim_time == -1) THEN
+        file_has_time = .FALSE.
+      ELSE
+        file_has_time = .TRUE.
+      END IF
+
+      IF (file_has_time) THEN
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var == 1) THEN
+          ! The variable only has vi as a dimension
+        ELSE
+          IF (ndims_of_var == 2) THEN
+            IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' &
+              // TRIM( filename) // '" has two dimensions, but the second one is not time!')
+          ELSE
+            CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+          END IF
+        END IF
+      ELSE ! IF (file_has_time) THEN
+        ! The file does not have a time dimension; the variable should only have vi as a dimension
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+      END IF ! IF (file_has_time) THEN
+
+    ELSE ! IF (.NOT. PRESENT( should_have_time)) THEN
+      IF (should_have_time) THEN
+        ! This variable should have a time dimension
+
+        ! Check if the file has a valid time dimension
+        CALL check_time( filename)
+
+        ! Inquire the time dimension
+        CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+        IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have time as a dimension!')
+
+      ELSE ! IF (should_have_time) THEN
+        ! This variable should not have a time dimension; the variable should only have vi as a dimension
+
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+
+      END IF ! IF (should_have_time) THEN
+    END IF ! IF (.NOT. PRESENT( should_have_time)) THEN
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE check_mesh_field_dp_2D_b
+
+  SUBROUTINE check_mesh_field_dp_2D_c(                filename, var_name, should_have_time)
+    ! Check if this file contains a 2-D mesh variable by this name
+    !
+    ! NOTE: this is 2-D in the physical sense, so a 1-D array!
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: should_have_time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_mesh_field_dp_2D_c'
+    INTEGER                                            :: id_dim_aci, id_dim_time, id_var
+    INTEGER                                            :: var_type
+    INTEGER                                            :: ndims_of_var
+    INTEGER, DIMENSION( NF90_MAX_VAR_DIMS)             :: dims_of_var
+    LOGICAL                                            :: file_has_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Check if the file has valid mesh dimensions and variables
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire mesh dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nAc, id_dim_aci)
+
+    ! Inquire variable
+    CALL inquire_var( filename, var_name, id_var)
+    IF (id_var == -1) CALL crash('variable "' // TRIM( var_name) // '" could not be found in file "' // TRIM( filename) // '"!')
+
+    ! Inquire variable info
+    CALL inquire_var_info( filename, id_var, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
+
+    ! Check variable type
+    IF (.NOT. (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE)) THEN
+      CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" is not of type NF90_FLOAT or NF90_DOUBLE!')
+    END IF
+
+    ! Check mesh dimensions
+    IF (.NOT. ANY( dims_of_var == id_dim_aci)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have aci as a dimension!')
+
+    IF (.NOT. PRESENT( should_have_time)) THEN
+      ! This variable is allowed to either have or not have a time dimension
+
+      ! Check if the file contains a time dimension
+      CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+      IF (id_dim_time == -1) THEN
+        file_has_time = .FALSE.
+      ELSE
+        file_has_time = .TRUE.
+      END IF
+
+      IF (file_has_time) THEN
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var == 1) THEN
+          ! The variable only has vi as a dimension
+        ELSE
+          IF (ndims_of_var == 2) THEN
+            IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' &
+              // TRIM( filename) // '" has two dimensions, but the second one is not time!')
+          ELSE
+            CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+          END IF
+        END IF
+      ELSE ! IF (file_has_time) THEN
+        ! The file does not have a time dimension; the variable should only have vi as a dimension
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+      END IF ! IF (file_has_time) THEN
+
+    ELSE ! IF (.NOT. PRESENT( should_have_time)) THEN
+      IF (should_have_time) THEN
+        ! This variable should have a time dimension
+
+        ! Check if the file has a valid time dimension
+        CALL check_time( filename)
+
+        ! Inquire the time dimension
+        CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time)
+
+        ! Check if the variable has time as a dimension
+        IF (ndims_of_var /= 2) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+        IF (.NOT. ANY( dims_of_var == id_dim_time)) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" does not have time as a dimension!')
+
+      ELSE ! IF (should_have_time) THEN
+        ! This variable should not have a time dimension; the variable should only have vi as a dimension
+
+        IF (ndims_of_var /= 1) CALL crash('variable "' // TRIM( var_name) // '" in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+
+      END IF ! IF (should_have_time) THEN
+    END IF ! IF (.NOT. PRESENT( should_have_time)) THEN
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE check_mesh_field_dp_2D_c
 
   SUBROUTINE check_mesh_field_dp_2D_monthly(        filename, var_name, should_have_time)
     ! Check if this file contains a 2-D monthly mesh variable by this name

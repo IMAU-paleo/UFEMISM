@@ -388,6 +388,7 @@ MODULE configuration_module
   LOGICAL             :: remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
   LOGICAL             :: continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
   REAL(dp)            :: continental_shelf_min_height_config         = -2000._dp                        ! Maximum depth of the continental shelf
+  REAL(dp)            :: minimum_ice_thickness_config                = 0._dp                            ! If ice anywhere is thinner than this, remove it
 
   ! Thermodynamics and rheology
   ! ===========================
@@ -944,6 +945,7 @@ MODULE configuration_module
     LOGICAL                             :: remove_shelves_larger_than_PD
     LOGICAL                             :: continental_shelf_calving
     REAL(dp)                            :: continental_shelf_min_height
+    REAL(dp)                            :: minimum_ice_thickness
 
     ! Thermodynamics and rheology
     ! ===========================
@@ -1568,6 +1570,7 @@ CONTAINS
                      remove_shelves_larger_than_PD_config,            &
                      continental_shelf_calving_config,                &
                      continental_shelf_min_height_config,             &
+                     minimum_ice_thickness_config,                    &
                      nconmax_config,                                  &
                      alpha_min_config,                                &
                      dz_max_ice_config,                               &
@@ -2108,6 +2111,7 @@ CONTAINS
     C%remove_shelves_larger_than_PD            = remove_shelves_larger_than_PD_config
     C%continental_shelf_calving                = continental_shelf_calving_config
     C%continental_shelf_min_height             = continental_shelf_min_height_config
+    C%minimum_ice_thickness                    = minimum_ice_thickness_config
 
     ! Thermodynamics and rheology
     ! ===========================

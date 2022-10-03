@@ -267,6 +267,7 @@
     remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
     continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
     continental_shelf_min_height_config         = -2000.0                          ! Maximum depth of the continental shelf
+    minimum_ice_thickness_config                = 0.0                              ! If ice anywhere is thinner than this, remove it
 
   ! Thermodynamics and rheology
   ! ===========================

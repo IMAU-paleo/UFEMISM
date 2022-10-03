@@ -29,7 +29,6 @@ contains
 ! ===== Initialisation =====
 ! ==========================
 
-  ! Initialise all three reference geometries
   subroutine initialise_reference_geometries( refgeo_init, refgeo_PD, refgeo_GIAeq, region_name)
     ! Initialise all three reference geometries
 
@@ -233,23 +232,34 @@ contains
     ! Add routine to path
     call init_routine( routine_name)
 
-    if     (region_name == 'NAM') then
-      refgeo%grid%lambda_M     = C%lambda_M_NAM
-      refgeo%grid%phi_M        = C%phi_M_NAM
-      refgeo%grid%alpha_stereo = C%alpha_stereo_NAM
-    elseif (region_name == 'EAS') then
-      refgeo%grid%lambda_M     = C%lambda_M_EAS
-      refgeo%grid%phi_M        = C%phi_M_EAS
-      refgeo%grid%alpha_stereo = C%alpha_stereo_EAS
-    elseif (region_name == 'GRL') then
-      refgeo%grid%lambda_M     = C%lambda_M_GRL
-      refgeo%grid%phi_M        = C%phi_M_GRL
-      refgeo%grid%alpha_stereo = C%alpha_stereo_GRL
-    elseif (region_name == 'ANT') then
-      refgeo%grid%lambda_M     = C%lambda_M_ANT
-      refgeo%grid%phi_M        = C%phi_M_ANT
-      refgeo%grid%alpha_stereo = C%alpha_stereo_ANT
-    end if
+    ! Projection parameters for this region
+    select case (region_name)
+
+      case ('NAM')
+        ! North America
+        refgeo%grid%lambda_M     = C%lambda_M_NAM
+        refgeo%grid%phi_M        = C%phi_M_NAM
+        refgeo%grid%alpha_stereo = C%alpha_stereo_NAM
+
+      case ('EAS')
+        ! Eurasia
+        refgeo%grid%lambda_M     = C%lambda_M_EAS
+        refgeo%grid%phi_M        = C%phi_M_EAS
+        refgeo%grid%alpha_stereo = C%alpha_stereo_EAS
+
+      case ('GRL')
+        ! Greenland
+        refgeo%grid%lambda_M     = C%lambda_M_GRL
+        refgeo%grid%phi_M        = C%phi_M_GRL
+        refgeo%grid%alpha_stereo = C%alpha_stereo_GRL
+
+      case ('ANT')
+        ! Antarctica
+        refgeo%grid%lambda_M     = C%lambda_M_ANT
+        refgeo%grid%phi_M        = C%phi_M_ANT
+        refgeo%grid%alpha_stereo = C%alpha_stereo_ANT
+
+    end select
 
     ! Inquire if all the required fields are present in the specified NetCDF file,
     ! and determine the dimensions of the memory to be allocated.
@@ -315,6 +325,15 @@ contains
     ! Remove ice based on the no-ice masks (grid versions)
     call apply_mask_noice_grid( refgeo, region_name)
 
+    ! Remove very thin ice
+    do j = 1, refgeo%grid%ny
+    do i = 1, refgeo%grid%nx
+      if (refgeo%Hi_grid( i,j) < C%minimum_ice_thickness) then
+        refgeo%Hi_grid( i,j) = 0._dp
+      end if
+    end do
+    end do
+
     ! Finalise routine path
     call finalise_routine( routine_name)
 
@@ -323,7 +342,6 @@ contains
 ! ===== Secondary data =====
 ! ==========================
 
-  ! Fill in secondary data for the reference geometry (used to force mesh creation)
   subroutine calc_reference_geometry_secondary_data( grid, refgeo)
     ! Fill in secondary data for the reference geometry (used to force mesh creation)
 
@@ -465,7 +483,6 @@ contains
 ! ===== Mesh mapping =====
 ! ========================
 
-  ! Map init and PD references data from their supplied grids to the model mesh
   subroutine map_reference_geometries_to_mesh( region, mesh)
     ! Map the initial, present-day, and GIAeq reference geometries from their original
     ! square grids to the model mesh.
@@ -728,6 +745,13 @@ contains
     ! Map PD data to the mesh
     call map_grid2mesh_2D_partial( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
     call map_grid2mesh_2D_partial( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
+
+    ! Remove very thin ice
+    do vi = mesh%vi1, mesh%vi2
+      if (refgeo%Hi( vi) < C%minimum_ice_thickness) then
+        refgeo%Hi( vi) = 0._dp
+      end if
+    end do
 
     do vi = mesh%vi1, mesh%vi2
       refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)

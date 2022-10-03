@@ -784,9 +784,6 @@ contains
 
     end select
 
-    nsx = 0
-    nsy = 0
-
     ! Resolution
     grid%dx = dx
 

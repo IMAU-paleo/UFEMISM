@@ -956,7 +956,7 @@ CONTAINS
 !   END SUBROUTINE smooth_Shepard_3D_grid
 
 ! == Remove Lake Vostok from Antarctic input geometry data
-  SUBROUTINE remove_Lake_Vostok( x, y, Hi, Hb, Hs)
+  subroutine remove_Lake_Vostok( x, y, Hi, Hb, Hs)
     ! Remove Lake Vostok from Antarctic input geometry data
     ! by manually increasing ice thickness so that Hi = Hs - Hb
     !
@@ -965,51 +965,50 @@ CONTAINS
     !       fills up in a few centuries, but it slows down the model for a while and
     !       it looks ugly, so we just remove it right away.
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: x,y
-    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Hi
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Hb
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: Hs
+    real(dp), dimension(:  ), intent(in)    :: x,y
+    real(dp), dimension(:,:), intent(inout) :: Hi
+    real(dp), dimension(:,:), intent(in)    :: Hb
+    real(dp), dimension(:,:), intent(in)    :: Hs
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'remove_Lake_Vostok'
-    INTEGER                                       :: i,j,nx,ny
-    REAL(dp), PARAMETER                           :: lake_Vostok_xmin = 1164250.0
-    REAL(dp), PARAMETER                           :: lake_Vostok_xmax = 1514250.0
-    REAL(dp), PARAMETER                           :: lake_Vostok_ymin = -470750.0
-    REAL(dp), PARAMETER                           :: lake_Vostok_ymax = -220750.0
-    INTEGER                                       :: il,iu,jl,ju
+    character(len=256), parameter           :: routine_name = 'remove_Lake_Vostok'
+    integer                                 :: i,j,nx,ny
+    real(dp), parameter                     :: lake_Vostok_xmin = 1164250.0
+    real(dp), parameter                     :: lake_Vostok_xmax = 1514250.0
+    real(dp), parameter                     :: lake_Vostok_ymin = -470750.0
+    real(dp), parameter                     :: lake_Vostok_ymax = -220750.0
+    integer                                 :: il,iu,jl,ju
 
-
-    nx = SIZE( Hi,1)
-    ny = SIZE( Hi,2)
+    nx = size( Hi,1)
+    ny = size( Hi,2)
 
     il = 1
-    DO WHILE (x( il) < lake_Vostok_xmin)
+    do while (x( il) < lake_Vostok_xmin)
       il = il+1
-    END DO
+    end do
     iu = nx
-    DO WHILE (x( iu) > lake_Vostok_xmax)
+    do while (x( iu) > lake_Vostok_xmax)
       iu = iu-1
-    END DO
+    end do
     jl = 1
-    DO WHILE (y( jl) < lake_Vostok_ymin)
+    do while (y( jl) < lake_Vostok_ymin)
       jl = jl+1
-    END DO
+    end do
     ju = ny
-    DO WHILE (y( ju) > lake_Vostok_ymax)
+    do while (y( ju) > lake_Vostok_ymax)
       ju = ju-1
-    END DO
+    end do
 
-    DO i = il, iu
-    DO j = jl, ju
+    do i = il, iu
+    do j = jl, ju
       Hi( i,j) = Hs( i,j) - Hb( i,j)
-    END DO
-    END DO
+    end do
+    end do
 
-  END SUBROUTINE remove_Lake_Vostok
+  end subroutine remove_Lake_Vostok
 
 ! == Analytical solution by Schoof 2006 for the "SSA_icestream" benchmark experiment
   SUBROUTINE SSA_Schoof2006_analytical_solution( tantheta, h0, A_flow, y, U, tauc)
@@ -1118,7 +1117,7 @@ CONTAINS
     IF (detA == 0.0d0 ) THEN
       PRINT *, A(1,1), ',', A(1,2)
       PRINT *, A(2,1), ',', A(2,2)
-      write(0,*) 'determinant:', detA 
+      write(0,*) 'determinant:', detA
       WRITE(0,*) 'calc_matrix_inverse_2_by_2 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1163,7 +1162,7 @@ CONTAINS
       PRINT *, A(1,1), ',', A(1,2), ',', A(1,3)
       PRINT *, A(2,1), ',', A(2,2), ',', A(2,3)
       PRINT *, A(3,1), ',', A(3,2), ',', A(3,3)
-      write(0,*) 'determinant:', detA 
+      write(0,*) 'determinant:', detA
       WRITE(0,*) 'calc_matrix_inverse_3_by_3 - ERROR: matrix is numerically singular!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
@@ -1212,7 +1211,7 @@ CONTAINS
       do n = 1, 5
         write(0,*) A(1,n), ',', A(2,n), ',', A(3,n), ',', A(4,n), ',', A(5,n)
       end do
-      write(0,*) 'determinant:', detA 
+      write(0,*) 'determinant:', detA
       write(0,*) 'calc_matrix_inverse_5_by_5 - error: matrix inversion failed (singular matrix)!'
       CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF

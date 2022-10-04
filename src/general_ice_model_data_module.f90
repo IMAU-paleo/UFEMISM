@@ -56,23 +56,25 @@ contains
 ! ===== Masks =====
 ! =================
 
-  SUBROUTINE determine_masks( mesh, ice)
+  subroutine determine_masks( mesh, ice)
     ! Determine the different masks, on both the Aa and the Ac mesh
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_masks'
-    INTEGER                                            :: vi, ci, vc
-    real(dp), dimension(:), allocatable                :: Hi_a, Hb_a, SL_a
+    character(len=256), parameter       :: routine_name = 'determine_masks'
+    integer                             :: vi, ci, vc
+    real(dp), dimension(:), allocatable :: Hi_a, Hb_a, SL_a
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
-    CALL init_routine( routine_name)
-
+    call init_routine( routine_name)
 
     ! Get necessary information
     allocate(Hi_a(1:mesh%nV))
@@ -85,6 +87,11 @@ contains
     call allgather_array(Hb_a)
     call allgather_array(SL_a)
 
+    ! === Basic masks ===
+    ! ===================
+
+    ! Land
+    ! ====
 
     ! Start out with land everywhere, fill in the rest based on input.
     ice%mask_land_a   = 1
@@ -96,114 +103,154 @@ contains
     ice%mask_coast_a  = 0
     ice%mask_margin_a = 0
     ice%mask_gl_a     = 0
+    ice%mask_glf_a    = 0
     ice%mask_cf_a     = 0
     ice%mask_a        = C%type_land
 
-    DO vi = mesh%vi1, mesh%vi2
+    do vi = mesh%vi1, mesh%vi2
 
-      ! Determine ocean (both open and shelf-covered)
-      IF (is_floating( Hi_a( vi), Hb_a( vi), SL_a( vi))) THEN
+      ! Ocean
+      ! =====
+
+      ! Both open and shelf-covered
+      if (is_floating( Hi_a( vi), Hb_a( vi), SL_a( vi))) then
         ice%mask_ocean_a( vi) = 1
         ice%mask_land_a(  vi) = 0
         ice%mask_a(       vi) = C%type_ocean
-      END IF
+      end if
 
-      ! Determine ice
-      IF (Hi_a( vi) > 0._dp) THEN
+      ! Ice
+      ! ===
+
+      if (Hi_a( vi) > 0._dp) then
         ice%mask_ice_a( vi)  = 1
-      END IF
+      end if
 
-      ! Determine sheet
-      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_land_a( vi) == 1) THEN
+      ! Ice sheet
+      ! =========
+
+      if (ice%mask_ice_a( vi) == 1 .and. ice%mask_land_a( vi) == 1) then
         ice%mask_sheet_a( vi) = 1
         ice%mask_a(       vi) = C%type_sheet
-      END IF
+      end if
 
-      ! Determine shelf
-      IF (ice%mask_ice_a( vi) == 1 .AND. ice%mask_ocean_a( vi) == 1) THEN
+      ! Ice shelf
+      ! =========
+
+      if (ice%mask_ice_a( vi) == 1 .and. ice%mask_ocean_a( vi) == 1) then
         ice%mask_shelf_a( vi) = 1
         ice%mask_a(       vi) = C%type_shelf
-      END IF
+      end if
 
-    END DO ! DO vi = 1, mesh%nV
+    end do
 
-    ! Determine coast, grounding line and calving front
-    DO vi = mesh%vi1, mesh%vi2
+    ! Communicate results
+    ! ===================
 
-      IF (ice%mask_land_a( vi) == 1) THEN
-        ! Land bordering ocean equals coastline
+    call allgather_array(ice%mask_land_a )
+    call allgather_array(ice%mask_ocean_a)
+    call allgather_array(ice%mask_lake_a )
+    call allgather_array(ice%mask_ice_a  )
+    call allgather_array(ice%mask_sheet_a)
+    call allgather_array(ice%mask_shelf_a)
 
-        DO ci = 1, mesh%nC( vi)
+    ! === Transitional masks ===
+    ! ==========================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Coastline
+      ! =========
+
+      if (ice%mask_land_a( vi) == 1 .and. ice%mask_ice_a( vi) == 0) then
+        ! Ice-free land bordering ocean equals coastline
+        do ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          ! if neighbour is sea
-          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc))) THEN
-            ice%mask_a( vi) = C%type_coast
+          if (ice%mask_ocean_a( vc) == 1) then
             ice%mask_coast_a( vi) =  1
-          END IF
-        END DO
-      END IF
+            ice%mask_a( vi) = C%type_coast
+          end if
+        end do
+      end if
 
-      IF (ice%mask_ice_a( vi) == 1) THEN
+      ! Ice margin
+      ! ==========
+
+      if (ice%mask_ice_a( vi) == 1) then
         ! Ice bordering non-ice equals margin
-
-        DO ci = 1, mesh%nC( vi)
+        do ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          ! if neighbour has no ice
-          IF (Hi_a( vc) <= 0._dp) THEN
-            ice%mask_a( vi) = C%type_margin
+          if (ice%mask_ice_a( vc) == 0) then
             ice%mask_margin_a( vi) =  1
-          END IF
-        END DO
-      END IF
+            ice%mask_a( vi) = C%type_margin
+          end if
+        end do
+      end if
 
-      IF (ice%mask_sheet_a( vi) == 1) THEN
-        ! Sheet bordering shelf equals groundingline
+      ! Grounding line (ice sheet side)
+      ! ===============================
 
-        DO ci = 1, mesh%nC( vi)
+      if (ice%mask_sheet_a( vi) == 1) then
+        ! Sheet bordering shelf equals grounding line
+        do ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          ! if neighbour has ocean and ice
-          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc)) .and. Hi_a( vc) > 0._dp) THEN
-            ice%mask_a( vi) = C%type_groundingline
+          if (ice%mask_shelf_a( vc) == 1) then
             ice%mask_gl_a( vi) = 1
-          END IF
-        END DO
-      END IF
+            ice%mask_a( vi) = C%type_groundingline
+          end if
+        end do
+      end if
 
-      IF (ice%mask_ice_a( vi) == 1) THEN
-        ! Ice (sheet or shelf) bordering open ocean equals calvingfront
+      ! Grounding line (ice shelf side)
+      ! ===============================
 
-        DO ci = 1, mesh%nC(vi)
+      if (ice%mask_shelf_a( vi) == 1) then
+        ! Shelf bordering sheet equals floating side of grounding line
+        do ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
-          ! if neighbour has ocean and no ice
-          IF (is_floating( Hi_a( vc), Hb_a( vc), SL_a( vc)) .and. Hi_a( vc) <= 0._dp) THEN
-            ice%mask_a( vi) = C%type_calvingfront
-            ice%mask_cf_a( vi) = 1
-          END IF
-        END DO
+          if (ice%mask_sheet_a( vc) == 1) then
+            ice%mask_glf_a( vi) =  1
+          end if
+        end do
+      end if
 
-      END IF
-    END DO ! DO vi = 1, mesh%nV
+      ! Calving front
+      ! =============
+
+      if (ice%mask_ice_a( vi) == 1) then
+        ! Ice (sheet or shelf) bordering open ocean equals calving front
+        do ci = 1, mesh%nC(vi)
+          vc = mesh%C( vi,ci)
+          if (ice%mask_ocean_a( vc) == 1 .and. ice%mask_ice_a( vc) == 0) then
+            ice%mask_cf_a( vi) = 1
+            ice%mask_a( vi) = C%type_calvingfront
+          end if
+        end do
+      end if
+
+    end do ! vi = mesh%vi1, mesh%vi2
+
+    ! Communicate results
+    ! ===================
+
+    call allgather_array(ice%mask_coast_a )
+    call allgather_array(ice%mask_margin_a)
+    call allgather_array(ice%mask_gl_a    )
+    call allgather_array(ice%mask_glf_a   )
+    call allgather_array(ice%mask_cf_a    )
+    call allgather_array(ice%mask_a       )
+
+    ! === Finalisation ===
+    ! ====================
 
     deallocate(Hi_a)
     deallocate(Hb_a)
     deallocate(SL_a)
 
-    call allgather_array(ice%mask_land_a)
-    call allgather_array(ice%mask_lake_a  )
-    call allgather_array(ice%mask_ocean_a )
-    call allgather_array(ice%mask_ice_a   )
-    call allgather_array(ice%mask_shelf_a )
-    call allgather_array(ice%mask_sheet_a )
-    call allgather_array(ice%mask_coast_a )
-    call allgather_array(ice%mask_margin_a)
-    call allgather_array(ice%mask_gl_a    )
-    call allgather_array(ice%mask_cf_a    )
-    call allgather_array(ice%mask_a       )
-
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_masks
+  end subroutine determine_masks
 
 ! ===== Grounded fractions =====
 ! ==============================
@@ -642,55 +689,55 @@ contains
 
   end subroutine initialise_mask_noice
 
-  SUBROUTINE initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
+  subroutine initialise_mask_noice_NAM_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the North America domain
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT)   :: mask_noice
+    type(type_mesh),                        intent(in)  :: mesh
+    integer,  dimension(mesh%vi1:mesh%vi2), intent(out) :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_mask_noice_NAM_remove_GRL'
-    INTEGER                                               :: vi
-    REAL(dp), DIMENSION(2)                                :: pa, pb
-    REAL(dp)                                              :: yl_ab
+    character(len=256), parameter                       :: routine_name = 'initialise_mask_noice_NAM_remove_GRL'
+    integer                                             :: vi
+    real(dp), dimension(2)                              :: pa, pb
+    real(dp)                                            :: yl_ab
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     pa = [ 490000._dp, 1530000._dp]
     pb = [2030000._dp,  570000._dp]
 
-    DO vi = mesh%vi1, mesh%vi2
+    do vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
-      IF (mesh%V( vi,2) > yl_ab .AND. mesh%V( vi,1) > pa(1) .AND. mesh%V( vi,2) > pb(2)) THEN
+      if (mesh%V( vi,2) > yl_ab .and. mesh%V( vi,1) > pa(1) .and. mesh%V( vi,2) > pb(2)) then
         mask_noice( vi) = 1
-      ELSE
+      else
         mask_noice( vi) = 0
-      END IF
-    END DO
-    CALL sync
+      end if
+    end do
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_mask_noice_NAM_remove_GRL
+  end subroutine initialise_mask_noice_NAM_remove_GRL
 
-  SUBROUTINE initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
+  subroutine initialise_mask_noice_EAS_remove_GRL( mesh, mask_noice)
     ! Prevent ice growth in the Greenlandic part of the Eurasia domain
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(OUT)   :: mask_noice
+    type(type_mesh),                       intent(in)  :: mesh
+    integer, dimension(mesh%vi1:mesh%vi2), intent(out) :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_mask_noice_EAS_remove_GRL'
-    INTEGER                                               :: vi
-    REAL(dp), DIMENSION(2)                                :: pa, pb, pc, pd
-    REAL(dp)                                              :: yl_ab, yl_bc, yl_cd
+    character(len=256), parameter                      :: routine_name = 'initialise_mask_noice_EAS_remove_GRL'
+    integer                                            :: vi
+    real(dp), dimension(2)                             :: pa, pb, pc, pd
+    real(dp)                                           :: yl_ab, yl_bc, yl_cd
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -700,24 +747,24 @@ contains
     pc = [ -835000._dp, 1135000._dp]
     pd = [ -400000._dp, 1855000._dp]
 
-    DO vi = mesh%vi1, mesh%vi2
+    do vi = mesh%vi1, mesh%vi2
       yl_ab = pa(2) + (mesh%V( vi,1) - pa(1))*(pb(2)-pa(2))/(pb(1)-pa(1))
       yl_bc = pb(2) + (mesh%V( vi,1) - pb(1))*(pc(2)-pb(2))/(pc(1)-pb(1))
       yl_cd = pc(2) + (mesh%V( vi,1) - pc(1))*(pd(2)-pc(2))/(pd(1)-pc(1))
-      IF ((mesh%V( vi,1) <  pa(1) .AND. mesh%V( vi,2) > pa(2)) .OR. &
-          (mesh%V( vi,1) >= pa(1) .AND. mesh%V( vi,1) < pb(1) .AND. mesh%V( vi,2) > yl_ab) .OR. &
-          (mesh%V( vi,1) >= pb(1) .AND. mesh%V( vi,1) < pc(1) .AND. mesh%V( vi,2) > yl_bc) .OR. &
-          (mesh%V( vi,1) >= pc(1) .AND. mesh%V( vi,1) < pd(1) .AND. mesh%V( vi,2) > yl_cd)) THEN
+      if ((mesh%V( vi,1) <  pa(1) .and. mesh%V( vi,2) > pa(2)) .or. &
+          (mesh%V( vi,1) >= pa(1) .and. mesh%V( vi,1) < pb(1) .and. mesh%V( vi,2) > yl_ab) .or. &
+          (mesh%V( vi,1) >= pb(1) .and. mesh%V( vi,1) < pc(1) .and. mesh%V( vi,2) > yl_bc) .or. &
+          (mesh%V( vi,1) >= pc(1) .and. mesh%V( vi,1) < pd(1) .and. mesh%V( vi,2) > yl_cd)) then
         mask_noice( vi) = 1
-      ELSE
+      else
         mask_noice( vi) = 0
-      END IF
-    END DO
+      end if
+    end do
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE initialise_mask_noice_EAS_remove_GRL
+  end subroutine initialise_mask_noice_EAS_remove_GRL
 
   subroutine initialise_mask_noice_GRL_remove_Ellesmere( mesh, mask_noice)
     ! Prevent ice growth in the Ellesmere Island part of the Greenland domain
@@ -764,9 +811,6 @@ contains
 
 ! ===== Drainage basins =====
 ! ===========================
-
-  ! ===== Ice drainage basins from an external polygon file =====
-! =============================================================
 
   subroutine initialise_basins( mesh, ice)
     ! Define the ice basins mask from an external text file

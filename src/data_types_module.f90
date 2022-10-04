@@ -85,6 +85,7 @@ module data_types_module
     INTEGER,  DIMENSION(:    ), allocatable :: mask_coast_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_margin_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_gl_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_glf_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_cf_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_a
     REAL(dp), DIMENSION(:    ), allocatable :: f_grnd_a
@@ -147,6 +148,10 @@ module data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
     REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+
+    ! Ice dynamics - calving
+    REAL(dp), DIMENSION(:    ), allocatable :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_eff_cf_a                 ! Effective ice thickness at calving front pixels (= Hi of thinnest non-calving-front neighbour)
 
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp)                                :: pc_zeta

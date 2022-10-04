@@ -1203,7 +1203,7 @@ contains
     ! =================================
 
     ! Allocation
-    allocate(Ti_ext   ( 1:mesh_old%nV, C%nz) )
+    allocate( Ti_ext  ( 1:mesh_old%nV, C%nz) )
     allocate( Vmap    ( 1:mesh_old%nV      ) )
     allocate( Vstack1 ( 1:mesh_old%nV      ) )
     allocate( Vstack2 ( 1:mesh_old%nV      ) )
@@ -1327,17 +1327,19 @@ contains
     call remap_field_dp_3D( mesh_old, mesh_new, map, Ti_ext_local, 'cons_2nd_order')
 
     ! Reallocate ice temperature field
-    call reallocate_bounds( ice%Ti_a, mesh_new%vi1, mesh_new%vi2, C%nz )
+    call reallocate_bounds( ice%Ti_a, mesh_new%vi1, mesh_new%vi2, C%nz)
 
     ! Copy remapped data only for ice-covered pixels
     do vi = mesh_new%vi1, mesh_new%vi2
       if (mask_ice_a_new( vi) == 1) then
         ice%Ti_a( vi,:) = Ti_ext_local( vi,:)
+      else
+        ice%Ti_a( vi,:) = 0._dp
       end if
     end do
 
     ! Reallocate mask_ice_a_prev
-    call reallocate_bounds( ice%mask_ice_a_prev,1,mesh_new%nV)
+    call reallocate_bounds( ice%mask_ice_a_prev, 1, mesh_new%nV)
 
     ! Fill it in (needed for the generic temperature update)
     ice%mask_ice_a_prev(mesh_new%vi1:mesh_new%vi2) = mask_ice_a_new

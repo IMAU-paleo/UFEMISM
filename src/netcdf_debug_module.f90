@@ -31,6 +31,11 @@ MODULE netcdf_debug_module
 !
 ! A new debug file is automatically created, and the old one discarded,
 ! when the mesh is updated.
+!
+! =====================================
+!
+! Additionally: CSR and PETSc matrices can be written directly to NetCDF,
+!               to allow for smooth comparison with Matlab prototype code.
 
 ! ===== Preamble =====
 ! ====================
@@ -41,6 +46,7 @@ MODULE netcdf_debug_module
   USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
   USE parameters_module
   USE petsc_module,                    ONLY: perr
+  USE petscksp
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_int_0D,   allocate_shared_dp_0D, &
                                              allocate_shared_int_1D,   allocate_shared_dp_1D, &
@@ -57,8 +63,10 @@ MODULE netcdf_debug_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_debug_fields, type_model_region, type_mesh
-  USE netcdf_basic_module,             ONLY: create_new_netcdf_file_for_writing
+  USE data_types_module,               ONLY: type_debug_fields, type_model_region, type_mesh, type_sparse_matrix_CSR_dp
+  USE netcdf,                          ONLY: NF90_INT, NF90_DOUBLE
+  USE netcdf_basic_module,             ONLY: create_new_netcdf_file_for_writing, create_dimension, create_variable, &
+                                             write_var_int_1D, write_var_dp_1D
   USE netcdf_output_module,            ONLY: setup_mesh_in_netcdf_file, add_zeta_dimension_to_file, add_month_dimension_to_file, &
                                              add_field_mesh_int_2D_notime, add_field_mesh_int_2D_b_notime, add_field_mesh_int_2D_c_notime, &
                                              add_field_mesh_dp_2D_notime , add_field_mesh_dp_2D_b_notime , add_field_mesh_dp_2D_c_notime, &
@@ -71,12 +79,17 @@ MODULE netcdf_debug_module
                                              write_to_field_multiple_options_mesh_dp_2D_c_notime, &
                                              write_to_field_multiple_options_mesh_dp_2D_monthly_notime, &
                                              write_to_field_multiple_options_mesh_dp_3D_notime
+  USE petsc_module,                    ONLY: mat_petsc2CSR
+  USE sparse_matrix_module,            ONLY: deallocate_matrix_CSR
 
   IMPLICIT NONE
 
   TYPE(type_debug_fields) :: debug_NAM, debug_EAS, debug_GRL, debug_ANT, debug
 
 CONTAINS
+
+! ===== Debug NetCDF file =====
+! =============================
 
   ! Main routines: create and write to NetCDF debug file
   SUBROUTINE write_to_debug_file
@@ -1099,5 +1112,81 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE deallocate_debug_fields_region
+
+! ===== Matrix NetCDF files =====
+! ===============================
+
+  SUBROUTINE write_PETSc_matrix_to_NetCDF( A, filename)
+    ! Write a PETSc matrix to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(tMat),                          INTENT(IN)    :: A
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_PETSc_matrix_to_NetCDF'
+    TYPE(type_sparse_matrix_CSR_dp)                    :: A_CSR
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Get matrix in CSR format using native Fortran arrays
+    CALL mat_petsc2CSR( A, A_CSR)
+
+    ! Write the CSR matrix to a file
+    CALL write_CSR_matrix_to_NetCDF( A_CSR, filename)
+
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR( A_CSR)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_PETSc_matrix_to_NetCDF
+
+  SUBROUTINE write_CSR_matrix_to_NetCDF( A_CSR, filename)
+    ! Write a CSR matrix to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(IN)    :: A_CSR
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_CSR_matrix_to_NetCDF'
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: ncid
+    INTEGER                                            :: id_dim_m, id_dim_mp1, id_dim_n, id_dim_nnz
+    INTEGER                                            :: id_var_ptr, id_var_index, id_var_val
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'm'     , A_CSR%m  , id_dim_m  )
+    CALL create_dimension( filename, 'mplus1', A_CSR%m+1, id_dim_mp1)
+    CALL create_dimension( filename, 'n'     , A_CSR%n  , id_dim_n  )
+    CALL create_dimension( filename, 'nnz'   , A_CSR%nnz, id_dim_nnz)
+
+    ! Create variables
+    CALL create_variable( filename, 'ptr'  , NF90_INT   , [id_dim_mp1], id_var_ptr  )
+    CALL create_variable( filename, 'index', NF90_INT   , [id_dim_nnz], id_var_index)
+    CALL create_variable( filename, 'val'  , NF90_DOUBLE, [id_dim_nnz], id_var_val  )
+
+    ! Write data
+    CALL write_var_int_1D( filename, id_var_ptr  , A_CSR%ptr  )
+    CALL write_var_int_1D( filename, id_var_index, A_CSR%index)
+    CALL write_var_dp_1D(  filename, id_var_val  , A_CSR%val  )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_CSR_matrix_to_NetCDF
 
 END MODULE netcdf_debug_module

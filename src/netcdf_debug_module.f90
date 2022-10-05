@@ -34,6 +34,9 @@ MODULE netcdf_debug_module
 !
 ! =====================================
 !
+! Additionally: single variables can now also be immediately saved as
+!               NetCDF files. They will have no dimensions at all, so beware!
+!
 ! Additionally: CSR and PETSc matrices can be written directly to NetCDF,
 !               to allow for smooth comparison with Matlab prototype code.
 
@@ -63,11 +66,17 @@ MODULE netcdf_debug_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_debug_fields, type_model_region, type_mesh, type_sparse_matrix_CSR_dp
+  USE data_types_module,               ONLY: type_debug_fields, type_model_region, type_mesh, type_sparse_matrix_CSR_dp, &
+                                             type_grid
   USE netcdf,                          ONLY: NF90_INT, NF90_DOUBLE
   USE netcdf_basic_module,             ONLY: create_new_netcdf_file_for_writing, create_dimension, create_variable, &
-                                             write_var_int_1D, write_var_dp_1D
-  USE netcdf_output_module,            ONLY: setup_mesh_in_netcdf_file, add_zeta_dimension_to_file, add_month_dimension_to_file, &
+                                             write_var_int_1D, write_var_dp_1D, &
+                                             write_var_int_2D, write_var_dp_2D, &
+                                             write_var_int_3D, write_var_dp_3D
+  USE netcdf_output_module,            ONLY: setup_mesh_in_netcdf_file, setup_xy_grid_in_netcdf_file, &
+                                             add_zeta_dimension_to_file, add_month_dimension_to_file, &
+                                             add_field_grid_int_2D_notime, add_field_grid_dp_2D_notime, &
+                                             add_field_grid_dp_2D_monthly_notime, add_field_grid_dp_3D_notime, &
                                              add_field_mesh_int_2D_notime, add_field_mesh_int_2D_b_notime, add_field_mesh_int_2D_c_notime, &
                                              add_field_mesh_dp_2D_notime , add_field_mesh_dp_2D_b_notime , add_field_mesh_dp_2D_c_notime, &
                                              add_field_mesh_dp_2D_monthly_notime, add_field_mesh_dp_3D_notime, &
@@ -1112,6 +1121,303 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE deallocate_debug_fields_region
+
+! ===== Single-variable NetCDF files =====
+! ========================================
+
+  SUBROUTINE save_variable_as_netcdf_int_1D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,  DIMENSION(:    ),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_1D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1 /), id_var)
+
+    ! Write data
+    CALL write_var_int_1D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_int_1D
+
+  SUBROUTINE save_variable_as_netcdf_int_2D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,  DIMENSION(:,:  ),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_2D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1, id_dim_n2
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2 /), id_var)
+
+    ! Write data
+    CALL write_var_int_2D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_int_2D
+
+  SUBROUTINE save_variable_as_netcdf_int_3D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    INTEGER,  DIMENSION(:,:,:),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_int_3D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1, id_dim_n2, id_dim_n3
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, 'n3', SIZE( d,3), id_dim_n3)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_INT, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
+
+    ! Write data
+    CALL write_var_int_3D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_int_3D
+
+  SUBROUTINE save_variable_as_netcdf_dp_1D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    REAL(dp), DIMENSION(:    ),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_1D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1 /), id_var)
+
+    ! Write data
+    CALL write_var_dp_1D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_dp_1D
+
+  SUBROUTINE save_variable_as_netcdf_dp_2D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    REAL(dp), DIMENSION(:,:  ),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_2D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1, id_dim_n2
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2 /), id_var)
+
+    ! Write data
+    CALL write_var_dp_2D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_dp_2D
+
+  SUBROUTINE save_variable_as_netcdf_dp_3D( d, field_name)
+    ! Save a single variable to a NetCDF file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    REAL(dp), DIMENSION(:,:,:),      INTENT(IN)        :: d
+    CHARACTER(LEN=*),                INTENT(IN)        :: field_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'save_variable_as_netcdf_dp_3D'
+    CHARACTER(LEN=256)                                 :: filename
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: id_dim_n1, id_dim_n2, id_dim_n3
+    INTEGER                                            :: id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Determine file name
+    filename = TRIM( C%output_dir) // TRIM( field_name) // '.nc'
+
+    ! Delete existing file
+    IF (par%master) THEN
+      INQUIRE( EXIST = file_exists, FILE = TRIM( filename))
+      IF (file_exists) THEN
+        CALL system('rm -f ' // filename)
+      END IF
+    END IF ! IF (par%master) THEN
+    CALL sync
+
+    ! Create a new NetCDF file
+    CALL create_new_netcdf_file_for_writing( filename)
+
+    ! Create dimensions
+    CALL create_dimension( filename, 'n1', SIZE( d,1), id_dim_n1)
+    CALL create_dimension( filename, 'n2', SIZE( d,2), id_dim_n2)
+    CALL create_dimension( filename, 'n3', SIZE( d,3), id_dim_n3)
+
+    ! Create variable
+    CALL create_variable( filename, field_name, NF90_DOUBLE, (/ id_dim_n1, id_dim_n2, id_dim_n3 /), id_var)
+
+    ! Write data
+    CALL write_var_dp_3D(  filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE save_variable_as_netcdf_dp_3D
 
 ! ===== Matrix NetCDF files =====
 ! ===============================

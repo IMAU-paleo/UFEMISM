@@ -425,11 +425,10 @@ contains
     ! ====================
 
     ! Finalise routine path
-      call finalise_routine( routine_name, n_extra_windows_expected = huge( 1))
+      call finalise_routine( routine_name)
 
   end subroutine initialise_bed_roughness
 
-  ! The Martin et al. (2011) till parameterisation
   subroutine calc_bed_roughness_Martin2011( mesh, ice)
     ! Calculate the till friction angle phi_fric and till yield stress
     ! tauc, using the till model by Martin et al. (2011), Eq. 10.
@@ -445,6 +444,9 @@ contains
     integer                             :: vi
     real(dp)                            :: w_Hb
 
+    ! === Initialisation ===
+    ! ======================
+
     ! Add routine to path
     call init_routine( routine_name)
 
@@ -454,6 +456,9 @@ contains
       call crash('only applicable when choice_sliding_law = ' // &
                  'Coulomb_regularised", or "Zoet-Iverson"!')
     end if
+
+    ! === Bed roughness ===
+    ! =====================
 
     do vi = mesh%vi1, mesh%vi2
 
@@ -467,6 +472,9 @@ contains
 
     end do
 
+    ! === Finalisation ===
+    ! ====================
+
     ! Safety
     call check_for_NaN_dp_1D( ice%phi_fric_a, 'ice%phi_fric_a')
 
@@ -475,7 +483,6 @@ contains
 
   end subroutine calc_bed_roughness_Martin2011
 
-  ! Initialise bed roughness from a file
   subroutine initialise_bed_roughness_from_file( mesh, ice)
     ! Initialise bed roughness with data from an external NetCDF file
 
@@ -521,8 +528,8 @@ contains
 
   end subroutine initialise_bed_roughness_from_file
 
-! == Sliding laws
-! ===============
+! ===== Sliding laws =====
+! ========================
 
   SUBROUTINE calc_sliding_law_Coulomb_regularised( mesh, ice, u_a, v_a, beta_a)
     ! Regularised Coulomb-type sliding law
@@ -635,8 +642,8 @@ contains
 
   END SUBROUTINE calc_sliding_law_idealised
 
-! == Remapping
-! ============
+! ===== Remapping =====
+! =====================
 
   SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, map, ice)
     ! Remap or reallocate all the data fields

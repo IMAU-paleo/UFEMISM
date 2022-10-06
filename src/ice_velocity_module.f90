@@ -342,7 +342,7 @@ contains
 
     do while (.not. has_converged)
       viscosity_iteration_i = viscosity_iteration_i + 1
-      
+
       ! TODO: calc_vertical_shear_strain_rates and calc_effective_viscosity have a circular dependency...
       ! Calculate the vertical shear strain rates
       call calc_vertical_shear_strain_rates( mesh, ice)
@@ -2057,7 +2057,7 @@ contains
 
 #endif
 
-  ! Initialise/remap data fields for the velocity solver(s)
+  ! Initialise data fields for the velocity solver(s)
   subroutine initialise_velocity_solver( mesh, ice)
     ! Allocate and initialise data fields for the velocity solver
 
@@ -2137,7 +2137,7 @@ contains
       ice%visc_eff_int_a = 1.
       ice%N_a            = 0.
       ice%beta_a         = 0.
-      ice%beta_eff_a   = 0. 
+      ice%beta_eff_a   = 0.
       ice%beta_eff_b   = 0.
       ice%taubx_b = 0.
       ice%tauby_b = 0.
@@ -2494,6 +2494,11 @@ contains
     call init_routine( routine_name)
 
     select case (C%choice_ice_dynamics)
+
+      case ('none')
+        ! Remap no-dynamics stuff
+        call crash('todo, implement none')
+        !call remap_velocities_none( mesh_old, mesh_new, map, ice)
 
       case ('SIA')
         ! Remap SIA stuff

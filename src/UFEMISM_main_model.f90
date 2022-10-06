@@ -270,7 +270,7 @@ CONTAINS
       ! == Ocean temperature inversion
       ! ==============================
 
-      IF (C%do_ocean_temperature_inversion) THEN! .AND. region%do_ocean_inv) THEN
+      IF (C%do_ocean_temperature_inversion .AND. region%do_BMB) THEN
         ! Adjust ocean temperatures
         CALL ocean_temperature_inversion( region%mesh, region%ice, region%BMB, region%refgeo_PD, region%time)
       END IF
@@ -381,7 +381,7 @@ CONTAINS
       CALL create_new_mesh_single( region)
     END IF
 
-    IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
+    IF (par%master) WRITE(0,*) '  Recomputing remapping operators...'
 
     ! Update the mapping operators between the new mesh and the fixed square grids
     CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
@@ -411,6 +411,8 @@ CONTAINS
     CALL reallocate_shared_int_1D( region%mesh_new%nV, region%ice%basin_ID, region%ice%wbasin_ID)
     CALL initialise_basins( region%mesh_new, region%ice%basin_ID, region%ice%nbasins, region%name)
 
+    IF (par%master) WRITE(0,*) '  Reallocating and remapping reference geometries...'
+
     ! Reallocate memory for reference geometries
     CALL deallocate_shared( region%refgeo_init%wHi )
     CALL deallocate_shared( region%refgeo_init%wHb )
@@ -438,6 +440,8 @@ CONTAINS
 
     ! Map reference geometries from the square grids to the mesh
     CALL map_reference_geometries_to_mesh( region, region%mesh_new)
+
+    IF (par%master) WRITE(0,*) '  Reallocating and remapping submodels...'
 
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'none') THEN
@@ -715,15 +719,17 @@ CONTAINS
     ! ===== Ice temperature profile =====
     ! ===================================
 
-    ! Run the climate and SMB models once, to get the correct surface temperature+SMB fields for the ice temperature initialisation
+    ! Run the mass balance sub-models once, to get e.g. the correct surface temperature+SMB
+    ! fields for the ice temperature initialisation and other stuff right (e.g. BMB from previous run)
     CALL run_climate_model( region, climate_matrix_global, C%start_time_of_run)
     CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, C%start_time_of_run, region%SMB, region%mask_noice)
+    CALL run_ocean_model( region%mesh, region%grid_smooth, region%ice, region%ocean_matrix, region%climate_matrix, region%name, region%time)
+    CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
 
     ! Initialise the ice temperature profile
     CALL initialise_ice_temperature( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, region%name, region%restart)
-
-    ! Initialise the rheology
-    CALL calc_ice_rheology( region%mesh, region%ice, C%start_time_of_run)
+    ! Run thermodynamics once to get an issue-free initial field
+    CALL run_thermo_model( region%mesh, region%ice, region%climate_matrix%applied, region%ocean_matrix%applied, region%SMB, C%start_time_of_run, do_solve_heat_equation = .TRUE.)
 
     ! ===== Exception: Initial velocities for choice_ice_dynamics == "none" =====
     ! ===========================================================================
@@ -1007,7 +1013,6 @@ CONTAINS
     CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
     CALL allocate_shared_dp_0D(  grid%ymax,         grid%wymax        )
     CALL allocate_shared_dp_0D(  grid%tol_dist,     grid%wtol_dist    )
-
 
     ! === Basic grid data ===
     ! =======================
@@ -1299,8 +1304,7 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
 
-      IF (ice%mask_land_a( vi) == 0 .OR. &
-          mesh%edge_index( vi)  > 0) THEN
+      IF (mesh%edge_index( vi)  > 0) THEN
         CYCLE
       END IF
 
@@ -1311,7 +1315,7 @@ CONTAINS
       grid_count = 0
 
       DO j = 1, refgeo%grid%ny
-      DO i = refgeo%grid%i1, refgeo%grid%i2
+      DO i = 1, refgeo%grid%nx
 
         IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
 

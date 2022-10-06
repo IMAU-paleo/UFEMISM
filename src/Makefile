@@ -54,6 +54,7 @@ UFEMISM_program_objects = \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \
         general_sea_level_module.o \
+        calving_module.o \
         thermodynamics_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
@@ -122,7 +123,7 @@ include .depend
 	  makedepf90 -b $(TEST_OBJ_DIR) *.f90 >> .depend;
 else
 .NOTPARALLEL:
-.depend: 
+.depend:
 	$(warning makedepf90 disabled, enabling .NOTPARALLEL: for the whole makefile )
 	touch .depend;
 endif

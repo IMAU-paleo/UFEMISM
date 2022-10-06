@@ -23,6 +23,7 @@ MODULE ice_dynamics_module
   use thermodynamics_module,               only : calc_ice_rheology, remap_ice_temperature
   use mpi_module,                          only : allgather_array
   use forcing_module,                      only : forcing
+  use calving_module,                      only : imposed_shelf_removal, remove_unconnected_shelves
 
   implicit none
 
@@ -139,7 +140,7 @@ contains
 
     end if
 
-    ! Initialise with data from initial file
+    ! Initialise with initial reference data
     do vi = mesh%vi1, mesh%vi2
       ! Main quantities
       ice%Hi_a( vi)   = refgeo_init%Hi( vi)
@@ -327,68 +328,90 @@ contains
 ! ===== Predictor-corrector method =====
 ! ======================================
 
-  SUBROUTINE run_ice_dynamics_pc( region, t_end)
+  subroutine run_ice_dynamics_pc( region, t_end)
     ! Ice dynamics and time-stepping with the predictor/correct method
     ! (adopted from Yelmo, originally based on Cheng et al., 2017)
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_model_region),             INTENT(INOUT) :: region
-    REAL(dp),                            INTENT(IN)    :: t_end
+    type(type_model_region), intent(inout) :: region
+    real(dp),                intent(in)    :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_ice_dynamics_pc'
-    INTEGER                                            :: vi1,vi2
-    LOGICAL                                            :: do_update_ice_velocity
-    REAL(dp)                                           :: dt_from_pc, dt_crit_adv
+    character(len=256), parameter          :: routine_name = 'run_ice_dynamics_pc'
+    integer                                :: vi1,vi2
+    logical                                :: do_update_ice_velocity
+    real(dp)                               :: dt_from_pc, dt_crit_adv
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Abbreviations for cleaner code
     vi1 = region%mesh%vi1
     vi2 = region%mesh%vi2
 
-    ! Determine whether or not we need to update ice velocities
-    do_update_ice_velocity = .FALSE.
-    IF     (C%choice_ice_dynamics == 'none') THEN
-      region%ice%dHi_dt_a( vi1:vi2) = 0._dp
-    ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
-      IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-      IF (region%time == region%t_next_SSA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-      IF (region%time == region%t_next_SIA ) do_update_ice_velocity = .TRUE.
-    ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-      IF (region%time == region%t_next_DIVA) do_update_ice_velocity = .TRUE.
-    ELSE
-      CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-    END IF
+    ! === Check time step ===
+    ! =======================
 
-    IF (do_update_ice_velocity) THEN
+    ! Determine whether or not we need to update ice velocities
+    do_update_ice_velocity = .false.
+
+    select case(C%choice_ice_dynamics)
+
+      case ('none')
+        region%ice%dHi_dt_a( vi1:vi2) = 0._dp
+
+      case ('SIA')
+        if (region%time == region%t_next_SIA ) do_update_ice_velocity = .true.
+
+      case ('SSA')
+        if (region%time == region%t_next_SSA ) do_update_ice_velocity = .true.
+
+      case ('SIA/SSA')
+        if (region%time == region%t_next_SIA ) do_update_ice_velocity = .true.
+
+      case ('DIVA')
+        if (region%time == region%t_next_DIVA) do_update_ice_velocity = .true.
+
+      case default
+        call crash('unknown choice_ice_dynamics "' // trim( C%choice_ice_dynamics) // '"!')
+
+    end select
+
+    ! === Predictor-corrector ===
+    ! ===========================
+
+    if (do_update_ice_velocity) then
 
       ! Calculate time step based on the truncation error in ice thickness (Robinson et al., 2020, Eq. 33)
-      CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_adv)
+      call calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_adv)
 
+      ! Calculate critical time step
       region%dt_crit_ice_prev = region%dt_crit_ice
-      region%ice%pc_eta_prev  = region%ice%pc_eta
       dt_from_pc              = (C%pc_epsilon / region%ice%pc_eta)**(C%pc_k_I + C%pc_k_p) * (C%pc_epsilon / region%ice%pc_eta_prev)**(-C%pc_k_p) * region%dt
+      region%dt_crit_ice      = max( C%dt_min, max( 0.5_dp * region%dt_crit_ice_prev, minval([ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc])))
 
-      region%dt_crit_ice      = MAX(C%dt_min, MINVAL((/ C%dt_max, 2._dp * region%dt_crit_ice_prev, dt_crit_adv, dt_from_pc/)))
-
-      region%ice%pc_zeta      = region%dt_crit_ice / region%dt_crit_ice_prev
-      region%ice%pc_beta1     = 1._dp + region%ice%pc_zeta / 2._dp
-      region%ice%pc_beta2     =       - region%ice%pc_zeta / 2._dp
+      ! Calculate zeta
+      region%ice%pc_zeta = region%dt_crit_ice / region%dt_crit_ice_prev
 
       ! Predictor step
       ! ==============
 
-      ! Calculate new ice geometry
+      ! Save previous rate of change
       region%ice%pc_f2 = region%ice%dHi_dt_a
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
+
+      ! Calculate new rate of change
+      call calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
       region%ice%pc_f1 = region%ice%dHi_dt_a
-      region%ice%Hi_pred = MAX(0._dp, region%ice%Hi_a + region%dt_crit_ice * region%ice%dHi_dt_a)
+
+      ! Predict new ice geometry
+      region%ice%Hi_pred = MAX(0._dp,  region%ice%Hi_a + region%dt_crit_ice * &
+                             ((1._dp + region%ice%pc_zeta / 2._dp) * region%ice%pc_f1 - &
+                                      (region%ice%pc_zeta / 2._dp) * region%ice%pc_f2))
 
       ! Update step
       ! ===========
@@ -396,153 +419,175 @@ contains
       ! Calculate velocities for predicted geometry
       region%ice%Hi_old = region%ice%Hi_a
       region%ice%Hi_a   = region%ice%Hi_pred
-      CALL update_general_ice_model_data( region%mesh, region%ice)
+      call update_general_ice_model_data( region%mesh, region%ice)
 
-      IF     (C%choice_ice_dynamics == 'SIA') THEN
+      select case (C%choice_ice_dynamics)
 
-        ! Calculate velocities
-       call solve_SIA( region%mesh, region%ice)
+        case ('SIA')
 
-       ! Update timer
-       region%t_last_SIA = region%time
-       region%t_next_SIA = region%time + region%dt_crit_ice
+          ! Calculate velocities
+         call solve_SIA( region%mesh, region%ice)
 
-      ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+         ! Update timer
+         region%t_last_SIA = region%time
+         region%t_next_SIA = region%time + region%dt_crit_ice
 
-        ! Calculate velocities
-       CALL solve_SSA( region%mesh, region%ice)
+        case ('SSA')
 
-       ! Update timer
-       region%t_last_SSA = region%time
-       region%t_next_SSA = region%time + region%dt_crit_ice
+          ! Calculate velocities
+         call solve_SSA( region%mesh, region%ice)
+
+         ! Update timer
+         region%t_last_SSA = region%time
+         region%t_next_SSA = region%time + region%dt_crit_ice
 
 
-      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+        case ('SIA/SSA')
 
-        ! Calculate velocities
-       CALL solve_SIA(  region%mesh, region%ice)
-       CALL solve_SSA(  region%mesh, region%ice)
+          ! Calculate velocities
+         call solve_SIA(  region%mesh, region%ice)
+         call solve_SSA(  region%mesh, region%ice)
 
-       ! Update timer
-       region%t_last_SIA = region%time
-       region%t_last_SSA = region%time
-       region%t_next_SIA = region%time + region%dt_crit_ice
-       region%t_next_SSA = region%time + region%dt_crit_ice
+         ! Update timer
+         region%t_last_SIA = region%time
+         region%t_next_SIA = region%time + region%dt_crit_ice
+         region%t_last_SSA = region%time
+         region%t_next_SSA = region%time + region%dt_crit_ice
 
-      ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
+        case ('DIVA')
 
-        ! Calculate velocities
-        CALL solve_DIVA( region%mesh, region%ice)
+          ! Calculate velocities
+          call solve_DIVA( region%mesh, region%ice)
 
-        ! Update timer
-        region%t_last_DIVA = region%time
-        region%t_next_DIVA = region%time + region%dt_crit_ice
+          ! Update timer
+          region%t_last_DIVA = region%time
+          region%t_next_DIVA = region%time + region%dt_crit_ice
 
-      ELSE
-        CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-      END IF
+        case default
+          call crash('unknown choice_ice_dynamics "' // trim( C%choice_ice_dynamics) // '"!')
+
+      end select
 
       ! Corrector step
       ! ==============
 
+      ! Calculate dHi_dt for the predicted ice thickness and updated velocity
+      call calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
+      region%ice%pc_f3 = region%ice%dHi_dt_a
+      region%ice%pc_f4 = region%ice%pc_f1
+
       ! Go back to old ice thickness. Run all the other modules (climate, SMB, BMB, thermodynamics, etc.)
       ! and only go to new (corrected) ice thickness at the end of this time loop.
       region%ice%Hi_a = region%ice%Hi_old
-      CALL update_general_ice_model_data( region%mesh, region%ice)
+      call update_general_ice_model_data( region%mesh, region%ice)
 
-      ! Calculate "corrected" ice thickness based on new velocities
-      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt_crit_ice, region%mask_noice, region%refgeo_PD)
-      region%ice%pc_f3 = region%ice%dHi_dt_a
-      region%ice%pc_f4 = region%ice%pc_f1
-      region%ice%Hi_corr = MAX(0._dp, region%ice%Hi_a + 0.5_dp * region%dt_crit_ice * (region%ice%pc_f3 + region%ice%pc_f4))
+      ! Calculate "corrected" ice thickness (Robinson et al. (2020), Eq. 31)
+      region%ice%Hi_corr = MAX(0._dp, region%ice%Hi_old + 0.5_dp * region%dt_crit_ice * &
+                                     (region%ice%pc_f4 + region%ice%pc_f3))
+
+      ! Calculate applied ice thickness rate of change
+      region%ice%dHi_dt_a = (region%ice%Hi_corr - region%ice%Hi_a) / region%dt_crit_ice
+
+      ! Truncation error
+      ! ================
 
       ! Determine truncation error
-      CALL calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice, region%dt_prev)
+      call calc_pc_truncation_error( region%mesh, region%ice, region%dt_crit_ice)
 
-    END IF ! IF (do_update_ice_velocity) THEN
+    end if ! (do_update_ice_velocity)
+
+    ! === Final quantities ===
+    ! ========================
 
     ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
-    CALL determine_timesteps_and_actions( region, t_end)
+    call determine_timesteps_and_actions( region, t_end)
 
-    ! ! Calculate ice thickness at the end of this model loop
+    ! Calculate ice thickness at the end of the adjusted time step
     region%ice%Hi_tplusdt_a = MAX( 0._dp, region%ice%Hi_a + region%dt * region%ice%dHi_dt_a)
 
-    ! IF (par%master) WRITE(*,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_adv = ', dt_crit_adv, ', dt_from_pc = ', dt_from_pc, ', dt = ', region%dt
-    ! CALL sync
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE run_ice_dynamics_pc
+  end subroutine run_ice_dynamics_pc
 
-  SUBROUTINE calc_pc_truncation_error( mesh, ice, dt, dt_prev)
+  subroutine calc_pc_truncation_error( mesh, ice, dt)
     ! Calculate the truncation error in the ice thickness rate of change (Robinson et al., 2020, Eq. 32)
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    REAL(dp),                            INTENT(IN)    :: dt, dt_prev
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
+    real(dp),             intent(in)    :: dt
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_pc_truncation_error'
-    INTEGER                                            :: vi, ci, vc
-    LOGICAL                                            :: has_GL_neighbour
-    REAL(dp)                                           :: zeta, eta_proc
+    character(len=256), parameter       :: routine_name = 'calc_pc_truncation_error'
+    integer                             :: vi, ci, vc
+    logical                             :: has_GL_neighbour
+    real(dp)                            :: eta_proc
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    ! ! Ratio of time steps
-    ! zeta = dt / dt_prev
+    ! Save previous value of eta
+    ice%pc_eta_prev  = ice%pc_eta
 
-    ! ! Find maximum truncation error
-    ! eta_proc = C%pc_eta_min
+    ! Find maximum truncation error
+    eta_proc = C%pc_eta_min
 
-    ! DO vi = mesh%vi1, mesh%vi2
+    do vi = mesh%vi1, mesh%vi2
 
-    !   ! Calculate truncation error (Robinson et al., 2020, Eq. 32)
-    !   ice%pc_tau( vi) = ABS( zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / ((3._dp * zeta + 3._dp) * dt))
+      ! Calculate truncation error (Robinson et al., 2020, Eq. 32)
+      ice%pc_tau( vi) = abs( ice%pc_zeta * (ice%Hi_corr( vi) - ice%Hi_pred( vi)) / &
+                             ((3._dp * ice%pc_zeta + 3._dp) * dt))
 
-    !   IF (ice%mask_sheet_a( vi) == 1) THEN
+      if (ice%mask_sheet_a( vi) == 1) then
 
-    !     has_GL_neighbour = .FALSE.
-    !     DO ci = 1, mesh%nC( vi)
-    !       vc = mesh%C( vi,ci)
-    !       IF (ice%mask_gl_a( vc) == 1) THEN
-    !         has_GL_neighbour = .TRUE.
-    !         EXIT
-    !       END IF
-    !     END DO
+        has_GL_neighbour = .false.
+        do ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          if (ice%mask_gl_a( vc) == 1) then
+            has_GL_neighbour = .true.
+            exit
+          end if
+        end do
 
-    !     IF (.NOT.has_GL_neighbour) eta_proc = MAX( eta_proc, ice%pc_tau( vi))
+        if (.not. has_GL_neighbour) then
+          eta_proc = max( eta_proc, ice%pc_tau( vi))
+        end if
 
-    !   END IF
+      end if
 
-    ! END DO
-    ! CALL MPI_REDUCE( eta_proc, ice%pc_eta, 1, MPI_DOUBLE_PRECISION, MPI_MAX, 0, MPI_COMM_WORLD, ierr)
+    end do
+
+    ! Get maximum value across all processes
+    call MPI_ALLREDUCE( eta_proc, ice%pc_eta, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE calc_pc_truncation_error
+  end subroutine calc_pc_truncation_error
 
 ! ===== Ice thickness update =====
 ! ================================
 
-  subroutine update_ice_thickness( mesh, ice, refgeo_PD)
+  subroutine update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
     ! Update the ice thickness at the end of a model time loop
 
     implicit none
 
     ! In- and output variables:
-    type(type_mesh),               intent(in)    :: mesh
-    type(type_ice_model),          intent(inout) :: ice
-    type(type_reference_geometry), intent(in)    :: refgeo_PD
+    type(type_mesh),                       intent(in)    :: mesh
+    type(type_ice_model),                  intent(inout) :: ice
+    integer, dimension(mesh%vi1:mesh%vi2), intent(in)    :: mask_noice
+    type(type_reference_geometry),         intent(in)    :: refgeo_PD
+    type(type_reference_geometry),         intent(in)    :: refgeo_GIAeq
 
     ! Local variables:
-    character(len=256), parameter                :: routine_name = 'update_ice_thickness'
+    character(len=256), parameter                        :: routine_name = 'update_ice_thickness'
 
     ! Add routine to path
     call init_routine( routine_name)
@@ -554,7 +599,10 @@ contains
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = max( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
 
-    call update_general_ice_model_data(      mesh, ice)
+    ! Remove ice following various criteria
+    call additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
+
+    call update_general_ice_model_data( mesh, ice)
 
     ! Compute ice thickness/elevation difference w.r.t PD
     ice%dHi_a( mesh%vi1:mesh%vi2) = ice%Hi_a( mesh%vi1:mesh%vi2) - refgeo_PD%Hi( mesh%vi1:mesh%vi2)
@@ -564,6 +612,50 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine update_ice_thickness
+
+  subroutine additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
+    ! Remove ice following various criteria
+
+    implicit none
+
+    ! In- and output variables:
+    type(type_mesh),                       intent(in)    :: mesh
+    type(type_ice_model),                  intent(inout) :: ice
+    integer, dimension(mesh%vi1:mesh%vi2), intent(in)    :: mask_noice
+    type(type_reference_geometry),         intent(in)    :: refgeo_PD
+    type(type_reference_geometry),         intent(in)    :: refgeo_GIAeq
+
+    ! Local variables:
+    character(len=256), parameter                        :: routine_name = 'additional_ice_removal'
+    integer                                              :: vi
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Remove very thin ice
+    do vi = mesh%vi1, mesh%vi2
+      if (ice%Hi_a( vi) < C%minimum_ice_thickness) then
+        ice%Hi_a( vi) = 0._dp
+      end if
+    end do
+
+    ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
+    do vi = mesh%vi1, mesh%vi2
+      if (mask_noice( vi) == 1) then
+        ice%Hi_a( vi) = 0._dp
+      end if
+    end do
+
+    ! If so specified, remove specific shelf areas
+    CALL imposed_shelf_removal( mesh, ice, refgeo_PD, refgeo_GIAeq)
+
+    ! Remove unconnected shelves
+    call remove_unconnected_shelves( mesh, ice)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine additional_ice_removal
 
 ! ===== Time stepping =====
 ! =========================
@@ -648,26 +740,26 @@ contains
 
   END SUBROUTINE calc_critical_timestep_SIA
 
-  SUBROUTINE calc_critical_timestep_adv( mesh, ice, dt_crit_adv)
+  subroutine calc_critical_timestep_adv( mesh, ice, dt_crit_adv)
     ! Calculate the critical time step for advective ice flow (CFL criterion)
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    REAL(dp),                            INTENT(OUT)   :: dt_crit_adv
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(in)    :: ice
+    real(dp),             intent(out)   :: dt_crit_adv
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_critical_timestep_adv'
-    INTEGER                                            :: aci, vi, vj
-    REAL(dp), DIMENSION(:    ), allocatable            :: u_c,  v_c
-    REAL(dp), DIMENSION(:    ), allocatable            :: u_vav_b, v_vav_b
-    REAL(dp)                                           :: dist, dt
-    REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
+    character(len=256), parameter       :: routine_name = 'calc_critical_timestep_adv'
+    integer                             :: aci, vi, vj
+    real(dp), dimension(:), allocatable :: u_c,  v_c
+    real(dp), dimension(:), allocatable :: u_vav_b, v_vav_b
+    real(dp)                            :: dist, dt, uv_c
+    real(dp), parameter                 :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     allocate(u_c(mesh%ci1:mesh%ci2))
     allocate(v_c(mesh%ci1:mesh%ci2))
@@ -680,22 +772,28 @@ contains
     call allgather_array(v_vav_b)
 
     ! Calculate ice velocity on the staggered grid
-    CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
+    call map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
 
     dt_crit_adv = 2._dp * C%dt_max
 
-    DO aci = mesh%ci1, mesh%ci2
+    do aci = mesh%ci1, mesh%ci2
 
       vi = mesh%Aci( aci,1)
       vj = mesh%Aci( aci,2)
-      dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
-      dt = dist / (ABS( u_c( aci)) + ABS( v_c( aci)))
-      dt_crit_adv = MIN( dt_crit_adv, dt)
+      dist = norm2( mesh%V( vi,:) - mesh%V( vj,:))
+      uv_c = (abs( u_c( aci)) + abs( v_c( aci)))
 
-    END DO
+      if (uv_c > 0._dp) then
+        dt = dist / uv_c
+      else
+        dt = 2._dp * C%dt_max
+      end if
+      dt_crit_adv = min( dt_crit_adv, dt)
 
-    CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_adv, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
-    dt_crit_adv = MIN(C%dt_max, dt_crit_adv * dt_correction_factor)
+    end do
+
+    call MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_adv, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    dt_crit_adv = min(C%dt_max, dt_crit_adv * dt_correction_factor)
 
     ! Clean up after yourself
     deallocate( u_c)
@@ -704,117 +802,123 @@ contains
     deallocate( v_vav_b)
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE calc_critical_timestep_adv
+  end subroutine calc_critical_timestep_adv
 
-  SUBROUTINE determine_timesteps_and_actions( region, t_end)
+  subroutine determine_timesteps_and_actions( region, t_end)
     ! Determine how long we can run just ice dynamics before another "action" (thermodynamics,
     ! GIA, output writing, inverse routine, etc.) has to be performed, and adjust the time step accordingly.
 
-    IMPLICIT NONE
+    implicit none
 
     ! Input variables:
-    TYPE(type_model_region),             INTENT(INOUT) :: region
-    REAL(dp),                            INTENT(IN)    :: t_end
+    type(type_model_region), intent(inout) :: region
+    real(dp),                intent(in)    :: t_end
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'determine_timesteps_and_actions'
-    REAL(dp)                                           :: t_next
+    character(len=256), parameter          :: routine_name = 'determine_timesteps_and_actions'
+    real(dp)                               :: t_next
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Determine when each model components should be updated
 
-    t_next = MIN(t_end, region%time + C%dt_max)
+    t_next = min(t_end, region%time + C%dt_max)
 
     ! First the ice dynamics
     ! ======================
 
-    ! IF     (C%choice_ice_dynamics == 'none') THEN
-    !   ! Just stick to the maximum time step
-    ! ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
-    !   t_next = MIN( t_next, region%t_next_SIA)
-    ! ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-    !   t_next = MIN( t_next, region%t_next_SSA)
-    ! ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-    !   t_next = MIN( t_next, region%t_next_SIA)
-    !   t_next = MIN( t_next, region%t_next_SSA)
-    ! ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-    !   t_next = MIN( t_next, region%t_next_DIVA)
-    ! ELSE
-    !   CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
-    ! END IF ! IF (C%choice_ice_dynamics == 'SIA') THEN
+    select case (C%choice_ice_dynamics)
+
+      case ('none')
+        ! Just stick to the maximum time step
+
+      case ('SIA')
+        t_next = min( t_next, region%t_next_SIA)
+
+      case ('SSA')
+        t_next = min( t_next, region%t_next_SSA)
+
+      case ('SIA/SSA')
+        t_next = min( t_next, region%t_next_SIA)
+        t_next = min( t_next, region%t_next_SSA)
+
+      case ('DIVA')
+        t_next = min( t_next, region%t_next_DIVA)
+
+      case default
+        call crash('unknown choice_ice_dynamics "' // trim( C%choice_ice_dynamics) // '"!')
+
+    end select
 
     ! Then the other model components
     ! ===============================
 
-    region%do_thermo  = .FALSE.
-    IF (region%time == region%t_next_thermo) THEN
-      region%do_thermo      = .TRUE.
+    region%do_thermo  = .false.
+    if (region%time == region%t_next_thermo) then
+      region%do_thermo      = .true.
       region%t_last_thermo  = region%time
       region%t_next_thermo  = region%t_last_thermo + C%dt_thermo
-    END IF
-    t_next = MIN( t_next, region%t_next_thermo)
+    end if
+    t_next = min( t_next, region%t_next_thermo)
 
-    region%do_climate = .FALSE.
-    IF (region%time == region%t_next_climate) THEN
-      region%do_climate     = .TRUE.
+    region%do_climate = .false.
+    if (region%time == region%t_next_climate) then
+      region%do_climate     = .true.
       region%t_last_climate = region%time
       region%t_next_climate = region%t_last_climate + C%dt_climate
-    END IF
-    t_next = MIN( t_next, region%t_next_climate)
+    end if
+    t_next = min( t_next, region%t_next_climate)
 
-    region%do_ocean   = .FALSE.
-    IF (region%time == region%t_next_ocean) THEN
-      region%do_ocean       = .TRUE.
+    region%do_ocean   = .false.
+    if (region%time == region%t_next_ocean) then
+      region%do_ocean       = .true.
       region%t_last_ocean   = region%time
       region%t_next_ocean   = region%t_last_ocean + C%dt_ocean
-    END IF
-    t_next = MIN( t_next, region%t_next_ocean)
+    end if
+    t_next = min( t_next, region%t_next_ocean)
 
-    region%do_SMB     = .FALSE.
-    IF (region%time == region%t_next_SMB) THEN
-      region%do_SMB         = .TRUE.
+    region%do_SMB     = .false.
+    if (region%time == region%t_next_SMB) then
+      region%do_SMB         = .true.
       region%t_last_SMB     = region%time
       region%t_next_SMB     = region%t_last_SMB + C%dt_SMB
-    END IF
-    t_next = MIN( t_next, region%t_next_SMB)
+    end if
+    t_next = min( t_next, region%t_next_SMB)
 
-    region%do_BMB     = .FALSE.
-    IF (region%time == region%t_next_BMB) THEN
-      region%do_BMB         = .TRUE.
+    region%do_BMB     = .false.
+    if (region%time == region%t_next_BMB) then
+      region%do_BMB         = .true.
       region%t_last_BMB     = region%time
       region%t_next_BMB     = region%t_last_BMB + C%dt_BMB
-    END IF
-    t_next = MIN( t_next, region%t_next_BMB)
+    end if
+    t_next = min( t_next, region%t_next_BMB)
 
-    region%do_ELRA    = .FALSE.
-    IF (region%time == region%t_next_ELRA) THEN
-      region%do_ELRA        = .TRUE.
+    region%do_ELRA    = .false.
+    if (region%time == region%t_next_ELRA) then
+      region%do_ELRA        = .true.
       region%t_last_ELRA    = region%time
       region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
-    END IF
-    t_next = MIN( t_next, region%t_next_ELRA)
+    end if
+    t_next = min( t_next, region%t_next_ELRA)
 
-    region%do_output  = .FALSE.
-    IF (region%time == region%t_next_output) THEN
-      region%do_output      = .TRUE.
+    region%do_output  = .false.
+    if (region%time == region%t_next_output) then
+      region%do_output      = .true.
       region%t_last_output  = region%time
       region%t_next_output  = region%t_last_output + C%dt_output
-    END IF
-    t_next = MIN( t_next, region%t_next_output)
+    end if
+    t_next = min( t_next, region%t_next_output)
 
     ! Set time step so that we move forward to the next action
     region%dt = t_next - region%time
 
-    CALL sync
-
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_timesteps_and_actions
+  end subroutine determine_timesteps_and_actions
 
 ! ===== Allocation and remapping =====
 ! ====================================
@@ -1159,17 +1263,8 @@ contains
     ! === Ice velocities ===
     ! ======================
 
-    ! If we're running with choice_ice_dynamics == "none",
-    ! remap velocities pretending we are using the DIVA, just like we did
-    ! during initialisation to get reasonable velocities for the thermodynamics.
+    call remap_velocities( mesh_old, mesh_new, map, ice)
 
-    if (C%choice_ice_dynamics == 'none') then
-      C%choice_ice_dynamics = 'DIVA'
-      call remap_velocities( mesh_old, mesh_new, map, ice)
-      C%choice_ice_dynamics = 'none'
-    else
-      call remap_velocities( mesh_old, mesh_new, map, ice)
-    end if
 
     ! === Ice flow factor ===
     ! =======================

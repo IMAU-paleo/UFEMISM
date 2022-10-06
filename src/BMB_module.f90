@@ -29,7 +29,7 @@ MODULE BMB_module
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
                                              type_remapping_mesh_mesh, type_reference_geometry, type_restart_data
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
 
   IMPLICIT NONE
 
@@ -150,11 +150,11 @@ CONTAINS
 
       ! Add sub-shelf melt rates
       IF (C%choice_BMB_shelf_model == 'inversion') THEN
-        ! For the inversion of melt rates, add inverted rates everywhere. BMB_shelf
-        ! can be non-zero only at points where the model OR the reference data is
-        ! shelf or ocean (this helps to account for 'unwanted' grounding line advance
-        ! or retreat, and to get an idea of the melt rates needed at ocean points).
-        ! Thus, no need for masks here.
+        ! For the inversion of melt rates or temperatures, add inverted rates
+        ! everywhere. BMB_shelf can be non-zero only at points where the model
+        ! OR the reference data is shelf or ocean (this helps to account for
+        ! 'unwanted' grounding line advance or retreat, and to get an idea of
+        ! the melt rates needed at ocean points). Thus, no need for masks here.
         BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
       ELSE
         ! Different sub-grid schemes for sub-shelf melt. BMB_shelf can be non-zero
@@ -162,9 +162,9 @@ CONTAINS
         IF     (C%choice_BMB_subgrid == 'FCMP') THEN
           IF (ice%mask_shelf_a( vi) == 1) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'PMP') THEN
-          BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grnd_a( vi)) * BMB%BMB_shelf( vi)
+          BMB%BMB( vi) = BMB%BMB( vi) + (1._dp - ice%f_grndx_a( vi)) * BMB%BMB_shelf( vi)
         ELSEIF (C%choice_BMB_subgrid == 'NMP') THEN
-          IF (ice%f_grnd_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
+          IF (ice%f_grndx_a( vi) == 0._dp) BMB%BMB( vi) = BMB%BMB( vi) + BMB%BMB_shelf( vi)
         ELSE
           CALL crash('unknown choice_BMB_subgrid "' // TRIM(C%choice_BMB_subgrid) // '"!')
         END IF
@@ -892,49 +892,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE run_BMB_model_Favier2019_Mplus
-
-  SUBROUTINE calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
-    ! Calculate ocean temperature at the base of the shelf by interpolating
-    ! the 3-D ocean temperature field in the vertical column
-
-    IMPLICIT NONE
-
-    ! In/output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(IN)    :: ice
-    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
-    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ocean_temperature_at_shelf_base'
-    INTEGER                                            :: vi
-    REAL(dp)                                           :: depth
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    DO vi = mesh%vi1, mesh%vi2
-
-      ! Initialise at zero
-      BMB%T_ocean_base( vi) = 0._dp
-
-      IF (ice%mask_ocean_a( vi) == 1) THEN
-
-        ! Calculate depth
-        depth = MAX( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
-
-        ! Find ocean temperature at this depth
-        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
-
-      END IF
-
-    END DO
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE calc_ocean_temperature_at_shelf_base
 
   SUBROUTINE calc_ocean_freezing_point_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate the ocean freezing point at the base of the shelf, needed to calculate
@@ -2315,8 +2272,7 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       IF (ice%mask_shelf_a( vi) == 1 .OR. &
-          ice%mask_ocean_a( vi) == 1 .OR. &
-          is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) ) THEN
+          ice%mask_ocean_a( vi) == 1) THEN
 
         ! = Flux through floating ice [weight]
         ! ====================================
@@ -2355,14 +2311,13 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       IF (ice%mask_shelf_a( vi) == 1 .OR. &
-          ice%mask_ocean_a( vi) == 1 .OR. &
-          is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)) THEN
+          ice%mask_ocean_a( vi) == 1) THEN
 
         ! = Pressure melting point at the bottom of the ice shelf [K]
         ! ===========================================================
 
-        t_melt = 0.0939_dp - 0.057_dp * 35._dp - &
-                 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+          t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
+                   7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
         ! = Thermal forcing [K]
         ! =====================
@@ -2372,16 +2327,7 @@ CONTAINS
         ! = Sub-shelf basal melt [m/a]
         ! ============================
 
-        IF (ice%mask_sheet_a( vi) == 1 .AND. &
-            (.NOT. C%do_ocean_temperature_inversion) ) THEN
-
-          BMB%BMB_shelf( vi) = 0.0_dp
-
-        ELSE
-
-          BMB%BMB_shelf( vi) = q_factor * F_melt( vi) * (-t_force) * ABS(t_force)
-
-        END IF
+        BMB%BMB_shelf( vi) = q_factor * F_melt( vi) * (-t_force) * ABS(t_force)
 
       END IF
 
@@ -2409,22 +2355,79 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BMB_model_Bernales202X'
+    INTEGER                                            :: k
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Variables
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
-    CALL allocate_shared_dp_1D( mesh%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
+    CALL allocate_shared_dp_1D(  mesh%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
+    CALL allocate_shared_int_1D( mesh%nV, BMB%M_ocean_base, BMB%wM_ocean_base)
 
     ! Initialise ocean temperature and salinity at the base of the ice shelf
     CALL calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
     CALL calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
 
+    IF (C%do_ocean_temperature_inversion) THEN
+      CALL allocate_shared_dp_1D( mesh%nV, BMB%T_base_ave, BMB%wT_base_ave)
+      CALL allocate_shared_dp_2D( mesh%nV, C%T_base_window_size, BMB%T_base_window, BMB%wT_base_window)
+
+      BMB%T_base_ave( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
+
+      DO k = 1, C%T_base_window_size
+        BMB%T_base_window( mesh%vi1:mesh%vi2, k) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
+      END DO
+    END IF
+
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=2)
+    CALL finalise_routine( routine_name, n_extra_windows_expected=3)
 
   END SUBROUTINE initialise_BMB_model_Bernales202X
+
+  SUBROUTINE calc_ocean_temperature_at_shelf_base( mesh, ice, ocean, BMB)
+    ! Calculate ocean temperature at the base of the shelf by interpolating
+    ! the 3-D ocean temperature field in the vertical column
+
+    IMPLICIT NONE
+
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+    TYPE(type_ocean_snapshot_regional),  INTENT(IN)    :: ocean
+    TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_ocean_temperature_at_shelf_base'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: depth
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Initialise at zero
+      BMB%T_ocean_base( vi) = 0._dp
+
+      IF (ice%mask_shelf_a( vi) == 1 .OR. &
+          ice%mask_ocean_a( vi) == 1) THEN
+
+        ! Calculate depth for ice shelves or ocean
+        depth = MAX( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
+
+        ! Find ocean temperature at this depth
+        CALL interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), depth, BMB%T_ocean_base( vi))
+
+      END IF
+
+    END DO
+    CALL sync
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_ocean_temperature_at_shelf_base
 
   SUBROUTINE calc_ocean_salinity_at_shelf_base( mesh, ice, ocean, BMB)
     ! Calculate ocean temperature at the base of the shelf by interpolating
@@ -2451,9 +2454,10 @@ CONTAINS
       ! Initialise at zero
       BMB%S_ocean_base( vi) = 0._dp
 
-      IF (ice%mask_ocean_a( vi) == 1) THEN
+      IF (ice%mask_shelf_a( vi) == 1 .OR. &
+          ice%mask_ocean_a( vi) == 1) THEN
 
-        ! Calculate depth
+        ! Calculate depth for ice shelves or ocean
         depth = MAX( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
 
         ! Find ocean temperature at this depth
@@ -2516,7 +2520,7 @@ CONTAINS
     ELSE
       ! Neither ice shelf nor ocean
 
-      dist_gl = 1.0E-20_dp
+      dist_gl = 1.0E20_dp
 
     END IF
 
@@ -2644,7 +2648,7 @@ CONTAINS
       ! or the sub-grid grounded area fraction
       IF ( is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) .OR. &
            ice%mask_shelf_a( vi) == 1 .OR. &
-           ice%f_grnd_a( vi) < 1.0_dp) THEN
+           ice%f_grndx_a( vi) < 1.0_dp) THEN
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
           h_scale = 1.0_dp/C%BMB_inv_scale_shelf
@@ -2743,7 +2747,8 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time >= C%ocean_temperature_inv_t_end) THEN
-      ! Nothing to do for now. Just return.
+      ! Inversion is done. Use running average of bed roughness.
+      BMB%T_ocean_base( mesh%vi1:mesh%vi2) = BMB%T_base_ave( mesh%vi1:mesh%vi2)
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -2756,11 +2761,13 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
 
-      ! Invert only over shelf vertices
-      IF ( ice%mask_shelf_a( vi) == 1 .OR. &
-           is_floating( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp) ) THEN
+      ! Invert only over shelf or GL vertices
+      IF ( ice%mask_shelf_a( vi) == 1) THEN
 
-        ! Ice shelf, use it during extrapolation
+        ! Add this vertex to mask of inverted ocean temperatures
+        BMB%M_ocean_base( vi) = 1
+
+        ! Use this vertex during extrapolation
         mask( vi) = 2
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
@@ -2782,32 +2789,53 @@ CONTAINS
 
       ELSE
 
-        ! Not ice shelf, so mark it for extrapolation
+        ! Remove this vertex from mask of inverted ocean temperatures
+        BMB%M_ocean_base( vi) = 0
+
+        ! Not ice shelf: mark it for extrapolation
         mask( vi) = 1
 
-      END IF ! else the reference is grounded ice sheet, so leave it alone
+      END IF
 
     END DO
     CALL sync
 
     ! Limit basal melt
     DO vi = mesh%vi1, mesh%vi2
-      t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
-               7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-      BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)! - .5_dp)
-      BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
+      IF (ice%mask_shelf_a( vi) == 1) THEN
+
+        t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
+                 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+
+        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt - .2_dp)
+        BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
+
+      END IF
+
     END DO
     CALL sync
 
-    ! ! Extrapolate the resulting field
-    ! ! ===============================
+    ! Extrapolate the resulting field
+    ! ===============================
 
-    ! ! Perform the extrapolation
-    ! IF (par%master) THEN
-    !   CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 10000._dp, mask_filled)
-    ! END IF
-    ! CALL sync
+    ! Perform the extrapolation
+    IF (par%master) THEN
+      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 10000._dp, mask_filled)
+    END IF
+    CALL sync
+
+    ! Running T_ocean_base average
+    ! ============================
+
+    ! Update the running window: drop oldest record and push the rest to the back
+    BMB%T_base_window( mesh%vi1:mesh%vi2,2:C%T_base_window_size) = BMB%T_base_window( mesh%vi1:mesh%vi2,1:C%T_base_window_size-1)
+
+    ! Update the running window: add new record to beginning of window
+    BMB%T_base_window( mesh%vi1:mesh%vi2,1) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
+
+    ! Compute running average
+    BMB%T_base_ave( mesh%vi1:mesh%vi2) = SUM(BMB%T_base_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%T_base_window_size,dp)
 
     CALL deallocate_shared( wmask)
     CALL deallocate_shared( wmask_filled)
@@ -3002,7 +3030,7 @@ CONTAINS
       mask_FCMP( vi) = 0
       mask_PMP(  vi) = 0
       IF (ice%mask_shelf_a( vi) == 1) mask_FCMP( vi) = 1
-      IF (ice%f_grnd_a( vi) < 1._dp .AND. ice%mask_ice_a( vi) == 1) mask_PMP(  vi) = 1
+      IF (ice%f_grndx_a( vi) < 1._dp .AND. ice%mask_ice_a( vi) == 1) mask_PMP(  vi) = 1
     END DO
     CALL sync
 
@@ -3173,13 +3201,14 @@ CONTAINS
 
       ! Exception for iterative inversion of ocean temperatures, to avoid resetting it.
       IF (C%do_ocean_temperature_inversion) THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%T_ocean_base, BMB%wT_ocean_base, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%T_ocean_base,  BMB%wT_ocean_base,  'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%T_base_ave,    BMB%wT_base_ave,    'nearest_neighbour')
+        CALL remap_field_dp_3D( mesh_old, mesh_new, map, BMB%T_base_window, BMB%wT_base_window, 'nearest_neighbour')
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%T_ocean_base, BMB%wT_ocean_base)
       END IF
 
       CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%S_ocean_base, BMB%wS_ocean_base)
-
 
     ELSE
       CALL crash('unknown choice_BMB_shelf_model "' // TRIM(C%choice_BMB_shelf_model) // '"!')

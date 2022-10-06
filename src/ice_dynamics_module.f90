@@ -1340,15 +1340,29 @@ CONTAINS
 
       ! Special cases for the little ones
       IF (C%choice_ice_dynamics == 'SIA') THEN
+        ! Horizontal velocities
+        ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_b( mesh%ti1:mesh%ti2,:)
+        ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_b( mesh%ti1:mesh%ti2,:)
         ! Basal velocity is zero
         ice%u_base_b( mesh%ti1:mesh%ti2) = 0._dp
         ice%v_base_b( mesh%ti1:mesh%ti2) = 0._dp
         CALL sync
 
       ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
+        ! Horizontal velocities
+        ice%u_base_SSA_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,C%nz)
+        ice%v_base_SSA_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,C%nz)
         ! No vertical velocity
         ice%w_3D_a( mesh%vi1:mesh%vi2,:) = 0._dp
         CALL sync
+
+      ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
+        ! Horizontal SIA velocities
+        ice%u_3D_SIA_b( mesh%ti1:mesh%ti2,:) = ice%u_3D_b( mesh%ti1:mesh%ti2,:)
+        ice%v_3D_SIA_b( mesh%ti1:mesh%ti2,:) = ice%v_3D_b( mesh%ti1:mesh%ti2,:)
+        ! Horizontal SSA velocities
+        ice%u_base_SSA_b( mesh%ti1:mesh%ti2) = ice%u_3D_b( mesh%ti1:mesh%ti2,C%nz)
+        ice%v_base_SSA_b( mesh%ti1:mesh%ti2) = ice%v_3D_b( mesh%ti1:mesh%ti2,C%nz)
       END IF
 
       ! Map velocity components to the a-grid
@@ -1701,7 +1715,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHs_dt_a,             ice%wdHs_dt_a            )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%dHi_dt_past_a,        ice%wdHi_dt_past_a       )
 
-   ! Ice dynamics - calving
+    ! Ice dynamics - calving
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%float_margin_frac_a,  ice%wfloat_margin_frac_a )
     CALL reallocate_shared_dp_1D(  mesh_new%nV,                  ice%Hi_eff_cf_a,          ice%wHi_eff_cf_a         )
 

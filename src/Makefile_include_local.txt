@@ -1,23 +1,30 @@
+# Depends on this file
+$(OBJ_PATH)/%.o : %.f90 Makefile_include_local.txt
+
 # Compiler names:
   F90 = mpifort
 
 # Setting the path for the netcdf libraries:  
   NCLIB     = $(shell nf-config --flibs)
   NCINC     = $(shell nf-config --fflags)
-  PETSC_DIR = ${HOME}/local_projects/petsc
-  PETSC_ARCH= arch-linux-c-debug
+  PETSC_DIR = /usr/include/petsc
 
 # Compiler flags:
-  COMPILER_FLAGS_BASIC    = -O3 -J${MOD_PATH} -Wall -ffree-line-length-none -cpp \
+  COMPILER_FLAGS_BASIC    = -O3 -Wall -ffree-line-length-none -cpp \
                             -Werror=implicit-interface -fimplicit-none -g -march=native
-  COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og
 
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC}\
-                            ${NCINC} -I${PETSC_DIR}/include \
-                            -I${PETSC_DIR}/${PETSC_ARCH}/include
+# check=all : bounds checking etc ...
+# backtrace : print backtrace on checking fail
+# Og        : compile with only optimizations compatible with gdb enabled
+# init-real=nan : initialize every real allocation to nan, follow the nans to find uninitialized values
+# init-integer=-42 : same, but for integers
+# init-character=33 : same, but for characters, 33 is equal to "!" (so look for those)
+  COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og \
+                            -finit-real=nan -finit-integer=-42 -finit-character=33
+                            -ffpe-trap=invalid,zero,overflow,underflow
+
+  F90FLAGS                = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} \
+                            ${NCINC} -I${PETSC_DIR} 
 
 # Linking flags of libaries:
-  LDFLAGS                 = -L/usr/local/lib ${NCLIB} \
-                            -Wl,-rpath=${PETSC_DIR}/${PETSC_ARCH}/lib \
-                            ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so \
-                            -lmkl_rt -g
+  LDFLAGS                 = -L/usr/local/lib ${NCLIB} -lpetsc -lopenblas -g

@@ -10,19 +10,19 @@ module ice_velocity_module
   use configuration_module,                only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
   use parameters_module
   use parallel_module,                     only : par, sync, ierr, cerr, partition_list
-  use utilities_module,                    only : check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                                  check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
+  use utilities_module,                    only : check_for_nan, check_for_zero, &
                                                   vertical_average, vertical_integration_from_bottom_to_zeta, &
                                                   vertical_integrate, SSA_Schoof2006_analytical_solution
   use data_types_module,                   only : type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, &
                                                   type_remapping_mesh_mesh
-  use mesh_mapping_module,                 only : remap_field_dp_2D
+  use mesh_mapping_module,                 only : remap_field_dp_2D, remap_field_dp_3D
   use mesh_operators_module,               only : map_a_to_b_2d, map_b_to_a_2d, map_a_to_b_3d, map_b_to_a_3D
   use mesh_operators_module,               only : ddx_a_to_a_2D, ddy_a_to_a_2D, ddx_b_to_a_3D, ddy_b_to_a_3D
   use mesh_operators_module,               only : ddx_a_to_b_2D, ddx_b_to_a_2D, ddy_a_to_b_2D, ddy_b_to_a_2D
   use mesh_operators_module,               only : apply_Neumann_BC_direct_a_2D
   use sparse_matrix_module,                only : allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, &
-                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR
+                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR, &
+                                                  resync_csr_dist
   use basal_conditions_and_sliding_module, only : calc_basal_conditions, calc_sliding_law
   use general_ice_model_data_module,       only : determine_grounded_fractions
   use reallocate_mod,                      only : reallocate_bounds
@@ -343,6 +343,7 @@ contains
     do while (.not. has_converged)
       viscosity_iteration_i = viscosity_iteration_i + 1
 
+      ! TODO: calc_vertical_shear_strain_rates and calc_effective_viscosity have a circular dependency...
       ! Calculate the vertical shear strain rates
       call calc_vertical_shear_strain_rates( mesh, ice)
 
@@ -519,6 +520,15 @@ contains
 
       ! Calculate 3D vertical velocity from 3D horizontal velocities and conservation of mass
       CALL calc_3D_vertical_velocities( mesh, ice)
+
+      ! Calculate vertically averaged velocities
+      DO ti = mesh%ti1, mesh%ti2
+        prof = ice%u_3D_b( ti,:)
+        CALL vertical_average( prof, ice%u_vav_b( ti))
+        prof = ice%v_3D_b( ti,:)
+        CALL vertical_average( prof, ice%v_vav_b( ti))
+      END DO
+
 
     ELSE
       CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
@@ -704,6 +714,9 @@ contains
     ! Allocate shared memory
     allocate( visc_eff_3D_b( mesh%ti1:mesh%ti2, C%nz))
 
+    ! Safety
+    call check_for_zero(ice%visc_eff_3D_a, 'ice%visc_eff_3D_a')
+
     ! Map 3-D effective viscosity to the b-grid
     CALL map_a_to_b_3D( mesh, ice%visc_eff_3D_a, visc_eff_3D_b)
 
@@ -719,8 +732,8 @@ contains
     deallocate( visc_eff_3D_b)
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%du_dz_3D_b, 'ice%du_dz_3D_b')
-    CALL check_for_NaN_dp_2D( ice%dv_dz_3D_b, 'ice%dv_dz_3D_b')
+    CALL check_for_nan( ice%du_dz_3D_b, 'ice%du_dz_3D_b')
+    CALL check_for_nan( ice%dv_dz_3D_b, 'ice%dv_dz_3D_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -804,9 +817,11 @@ contains
     deallocate(N_a)
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
-    CALL check_for_NaN_dp_1D( ice%visc_eff_int_a, 'ice%visc_eff_int_a')
-    CALL check_for_NaN_dp_1D( ice%N_a,            'ice%N_a'           )
+    CALL check_for_zero( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
+    CALL check_for_nan( ice%visc_eff_3D_a,  'ice%visc_eff_3D_a' )
+    CALL check_for_zero( ice%visc_eff_int_a,  'ice%visc_eff_int_a' )
+    CALL check_for_nan( ice%visc_eff_int_a, 'ice%visc_eff_int_a')
+    CALL check_for_nan( ice%N_a,            'ice%N_a'           )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -859,7 +874,7 @@ contains
     deallocate( v_a)
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%beta_a, 'ice%beta_a')
+    CALL check_for_nan( ice%beta_a, 'ice%beta_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -898,7 +913,7 @@ contains
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%F2_a, 'ice%F2_a')
+    CALL check_for_nan( ice%F2_a, 'ice%F2_a')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -952,8 +967,8 @@ contains
     END IF
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%beta_eff_a, 'ice%beta_eff_a')
-    CALL check_for_NaN_dp_1D( ice%beta_eff_b, 'ice%beta_eff_b')
+    CALL check_for_nan( ice%beta_eff_a, 'ice%beta_eff_a')
+    CALL check_for_nan( ice%beta_eff_b, 'ice%beta_eff_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -983,8 +998,8 @@ contains
     CALL sync
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%taubx_b, 'ice%taubx_b')
-    CALL check_for_NaN_dp_1D( ice%tauby_b, 'ice%tauby_b')
+    CALL check_for_nan( ice%taubx_b, 'ice%taubx_b')
+    CALL check_for_nan( ice%tauby_b, 'ice%tauby_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1034,8 +1049,8 @@ contains
     deallocate( F2_b )
 
     ! Safety
-    CALL check_for_NaN_dp_1D( ice%u_base_b, 'ice%u_base_b')
-    CALL check_for_NaN_dp_1D( ice%v_base_b, 'ice%v_base_b')
+    CALL check_for_nan( ice%u_base_b, 'ice%u_base_b')
+    CALL check_for_nan( ice%v_base_b, 'ice%v_base_b')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1075,7 +1090,6 @@ contains
       CALL vertical_integration_from_bottom_to_zeta( prof, F1_3D)
       F1_3D_b( ti,:) = F1_3D
     END DO
-    CALL sync
 
     ! Calculate 3D horizontal velocity components
     DO ti = mesh%ti1, mesh%ti2
@@ -1084,8 +1098,8 @@ contains
     END DO
 
     ! Safety
-    CALL check_for_NaN_dp_2D( ice%u_3D_b, 'ice%u_3D_b')
-    CALL check_for_NaN_dp_2D( ice%v_3D_b, 'ice%v_3D_b')
+    CALL check_for_nan( ice%u_3D_b, 'ice%u_3D_b')
+    CALL check_for_nan( ice%v_3D_b, 'ice%v_3D_b')
 
     ! Clean up after yourself
     deallocate( Hi_b         )
@@ -1169,16 +1183,16 @@ contains
       IF (mesh%Tri_edge_index( ti) == 0) THEN
         ! Free triangle: fill in matrix row for the SSA/DIVA
         IF (C%include_SSADIVA_crossterms) THEN
-          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
         ELSE
-          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
-          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
         END IF
       ELSE
         ! Border triangle: apply boundary conditions
-        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
-        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
       END IF
 
     END DO
@@ -1191,6 +1205,7 @@ contains
     ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
     call allgather_array(b_buv,t21,t22)
     call allgather_array(uv_buv,t21,t22)
+    call resync_csr_dist(ice%M_SSADIVA, t21, t22)
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
@@ -1199,6 +1214,10 @@ contains
       C%DIVA_SOR_omega           , &
       C%DIVA_PETSc_rtol          , &
       C%DIVA_PETSc_abstol)
+
+    call check_for_nan(uv_buv(pti1:pti2), "uv_buv")
+
+    call allgather_array(uv_buv)
 
   ! Get solution back on the b-grid
   ! ================================
@@ -1219,6 +1238,9 @@ contains
     deallocate( dN_dy_b)
     deallocate( b_buv  )
     deallocate( uv_buv )
+
+    call check_for_nan(u_b, "u_b")
+    call check_for_nan(v_b, "v_b")
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1906,7 +1928,7 @@ contains
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: u_b, v_b
+    REAL(dp), DIMENSION(1       :mesh%nAc), INTENT(IN)    :: u_b, v_b
     REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)   :: u_c, v_c
 
     ! Local variables:
@@ -2035,7 +2057,7 @@ contains
 
 #endif
 
-  ! Initialise/remap data fields for the velocity solver(s)
+  ! Initialise data fields for the velocity solver(s)
   subroutine initialise_velocity_solver( mesh, ice)
     ! Allocate and initialise data fields for the velocity solver
 
@@ -2073,6 +2095,7 @@ contains
         ! Velocity fields containing the SSA solution on the b-grid
         allocate( ice%u_base_SSA_b ( mesh%ti1:mesh%ti2 ))
         allocate( ice%v_base_SSA_b ( mesh%ti1:mesh%ti2 ))
+
       end if
 
       ! Physical terms in the SSA/DIVA
@@ -2100,9 +2123,29 @@ contains
       allocate( ice%ti2n_u         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%ti2n_v         ( mesh%ti1:mesh%ti2              ))
       allocate( ice%n2ti_uv     ( 2*(mesh%ti1-1)+1:2*mesh%ti2, 2    ))
+
+      ! Circular dependency on u_vav_b -> u_3d_b -> u_vav_b, set u_vav_b etal to zero
+      ice%taudx_b = 0.
+      ice%taudy_b = 0.
+      ice%du_dx_a = 0.
+      ice%du_dy_a = 0.
+      ice%dv_dx_a = 0.
+      ice%dv_dy_a = 0.
+      ice%du_dz_3D_b = 0.
+      ice%dv_dz_3D_b = 0.
+      ice%visc_eff_3D_a  = 1d100 ! solid as a rock
+      ice%visc_eff_int_a = 1.
+      ice%N_a            = 0.
+      ice%beta_a         = 0.
+      ice%beta_eff_a   = 0.
+      ice%beta_eff_b   = 0.
+      ice%taubx_b = 0.
+      ice%tauby_b = 0.
+      ice%u_vav_b = 1. ! very slow
+      ice%v_vav_b = 1. ! very slow
+
       call initialise_matrix_conversion_lists(  mesh, ice)
       call initialise_SSADIVA_stiffness_matrix( mesh, ice)
-
     end if
 
     ! Initialise the ISMIP-HOM experiments for faster convergence
@@ -2239,6 +2282,7 @@ contains
       elseif (C%choice_ice_dynamics == 'DIVA') then
         ice%u_vav_b(      mesh%ti1:mesh%ti2) = u_ISMIP_HOM( mesh%ti1:mesh%ti2)
       end if
+
 
       ! Clean up after yourself
       deallocate( u_ISMIP_HOM)
@@ -2450,6 +2494,11 @@ contains
     call init_routine( routine_name)
 
     select case (C%choice_ice_dynamics)
+
+      case ('none')
+        ! Remap no-dynamics stuff
+        call crash('todo, implement none')
+        !call remap_velocities_none( mesh_old, mesh_new, map, ice)
 
       case ('SIA')
         ! Remap SIA stuff
@@ -2855,7 +2904,10 @@ contains
     call reallocate_bounds( ice%dv_dy_a       , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%du_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
     call reallocate_bounds( ice%dv_dz_3D_b    , mesh_new%ti1, mesh_new%ti2  , C%nz )
-    call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    ! Remap a-grid velocities
+    ! call reallocate_bounds( ice%visc_eff_3D_a , mesh_new%vi1, mesh_new%vi2  , C%nz )
+    ! Circular dependency, so we must not set it to zero
+    call remap_field_dp_3D( mesh_old, mesh_new, map, ice%visc_eff_3D_a, 'cons_2nd_order')
     call reallocate_bounds( ice%visc_eff_int_a, mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%N_a           , mesh_new%vi1, mesh_new%vi2         )
     call reallocate_bounds( ice%beta_a        , mesh_new%vi1, mesh_new%vi2         )

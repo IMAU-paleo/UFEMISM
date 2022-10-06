@@ -85,6 +85,7 @@ module data_types_module
     INTEGER,  DIMENSION(:    ), allocatable :: mask_coast_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_margin_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_gl_a
+    INTEGER,  DIMENSION(:    ), allocatable :: mask_glf_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_cf_a
     INTEGER,  DIMENSION(:    ), allocatable :: mask_a
     REAL(dp), DIMENSION(:    ), allocatable :: f_grnd_a
@@ -147,6 +148,10 @@ module data_types_module
     REAL(dp), DIMENSION(:    ), allocatable :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), allocatable :: Hi_tplusdt_a
     REAL(dp), DIMENSION(:    ), allocatable :: dHi_dt_a
+
+    ! Ice dynamics - calving
+    REAL(dp), DIMENSION(:    ), allocatable :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels
+    REAL(dp), DIMENSION(:    ), allocatable :: Hi_eff_cf_a                 ! Effective ice thickness at calving front pixels (= Hi of thinnest non-calving-front neighbour)
 
     ! Ice dynamics - predictor/corrector ice thickness update
     REAL(dp)                                :: pc_zeta
@@ -1035,12 +1040,12 @@ module data_types_module
     TYPE(type_grid)                         :: grid_smooth                               ! For smoothing data fields (used in the climate matrix)
 
     ! Computation times
-    REAL(dp)                                :: tcomp_total
-    REAL(dp)                                :: tcomp_ice
-    REAL(dp)                                :: tcomp_thermo
-    REAL(dp)                                :: tcomp_climate
-    REAL(dp)                                :: tcomp_GIA
-    REAL(dp)                                :: tcomp_mesh
+    REAL(dp)                                :: tcomp_total    = 0.
+    REAL(dp)                                :: tcomp_ice      = 0.
+    REAL(dp)                                :: tcomp_thermo   = 0.
+    REAL(dp)                                :: tcomp_climate  = 0.
+    REAL(dp)                                :: tcomp_GIA      = 0.
+    REAL(dp)                                :: tcomp_mesh     = 0.
 
   END TYPE type_model_region
 
@@ -1108,11 +1113,11 @@ module data_types_module
     real(dp)                                :: dT_dw                                     ! Deep-water temperature change
 
     ! Computation times for all regions combined
-    real(dp)                                :: tcomp_total
-    real(dp)                                :: tcomp_ice
-    real(dp)                                :: tcomp_thermo
-    real(dp)                                :: tcomp_climate
-    real(dp)                                :: tcomp_GIA
+    real(dp)                                :: tcomp_total    = 0.
+    real(dp)                                :: tcomp_ice      = 0.
+    real(dp)                                :: tcomp_thermo   = 0.
+    real(dp)                                :: tcomp_climate  = 0.
+    real(dp)                                :: tcomp_GIA      = 0.
 
   end type type_global_scalar_data
 

@@ -255,7 +255,7 @@ contains
       ! == Update ice geometry
       ! ======================
 
-      call update_ice_thickness( region%mesh, region%ice, region%refgeo_PD)
+      call update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
 
       ! Advance region time
       ! ===================
@@ -468,8 +468,8 @@ contains
     routine_name = 'initialise_model('  //  name  //  ')'
     call init_routine( routine_name)
 
-    ! ===== Basic initialisation =====
-    ! ================================
+    ! ===== Region name =====
+    ! =======================
 
     ! Region name
     region%name = name
@@ -491,13 +491,13 @@ contains
     end if
     call sync
 
-    ! ===== Allocate memory for timers and scalars =====
-    ! ==================================================
+    ! ===== Timers and scalars =====
+    ! ==============================
 
     call allocate_region_timers_and_scalars( region)
 
-    ! ===== PD and init reference data fields =====
-    ! =============================================
+    ! ===== Reference geometries =====
+    ! ================================
 
     call initialise_reference_geometries( region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq, region%name)
 
@@ -510,8 +510,8 @@ contains
       call create_single_mesh_from_cart_data( region)
     endif
 
-    ! ===== Map reference geometries to the mesh =====
-    ! ================================================
+    ! ===== Reference geometries: grid to mesh =====
+    ! ==============================================
 
     ! Allocate memory for reference data on the mesh
     allocate( region%refgeo_init%Hi (region%mesh%vi1:region%mesh%vi2), source=0.0_dp)
@@ -572,6 +572,7 @@ contains
     ! ===========================
 
     call initialise_ocean_model_regional( region, ocean_matrix_global)
+    call run_ocean_model( region%mesh, region%ocean_matrix)
 
     ! ===== The SMB model =====
     ! =========================
@@ -583,6 +584,7 @@ contains
     ! =========================
 
     call initialise_BMB_model( region%mesh, region%ice, region%BMB, region%name)
+    call run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB)
 
     ! ===== The GIA model =====
     ! =========================
@@ -670,6 +672,10 @@ contains
     region%dt             = C%dt_min
     region%dt_prev        = C%dt_min
 
+    region%dt_crit_SIA    = C%dt_min
+    region%dt_crit_SSA    = C%dt_min
+    region%dt_crit_ice    = C%dt_min
+
     region%t_last_mesh    = C%start_time_of_run
     region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
     region%do_mesh        = .false.
@@ -708,7 +714,11 @@ contains
 
     region%t_last_ELRA    = C%start_time_of_run
     region%t_next_ELRA    = C%start_time_of_run
-    region%do_ELRA        = .true.
+    if (C%choice_GIA_model == 'ELRA') then
+      region%do_ELRA      = .true.
+    else
+      region%do_ELRA      = .false.
+    end if
 
     region%t_last_output  = C%start_time_of_run
     region%t_next_output  = C%start_time_of_run
@@ -772,9 +782,6 @@ contains
         grid%alpha_stereo = C%alpha_stereo_ANT
 
     end select
-
-    nsx = 0
-    nsy = 0
 
     ! Resolution
     grid%dx = dx

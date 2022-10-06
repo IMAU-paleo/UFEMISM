@@ -323,7 +323,7 @@ contains
     call check_for_NaN_dp_2D( SMB%FirnDepth       , 'SMB%FirnDepth'       )
     call check_for_NaN_dp_1D( SMB%SMB_year        , 'SMB%SMB_year'        )
     call check_for_NaN_dp_1D( SMB%MeltPreviousYear, 'SMB%MeltPreviousYear')
-    call check_for_NaN_dp_1D( SMB%Albedo_year     , 'SMB%Albedo_year'     )
+    !call check_for_NaN_dp_1D( SMB%Albedo_year     , 'SMB%Albedo_year'     ) ! Unused, undefined
 
     ! Finalise routine path
     call finalise_routine( routine_name)
@@ -364,7 +364,7 @@ contains
     allocate(  SMB%Refreezing_year (mesh%vi1:mesh%vi2    ))
     allocate(  SMB%Runoff          (mesh%vi1:mesh%vi2, 12))
     allocate(  SMB%Albedo          (mesh%vi1:mesh%vi2, 12))
-    allocate(  SMB%Albedo_year     (mesh%vi1:mesh%vi2    ))
+    !allocate(  SMB%Albedo_year     (mesh%vi1:mesh%vi2    ))
     allocate(  SMB%SMB             (mesh%vi1:mesh%vi2, 12))
     allocate(  SMB%SMB_year        (mesh%vi1:mesh%vi2    ))
 
@@ -516,7 +516,7 @@ contains
       call reallocate_bounds( SMB%Refreezing_year ,mesh_new%vi1,mesh_new%vi2    )
       call reallocate_bounds( SMB%Runoff          ,mesh_new%vi1,mesh_new%vi2, 12)
       call reallocate_bounds( SMB%Albedo          ,mesh_new%vi1,mesh_new%vi2, 12)
-      call reallocate_bounds( SMB%Albedo_year     ,mesh_new%vi1,mesh_new%vi2    )
+      !call reallocate_bounds( SMB%Albedo_year     ,mesh_new%vi1,mesh_new%vi2    )
       call reallocate_bounds( SMB%SMB             ,mesh_new%vi1,mesh_new%vi2, 12)
     end if
 

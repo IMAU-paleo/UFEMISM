@@ -172,7 +172,6 @@ contains
                           trim(C%choice_BMB_sheet_model), &
                           '", shelf = "', TRIM(C%choice_BMB_shelf_model), '"...'
     end if
-    call sync
 
     ! === General ===
     ! ===============

@@ -4,8 +4,8 @@
 #     http://www.gnu.org/software/make/manual/make.html
 
 # For compiling setting, Makefile will point to the uncommented file below:
-#include Makefile_include_local.txt
-include Makefile_include_mac.txt
+include Makefile_include_local.txt
+#include Makefile_include_mac.txt
 #include Makefile_include_snellius.txt
 
 # The OBJ_PATH and the MOD_PATH are defined:
@@ -14,15 +14,7 @@ MOD_PATH = module-files
 
 # Pattern rules for creating object files from *.f90 (fortran 90) source files
 $(OBJ_PATH)/%.o : %.f90 Makefile
-	$(F90) $(F90FLAGS) -fbackslash -c -o $@ $<
-
-$(OBJ_PATH)/%.o : %.F90 Makefile
-	$(F90) $(F90FLAGS) -c -o $@ $<
-
-# This rule is used to build an executable from the object files:
-% :
-	$(F90) $(F90FLAGS)    -o $@ $^ $(LDFLAGS)
-
+	$(F90) $(F90FLAGS) -J${MOD_PATH} -fbackslash -c -o $@ $<
 
 
 # ================================================================
@@ -62,6 +54,7 @@ UFEMISM_program_objects = \
         basal_conditions_and_sliding_module.o \
         general_ice_model_data_module.o \
         general_sea_level_module.o \
+        calving_module.o \
         thermodynamics_module.o \
         ice_velocity_module.o \
         ice_thickness_module.o \
@@ -72,9 +65,10 @@ UFEMISM_program_objects = \
         UFEMISM_main_model.o \
         UFEMISM_program.o
 
+# This rule is used to build an executable from the object files:
 # The executable (the target) depends on the object files:
 UFEMISM_program : $(UFEMISM_program_objects:%=$(OBJ_PATH)/%)
-
+	$(F90) $(F90FLAGS)    -o $@ $^ $(LDFLAGS)
 
 
 # =============================================================
@@ -96,13 +90,40 @@ clean :
 
 all : $(all_programs)
 
-include .depend
+
+
+# =============================================================
+#       UFEMISM library for unit testing:
+# =============================================================
+
+TEST_DIR = ../tests
+TEST_OBJ_DIR = ${TEST_DIR}/obj
+TEST_MOD_DIR = ${TEST_DIR}/mod
+TEST_OBJS = $(filter-out ${TEST_OBJ_DIR}/UFEMISM_program.o,$(UFEMISM_program_objects:%=$(TEST_OBJ_DIR)/%))
+
+$(TEST_OBJ_DIR)/%.o : %.f90 Makefile
+	$(F90) $(F90FLAGS) -J${TEST_MOD_DIR} -fbackslash -fprofile-arcs -ftest-coverage -c -o $@ $<
+
+unit_tests_lib: ../tests/UFEMISM.a
+
+../tests/UFEMISM.a : $(TEST_OBJS)
+	ar rcs $@ $^
+
+
+# =============================================================
+#      Make dependency graph, better re-compilation + multi
+#      threaded compilation (-j flag)
+#      Does nothing when makedepf90 is not present
+# =============================================================
 
 ifeq ($(shell command -v makedepf90 2>&1 > /dev/null; echo $$?), 0)
-.depend: Makefile *.f90 *.F90
-	  makedepf90 -b object-files *.f90 *.F90 > .depend;
+include .depend
+.depend: Makefile *.f90
+	  makedepf90 -b $(OBJ_PATH) *.f90 > .depend;
+	  makedepf90 -b $(TEST_OBJ_DIR) *.f90 >> .depend;
 else
+.NOTPARALLEL:
 .depend:
-	  $(warning makedepf90 not present, multithreaded compilation make -jX will not work!)
-	  touch .depend;
+	$(warning makedepf90 disabled, enabling .NOTPARALLEL: for the whole makefile )
+	touch .depend;
 endif

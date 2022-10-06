@@ -1,95 +1,106 @@
-MODULE ice_thickness_module
-
+module ice_thickness_module
   ! Contains the routines for solving the ice thickness equation
 
-  ! Import basic functionality
-#include <petsc/finclude/petscksp.h>
-  USE mpi
-  USE configuration_module,            ONLY: dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  USE parameters_module
-  USE petsc_module,                    ONLY: perr
-  USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list
-  USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
+! === Preamble ===
+! ================
 
-  ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
-                                             type_reference_geometry
-  USE utilities_module,                ONLY: is_floating
-  USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex
-  USE ice_velocity_module,             ONLY: map_velocities_b_to_c_2D
-  use mpi_module,                      only: allgather_array
+  use mpi
+  use configuration_module,            only : dp, C, routine_path, init_routine, finalise_routine, crash
+  use data_types_module,               only : type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
+                                              type_reference_geometry
+  use mesh_help_functions_module,      only : rotate_xy_to_po_stag
+  use ice_velocity_module,             only : map_velocities_b_to_c_2D
+  use mpi_module,                      only : allgather_array
 
-  IMPLICIT NONE
+  implicit none
 
-CONTAINS
+contains
 
-  ! The main routine that is called from "run_ice_model" in the ice_dynamics_module
-  SUBROUTINE calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, refgeo_PD)
+! ===== Compute new ice thickness at t+dt =====
+! =============================================
+
+  subroutine calc_dHi_dt( mesh, ice, SMB, BMB, dt, mask_noice, refgeo_PD)
     ! Use the total ice velocities to update the ice thickness
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-    TYPE(type_BMB_model),                INTENT(IN)    :: BMB
-    REAL(dp),                            INTENT(IN)    :: dt
-    INTEGER, DIMENSION(mesh%vi1:mesh%vi2), INTENT(in)  :: mask_noice
-    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
+    type(type_mesh),                       intent(in)    :: mesh
+    type(type_ice_model),                  intent(inout) :: ice
+    type(type_SMB_model),                  intent(in)    :: SMB
+    type(type_BMB_model),                  intent(in)    :: BMB
+    real(dp),                              intent(in)    :: dt
+    integer, dimension(mesh%vi1:mesh%vi2), intent(in)    :: mask_noice
+    type(type_reference_geometry),         intent(in)    :: refgeo_PD
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt'
+    character(len=256), parameter                        :: routine_name = 'calc_dHi_dt'
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
-    ! Use the specified time integration method to calculate the ice thickness at t+dt
-    IF     (C%choice_ice_integration_method == 'none') THEN
+    ! === Time integration ===
+    ! ========================
+
+    select case (C%choice_ice_integration_method)
+
+    case ('none')
       ice%dHi_dt_a( mesh%vi1:mesh%vi2) = 0._dp
-    ELSEIF (C%choice_ice_integration_method == 'explicit') THEN
-       call calc_dHi_dt_explicit(     mesh, ice, SMB, BMB, dt)
-    ELSEIF (C%choice_ice_integration_method == 'semi-implicit') THEN
-       call crash("not implemented")
-   !   CALL crash('calc_dHi_dt_semiimplicit: FIXME!')
-      !CALL calc_dHi_dt_semiimplicit( mesh, ice, SMB, BMB, dt)
-    ELSE
-      CALL crash('unknown choice_ice_integration_method "' // TRIM( C%choice_ice_integration_method) // '"')
-    END IF
+
+    case ('explicit')
+       call calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
+
+    case ('semi-implicit')
+       call crash("semi-implicit method not implemented yet!")
+
+    case default
+      call crash('unknown choice_ice_integration_method "' // trim( C%choice_ice_integration_method) // '"')
+
+    end select
+
+    ! === Boundary conditions ===
+    ! ===========================
 
     ! Apply boundary conditions
-    CALL apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
+    call apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
+
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE calc_dHi_dt
+  end subroutine calc_dHi_dt
 
-  ! Different solvers for the ice thickness equation (explicit & semi-implicit)
-  SUBROUTINE calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
+  subroutine calc_dHi_dt_explicit( mesh, ice, SMB, BMB, dt)
     ! The explicit solver for the ice thickness equation
 
-    IMPLICIT NONE
+    implicit none
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
-    TYPE(type_SMB_model),                INTENT(IN)    :: SMB
-    TYPE(type_BMB_model),                INTENT(IN)    :: BMB
-    REAL(dp),                            INTENT(IN)    :: dt
+    type(type_mesh),      intent(in)      :: mesh
+    type(type_ice_model), intent(inout)   :: ice
+    type(type_SMB_model), intent(in)      :: SMB
+    type(type_BMB_model), intent(in)      :: BMB
+    real(dp),             intent(in)      :: dt
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_dHi_dt_explicit'
-    REAL(dp), DIMENSION(:    ), allocatable            ::  u_c,  v_c,  up_c,  uo_c
-    real(dp), dimension(:    ), allocatable            :: v_vav_b, u_vav_b, Hi_a
-    real(dp), dimension(:,:  ), allocatable            :: Cw
-    INTEGER                                            :: aci, vi, vj, cii, ci, cji, cj
-    REAL(dp)                                           :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
-    REAL(dp), DIMENSION(mesh%nV)                       :: Vi_SMB
+    character(len=256), parameter         :: routine_name = 'calc_dHi_dt_explicit'
+    real(dp), dimension(:  ), allocatable ::  u_c,  v_c,  up_c,  uo_c
+    real(dp), dimension(:  ), allocatable :: v_vav_b, u_vav_b, Hi_a
+    real(dp), dimension(:,:), allocatable :: Cw
+    integer                               :: aci, vi, vj, cii, ci, cji, cj
+    real(dp)                              :: dVi, Vi_out, Vi_in, Vi_available, rescale_factor
+    real(dp), dimension(mesh%nV)          :: Vi_MB
+
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     ! Initialise at zero
     ice%dVi_in     = 0._dp
@@ -97,11 +108,11 @@ CONTAINS
     Vi_in          = 0._dp
     Vi_available   = 0._dp
     rescale_factor = 0._dp
-    Vi_SMB         = 0._dp
+    Vi_MB          = 0._dp
 
     ! Calculate vertically averaged ice velocities along vertex connections
-    allocate(u_c ( 1:mesh%nAc))
-    allocate(v_c ( 1:mesh%nAc))
+    allocate(u_c ( mesh%ci1:mesh%ci2))
+    allocate(v_c ( mesh%ci1:mesh%ci2))
     allocate(up_c( 1:mesh%nAc))
     allocate(uo_c( 1:mesh%nAc))
 
@@ -119,15 +130,17 @@ CONTAINS
     call allgather_array(Hi_a)
     call allgather_array(Cw)
 
-
     CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
-    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c, uo_c)
+    CALL rotate_xy_to_po_stag( mesh, u_c, v_c, up_c(mesh%ci1:mesh%ci2), uo_c(mesh%ci1:mesh%ci2))
+
+    call allgather_array(up_c)
+    call allgather_array(uo_c)
 
     ! Calculate ice fluxes across all Aa vertex connections
     ! based on ice velocities calculated on Ac mesh
     ! =============================================
 
-    DO aci = 1, mesh%nAc
+    do aci = 1, mesh%nAc
 
       ! The two Aa vertices connected by the Ac vertex
       vi = mesh%Aci( aci,1)
@@ -136,29 +149,29 @@ CONTAINS
       ! Find their own respective connectivity, for storing the ice flux
       ci = 0
       cj = 0
-      DO cii = 1, mesh%nC( vi)
-        IF (mesh%C( vi,cii)==vj) THEN
+      do cii = 1, mesh%nC( vi)
+        if (mesh%C( vi,cii)==vj) then
           ci = cii
-          EXIT
-        END IF
-      END DO
-      DO cji = 1, mesh%nC( vj)
-        IF (mesh%C( vj,cji)==vi) THEN
+          exit
+        end if
+      end do
+      do cji = 1, mesh%nC( vj)
+        if (mesh%C( vj,cji)==vi) then
           cj = cji
-          EXIT
-        END IF
-      END DO
+          exit
+        end if
+      end do
 
       ! Calculate ice volume per year moving along connection from vi to vj as the product of:
       ! - width          (m   - determined by distance between adjacent triangle circumcenters)
       ! - ice thickness  (m   - at flux origin (upwind scheme, because this is really advection)
       ! - ice velocity   (m/y - calculated at midpoint, using surface slope along connection)
       ! - time step      (y)
-      IF (up_c( aci) > 0._dp) THEN
+      if (up_c( aci) > 0._dp) then
         dVi = Hi_a( vi) * up_c( aci) * Cw( vi,ci) * dt ! m3
-      ELSE
+      else
         dVi = Hi_a( vj) * up_c( aci) * Cw( vi,ci) * dt ! m3
-      END IF
+      end if
 
       ! Keep track of ice fluxes across individual connections, to correct for
       ! negative ice thicknesses if necessary
@@ -166,75 +179,88 @@ CONTAINS
       ice%dVi_in( vi, ci) = -dVi ! m3
       ice%dVi_in( vj, cj) =  dVi ! m3
 
-    END DO ! DO aci = mesh%ci1, mesh%ci2
+    end do ! aci = 1, mesh%nAc
 
     ! Correct outfluxes for possible resulting negative ice thicknesses
     ! =================================================================
 
-    Vi_SMB( mesh%vi1:mesh%vi2) = (SMB%SMB_year( mesh%vi1:mesh%vi2) + BMB%BMB( mesh%vi1:mesh%vi2))  * mesh%A( mesh%vi1:mesh%vi2) * dt
+    do vi = mesh%vi1, mesh%vi2
 
-    DO vi = mesh%vi1, mesh%vi2
+      ! Ice volume added to each grid cell through the (surface + basal) mass balance
+      ! => With an exception for the calving front, where we only apply
+      !    the mass balance to the floating fraction
+      ! => And for ice-free ocean, where no accumulation is allowed
+      if (ice%mask_cf_a( vi) == 1 .and. ice%mask_shelf_a( vi) == 1) then
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt * ice%float_margin_frac_a( vi)
+      elseif (ice%mask_ocean_a( vi) == 1 .and. ice%mask_shelf_a( vi) == 0) then
+        Vi_MB( vi) = 0._dp
+      else
+        Vi_MB( vi) = (SMB%SMB_year( vi) + BMB%BMB( vi))  * mesh%A( vi) * dt
+      end if
 
       ! Check how much ice is available for melting or removing (in m^3)
       Vi_available = mesh%A( vi) * ice%Hi_a( vi)
 
-      dVi = SUM( ice%dVi_in( vi,:))
+      dVi = sum( ice%dVi_in( vi,:))
 
       Vi_in  = 0._dp
       Vi_out = 0._dp
-      DO ci = 1, mesh%nC( vi)
-        IF (ice%dVi_in( vi,ci) > 0._dp) THEN
+      do ci = 1, mesh%nC( vi)
+        if (ice%dVi_in( vi,ci) > 0._dp) then
           Vi_in  = Vi_in  + ice%dVi_in( vi,ci)
-        ELSE
+        else
           Vi_out = Vi_out - ice%dVi_in( vi,ci)
-        END IF
-      END DO
+        end if
+      end do
 
       rescale_factor = 1._dp
 
       ! If all the ice already present melts away, there can be no outflux.
-      IF (-Vi_SMB( vi) >= Vi_available) THEN
+      if (-Vi_MB( vi) >= Vi_available) then
         ! All ice in this vertex melts, nothing remains to move around. Rescale outfluxes to zero.
-        Vi_SMB( vi) = -Vi_available
+        Vi_MB( vi) = -Vi_available
         rescale_factor = 0._dp
-      END IF
+      end if
 
       ! If the total outflux exceeds the available ice plus SMB plus total influx, rescale outfluxes
-      IF (Vi_out > Vi_available + Vi_SMB( vi)) THEN
+      if (Vi_out > Vi_available + Vi_MB( vi)) then
         ! Total outflux plus melt exceeds available ice volume. Rescale outfluxes to correct for this.
-        rescale_factor = (Vi_available + Vi_SMB( vi)) / Vi_out
-      END IF
+        rescale_factor = (Vi_available + Vi_MB( vi)) / Vi_out
+      end if
 
       ! Rescale ice outfluxes out of vi and into vi's neighbours
-      IF (rescale_factor < 1._dp) THEN
-        DO ci = 1, mesh%nC( vi)
+      if (rescale_factor < 1._dp) then
+        do ci = 1, mesh%nC( vi)
           vj = mesh%C( vi,ci)
 
-          IF (ice%dVi_in( vi,ci) < 0._dp) THEN
+          if (ice%dVi_in( vi,ci) < 0._dp) then
             ice%dVi_in( vi,ci) = ice%dVi_in( vi,ci) * rescale_factor
 
-            DO cji = 1, mesh%nC( vj)
-              IF (mesh%C( vj,cji) == vi) THEN
+            do cji = 1, mesh%nC( vj)
+              if (mesh%C( vj,cji) == vi) then
                 ice%dVi_in( vj,cji) = -ice%dVi_in( vi,ci)
-                EXIT
-              END IF
-            END DO
+                exit
+              end if
+            end do
 
-          END IF ! IF (ice%dVi_in( vi,ci) < 0._dp) THEN
-        END DO ! DO ci = 1, mesh%nC( vi)
-      END IF ! IF (rescale_factor < 1._dp) THEN
+          end if ! IF (ice%dVi_in( vi,ci) < 0._dp) THEN
+        end do ! DO ci = 1, mesh%nC( vi)
+      end if ! IF (rescale_factor < 1._dp) THEN
 
-    END DO ! DO vi = mesh%vi1, mesh%vi2
+    end do ! vi = mesh%vi1, mesh%vi2
 
     ! Calculate change in ice thickness over time at every vertex
     ! ===========================================================
 
-    DO vi = mesh%vi1, mesh%vi2
-      dVi  = SUM( ice%dVi_in( vi,:))
-      ice%dHi_dt_a(     vi) = (dVi + Vi_SMB( vi)) / (mesh%A( vi) * dt)
-      ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi) * dt)
+    do vi = mesh%vi1, mesh%vi2
+      dVi  = sum( ice%dVi_in( vi,:))
+      ice%dHi_dt_a(     vi) = (dVi + Vi_MB( vi)) / (mesh%A( vi) * dt)
+      ice%Hi_tplusdt_a( vi) = max( 0._dp, ice%Hi_a( vi) + ice%dHi_dt_a( vi) * dt)
       ice%dHi_dt_a(     vi) = (ice%Hi_tplusdt_a( vi) - ice%Hi_a( vi)) / dt
-    END DO
+    end do
+
+    ! === Finalisation ===
+    ! ====================
 
     ! Clean up after yourself
     deallocate( u_c )
@@ -245,10 +271,13 @@ CONTAINS
     deallocate( Cw  )
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE calc_dHi_dt_explicit
-  ! Some useful tools
+  end subroutine calc_dHi_dt_explicit
+
+! ===== Boundary conditions =====
+! ===============================
+
   SUBROUTINE apply_ice_thickness_BC( mesh, ice, dt, mask_noice, refgeo_PD)
     ! Apply ice thickness boundary conditions (at the domain boundary, and through the mask_noice)
 
@@ -351,48 +380,6 @@ CONTAINS
       END IF
 
     END DO ! DO vi = mesh%vi1, mesh%vi2
-
-    ! Remove ice in areas where no ice is allowed (e.g. Greenland in NAM and EAS, and Ellesmere Island in GRL)
-    DO vi = mesh%vi1, mesh%vi2
-      IF (mask_noice(     vi) == 1) THEN
-        ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-        ice%Hi_tplusdt_a( vi) = 0._dp
-      END IF
-    END DO
-
-    ! If so specified, remove all floating ice
-    IF (C%do_remove_shelves) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (is_floating( ice%Hi_tplusdt_a( vi), ice%Hb_a( vi), ice%SL_a( vi))) THEN
-          ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-          ice%Hi_tplusdt_a( vi) = 0._dp
-        END IF
-      END DO
-    END IF ! IF (C%do_remove_shelves) THEN
-
-    ! If so specified, remove all floating ice beyond the present-day calving front
-    IF (C%remove_shelves_larger_than_PD) THEN
-      DO vi = mesh%vi1, mesh%vi2
-        IF (refgeo_PD%Hi( vi) == 0._dp .AND. refgeo_PD%Hb( vi) < 0._dp) THEN
-          ice%dHi_dt_a(     vi) = -ice%Hi_a( vi) / dt
-          ice%Hi_tplusdt_a( vi) = 0._dp
-        END IF
-      END DO
-    END IF ! IF (C%remove_shelves_larger_than_PD) THEN
-
-    ! If so specified, remove all floating ice crossing the continental shelf edge
-    IF (C%continental_shelf_calving) THEN
-      CALL crash('continental_shelf_calving: FIXME!')
-!      DO i = grid%i1, grid%i2
-!      DO j = 1, grid%ny
-!        IF (refgeo_GIAeq%Hi( j,i) == 0._dp .AND. refgeo_GIAeq%Hb( j,i) < C%continental_shelf_min_height) THEN
-!          ice%dHi_dt_a(     j,i) = -ice%Hi_a( j,i) / dt
-!          ice%Hi_tplusdt_a( j,i) = 0._dp
-!        END IF
-!      END DO
-!      END DO
-!      CALL sync
-    END IF ! IF (C%continental_shelf_calving) THEN
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

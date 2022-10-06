@@ -650,6 +650,7 @@ MODULE configuration_module
     LOGICAL             :: do_ocean_temperature_inversion_config       = .FALSE.                          ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
     REAL(dp)            :: ocean_temperature_inv_t_start_config        = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
     REAL(dp)            :: ocean_temperature_inv_t_end_config          = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+    INTEGER             :: T_base_window_size_config                   = 200                              ! Number of previous time steps used to compute a running average of inverted T_ocean_base
 
     LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
@@ -1402,6 +1403,7 @@ MODULE configuration_module
     LOGICAL                             :: do_ocean_temperature_inversion
     REAL(dp)                            :: ocean_temperature_inv_t_start
     REAL(dp)                            :: ocean_temperature_inv_t_end
+    INTEGER                             :: T_base_window_size
 
     LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
@@ -2266,6 +2268,7 @@ CONTAINS
                      do_ocean_temperature_inversion_config,           &
                      ocean_temperature_inv_t_start_config,            &
                      ocean_temperature_inv_t_end_config,              &
+                     T_base_window_size_config,                       &
                      BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
@@ -3143,6 +3146,7 @@ CONTAINS
     C%do_ocean_temperature_inversion           = do_ocean_temperature_inversion_config
     C%ocean_temperature_inv_t_start            = ocean_temperature_inv_t_start_config
     C%ocean_temperature_inv_t_end              = ocean_temperature_inv_t_end_config
+    C%T_base_window_size                       = T_base_window_size_config
 
     C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config

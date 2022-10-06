@@ -186,6 +186,7 @@ MODULE data_types_netcdf_module
     INTEGER :: id_var_BMB_shelf
     INTEGER :: id_var_T_ocean_base
     INTEGER :: id_var_S_ocean_base
+    INTEGER :: id_var_M_ocean_base
 
     CHARACTER(LEN=256) :: name_var_Hi                    = 'Hi                   '
     CHARACTER(LEN=256) :: name_var_Hb                    = 'Hb                   '
@@ -210,6 +211,7 @@ MODULE data_types_netcdf_module
     CHARACTER(LEN=256) :: name_var_BMB_shelf             = 'BMB_shelf            '
     CHARACTER(LEN=256) :: name_var_T_ocean_base          = 'T_ocean_base         '
     CHARACTER(LEN=256) :: name_var_S_ocean_base          = 'S_ocean_base         '
+    CHARACTER(LEN=256) :: name_var_M_ocean_base          = 'M_ocean_base         '
 
   END TYPE type_netcdf_restart
 

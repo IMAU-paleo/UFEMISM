@@ -714,6 +714,7 @@ CONTAINS
     IF (C%do_ocean_temperature_inversion) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_T_ocean_base, region%BMB%T_ocean_base, start = (/ 1, netcdf%ti/)))
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_S_ocean_base, region%BMB%S_ocean_base, start = (/ 1, netcdf%ti/)))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_M_ocean_base, region%BMB%M_ocean_base, start = (/ 1, netcdf%ti/)))
     END IF
 
     ! Close the file
@@ -1013,6 +1014,8 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%T_ocean_base, start=(/1,  netcdf%ti /) ))
     ELSEIF (field_name == 'S_ocean_base') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%S_ocean_base, start=(/1,  netcdf%ti /) ))
+    ELSEIF (field_name == 'M_ocean_base') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%BMB%M_ocean_base, start=(/1,  netcdf%ti /) ))
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -1223,6 +1226,7 @@ CONTAINS
     IF (C%do_ocean_temperature_inversion) THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, [vi, time], netcdf%id_var_T_ocean_base, long_name='Ice shelf basal ocean temperature', units='K')
       CALL create_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, [vi, time], netcdf%id_var_S_ocean_base, long_name='Ice shelf basal ocean salinity', units='PSU')
+      CALL create_int_var(    netcdf%ncid, netcdf%name_var_M_ocean_base, [vi, time], netcdf%id_var_M_ocean_base, long_name='Mask of inverted ocean temperature', units='-')
     END IF
 
     ! Leave definition mode
@@ -1663,6 +1667,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'T_ocean_base',             [vi,    t], id_var, long_name='Basal ocean temperature', units='K')
     ELSEIF (field_name == 'S_ocean_base') THEN
       CALL create_double_var( netcdf%ncid, 'S_ocean_base',             [vi,    t], id_var, long_name='Basal ocean salinity', units='PSU')
+    ELSEIF (field_name == 'M_ocean_base') THEN
+      CALL create_int_var(    netcdf%ncid, 'M_ocean_base',             [vi,    t], id_var, long_name='Mask of inverted ocean temperature', units='-')
 
     ! Masks
     ELSEIF (field_name == 'mask') THEN
@@ -3004,9 +3010,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_BMB_shelf)
     END IF
-    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
+    IF (C%do_combine_data_and_inverted_ocean) THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_T_ocean_base)
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_S_ocean_base)
+      CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_M_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_M_ocean_base)
     END IF
 
     ! Close the netcdf file
@@ -3163,9 +3170,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_BMB_shelf, restart%BMB_shelf, start = (/ 1, ti /) ))
     END IF
-    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
+    IF (C%do_combine_data_and_inverted_ocean) THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_T_ocean_base, restart%T_ocean_base, start = (/ 1, ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_S_ocean_base, restart%S_ocean_base, start = (/ 1, ti /) ))
+      CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_M_ocean_base, restart%M_ocean_base, start = (/ 1, ti /) ))
     END IF
 
     ! Close the netcdf file
@@ -5376,8 +5384,8 @@ CONTAINS
       ! Basal drag
       ! ==========
 
-      IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grnd_a( vi) > 0._dp) THEN
-        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grnd_a( vi)**.5_dp
+      IF (region%ice%mask_ice_a( vi) == 1 .AND. region%ice%f_grndx_a( vi) > 0._dp) THEN
+        basal_drag( vi) = region%ice%uabs_base_a( vi) * region%ice%beta_a( vi) * region%ice%f_grndx_a( vi)**.5_dp
       END IF
 
       ! Calving and front melting fluxes
@@ -5396,12 +5404,12 @@ CONTAINS
       END IF
 
       IF (region%ice%mask_ice_a( vi) == 1) THEN
-        grounded_ice_sheet_area_fraction( vi) = region%ice%f_grnd_a( vi)
+        grounded_ice_sheet_area_fraction( vi) = region%ice%f_grndx_a( vi)
       ELSE
         grounded_ice_sheet_area_fraction( vi) = 0._dp
       END IF
 
-      floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grnd_a( vi)), region%ice%float_margin_frac_a( vi))
+      floating_ice_shelf_area_fraction( vi) = REAL( region%ice%mask_ice_a( vi), dp) * MAX( (1._dp - region%ice%f_grndx_a( vi)), region%ice%float_margin_frac_a( vi))
 
       ! Integrated values
       ! =================

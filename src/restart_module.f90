@@ -13,7 +13,7 @@ MODULE restart_module
   USE petsc_module,                    ONLY: perr
   USE parallel_module,                 ONLY: par, sync, ierr, cerr, partition_list, &
                                              allocate_shared_dp_1D, allocate_shared_dp_2D, &
-                                             deallocate_shared
+                                             deallocate_shared, allocate_shared_int_1D
   USE netcdf_module,                   ONLY: inquire_restart_file_mesh, read_restart_file_mesh, &
                                              inquire_restart_file_init, read_restart_file_init
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
@@ -219,9 +219,10 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL allocate_shared_dp_1D( restart%mesh%nV, restart%BMB_shelf, restart%wBMB_shelf)
     END IF
-    IF (C%choice_ocean_model == 'PD_obs' .AND. C%do_combine_data_and_inverted_ocean) THEN
-      CALL allocate_shared_dp_1D( restart%mesh%nV, restart%T_ocean_base, restart%wT_ocean_base)
-      CALL allocate_shared_dp_1D( restart%mesh%nV, restart%S_ocean_base, restart%wS_ocean_base)
+    IF (C%do_combine_data_and_inverted_ocean) THEN
+      CALL allocate_shared_dp_1D(  restart%mesh%nV, restart%T_ocean_base, restart%wT_ocean_base)
+      CALL allocate_shared_dp_1D(  restart%mesh%nV, restart%S_ocean_base, restart%wS_ocean_base)
+      CALL allocate_shared_int_1D( restart%mesh%nV, restart%M_ocean_base, restart%wM_ocean_base)
     END IF
 
     ! Read data from the restart file
@@ -443,13 +444,6 @@ CONTAINS
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! IF (C%windup_total_years <= 0._dp) THEN
-    !   ! Finalise routine path
-    !   CALL finalise_routine( routine_name)
-    !   ! Exit rutine
-    !   RETURN
-    ! END IF
 
     ! === Wind up the model ===
     ! =========================

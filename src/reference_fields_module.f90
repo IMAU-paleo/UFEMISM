@@ -295,7 +295,6 @@ CONTAINS
     ! Remove ice based on the no-ice masks (grid versions)
     CALL apply_mask_noice_grid( refgeo, region_name)
 
-    ! Remove very thin ice
     DO j = 1, refgeo%grid%ny
     DO i = refgeo%grid%i1, refgeo%grid%i2
       IF (refgeo%Hi_grid( i,j) < C%minimum_ice_thickness) THEN
@@ -436,11 +435,11 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '  Initialising initial         reference geometry from restart data...'
 
-    CALL calc_remapping_operator_mesh2grid( mesh, refgeo%grid)
+    ! CALL calc_remapping_operator_mesh2grid( mesh, refgeo%grid)
 
-    CALL map_reference_geometry_to_grid( mesh, restart, refgeo)
+    ! CALL map_reference_geometry_to_grid( mesh, restart, refgeo)
 
-    CALL deallocate_remapping_operators_mesh2grid( refgeo%grid)
+    ! CALL deallocate_remapping_operators_mesh2grid( refgeo%grid)
 
     ! == Final touches
     ! ================

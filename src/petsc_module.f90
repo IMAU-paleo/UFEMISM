@@ -347,7 +347,7 @@ CONTAINS
     nrows_proc = i2+1-i1
     
     ! Determine number of non-zeros for this process
-    nnz_proc = A_CSR%ptr(i2+1)+1-A_CSR%ptr(i1)
+    nnz_proc = A_CSR%nnz
 
     ! Allocate memory for local CSR-submatrix
     ALLOCATE( ptr_proc(   0:nrows_proc    ))

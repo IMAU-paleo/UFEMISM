@@ -1868,7 +1868,8 @@ MODULE mesh_help_functions_module
     !x = b
     ! Solve Ax = b using LAPACK
     ! CALL DGESV( 2, 1, A, 2, IPIV, x, 2, info)
-    ! Its very small, we can compute it directly
+    ! Its very small, we can compute it directly, the cross2 is non-zero, so no
+    ! division by zero chance here
     x(1) = (A(2,2)*b(1)-A(1,2)*b(2)) / (A(2,2)*A(1,1)-A(1,2)*A(2,1)) 
     x(2) = (A(2,1)*b(1)-A(1,1)*b(2)) / (A(1,2)*A(2,1)-A(1,1)*A(2,2))
 

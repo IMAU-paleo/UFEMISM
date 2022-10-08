@@ -1133,7 +1133,7 @@ CONTAINS
   
   END SUBROUTINE deallocate_matrix_CSR
   
-  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n, nnz_max_proc)
+  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n)
     ! Allocate shared memory for a CSR-format sparse m-by-n matrix A
     ! 
     ! NOTE: uses local allocatable memory, so that the processes can create their own
@@ -1143,7 +1143,7 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
-    INTEGER,                             INTENT(IN)    :: m, n, nnz_max_proc
+    INTEGER,                             INTENT(IN)    :: m, n
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_matrix_CSR_dist'
@@ -1155,7 +1155,7 @@ CONTAINS
     AA%n       = n
 
     ! Allocate local memory
-    AA%nnz_max = nnz_max_proc
+    AA%nnz_max = 2000
     AA%nnz     = 0
     
     ALLOCATE( AA%ptr(   AA%m+1    ))
@@ -1254,13 +1254,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
     
-    ! Determine total number of non-zero elements in A
-    CALL MPI_ALLREDUCE( AA%nnz, nnz_tot, 1, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
-    
-    ! Allocate shared memory
-    allocate( ptr  ( AA%m+1))
-    allocate( index(nnz_tot))
-    allocate( val(  nnz_tot))
+    ! Sort the column entries in the assembled matrix
+    CALL sort_columns_in_CSR( AA, i1, i2)
 
     ! Determine range of indices for each process
     call mpi_allgather( AA%nnz, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
@@ -1269,42 +1264,24 @@ CONTAINS
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
-
-    ! Copy data to buffers
-    ptr(   i1:i2) = AA%ptr(   i1:i2  ) + displs( par%i+1 )
-    call allgather_array(ptr(:AA%m),i1,i2)
-    ptr( AA%m+1) = nnz_tot+1
     
-    
-    ! Sort the column entries in the assembled matrix
-    CALL sort_columns_in_CSR( AA, i1, i2)
-
-    ! Send everything to all
-    call mpi_allgatherv( AA%index, AA%nnz, MPI_INTEGER &
-                       , index, counts, displs, MPI_INTEGER, MPI_COMM_WORLD, err)
-
-    call mpi_allgatherv( AA%val, AA%nnz, MPI_REAL8 &
-                       , val, counts, displs, MPI_REAL8, MPI_COMM_WORLD, err)
+    ! (re)-allocate memory. This is superfluous, but gives us better bounds checking (-fcheck=bounds)
+    allocate( index(1:AA%nnz))
+    allocate( val  (1:AA%nnz))
+    index = AA%index(1:AA%nnz)
+    val = AA%val(1:AA%nnz)
 
     call move_alloc(val, AA%val) 
     call move_alloc(index, AA%index) 
-    call move_alloc(ptr, AA%ptr) 
 
-    AA%nnz_max = nnz_tot
-    AA%nnz     = nnz_tot
+    AA%nnz_max = AA%nnz
     
+    AA%nnz_tot = displs(par%n) + counts(par%n)
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 5)
   
   END SUBROUTINE finalise_matrix_CSR_dist
-  subroutine resync_csr_dist( AA, i1, i2)
-    implicit none
-
-    type(type_sparse_matrix_CSR_dp),     intent(inout) :: AA
-    integer,                             intent(in)    :: i1, i2
-  
-    call allgather_array(AA%val,AA%ptr(i1),AA%ptr(i2+1) -1)
-  end subroutine
   subroutine write_csr( AA, filename )
     IMPLICIT NONE
     
@@ -1322,7 +1299,7 @@ CONTAINS
     write(unit, *) "index:   ",AA%index
     write(unit, *) "size_val:",size(AA%val)
     write(unit, *) "val:     "
-    do n=1,size(AA%val)
+    do n=lbound(AA%val,1),ubound(AA%val,1)
       write(unit,*) AA%val(n)
     end do
     close(unit=unit)

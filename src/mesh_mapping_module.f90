@@ -712,7 +712,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_remapping_operator_grid2mesh'
     TYPE(PetscErrorCode)                               :: perr
     LOGICAL                                            :: count_coincidences
-    INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
+    INTEGER                                            :: nrows_A, ncols_A, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_xdy_a_g_CSR, A_mxydx_a_g_CSR, A_xydy_a_g_CSR
     TYPE(tMat)                                         :: A_xdy_a_g    , A_mxydx_a_g    , A_xydy_a_g
     INTEGER                                            :: vi1, vi2, vi
@@ -743,14 +743,12 @@ CONTAINS
     ! Matrix sise
     nrows_A         = mesh%nV  ! to
     ncols_A         = grid%n   ! from
-    nnz_est         = 4 * MAX( nrows_A, ncols_A)
-    nnz_est_proc    = CEILING( REAL( nnz_est, dp) / REAL( par%n, dp))
     nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh%A) / (grid%dx**2)), &
                                     CEILING( 2._dp * (grid%dx**2) / MINVAL( mesh%A))) )
 
-    CALL allocate_matrix_CSR_dist( A_xdy_a_g_CSR  , nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( A_mxydx_a_g_CSR, nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( A_xydy_a_g_CSR , nrows_A, ncols_A, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( A_xdy_a_g_CSR  , nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( A_mxydx_a_g_CSR, nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( A_xydy_a_g_CSR , nrows_A, ncols_A )
 
     ! Allocate memory for single row results
     single_row_Vor%n_max = nnz_per_row_max
@@ -1062,7 +1060,7 @@ CONTAINS
     REAL(dp)                                           :: xmin, xmax, ymin, ymax
     INTEGER                                            :: il, iu, jl, ju
     INTEGER                                            :: i, j, ii, jj
-    INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
+    INTEGER                                            :: nrows_A, ncols_A, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: A_xdy_g_b_CSR, A_mxydx_g_b_CSR, A_xydy_g_b_CSR
     TYPE(tMat)                                         :: A_xdy_g_b    , A_mxydx_g_b    , A_xydy_g_b
     TYPE(type_single_row_mapping_matrices)             :: single_row_grid, single_row_Tri
@@ -1197,14 +1195,12 @@ CONTAINS
     ! Matrix sise
     nrows_A         = grid%n     ! to
     ncols_A         = mesh%nTri  ! from
-    nnz_est         = 4 * MAX( nrows_A, ncols_A)
-    nnz_est_proc    = CEILING( REAL( nnz_est, dp) / REAL( par%n, dp))
     nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh%TriA) / (grid%dx**2)), &
                                     CEILING( 2._dp * (grid%dx**2) / MINVAL( mesh%TriA))) )
 
-    CALL allocate_matrix_CSR_dist( A_xdy_g_b_CSR  , nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( A_mxydx_g_b_CSR, nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( A_xydy_g_b_CSR , nrows_A, ncols_A, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( A_xdy_g_b_CSR  , nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( A_mxydx_g_b_CSR, nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( A_xydy_g_b_CSR , nrows_A, ncols_A )
 
     ! Allocate memory for single row results
     single_row_grid%n_max = nnz_per_row_max
@@ -1783,7 +1779,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'integrate_triangles_through_Voronoi_cells'
-    INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
+    INTEGER                                            :: nrows_A, ncols_A, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: B_xdy_b_a_CSR, B_mxydx_b_a_CSR, B_xydy_b_a_CSR
     TYPE(type_single_row_mapping_matrices)             :: single_row
     INTEGER                                            :: via, vib, vic, ti, vi_hint, k
@@ -1798,14 +1794,12 @@ CONTAINS
     ! Matrix sise
     nrows_A         = mesh_tri%nTri  ! to
     ncols_A         = mesh_Vor%nV    ! from
-    nnz_est         = 4 * MAX( nrows_A, ncols_A)
-    nnz_est_proc    = CEILING( REAL( nnz_est, dp) / REAL( par%n, dp))
     nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh_tri%TriA) / MINVAL( mesh_Vor%A   )), &
                                     CEILING( 2._dp * MAXVAL( mesh_Vor%A   ) / MINVAL( mesh_tri%TriA)) ))
 
-    CALL allocate_matrix_CSR_dist( B_xdy_b_a_CSR  , nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( B_mxydx_b_a_CSR, nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( B_xydy_b_a_CSR , nrows_A, ncols_A, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( B_xdy_b_a_CSR  , nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( B_mxydx_b_a_CSR, nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( B_xydy_b_a_CSR , nrows_A, ncols_A )
 
     ! Initialise results from integrating a single triangle through the Voronoi cells
     single_row%n_max = 100
@@ -1899,7 +1893,7 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'integrate_Voronoi_cells_through_triangles'
-    INTEGER                                            :: nrows_A, ncols_A, nnz_est, nnz_est_proc, nnz_per_row_max
+    INTEGER                                            :: nrows_A, ncols_A, nnz_per_row_max
     TYPE(type_sparse_matrix_CSR_dp)                    :: B_xdy_a_b_CSR, B_mxydx_a_b_CSR, B_xydy_a_b_CSR
     TYPE(type_single_row_mapping_matrices)             :: single_row
     INTEGER                                            :: vi, nVor, vori1, vori2, k, ti_hint
@@ -1915,14 +1909,12 @@ CONTAINS
     ! Matrix sise
     nrows_A         = mesh_Vor%nV    ! to
     ncols_A         = mesh_tri%nTri  ! from
-    nnz_est         = 4 * MAX( nrows_A, ncols_A)
-    nnz_est_proc    = CEILING( REAL( nnz_est, dp) / REAL( par%n, dp))
     nnz_per_row_max = MAX( 32, MAX( CEILING( 2._dp * MAXVAL( mesh_tri%TriA) / MINVAL( mesh_vor%A   )), &
                                     CEILING( 2._dp * MAXVAL( mesh_vor%A   ) / MINVAL( mesh_tri%TriA)) ))
 
-    CALL allocate_matrix_CSR_dist( B_xdy_a_b_CSR  , nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( B_mxydx_a_b_CSR, nrows_A, ncols_A, nnz_est_proc)
-    CALL allocate_matrix_CSR_dist( B_xydy_a_b_CSR , nrows_A, ncols_A, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( B_xdy_a_b_CSR  , nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( B_mxydx_a_b_CSR, nrows_A, ncols_A )
+    CALL allocate_matrix_CSR_dist( B_xydy_a_b_CSR , nrows_A, ncols_A )
 
     ! Initialise results from integrating a single triangle through the Voronoi cells
     single_row%n_max = 100

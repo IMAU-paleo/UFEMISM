@@ -23,7 +23,8 @@ module data_types_module
 
     INTEGER                                 :: m,n                         ! A = [m-by-n]
     INTEGER                                 :: nnz_max                     ! Maximum number of non-zero entries in A (determines how much memory is allocated)
-    INTEGER                                 :: nnz                         ! Number         of non-zero entries in A (determines how much memory is allocated)
+    INTEGER                                 :: nnz                         ! Number         of non-zero entries in A locally (determines how much memory is allocated)
+    integer                                 :: nnz_tot                     ! globally nnz entries
     INTEGER,  DIMENSION(:    ), allocatable :: ptr
     INTEGER,  DIMENSION(:    ), allocatable :: index
     REAL(dp), DIMENSION(:    ), allocatable :: val

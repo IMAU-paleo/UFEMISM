@@ -21,8 +21,7 @@ module ice_velocity_module
   use mesh_operators_module,               only : ddx_a_to_b_2D, ddx_b_to_a_2D, ddy_a_to_b_2D, ddy_b_to_a_2D
   use mesh_operators_module,               only : apply_Neumann_BC_direct_a_2D
   use sparse_matrix_module,                only : allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, &
-                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR, &
-                                                  resync_csr_dist
+                                                  solve_matrix_equation_CSR, deallocate_matrix_CSR
   use basal_conditions_and_sliding_module, only : calc_basal_conditions, calc_sliding_law
   use general_ice_model_data_module,       only : determine_grounded_fractions
   use reallocate_mod,                      only : reallocate_bounds
@@ -1205,7 +1204,6 @@ contains
     ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
     call allgather_array(b_buv,t21,t22)
     call allgather_array(uv_buv,t21,t22)
-    call resync_csr_dist(ice%M_SSADIVA, t21, t22)
 
     CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
       C%DIVA_choice_matrix_solver, &
@@ -2339,7 +2337,7 @@ contains
 
     ! Local variables:
     character(len=256), parameter       :: routine_name = 'initialise_SSADIVA_stiffness_matrix'
-    integer                             :: ncols, nrows, nnz_per_row_max, nnz_max
+    integer                             :: ncols, nrows
     integer                             :: n1, n2, n, ti, k1, k2, k, tj, mu, mv
     integer, dimension(:), allocatable  :: ti2n_u, ti2n_v
 
@@ -2349,10 +2347,8 @@ contains
     ! Allocate shared memory for A
     ncols           = 2*mesh%nTri    ! from
     nrows           = 2*mesh%nTri    ! to
-    nnz_per_row_max = 20
 
-    nnz_max = nrows * nnz_per_row_max
-    call allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, nnz_max)
+    call allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols)
 
     ! Fill in matrix rows, right-hand side, and initial guess
     call partition_list( mesh%nTri, par%i, par%n, n1, n2)

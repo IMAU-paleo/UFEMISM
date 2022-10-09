@@ -26,9 +26,10 @@ MODULE forcing_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_insolation_file, &
-                                             read_insolation_file_time_lat, read_insolation_file_timeframes, &
-                                             inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
+  USE netcdf_module,                   ONLY: inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
+  USE netcdf_extra_module,             ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
+                                             read_insolation_data_file_timeframes
   USE data_types_module,               ONLY: type_forcing_data, type_mesh, type_model_region
 
   IMPLICIT NONE
@@ -996,8 +997,7 @@ CONTAINS
       END IF ! IF (par%master) THEN
 
       ! Read new insolation fields from the NetCDF file
-      IF (par%master) CALL read_insolation_file_timeframes( forcing, ti0, ti1)
-      CALL sync
+      CALL read_insolation_data_file_timeframes( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
 
     ELSE
       IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
@@ -1047,9 +1047,7 @@ CONTAINS
       CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
 
       forcing%netcdf_ins%filename = C%filename_insolation
-
-      IF (par%master) CALL inquire_insolation_file( forcing)
-      CALL sync
+      CALL inquire_insolation_data_file( forcing)
 
       ! Insolation
       CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,    forcing%wins_time   )
@@ -1058,8 +1056,7 @@ CONTAINS
       CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1,  forcing%wins_Q_TOA1 )
 
       ! Read time and latitude data
-      IF (par%master) CALL read_insolation_file_time_lat( forcing)
-      CALL sync
+      CALL read_insolation_data_file_time_lat( forcing)
 
     ELSE
       CALL crash('unknown choice_insolation_forcing "' // TRIM( C%choice_insolation_forcing) // '"!')

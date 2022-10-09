@@ -28,7 +28,7 @@ MODULE reference_fields_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              is_floating, surface_elevation, remove_Lake_Vostok, deallocate_grid
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_reference_geometry_file, read_reference_geometry_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
   USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh, type_remapping_mesh_mesh
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, &

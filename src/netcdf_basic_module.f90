@@ -869,7 +869,7 @@ CONTAINS
 
   END SUBROUTINE check_mesh_dimensions
 
-  ! Zeta, month, time dimensions
+  ! Zeta, z_ocean, month, time dimensions
   SUBROUTINE check_zeta( filename)
     ! Check if this file contains a valid zeta dimension and variable
 
@@ -933,6 +933,63 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE check_zeta
+
+  SUBROUTINE check_z_ocean( filename)
+    ! Check if this file contains a valid z_ocean dimension and variable
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'check_z_ocean'
+    INTEGER                                            :: id_dim
+    INTEGER                                            :: n
+    CHARACTER(LEN=256)                                 :: dim_name
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: var_type
+    INTEGER                                            :: ndims_of_var
+    INTEGER,  DIMENSION( NF90_MAX_VAR_DIMS)            :: dims_of_var
+    REAL(dp), DIMENSION(:    ), POINTER                :: z_ocean
+    INTEGER                                            :: wz_ocean
+    INTEGER                                            :: k
+
+    ! Add routine to path
+    CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
+
+    ! Inquire dimension
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim, dim_length = n, dim_name = dim_name)
+
+    ! Safety checks on dimension
+    IF (id_dim == -1) CALL crash('no valid z_ocean dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (n == NF90_UNLIMITED) CALL crash('z_ocean dimension in file "' // TRIM( filename) // '" is unlimited!')
+    IF (n < 1) CALL crash('z_ocean dimension in file "' // TRIM( filename) // '" has length n = {int_01}!', int_01  = n)
+
+    ! Inquire variable
+    CALL inquire_var_multiple_options( filename, field_name_options_z_ocean, id_var, var_name = var_name, var_type = var_type, ndims_of_var = ndims_of_var, dims_of_var = dims_of_var)
+    IF (id_var == -1) CALL crash('no valid z_ocean variable could be found in file "' // TRIM( filename) // '"!')
+    IF (.NOT. (var_type == NF90_FLOAT .OR. var_type == NF90_DOUBLE)) CALL crash('z_ocean variable in file "' // TRIM( filename) // '" is not of type NF90_FLOAT or NF90_DOUBLE!')
+    IF (ndims_of_var /= 1) CALL crash('z_ocean variable in file "' // TRIM( filename) // '" has {int_01} dimensions!', int_01 = ndims_of_var)
+    IF (dims_of_var( 1) /= id_dim) CALL crash('z_ocean variable in file "' // TRIM( filename) // '" does not have z_ocean as a dimension!')
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( n, z_ocean, wz_ocean)
+
+    ! Read variable
+    CALL read_var_dp_1D( filename, id_var, z_ocean)
+
+    ! Check validity
+    CALL check_for_NaN_dp_1D( z_ocean, 'z_ocean')
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wz_ocean)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE check_z_ocean
 
   SUBROUTINE check_month( filename)
     ! Check if this file contains a valid month dimension (we don't really care about the variable)

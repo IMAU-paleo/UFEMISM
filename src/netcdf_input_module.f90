@@ -64,7 +64,7 @@ MODULE netcdf_input_module
                                              inquire_dim_multiple_options, inquire_var_multiple_options, &
                                              read_var_int_0D, read_var_int_1D, read_var_int_2D, read_var_int_3D, read_var_int_4D, &
                                              read_var_dp_0D , read_var_dp_1D , read_var_dp_2D , read_var_dp_3D , read_var_dp_4D, &
-                                             check_x, check_y, check_lon, check_lat, check_mesh_dimensions, check_zeta, find_timeframe, &
+                                             check_x, check_y, check_lon, check_lat, check_mesh_dimensions, check_zeta, check_z_ocean, find_timeframe, &
                                              check_xy_grid_field_int_2D, check_xy_grid_field_dp_2D, check_xy_grid_field_dp_2D_monthly, check_xy_grid_field_dp_3D, &
                                              check_lonlat_grid_field_int_2D, check_lonlat_grid_field_dp_2D, check_lonlat_grid_field_dp_2D_monthly, check_lonlat_grid_field_dp_3D, &
                                              check_mesh_field_int_2D, check_mesh_field_dp_2D, check_mesh_field_dp_2D_monthly, check_mesh_field_dp_3D, &
@@ -1809,6 +1809,44 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
   END SUBROUTINE setup_zeta_from_file
+
+  SUBROUTINE setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+    ! Set up a z_ocean coordinate from a NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    INTEGER,                             INTENT(OUT)   :: nz_ocean
+    REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   ::  z_ocean
+    INTEGER,                             INTENT(OUT)   :: wz_ocean
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_z_ocean_from_file'
+    INTEGER                                            :: id_dim_z_ocean, id_var_z_ocean
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check z_ocean dimension and variable for validity
+    CALL check_z_ocean( filename)
+
+    ! Inquire z_ocean dimension
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean, dim_length = nz_ocean)
+
+    ! Inquire z_ocean variable
+    CALL inquire_var_multiple_options( filename, field_name_options_z_ocean, id_var_z_ocean)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_1D( nz_ocean, z_ocean, wz_ocean)
+
+    ! Read z_ocean from file
+    CALL read_var_dp_1D( filename, id_var_z_ocean, z_ocean)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
+
+  END SUBROUTINE setup_z_ocean_from_file
 
   ! ===== Determine indexing and dimension directions =====
   ! =======================================================

@@ -1,0 +1,35 @@
+name: Mininism Github Action
+
+on:
+  push:
+    branches: 
+      - master
+      - minimism
+      - develop
+  pull_request:
+    branches:
+      - master
+      - minimism
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Minimism
+    runs-on: ubunbu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade
+          sudo apt-get install libopenmpi-dev libnetcdff-dev netcdf-bin \
+          libopenblas-dev makedepf90 petsc-dev
+      
+      - name: compile minimism
+        run: |
+          cd src
+          make -j2
+

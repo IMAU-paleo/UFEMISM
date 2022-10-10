@@ -28,7 +28,7 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: data.tgz
-          key: {{ github.sha }}-data
+          key: ${{ github.sha }}-data
 
   build:
     name: Build minimism
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: src/UFEMISM_program
-          key: {{ github.sha }}-binary
+          key: ${{ github.sha }}-binary
 
   test:
     name: Test minimism
@@ -69,12 +69,12 @@ jobs:
       - uses: actions/cache@v3
         with:
           path: src/UFEMISM_program
-          key: {{ github.sha }}-binary
+          key: ${{ github.sha }}-binary
 
       - uses: actions/cache@v3
         with:
           path: data.tgz
-          key: {{ github.sha }}-data
+          key: ${{ github.sha }}-data
 
       - name: Extract data
         run: |

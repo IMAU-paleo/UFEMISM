@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get upgrade
+          # sudo apt-get upgrade
           sudo apt-get install libopenmpi-dev libnetcdff-dev \
                                netcdf-bin libopenblas-dev    \
                                makedepf90 petsc-dev
@@ -76,6 +76,13 @@ jobs:
         with:
           path: data.tgz
           key: ${{ github.sha }}-data
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libopenmpi-dev libnetcdff-dev \
+                               netcdf-bin libopenblas-dev    \
+                               petsc-dev
 
       - name: Extract data
         run: |

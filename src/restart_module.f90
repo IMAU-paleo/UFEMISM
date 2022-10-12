@@ -31,7 +31,7 @@ MODULE restart_module
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
   USE data_types_module,               ONLY: type_model_region
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary
-  USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
+  USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, calc_lat_lon_coordinates, find_triangle_areas, &
                                              find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
                                              find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh, &
                                              calc_triangle_geometric_centres
@@ -113,7 +113,7 @@ CONTAINS
     CALL allocate_mesh_secondary(                 region%mesh)    ! Adds  9 MPI windows
     CALL calc_triangle_geometric_centres(         region%mesh)
     CALL find_Voronoi_cell_areas(                 region%mesh)
-    CALL get_lat_lon_coordinates(                 region%mesh)
+    CALL calc_lat_lon_coordinates(                 region%mesh)
     CALL find_triangle_areas(                     region%mesh)
     CALL find_connection_widths(                  region%mesh)
     CALL make_Ac_mesh(                            region%mesh)    ! Adds  5 MPI windows

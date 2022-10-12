@@ -23,8 +23,7 @@ MODULE SMB_module
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             transpose_dp_2D, transpose_dp_3D
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, &
                                              type_SMB_model, type_remapping_mesh_mesh, &
@@ -101,10 +100,10 @@ CONTAINS
       ! Use a directly prescribed global/regional SMB
 
       CALL run_SMB_model_direct( mesh, climate_matrix%SMB_direct, SMB, time, mask_noice)
-      
+
     ELSEIF (C%choice_SMB_model == 'ISMIP_style_forcing') THEN
       ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-      
+
       CALL run_SMB_model_ISMIP_forcing( mesh, climate_matrix, SMB)
 
     ELSE
@@ -828,9 +827,9 @@ CONTAINS
     ! Run the selected SMB model
     !
     ! Use the ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-    
+
     IMPLICIT NONE
-    
+
     ! In/output variables
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_climate_matrix_regional),     INTENT(IN)    :: climate_matrix
@@ -839,18 +838,18 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_SMB_model_ISMIP_forcing'
     INTEGER                                            :: vi
-    
+
     ! Add routine to path
     CALL init_routine( routine_name)
-    
+
     DO vi = mesh%vi1, mesh%vi2
-        SMB%SMB_year( vi) = climate_matrix%ISMIP_forcing%SMB( vi)
+      SMB%SMB_year( vi) = climate_matrix%ISMIP_style%SMB( vi)
     END DO
     CALL sync
-    
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE run_SMB_model_ISMIP_forcing
 
 ! == Remapping after mesh update

@@ -21,9 +21,8 @@ MODULE UFEMISM_main_model
                                                  reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                                  reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                                  deallocate_shared
-  USE netcdf_module,                       ONLY: debug, write_to_debug_file, create_output_files, write_to_output_files, &
-                                                 initialise_debug_fields, associate_debug_fields, reallocate_debug_fields, &
-                                                 create_debug_file, write_PETSc_matrix_to_NetCDF
+  USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, create_debug_file, initialise_debug_fields, reallocate_debug_fields, associate_debug_fields
+  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
   USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
@@ -45,7 +44,7 @@ MODULE UFEMISM_main_model
   USE bedrock_ELRA_module,                 ONLY: initialise_ELRA_model,                   remap_ELRA_model,     run_ELRA_model
 
   USE tests_and_checks_module,             ONLY: run_all_matrix_tests
-  USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion
+  USE basal_conditions_and_sliding_module, ONLY: basal_sliding_inversion, write_inverted_bed_roughness_to_file
   USE restart_module,                      ONLY: read_mesh_from_restart_file, read_init_data_from_restart_file
   USE general_sea_level_module,            ONLY: calculate_PD_sealevel_contribution
   USE ice_velocity_module,                 ONLY: solve_DIVA
@@ -217,9 +216,9 @@ CONTAINS
       ! == Basal sliding inversion
       ! ==========================
 
-      IF (C%do_basal_sliding_inversion) THEN
+      IF (C%do_BIVgeo) THEN
         IF (region%do_basal) THEN
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD)
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, C%BIVgeo_dt)
         END IF
       END IF
 
@@ -288,6 +287,7 @@ CONTAINS
       IF (C%choice_SMB_model == 'IMAU-ITM') THEN
         CALL write_regional_text_output( region)
       END IF
+      IF (C%do_BIVgeo) CALL write_inverted_bed_roughness_to_file( region%mesh, region%grid_output, region%ice)
     END IF
 
     ! Determine total ice sheet area, volume, volume-above-flotation and GMSL contribution,
@@ -802,7 +802,7 @@ CONTAINS
       END IF
 
       region%t_last_basal   = C%start_time_of_run
-      region%t_next_basal   = C%start_time_of_run + C%dt_basal
+      region%t_next_basal   = C%start_time_of_run + C%BIVgeo_Dt
       region%do_basal       = .FALSE.
 
       region%t_last_SMB_inv = C%start_time_of_run
@@ -886,7 +886,7 @@ CONTAINS
     CALL allocate_shared_dp_0D(  grid%dx,           grid%wdx          )
     CALL allocate_shared_dp_0D(  grid%lambda_M,     grid%wlambda_M    )
     CALL allocate_shared_dp_0D(  grid%phi_M,        grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  grid%alpha_stereo, grid%walpha_stereo)
+    CALL allocate_shared_dp_0D(  grid%beta_stereo, grid%wbeta_stereo)
     CALL allocate_shared_dp_0D(  grid%xmin,         grid%wxmin        )
     CALL allocate_shared_dp_0D(  grid%xmax,         grid%wxmax        )
     CALL allocate_shared_dp_0D(  grid%ymin,         grid%wymin        )
@@ -907,19 +907,19 @@ CONTAINS
       IF     (region%name == 'NAM') THEN
         grid%lambda_M     = C%lambda_M_NAM
         grid%phi_M        = C%phi_M_NAM
-        grid%alpha_stereo = C%alpha_stereo_NAM
+        grid%beta_stereo  = C%beta_stereo_NAM
       ELSEIF (region%name == 'EAS') THEN
         grid%lambda_M     = C%lambda_M_EAS
         grid%phi_M        = C%phi_M_EAS
-        grid%alpha_stereo = C%alpha_stereo_EAS
+        grid%beta_stereo  = C%beta_stereo_EAS
       ELSEIF (region%name == 'GRL') THEN
         grid%lambda_M     = C%lambda_M_GRL
         grid%phi_M        = C%phi_M_GRL
-        grid%alpha_stereo = C%alpha_stereo_GRL
+        grid%beta_stereo  = C%beta_stereo_GRL
       ELSEIF (region%name == 'ANT') THEN
         grid%lambda_M     = C%lambda_M_ANT
         grid%phi_M        = C%phi_M_ANT
-        grid%alpha_stereo = C%alpha_stereo_ANT
+        grid%beta_stereo  = C%beta_stereo_ANT
       END IF
 
       ! Determine the center of the model domain
@@ -1029,7 +1029,7 @@ CONTAINS
     ! point using the mesh projection parameters
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%alpha_stereo, grid%lon( i,j), grid%lat( i,j))
+      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), grid%lambda_M, grid%phi_M, grid%beta_stereo, grid%lon( i,j), grid%lat( i,j))
     END DO
     END DO
     CALL sync

@@ -21,9 +21,8 @@ MODULE UFEMISM_main_model
                                                  reallocate_shared_int_2D, reallocate_shared_dp_2D, &
                                                  reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                                  deallocate_shared
-  USE netcdf_module,                       ONLY: debug, write_to_debug_file, create_output_files, write_to_output_files, &
-                                                 initialise_debug_fields, associate_debug_fields, reallocate_debug_fields, &
-                                                 create_debug_file, write_PETSc_matrix_to_NetCDF
+  USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, create_debug_file, initialise_debug_fields, reallocate_debug_fields, associate_debug_fields
+  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files
   USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
   USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
@@ -908,19 +907,19 @@ CONTAINS
       IF     (region%name == 'NAM') THEN
         grid%lambda_M     = C%lambda_M_NAM
         grid%phi_M        = C%phi_M_NAM
-        grid%beta_stereo = C%beta_stereo_NAM
+        grid%beta_stereo  = C%beta_stereo_NAM
       ELSEIF (region%name == 'EAS') THEN
         grid%lambda_M     = C%lambda_M_EAS
         grid%phi_M        = C%phi_M_EAS
-        grid%beta_stereo = C%beta_stereo_EAS
+        grid%beta_stereo  = C%beta_stereo_EAS
       ELSEIF (region%name == 'GRL') THEN
         grid%lambda_M     = C%lambda_M_GRL
         grid%phi_M        = C%phi_M_GRL
-        grid%beta_stereo = C%beta_stereo_GRL
+        grid%beta_stereo  = C%beta_stereo_GRL
       ELSEIF (region%name == 'ANT') THEN
         grid%lambda_M     = C%lambda_M_ANT
         grid%phi_M        = C%phi_M_ANT
-        grid%beta_stereo = C%beta_stereo_ANT
+        grid%beta_stereo  = C%beta_stereo_ANT
       END IF
 
       ! Determine the center of the model domain
@@ -1030,7 +1029,7 @@ CONTAINS
     ! point using the mesh projection parameters
     DO i = grid%i1, grid%i2
     DO j = 1, grid%ny
-      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), region%mesh%lambda_M, region%mesh%phi_M, region%mesh%beta_stereo, grid%lon( i,j), grid%lat( i,j))
+      CALL inverse_oblique_sg_projection( grid%x( i), grid%y( j), grid%lambda_M, grid%phi_M, grid%beta_stereo, grid%lon( i,j), grid%lat( i,j))
     END DO
     END DO
     CALL sync

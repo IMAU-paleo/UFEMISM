@@ -2736,7 +2736,7 @@ CONTAINS
     CHARACTER(LEN=256), PARAMETER                :: routine_name = 'ocean_temperature_inversion'
     INTEGER                                      :: vi
     REAL(dp)                                     :: h_delta, h_scale, t_melt
-    INTEGER,  DIMENSION(:    ), POINTER          ::  mask,  mask_filled
+    INTEGER,  DIMENSION(:), POINTER              ::  mask,  mask_filled
     INTEGER                                      :: wmask, wmask_filled
 
     ! Add routine to path
@@ -2746,7 +2746,7 @@ CONTAINS
       ! Nothing to do for now. Just return.
       CALL finalise_routine( routine_name)
       RETURN
-    ELSEIF (time >= C%ocean_temperature_inv_t_end) THEN
+    ELSEIF (time > C%ocean_temperature_inv_t_end) THEN
       ! Inversion is done. Use running average of bed roughness.
       BMB%T_ocean_base( mesh%vi1:mesh%vi2) = BMB%T_base_ave( mesh%vi1:mesh%vi2)
       CALL finalise_routine( routine_name)
@@ -2761,8 +2761,9 @@ CONTAINS
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
 
-      ! Invert only over shelf or GL vertices
-      IF ( ice%mask_shelf_a( vi) == 1) THEN
+      ! Invert only over non-calving-front shelf vertices
+      IF ( ice%mask_shelf_a( vi) == 1 .AND. &
+           ice%mask_cf_a(    vi) == 0) THEN
 
         ! Add this vertex to mask of inverted ocean temperatures
         BMB%M_ocean_base( vi) = 1
@@ -2771,9 +2772,9 @@ CONTAINS
         mask( vi) = 2
 
         IF (refgeo%Hi( vi) > 0._dp) THEN
-          h_scale = 1.0_dp/C%BMB_inv_scale_shelf
+          h_scale = 1.0_dp/1000._dp
         ELSE
-          h_scale = 1.0_dp/C%BMB_inv_scale_ocean
+          h_scale = 1.0_dp/1000._dp
         END IF
 
         h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
@@ -2800,7 +2801,7 @@ CONTAINS
     END DO
     CALL sync
 
-    ! Limit basal melt
+    ! Limit basal temperatures
     DO vi = mesh%vi1, mesh%vi2
 
       IF (ice%mask_shelf_a( vi) == 1) THEN
@@ -2808,7 +2809,7 @@ CONTAINS
         t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
                  7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt - .2_dp)
+        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt - .3_dp)
         BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
 
       END IF

@@ -62,7 +62,7 @@ jobs:
                                netcdf-bin libopenblas-dev    \
                                petsc-dev
 
-      - name: Run GRL (40km res, 0.3kyr)
+      - name: Run EISMINT 1
         run: |
           cd tests
           mpirun -n 2 ../src/UFEMISM_program eismint_1.cfg

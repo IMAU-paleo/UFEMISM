@@ -16,22 +16,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  data:
-    name: Download data
-    # TODO: use https://github.com/MartijnHols/actions-cache to make cache usable between runs
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Download data
-        run: |
-          touch data.tgz
-          # wget .....
-          # cp .... data.tgz
-      - uses: actions/cache@v3
-        with:
-          path: data.tgz
-          key: ${{ github.sha }}-data
-
   build:
     name: Build minimism
     runs-on: ubuntu-22.04
@@ -61,7 +45,6 @@ jobs:
     name: Test minimism
     runs-on: ubuntu-22.04
     needs:
-      - data
       - build
 
     steps:
@@ -72,11 +55,6 @@ jobs:
           path: src/UFEMISM_program
           key: ${{ github.sha }}-binary
 
-      - uses: actions/cache@v3
-        with:
-          path: data.tgz
-          key: ${{ github.sha }}-data
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -84,12 +62,7 @@ jobs:
                                netcdf-bin libopenblas-dev    \
                                petsc-dev
 
-      - name: Extract data
-        run: |
-          # tar -xzf data.tgz
-          # ln -s data...   tests/data
-
       - name: Run GRL (40km res, 0.3kyr)
         run: |
           cd tests
-          mpirun -n 2 ../src/UFEMISM_program GRL_40km_0.3kyr.cfg
+          mpirun -n 2 ../src/UFEMISM_program eismint_1.cfg

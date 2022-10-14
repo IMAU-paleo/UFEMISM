@@ -52,12 +52,68 @@ contains
     ! Local variables:
     character(len=256), parameter                        :: routine_name = 'run_SMB_model'
     integer                                              :: vi
+    real(dp)                                             :: R
 
     ! === Initialisation ===
     ! ======================
 
     ! Add routine to path
     call init_routine( routine_name)
+
+
+    IF (C%do_benchmark_experiment) THEN
+      IF (C%choice_benchmark_experiment == 'EISMINT_1' .OR. &
+          C%choice_benchmark_experiment == 'EISMINT_2' .OR. &
+          C%choice_benchmark_experiment == 'EISMINT_3' .OR. &
+          C%choice_benchmark_experiment == 'EISMINT_4' .OR. &
+          C%choice_benchmark_experiment == 'EISMINT_5' .OR. &
+          C%choice_benchmark_experiment == 'EISMINT_6') THEN
+          
+        CALL EISMINT_SMB( mesh, time, SMB)
+        CALL finalise_routine( routine_name)
+        RETURN
+        
+      ELSEIF (C%choice_benchmark_experiment == 'Halfar' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_A' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_B' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_C' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_D' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_E' .OR. &
+              C%choice_benchmark_experiment == 'ISMIP_HOM_F') THEN
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0._dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0._dp
+        CALL finalise_routine( routine_name)
+        RETURN
+      ELSEIF (C%choice_benchmark_experiment == 'Bueler') THEN
+        DO vi = mesh%vi1, mesh%vi2
+          SMB%SMB_year( vi  ) = Bueler_solution_MB( mesh%V(vi,1), mesh%V(vi,2), time)
+          SMB%SMB(      vi,:) = SMB%SMB_year( vi) / 12._dp
+        END DO
+        CALL finalise_routine( routine_name)
+        RETURN
+      ELSEIF (C%choice_benchmark_experiment == 'MISMIP_mod') THEN
+        SMB%SMB_year( mesh%vi1:mesh%vi2  ) = 0.3_dp
+        SMB%SMB(      mesh%vi1:mesh%vi2,:) = 0.3_dp / 12._dp
+        CALL finalise_routine( routine_name)
+        RETURN
+      ELSEIF (C%choice_benchmark_experiment == 'mesh_generation_test') THEN
+        ! Similar to EISMINT
+        DO vi = mesh%vi1, mesh%vi2
+          R = NORM2(mesh%V(vi,:))
+          IF (R < 250000._dp) THEN
+            SMB%SMB_year( vi  ) = 0.3_dp
+          ELSE
+            SMB%SMB_year( vi  ) = MAX(-2._dp, 0.3_dp - (R - 250000._dp) / 200000._dp)
+          END IF
+          SMB%SMB(      vi,:) = SMB%SMB_year( vi  ) / 12._dp
+        END DO ! DO vi = mesh%vi1, mesh%vi2
+        CALL sync
+        CALL finalise_routine( routine_name)
+        RETURN
+      ELSE
+        CALL crash('unknown choice_benchmark_experiment "' // TRIM( C%choice_benchmark_experiment) // '"!')
+      END IF
+    END IF ! IF (C%do_benchmark_experiment) THEN
 
     ! === Choice of model ===
     ! =======================
@@ -329,6 +385,127 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine run_SMB_model_IMAUITM
+
+
+  ! The EISMINT SMB parameterisations
+  SUBROUTINE EISMINT_SMB( mesh, time, SMB)
+    ! Run the IMAU-ITM SMB model. Based on the one from ANICE.
+    
+    ! NOTE: all the SMB components and the total are in meters of water equivalent
+    
+    IMPLICIT NONE
+    
+    ! In/output variables
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh 
+    REAL(dp),                            INTENT(IN)    :: time
+    TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'EISMINT_SMB'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: E               ! Radius of circle where accumulation is M_max
+    REAL(dp)                                           :: dist            ! distance to centre of circle
+    REAL(dp)                                           :: S_b             ! Gradient of accumulation-rate change with horizontal distance
+    REAL(dp)                                           :: M_max           ! Maximum accumulation rate 
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Default EISMINT configuration
+    E         = 450000._dp
+    S_b       = 0.01_dp / 1000._dp 
+    M_max     = 0.5_dp
+    
+    IF     (C%choice_benchmark_experiment == 'EISMINT_1') THEN ! Moving margin, steady state
+      ! No changes
+    ELSEIF (C%choice_benchmark_experiment == 'EISMINT_2') THEN ! Moving margin, 20 kyr
+      IF (time < 0._dp) THEN
+        ! No changes; first 120 kyr are initialised with EISMINT_1
+      ELSE
+        E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 20000._dp)
+      END IF
+    ELSEIF (C%choice_benchmark_experiment == 'EISMINT_3') THEN ! Moving margin, 40 kyr
+      IF (time < 0._dp) THEN
+        ! No changes; first 120 kyr are initialised with EISMINT_1
+      ELSE
+        E         = 450000._dp + 100000._dp * SIN( 2._dp * pi * time / 40000._dp)
+      END IF
+    ELSEIF (C%choice_benchmark_experiment == 'EISMINT_4') THEN ! Fixed margin, steady state
+      M_max       = 0.3_dp       
+      E           = 999000._dp
+    ELSEIF (C%choice_benchmark_experiment == 'EISMINT_5') THEN ! Fixed margin, 20 kyr
+      IF (time < 0._dp) THEN
+        M_max     = 0.3_dp
+        E         = 999000._dp 
+      ELSE
+        M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 20000._dp)
+        E         = 999000._dp 
+      END IF
+    ELSEIF (C%choice_benchmark_experiment == 'EISMINT_6') THEN ! Fixed margin, 40 kyr
+      IF (time < 0._dp) THEN
+        M_max     = 0.3_dp
+        E         = 999000._dp 
+      ELSE
+        M_max     = 0.3_dp + 0.2_dp * SIN( 2._dp * pi * time / 40000._dp)
+        E         = 999000._dp 
+      END IF
+    END IF
+
+    DO vi = mesh%vi1, mesh%vi2
+      dist = NORM2( mesh%V( vi,:))
+      SMB%SMB_year(vi) = MIN( M_max, S_b * (E - dist))
+      SMB%SMB(vi,:) = SMB%SMB_year(vi) / 12._dp
+    END DO
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+          
+  END SUBROUTINE EISMINT_SMB
+  FUNCTION Bueler_solution_MB( x, y, t) RESULT(M)
+    ! Describes an ice-sheet at time t (in years) conforming to the Bueler solution
+    ! with dome thickness H0 and margin radius R0 at t0, with a surface mass balance
+    ! determined by lambda.
+    
+    ! Input variables
+    REAL(dp), INTENT(IN) :: x       ! x coordinate [m]
+    REAL(dp), INTENT(IN) :: y       ! y coordinate [m]
+    REAL(dp), INTENT(IN) :: t       ! Time from t0 [years]
+    
+    ! Result
+    REAL(dp)             :: M
+    
+    ! Local variables
+    REAL(dp) :: A_flow, rho, g, n, alpha, beta, Gamma, f1, f2, t0, tp, f3, f4, H
+    
+    REAL(dp), PARAMETER :: H0     = 3000._dp    ! Ice dome thickness at t=0 [m]
+    REAL(dp), PARAMETER :: R0     = 500000._dp  ! Ice margin radius  at t=0 [m]
+    REAL(dp), PARAMETER :: lambda = 5.0_dp      ! Mass balance parameter
+  
+    A_flow  = 1E-16_dp
+    rho     = 910._dp
+    g       = 9.81_dp
+    n       = 3._dp
+    
+    alpha = (2._dp - (n+1._dp)*lambda) / ((5._dp*n)+3._dp)
+    beta  = (1._dp + ((2._dp*n)+1._dp)*lambda) / ((5._dp*n)+3._dp)
+    Gamma = 2._dp/5._dp * (A_flow/sec_per_year) * (rho * g)**n
+    
+    f1 = ((2._dp*n)+1)/(n+1._dp)
+    f2 = (R0**(n+1._dp))/(H0**((2._dp*n)+1._dp))
+    t0 = (beta / Gamma) * (f1**n) * f2 
+    
+    !tp = (t * sec_per_year) + t0; % Acutal equation needs t in seconds from zero , but we want to supply t in years from t0
+    tp = t * sec_per_year
+    
+    f1 = (tp / t0)**(-alpha)
+    f2 = (tp / t0)**(-beta)
+    f3 = SQRT( (x**2._dp) + (y**2._dp) )/R0
+    f4 = MAX(0._dp, 1._dp - (f2*f3)**((n+1._dp)/n))
+    H = H0 * f1 * f4**(n/((2._dp*n)+1._dp))
+    
+    M = (lambda / tp) * H * sec_per_year
+  
+  END FUNCTION Bueler_solution_MB
 
   subroutine initialise_SMB_model_IMAU_ITM( mesh, ice, SMB, region_name)
     ! Allocate memory for the data fields of the SMB model.

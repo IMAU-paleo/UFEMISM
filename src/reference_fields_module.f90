@@ -98,10 +98,7 @@ contains
           write(*,'(3A)') '  Initialising present-day     reference geometry from idealised case "', &
                              trim(C%choice_refgeo_PD_idealised), '"...'
         end if
-        call sync
-
-        ! WIP
-        call crash('choice_refgeo_PD - idealised not implemented yet...')
+        call initialise_reference_geometry_idealised_grid( refgeo_PD, C%choice_refgeo_PD_idealised, region_name, C%dx_refgeo_PD_idealised)
 
       case ('realistic')
         ! Realistic geometry
@@ -109,7 +106,6 @@ contains
           write(*,"(3A)") '  Initialising present-day     reference geometry from file ', &
                              trim( filename_refgeo_PD), '...'
         end if
-        call sync
 
         ! Initialise PD geometry from a file
         call initialise_reference_geometry_from_file( refgeo_PD, filename_refgeo_PD, region_name)
@@ -132,10 +128,8 @@ contains
           write(*,'(3A)') '  Initialising initial         reference geometry from idealised case "', &
                              trim(C%choice_refgeo_init_idealised), '"...'
         end if
-        call sync
+        CALL initialise_reference_geometry_idealised_grid( refgeo_init, C%choice_refgeo_init_idealised, region_name, C%dx_refgeo_init_idealised)
 
-        ! WIP
-        call crash('choice_refgeo_init - idealised not implemented yet...')
 
       case ('realistic')
         ! Realistic geometry
@@ -144,7 +138,6 @@ contains
           write(*,"(3A)") '  Initialising initial         reference geometry from file ', &
                              trim( filename_refgeo_init), '...'
         end if
-        call sync
 
         ! Initialise initial geometry from a file
         call initialise_reference_geometry_from_file( refgeo_init, filename_refgeo_init, region_name)
@@ -173,10 +166,8 @@ contains
           write(*,'(3A)') '  Initialising GIA equilibrium reference geometry from idealised case "', &
                              trim(C%choice_refgeo_GIAeq_idealised), '"...'
         end if
+        CALL initialise_reference_geometry_idealised_grid( refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised, region_name, C%dx_refgeo_GIAeq_idealised)
         call sync
-
-        ! WIP
-        call crash('choice_refgeo_GIAeq - idealised not implemented yet...')
 
       case ('realistic')
         ! Realistic geometry
@@ -339,6 +330,227 @@ contains
 
   end subroutine initialise_reference_geometry_from_file
 
+  ! Initialise a reference geometry according to an idealised world on the initial grid
+  SUBROUTINE initialise_reference_geometry_idealised_grid( refgeo, choice_refgeo_idealised, region_name, dx)
+    ! Initialise a reference geometry according to an idealised world
+     
+    implicit none
+      
+    ! In/output variables:
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+    CHARACTER(LEN=256),             INTENT(IN)    :: choice_refgeo_idealised
+    CHARACTER(LEN=3),               INTENT(IN)    :: region_name
+    REAL(dp),                       INTENT(IN)    :: dx
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Set up a grid
+    CALL setup_idealised_geometry_grid( refgeo%grid, region_name, dx)
+    
+    ! Allocate shared memory
+    allocate( refgeo%Hi_grid( refgeo%grid%nx, refgeo%grid%ny ))
+    allocate( refgeo%Hb_grid( refgeo%grid%nx, refgeo%grid%ny ))
+    allocate( refgeo%Hs_grid( refgeo%grid%nx, refgeo%grid%ny ))
+
+    
+    IF     (choice_refgeo_idealised == 'flatearth') THEN
+      ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
+      CALL initialise_reference_geometry_idealised_grid_flatearth(     refgeo%grid, refgeo)
+#if 0
+    ELSEIF (choice_refgeo_idealised == 'Halfar') THEN
+      ! The Halfar dome solution at t = 0
+      CALL initialise_reference_geometry_idealised_grid_Halfar(        refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'Bueler') THEN
+      ! The Bueler dome solution at t = 0
+      CALL initialise_reference_geometry_idealised_grid_Bueler(        refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'SSA_icestream') THEN
+      ! The SSA_icestream infinite slab on a flat slope
+      CALL initialise_reference_geometry_idealised_grid_SSA_icestream( refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'MISMIP_mod') THEN
+      ! The MISMIP_mod cone-shaped island
+      CALL initialise_reference_geometry_idealised_grid_MISMIP_mod(    refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_A') THEN
+      ! The ISMIP-HOM A bumpy slope
+      CALL initialise_reference_geometry_idealised_grid_ISMIP_HOM_A(   refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_B') THEN
+      ! The ISMIP-HOM B bumpy slope
+      CALL initialise_reference_geometry_idealised_grid_ISMIP_HOM_B(   refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_C' .OR. &
+            choice_refgeo_idealised == 'ISMIP_HOM_D') THEN
+      ! The ISMIP-HOM C/D bumpy slope
+      CALL initialise_reference_geometry_idealised_grid_ISMIP_HOM_CD(  refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_E') THEN
+      ! The ISMIP-HOM E Glacier d'Arolla geometry
+      CALL initialise_reference_geometry_idealised_grid_ISMIP_HOM_E(   refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_F') THEN
+      ! The ISMIP-HOM A bumpy slope
+      CALL initialise_reference_geometry_idealised_grid_ISMIP_HOM_F(   refgeo%grid, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'MISMIP+') THEN
+      ! The MISMIP+ fjord geometry
+      CALL initialise_reference_geometry_idealised_grid_MISMIPplus(    refgeo%grid, refgeo)
+#endif
+    ELSE
+      CALL crash('unknown choice_refgeo_idealised "' // TRIM( choice_refgeo_idealised) // '"!')
+    END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 16)
+  
+  END SUBROUTINE initialise_reference_geometry_idealised_grid
+
+  SUBROUTINE initialise_reference_geometry_idealised_grid_flatearth(     grid, refgeo)
+    ! Initialise reference geometry according to an idealised world
+    !
+    ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
+     
+    IMPLICIT NONE
+      
+    ! In/output variables:
+    TYPE(type_grid),                INTENT(IN)    :: grid
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_grid_flatearth'
+    INTEGER                                       :: i,j
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+      
+    DO i = 1, grid%nx
+    DO j = 1, grid%ny
+      refgeo%Hi_grid( i,j) = 0._dp
+      refgeo%Hb_grid( i,j) = 0._dp
+      refgeo%Hs_grid( i,j) = 0._dp
+    END DO
+    END DO
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+  
+  END SUBROUTINE initialise_reference_geometry_idealised_grid_flatearth
+
+  SUBROUTINE setup_idealised_geometry_grid( grid, region_name, dx)
+    ! Set up a square grid for the idealised reference geometry (since it is now not provided externally)
+  
+    IMPLICIT NONE  
+    
+    ! In/output variables:
+    TYPE(type_grid),                 INTENT(INOUT)     :: grid
+    CHARACTER(LEN=3),                INTENT(IN)        :: region_name
+    REAL(dp),                        INTENT(IN)        :: dx
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'setup_idealised_geometry_grid'
+    INTEGER                                            :: nsx, nsy, i, j, n
+    REAL(dp)                                           :: xmin, xmax, ymin, ymax, xmid, ymid
+    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    ! Assign dummy values to suppress compiler warnings
+    xmin = 0._dp
+    xmax = 0._dp
+    ymin = 0._dp
+    ymax = 0._dp
+    xmid = 0._dp
+    ymid = 0._dp
+    nsx  = 0
+    nsy  = 0
+    
+  
+    grid%dx = dx
+
+    ! Resolution, domain size, and projection parameters for this region are determined from the config
+    IF     (region_name == 'NAM') THEN
+      xmin = C%xmin_NAM
+      xmax = C%xmax_NAM
+      ymin = C%ymin_NAM
+      ymax = C%ymax_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      xmin = C%xmin_EAS
+      xmax = C%xmax_EAS
+      ymin = C%ymin_EAS
+      ymax = C%ymax_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      xmin = C%xmin_GRL
+      xmax = C%xmax_GRL
+      ymin = C%ymin_GRL
+      ymax = C%ymax_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      xmin = C%xmin_ANT
+      xmax = C%xmax_ANT
+      ymin = C%ymin_ANT
+      ymax = C%ymax_ANT
+    END IF
+    
+    ! Determine the number of grid cells we can fit in this domain
+    xmid = (xmax + xmin) / 2._dp
+    ymid = (ymax + ymin) / 2._dp
+    nsx  = FLOOR( (xmax - xmid) / grid%dx)
+    nsy  = FLOOR( (ymax - ymid) / grid%dx)
+    
+    ! Small exceptions for very weird benchmark experiments
+    IF (C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'SSA_icestream') nsx = 3
+    IF (C%choice_refgeo_init_ANT == 'idealised' .AND. C%choice_refgeo_init_idealised == 'ISMIP_HOM_E')   nsx = 25
+    
+    grid%nx = 1 + 2*nsx
+    grid%ny = 1 + 2*nsy
+    
+    ! Assign range to each processor
+    CALL partition_list( grid%nx, par%i, par%n, grid%i1, grid%i2)
+    CALL partition_list( grid%ny, par%i, par%n, grid%j1, grid%j2)
+    
+    ! Allocate shared memory for x and y
+    allocate( grid%x( grid%nx ))
+    allocate( grid%y( grid%ny ))
+    
+    ! Fill in x and y
+    DO i = 1, grid%nx
+      grid%x( i) = -nsx*grid%dx + (i-1)*grid%dx
+    END DO
+    DO j = 1, grid%ny
+      grid%y( j) = -nsy*grid%dx + (j-1)*grid%dx
+    END DO
+    
+    grid%xmin = MINVAL(grid%x)
+    grid%xmax = MAXVAL(grid%x)
+    grid%ymin = MINVAL(grid%y)
+    grid%ymax = MAXVAL(grid%y)
+      
+    ! Tolerance; points lying within this distance of each other are treated as identical
+    grid%tol_dist = ((grid%xmax - grid%xmin) + (grid%ymax - grid%ymin)) * tol / 2._dp
+    
+    ! Set up grid-to-vector translation tables
+    grid%n  = grid%nx * grid%ny
+    allocate( grid%ij2n (grid%nx, grid%ny))
+    allocate( grid%n2ij (grid%n , 2 ))
+    n = 0
+    do i = 1, grid%nx
+      if (MOD(i,2) == 1) then
+        do j = 1, grid%ny
+          n = n+1
+          grid%ij2n( i,j) = n
+          grid%n2ij( n,:) = [i,j]
+        end do
+      else
+        do j = grid%ny, 1, -1
+          n = n+1
+          grid%ij2n( i,j) = n
+          grid%n2ij( n,:) = [i,j]
+        end do
+      end if
+    end do
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name )
+    
+  END SUBROUTINE setup_idealised_geometry_grid
+
 ! ===== Secondary data =====
 ! ==========================
 
@@ -480,6 +692,97 @@ contains
 
   end subroutine calc_reference_geometry_secondary_data
 
+  ! Initialise a reference geometry according to an idealised world on the model mesh
+  SUBROUTINE initialise_reference_geometry_idealised_mesh( mesh, refgeo, choice_refgeo_idealised)
+    ! Initialise a reference geometry according to an idealised world
+     
+    IMPLICIT NONE
+      
+    ! In/output variables:
+    TYPE(type_mesh),                INTENT(IN)    :: mesh
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+    CHARACTER(LEN=256),             INTENT(IN)    :: choice_refgeo_idealised
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh'
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+    
+    IF     (choice_refgeo_idealised == 'flatearth') THEN
+      ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
+      CALL initialise_reference_geometry_idealised_mesh_flatearth(     mesh, refgeo)
+#if 0  
+    ELSEIF (choice_refgeo_idealised == 'Halfar') THEN
+      ! The Halfar dome solution at t = 0
+      CALL initialise_reference_geometry_idealised_mesh_Halfar(        mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'Bueler') THEN
+      ! The Bueler dome solution at t = 0
+      CALL initialise_reference_geometry_idealised_mesh_Bueler(        mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'SSA_icestream') THEN
+      ! The SSA_icestream infinite slab on a flat slope
+      CALL initialise_reference_geometry_idealised_mesh_SSA_icestream( mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'MISMIP_mod') THEN
+      ! The MISMIP_mod cone-shaped island
+      CALL initialise_reference_geometry_idealised_mesh_MISMIP_mod(    mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_A') THEN
+      ! The ISMIP-HOM A bumpy slope
+      CALL initialise_reference_geometry_idealised_mesh_ISMIP_HOM_A(   mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_B') THEN
+      ! The ISMIP-HOM B bumpy slope
+      CALL initialise_reference_geometry_idealised_mesh_ISMIP_HOM_B(   mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_C' .OR. &
+            choice_refgeo_idealised == 'ISMIP_HOM_D') THEN
+      ! The ISMIP-HOM C/D bumpy slope
+      CALL initialise_reference_geometry_idealised_mesh_ISMIP_HOM_CD(  mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_E') THEN
+      ! The ISMIP-HOM E Glacier d'Arolla geometry
+      CALL initialise_reference_geometry_idealised_mesh_ISMIP_HOM_E(   mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP_HOM_F') THEN
+      ! The ISMIP-HOM A bumpy slope
+      CALL initialise_reference_geometry_idealised_mesh_ISMIP_HOM_F(   mesh, refgeo)
+    ELSEIF (choice_refgeo_idealised == 'MISMIP+') THEN
+      ! The MISMIP+ fjord geometry
+      CALL initialise_reference_geometry_idealised_mesh_MISMIPplus(    mesh, refgeo)
+#endif
+    ELSE
+      CALL crash('unknown choice_refgeo_idealised "' // TRIM( choice_refgeo_idealised) // '"!')
+    END IF
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 3)
+  
+  END SUBROUTINE initialise_reference_geometry_idealised_mesh
+
+  SUBROUTINE initialise_reference_geometry_idealised_mesh_flatearth(     mesh, refgeo)
+    ! Initialise reference geometry according to an idealised world
+    !
+    ! Simply a flat, empty earth. Used for example in the EISMINT-1 benchmark experiments
+     
+    IMPLICIT NONE
+      
+    ! In/output variables:
+    TYPE(type_mesh),                INTENT(IN)    :: mesh
+    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
+    
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'initialise_reference_geometry_idealised_mesh_flatearth'
+    INTEGER                                       :: vi
+    
+    ! Add routine to path
+    CALL init_routine( routine_name)
+      
+    DO vi = mesh%vi1, mesh%vi2
+      refgeo%Hi( vi) = 0._dp
+      refgeo%Hb( vi) = 0._dp
+      refgeo%Hs( vi) = 0._dp
+    END DO
+    
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+  
+  END SUBROUTINE initialise_reference_geometry_idealised_mesh_flatearth
+
 ! ===== Mesh mapping =====
 ! ========================
 
@@ -541,7 +844,7 @@ contains
         ! Idealised geometry
 
         ! Calculate the exact solution directly on the mesh
-        call crash('choice_refgeo_init - idealised not implemented yet...')
+        call initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
 
       case ('realistic')
         ! Realistic geometry
@@ -607,8 +910,7 @@ contains
         ! Idealised geometry
 
         ! Calculate the exact solution directly on the mesh
-        call crash('choice_refgeo_PD - idealised not implemented yet...')
-
+        call initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
       case ('realistic')
         ! Realistic geometry
 
@@ -659,7 +961,7 @@ contains
         ! Idealised geometry
 
         ! Calculate the exact solution directly on the mesh
-        call crash('choice_refgeo_GIAeq - idealised not implemented yet...')
+        call initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
 
       case ('realistic')
         ! Realistic geometry

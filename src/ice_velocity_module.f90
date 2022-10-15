@@ -223,7 +223,7 @@ CONTAINS
 
       ! Apply the sub-grid grounded fraction
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**.5_dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**2._dp
       END DO
       CALL sync
 
@@ -1000,7 +1000,7 @@ CONTAINS
     ! Apply the sub-grid grounded fraction
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**.5_dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**2._dp
       END DO
       CALL sync
     END IF
@@ -2111,6 +2111,10 @@ CONTAINS
         ! Velocity fields containing the SSA solution on the b-grid
         CALL allocate_shared_dp_1D(   mesh%nTri,              ice%u_base_SSA_b          , ice%wu_base_SSA_b         )
         CALL allocate_shared_dp_1D(   mesh%nTri,              ice%v_base_SSA_b          , ice%wv_base_SSA_b         )
+
+        ! Give it a werwfwef value plssss
+        ice%u_base_SSA_b = 0.1_dp
+        ice%v_base_SSA_b = 0.1_dp
       END IF
 
       ! Physical terms in the SSA/DIVA

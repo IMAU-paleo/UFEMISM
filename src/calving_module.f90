@@ -118,7 +118,7 @@ CONTAINS
       IF (ice%mask_cf_a( vi) == 1) THEN
         ! If its effective (shelf) or modelled (sheet) thickness is below the threshold
         IF ( (ice%mask_shelf_a( vi) == 1 .AND. ice%Hi_eff_cf_a( vi) < C%calving_threshold_thickness_shelf) .OR. &
-             (ice%mask_sheet_a( vi) == 1 .AND. ice%Hi_a( vi)        < C%calving_threshold_thickness_sheet) ) THEN
+             (ice%mask_sheet_a( vi) == 1 .AND. ice%Hi_eff_cf_a( vi) < C%calving_threshold_thickness_sheet) ) THEN
           ! Remove ice from this vertex
           ice%Hi_a( vi) = 0._dp
           ! Calving event occurred. This will cause the calving loop to

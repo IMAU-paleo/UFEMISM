@@ -789,9 +789,11 @@ CONTAINS
         ice%Hi_eff_cf_a(         vi) = 0._dp
       END IF
 
+      ! Floating calving front
       IF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_shelf_a( vi) == 1) THEN
 
         ! First check if any non-calving-front neighbours actually exist
+        has_noncf_neighbours = .FALSE.
         DO ci = 1, mesh%nC( vi)
           vc = mesh%C( vi,ci)
           IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
@@ -825,6 +827,44 @@ CONTAINS
         ! Calculate ice-filled fraction
         ice%float_margin_frac_a( vi) = ice%Hi_a( vi) / Hi_neighbour_max
         ice%Hi_eff_cf_a(         vi) = Hi_neighbour_max
+
+      END IF
+
+      ! Grounded calving front
+      IF (ice%mask_cf_a( vi) == 1 .AND. ice%mask_sheet_a( vi) == 1) THEN
+
+        ! First check if any non-calving-front neighbours actually exist
+        DO ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+            has_noncf_neighbours = .TRUE.
+          END IF
+        END DO
+
+        ! If not, then the effective thickness is just the vertex one
+        IF (.NOT. has_noncf_neighbours) THEN
+          ice%Hi_eff_cf_a( vi) = ice%Hi_a( vi)
+          CYCLE
+        END IF
+
+        ! If so, find the ice thickness the thickest non-calving-front neighbour
+        Hi_neighbour_max = 0._dp
+        DO ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          IF (ice%mask_ice_a( vc) == 1 .AND. ice%mask_cf_a( vc) == 0) THEN
+            Hi_neighbour_max = MAX( Hi_neighbour_max, ice%Hi_a( vc))
+          END IF
+        END DO
+
+        ! If the thickest non-calving-front neighbour has thinner ice,
+        ! then the effective thickness is just the vertex one
+        IF (Hi_neighbour_max < ice%Hi_a( vi)) THEN
+          ice%Hi_eff_cf_a( vi) = ice%Hi_a( vi)
+          CYCLE
+        END IF
+
+        ! Assing the effective ice thickness
+        ice%Hi_eff_cf_a( vi) = Hi_neighbour_max
 
       END IF
 

@@ -1794,7 +1794,7 @@ CONTAINS
       ! Nothing to do for now. Just return.
       CALL finalise_routine( routine_name)
       RETURN
-    ELSEIF (time >= C%basal_sliding_inv_t_end) THEN
+    ELSEIF (time > C%basal_sliding_inv_t_end) THEN
       ! Inversion is done. Use running average of bed roughness.
       ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_ave_a( mesh%vi1:mesh%vi2)
       ! And return.
@@ -1825,15 +1825,8 @@ CONTAINS
       ! Invert only where the model has grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
 
-        ! Check if grounded vertex is marginal or interior ice.
-        ! If marginal, override its value during extrapolation.
-        IF (ice%mask_margin_a( vi) == 1 .OR. ice%mask_gl_a( vi) == 1) THEN
-          ! Mark this vertex as ice margin/grounding-line
-          mask( vi) = 1
-        ELSE
-          ! Mark this vertex as grounded ice
-          mask( vi) = 2
-        END IF
+        ! Mark this vertex as grounded ice
+        mask( vi) = 2
 
         ! If the difference/fraction is outside the specified tolerance
         IF (ABS(h_delta) >= C%basal_sliding_inv_tol_diff .OR. &
@@ -1930,7 +1923,7 @@ CONTAINS
         ! This vertex is not grounded ice sheet, so mark it for later extrapolation
         mask( vi) = 1
 
-      END IF ! (ice%mask_sheet_a( vi) == 1)
+      END IF ! ice%mask_sheet_a( vi) == 1
 
     END DO
     CALL sync

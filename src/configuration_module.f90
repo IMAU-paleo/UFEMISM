@@ -545,7 +545,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
     CHARACTER(LEN=256)  :: name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
     CHARACTER(LEN=256)  :: name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
-    LOGICAL             :: do_combine_data_and_inverted_ocean_config   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values
+    LOGICAL             :: use_inverted_ocean_config                   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values
 
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
@@ -1299,7 +1299,7 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_PD_obs_ocean
     CHARACTER(LEN=256)                  :: name_ocean_temperature_obs
     CHARACTER(LEN=256)                  :: name_ocean_salinity_obs
-    LOGICAL                             :: do_combine_data_and_inverted_ocean
+    LOGICAL                             :: use_inverted_ocean
 
     ! GCM snapshots in the matrix_warm_cold option
     CHARACTER(LEN=256)                  :: filename_GCM_ocean_snapshot_PI
@@ -2192,7 +2192,7 @@ CONTAINS
                      filename_PD_obs_ocean_config,                    &
                      name_ocean_temperature_obs_config,               &
                      name_ocean_salinity_obs_config,                  &
-                     do_combine_data_and_inverted_ocean_config,       &
+                     use_inverted_ocean_config,                       &
                      filename_GCM_ocean_snapshot_PI_config,           &
                      filename_GCM_ocean_snapshot_warm_config,         &
                      filename_GCM_ocean_snapshot_cold_config,         &
@@ -3046,7 +3046,7 @@ CONTAINS
     C%filename_PD_obs_ocean                    = filename_PD_obs_ocean_config
     C%name_ocean_temperature_obs               = name_ocean_temperature_obs_config
     C%name_ocean_salinity_obs                  = name_ocean_salinity_obs_config
-    C%do_combine_data_and_inverted_ocean       = do_combine_data_and_inverted_ocean_config
+    C%use_inverted_ocean                       = use_inverted_ocean_config
 
     ! GCM snapshots in the matrix_warm_cold option
     C%filename_GCM_ocean_snapshot_PI           = filename_GCM_ocean_snapshot_PI_config

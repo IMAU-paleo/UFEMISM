@@ -588,13 +588,38 @@ CONTAINS
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%PD_obs,  name = 'PD_obs' )
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%applied, name = 'applied')
 
-    ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,
-    ! extrapolate mapped ocean data to cover the entire 3D domain, and finally
-    ! map to the actual ice model resolution
-    CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs, region%ocean_matrix%PD_obs, C%filename_PD_obs_ocean)
-
     ! Combine with inverted ocean temperatures. Or not.
-    IF (.NOT. C%do_combine_data_and_inverted_ocean) THEN
+    IF (C%use_inverted_ocean) THEN
+
+      DO k = 1, C%nz_ocean
+      DO vi = region%mesh%vi1, region%mesh%vi2
+
+        ! Initialise PD_obs ocean forcing with restart data
+        region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)  = region%restart%S_ocean_base( vi)
+
+        ! Initialise applied ocean forcing with restart data
+        region%ocean_matrix%applied%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
+
+      END DO
+      END DO
+      CALL sync
+
+    ELSE
+
+      ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,
+      ! extrapolate mapped ocean data to cover the entire 3D domain, and finally
+      ! map to the actual ice model resolution
+      CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs, region%ocean_matrix%PD_obs, C%filename_PD_obs_ocean)
 
       DO k = 1, C%nz_ocean
       DO vi = region%mesh%vi1, region%mesh%vi2
@@ -610,61 +635,6 @@ CONTAINS
         region%ocean_matrix%applied%S_ocean(          vi,k) = region%ocean_matrix%PD_obs%S_ocean(          vi,k)
         region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
         region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
-
-      END DO
-      END DO
-      CALL sync
-
-    ELSE
-
-      DO k = 1, C%nz_ocean
-      DO vi = region%mesh%vi1, region%mesh%vi2
-
-        ! ! First check if any inverted neighbours actually exist, or
-        ! ! if the vertex iself has an inverted value
-        ! has_inverted_neighbours = .FALSE.
-        ! DO ci = 1, region%mesh%nC( vi)
-        !   vc = region%mesh%C( vi,ci)
-        !   IF (region%restart%M_ocean_base( vi) == 1 .OR. region%restart%M_ocean_base( vc) == 1) THEN
-        !     has_inverted_neighbours = .TRUE.
-        !     EXIT
-        !   END IF
-        ! END DO
-
-        ! IF (has_inverted_neighbours) THEN
-
-          ! Initialise PD_obs ocean forcing with present-day observations
-          region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)  = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
-          region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
-          region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)  = region%restart%S_ocean_base( vi)
-
-          ! Initialise applied ocean forcing with present-day observations
-          region%ocean_matrix%applied%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
-          region%ocean_matrix%applied%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
-          region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
-          region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
-
-        ! ELSE
-
-        !   ! PD_obs doesn't have a bias-corrected version
-        !   region%ocean_matrix%PD_obs%T_ocean_corr_ext(  vi,k) = region%ocean_matrix%PD_obs%T_ocean_ext( vi,k)
-        !   region%ocean_matrix%PD_obs%S_ocean_corr_ext(  vi,k) = region%ocean_matrix%PD_obs%S_ocean_ext( vi,k)
-
-        !   ! Initialise applied ocean forcing with present-day observations
-        !   region%ocean_matrix%applied%T_ocean(          vi,k) = region%ocean_matrix%PD_obs%T_ocean(          vi,k)
-        !   region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
-        !   region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
-        !   region%ocean_matrix%applied%S_ocean(          vi,k) = region%ocean_matrix%PD_obs%S_ocean(          vi,k)
-        !   region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
-        !   region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
-
-
-        ! END IF
 
       END DO
       END DO
@@ -1359,28 +1329,18 @@ CONTAINS
     ! First, check if any existing header matches the current ice model set-up.
     CALL check_for_matching_ocean_header( region, filename_ocean_glob, foundmatch, ocean_reg%hires_ocean_foldername)
 
-    IF (C%do_combine_data_and_inverted_ocean .AND. ocean_reg%name == 'PD_obs') THEN
+    IF (foundmatch) THEN
 
-      IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Extrapolating combination of inverted temperatures and global data...'
-      CALL map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires, ocean_reg%name)
-      CALL write_hires_combined_ocean_data_to_file( hires)
+      IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Found valid extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
+      CALL get_hires_ocean_data_from_file( region%mesh, hires, ocean_reg%hires_ocean_foldername)
 
     ELSE
+      ! No header fitting the current ice model set-up was found. Create a new one describing
+      ! the current set-up, and generate extrapolated ocean data files from scratch.
+      IF (par%master) WRITE(0,*) '   Creating new extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"...'
 
-      IF (foundmatch) THEN
-
-        IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Found valid extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
-        CALL get_hires_ocean_data_from_file( region%mesh, hires, ocean_reg%hires_ocean_foldername)
-
-      ELSE
-        ! No header fitting the current ice model set-up was found. Create a new one describing
-        ! the current set-up, and generate extrapolated ocean data files from scratch.
-        IF (par%master) WRITE(0,*) '   Creating new extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"...'
-
-        CALL map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires, ocean_reg%name)
-        CALL write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
-
-      END IF
+      CALL map_and_extrapolate_hires_ocean_data( region, ocean_glob, hires, ocean_reg%name)
+      CALL write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, ocean_reg%hires_ocean_foldername)
 
     END IF
 
@@ -1537,120 +1497,6 @@ CONTAINS
 
   END SUBROUTINE get_hires_ocean_data_from_file
 
-  SUBROUTINE get_hires_combined_ocean_data_from_file( mesh, hires)
-    ! Read high-resolution combined extrapolated ocean data from an external file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_hires_combined_ocean_data_from_file'
-    INTEGER                                            :: i,j,n
-    REAL(dp), PARAMETER                                :: tol = 1E-9_dp
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Check if the NetCDF file has all the required dimensions and variables
-    CALL allocate_shared_int_0D( hires%grid%nx,  hires%grid%wnx)
-    CALL allocate_shared_int_0D( hires%grid%ny,  hires%grid%wny)
-    IF (par%master) THEN
-      hires%netcdf%filename = TRIM(C%output_dir) // 'extrapolated_ocean_data_combined.nc'
-      CALL inquire_extrapolated_ocean_file( hires)
-    END IF
-    CALL sync
-
-    ! Allocate shared memory for x,y and the actual data
-    CALL allocate_shared_dp_1D( hires%grid%nx,                hires%grid%x,  hires%grid%wx )
-    CALL allocate_shared_dp_1D(                hires%grid%ny, hires%grid%y,  hires%grid%wy )
-    CALL allocate_shared_dp_3D( hires%grid%nx, hires%grid%ny, C%nz_ocean, hires%T_ocean, hires%wT_ocean)
-    CALL allocate_shared_dp_3D( hires%grid%nx, hires%grid%ny, C%nz_ocean, hires%S_ocean, hires%wS_ocean)
-
-    ! Read the data from the NetCDF file
-    IF (par%master) THEN
-      WRITE(0,*) '    Reading high-resolution extrapolated ocean data from file "', TRIM( hires%netcdf%filename), '"...'
-      CALL read_extrapolated_ocean_file( hires)
-    END IF
-    CALL sync
-
-    ! Allocate shared memory for other grid parameters
-    CALL allocate_shared_dp_0D(  hires%grid%dx,           hires%grid%wdx          )
-    CALL allocate_shared_dp_0D(  hires%grid%xmin,         hires%grid%wxmin        )
-    CALL allocate_shared_dp_0D(  hires%grid%xmax,         hires%grid%wxmax        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymin,         hires%grid%wymin        )
-    CALL allocate_shared_dp_0D(  hires%grid%ymax,         hires%grid%wymax        )
-    CALL allocate_shared_dp_0D(  hires%grid%lambda_M,     hires%grid%wlambda_M    )
-    CALL allocate_shared_dp_0D(  hires%grid%phi_M,        hires%grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  hires%grid%alpha_stereo, hires%grid%walpha_stereo)
-
-    ! Polar stereographic projection parameters and resolution
-    IF (par%master) THEN
-      ! Projection parameters are of course identical to those used for this ice model region
-      hires%grid%lambda_M     = mesh%lambda_M
-      hires%grid%phi_M        = mesh%phi_M
-      hires%grid%alpha_stereo = mesh%alpha_stereo
-      ! But the resolution is different
-      hires%grid%dx           = hires%grid%x( 2) - hires%grid%x( 1)
-      hires%grid%xmin         = hires%grid%x( 1            )
-      hires%grid%xmax         = hires%grid%x( hires%grid%nx)
-      hires%grid%ymin         = hires%grid%y( 1            )
-      hires%grid%ymax         = hires%grid%y( hires%grid%ny)
-    END IF
-    CALL sync
-
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( hires%grid%tol_dist, hires%grid%wtol_dist)
-    IF (par%master) hires%grid%tol_dist = ((hires%grid%xmax - hires%grid%xmin) + (hires%grid%ymax - hires%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                               hires%grid%n,    hires%grid%wn)
-    IF (par%master) hires%grid%n  = hires%grid%nx * hires%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( hires%grid%nx, hires%grid%ny, hires%grid%ij2n, hires%grid%wij2n)
-    CALL allocate_shared_int_2D( hires%grid%n , 2            , hires%grid%n2ij, hires%grid%wn2ij)
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, hires%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, hires%grid%ny
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = hires%grid%ny, 1, -1
-            n = n+1
-            hires%grid%ij2n( i,j) = n
-            hires%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
-
-    ! Assign range to each processor
-    CALL partition_list( hires%grid%nx, par%i, par%n, hires%grid%i1, hires%grid%i2)
-    CALL partition_list( hires%grid%ny, par%i, par%n, hires%grid%j1, hires%grid%j2)
-
-    ! Lat,lon coordinates
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lat, hires%grid%wlat)
-    CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, hires%grid%lon, hires%grid%wlon)
-
-    DO j = 1, hires%grid%ny
-    DO i = hires%grid%i1, hires%grid%i2
-      CALL inverse_oblique_sg_projection( hires%grid%x( i), hires%grid%y( j), hires%grid%lambda_M, hires%grid%phi_M, hires%grid%alpha_stereo, hires%grid%lon( i,j), hires%grid%lat( i,j))
-    END DO
-    END DO
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected=20)
-
-  END SUBROUTINE get_hires_combined_ocean_data_from_file
-
   SUBROUTINE write_hires_extrapolated_ocean_data_to_file( hires, filename_ocean_glob, hires_foldername)
     ! 1. Create a new folder inside the "extrapolated_ocean_files" folder
     ! 2. Create a header file inside this new folder listing the current model settings
@@ -1686,40 +1532,6 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_hires_extrapolated_ocean_data_to_file
-
-  SUBROUTINE write_hires_combined_ocean_data_to_file( hires)
-    ! 1. Create a new folder inside the "extrapolated_ocean_files" folder
-    ! 2. Create a header file inside this new folder listing the current model settings
-    ! 3. Create a NetCDF file inside this new folder
-    ! 4. Write the high-resolution extrapolated ocean data to this NetCDF file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_highres_ocean_data),       INTENT(INOUT) :: hires
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_hires_combined_ocean_data_to_file'
-    CHARACTER(LEN=256)                                 :: hires_ocean_filename
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    hires_ocean_filename = TRIM(C%output_dir) // 'extrapolated_ocean_data_combined.nc'
-
-    ! Create a NetCDF file and write data to it
-    IF (par%master) WRITE(0,*) '    Writing combined inverted and extrapolated ocean data to file "', TRIM(hires_ocean_filename), '"...'
-    CALL create_extrapolated_ocean_file( hires, hires_ocean_filename)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_hires_combined_ocean_data_to_file
 
   SUBROUTINE check_for_matching_ocean_header( region, filename_ocean_glob, foundmatch, hires_foldername)
     ! Inspect all the folder inside the "extrapolated_ocean_files" folder, read their header files,
@@ -2125,81 +1937,6 @@ CONTAINS
     ! Map the data from the global lon/lat-grid to the high-resolution regional x/y-grid
     CALL map_glob_to_grid_3D( ocean_glob%nlat, ocean_glob%nlon, ocean_glob%lat, ocean_glob%lon, hires%grid, ocean_glob%T_ocean, hires%T_ocean)
     CALL map_glob_to_grid_3D( ocean_glob%nlat, ocean_glob%nlon, ocean_glob%lat, ocean_glob%lon, hires%grid, ocean_glob%S_ocean, hires%S_ocean)
-
-    ! ===== Map inverted ocean temperatures at the base of ice shelves (if so specified) =====
-    ! ========================================================================================
-
-    IF (C%do_combine_data_and_inverted_ocean .AND. snap_name == 'PD_obs') THEN
-
-      ! Useful
-      NaN = -1._dp
-      NaN = SQRT( NaN)
-
-      IF (par%master) WRITE(0,'(A)') '     Mapping inverted ocean temperatures from the mesh to the regional x/y-grid...'
-
-      ! ! Allocate shared memory for ice shelf base depth on the mesh
-      ! CALL allocate_shared_dp_1D( region%mesh%nV, Z_ocean_base_lores, wZ_ocean_base_lores)
-
-      ! DO vi = region%mesh%vi1, region%mesh%vi2
-
-      !   DO ci = 1, region%mesh%nC( vi)
-
-      !     vc = region%mesh%C( vi,ci)
-
-      !     IF (region%restart%M_ocean_base( vi) == 1 .OR. &
-      !         region%restart%M_ocean_base( vc) == 1) THEN
-      !       ! Ocean temperature was inverted at some point for this vertex
-      !       Z_ocean_base_lores( vi) = region%restart%Hi( vi) - region%restart%Hs( vi)
-      !       EXIT
-      !     ELSE
-      !       ! Ignore this point
-      !       Z_ocean_base_lores( vi) = NaN
-      !     END IF
-
-      !   END DO
-
-      ! END DO
-
-      ! Allocate shared memory for high-resolution inverted ocean temperatures
-      CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, T_ocean_base_hires, wT_ocean_base_hires)
-      CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, S_ocean_base_hires, wS_ocean_base_hires)
-      CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, M_ocean_base_hires, wM_ocean_base_hires)
-      ! CALL allocate_shared_dp_2D( hires%grid%nx, hires%grid%ny, Z_ocean_base_hires, wZ_ocean_base_hires)
-
-      ! Map inverted ocean temperature from mesh to grid
-      CALL calc_remapping_operator_mesh2grid( region%mesh, hires%grid)
-      CALL map_mesh2grid_2D( region%mesh, hires%grid, region%restart%T_ocean_base, T_ocean_base_hires)
-      CALL map_mesh2grid_2D( region%mesh, hires%grid, region%restart%S_ocean_base, S_ocean_base_hires)
-      CALL map_mesh2grid_2D( region%mesh, hires%grid, REAL(region%restart%M_ocean_base,dp), M_ocean_base_hires)
-      ! CALL map_mesh2grid_2D( region%mesh, hires%grid, Z_ocean_base_lores, Z_ocean_base_hires)
-      CALL deallocate_remapping_operators_mesh2grid( hires%grid)
-
-      ! Replace ocean data with inverted data where available
-      DO j = 1, hires%grid%ny
-      DO i = hires%grid%i1, hires%grid%i2
-
-        t_melt = 0.0939_dp - 0.057_dp * S_ocean_base_hires( i,j) - &
-                 7.64E-04_dp * hires%Hi( i,j) * ice_density / seawater_density
-
-        IF (M_ocean_base_hires( i,j) >= 0.0_dp) THEN
-          DO k = 1, C%nz_ocean
-            hires%T_ocean( i,j,k) = MAX( T_ocean_base_hires( i,j), t_melt - .3_dp)
-            hires%S_ocean( i,j,k) = S_ocean_base_hires( i,j)
-          END DO
-        END IF
-
-      END DO
-      END DO
-      CALL sync
-
-      ! Clean up after yoself!
-      CALL deallocate_shared( wT_ocean_base_hires)
-      CALL deallocate_shared( wS_ocean_base_hires)
-      CALL deallocate_shared( wM_ocean_base_hires)
-      ! CALL deallocate_shared( wZ_ocean_base_hires)
-      ! CALL deallocate_shared( wZ_ocean_base_lores)
-
-    END IF
 
     ! ===== Perform the extrapolation on the high-resolution grid =====
     ! =================================================================
@@ -2820,24 +2557,15 @@ CONTAINS
     ! ===== Read the high-resolution extrapolated ocean data =====
     ! ============================================================
 
-    IF (C%do_combine_data_and_inverted_ocean .AND. ocean_reg%name == 'PD_obs') THEN
-
-      IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Remapping combined ocean data...'
-      CALL get_hires_combined_ocean_data_from_file( mesh_new, hires)
-
+    INQUIRE( FILE = ocean_reg%hires_ocean_foldername, EXIST = folder_exists)
+    IF (folder_exists) THEN
+      IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Found extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
+      CALL get_hires_ocean_data_from_file( mesh_new, hires, ocean_reg%hires_ocean_foldername)
     ELSE
-
-      INQUIRE( FILE = ocean_reg%hires_ocean_foldername, EXIST = folder_exists)
-      IF (folder_exists) THEN
-        IF (par%master) WRITE(0,*) '   ', TRIM(ocean_reg%name), ': Found extrapolated ocean data in folder "', TRIM( ocean_reg%hires_ocean_foldername), '"'
-        CALL get_hires_ocean_data_from_file( mesh_new, hires, ocean_reg%hires_ocean_foldername)
-      ELSE
-        ! No header fitting the current ice model set-up was found.
-        ! This should not occur, so throw an error and abort.
-        IF (par%master) WRITE(0,*) 'remap_ocean_data - ERROR: no valid extrapolated ocean data found during mesh update!'
-        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-      END IF
-
+      ! No header fitting the current ice model set-up was found.
+      ! This should not occur, so throw an error and abort.
+      IF (par%master) WRITE(0,*) 'remap_ocean_data - ERROR: no valid extrapolated ocean data found during mesh update!'
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
     END IF
 
     ! ===== Map extrapolated data from the high-resolution grid to the actual ice-model mesh =====

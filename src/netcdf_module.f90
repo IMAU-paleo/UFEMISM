@@ -3010,7 +3010,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_BMB_shelf)
     END IF
-    IF (C%do_combine_data_and_inverted_ocean) THEN
+    IF (C%use_inverted_ocean) THEN
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_T_ocean_base)
       CALL inquire_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_S_ocean_base)
       CALL inquire_int_var(    netcdf%ncid, netcdf%name_var_M_ocean_base, (/ netcdf%id_dim_vi, netcdf%id_dim_time /), netcdf%id_var_M_ocean_base)
@@ -3170,7 +3170,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion' .AND. C%BMB_inv_use_restart_field) THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_BMB_shelf, restart%BMB_shelf, start = (/ 1, ti /) ))
     END IF
-    IF (C%do_combine_data_and_inverted_ocean) THEN
+    IF (C%use_inverted_ocean) THEN
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_T_ocean_base, restart%T_ocean_base, start = (/ 1, ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_S_ocean_base, restart%S_ocean_base, start = (/ 1, ti /) ))
       CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_M_ocean_base, restart%M_ocean_base, start = (/ 1, ti /) ))

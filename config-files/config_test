@@ -389,7 +389,7 @@
   filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
   name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
   name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
-  do_combine_data_and_inverted_ocean_config   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values from a restart file
+  use_inverted_ocean_config                   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values from a restart file
 
   ! GCM snapshots in the matrix_warm_cold option
   filename_GCM_ocean_snapshot_PI_config       = 'data/CMIP5/ocn/CCSM_CMIP5_piControl_ocean.nc'

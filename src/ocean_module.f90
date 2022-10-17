@@ -578,7 +578,8 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ocean_model_PD_obs_regional'
-    INTEGER                                            :: vi,k
+    INTEGER                                            :: vi,k,ci,vc
+    LOGICAL                                            :: has_inverted_neighbours
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -592,32 +593,7 @@ CONTAINS
     ! map to the actual ice model resolution
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs, region%ocean_matrix%PD_obs, C%filename_PD_obs_ocean)
 
-    ! ! If so specified, replace ocean temperatures and salinity with
-    ! ! inverted for values from the previous simulation, only where
-    ! ! the inversion was actually applied
-    ! IF (C%do_combine_data_and_inverted_ocean) THEN
-
-    !   DO k = 1, C%nz_ocean
-    !   DO vi = region%mesh%vi1, region%mesh%vi2
-
-    !     IF (region%restart%M_ocean_base( vi) == 1) THEN
-
-    !       ! Replace PD_obs ocean data with inverted values from last run
-    !       region%ocean_matrix%PD_obs%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
-    !       region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
-    !       region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
-    !       region%ocean_matrix%PD_obs%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
-    !       region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
-    !       region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
-
-    !     END IF
-
-    !   END DO
-    !   END DO
-    !   CALL sync
-
-    ! END IF
-
+    ! Combine with inverted ocean temperatures. Or not.
     IF (.NOT. C%do_combine_data_and_inverted_ocean) THEN
 
       DO k = 1, C%nz_ocean
@@ -644,21 +620,51 @@ CONTAINS
       DO k = 1, C%nz_ocean
       DO vi = region%mesh%vi1, region%mesh%vi2
 
-        ! Initialise PD_obs ocean forcing with present-day observations
-        region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)  = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
-        region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
-        region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)  = region%restart%S_ocean_base( vi)
+        ! ! First check if any inverted neighbours actually exist, or
+        ! ! if the vertex iself has an inverted value
+        ! has_inverted_neighbours = .FALSE.
+        ! DO ci = 1, region%mesh%nC( vi)
+        !   vc = region%mesh%C( vi,ci)
+        !   IF (region%restart%M_ocean_base( vi) == 1 .OR. region%restart%M_ocean_base( vc) == 1) THEN
+        !     has_inverted_neighbours = .TRUE.
+        !     EXIT
+        !   END IF
+        ! END DO
 
-        ! Initialise applied ocean forcing with present-day observations
-        region%ocean_matrix%applied%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
-        region%ocean_matrix%applied%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
-        region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
-        region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
+        ! IF (has_inverted_neighbours) THEN
+
+          ! Initialise PD_obs ocean forcing with present-day observations
+          region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)  = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
+          region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
+          region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)  = region%restart%S_ocean_base( vi)
+
+          ! Initialise applied ocean forcing with present-day observations
+          region%ocean_matrix%applied%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
+          region%ocean_matrix%applied%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
+          region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
+          region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
+
+        ! ELSE
+
+        !   ! PD_obs doesn't have a bias-corrected version
+        !   region%ocean_matrix%PD_obs%T_ocean_corr_ext(  vi,k) = region%ocean_matrix%PD_obs%T_ocean_ext( vi,k)
+        !   region%ocean_matrix%PD_obs%S_ocean_corr_ext(  vi,k) = region%ocean_matrix%PD_obs%S_ocean_ext( vi,k)
+
+        !   ! Initialise applied ocean forcing with present-day observations
+        !   region%ocean_matrix%applied%T_ocean(          vi,k) = region%ocean_matrix%PD_obs%T_ocean(          vi,k)
+        !   region%ocean_matrix%applied%T_ocean_ext(      vi,k) = region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
+        !   region%ocean_matrix%applied%T_ocean_corr_ext( vi,k) = region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
+        !   region%ocean_matrix%applied%S_ocean(          vi,k) = region%ocean_matrix%PD_obs%S_ocean(          vi,k)
+        !   region%ocean_matrix%applied%S_ocean_ext(      vi,k) = region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
+        !   region%ocean_matrix%applied%S_ocean_corr_ext( vi,k) = region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
+
+
+        ! END IF
 
       END DO
       END DO
@@ -1078,32 +1084,6 @@ CONTAINS
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_PI,   region%ocean_matrix%GCM_PI,   C%filename_GCM_ocean_snapshot_PI  )
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_warm, region%ocean_matrix%GCM_warm, C%filename_GCM_ocean_snapshot_warm)
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_cold, region%ocean_matrix%GCM_cold, C%filename_GCM_ocean_snapshot_cold)
-
-    ! ! If so specified, replace ocean temperatures and salinity with
-    ! ! inverted for values from the previous simulation, only where
-    ! ! the inversion was actually applied
-    ! IF (C%do_combine_data_and_inverted_ocean) THEN
-
-    !   DO k = 1, C%nz_ocean
-    !   DO vi = region%mesh%vi1, region%mesh%vi2
-
-    !     IF (region%restart%M_ocean_base( vi) == 1) THEN
-
-          ! Replace PD_obs ocean data with inverted values from last run
-          ! region%ocean_matrix%PD_obs%T_ocean(          vi,k) = region%restart%T_ocean_base( vi)
-          ! region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k) = region%restart%T_ocean_base( vi)
-          ! region%ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k) = region%restart%T_ocean_base( vi)
-          ! region%ocean_matrix%PD_obs%S_ocean(          vi,k) = region%restart%S_ocean_base( vi)
-          ! region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k) = region%restart%S_ocean_base( vi)
-          ! region%ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k) = region%restart%S_ocean_base( vi)
-
-    !     END IF
-
-    !   END DO
-    !   END DO
-    !   CALL sync
-
-    ! END IF
 
     ! Correct regional ocean data for GCM bias
     CALL correct_GCM_bias_ocean( region%mesh, region%ocean_matrix, region%ocean_matrix%GCM_warm)
@@ -2201,9 +2181,9 @@ CONTAINS
         t_melt = 0.0939_dp - 0.057_dp * S_ocean_base_hires( i,j) - &
                  7.64E-04_dp * hires%Hi( i,j) * ice_density / seawater_density
 
-        IF (M_ocean_base_hires( i,j) >= 0.50_dp) THEN
+        IF (M_ocean_base_hires( i,j) >= 0.0_dp) THEN
           DO k = 1, C%nz_ocean
-            hires%T_ocean( i,j,k) = MAX( T_ocean_base_hires( i,j), t_melt - .2_dp)
+            hires%T_ocean( i,j,k) = MAX( T_ocean_base_hires( i,j), t_melt - .3_dp)
             hires%S_ocean( i,j,k) = S_ocean_base_hires( i,j)
           END DO
         END IF

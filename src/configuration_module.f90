@@ -408,9 +408,12 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
     ! Partially fixed geometry, useful for initialisation and inversion runs
-    LOGICAL             :: fixed_shelf_geometry_config                 = .FALSE.                          ! Keep geometry of floating ice fixed
-    LOGICAL             :: fixed_sheet_geometry_config                 = .FALSE.                          ! Keep geometry of grounded ice fixed
-    LOGICAL             :: fixed_grounding_line_config                 = .FALSE.                          ! Keep ice thickness at the grounding line fixed
+    ! A value of 1 means fully fixed, 0 means fully free, values in between
+    ! create a "delayed" ice thickness evolution.
+    REAL(dp)            :: fixed_sheet_geometry_config                 = 0._dp                            ! Keep geometry of grounded ice fixed
+    REAL(dp)            :: fixed_shelf_geometry_config                 = 0._dp                            ! Keep geometry of floating ice fixed
+    REAL(dp)            :: fixed_grounding_line_g_config               = 0._dp                            ! Keep ice thickness at the grounded side of grounding line fixed
+    REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Keep ice thickness at the floating side of grounding line fixed
 
     ! Memory of first dHi_dt of simulation
     LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt
@@ -1161,9 +1164,10 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_mask_noice_ANT
 
     ! Partially fixed geometry, useful for initialisation and inversion runs
-    LOGICAL                             :: fixed_shelf_geometry
-    LOGICAL                             :: fixed_sheet_geometry
-    LOGICAL                             :: fixed_grounding_line
+    REAL(dp)                            :: fixed_sheet_geometry
+    REAL(dp)                            :: fixed_shelf_geometry
+    REAL(dp)                            :: fixed_grounding_line_g
+    REAL(dp)                            :: fixed_grounding_line_f
 
     ! Memory of previous run during a restart
     LOGICAL                             :: do_use_hi_memory
@@ -2062,9 +2066,10 @@ CONTAINS
                      choice_mask_noice_EAS_config,                    &
                      choice_mask_noice_GRL_config,                    &
                      choice_mask_noice_ANT_config,                    &
-                     fixed_shelf_geometry_config,                     &
                      fixed_sheet_geometry_config,                     &
-                     fixed_grounding_line_config,                     &
+                     fixed_shelf_geometry_config,                     &
+                     fixed_grounding_line_g_config,                   &
+                     fixed_grounding_line_f_config,                   &
                      do_use_hi_memory_config,                         &
                      get_senile_after_config,                         &
                      dHi_dt_window_size_config,                       &
@@ -2906,9 +2911,10 @@ CONTAINS
     C%choice_mask_noice_ANT                    = choice_mask_noice_ANT_config
 
     ! Partially fixed geometry, useful for initialisation and inversion runs
-    C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
     C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
-    C%fixed_grounding_line                     = fixed_grounding_line_config
+    C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
+    C%fixed_grounding_line_g                   = fixed_grounding_line_g_config
+    C%fixed_grounding_line_f                   = fixed_grounding_line_f_config
 
     ! Memory of previous run during a restart
     C%do_use_hi_memory                         = do_use_hi_memory_config

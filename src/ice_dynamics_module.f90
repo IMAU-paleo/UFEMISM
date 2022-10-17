@@ -646,7 +646,8 @@ CONTAINS
   END SUBROUTINE update_ice_thickness
 
   SUBROUTINE fix_ice_thickness( mesh, ice)
-    ! Check if we want to keep the ice thickness fixed in time for specific areas
+    ! Check if we want to keep the ice thickness fixed in time for specific areas,
+    ! or delay its evolution by a given percentage each time step.
 
     IMPLICIT NONE
 
@@ -656,96 +657,44 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'fix_ice_thickness'
-    INTEGER                                            :: vi, ci, vc
-    LOGICAL                                            :: fix_Hi_here
+    INTEGER                                            :: vi
 
+    ! === Initialisation ===
+    ! ======================
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! If so specified, keep sheet geometry fixed (incl. first adjacent shelf points)
-    IF (C%fixed_sheet_geometry) THEN
-      DO vi = mesh%vi1, mesh%vi2
+    ! === Fix or delay ====
+    ! =====================
 
-        fix_Hi_here = .FALSE.
+    DO vi = mesh%vi1, mesh%vi2
 
-        IF (ice%mask_sheet_a( vi) == 1) THEN
-          fix_Hi_here = .TRUE.
-        ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
-          DO ci = 1, mesh%nC( vi)
-            vc = mesh%C( vi,ci)
-            IF (ice%mask_sheet_a( vc) == 1) THEN
-              fix_Hi_here = .TRUE.
-              EXIT
-            END IF
-          END DO
-        END IF
+      ! Grounding line (grounded side)
+      IF (ice%mask_gl_a( vi) == 1) THEN
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_g + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_g)
 
-        IF (fix_Hi_here) THEN
-          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
-        END IF
+      ! Grounding line (floating side)
+      ELSEIF (ice%mask_glf_a( vi) == 1) THEN
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_f + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_f)
 
-      END DO
-      CALL sync
-    END IF
+      ! Grounded ice
+      ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_sheet_geometry + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_sheet_geometry)
 
-    ! If so specified, keep GL position fixed (both grounded and floating sides)
-    IF (C%fixed_grounding_line) THEN
-      DO vi = mesh%vi1, mesh%vi2
+      ! Floating ice
+      ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_shelf_geometry + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_shelf_geometry)
+      END IF
 
-        fix_Hi_here = .FALSE.
+    END DO
 
-        IF (ice%mask_sheet_a( vi) == 1) THEN
-          DO ci = 1, mesh%nC( vi)
-            vc = mesh%C( vi,ci)
-            IF (ice%mask_shelf_a( vc) == 1) THEN
-              fix_Hi_here = .TRUE.
-              EXIT
-            END IF
-          END DO
-        ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
-          DO ci = 1, mesh%nC( vi)
-            vc = mesh%C( vi,ci)
-            IF (ice%mask_sheet_a( vc) == 1) THEN
-              fix_Hi_here = .TRUE.
-              EXIT
-            END IF
-          END DO
-        END IF
-
-        IF (fix_Hi_here) THEN
-          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
-        END IF
-
-      END DO
-      CALL sync
-    END IF
-
-    ! If so specified, keep shelf geometry fixed (incl. first adjacent sheet points)
-    IF (C%fixed_shelf_geometry) THEN
-      DO vi = mesh%vi1, mesh%vi2
-
-        fix_Hi_here = .FALSE.
-
-        IF (ice%mask_shelf_a( vi) == 1) THEN
-          fix_Hi_here = .TRUE.
-        ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
-          DO ci = 1, mesh%nC( vi)
-            vc = mesh%C( vi,ci)
-            IF (ice%mask_shelf_a( vc) == 1) THEN
-              fix_Hi_here = .TRUE.
-              EXIT
-            END IF
-          END DO
-        END IF
-
-        IF (fix_Hi_here) THEN
-          ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)
-        END IF
-
-      END DO
-      CALL sync
-    END IF
+    ! === Finalisation ===
+    ! ====================
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

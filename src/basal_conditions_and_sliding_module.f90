@@ -1214,7 +1214,6 @@ CONTAINS
       ! Compute ice basal temperature relative to the pressure melting point of ice
       ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
       ! Compute weight based on temperature difference
-      ! w_ti = EXP((-0.6931_dp/C%slid_submelt_halfpoint) * ti_diff)
       w_ti = 1._dp - (ti_diff**5._dp / 10._dp**5._dp)
       ! Limit weight to [0 1] interval, just in case
       w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
@@ -1838,7 +1837,6 @@ CONTAINS
           ! Compute ice basal temperature relative to the pressure melting point of ice
           ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
           ! Compute scaling factor based on temperature difference
-          ! w_ti = EXP((-0.6931_dp/C%slid_submelt_halfpoint) * ti_diff)
           w_ti = 1._dp - (ti_diff**2._dp / 10._dp**2._dp)
           ! Limit scaling factor to [0 1] interval, just in case
           w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
@@ -1892,17 +1890,6 @@ CONTAINS
 
               ! Compute local minumum limit for bed roughness
               min_lim = C%basal_sliding_inv_phi_min
-
-              ! Increase minimum value for thin ice
-              IF (C%basal_sliding_inv_thin_ice_Hi > 0._dp) THEN
-
-                IF (refgeo%Hi( vi) <= C%basal_sliding_inv_thin_ice_Hi) THEN
-                  min_lim = C%basal_sliding_inv_phi_min + &
-                            (1._dp - refgeo%Hi( vi) / C%basal_sliding_inv_thin_ice_Hi) &
-                            * (C%basal_sliding_inv_phi_min_thin - C%basal_sliding_inv_phi_min)
-                END IF
-
-              END IF
 
               ! Constrain adjusted value to roughness limits
               new_val = MIN(MAX(new_val, min_lim), C%basal_sliding_inv_phi_max)

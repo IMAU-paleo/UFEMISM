@@ -268,9 +268,7 @@
   fixed_grounding_line_g_config               = 0.999                            ! Keep ice thickness at the grounded side of grounding line fixed
   fixed_grounding_line_f_config               = 0.999                            ! Keep ice thickness at the floating side of grounding line fixed
 
-  ! Memory of Hi from previous time step
-  do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of Hi
-  get_senile_after_config                     = 10000.0                          ! Keep fading memory for this amount of years
+  ! Memory of previous run during a restart
   dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! Ice dynamics - basal conditions and sliding
@@ -308,7 +306,6 @@
   basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
   basal_roughness_restart_type_config         = 'last'                           ! Values from previous run: "last" (last output) or "average" (running average)
   do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
-  slid_submelt_halfpoint_config               = 3.0                              ! Basal temp w.r.t. local melt point at which sliding is reduced by 50% in exp function
 
   ! Basal sliding inversion
   do_basal_sliding_inversion_config           = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
@@ -321,8 +318,6 @@
   basal_sliding_inv_wsmooth_config            = 0.1                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
   basal_sliding_inv_phi_max_config            = 30.0                             ! Maximum value of phi_fric allowed during inversion
   basal_sliding_inv_phi_min_config            = 0.5                              ! Minimum value of phi_fric allowed during inversion
-  basal_sliding_inv_thin_ice_Hi_config        = 0.0                              ! If reference ice is thinner than this value, increase the min limit on phi_fric
-  basal_sliding_inv_phi_min_thin_config       = 1.0                              ! Minimum value of phi_fric over thin ice areas allowed during inversion
   basal_sliding_inv_tol_diff_config           = 0.0                              ! Minimum ice thickness difference [m] that triggers inversion
   basal_sliding_inv_tol_frac_config           = 0.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
   phi_fric_window_size_config                 = 500                              ! Number of previous inversion time steps used to compute a running average of phi_fric

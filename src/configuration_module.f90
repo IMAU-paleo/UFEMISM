@@ -416,8 +416,6 @@ MODULE configuration_module
     REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Keep ice thickness at the floating side of grounding line fixed
 
     ! Memory of first dHi_dt of simulation
-    LOGICAL             :: do_use_hi_memory_config                     = .FALSE.                          ! Keep a fading memory of first dHi_dt
-    REAL(dp)            :: get_senile_after_config                     = 100._dp                          ! Keep fading memory for this amount of years
     INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! == Ice dynamics - basal conditions and sliding
@@ -1170,8 +1168,6 @@ MODULE configuration_module
     REAL(dp)                            :: fixed_grounding_line_f
 
     ! Memory of previous run during a restart
-    LOGICAL                             :: do_use_hi_memory
-    REAL(dp)                            :: get_senile_after
     INTEGER                             :: dHi_dt_window_size
 
     ! Ice dynamics - basal conditions and sliding
@@ -2070,8 +2066,6 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_grounding_line_g_config,                   &
                      fixed_grounding_line_f_config,                   &
-                     do_use_hi_memory_config,                         &
-                     get_senile_after_config,                         &
                      dHi_dt_window_size_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
@@ -2917,8 +2911,6 @@ CONTAINS
     C%fixed_grounding_line_f                   = fixed_grounding_line_f_config
 
     ! Memory of previous run during a restart
-    C%do_use_hi_memory                         = do_use_hi_memory_config
-    C%get_senile_after                         = get_senile_after_config
     C%dHi_dt_window_size                       = dHi_dt_window_size_config
 
     ! Ice dynamics - basal conditions and sliding

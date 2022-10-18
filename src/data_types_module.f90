@@ -189,10 +189,7 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHi_dt_window_a
-    REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_past_a
-    ! REAL(dp),                   POINTER     :: Hi_tot_old
-    ! REAL(dp),                   POINTER     :: Hi_tot_old_time
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a, wdHi_dt_past_a!, wHi_tot_old, wHi_tot_old_time
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a
 
     ! Ice dynamics - calving
     REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels

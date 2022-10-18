@@ -260,8 +260,7 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF ( (.NOT. C%choice_basal_roughness == 'restart') .AND. &
-         (.NOT. C%do_use_hi_memory) ) THEN
+    IF (.NOT. C%choice_basal_roughness == 'restart') THEN
       CALL finalise_routine(routine_name)
       RETURN
     END IF
@@ -393,18 +392,6 @@ CONTAINS
 
     END IF ! (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_basal_sliding_inversion))
 
-    ! == Ice thickness rate of change
-    ! ===============================
-
-    IF (C%do_use_hi_memory ) THEN
-
-      ! Map data field from source mesh to new mesh
-      ! Already re-allocated by remap_ice_model
-      CALL map_mesh2mesh_2D( region%restart%mesh, region%mesh, map, &
-                             region%restart%dHi_dt_ave, region%ice%dHi_dt_past_a, &
-                             'cons_2nd_order')
-    END IF
-
     ! == Finalisation
     ! ===============
 
@@ -473,9 +460,6 @@ CONTAINS
 
     ! Run the ice model until coming back to present
     DO WHILE (region%time < t_end)
-
-      ! Make sure memory/senility method is off
-      C%do_use_hi_memory = .FALSE.
 
       ! Calculate ice velocities
       CALL run_ice_model( region, t_end)

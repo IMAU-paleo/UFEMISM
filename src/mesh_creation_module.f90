@@ -30,7 +30,7 @@ MODULE mesh_creation_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_reference_geometry
-  USE mesh_help_functions_module,      ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, get_lat_lon_coordinates, &
+  USE mesh_help_functions_module,      ONLY: find_connection_widths, find_triangle_areas, find_Voronoi_cell_areas, calc_lat_lon_coordinates, &
                                              determine_mesh_resolution, write_mesh_to_screen, merge_vertices, switch_vertices, redo_Tri_edge_indices, check_mesh, &
                                              cart_bilinear_dp, cart_bilinear_int, max_cart_over_triangle_int, max_cart_over_triangle_dp, cross2, &
                                              min_cart_over_triangle_int, sum_cart_over_triangle_dp, is_in_triangle, segment_intersection, is_walltowall, &
@@ -1787,7 +1787,7 @@ CONTAINS
     CALL allocate_mesh_secondary(             mesh)    ! Adds  9 MPI windows
     CALL calc_triangle_geometric_centres(     mesh)
     CALL find_Voronoi_cell_areas(             mesh)
-    CALL get_lat_lon_coordinates(             mesh)
+    CALL calc_lat_lon_coordinates(            mesh)
     CALL find_triangle_areas(                 mesh)
     CALL find_connection_widths(              mesh)
     CALL make_Ac_mesh(                        mesh)    ! Adds  5 MPI windows

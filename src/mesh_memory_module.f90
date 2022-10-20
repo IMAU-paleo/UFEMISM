@@ -66,24 +66,24 @@ CONTAINS
 
     CALL allocate_shared_dp_0D(  mesh%lambda_M,         mesh%wlambda_M        )
     CALL allocate_shared_dp_0D(  mesh%phi_M,            mesh%wphi_M           )
-    CALL allocate_shared_dp_0D(  mesh%alpha_stereo,     mesh%walpha_stereo    )
+    CALL allocate_shared_dp_0D(  mesh%beta_stereo,      mesh%wbeta_stereo     )
 
     IF (mesh%region_name     == 'NAM') THEN
       mesh%lambda_M     = C%lambda_M_NAM
       mesh%phi_M        = C%phi_M_NAM
-      mesh%alpha_stereo = C%alpha_stereo_NAM
+      mesh%beta_stereo  = C%beta_stereo_NAM
     ELSEIF (mesh%region_name == 'EAS') THEN
       mesh%lambda_M     = C%lambda_M_EAS
       mesh%phi_M        = C%phi_M_EAS
-      mesh%alpha_stereo = C%alpha_stereo_EAS
+      mesh%beta_stereo  = C%beta_stereo_EAS
     ELSEIF (mesh%region_name == 'GRL') THEN
       mesh%lambda_M     = C%lambda_M_GRL
       mesh%phi_M        = C%phi_M_GRL
-      mesh%alpha_stereo = C%alpha_stereo_GRL
+      mesh%beta_stereo  = C%beta_stereo_GRL
     ELSEIF (mesh%region_name == 'ANT') THEN
       mesh%lambda_M     = C%lambda_M_ANT
       mesh%phi_M        = C%phi_M_ANT
-      mesh%alpha_stereo = C%alpha_stereo_ANT
+      mesh%beta_stereo  = C%beta_stereo_ANT
     END IF
 
     CALL allocate_shared_dp_0D(  mesh%xmin,             mesh%wxmin            )
@@ -314,7 +314,7 @@ CONTAINS
 
     CALL deallocate_shared( mesh%wlambda_M)
     CALL deallocate_shared( mesh%wphi_M)
-    CALL deallocate_shared( mesh%walpha_stereo)
+    CALL deallocate_shared( mesh%wbeta_stereo)
     CALL deallocate_shared( mesh%wxmin)
     CALL deallocate_shared( mesh%wxmax)
     CALL deallocate_shared( mesh%wymin)
@@ -464,24 +464,24 @@ CONTAINS
 
     CALL allocate_shared_dist_dp_0D(  mesh%lambda_M,         mesh%wlambda_M        )
     CALL allocate_shared_dist_dp_0D(  mesh%phi_M,            mesh%wphi_M           )
-    CALL allocate_shared_dist_dp_0D(  mesh%alpha_stereo,     mesh%walpha_stereo    )
+    CALL allocate_shared_dist_dp_0D(  mesh%beta_stereo,      mesh%wbeta_stereo     )
 
     IF (mesh%region_name     == 'NAM') THEN
       mesh%lambda_M     = C%lambda_M_NAM
       mesh%phi_M        = C%phi_M_NAM
-      mesh%alpha_stereo = C%alpha_stereo_NAM
+      mesh%beta_stereo  = C%beta_stereo_NAM
     ELSEIF (mesh%region_name == 'EAS') THEN
       mesh%lambda_M     = C%lambda_M_EAS
       mesh%phi_M        = C%phi_M_EAS
-      mesh%alpha_stereo = C%alpha_stereo_EAS
+      mesh%beta_stereo  = C%beta_stereo_EAS
     ELSEIF (mesh%region_name == 'GRL') THEN
       mesh%lambda_M     = C%lambda_M_GRL
       mesh%phi_M        = C%phi_M_GRL
-      mesh%alpha_stereo = C%alpha_stereo_GRL
+      mesh%beta_stereo  = C%beta_stereo_GRL
     ELSEIF (mesh%region_name == 'ANT') THEN
       mesh%lambda_M     = C%lambda_M_ANT
       mesh%phi_M        = C%phi_M_ANT
-      mesh%alpha_stereo = C%alpha_stereo_ANT
+      mesh%beta_stereo  = C%beta_stereo_ANT
     END IF
 
     CALL allocate_shared_dist_dp_0D(  mesh%xmin,             mesh%wxmin            )
@@ -673,7 +673,7 @@ CONTAINS
 
     CALL deallocate_shared( mesh%wlambda_M)
     CALL deallocate_shared( mesh%wphi_M)
-    CALL deallocate_shared( mesh%walpha_stereo)
+    CALL deallocate_shared( mesh%wbeta_stereo)
     CALL deallocate_shared( mesh%wxmin)
     CALL deallocate_shared( mesh%wxmax)
     CALL deallocate_shared( mesh%wymin)

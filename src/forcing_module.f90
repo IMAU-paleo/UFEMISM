@@ -26,9 +26,10 @@ MODULE forcing_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_insolation_file, &
-                                             read_insolation_file_time_lat, read_insolation_file_timeframes, &
-                                             inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
+  USE netcdf_module,                   ONLY: inquire_geothermal_heat_flux_file, read_geothermal_heat_flux_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
+  USE netcdf_extra_module,             ONLY: inquire_insolation_data_file, read_insolation_data_file_time_lat, &
+                                             read_insolation_data_file_timeframes
   USE data_types_module,               ONLY: type_forcing_data, type_mesh, type_model_region
 
   IMPLICIT NONE
@@ -255,10 +256,10 @@ CONTAINS
       CLOSE( UNIT  = 1337)
 
       IF (C%start_time_of_run/1000._dp < forcing%CO2_time(1)) THEN
-         CALL warning(' Model time starts before start of CO2 record; constant extrapolation will be used in that case!')
+         CALL warning('Model time starts before start of CO2 record; constant extrapolation will be used in that case!')
       END IF
       IF (C%end_time_of_run/1000._dp > forcing%CO2_time(C%CO2_record_length)) THEN
-         CALL warning(' Model time will reach beyond end of CO2 record; constant extrapolation will be used in that case!')
+         CALL warning('Model time will reach beyond end of CO2 record; constant extrapolation will be used in that case!')
       END IF
 
     END IF ! IF (par%master) THEN
@@ -962,29 +963,26 @@ CONTAINS
       END IF
 
       ! Find time indices to be read
-      IF (par%master) THEN
-        IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
-          ti1 = 1
-          DO WHILE (forcing%ins_time(ti1) < time)
-            ti1 = ti1 + 1
-          END DO
-          ti0 = ti1 - 1
+      IF (time <= forcing%ins_time( forcing%ins_nyears)) THEN
+        ti1 = 1
+        DO WHILE (forcing%ins_time(ti1) < time)
+          ti1 = ti1 + 1
+        END DO
+        ti0 = ti1 - 1
 
-          forcing%ins_t0 = forcing%ins_time(ti0)
-          forcing%ins_t1 = forcing%ins_time(ti1)
-        ELSE
-          ! Constant PD insolation for future projections
-          ti0 = forcing%ins_nyears
-          ti1 = forcing%ins_nyears
+        forcing%ins_t0 = forcing%ins_time(ti0)
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      ELSE
+        ! Constant PD insolation for future projections
+        ti0 = forcing%ins_nyears
+        ti1 = forcing%ins_nyears
 
-          forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
-          forcing%ins_t1 = forcing%ins_time(ti1)
-        END IF
-      END IF ! IF (par%master) THEN
+        forcing%ins_t0 = forcing%ins_time(ti0) - 1._dp
+        forcing%ins_t1 = forcing%ins_time(ti1)
+      END IF
 
       ! Read new insolation fields from the NetCDF file
-      IF (par%master) CALL read_insolation_file_timeframes( forcing, ti0, ti1)
-      CALL sync
+      CALL read_insolation_data_file_timeframes( forcing, ti0, ti1, forcing%ins_Q_TOA0, forcing%ins_Q_TOA1)
 
     ELSE
       IF (par%master) WRITE(0,*) 'update_insolation_timeframes_from_file - ERROR: unknown choice_insolation_forcing "', TRIM( C%choice_insolation_forcing), '"!'
@@ -1034,9 +1032,7 @@ CONTAINS
       CALL allocate_shared_int_0D( forcing%ins_nlat,   forcing%wins_nlat  )
 
       forcing%netcdf_ins%filename = C%filename_insolation
-
-      IF (par%master) CALL inquire_insolation_file( forcing)
-      CALL sync
+      CALL inquire_insolation_data_file( forcing)
 
       ! Insolation
       CALL allocate_shared_dp_1D( forcing%ins_nyears,   forcing%ins_time,   forcing%wins_time   )
@@ -1045,15 +1041,14 @@ CONTAINS
       CALL allocate_shared_dp_2D( forcing%ins_nlat, 12, forcing%ins_Q_TOA1, forcing%wins_Q_TOA1 )
 
       ! Read time and latitude data
+      CALL read_insolation_data_file_time_lat( forcing)
+
       IF (par%master) THEN
-
-        CALL read_insolation_file_time_lat( forcing)
-
         IF (C%start_time_of_run < forcing%ins_time(1)) THEN
-          CALL warning(' Model time starts before start of insolation record; the model will crash lol')
+          CALL warning('Model time starts before start of insolation record; the model will crash lol')
         END IF
         IF (C%end_time_of_run > forcing%ins_time(forcing%ins_nyears)) THEN
-          CALL warning(' Model time will reach beyond end of insolation record; constant extrapolation will be used in that case!')
+          CALL warning('Model time will reach beyond end of insolation record; constant extrapolation will be used in that case!')
         END IF
       END IF
       CALL sync
@@ -1162,10 +1157,10 @@ CONTAINS
         CLOSE( UNIT  = 1337)
 
         IF (C%start_time_of_run < forcing%sealevel_time(1)) THEN
-          CALL warning(' Model time starts before start of sea level record; constant extrapolation will be used in that case!')
+          CALL warning('Model time starts before start of sea level record; constant extrapolation will be used in that case!')
         END IF
         IF (C%end_time_of_run > forcing%sealevel_time(C%sealevel_record_length)) THEN
-          CALL warning(' Model time will reach beyond end of sea level record; constant extrapolation will be used in that case!')
+          CALL warning('Model time will reach beyond end of sea level record; constant extrapolation will be used in that case!')
         END IF
 
     END IF ! IF (par%master) THEN

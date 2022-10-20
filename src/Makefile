@@ -63,6 +63,11 @@ UFEMISM_program_objects = \
         mesh_single_module.o \
         zeta_module.o \
         netcdf_module.o \
+        netcdf_basic_module.o \
+        netcdf_input_module.o \
+        netcdf_output_module.o \
+        netcdf_debug_module.o \
+        netcdf_extra_module.o \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \
@@ -117,6 +122,11 @@ UFEMISM_program_objects = \
         mesh_single_module.o \
         zeta_module.o \
         netcdf_module.o \
+        netcdf_basic_module.o \
+        netcdf_input_module.o \
+        netcdf_output_module.o \
+        netcdf_debug_module.o \
+        netcdf_extra_module.o \
         forcing_module.o \
         reference_fields_module.o \
         basal_conditions_and_sliding_module.o \

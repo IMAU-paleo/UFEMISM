@@ -692,6 +692,7 @@ CONTAINS
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_3D_c,  v_3D_c
     INTEGER                                            :: wu_3D_c, wv_3D_c
     REAL(dp)                                           :: D_SIA, dist, dt
+    REAL(dp), DIMENSION(C%nz)                          :: prof
     REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
     ! Add routine to path
@@ -707,16 +708,30 @@ CONTAINS
     CALL allocate_shared_dp_2D( mesh%nAc, C%nz, v_3D_c  , wv_3D_c  )
 
     ! Calculate ice velocity and thickness, and surface slopes on the staggered grid
-    CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
+    CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_SIA_b, ice%v_3D_SIA_b, u_3D_c, v_3D_c)
+
+    ! Calculate vertically averaged velocities
+    DO aci = mesh%ci1, mesh%ci2
+      prof = u_3D_c( aci,:)
+      CALL vertical_average( prof, u_c( aci))
+      prof = v_3D_c( aci,:)
+      CALL vertical_average( prof, v_c( aci))
+    END DO
+    CALL sync
+
     CALL map_a_to_c_2D( mesh, ice%Hi_a, Hi_c    )
     CALL ddx_a_to_c_2D( mesh, ice%Hs_a, dHs_dx_c)
     CALL ddy_a_to_c_2D( mesh, ice%Hs_a, dHs_dy_c)
-    CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_b, ice%v_3D_b, u_3D_c, v_3D_c)
 
     ! Initialise time step with maximum allowed value
     dt_crit_SIA = C%dt_max
 
     DO aci = mesh%ci1, mesh%ci2
+
+      ! Only check at ice-covered vertices
+      vi = mesh%Aci( aci,1)
+      vj = mesh%Aci( aci,2)
+      IF (ice%Hi_a( vi) == 0._dp .OR. ice%Hi_a( vj) == 0._dp) CYCLE
 
       ! Calculate the SIA ice diffusivity
       D_SIA = 1E-9_dp
@@ -789,8 +804,11 @@ CONTAINS
 
     DO aci = mesh%ci1, mesh%ci2
 
+      ! Only check at ice-covered vertices
       vi = mesh%Aci( aci,1)
       vj = mesh%Aci( aci,2)
+      IF (ice%Hi_a( vi) == 0._dp .OR. ice%Hi_a( vj) == 0._dp) CYCLE
+
       dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
       uv_c = (ABS( u_c( aci)) + ABS( v_c( aci)))
       IF (uv_c > 0._dp) THEN
@@ -971,7 +989,7 @@ CONTAINS
       END IF
 
       region%do_basal    = .FALSE.
-      IF (C%do_basal_sliding_inversion) THEN
+      IF (C%do_slid_inv) THEN
         IF (region%time >= region%t_next_basal) THEN
           region%do_basal     = .TRUE.
           region%t_last_basal = region%time
@@ -1144,14 +1162,6 @@ CONTAINS
     END IF
     CALL sync
 
-    ! ! Initialise total ice thickness at start of run
-    ! ice%Hi_tot_old = SUM( ice%Hi_a( mesh%vi1:mesh%vi2))
-    ! CALL sync
-    ! ! Communicate mid-point results among processes
-    ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, ice%Hi_tot_old, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-    ! ! Initialise time (to make sure it is not used until a mesh update)
-    ! ice%Hi_tot_old_time = C%start_time_of_run
-
     ! Allocate and initialise basal conditions
     CALL initialise_basal_conditions( mesh, ice, restart)
 
@@ -1264,9 +1274,9 @@ CONTAINS
 
   SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
 
-    USE data_types_module,          ONLY: type_remapping_latlon2mesh
+    USE data_types_module,          ONLY: type_remapping_lonlat2mesh
     USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_glob_mesh, map_latlon2mesh_2D, deallocate_remapping_arrays_glob_mesh
+    USE mesh_mapping_module,        ONLY: create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, deallocate_remapping_arrays_lonlat_mesh
 
     IMPLICIT NONE
 
@@ -1276,19 +1286,19 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
-    TYPE(type_remapping_latlon2mesh)                   :: map
+    TYPE(type_remapping_lonlat2mesh)                   :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Calculate mapping arrays
-    CALL create_remapping_arrays_glob_mesh( mesh, forcing%grid_ghf, map)
+    CALL create_remapping_arrays_lonlat_mesh( mesh, forcing%grid_ghf, map)
 
     ! Map global climate data to the mesh
-    CALL map_latlon2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
+    CALL map_lonlat2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
 
     ! Deallocate mapping arrays
-    CALL deallocate_remapping_arrays_glob_mesh( map)
+    CALL deallocate_remapping_arrays_lonlat_mesh( map)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

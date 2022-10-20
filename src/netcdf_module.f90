@@ -27,7 +27,7 @@ MODULE netcdf_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE data_types_netcdf_module
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_grid, type_reference_geometry, type_forcing_data, &
-                                             type_debug_fields, &
+                                             type_debug_fields, type_ice_model, &
                                              type_climate_snapshot_global, type_sparse_matrix_CSR_dp, &
                                              type_ocean_snapshot_global, type_highres_ocean_data, &
                                              type_restart_data, type_netcdf_resource_tracker, &
@@ -681,7 +681,7 @@ CONTAINS
 
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, region%ice%phi_fric_a, start = (/ 1, netcdf%ti/)))
 
-      IF (C%do_basal_sliding_inversion) THEN
+      IF (C%do_slid_inv) THEN
         CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric_ave, region%ice%phi_fric_ave_a, start = (/ 1, netcdf%ti/)))
       END IF
 
@@ -1200,7 +1200,7 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi, time], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi, time], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
 
-    IF (C%do_basal_sliding_inversion) THEN
+    IF (C%do_slid_inv) THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [vi, time], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degrees')
     END IF
 
@@ -1783,7 +1783,7 @@ CONTAINS
 
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_a, netcdf%id_var_phi_fric, netcdf%ti)
 
-      IF (C%do_basal_sliding_inversion) THEN
+      IF (C%do_slid_inv) THEN
         CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%phi_fric_ave_a, netcdf%id_var_phi_fric_ave, netcdf%ti)
       END IF
 
@@ -2304,7 +2304,7 @@ CONTAINS
     CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y, t], netcdf%id_var_beta_sq,  long_name='Bed roughness', units='?')
     CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y, t], netcdf%id_var_phi_fric, long_name='Bed roughness', units='degrees')
 
-    IF (C%do_basal_sliding_inversion) THEN
+    IF (C%do_slid_inv) THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric_ave, [x, y, t], netcdf%id_var_phi_fric_ave, long_name='Averaged bed roughness', units='degress')
     END IF
 
@@ -2766,7 +2766,7 @@ CONTAINS
     TYPE(type_grid),            INTENT(IN)        :: grid
     REAL(dp), DIMENSION(:    ), INTENT(IN)        :: d_mesh
     INTEGER,                    INTENT(IN)        :: id_var
-    INTEGER,                    INTENT(IN)        :: ti
+    INTEGER,                    INTENT(IN), OPTIONAL :: ti
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_and_write_to_grid_netcdf_dp_2D'
@@ -2783,7 +2783,13 @@ CONTAINS
     CALL map_mesh2grid_2D( mesh, grid, d_mesh, d_grid)
 
     ! Write grid data to NetCDF
-    IF (par%master) CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
+    IF (par%master) THEN
+      IF (PRESENT( ti)) THEN
+        CALL handle_error( nf90_put_var( ncid, id_var, d_grid, start=(/1, 1, ti/) ))
+      ELSE
+        CALL handle_error( nf90_put_var( ncid, id_var, d_grid ))
+      END IF
+    END IF
 
     ! Deallocate shared memory
     CALL deallocate_shared( wd_grid)
@@ -3551,13 +3557,13 @@ CONTAINS
     CALL inquire_dim( clim%netcdf%ncid, clim%netcdf%name_dim_month,   int_dummy,  clim%netcdf%id_dim_month)
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /), clim%netcdf%id_var_lat)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /), clim%netcdf%id_var_lon)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Hs)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_T2m)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Precip)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_WE)
-    CALL inquire_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_SN)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lat,      (/ clim%netcdf%id_dim_lat                                                   /), clim%netcdf%id_var_lat)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_lon,      (/ clim%netcdf%id_dim_lon                                                   /), clim%netcdf%id_var_lon)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Hs,       (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat                           /), clim%netcdf%id_var_Hs)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_T2m,      (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_T2m)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Precip,   (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Precip)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_WE,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_WE)
+    CALL inquire_single_or_double_var( clim%netcdf%ncid, clim%netcdf%name_var_Wind_SN,  (/ clim%netcdf%id_dim_lon, clim%netcdf%id_dim_lat, clim%netcdf%id_dim_month /), clim%netcdf%id_var_Wind_SN)
 
     ! Close the netcdf file
     CALL close_netcdf_file( clim%netcdf%ncid)
@@ -4947,6 +4953,488 @@ CONTAINS
 
   END SUBROUTINE write_to_SELEN_output_file
 
+! ===== Basal inversion =====
+! ===========================
+
+  ! Inverted basal roughness
+  SUBROUTINE create_BIV_bed_roughness_file_mesh( mesh, ice)
+    ! Create a new inverted bed roughness file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_BIV_bed_roughness_file_mesh'
+    TYPE(type_netcdf_BIV_bed_roughness)                :: netcdf
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: vi,ti,ci,aci,ciplusone,two,three,six,vii
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Create a new file and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+
+    netcdf%filename = TRIM(C%output_dir) // TRIM(C%slid_inv_filename_output)
+    INQUIRE(EXIST=file_exists, FILE = TRIM( netcdf%filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
+    END IF
+
+    ! Create netcdf file
+    IF (par%master) WRITE(0,*) ''
+    IF (par%master) WRITE(0,*) ' Writing inverted bed roughness to file "', TRIM( netcdf%filename), '"...'
+    CALL handle_error(nf90_create( netcdf%filename, IOR(nf90_clobber,nf90_share), netcdf%ncid))
+
+    ! Mesh data
+    ! =========
+
+    ! Define dimensions
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_vi,           mesh%nV,          netcdf%id_dim_vi          ) ! Vertex indices
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_ti,           mesh%nTri,        netcdf%id_dim_ti          ) ! Triangle indices
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_ci,           mesh%nC_mem,      netcdf%id_dim_ci          ) ! Connection indices
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_aci,          mesh%nAc,         netcdf%id_dim_aci         ) ! Staggered vertex indices
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_ciplusone,    mesh%nC_mem+1,    netcdf%id_dim_ciplusone   ) ! connection indices plus one (neighbour function arrays have one more column)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_two,          2,                netcdf%id_dim_two         ) ! 2 (each vertex has an X and Y coordinates)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_three,        3,                netcdf%id_dim_three       ) ! 3 (each triangle has three vertices)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_six,          6,                netcdf%id_dim_six         ) ! 4 (each staggered vertex lists four regular vertices and two triangles)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_vii_transect, mesh%nV_transect, netcdf%id_dim_vii_transect) ! Number of vertex pairs in the transect
+
+    ! Placeholders for the dimension ID's, for shorter code
+    vi        = netcdf%id_dim_vi
+    ti        = netcdf%id_dim_ti
+    ci        = netcdf%id_dim_ci
+    aci       = netcdf%id_dim_aci
+    ciplusone = netcdf%id_dim_ciplusone
+    two       = netcdf%id_dim_two
+    three     = netcdf%id_dim_three
+    six       = netcdf%id_dim_six
+    vii       = netcdf%id_dim_vii_transect
+
+    ! Define variables
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_V,                [vi,  two  ], netcdf%id_var_V,                long_name='Vertex coordinates', units='m')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri,              [ti,  three], netcdf%id_var_Tri,              long_name='Vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_nC,               [vi        ], netcdf%id_var_nC,               long_name='Number of connected vertices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_C,                [vi,  ci   ], netcdf%id_var_C,                long_name='Indices of connected vertices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_niTri,            [vi        ], netcdf%id_var_niTri,            long_name='Number of inverse triangles')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_iTri,             [vi,  ci   ], netcdf%id_var_iTri,             long_name='Indices of inverse triangles')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_edge_index,       [vi        ], netcdf%id_var_edge_index,       long_name='Edge index')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_Tricc,            [ti,  two  ], netcdf%id_var_Tricc,            long_name='Triangle circumcenter', units='m')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_TriC,             [ti,  three], netcdf%id_var_TriC,             long_name='Triangle neighbours')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Tri_edge_index,   [ti        ], netcdf%id_var_Tri_edge_index,   long_name='Triangle edge index')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_VAc,              [aci, two  ], netcdf%id_var_VAc,              long_name='Staggered vertex coordinates', units='m')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_Aci,              [aci, six  ], netcdf%id_var_Aci,              long_name='Staggered to regular vertex indices')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_iAci,             [vi,  ci   ], netcdf%id_var_iAci,             long_name='Regular to staggered vertex indices')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_A,                [vi        ], netcdf%id_var_A,                long_name='Vertex Voronoi cell area', units='m^2')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_R,                [vi        ], netcdf%id_var_R,                long_name='Vertex resolution', units='m')
+    CALL create_int_var(    netcdf%ncid, netcdf%name_var_vi_transect,      [vii, two  ], netcdf%id_var_vi_transect,      long_name='Transect vertex pairs')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_w_transect,       [vii, two  ], netcdf%id_var_w_transect,       long_name='Transect interpolation weights')
+
+    ! Bed roughness
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      CALL crash('not defined for choice_sliding_law = "no_sliding"!')
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi], netcdf%id_var_phi_fric, long_name='Till friction angle', units='degrees')
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi], netcdf%id_var_beta_sq,  long_name='Coulomb-law friction coefficient', units='unitless')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi], netcdf%id_var_beta_sq,  long_name='Coulomb-law friction coefficient', units='unitless')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [vi], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [vi], netcdf%id_var_phi_fric, long_name='Till friction angle', units='degrees')
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+
+    ! Write mesh data
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_V,               mesh%V             ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Tri,             mesh%Tri           ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_nC,              mesh%nC            ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_C,               mesh%C             ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_niTri,           mesh%niTri         ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_iTri,            mesh%iTri          ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_edge_index,      mesh%edge_index    ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Tricc,           mesh%Tricc         ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_TriC,            mesh%TriC          ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Tri_edge_index,  mesh%Tri_edge_index))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_VAc,             mesh%VAc           ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_Aci,             mesh%Aci           ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_iAci,            mesh%iAci          ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_A,               mesh%A             ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_R,               mesh%R             ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_vi_transect,     mesh%vi_transect   ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_w_transect,      mesh%w_transect    ))
+
+    ! Write the bed roughness data
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      CALL crash('not defined for choice_sliding_law = "no_sliding"!')
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq, ice%beta_sq_a ))
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, ice%phi_fric_a ))
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_alpha_sq, ice%alpha_sq_a ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq , ice%beta_sq_a  ))
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_alpha_sq, ice%alpha_sq_a ))
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_beta_sq , ice%beta_sq_a  ))
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_phi_fric, ice%phi_fric_a ))
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    CALL handle_error(nf90_sync( netcdf%ncid))
+
+    ! Close the file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_BIV_bed_roughness_file_mesh
+
+  SUBROUTINE create_BIV_bed_roughness_file_grid( mesh, grid, ice)
+    ! Create a new inverted bed roughness file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_BIV_bed_roughness_file_grid'
+    TYPE(type_netcdf_BIV_bed_roughness)                :: netcdf
+    INTEGER                                            :: i
+    LOGICAL                                            :: file_exists
+    INTEGER                                            :: x, y
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Create a new file and, to prevent loss of data,
+    ! stop with an error message if one already exists (not when differences are considered):
+
+    IF (par%master) THEN
+
+    netcdf%filename = TRIM(C%output_dir) // TRIM(C%slid_inv_filename_output)
+    i = INDEX( netcdf%filename, '.nc')
+    netcdf%filename = netcdf%filename( 1:i-1) // '_grid.nc'
+    INQUIRE(EXIST=file_exists, FILE = TRIM( netcdf%filename))
+    IF (file_exists) THEN
+      CALL crash('file "' // TRIM( netcdf%filename) // '" already exists!')
+    END IF
+
+    ! Create netcdf file
+    IF (par%master) WRITE(0,*) ''
+    IF (par%master) WRITE(0,*) ' Writing inverted bed roughness to file "', TRIM( netcdf%filename), '"...'
+    CALL handle_error(nf90_create( netcdf%filename, IOR(nf90_clobber,nf90_share), netcdf%ncid))
+
+    ! Define dimensions:
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_x, grid%nx, netcdf%id_dim_x)
+    CALL create_dim( netcdf%ncid, netcdf%name_dim_y, grid%ny, netcdf%id_dim_y)
+
+    ! Placeholders for the dimension ID's, for shorter code
+    x = netcdf%id_dim_x
+    y = netcdf%id_dim_y
+
+    ! Define variables:
+    ! The order of the CALL statements for the different variables determines their
+    ! order of appearence in the netcdf file.
+
+    ! Dimension variables
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_x,       [x      ], netcdf%id_var_x,       long_name='X-coordinate', units='m')
+    CALL create_double_var( netcdf%ncid, netcdf%name_var_y,       [   y   ], netcdf%id_var_y,       long_name='Y-coordinate', units='m')
+
+    ! Bed roughness
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      CALL crash('not defined for choice_sliding_law = "no_sliding"!')
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y], netcdf%id_var_phi_fric, long_name='Till friction angle', units='degrees')
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y], netcdf%id_var_beta_sq,  long_name='Coulomb-law friction coefficient', units='unitless')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y], netcdf%id_var_beta_sq,  long_name='Coulomb-law friction coefficient', units='unitless')
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  [x, y], netcdf%id_var_beta_sq,  long_name='Power-law friction coefficient', units='[Pa m^−1/3 yr^1/3]')
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL create_double_var( netcdf%ncid, netcdf%name_var_phi_fric, [x, y], netcdf%id_var_phi_fric, long_name='Till friction angle', units='degrees')
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Leave definition mode:
+    CALL handle_error(nf90_enddef( netcdf%ncid))
+
+    ! Write the data
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_x,        grid%x ))
+    CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_y,        grid%y ))
+
+    END IF ! IF (par%master) THEN
+
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      CALL crash('not defined for choice_sliding_law = "no_sliding"!')
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%beta_sq_a, netcdf%id_var_beta_sq)
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%phi_fric_a, netcdf%id_var_phi_fric)
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%alpha_sq_a, netcdf%id_var_alpha_sq)
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%beta_sq_a , netcdf%id_var_beta_sq )
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%alpha_sq_a, netcdf%id_var_alpha_sq)
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%beta_sq_a , netcdf%id_var_beta_sq )
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D(  netcdf%ncid, mesh, grid, ice%phi_fric_a, netcdf%id_var_phi_fric)
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Synchronize with disk (otherwise it doesn't seem to work on a MAC)
+    IF (par%master) CALL handle_error(nf90_sync( netcdf%ncid))
+
+    ! Close the file
+    IF (par%master) CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_BIV_bed_roughness_file_grid
+
+  SUBROUTINE inquire_BIV_bed_roughness_file( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_netcdf_BIV_bed_roughness), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_BIV_bed_roughness_file'
+    INTEGER                                       :: nx, ny, x, y
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist, return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+
+    ! Abbreviations for shorter code
+    x = netcdf%id_dim_x
+    y = netcdf%id_dim_y
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_x, (/ x    /), netcdf%id_var_x)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_y, (/    y /), netcdf%id_var_y)
+
+    IF     (C%choice_sliding_law == 'no_sliding') THEN
+      CALL crash('not defined for choice_sliding_law = "no_sliding"!')
+      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+    ELSEIF (C%choice_sliding_law == 'Weertman') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ x, y /), netcdf%id_var_beta_sq )
+    ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+            C%choice_sliding_law == 'Coulomb_regularised') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ x, y /), netcdf%id_var_phi_fric)
+    ELSEIF (C%choice_sliding_law == 'Tsai2015') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_alpha_sq, (/ x, y /), netcdf%id_var_alpha_sq)
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ x, y /), netcdf%id_var_beta_sq )
+    ELSEIF (C%choice_sliding_law == 'Schoof2005') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_alpha_sq, (/ x, y /), netcdf%id_var_alpha_sq)
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_beta_sq,  (/ x, y /), netcdf%id_var_beta_sq )
+    ELSEIF (C%choice_sliding_law == 'Zoet-Iverson') THEN
+      CALL inquire_double_var( netcdf%ncid, netcdf%name_var_phi_fric, (/ x, y /), netcdf%id_var_phi_fric)
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_BIV_bed_roughness_file
+
+  SUBROUTINE read_BIV_bed_roughness_file(    netcdf, alpha_sq, beta_sq, phi_fric)
+    ! Read the inverted bed roughness file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_netcdf_BIV_bed_roughness), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ), OPTIONAL, INTENT(INOUT) :: alpha_sq, beta_sq, phi_fric
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_BIV_bed_roughness_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    IF     (PRESENT( alpha_sq)) THEN
+      ! Safety
+      IF (PRESENT( beta_sq) .OR. PRESENT( phi_fric)) THEN
+        CALL crash('can only read one friction parameter from file!')
+      END IF
+      CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_alpha_sq, alpha_sq ))
+    ELSEIF (PRESENT( beta_sq)) THEN
+      ! Safety
+      IF (PRESENT( alpha_sq) .OR. PRESENT( phi_fric)) THEN
+        CALL crash('can only read one friction parameter from file!')
+      END IF
+      CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_beta_sq, beta_sq ))
+    ELSEIF (PRESENT( phi_fric)) THEN
+      ! Safety
+      IF (PRESENT( alpha_sq) .OR. PRESENT( beta_sq)) THEN
+        CALL crash('can only read one friction parameter from file!')
+      END IF
+      CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_phi_fric, phi_fric ))
+    ELSE
+        CALL crash('must specify a friction parameter to read from file!')
+    END IF
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_BIV_bed_roughness_file
+
+  ! Target velocity fields for basal inversion
+  SUBROUTINE inquire_BIV_target_velocity( netcdf)
+    ! Check if the right dimensions and variables are present in the file.
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_netcdf_BIV_target_velocity), INTENT(INOUT) :: netcdf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_BIV_target_velocity'
+    INTEGER                                       :: i
+    LOGICAL                                       :: is_Rignot2011
+    INTEGER                                       :: nx, ny, x, y
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+
+    ! Abbreviations for shorter code
+    x = netcdf%id_dim_x
+    y = netcdf%id_dim_y
+
+    ! Exception for the Rignot et al. (2011) velocity file (downloadable from https: // nsidc.org/data/NSIDC-0484/versions/2)
+    is_Rignot2011 = .FALSE.
+    DO i = 1, 256-36
+      IF (netcdf%filename(i:i+33) == 'antarctica_ice_velocity_450m_v2.nc') THEN
+        netcdf%name_var_u_surf = 'VX'
+        netcdf%name_var_v_surf = 'VY'
+      END IF
+    END DO
+
+    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_u_surf, (/ x, y /), netcdf%id_var_u_surf)
+    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_v_surf, (/ x, y /), netcdf%id_var_v_surf)
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE inquire_BIV_target_velocity
+
+  SUBROUTINE read_BIV_target_velocity(    netcdf, u_surf, v_surf)
+    ! Read the target velocity NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_netcdf_BIV_target_velocity), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),            INTENT(INOUT) :: u_surf, v_surf
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_BIV_target_velocity'
+    INTEGER                                       :: nx, ny
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Open the netcdf file
+    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
+
+    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
+    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
+
+    ! Read the data
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_u_surf, u_surf ))
+    CALL handle_error(nf90_get_var( netcdf%ncid, netcdf%id_var_v_surf, v_surf ))
+
+    ! Close the netcdf file
+    CALL close_netcdf_file( netcdf%ncid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE read_BIV_target_velocity
+
 ! ===== ISMIP-style output =====
 ! ==============================
 
@@ -5765,15 +6253,15 @@ CONTAINS
 ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
 ! ============================================================
 
-  SUBROUTINE inquire_ISMIP_forcing_SMB_baseline_file( netcdf)
+  SUBROUTINE inquire_ISMIP_forcing_baseline_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.
 
     ! In/output variables:
-    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
+    TYPE(type_netcdf_ISMIP_style_baseline), INTENT(INOUT) :: netcdf
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_SMB_baseline_file'
-    INTEGER                                       :: nx,ny
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_baseline_file'
+    INTEGER                                       :: nx, ny
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5791,9 +6279,11 @@ CONTAINS
     CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
 
     ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
-    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_SMB, (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_SMB)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_SMB, (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_SMB)
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_ST , (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_ST )
+    CALL inquire_single_or_double_var( netcdf%ncid, netcdf%name_var_Hs , (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_Hs )
 
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
@@ -5801,17 +6291,17 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE inquire_ISMIP_forcing_SMB_baseline_file
+  END SUBROUTINE inquire_ISMIP_forcing_baseline_file
 
-  SUBROUTINE read_ISMIP_forcing_SMB_baseline_file( netcdf, SMB)
+  SUBROUTINE read_ISMIP_forcing_baseline_file( netcdf, SMB, ST, Hs)
     ! Read grid and data from the NetCDF file
 
     ! In/output variables:
-    TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
-    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: SMB
+    TYPE(type_netcdf_ISMIP_style_baseline), INTENT(INOUT) :: netcdf
+    REAL(dp), DIMENSION(:,:  ),             INTENT(INOUT) :: SMB, ST, Hs
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_SMB_baseline_file'
+    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_baseline_file'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -5825,7 +6315,9 @@ CONTAINS
     CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
 
     ! Read the field data
-    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_SMB, SMB, start = (/ 1, 1 /) ))
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_SMB, SMB ))
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_ST , ST  ))
+    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_Hs , Hs  ))
 
     ! Close the netcdf file
     CALL close_netcdf_file( netcdf%ncid)
@@ -5833,77 +6325,7 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE read_ISMIP_forcing_SMB_baseline_file
-
-  SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file( netcdf)
-    ! Check if the right dimensions and variables are present in the file.
-
-    ! In/output variables:
-    TYPE(type_netcdf_ISMIP_style_forcing), INTENT(INOUT) :: netcdf
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'inquire_ISMIP_forcing_ST_baseline_file'
-    INTEGER                                       :: nx,ny
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-
-    ! Inquire dimensions id's. Check that all required dimensions exist return their lengths.
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_x, nx, netcdf%id_dim_x)
-    CALL inquire_dim( netcdf%ncid, netcdf%name_dim_y, ny, netcdf%id_dim_y)
-
-    ! Inquire variable id's. Make sure that each variable has the correct dimensions:
-    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_x,   (/ netcdf%id_dim_x                  /), netcdf%id_var_x  )
-    CALL inquire_single_var( netcdf%ncid, netcdf%name_var_y,   (/                  netcdf%id_dim_y /), netcdf%id_var_y  )
-    CALL inquire_double_var( netcdf%ncid, netcdf%name_var_ST,  (/ netcdf%id_dim_x, netcdf%id_dim_y /), netcdf%id_var_ST )
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE inquire_ISMIP_forcing_ST_baseline_file
-
-  SUBROUTINE read_ISMIP_forcing_ST_baseline_file( netcdf, ST)
-    ! Read grid and data from the NetCDF file
-
-    ! In/output variables:
-    TYPE(type_netcdf_ISMIP_style_forcing),   INTENT(INOUT) :: netcdf
-    REAL(dp), DIMENSION(:,:  ),              INTENT(INOUT) :: ST
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'read_ISMIP_forcing_ST_baseline_file'
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Open the netcdf file
-    CALL open_netcdf_file( netcdf%filename, netcdf%ncid)
-
-    ! Read the field data
-    CALL handle_error( nf90_get_var( netcdf%ncid, netcdf%id_var_ST, ST, start = (/ 1, 1 /) ))
-
-    ! Close the netcdf file
-    CALL close_netcdf_file( netcdf%ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE read_ISMIP_forcing_ST_baseline_file
+  END SUBROUTINE read_ISMIP_forcing_baseline_file
 
   SUBROUTINE inquire_ISMIP_forcing_aSMB_file( netcdf)
     ! Check if the right dimensions and variables are present in the file.

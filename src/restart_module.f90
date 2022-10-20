@@ -19,7 +19,7 @@ MODULE restart_module
   USE data_types_netcdf_module,        ONLY: type_netcdf_restart
   USE data_types_module,               ONLY: type_model_region, type_mesh, type_restart_data, type_remapping_mesh_mesh
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary, deallocate_mesh_all
-  USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, get_lat_lon_coordinates, find_triangle_areas, &
+  USE mesh_help_functions_module,      ONLY: find_Voronoi_cell_areas, calc_lat_lon_coordinates, find_triangle_areas, &
                                              find_connection_widths, determine_mesh_resolution, find_POI_xy_coordinates, &
                                              find_POI_vertices_and_weights, find_Voronoi_cell_geometric_centres, check_mesh, &
                                              calc_triangle_geometric_centres
@@ -121,7 +121,7 @@ CONTAINS
     CALL allocate_mesh_secondary(                 mesh)    ! Adds  9 MPI windows
     CALL calc_triangle_geometric_centres(         mesh)
     CALL find_Voronoi_cell_areas(                 mesh)
-    CALL get_lat_lon_coordinates(                 mesh)
+    CALL calc_lat_lon_coordinates(                mesh)
     CALL find_triangle_areas(                     mesh)
     CALL find_connection_widths(                  mesh)
     CALL make_Ac_mesh(                            mesh)    ! Adds  5 MPI windows
@@ -282,7 +282,7 @@ CONTAINS
     ! == Basal roughness
     ! ==================
 
-    IF (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_basal_sliding_inversion)) THEN
+    IF (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_slid_inv)) THEN
 
       CALL allocate_shared_dp_1D( region%mesh%nV, bed_method1,    wbed_method1)
       CALL allocate_shared_dp_1D( region%mesh%nV, bed_method2,    wbed_method2)
@@ -340,8 +340,8 @@ CONTAINS
 
         ! Make sure bed roughness stays within the prescribed limits
         region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), &
-                                             C%basal_sliding_inv_phi_min), &
-                                             C%basal_sliding_inv_phi_max)
+                                             C%slid_inv_phi_min), &
+                                             C%slid_inv_phi_max)
 
       END DO
       CALL sync
@@ -368,7 +368,7 @@ CONTAINS
       CALL sync
 
       ! Smooth the local variable
-      CALL smooth_Gaussian_2D( region%mesh, region%grid_smooth, rough_smoothed, C%basal_sliding_inv_rsmooth)
+      CALL smooth_Gaussian_2D( region%mesh, region%grid_smooth, rough_smoothed, C%slid_inv_Bernales2017_smooth_r)
 
       ! Set weight for combination with unsmoothed field
       basal_roughness_remap_wsmooth = 0.04_dp
@@ -380,7 +380,7 @@ CONTAINS
                                                 basal_roughness_remap_wsmooth  * rough_smoothed( vi)
 
           ! Make sure the variable stays within the prescribed limits
-          region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), C%basal_sliding_inv_phi_min), C%basal_sliding_inv_phi_max)
+          region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
 
       END DO
       CALL sync
@@ -390,7 +390,7 @@ CONTAINS
       CALL deallocate_shared( wbed_method2)
       CALL deallocate_shared( wrough_smoothed)
 
-    END IF ! (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_basal_sliding_inversion))
+    END IF ! (C%choice_basal_roughness == 'restart' .AND. (.NOT. C%do_slid_inv))
 
     ! == Finalisation
     ! ===============
@@ -494,8 +494,8 @@ CONTAINS
 
         ! Make sure bed roughness stays within the prescribed limits
         region%ice%phi_fric_a( vi) = MIN(MAX(region%ice%phi_fric_a( vi), &
-                                             C%basal_sliding_inv_phi_min), &
-                                             C%basal_sliding_inv_phi_max)
+                                             C%slid_inv_phi_min), &
+                                             C%slid_inv_phi_max)
 
       END DO
       CALL sync

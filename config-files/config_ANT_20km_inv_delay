@@ -40,7 +40,7 @@
   do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Whether or not to let UFEMISM dynamically create its own output folder
-  ! =======================================================================
+  ! ======================================================================
 
   create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
   fixed_output_dir_config                     = 'results_ANT_20km_inv_delay'     ! If not, create a directory with this name instead (stops the program if this directory already exists)
@@ -111,6 +111,10 @@
   ! Reference geometries (initial, present-day, and GIA equilibrium)
   ! ================================================================
 
+  ! Some pre-processing stuff for reference ice geometry
+  refgeo_Hi_min_config                        = 0.5                              ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
+  remove_Lake_Vostok_config                   = .TRUE.                           ! Remove Lake Vostok when running Antarctic simulations
+
   ! Initial geometry
   choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
   choice_refgeo_init_EAS_config               = 'realistic'                      ! Choice of initial geometry for Eurasia      ; can be "idealised", "realistic", or "restart"
@@ -140,8 +144,6 @@
   filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
   filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_2km.nc'
   filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
-
-  remove_Lake_Vostok_config                   = .TRUE.
 
   ! Whether or not the simulation is a restart of a previous simulation
   ! ===================================================================
@@ -307,20 +309,23 @@
   basal_roughness_restart_type_config         = 'last'                           ! Values from previous run: "last" (last output) or "average" (running average)
   do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
-  ! Basal sliding inversion
-  do_basal_sliding_inversion_config           = .TRUE.                           ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-  do_basal_sliding_smoothing_config           = .TRUE.                           ! If set to TRUE, inverted basal roughness is smoothed
-  do_basal_sliding_extrapole_config           = .TRUE.                           ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
-  basal_sliding_inv_t_start_config            = 0.0                              ! Minimum model time when the inversion is allowed
-  basal_sliding_inv_t_end_config              = 80000.0                          ! Maximum model time when the inversion is allowed
-  basal_sliding_inv_scale_config              = 20000.0                          ! Scaling constant for inversion procedure [m]
-  basal_sliding_inv_rsmooth_config            = 10000.0                          ! Smoothing radius for inversion procedure [m]
-  basal_sliding_inv_wsmooth_config            = 0.1                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
-  basal_sliding_inv_phi_max_config            = 30.0                             ! Maximum value of phi_fric allowed during inversion
-  basal_sliding_inv_phi_min_config            = 0.5                              ! Minimum value of phi_fric allowed during inversion
-  basal_sliding_inv_tol_diff_config           = 0.0                              ! Minimum ice thickness difference [m] that triggers inversion
-  basal_sliding_inv_tol_frac_config           = 0.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
-  phi_fric_window_size_config                 = 500                              ! Number of previous inversion time steps used to compute a running average of phi_fric
+  ! Bed roughness inversion
+  do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
+  choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
+  slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
+  slid_inv_phi_min_config                     = 0.5                              ! Minimum value of phi_fric allowed during inversion
+  slid_inv_phi_max_config                     = 30.0                             ! Maximum value of phi_fric allowed during inversion
+  slid_inv_filename_output_config             = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
+  slid_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
+  !
+  do_slid_inv_Bernales2017_smooth_config      = .TRUE.                           ! If set to TRUE, inverted basal roughness is smoothed
+  do_slid_inv_Bernales2017_extrap_config      = .TRUE.                           ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
+  slid_inv_Bernales2017_hi_scale_config       = 20000.0                          ! Scaling constant for inversion procedure [m]
+  slid_inv_Bernales2017_smooth_r_config       = 10000.0                          ! Smoothing radius for inversion procedure [m]
+  slid_inv_Bernales2017_smooth_w_config       = 0.1                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
+  slid_inv_Bernales2017_tol_diff_config       = 0.0                              ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
+  slid_inv_Bernales2017_tol_frac_config       = 0.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
 
   ! Ice dynamics - calving
   ! =========================
@@ -384,7 +389,7 @@
   filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
   name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
   name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
-  do_combine_data_and_inverted_ocean_config   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values from a restart file
+  use_inverted_ocean_config                   = .FALSE.                          ! Whether to combine the PD ocean data with inverted values
 
   ! GCM snapshots in the matrix_warm_cold option
   filename_GCM_ocean_snapshot_PI_config       = 'data/CMIP5/ocn/CCSM_CMIP5_piControl_ocean.nc'
@@ -454,20 +459,6 @@
   SMB_IMAUITM_inv_C_abl_Q_max_config          = 10.0                             ! Maximum value of C_abl_Q        allowed during inversion
   SMB_IMAUITM_inv_C_refr_min_config           = 0.0                              ! Minimum value of C_refr         allowed during inversion
   SMB_IMAUITM_inv_C_refr_max_config           = 10.0                             ! Maximum value of C_refr         allowed during inversion
-
-  ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
-  ! ==============================================================
-
-  ISMIP_forcing_filename_SMB_baseline_config  = 'data/ISMIP6/unforced/SMB_baseline/SMB_baseline_1900.nc' ! NetCDF file containing the baseline SMB
-  ISMIP_forcing_filename_ST_baseline_config   = 'data/ISMIP6/unforced/ST_baseline/ST_baseline_1900.nc'   ! NetCDF file containing the baseline temperature
-  ISMIP_forcing_foldername_aSMB_config        = 'data/ISMIP6/unforced/aSMB_unforced' ! Folder containing the single-year NetCDF files of the SMB anomaly
-  ISMIP_forcing_basefilename_aSMB_config      = 'aSMB_unforced_'                 ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_dSMBdz_config      = 'data/ISMIP6/unforced/dSMBdz_unforced' ! Folder containing the single-year NetCDF files of the SMB lapse rate
-  ISMIP_forcing_basefilename_dSMBdz_config    = 'dSMBdz_unforced_'               ! Filename without the year (e.g. if the actual file is "dSMBdz_MARv3.12-yearly-CESM2-ssp585-1950.nc", then this variable should be "dSMBdz_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_aST_config         = 'data/ISMIP6/unforced/aST_unforced'  ! Folder containing the single-year NetCDF files of the temperature anomaly
-  ISMIP_forcing_basefilename_aST_config       = 'aST_unforced_'                  ! Filename without the year (e.g. if the actual file is "aST_MARv3.12-yearly-CESM2-ssp585-1950.nc",    then this variable should be "aST_MARv3.12-yearly-CESM2-ssp585-"
-  ISMIP_forcing_foldername_dSTdz_config       = 'data/ISMIP6/unforced/dSTdz_unforced' ! Folder containing the single-year NetCDF files of the temperature lapse rate
-  ISMIP_forcing_basefilename_dSTdz_config     = 'dSTdz_unforced_'                ! Filename without the year (e.g. if the actual file is "dSTdz_MARv3.12-yearly-CESM2-ssp585-1950.nc",  then this variable should be "dSTdz_MARv3.12-yearly-CESM2-ssp585-"
 
   ! Basal mass balance
   ! ==================

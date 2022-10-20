@@ -27,10 +27,12 @@ MODULE reference_fields_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             is_floating, surface_elevation, remove_Lake_Vostok, oblique_sg_projection
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, inquire_reference_geometry_file, read_reference_geometry_file
+                                             is_floating, surface_elevation, remove_Lake_Vostok, &
+                                             oblique_sg_projection, deallocate_grid
   USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, &
                                              type_mesh, type_remapping_mesh_mesh, type_restart_data
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
+  USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
   USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, &
                                              deallocate_remapping_operators_grid2mesh, &
                                              calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
@@ -191,96 +193,32 @@ CONTAINS
     ! Projection parameters for this region
     CALL allocate_shared_dp_0D(  refgeo%grid%lambda_M,     refgeo%grid%wlambda_M    )
     CALL allocate_shared_dp_0D(  refgeo%grid%phi_M,        refgeo%grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  refgeo%grid%alpha_stereo, refgeo%grid%walpha_stereo)
+    CALL allocate_shared_dp_0D(  refgeo%grid%beta_stereo,  refgeo%grid%wbeta_stereo)
 
     IF     (region_name == 'NAM') THEN
       refgeo%grid%lambda_M     = C%lambda_M_NAM
       refgeo%grid%phi_M        = C%phi_M_NAM
-      refgeo%grid%alpha_stereo = C%alpha_stereo_NAM
+      refgeo%grid%beta_stereo  = C%beta_stereo_NAM
     ELSEIF (region_name == 'EAS') THEN
       refgeo%grid%lambda_M     = C%lambda_M_EAS
       refgeo%grid%phi_M        = C%phi_M_EAS
-      refgeo%grid%alpha_stereo = C%alpha_stereo_EAS
+      refgeo%grid%beta_stereo  = C%beta_stereo_EAS
     ELSEIF (region_name == 'GRL') THEN
       refgeo%grid%lambda_M     = C%lambda_M_GRL
       refgeo%grid%phi_M        = C%phi_M_GRL
-      refgeo%grid%alpha_stereo = C%alpha_stereo_GRL
+      refgeo%grid%beta_stereo  = C%beta_stereo_GRL
     ELSEIF (region_name == 'ANT') THEN
       refgeo%grid%lambda_M     = C%lambda_M_ANT
       refgeo%grid%phi_M        = C%phi_M_ANT
-      refgeo%grid%alpha_stereo = C%alpha_stereo_ANT
+      refgeo%grid%beta_stereo  = C%beta_stereo_ANT
     END IF
-
-    ! Inquire if all the required fields are present in the specified NetCDF file,
-    ! and determine the dimensions of the memory to be allocated.
-    CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
-    CALL allocate_shared_int_0D( refgeo%grid%ny, refgeo%grid%wny)
-    IF (par%master) THEN
-      refgeo%netcdf%filename = filename_refgeo
-      CALL inquire_reference_geometry_file( refgeo)
-    END IF
-    CALL sync
-
-    ! Assign range to each processor
-    CALL partition_list( refgeo%grid%nx, par%i, par%n, refgeo%grid%i1, refgeo%grid%i2)
-    CALL partition_list( refgeo%grid%ny, par%i, par%n, refgeo%grid%j1, refgeo%grid%j2)
-
-    ! Allocate memory for raw data
-    CALL allocate_shared_dp_1D( refgeo%grid%nx,                 refgeo%grid%x,  refgeo%grid%wx )
-    CALL allocate_shared_dp_1D(                 refgeo%grid%ny, refgeo%grid%y,  refgeo%grid%wy )
-
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hi_grid, refgeo%wHi_grid)
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hb_grid, refgeo%wHb_grid)
-    CALL allocate_shared_dp_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%Hs_grid, refgeo%wHs_grid)
 
     ! Read data from input file
-    IF (par%master) CALL read_reference_geometry_file( refgeo)
-    CALL sync
-
-    ! Fill in secondary grid parameters
-    CALL allocate_shared_dp_0D( refgeo%grid%dx,   refgeo%grid%wdx  )
-    CALL allocate_shared_dp_0D( refgeo%grid%xmin, refgeo%grid%wxmin)
-    CALL allocate_shared_dp_0D( refgeo%grid%xmax, refgeo%grid%wxmax)
-    CALL allocate_shared_dp_0D( refgeo%grid%ymin, refgeo%grid%wymin)
-    CALL allocate_shared_dp_0D( refgeo%grid%ymax, refgeo%grid%wymax)
-    IF (par%master) THEN
-      refgeo%grid%dx = refgeo%grid%x( 2) - refgeo%grid%x( 1)
-      refgeo%grid%xmin = refgeo%grid%x( 1             )
-      refgeo%grid%xmax = refgeo%grid%x( refgeo%grid%nx)
-      refgeo%grid%ymin = refgeo%grid%y( 1             )
-      refgeo%grid%ymax = refgeo%grid%y( refgeo%grid%ny)
-    END IF
-    CALL sync
-
-    ! Tolerance; points lying within this distance of each other are treated as identical
-    CALL allocate_shared_dp_0D( refgeo%grid%tol_dist, refgeo%grid%wtol_dist)
-    IF (par%master) refgeo%grid%tol_dist = ((refgeo%grid%xmax - refgeo%grid%xmin) + (refgeo%grid%ymax - refgeo%grid%ymin)) * tol / 2._dp
-
-    ! Set up grid-to-vector translation tables
-    CALL allocate_shared_int_0D(                   refgeo%grid%n           , refgeo%grid%wn           )
-    IF (par%master) refgeo%grid%n  = refgeo%grid%nx * refgeo%grid%ny
-    CALL sync
-    CALL allocate_shared_int_2D( refgeo%grid%nx, refgeo%grid%ny, refgeo%grid%ij2n        , refgeo%grid%wij2n        )
-    CALL allocate_shared_int_2D( refgeo%grid%n , 2      , refgeo%grid%n2ij        , refgeo%grid%wn2ij        )
-    IF (par%master) THEN
-      n = 0
-      DO i = 1, refgeo%grid%nx
-        IF (MOD(i,2) == 1) THEN
-          DO j = 1, refgeo%grid%ny
-            n = n+1
-            refgeo%grid%ij2n( i,j) = n
-            refgeo%grid%n2ij( n,:) = [i,j]
-          END DO
-        ELSE
-          DO j = refgeo%grid%ny, 1, -1
-            n = n+1
-            refgeo%grid%ij2n( i,j) = n
-            refgeo%grid%n2ij( n,:) = [i,j]
-          END DO
-        END IF
-      END DO
-    END IF
-    CALL sync
+    CALL read_field_from_xy_file_2D( filename_refgeo, 'default_options_Hi', region_name, refgeo%grid, refgeo%Hi_grid, refgeo%wHi_grid)
+    CALL deallocate_grid( refgeo%grid)
+    CALL read_field_from_xy_file_2D( filename_refgeo, 'default_options_Hb', region_name, refgeo%grid, refgeo%Hb_grid, refgeo%wHb_grid)
+    CALL deallocate_grid( refgeo%grid)
+    CALL read_field_from_xy_file_2D( filename_refgeo, 'default_options_Hs', region_name, refgeo%grid, refgeo%Hs_grid, refgeo%wHs_grid)
 
     ! Safety
     CALL check_for_NaN_dp_2D( refgeo%Hi_grid, 'refgeo%Hi_grid')
@@ -295,10 +233,12 @@ CONTAINS
     ! Remove ice based on the no-ice masks (grid versions)
     CALL apply_mask_noice_grid( refgeo, region_name)
 
+    ! Remove very thin ice (particularly BedMachine Greenland, which inexplicably covers a lot of tundra with half a meter of ice)
     DO j = 1, refgeo%grid%ny
     DO i = refgeo%grid%i1, refgeo%grid%i2
-      IF (refgeo%Hi_grid( i,j) < C%minimum_ice_thickness) THEN
+      IF (refgeo%Hi_grid( i,j) < C%refgeo_Hi_min) THEN
         refgeo%Hi_grid( i,j) = 0._dp
+        refgeo%Hs_grid( i,j) = MAX( 0._dp, refgeo%Hb_grid( i,j))
       END IF
     END DO
     END DO
@@ -336,13 +276,12 @@ CONTAINS
     ! Projection parameters for this region
     CALL allocate_shared_dp_0D(  refgeo%grid%lambda_M,     refgeo%grid%wlambda_M    )
     CALL allocate_shared_dp_0D(  refgeo%grid%phi_M,        refgeo%grid%wphi_M       )
-    CALL allocate_shared_dp_0D(  refgeo%grid%alpha_stereo, refgeo%grid%walpha_stereo)
+    CALL allocate_shared_dp_0D(  refgeo%grid%beta_stereo,  refgeo%grid%wbeta_stereo)
 
 
     refgeo%grid%lambda_M     = refgeo_PD%grid%lambda_M
     refgeo%grid%phi_M        = refgeo_PD%grid%phi_M
-    refgeo%grid%alpha_stereo = refgeo_PD%grid%alpha_stereo
-
+    refgeo%grid%beta_stereo  = refgeo_PD%grid%beta_stereo
 
     ! Allocate memory for grid size
     CALL allocate_shared_int_0D( refgeo%grid%nx, refgeo%grid%wnx)
@@ -652,8 +591,8 @@ CONTAINS
     pb_latlon = [82.19_dp, -60.00_dp]
 
     ! The two endpoints in x,y
-    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%alpha_stereo, xa, ya)
-    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%alpha_stereo, xb, yb)
+    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%beta_stereo, xa, ya)
+    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), refgeo%grid%lambda_M, refgeo%grid%phi_M, refgeo%grid%beta_stereo, xb, yb)
 
     pa = [xa,ya]
     pb = [xb,yb]

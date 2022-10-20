@@ -23,8 +23,7 @@ MODULE SMB_module
                                              reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
-                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                             transpose_dp_2D, transpose_dp_3D
+                                             check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, &
                                              type_SMB_model, type_remapping_mesh_mesh, &
@@ -780,7 +779,7 @@ CONTAINS
     CALL init_routine( routine_name)
 
     DO vi = mesh%vi1, mesh%vi2
-        SMB%SMB_year( vi) = climate_matrix%ISMIP_forcing%SMB( vi)
+      SMB%SMB_year( vi) = climate_matrix%ISMIP_style%SMB( vi)
     END DO
     CALL sync
 

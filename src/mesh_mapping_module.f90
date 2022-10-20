@@ -24,8 +24,8 @@ MODULE mesh_mapping_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_remapping_mesh_mesh, type_grid, type_remapping_latlon2mesh, &
-                                             type_latlongrid, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
+  USE data_types_module,               ONLY: type_mesh, type_remapping_mesh_mesh, type_grid, type_grid_lonlat, &
+                                             type_remapping_lonlat2mesh, type_single_row_mapping_matrices, type_sparse_matrix_CSR_dp
   USE mesh_help_functions_module,      ONLY: is_in_triangle, write_mesh_to_text_file, lies_on_line_segment, segment_intersection, &
                                              find_containing_vertex, find_containing_triangle, is_in_Voronoi_cell, &
                                              find_shared_Voronoi_boundary, cross2, find_Voronoi_cell_vertices, find_triangle_area
@@ -241,20 +241,20 @@ CONTAINS
 
   END SUBROUTINE map_mesh2grid_3D
 
-  ! == Subroutine for mapping data from a global lat-lon grid and the mesh ==
-  SUBROUTINE create_remapping_arrays_glob_mesh( mesh, grid, map)
-    ! Create remapping arrays for remapping data from a global lat-lon grid to the model mesh
+  ! == Subroutine for mapping data from a lat/lon-grid and the mesh ==
+  SUBROUTINE create_remapping_arrays_lonlat_mesh( mesh, grid_lonlat, map)
+    ! Create remapping arrays for remapping data from a global lon/lat-grid to the model mesh
     ! using bilinear interpolation
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_latlongrid),               INTENT(IN)    :: grid
-    TYPE(type_remapping_latlon2mesh),    INTENT(INOUT) :: map
+    TYPE(type_grid_lonlat),              INTENT(IN)    :: grid_lonlat
+    TYPE(type_remapping_lonlat2mesh),    INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_remapping_arrays_glob_mesh'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_remapping_arrays_lonlat_mesh'
     INTEGER                                            :: vi
     INTEGER                                            :: il,iu,jl,ju
     REAL(dp)                                           :: wil,wiu,wjl,wju
@@ -275,27 +275,27 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Find enveloping lat-lon indices
-      il  = MAX(1, MIN( grid%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid%lon)) / (grid%lon(2) - grid%lon(1)))))
+      il  = MAX(1, MIN( grid_lonlat%nlon-1, 1 + FLOOR((mesh%lon( vi) - MINVAL(grid_lonlat%lon)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1)))))
       iu  = il + 1
-      wil = (grid%lon(iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+      wil = (grid_lonlat%lon(iu) - mesh%lon( vi)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
       wiu = 1._dp - wil
 
       ! Exception for pixels near the zero meridian
-      IF (mesh%lon( vi) < MINVAL(grid%lon)) THEN
-        il  = grid%nlon
+      IF (mesh%lon( vi) < MINVAL(grid_lonlat%lon)) THEN
+        il  = grid_lonlat%nlon
         iu  = 1
-        wil = (grid%lon( iu) - mesh%lon( vi)) / (grid%lon(2) - grid%lon(1))
+        wil = (grid_lonlat%lon( iu) - mesh%lon( vi)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
         wiu = 1._dp - wil
-      ELSEIF (mesh%lon( vi) > MAXVAL(grid%lon)) THEN
-        il  = grid%nlon
+      ELSEIF (mesh%lon( vi) > MAXVAL(grid_lonlat%lon)) THEN
+        il  = grid_lonlat%nlon
         iu  = 1
-        wiu = (mesh%lon( vi) - grid%lon( il)) / (grid%lon(2) - grid%lon(1))
+        wiu = (mesh%lon( vi) - grid_lonlat%lon( il)) / (grid_lonlat%lon(2) - grid_lonlat%lon(1))
         wil = 1._dp - wiu
       END IF
 
-      jl  = MAX(1, MIN( grid%nlat-1, 1 + FLOOR((mesh%lat( vi) - MINVAL(grid%lat)) / (grid%lat(2) - grid%lat(1)))))
+      jl  = MAX(1, MIN( grid_lonlat%nlat-1, 1 + FLOOR((mesh%lat( vi) - MINVAL(grid_lonlat%lat)) / (grid_lonlat%lat(2) - grid_lonlat%lat(1)))))
       ju  = jl + 1
-      wjl = (grid%lat( ju) - mesh%lat( vi)) / (grid%lat(2) - grid%lat(1))
+      wjl = (grid_lonlat%lat( ju) - mesh%lat( vi)) / (grid_lonlat%lat(2) - grid_lonlat%lat(1))
       wju = 1 - wjl
 
       ! Write to mapping arrays
@@ -314,20 +314,20 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected=8)
 
-  END SUBROUTINE create_remapping_arrays_glob_mesh
-  SUBROUTINE map_latlon2mesh_2D( mesh, map, d_grid, d_mesh)
-    ! Map data from a global lat-lon grid to the model mesh using bilinear interpolation
+  END SUBROUTINE create_remapping_arrays_lonlat_mesh
+  SUBROUTINE map_lonlat2mesh_2D( mesh, map, d_grid, d_mesh)
+    ! Map data from a lon/lat-grid to the model mesh using bilinear interpolation
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_remapping_latlon2mesh),    INTENT(IN)    :: map
+    TYPE(type_remapping_lonlat2mesh),    INTENT(IN)    :: map
     REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:    ),          INTENT(OUT)   :: d_mesh
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_latlon2mesh_2D'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_lonlat2mesh_2D'
     INTEGER                                            :: vi
     INTEGER                                            :: il,iu,jl,ju
     REAL(dp)                                           :: wil,wiu,wjl,wju
@@ -357,20 +357,20 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_latlon2mesh_2D
-  SUBROUTINE map_latlon2mesh_3D( mesh, map, d_grid, d_mesh)
-    ! Map data from a global lat-lon grid to the model mesh using bilinear interpolation
+  END SUBROUTINE map_lonlat2mesh_2D
+  SUBROUTINE map_lonlat2mesh_3D( mesh, map, d_grid, d_mesh)
+    ! Map data from a lon/lat-grid to the model mesh using bilinear interpolation
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_remapping_latlon2mesh),    INTENT(IN)    :: map
+    TYPE(type_remapping_lonlat2mesh),    INTENT(IN)    :: map
     REAL(dp), DIMENSION(:,:,:),          INTENT(IN)    :: d_grid
     REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: d_mesh
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_latlon2mesh_3D'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_lonlat2mesh_3D'
     INTEGER                                            :: vi
     INTEGER                                            :: il,iu,jl,ju
     REAL(dp)                                           :: wil,wiu,wjl,wju
@@ -400,16 +400,16 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_latlon2mesh_3D
-  SUBROUTINE deallocate_remapping_arrays_glob_mesh( map)
+  END SUBROUTINE map_lonlat2mesh_3D
+  SUBROUTINE deallocate_remapping_arrays_lonlat_mesh( map)
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_remapping_latlon2mesh),    INTENT(INOUT) :: map
+    TYPE(type_remapping_lonlat2mesh),    INTENT(INOUT) :: map
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_arrays_glob_mesh'
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'deallocate_remapping_arrays_lonlat_mesh'
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -426,7 +426,7 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE deallocate_remapping_arrays_glob_mesh
+  END SUBROUTINE deallocate_remapping_arrays_lonlat_mesh
 
 ! == Mapping data between two meshes
 

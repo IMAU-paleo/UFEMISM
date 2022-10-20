@@ -38,7 +38,7 @@ MODULE configuration_module
 
   TYPE subroutine_resource_tracker
     ! Track the resource use (computation time, memory) of a single subroutine
-    CHARACTER(LEN = 1024) :: routine_path
+    CHARACTER(LEN = 2048) :: routine_path
     REAL(dp)              :: tstart, tcomp
     INTEGER               :: n_MPI_windows_init, n_MPI_windows_final
     REAL(dp)              :: mem_use, mem_use_max
@@ -126,24 +126,40 @@ MODULE configuration_module
     LOGICAL             :: do_check_for_NaN_config                     = .FALSE.                          ! Whether or not fields should be checked for NaN values
     LOGICAL             :: do_time_display_config                      = .FALSE.                          ! Print current model time to screen
 
-  ! == Domain size for the four regions
-  ! ===================================
+  ! == The four model regions
+  ! =========================
 
-    REAL(dp)            :: xmin_NAM_config                             = -3600000._dp                     ! Western  boundary     of the North America domain [m]
+    ! North America
+    REAL(dp)            :: lambda_M_NAM_config                         = 265._dp                          ! Longitude of the pole of the stereographic projection for the North America domain [degrees east]
+    REAL(dp)            :: phi_M_NAM_config                            = 62._dp                           ! Latitude  of the pole of the stereographic projection for the North America domain [degrees north]
+    REAL(dp)            :: beta_stereo_NAM_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the North America domain [degrees]
+    REAL(dp)            :: xmin_NAM_config                             = -3600000._dp                     ! Western  boundary        of the North America domain [m]
     REAL(dp)            :: xmax_NAM_config                             =  3600000._dp                     ! Eastern  boundary     of the North America domain [m]
     REAL(dp)            :: ymin_NAM_config                             = -2400000._dp                     ! Southern boundary     of the North America domain [m]
     REAL(dp)            :: ymax_NAM_config                             =  2400000._dp                     ! Northern boundary     of the North America domain [m]
 
+    ! Eurasia
+    REAL(dp)            :: lambda_M_EAS_config                         = 40._dp                           ! Longitude of the pole of the stereographic projection for the Eurasia domain [degrees east]
+    REAL(dp)            :: phi_M_EAS_config                            = 70._dp                           ! Latitude  of the pole of the stereographic projection for the Eurasia domain [degrees north]
+    REAL(dp)            :: beta_stereo_EAS_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the Eurasia domain [degrees]
     REAL(dp)            :: xmin_EAS_config                             = -3400000._dp                     ! Western  boundary     of the Eurasia domain [m]
     REAL(dp)            :: xmax_EAS_config                             =  3400000._dp                     ! Eastern  boundary     of the Eurasia domain [m]
     REAL(dp)            :: ymin_EAS_config                             = -2080000._dp                     ! Southern boundary     of the Eurasia domain [m]
     REAL(dp)            :: ymax_EAS_config                             =  2080000._dp                     ! Northern boundary     of the Eurasia domain [m]
 
-    REAL(dp)            :: xmin_GRL_config                             =  -830000._dp                     ! Western  boundary     of the Greenland domain [m]
-    REAL(dp)            :: xmax_GRL_config                             =   830000._dp                     ! Eastern  boundary     of the Greenland domain [m]
-    REAL(dp)            :: ymin_GRL_config                             = -1430000._dp                     ! Southern boundary     of the Greenland domain [m]
-    REAL(dp)            :: ymax_GRL_config                             =  1430000._dp                     ! Northern boundary     of the Greenland domain [m]
+    ! Greenland
+    REAL(dp)            :: lambda_M_GRL_config                         = -45._dp                          ! Longitude of the pole of the stereographic projection for the Greenland domain [degrees east]
+    REAL(dp)            :: phi_M_GRL_config                            = 90._dp                           ! Latitude  of the pole of the stereographic projection for the Greenland domain [degrees north]
+    REAL(dp)            :: beta_stereo_GRL_config                      = 70._dp                           ! Standard parallel     of the stereographic projection for the Greenland domain [degrees]
+    REAL(dp)            :: xmin_GRL_config                             =  -720000._dp                     ! Western  boundary     of the Greenland domain [m]
+    REAL(dp)            :: xmax_GRL_config                             =   960000._dp                     ! Eastern  boundary     of the Greenland domain [m]
+    REAL(dp)            :: ymin_GRL_config                             = -3450000._dp                     ! Southern boundary     of the Greenland domain [m]
+    REAL(dp)            :: ymax_GRL_config                             =  -570000._dp                     ! Northern boundary     of the Greenland domain [m]
 
+    ! Antarctica
+    REAL(dp)            :: lambda_M_ANT_config                         = 0._dp                            ! Longitude of the pole of the stereographic projection for the Antarctica domain [degrees east]
+    REAL(dp)            :: phi_M_ANT_config                            = -90._dp                          ! Latitude  of the pole of the stereographic projection for the Antarctica domain [degrees north]
+    REAL(dp)            :: beta_stereo_ANT_config                      = 71._dp                           ! Standard parallel     of the stereographic projection for the Antarctica domain [degrees]
     REAL(dp)            :: xmin_ANT_config                             = -3300000._dp                     ! Western  boundary     of the Antarctica domain [m]
     REAL(dp)            :: xmax_ANT_config                             =  3300000._dp                     ! Eastern  boundary     of the Antarctica domain [m]
     REAL(dp)            :: ymin_ANT_config                             = -3300000._dp                     ! Southern boundary     of the Antarctica domain [m]
@@ -227,6 +243,10 @@ MODULE configuration_module
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    REAL(dp)            :: refgeo_Hi_min_config                        = 2.0_dp                           ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
+    LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.                           ! Remove Lake Vostok when running Antarctic simulations
+
     ! == Initial geometry
     ! ===================
 
@@ -274,8 +294,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_EAS_config            = 'data/ETOPO1/Eurasia_ETOPO1_5km.nc'
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_GRL_config            = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'
     CHARACTER(LEN=256)  :: filename_refgeo_GIAeq_ANT_config            = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc'
-
-    LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.
 
   ! == Whether or not the simulation is a restart of a previous simulation
   ! ======================================================================
@@ -454,20 +472,30 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: basal_roughness_restart_type_config         = 'average'                        ! Values from previous run: "last" (last output) or "average" (running average)
     LOGICAL             :: do_basal_roughness_remap_adjustment_config  = .TRUE.                           ! If TRUE, adjust bed roughness based on previous dH_dt history after a mesh update/remap
 
-    ! Basal sliding inversion
-    LOGICAL             :: do_basal_sliding_inversion_config           = .FALSE.                          ! If set to TRUE, basal roughness is iteratively adjusted to match initial ice thickness
-    LOGICAL             :: do_basal_sliding_smoothing_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
-    LOGICAL             :: do_basal_sliding_extrapole_config           = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
-    REAL(dp)            :: basal_sliding_inv_t_start_config            = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
-    REAL(dp)            :: basal_sliding_inv_t_end_config              = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
-    REAL(dp)            :: basal_sliding_inv_scale_config              = 10000._dp                        ! Scaling constant for inversion procedure [m]
-    REAL(dp)            :: basal_sliding_inv_rsmooth_config            = 500._dp                          ! Smoothing radius for inversion procedure [m]
-    REAL(dp)            :: basal_sliding_inv_wsmooth_config            = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
-    REAL(dp)            :: basal_sliding_inv_phi_max_config            = 30._dp                           ! Maximum value of phi_fric allowed during inversion
-    REAL(dp)            :: basal_sliding_inv_phi_min_config            = 2._dp                            ! Minimum value of phi_fric allowed during inversion
-    REAL(dp)            :: basal_sliding_inv_tol_diff_config           = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
-    REAL(dp)            :: basal_sliding_inv_tol_frac_config           = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
-    INTEGER             :: phi_fric_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of phi_fric
+    ! Bed roughness inversion
+    LOGICAL             :: do_slid_inv_config                          = .FALSE.                          ! Whether or not to perform an iterative inversion of bed roughness
+    CHARACTER(LEN=256)  :: choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+    REAL(dp)            :: slid_inv_t_start_config                     = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+    REAL(dp)            :: slid_inv_t_end_config                       = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+    REAL(dp)            :: slid_inv_phi_min_config                     = 2._dp                            ! Minimum value of phi_fric allowed during inversion
+    REAL(dp)            :: slid_inv_phi_max_config                     = 30._dp                           ! Maximum value of phi_fric allowed during inversion
+    CHARACTER(LEN=256)  :: slid_inv_filename_output_config             = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
+    INTEGER             :: slid_inv_window_size_config                 = 1000                             ! Number of previous time steps used to compute a running average of inverted values
+
+    LOGICAL             :: do_slid_inv_Bernales2017_smooth_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
+    LOGICAL             :: do_slid_inv_Bernales2017_extrap_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
+    REAL(dp)            :: slid_inv_Bernales2017_hi_scale_config       = 10000._dp                        ! Scaling constant for inversion procedure [m]
+    REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 500._dp                          ! Smoothing radius for inversion procedure [m]
+    REAL(dp)            :: slid_inv_Bernales2017_smooth_w_config       = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
+    REAL(dp)            :: slid_inv_Bernales2017_tol_diff_config       = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion
+    REAL(dp)            :: slid_inv_Bernales2017_tol_frac_config       = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+
+    REAL(dp)            :: slid_inv_Berends2022_tauc_config            = 10._dp                           ! Timescale       in the Berends2022 geometry/velocity-based basal inversion method [yr]
+    REAL(dp)            :: slid_inv_Berends2022_H0_config              = 100._dp                          ! First  thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+    REAL(dp)            :: slid_inv_Berends2022_u0_config              = 250._dp                          ! First  velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+    REAL(dp)            :: slid_inv_Berends2022_Hi_scale_config        = 300._dp                          ! Second thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+    REAL(dp)            :: slid_inv_Berends2022_u_scale_config         = 3000._dp                         ! Second velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+    CHARACTER(LEN=256)  :: slid_inv_target_velocity_filename_config    = ''                               ! NetCDF file where the target velocities are read in the Berends2022 geometry/velocity-based basal inversion methods
 
   ! == Ice dynamics - calving
   ! =========================
@@ -622,8 +650,7 @@ MODULE configuration_module
   ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
   ! ==============================================================
 
-    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_SMB_baseline_config  = ''                              ! NetCDF file containing the baseline SMB
-    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_ST_baseline_config   = ''                              ! NetCDF file containing the baseline temperature
+    CHARACTER(LEN=256)  :: ISMIP_forcing_filename_baseline_config      = ''                              ! NetCDF file containing the baseline climate
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_aSMB_config        = ''                              ! Folder containing the single-year NetCDF files of the SMB anomaly
     CHARACTER(LEN=256)  :: ISMIP_forcing_basefilename_aSMB_config      = ''                              ! Filename without the year (e.g. if the actual file is "aSMB_MARv3.12-yearly-CESM2-ssp585-1950.nc",   then this variable should be "aSMB_MARv3.12-yearly-CESM2-ssp585-"
     CHARACTER(LEN=256)  :: ISMIP_forcing_foldername_dSMBdz_config      = ''                              ! Folder containing the single-year NetCDF files of the SMB lapse rate
@@ -912,24 +939,40 @@ MODULE configuration_module
     LOGICAL                             :: do_check_for_NaN
     LOGICAL                             :: do_time_display
 
-    ! Domain size for the four regions
-    ! ================================
+    ! == The four model regions
+    ! =========================
 
+    ! North America
+    REAL(dp)                            :: lambda_M_NAM
+    REAL(dp)                            :: phi_M_NAM
+    REAL(dp)                            :: beta_stereo_NAM
     REAL(dp)                            :: xmin_NAM
     REAL(dp)                            :: xmax_NAM
     REAL(dp)                            :: ymin_NAM
     REAL(dp)                            :: ymax_NAM
 
+    ! Eurasia
+    REAL(dp)                            :: lambda_M_EAS
+    REAL(dp)                            :: phi_M_EAS
+    REAL(dp)                            :: beta_stereo_EAS
     REAL(dp)                            :: xmin_EAS
     REAL(dp)                            :: xmax_EAS
     REAL(dp)                            :: ymin_EAS
     REAL(dp)                            :: ymax_EAS
 
+    ! Greenland
+    REAL(dp)                            :: lambda_M_GRL
+    REAL(dp)                            :: phi_M_GRL
+    REAL(dp)                            :: beta_stereo_GRL
     REAL(dp)                            :: xmin_GRL
     REAL(dp)                            :: xmax_GRL
     REAL(dp)                            :: ymin_GRL
     REAL(dp)                            :: ymax_GRL
 
+    ! Antarctica
+    REAL(dp)                            :: lambda_M_ANT
+    REAL(dp)                            :: phi_M_ANT
+    REAL(dp)                            :: beta_stereo_ANT
     REAL(dp)                            :: xmin_ANT
     REAL(dp)                            :: xmax_ANT
     REAL(dp)                            :: ymin_ANT
@@ -937,7 +980,6 @@ MODULE configuration_module
 
     ! Mesh generation parameters
     ! ==========================
-
 
     LOGICAL                             :: use_submesh
     INTEGER                             :: nconmax
@@ -996,6 +1038,10 @@ MODULE configuration_module
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    REAL(dp)                            :: refgeo_Hi_min
+    LOGICAL                             :: remove_Lake_Vostok
+
     ! Initial geometry
     CHARACTER(LEN=256)                  :: choice_refgeo_init_NAM
     CHARACTER(LEN=256)                  :: choice_refgeo_init_EAS
@@ -1031,8 +1077,6 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_EAS
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_GRL
     CHARACTER(LEN=256)                  :: filename_refgeo_GIAeq_ANT
-
-    LOGICAL                             :: remove_Lake_Vostok
 
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
@@ -1203,20 +1247,30 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: basal_roughness_restart_type
     LOGICAL                             :: do_basal_roughness_remap_adjustment
 
-    ! Basal roughness inversion
-    LOGICAL                             :: do_basal_sliding_inversion
-    LOGICAL                             :: do_basal_sliding_smoothing
-    LOGICAL                             :: do_basal_sliding_extrapole
-    REAL(dp)                            :: basal_sliding_inv_t_start
-    REAL(dp)                            :: basal_sliding_inv_t_end
-    REAL(dp)                            :: basal_sliding_inv_scale
-    REAL(dp)                            :: basal_sliding_inv_rsmooth
-    REAL(dp)                            :: basal_sliding_inv_wsmooth
-    REAL(dp)                            :: basal_sliding_inv_phi_max
-    REAL(dp)                            :: basal_sliding_inv_phi_min
-    REAL(dp)                            :: basal_sliding_inv_tol_diff
-    REAL(dp)                            :: basal_sliding_inv_tol_frac
-    INTEGER                             :: phi_fric_window_size
+    ! Bed roughness inversion
+    LOGICAL                             :: do_slid_inv
+    CHARACTER(LEN=256)                  :: choice_slid_inv_method
+    REAL(dp)                            :: slid_inv_t_start
+    REAL(dp)                            :: slid_inv_t_end
+    REAL(dp)                            :: slid_inv_phi_min
+    REAL(dp)                            :: slid_inv_phi_max
+    CHARACTER(LEN=256)                  :: slid_inv_filename_output
+    INTEGER                             :: slid_inv_window_size
+
+    LOGICAL                             :: do_slid_inv_Bernales2017_smooth
+    LOGICAL                             :: do_slid_inv_Bernales2017_extrap
+    REAL(dp)                            :: slid_inv_Bernales2017_hi_scale
+    REAL(dp)                            :: slid_inv_Bernales2017_smooth_r
+    REAL(dp)                            :: slid_inv_Bernales2017_smooth_w
+    REAL(dp)                            :: slid_inv_Bernales2017_tol_diff
+    REAL(dp)                            :: slid_inv_Bernales2017_tol_frac
+
+    REAL(dp)                            :: slid_inv_Berends2022_tauc
+    REAL(dp)                            :: slid_inv_Berends2022_H0
+    REAL(dp)                            :: slid_inv_Berends2022_u0
+    REAL(dp)                            :: slid_inv_Berends2022_Hi_scale
+    REAL(dp)                            :: slid_inv_Berends2022_u_scale
+    CHARACTER(LEN=256)                  :: slid_inv_target_velocity_filename
 
     ! Ice dynamics - calving
     ! ======================
@@ -1371,8 +1425,7 @@ MODULE configuration_module
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
-    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_SMB_baseline
-    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_ST_baseline
+    CHARACTER(LEN=256)                  :: ISMIP_forcing_filename_baseline
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_aSMB
     CHARACTER(LEN=256)                  :: ISMIP_forcing_basefilename_aSMB
     CHARACTER(LEN=256)                  :: ISMIP_forcing_foldername_dSMBdz
@@ -1604,23 +1657,6 @@ MODULE configuration_module
     INTEGER                             :: type_margin
     INTEGER                             :: type_groundingline
     INTEGER                             :: type_calvingfront
-
-   ! Parameters of the polar stereographic projections of the four model regions
-   ! (These have to match the values used to create the input files!)
-   ! ===========================================================================
-
-    REAL(dp)                            :: lambda_M_NAM
-    REAL(dp)                            :: lambda_M_EAS
-    REAL(dp)                            :: lambda_M_GRL
-    REAL(dp)                            :: lambda_M_ANT
-    REAL(dp)                            :: phi_M_NAM
-    REAL(dp)                            :: phi_M_EAS
-    REAL(dp)                            :: phi_M_GRL
-    REAL(dp)                            :: phi_M_ANT
-    REAL(dp)                            :: alpha_stereo_NAM
-    REAL(dp)                            :: alpha_stereo_EAS
-    REAL(dp)                            :: alpha_stereo_GRL
-    REAL(dp)                            :: alpha_stereo_ANT
 
     ! The output directory
     ! ====================
@@ -1923,24 +1959,38 @@ CONTAINS
                      do_write_grid_data_config,                       &
                      do_check_for_NaN_config,                         &
                      do_time_display_config,                          &
+                     lambda_M_NAM_config,                             &
+                     phi_M_NAM_config,                                &
+                     beta_stereo_NAM_config,                          &
                      xmin_NAM_config,                                 &
                      xmax_NAM_config,                                 &
                      ymin_NAM_config,                                 &
                      ymax_NAM_config,                                 &
+                     lambda_M_EAS_config,                             &
+                     phi_M_EAS_config,                                &
+                     beta_stereo_EAS_config,                          &
                      xmin_EAS_config,                                 &
                      xmax_EAS_config,                                 &
                      ymin_EAS_config,                                 &
                      ymax_EAS_config,                                 &
+                     lambda_M_GRL_config,                             &
+                     phi_M_GRL_config,                                &
+                     beta_stereo_GRL_config,                          &
                      xmin_GRL_config,                                 &
                      xmax_GRL_config,                                 &
                      ymin_GRL_config,                                 &
                      ymax_GRL_config,                                 &
+                     lambda_M_ANT_config,                             &
+                     phi_M_ANT_config,                                &
+                     beta_stereo_ANT_config,                          &
                      xmin_ANT_config,                                 &
                      xmax_ANT_config,                                 &
                      ymin_ANT_config,                                 &
                      ymax_ANT_config,                                 &
                      nz_config,                                       &
                      zeta_config,                                     &
+                     refgeo_Hi_min_config,                            &
+                     remove_Lake_Vostok_config,                       &
                      choice_refgeo_init_NAM_config,                   &
                      choice_refgeo_init_EAS_config,                   &
                      choice_refgeo_init_GRL_config,                   &
@@ -1971,7 +2021,6 @@ CONTAINS
                      filename_refgeo_GIAeq_EAS_config,                &
                      filename_refgeo_GIAeq_GRL_config,                &
                      filename_refgeo_GIAeq_ANT_config,                &
-                     remove_Lake_Vostok_config,                       &
                      is_restart_config,                               &
                      time_to_restart_from_NAM_config,                 &
                      time_to_restart_from_EAS_config,                 &
@@ -2088,19 +2137,27 @@ CONTAINS
                      basal_roughness_filename_config,                 &
                      basal_roughness_restart_type_config,             &
                      do_basal_roughness_remap_adjustment_config,      &
-                     do_basal_sliding_inversion_config,               &
-                     do_basal_sliding_smoothing_config,               &
-                     do_basal_sliding_extrapole_config,               &
-                     basal_sliding_inv_t_start_config,                &
-                     basal_sliding_inv_t_end_config,                  &
-                     basal_sliding_inv_scale_config,                  &
-                     basal_sliding_inv_rsmooth_config,                &
-                     basal_sliding_inv_wsmooth_config,                &
-                     basal_sliding_inv_phi_max_config,                &
-                     basal_sliding_inv_phi_min_config,                &
-                     basal_sliding_inv_tol_diff_config,               &
-                     basal_sliding_inv_tol_frac_config,               &
-                     phi_fric_window_size_config,                     &
+                     do_slid_inv_config,                              &
+                     choice_slid_inv_method_config,                   &
+                     slid_inv_t_start_config,                         &
+                     slid_inv_t_end_config,                           &
+                     slid_inv_phi_min_config,                         &
+                     slid_inv_phi_max_config,                         &
+                     slid_inv_filename_output_config,                 &
+                     slid_inv_window_size_config,                     &
+                     do_slid_inv_Bernales2017_smooth_config,          &
+                     do_slid_inv_Bernales2017_extrap_config,          &
+                     slid_inv_Bernales2017_hi_scale_config,           &
+                     slid_inv_Bernales2017_smooth_r_config,           &
+                     slid_inv_Bernales2017_smooth_w_config,           &
+                     slid_inv_Bernales2017_tol_diff_config,           &
+                     slid_inv_Bernales2017_tol_frac_config,           &
+                     slid_inv_Berends2022_tauc_config,                &
+                     slid_inv_Berends2022_H0_config,                  &
+                     slid_inv_Berends2022_u0_config,                  &
+                     slid_inv_Berends2022_Hi_scale_config,            &
+                     slid_inv_Berends2022_u_scale_config,             &
+                     slid_inv_target_velocity_filename_config,        &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_shelf_config,        &
                      calving_threshold_thickness_sheet_config,        &
@@ -2237,8 +2294,7 @@ CONTAINS
                      SMB_IMAUITM_inv_C_abl_Q_max_config,              &
                      SMB_IMAUITM_inv_C_refr_min_config,               &
                      SMB_IMAUITM_inv_C_refr_max_config,               &
-                     ISMIP_forcing_filename_SMB_baseline_config,      &
-                     ISMIP_forcing_filename_ST_baseline_config,       &
+                     ISMIP_forcing_filename_baseline_config,          &
                      ISMIP_forcing_foldername_aSMB_config,            &
                      ISMIP_forcing_basefilename_aSMB_config,          &
                      ISMIP_forcing_foldername_dSMBdz_config,          &
@@ -2412,17 +2468,17 @@ CONTAINS
 
     IF (config_filename == '') RETURN
 
-    ! ! Write the CONFIG namelist to a temporary file
-    ! namelist_filename = 'config_namelist_temp.txt'
-    ! OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
-    ! WRITE( UNIT = namelist_unit, NML  = CONFIG)
-    ! CLOSE( UNIT = namelist_unit)
+    ! Write the CONFIG namelist to a temporary file
+    namelist_filename = 'config_namelist_temp.txt'
+    OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
+    WRITE( UNIT = namelist_unit, NML  = CONFIG)
+    CLOSE( UNIT = namelist_unit)
 
-    ! ! Check the config file for validity
-    ! CALL check_config_file_validity( config_filename, namelist_filename)
+    ! Check the config file for validity
+    CALL check_config_file_validity( config_filename, namelist_filename)
 
-    ! ! Delete the temporary CONFIG namelist file
-    ! CALL system('rm -f ' // TRIM( namelist_filename))
+    ! Delete the temporary CONFIG namelist file
+    CALL system('rm -f ' // TRIM( namelist_filename))
 
     ! Open the config file
     OPEN(  UNIT = config_unit, FILE = TRIM( config_filename), STATUS = 'OLD', ACTION = 'READ', IOSTAT = ios)
@@ -2649,24 +2705,40 @@ CONTAINS
     C%do_check_for_NaN                         = do_check_for_NaN_config
     C%do_time_display                          = do_time_display_config
 
-    ! Domain size for the four regions
-    ! ================================
+    ! == The four model regions
+    ! =========================
 
+    ! North America
+    C%lambda_M_NAM                             = lambda_M_NAM_config
+    C%phi_M_NAM                                = phi_M_NAM_config
+    C%beta_stereo_NAM                          = beta_stereo_NAM_config
     C%xmin_NAM                                 = xmin_NAM_config
     C%xmax_NAM                                 = xmax_NAM_config
     C%ymin_NAM                                 = ymin_NAM_config
     C%ymax_NAM                                 = ymax_NAM_config
 
+    ! Eurasia
+    C%lambda_M_EAS                             = lambda_M_EAS_config
+    C%phi_M_EAS                                = phi_M_EAS_config
+    C%beta_stereo_EAS                          = beta_stereo_EAS_config
     C%xmin_EAS                                 = xmin_EAS_config
     C%xmax_EAS                                 = xmax_EAS_config
     C%ymin_EAS                                 = ymin_EAS_config
     C%ymax_EAS                                 = ymax_EAS_config
 
+    ! Greenland
+    C%lambda_M_GRL                             = lambda_M_GRL_config
+    C%phi_M_GRL                                = phi_M_GRL_config
+    C%beta_stereo_GRL                          = beta_stereo_GRL_config
     C%xmin_GRL                                 = xmin_GRL_config
     C%xmax_GRL                                 = xmax_GRL_config
     C%ymin_GRL                                 = ymin_GRL_config
     C%ymax_GRL                                 = ymax_GRL_config
 
+    ! Antarctica
+    C%lambda_M_ANT                             = lambda_M_ANT_config
+    C%phi_M_ANT                                = phi_M_ANT_config
+    C%beta_stereo_ANT                          = beta_stereo_ANT_config
     C%xmin_ANT                                 = xmin_ANT_config
     C%xmax_ANT                                 = xmax_ANT_config
     C%ymin_ANT                                 = ymin_ANT_config
@@ -2735,6 +2807,10 @@ CONTAINS
     ! Reference geometries (initial, present-day, and GIA equilibrium)
     ! ================================================================
 
+    ! Some pre-processing stuff for reference ice geometry
+    C%refgeo_Hi_min                            = refgeo_Hi_min_config
+    C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
+
     ! Initial geometry
     C%choice_refgeo_init_NAM                   = choice_refgeo_init_NAM_config
     C%choice_refgeo_init_EAS                   = choice_refgeo_init_EAS_config
@@ -2770,8 +2846,6 @@ CONTAINS
     C%filename_refgeo_GIAeq_EAS                = filename_refgeo_GIAeq_EAS_config
     C%filename_refgeo_GIAeq_GRL                = filename_refgeo_GIAeq_GRL_config
     C%filename_refgeo_GIAeq_ANT                = filename_refgeo_GIAeq_ANT_config
-
-    C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
 
     ! Whether or not the simulation is a restart of a previous simulation
     ! ===================================================================
@@ -2940,20 +3014,28 @@ CONTAINS
     C%basal_roughness_restart_type             = basal_roughness_restart_type_config
     C%do_basal_roughness_remap_adjustment      = do_basal_roughness_remap_adjustment_config
 
-    ! Basal roughness inversion
-    C%do_basal_sliding_inversion               = do_basal_sliding_inversion_config
-    C%do_basal_sliding_smoothing               = do_basal_sliding_smoothing_config
-    C%do_basal_sliding_extrapole               = do_basal_sliding_extrapole_config
-    C%basal_sliding_inv_t_start                = basal_sliding_inv_t_start_config
-    C%basal_sliding_inv_t_end                  = basal_sliding_inv_t_end_config
-    C%basal_sliding_inv_scale                  = basal_sliding_inv_scale_config
-    C%basal_sliding_inv_rsmooth                = basal_sliding_inv_rsmooth_config
-    C%basal_sliding_inv_wsmooth                = basal_sliding_inv_wsmooth_config
-    C%basal_sliding_inv_phi_max                = basal_sliding_inv_phi_max_config
-    C%basal_sliding_inv_phi_min                = basal_sliding_inv_phi_min_config
-    C%basal_sliding_inv_tol_diff               = basal_sliding_inv_tol_diff_config
-    C%basal_sliding_inv_tol_frac               = basal_sliding_inv_tol_frac_config
-    C%phi_fric_window_size                     = phi_fric_window_size_config
+    ! Bed roughness inversion
+    C%do_slid_inv                              = do_slid_inv_config
+    C%choice_slid_inv_method                   = choice_slid_inv_method_config
+    C%slid_inv_t_start                         = slid_inv_t_start_config
+    C%slid_inv_t_end                           = slid_inv_t_end_config
+    C%slid_inv_phi_min                         = slid_inv_phi_min_config
+    C%slid_inv_phi_max                         = slid_inv_phi_max_config
+    C%slid_inv_filename_output                 = slid_inv_filename_output_config
+    C%slid_inv_window_size                     = slid_inv_window_size_config
+    C%do_slid_inv_Bernales2017_smooth          = do_slid_inv_Bernales2017_smooth_config
+    C%do_slid_inv_Bernales2017_extrap          = do_slid_inv_Bernales2017_extrap_config
+    C%slid_inv_Bernales2017_hi_scale           = slid_inv_Bernales2017_hi_scale_config
+    C%slid_inv_Bernales2017_smooth_r           = slid_inv_Bernales2017_smooth_r_config
+    C%slid_inv_Bernales2017_smooth_w           = slid_inv_Bernales2017_smooth_w_config
+    C%slid_inv_Bernales2017_tol_diff           = slid_inv_Bernales2017_tol_diff_config
+    C%slid_inv_Bernales2017_tol_frac           = slid_inv_Bernales2017_tol_frac_config
+    C%slid_inv_Berends2022_tauc                = slid_inv_Berends2022_tauc_config
+    C%slid_inv_Berends2022_H0                  = slid_inv_Berends2022_H0_config
+    C%slid_inv_Berends2022_u0                  = slid_inv_Berends2022_u0_config
+    C%slid_inv_Berends2022_Hi_scale            = slid_inv_Berends2022_Hi_scale_config
+    C%slid_inv_Berends2022_u_scale             = slid_inv_Berends2022_u_scale_config
+    C%slid_inv_target_velocity_filename        = slid_inv_target_velocity_filename_config
 
     ! Ice dynamics - calving
     ! ======================
@@ -3106,8 +3188,7 @@ CONTAINS
     ! ISMIP-style (SMB + aSMB + dSMBdz + ST + aST + dSTdz) forcing
     ! ==============================================================
 
-    C%ISMIP_forcing_filename_SMB_baseline      = ISMIP_forcing_filename_SMB_baseline_config
-    C%ISMIP_forcing_filename_ST_baseline       = ISMIP_forcing_filename_ST_baseline_config
+    C%ISMIP_forcing_filename_baseline          = ISMIP_forcing_filename_baseline_config
     C%ISMIP_forcing_foldername_aSMB            = ISMIP_forcing_foldername_aSMB_config
     C%ISMIP_forcing_basefilename_aSMB          = ISMIP_forcing_basefilename_aSMB_config
     C%ISMIP_forcing_foldername_dSMBdz          = ISMIP_forcing_foldername_dSMBdz_config
@@ -3342,23 +3423,6 @@ CONTAINS
     C%type_margin                              = 6
     C%type_groundingline                       = 7
     C%type_calvingfront                        = 8
-
-   ! Parameters of the polar stereographic projections of the four model regions
-   ! (These have to match the values used to create the input files!)
-   ! ===========================================================================
-
-    C%lambda_M_NAM                             = 265._dp
-    C%lambda_M_EAS                             =  40._dp
-    C%lambda_M_GRL                             = 315._dp
-    C%lambda_M_ANT                             =   0._dp
-    C%phi_M_NAM                                =  62._dp
-    C%phi_M_EAS                                =  70._dp
-    C%phi_M_GRL                                =  90._dp
-    C%phi_M_ANT                                = -90._dp
-    C%alpha_stereo_NAM                         =  19._dp
-    C%alpha_stereo_EAS                         =  19._dp
-    C%alpha_stereo_GRL                         =  20._dp
-    C%alpha_stereo_ANT                         =  19._dp
 
   END SUBROUTINE copy_variables_to_struct
 
@@ -3629,18 +3693,20 @@ CONTAINS
 ! ===== Extended error messaging / debugging system =====
 ! =======================================================
 
-  SUBROUTINE init_routine( routine_name)
+  SUBROUTINE init_routine( routine_name, do_track_resource_use)
     ! Initialise an IMAU-ICE subroutine; update the routine path
 
     IMPLICIT NONE
 
     ! In/output variables:
     CHARACTER(LEN=256),                  INTENT(IN)    :: routine_name
+    LOGICAL,                   OPTIONAL, INTENT(IN)    :: do_track_resource_use
 
     ! Local variables:
     INTEGER                                            :: len_path_tot, len_path_used, len_name
     INTEGER                                            :: ierr, cerr
     INTEGER                                            :: i
+    LOGICAL                                            :: do_track_resource_use_loc
 
     ! Check if routine_name has enough memory
     len_path_tot  = LEN(      routine_path)
@@ -3655,12 +3721,31 @@ CONTAINS
     ! Append this routine to the routine path
     routine_path = TRIM( routine_path) // '/' // TRIM( routine_name)
 
-    ! Initialise the computation time tracker
-    CALL find_subroutine_in_resource_tracker( i)
-    resource_tracker( i)%tstart = MPI_WTIME()
+    ! Check if resource use for this subroutine should be tracked
+    ! (especially for the NetCDF routines we don't want to do this, as there are
+    ! a great many of them and the resource tracker output file will become annoyingly big)
 
-    ! Check maximum MPI window at the start of the routine
-    resource_tracker( i)%n_MPI_windows_init = n_MPI_windows
+    IF (PRESENT( do_track_resource_use)) THEN
+      do_track_resource_use_loc = do_track_resource_use
+    ELSE
+      do_track_resource_use_loc = .TRUE.
+    END IF
+
+    IF (do_track_resource_use_loc) THEN
+
+      ! Initialise the computation time tracker
+      CALL find_subroutine_in_resource_tracker( i)
+      resource_tracker( i)%tstart = MPI_WTIME()
+
+      ! Check maximum MPI window at the start of the routine
+      resource_tracker( i)%n_MPI_windows_init = n_MPI_windows
+
+    ELSE
+
+      routine_path = TRIM( routine_path) // '_NOTRACK'
+
+    END IF
+
 
   END SUBROUTINE init_routine
 
@@ -3674,42 +3759,71 @@ CONTAINS
     INTEGER,  INTENT(IN), OPTIONAL                     :: n_extra_windows_expected
 
     ! Local variables:
+    LOGICAL                                            :: do_track_resource_use
     INTEGER                                            :: len_path_tot, i, ii
     INTEGER                                            :: ierr, cerr
     REAL(dp)                                           :: dt
     INTEGER                                            :: n_extra_windows_expected_loc, n_extra_windows_found
 
-    ! Add computation time to the resource tracker
-    CALL find_subroutine_in_resource_tracker( i)
-    dt = MPI_WTIME() - resource_tracker( i)%tstart
-    resource_tracker( i)%tcomp = resource_tracker( i)%tcomp + dt
-
-    ! Check maximum MPI window at the end of the routine
-    resource_tracker( i)%n_MPI_windows_final = n_MPI_windows
-
-    ! If it is larger than expected, warn that there might be a memory leak
-    n_extra_windows_expected_loc = 0
-    IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
-    n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
-
-    ii = INDEX( routine_path, 'UFEMISM_program/initialise_')
-    IF (ii == 0 .AND. n_extra_windows_found > n_extra_windows_expected_loc) THEN
-      ! This subroutine has more memory allocated at the start than at the beginning.
-      CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
-        int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)
+    ! Check if resource use should be tracked for this subroutine
+    i = INDEX( routine_path, '_NOTRACK')
+    IF ( i == 0) THEN
+      do_track_resource_use = .TRUE.
+    ELSE
+      do_track_resource_use = .FALSE.
     END IF
 
-    ! Find where in the string exactly the current routine name is located
-    len_path_tot = LEN( routine_path)
-    i = INDEX( routine_path, routine_name)
+    IF (do_track_resource_use) THEN
+      ! Resource use for this subroutine should be tracked
 
-    IF (i == 0) THEN
-      WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
-      CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    END IF
+      ! Add computation time to the resource tracker
+      CALL find_subroutine_in_resource_tracker( i)
+      dt = MPI_WTIME() - resource_tracker( i)%tstart
+      resource_tracker( i)%tcomp = resource_tracker( i)%tcomp + dt
 
-    ! Remove the current routine name from the routine path
-    routine_path( i-1:len_path_tot) = ' '
+      ! Check maximum MPI window at the end of the routine
+      resource_tracker( i)%n_MPI_windows_final = n_MPI_windows
+
+      ! If it is larger than expected, warn that there might be a memory leak
+      n_extra_windows_expected_loc = 0
+      IF (PRESENT( n_extra_windows_expected)) n_extra_windows_expected_loc = n_extra_windows_expected
+      n_extra_windows_found = resource_tracker( i)%n_MPI_windows_final - resource_tracker( i)%n_MPI_windows_init
+
+      ii = INDEX( routine_path, 'UFEMISM_program/initialise_')
+      IF (ii == 0 .AND. n_extra_windows_found > n_extra_windows_expected_loc) THEN
+        ! This subroutine has more memory allocated at the start than at the beginning.
+        CALL warning('more memory was allocated and not freed than expected; possible memory leak! (expected {int_01} extra windows, found {int_02})', &
+          int_01 = n_extra_windows_expected_loc, int_02 = n_extra_windows_found)
+      END IF
+
+      ! Find where in the string exactly the current routine name is located
+      i = INDEX( routine_path, routine_name)
+
+      IF (i == 0) THEN
+        WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      ! Remove the current routine name from the routine path
+      len_path_tot = LEN( routine_path)
+      routine_path( i-1:len_path_tot) = ' '
+
+    ELSE ! IF (do_track_resource_use) THEN
+      ! Resource use for this subroutine should not be tracked
+
+      ! Find where in the string exactly the current routine name is located
+      i = INDEX( routine_path, TRIM( routine_name) // '_NOTRACK')
+
+      IF (i == 0) THEN
+        WRITE(0,*) 'finalise_routine - ERROR: routine_name = "', TRIM( routine_name), '" not found in routine_path = "', TRIM( routine_path), '"!'
+        CALL MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
+      END IF
+
+      ! Remove the current routine name from the routine path
+      len_path_tot = LEN( routine_path)
+      routine_path( i-1:len_path_tot) = ' '
+
+    END IF ! IF (do_track_resource_use) THEN
 
   END SUBROUTINE finalise_routine
 

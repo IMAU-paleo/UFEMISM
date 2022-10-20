@@ -1052,12 +1052,10 @@ CONTAINS
     INTEGER,  DIMENSION(:    ),    INTENT(OUT)   :: mask_noice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
-    INTEGER                                      :: vi
-    REAL(dp), DIMENSION(2)                       :: pa_latlon, pb_latlon
-    REAL(dp)                                     :: xa,ya,xb,yb
-    REAL(dp), DIMENSION(2)                       :: pa, pb
-    REAL(dp)                                     :: yl_ab
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_mask_noice_GRL_remove_Ellesmere'
+    INTEGER                                            :: vi
+    REAL(dp), DIMENSION(2)                             :: pa_latlon, pb_latlon, pa, pb
+    REAL(dp)                                           :: xa, ya, xb, yb, yl_ab
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1067,8 +1065,8 @@ CONTAINS
     pb_latlon = [82.19_dp, -60.00_dp]
 
     ! The two endpoints in x,y
-    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xa, ya)
-    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, xb, yb)
+    CALL oblique_sg_projection( pa_latlon(2), pa_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%beta_stereo, xa, ya)
+    CALL oblique_sg_projection( pb_latlon(2), pb_latlon(1), mesh%lambda_M, mesh%phi_M, mesh%beta_stereo, xb, yb)
 
     pa = [xa,ya]
     pb = [xb,yb]
@@ -1293,7 +1291,7 @@ CONTAINS
         ! Project [lat,lon] to [x,y]
         CALL partition_list( n_vertices, par%i, par%n, vi1, vi2)
         DO vi = vi1, vi2
-          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, Vx( vi), Vy( vi))
+          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), mesh%lambda_M, mesh%phi_M, mesh%beta_stereo, Vx( vi), Vy( vi))
         END DO
 
       ELSEIF (region_name == 'GRL') THEN
@@ -1411,7 +1409,7 @@ CONTAINS
         ! Project [lat,lon] to [x,y]
         CALL partition_list( n_vertices, par%i, par%n, vi1, vi2)
         DO vi = vi1, vi2
-          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), mesh%lambda_M, mesh%phi_M, mesh%alpha_stereo, Vx( vi), Vy( vi))
+          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), mesh%lambda_M, mesh%phi_M, mesh%beta_stereo, Vx( vi), Vy( vi))
         END DO
 
       END IF ! IF (region_name == 'ANT') THEN
@@ -1852,7 +1850,7 @@ CONTAINS
         ! Project [lat,lon] to [x,y]
         CALL partition_list( n_vertices, par%i, par%n, vi1, vi2)
         DO vi = vi1, vi2
-          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), grid%lambda_M, grid%phi_M, grid%alpha_stereo, Vx( vi), Vy( vi))
+          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), grid%lambda_M, grid%phi_M, grid%beta_stereo, Vx( vi), Vy( vi))
         END DO
 
       ELSEIF (region_name == 'GRL') THEN
@@ -1969,7 +1967,7 @@ CONTAINS
         ! Project [lat,lon] to [x,y]
         CALL partition_list( n_vertices, par%i, par%n, vi1, vi2)
         DO vi = vi1, vi2
-          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), grid%lambda_M, grid%phi_M, grid%alpha_stereo, Vx( vi), Vy( vi))
+          CALL oblique_sg_projection( Vlon( vi), Vlat( vi), grid%lambda_M, grid%phi_M, grid%beta_stereo, Vx( vi), Vy( vi))
         END DO
 
       END IF ! IF (region_name == 'ANT') THEN

@@ -160,8 +160,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! =========
-  ! == Safety
+    ! =========
+    ! == Safety
 
     ! Check that this routine is called correctly
     IF (.NOT. (C%choice_ice_dynamics == 'SSA' .OR. C%choice_ice_dynamics == 'SIA/SSA')) THEN
@@ -184,8 +184,8 @@ CONTAINS
       RETURN
     END IF
 
-  ! == Safety - end
-  ! ===============
+    ! == Safety - end
+    ! ===============
 
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -285,8 +285,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! =========
-  ! == Safety
+    ! =========
+    ! == Safety
 
     ! Check that this routine is called correctly
     IF (.NOT. C%choice_ice_dynamics == 'DIVA') THEN
@@ -306,8 +306,8 @@ CONTAINS
       RETURN
     END IF
 
-  ! == Safety - end
-  ! ===============
+    ! == Safety - end
+    ! ===============
 
     ! Calculate the driving stresses taudx, taudy
     CALL calculate_driving_stress( mesh, ice)
@@ -2038,7 +2038,13 @@ CONTAINS
         ! Find the adjacent triangle
         vi = mesh%Aci( aci,1)
         vj = mesh%Aci( aci,2)
-        vl = mesh%Aci( aci,3)
+        IF (mesh%Aci( aci,3) > 0) THEN
+          vl = mesh%Aci( aci,3)
+        ELSEIF (mesh%Aci( aci,4) > 0) THEN
+          vl = mesh%Aci( aci,4)
+        ELSE
+          CALL crash('error in mesh geometry, fix this!')
+        END IF
 
         til = 0
         DO vti = 1, mesh%niTri( vi)

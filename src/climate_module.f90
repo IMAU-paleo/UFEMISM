@@ -96,7 +96,7 @@ CONTAINS
     ELSEIF (C%choice_climate_model == 'PD_obs') THEN
       ! Keep the climate fixed to present-day observed conditions
 
-      CALL run_climate_model_PD_obs( region%mesh, region%ice, region%climate_matrix, region%name)
+      CALL run_climate_model_PD_obs( region%mesh, region%ice, region%climate_matrix, region%refgeo_PD, region%name, region%time)
 
     ELSEIF (C%choice_climate_model == 'PD_dTglob') THEN
       ! Use the present-day climate plus a global temperature offset (de Boer et al., 2013)
@@ -396,7 +396,7 @@ CONTAINS
 ! == Static present-day observed climate
 ! ======================================
 
-  SUBROUTINE run_climate_model_PD_obs( mesh, ice, climate_matrix, region_name)
+  SUBROUTINE run_climate_model_PD_obs( mesh, ice, climate_matrix, refgeo, region_name, time)
     ! Run the regional climate model
     !
     ! Keep the climate fixed to present-day observed conditions
@@ -407,7 +407,9 @@ CONTAINS
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_climate_matrix_regional),  INTENT(INOUT) :: climate_matrix
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo
     CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_climate_model_PD_obs'
@@ -424,6 +426,13 @@ CONTAINS
 
     ! Initialise insolation at present-day (needed for the IMAU-ITM SMB model)
     CALL get_insolation_at_time( mesh, 0.0_dp, climate_matrix%PD_obs%Q_TOA)
+
+    ! == Inversion of climate fields
+    ! ==============================
+
+    IF (C%do_clim_inv) THEN
+      CALL climate_inversion( mesh, ice, climate_matrix, refgeo, time)
+    END IF
 
     ! == Downscaling to model topography
     ! ==================================
@@ -484,15 +493,6 @@ CONTAINS
 
     ! == Finalisation
     ! ===============
-
-    ! print*, ' '
-    ! print*, minval(climate_matrix%applied%Hs), maxval(climate_matrix%applied%Hs)
-    ! print*, minval(climate_matrix%applied%T2m), maxval(climate_matrix%applied%T2m)
-    ! print*, minval(climate_matrix%applied%Precip), maxval(climate_matrix%applied%Precip)
-    ! print*, minval(climate_matrix%applied%Wind_LR), maxval(climate_matrix%applied%Wind_LR)
-    ! print*, minval(climate_matrix%applied%Wind_DU), maxval(climate_matrix%applied%Wind_DU)
-    ! print*, minval(climate_matrix%applied%Q_TOA), maxval(climate_matrix%applied%Q_TOA)
-    ! stop ':)'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -4497,9 +4497,97 @@ CONTAINS
 
   END SUBROUTINE rotate_wind_to_model_mesh
 
+! == Iterative adjustment of precipitation and temperature
+! ========================================================
 
+  SUBROUTINE climate_inversion( mesh, ice, climate, refgeo, time)
+    ! Invert climate fields using the reference topography over tricky areas
 
+    IMPLICIT NONE
 
+    ! In/output variables
+    TYPE(type_mesh),                    INTENT(IN)    :: mesh
+    TYPE(type_ice_model),               INTENT(IN)    :: ice
+    TYPE(type_climate_matrix_regional), INTENT(INOUT) :: climate
+    TYPE(type_reference_geometry),      INTENT(IN)    :: refgeo
+    REAL(dp),                           INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                     :: routine_name = 'climate_inversion'
+    INTEGER                                           :: vi, m
+    REAL(dp)                                          :: h_delta, h_scale, t_melt
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (time < C%clim_inv_t_start) THEN
+      ! Nothing to do for now. Just return.
+      CALL finalise_routine( routine_name)
+      RETURN
+    ELSEIF (time > C%clim_inv_t_end) THEN
+      ! Inversion is done. Use running average of cliamte fields.
+      ! climate%PD_obs%Precip( mesh%vi1:mesh%vi2) = climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2)
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+
+      ! Invert only over high-ground, thin-ice grounded vertices
+      IF ( ice%mask_land_a( vi) == 1 .AND. &
+           refgeo%Hb(       vi) >= C%clim_inv_Hb_min .AND. &
+           refgeo%Hi(       vi) <= C%clim_inv_Hi_max) THEN
+
+        ! Scale down adjustment to prevent overshooting
+        h_scale = 1.0_dp/10000._dp
+
+        ! Restrict adjustment to [-1.5 1.5] range
+        h_delta = MAX(-1.5_dp, MIN(1.5_dp, h_delta * h_scale))
+
+        ! Further adjust only where the previous value is not improving the result
+        IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= 0._dp) .OR. &
+             (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= 0._dp) ) THEN
+
+          DO m = 1, 12
+
+            climate%PD_obs%Precip( vi,m) = climate%PD_obs%Precip( vi,m) - 1.72476_dp * TAN(h_delta)
+                                                                        ! The hardcoded jorjonian constant yeah baby.
+          END DO
+
+        END IF ! else climate fields do not change from previous time step
+
+      END IF ! else leave vertex alone
+
+    END DO
+    CALL sync
+
+    ! Limit climate fields
+    DO vi = mesh%vi1, mesh%vi2
+      DO m = 1, 12
+        climate%PD_obs%Precip( vi,m) = MAX( climate%PD_obs%Precip( vi,m),  0._dp)
+        climate%PD_obs%Precip( vi,m) = MIN( climate%PD_obs%Precip( vi,m), .01_dp)
+      END DO
+    END DO
+    CALL sync
+
+    ! Running climate field averages
+    ! ==============================
+
+    ! ! Update the running window: drop oldest record and push the rest to the back
+    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,2:C%clim_inv_window_size) = climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1:C%clim_inv_window_size-1)
+
+    ! ! Update the running window: add new record to beginning of window
+    ! climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,1) = climate%PD_obs%Precip( mesh%vi1:mesh%vi2)
+
+    ! ! Compute running average
+    ! climate%PD_obs%Precip_ave( mesh%vi1:mesh%vi2) = SUM(climate%PD_obs%Precip_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%clim_inv_window_size,dp)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE climate_inversion
 
 !==============================
 ! OBSOLETE: just for the record

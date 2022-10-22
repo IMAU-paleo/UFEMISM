@@ -1823,8 +1823,15 @@ CONTAINS
       ! Invert only where the model has grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
 
+        ! IF (ice%mask_gl_a( vi) == 1 .AND. C%fixed_grounding_line_g > 0._dp) THEN
+        !   ! Mark vertex for later extrapolation
+        !   mask( vi) = 1
+        !   ! And skip it
+        !   CYCLE
+        ! ELSE
         ! Mark this vertex as grounded ice
         mask( vi) = 2
+        ! END IF
 
         ! If the difference/fraction is outside the specified tolerance
         IF (ABS(h_delta) >= C%slid_inv_Bernales2017_tol_diff .OR. &
@@ -1853,7 +1860,7 @@ CONTAINS
           w_run = MAX( 0._dp, MIN( 1._dp, w_run))
 
           ! Compute final weight
-          w_tot = MAX( w_ti, w_pwp, w_run)
+          w_tot = 1._dp!MAX( w_ti, w_pwp, w_run)
 
           ! Reduce the adjustment based on (low) basal temperatures, (poor) till saturation, and (low) percolation
           h_delta = h_delta * w_tot
@@ -1951,7 +1958,7 @@ CONTAINS
         DO vi = mesh%vi1, mesh%vi2
             ice%phi_fric_a( vi) = (1._dp - C%slid_inv_Bernales2017_smooth_w) * ice%phi_fric_inv_a( vi) + C%slid_inv_Bernales2017_smooth_w * rough_smoothed( vi)
             ! Make sure the variable stays within the prescribed limits
-            ice%phi_fric_a( vi) = MIN(MAX(ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
+            ice%phi_fric_a( vi) = MIN( MAX( ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
         END DO
         CALL sync
 

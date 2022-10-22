@@ -1047,10 +1047,34 @@ CONTAINS
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%GCM_warm, name = 'GCM_warm')
     CALL allocate_ocean_snapshot_regional( region%mesh, region%ocean_matrix%applied,  name = 'applied')
 
+    ! Use inverted ocean temperatures from a previous run. Or not.
+    IF (C%use_inverted_ocean) THEN
+
+      DO k = 1, C%nz_ocean
+      DO vi = region%mesh%vi1, region%mesh%vi2
+
+        ! Initialise PD_obs ocean forcing with restart data
+        region%ocean_matrix%PD_obs%T_ocean(          vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%T_ocean_ext(      vi,k)  = region%restart%T_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean(          vi,k)  = region%restart%S_ocean_base( vi)
+        region%ocean_matrix%PD_obs%S_ocean_ext(      vi,k)  = region%restart%S_ocean_base( vi)
+
+      END DO
+      END DO
+      CALL sync
+
+    ELSE
+
+      ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,
+      ! extrapolate mapped ocean data to cover the entire 3D domain, and finally
+      ! map to the actual ice model resolution
+      CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs,   region%ocean_matrix%PD_obs,   C%filename_PD_obs_ocean           )
+
+    END IF
+
     ! Map ocean data from the global lon/lat-grid to the high-resolution regional x/y-grid,
     ! extrapolate mapped ocean data to cover the entire 3D domain, and finally
     ! map to the actual ice model resolution
-    CALL get_extrapolated_ocean_data( region, ocean_matrix_global%PD_obs,   region%ocean_matrix%PD_obs,   C%filename_PD_obs_ocean           )
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_PI,   region%ocean_matrix%GCM_PI,   C%filename_GCM_ocean_snapshot_PI  )
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_warm, region%ocean_matrix%GCM_warm, C%filename_GCM_ocean_snapshot_warm)
     CALL get_extrapolated_ocean_data( region, ocean_matrix_global%GCM_cold, region%ocean_matrix%GCM_cold, C%filename_GCM_ocean_snapshot_cold)

@@ -378,7 +378,16 @@
   climate_matrix_biascorrect_warm_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "warm" GCM snapshot
   climate_matrix_biascorrect_cold_config      = .TRUE.                           ! Whether or not to apply a bias correction (modelled vs observed PI climate) to the "cold" GCM snapshot
 
+  ! Glacial index
   switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
+
+  ! Iterative adjustment of precipitation and temperature
+  do_clim_inv_config                          = .TRUE.                           ! Whether or not to adjust climate fields in tricky areas
+  clim_inv_t_start_config                     = -9.9E9                           ! Minimum model time when the inversion is allowed
+  clim_inv_t_end_config                       = +9.9E9                           ! Maximum model time when the inversion is allowed
+  clim_inv_Hb_min_config                      = 1000.0                           ! Minimum bedrock elevation where the inversion operates
+  clim_inv_Hi_max_config                      = 1000.0                           ! Maximum ice thickness where the inversion operates
+  clim_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
 
   ! Ocean
   ! =====

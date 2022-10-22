@@ -262,7 +262,7 @@ CONTAINS
       ! ==========================
 
       IF (C%do_slid_inv) THEN
-        IF (region%do_basal) THEN
+        IF (region%do_slid_inv) THEN
           ! Adjust bed roughness
           CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
         END IF
@@ -509,29 +509,29 @@ CONTAINS
     CALL calculate_PD_sealevel_contribution( region)
 
     ! Request to run everything immediately after the mesh update
-    region%t_next_SIA     = region%time
-    region%t_next_SSA     = region%time
-    region%t_next_DIVA    = region%time
-    region%t_next_thermo  = region%time
-    region%t_next_climate = region%time
-    region%t_next_ocean   = region%time
-    region%t_next_SMB     = region%time
-    region%t_next_BMB     = region%time
-    region%t_next_ELRA    = region%time
-    region%t_next_basal   = region%time
-    region%t_next_SMB_inv = region%time
+    region%t_next_SIA      = region%time
+    region%t_next_SSA      = region%time
+    region%t_next_DIVA     = region%time
+    region%t_next_thermo   = region%time
+    region%t_next_climate  = region%time
+    region%t_next_ocean    = region%time
+    region%t_next_SMB      = region%time
+    region%t_next_BMB      = region%time
+    region%t_next_ELRA     = region%time
+    region%t_next_slid_inv = region%time
+    region%t_next_SMB_inv  = region%time
 
-    region%do_SIA         = .TRUE.
-    region%do_SSA         = .TRUE.
-    region%do_DIVA        = .TRUE.
-    region%do_thermo      = .TRUE.
-    region%do_climate     = .TRUE.
-    region%do_ocean       = .TRUE.
-    region%do_SMB         = .TRUE.
-    region%do_BMB         = .TRUE.
-    region%do_ELRA        = .TRUE.
-    region%do_basal       = .TRUE.
-    region%do_SMB_inv     = .TRUE.
+    region%do_SIA          = .TRUE.
+    region%do_SSA          = .TRUE.
+    region%do_DIVA         = .TRUE.
+    region%do_thermo       = .TRUE.
+    region%do_climate      = .TRUE.
+    region%do_ocean        = .TRUE.
+    region%do_SMB          = .TRUE.
+    region%do_BMB          = .TRUE.
+    region%do_ELRA         = .TRUE.
+    region%do_slid_inv     = .TRUE.
+    region%do_SMB_inv      = .TRUE.
 
     IF (par%master) WRITE(0,*) '  Finished reallocating and remapping.'
     IF (par%master) WRITE(0,*) '  Running again now...'
@@ -860,9 +860,9 @@ CONTAINS
     CALL allocate_shared_dp_0D(   region%t_next_ELRA,      region%wt_next_ELRA     )
     CALL allocate_shared_bool_0D( region%do_ELRA,          region%wdo_ELRA         )
 
-    CALL allocate_shared_dp_0D(   region%t_last_basal,     region%wt_last_basal    )
-    CALL allocate_shared_dp_0D(   region%t_next_basal,     region%wt_next_basal    )
-    CALL allocate_shared_bool_0D( region%do_basal,         region%wdo_basal        )
+    CALL allocate_shared_dp_0D(   region%t_last_slid_inv,  region%wt_last_slid_inv )
+    CALL allocate_shared_dp_0D(   region%t_next_slid_inv,  region%wt_next_slid_inv )
+    CALL allocate_shared_bool_0D( region%do_slid_inv,      region%wdo_slid_inv     )
 
     CALL allocate_shared_dp_0D(   region%t_last_SMB_inv,   region%wt_last_SMB_inv  )
     CALL allocate_shared_dp_0D(   region%t_next_SMB_inv,   region%wt_next_SMB_inv  )
@@ -930,9 +930,9 @@ CONTAINS
         region%do_ELRA        = .FALSE.
       END IF
 
-      region%t_last_basal     = C%start_time_of_run
-      region%t_next_basal     = C%start_time_of_run + C%dt_basal
-      region%do_basal         = .FALSE.
+      region%t_last_slid_inv  = C%start_time_of_run
+      region%t_next_slid_inv  = C%start_time_of_run + C%dt_slid_inv
+      region%do_slid_inv      = .FALSE.
 
       region%t_last_SMB_inv   = C%start_time_of_run
       region%t_next_SMB_inv   = C%start_time_of_run + C%dt_SMB_inv

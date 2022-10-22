@@ -2167,7 +2167,7 @@ CONTAINS
     CALL smooth_Gaussian_2D( mesh, grid, dphi_dt, sigma)
 
     DO vi = mesh%vi1, mesh%vi2
-      ice%phi_fric_a( vi) = MAX( C%slid_inv_phi_min, MIN( C%slid_inv_phi_max, ice%phi_fric_a( vi) + dphi_dt( vi) * C%dt_basal ))
+      ice%phi_fric_a( vi) = MAX( C%slid_inv_phi_min, MIN( C%slid_inv_phi_max, ice%phi_fric_a( vi) + dphi_dt( vi) * C%dt_slid_inv ))
     END DO
     CALL sync
 

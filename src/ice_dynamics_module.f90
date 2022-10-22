@@ -988,12 +988,12 @@ CONTAINS
         END IF
       END IF
 
-      region%do_basal    = .FALSE.
+      region%do_slid_inv      = .FALSE.
       IF (C%do_slid_inv) THEN
-        IF (region%time >= region%t_next_basal) THEN
-          region%do_basal     = .TRUE.
-          region%t_last_basal = region%time
-          region%t_next_basal = region%t_last_basal + C%dt_basal
+        IF (region%time >= region%t_next_slid_inv) THEN
+          region%do_slid_inv  = .TRUE.
+          region%t_last_slid_inv = region%time
+          region%t_next_slid_inv = region%t_last_slid_inv + C%dt_slid_inv
         END IF
       END IF
 

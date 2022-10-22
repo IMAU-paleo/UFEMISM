@@ -25,7 +25,7 @@
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
 
   ! Inversions
-  dt_basal_config                             = 5.0                              ! Time step (in years) for calling the iterative inversion of basal roughness
+  dt_slid_inv_config                          = 5.0                              ! Time step (in years) for calling the iterative inversion of basal roughness
   dt_SMB_inv_config                           = 5.0                              ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! Output

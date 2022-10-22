@@ -76,7 +76,7 @@ MODULE configuration_module
     REAL(dp)            :: dt_SELEN_config                             = 1000._dp                         ! Time step (in years) for calling SELEN
 
     ! Inversions
-    REAL(dp)            :: dt_basal_config                             = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
+    REAL(dp)            :: dt_slid_inv_config                          = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
     REAL(dp)            :: dt_SMB_inv_config                           = 50._dp                           ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
     ! Output
@@ -899,7 +899,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
     REAL(dp)                            :: dt_SELEN
-    REAL(dp)                            :: dt_basal
+    REAL(dp)                            :: dt_slid_inv
     REAL(dp)                            :: dt_SMB_inv
 
     ! Which ice sheets do we simulate?
@@ -1936,7 +1936,7 @@ CONTAINS
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
                      dt_SELEN_config,                                 &
-                     dt_basal_config,                                 &
+                     dt_slid_inv_config,                              &
                      dt_SMB_inv_config,                               &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
@@ -2665,7 +2665,7 @@ CONTAINS
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
     C%dt_SELEN                                 = dt_SELEN_config
-    C%dt_basal                                 = dt_basal_config
+    C%dt_slid_inv                              = dt_slid_inv_config
     C%dt_SMB_inv                               = dt_SMB_inv_config
 
     ! Which ice sheets do we simulate?

@@ -521,7 +521,7 @@ CONTAINS
 ! ===== Ice thickness update =====
 ! ================================
 
-  SUBROUTINE update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
+  SUBROUTINE update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq, time)
     ! Update the ice thickness at the end of a model time loop
 
     IMPLICIT NONE
@@ -532,6 +532,7 @@ CONTAINS
     INTEGER,                       DIMENSION(:), INTENT(IN)    :: mask_noice
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_PD
     TYPE(type_reference_geometry),               INTENT(IN)    :: refgeo_GIAeq
+    REAL(dp),                                    INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                           :: routine_name = 'update_ice_thickness'
@@ -545,7 +546,7 @@ CONTAINS
     CALL sync
 
     ! Check if we want to keep the ice thickness fixed for some specific areas
-    CALL fix_ice_thickness( mesh, ice)
+    CALL fix_ice_thickness( mesh, ice, time)
 
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
@@ -569,19 +570,22 @@ CONTAINS
 
   END SUBROUTINE update_ice_thickness
 
-  SUBROUTINE fix_ice_thickness( mesh, ice)
+  SUBROUTINE fix_ice_thickness( mesh, ice, time)
     ! Check if we want to keep the ice thickness fixed in time for specific areas,
-    ! or delay its evolution by a given percentage each time step.
+    ! or delay its evolution by a given percentage each time step, both options
+    ! including the possibility to reduce this constraint over time.
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'fix_ice_thickness'
     INTEGER                                            :: vi
+    REAL(dp)                                           :: fixiness, decay_start, decay_end
 
     ! === Initialisation ===
     ! ======================
@@ -589,30 +593,125 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! === Fixiness ===
+    ! ================
+
+    ! Intial value
+    fixiness = 1._dp
+
+    ! Make sure that the start and end times make sense
+    decay_start = MAX( C%fixed_decay_glf_t_start, C%start_time_of_run)
+    decay_end   = MIN( C%fixed_decay_glf_t_end,   C%end_time_of_run)
+
+    ! Compute decaying fixiness
+    IF (decay_start >= decay_end) THEN
+      ! This makes no sense
+      fixiness = 1._dp
+    ELSEIF (time <= decay_start) THEN
+      ! Apply full fix/delay
+      fixiness = 1._dp
+    ELSEIF (time >= decay_end) THEN
+      ! Remove any fix/delay
+      fixiness = 0._dp
+    ELSE
+      ! Fixiness decreases with time
+      fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
+    END IF
+
+    ! Just in case
+    fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
+
     ! === Fix or delay ====
     ! =====================
 
     DO vi = mesh%vi1, mesh%vi2
 
       ! Grounding line (grounded side)
+      ! ==============================
+
       IF (ice%mask_gl_a( vi) == 1) THEN
-        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_g + &
-                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_g)
+
+        ! ! Initial fixiness value
+        ! fixiness = 1._dp
+
+        ! ! Make sure that the start and end decay times make sense
+        ! decay_start = MAX( C%fixed_decay_glg_t_start, C%start_time_of_run)
+        ! decay_end   = MIN( C%fixed_decay_glg_t_end,   C%end_time_of_run)
+
+        ! ! Compute decaying fixiness
+        ! IF (decay_start >= decay_end) THEN
+        !   ! This makes no sense
+        !   fixiness = 1._dp
+        ! ELSEIF (time <= decay_start) THEN
+        !   ! Apply full fix/delay
+        !   fixiness = 1._dp
+        ! ELSEIF (time >= decay_end) THEN
+        !   ! Remove any fix/delay
+        !   fixiness = 0._dp
+        ! ELSE
+        !   ! Fixiness decreases with time
+        !   fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
+        ! END IF
+
+        ! ! Just in case
+        ! fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_g * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_g * fixiness)
 
       ! Grounding line (floating side)
+      ! ==============================
+
       ELSEIF (ice%mask_glf_a( vi) == 1) THEN
-        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_f + &
-                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_f)
+
+        ! ! Initial fixiness value
+        ! fixiness = 1._dp
+
+        ! ! Make sure that the start and end decay times make sense
+        ! decay_start = MAX( C%fixed_decay_glf_t_start, C%start_time_of_run)
+        ! decay_end   = MIN( C%fixed_decay_glf_t_end,   C%end_time_of_run)
+
+        ! ! Compute decaying fixiness
+        ! IF (decay_start >= decay_end) THEN
+        !   ! This makes no sense
+        !   fixiness = 1._dp
+        ! ELSEIF (time <= decay_start) THEN
+        !   ! Apply full fix/delay
+        !   fixiness = 1._dp
+        ! ELSEIF (time >= decay_end) THEN
+        !   ! Remove any fix/delay
+        !   fixiness = 0._dp
+        ! ELSE
+        !   ! Fixiness decreases with time
+        !   fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
+        ! END IF
+
+        ! ! Just in case
+        ! fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_f * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_f * fixiness)
 
       ! Grounded ice
+      ! ============
+
       ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
+
+        ! Compute new ice thickness
         ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_sheet_geometry + &
                                 ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_sheet_geometry)
 
       ! Floating ice
+      ! ============
+
       ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
+
+        ! Compute new ice thickness
         ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_shelf_geometry + &
                                 ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_shelf_geometry)
+
       END IF
 
     END DO

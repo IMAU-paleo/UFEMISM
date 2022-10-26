@@ -310,7 +310,7 @@ CONTAINS
       ! == Update ice geometry
       ! ======================
 
-      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
+      CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
       CALL sync
 
       ! == Advance region time

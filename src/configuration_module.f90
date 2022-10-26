@@ -432,6 +432,10 @@ MODULE configuration_module
     REAL(dp)            :: fixed_shelf_geometry_config                 = 0._dp                            ! Keep geometry of floating ice fixed
     REAL(dp)            :: fixed_grounding_line_g_config               = 0._dp                            ! Keep ice thickness at the grounded side of grounding line fixed
     REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Keep ice thickness at the floating side of grounding line fixed
+    REAL(dp)            :: fixed_decay_glg_t_start_config              = +9.9E9_dp                        ! Start time of linear transition between fix/delay and free GL evolution (grounded side)
+    REAL(dp)            :: fixed_decay_glg_t_end_config                = +9.9E9_dp                        ! End   time of linear transition between fix/delay and free GL evolution (grounded side)
+    REAL(dp)            :: fixed_decay_glf_t_start_config              = +9.9E9_dp                        ! Start time of linear transition between fix/delay and free GL evolution (floating side)
+    REAL(dp)            :: fixed_decay_glf_t_end_config                = +9.9E9_dp                        ! End   time of linear transition between fix/delay and free GL evolution (floating side)
 
     ! Memory of first dHi_dt of simulation
     INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
@@ -1216,6 +1220,10 @@ MODULE configuration_module
     REAL(dp)                            :: fixed_shelf_geometry
     REAL(dp)                            :: fixed_grounding_line_g
     REAL(dp)                            :: fixed_grounding_line_f
+    REAL(dp)                            :: fixed_decay_glg_t_start
+    REAL(dp)                            :: fixed_decay_glg_t_end
+    REAL(dp)                            :: fixed_decay_glf_t_start
+    REAL(dp)                            :: fixed_decay_glf_t_end
 
     ! Memory of previous run during a restart
     INTEGER                             :: dHi_dt_window_size
@@ -2127,6 +2135,10 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_grounding_line_g_config,                   &
                      fixed_grounding_line_f_config,                   &
+                     fixed_decay_glg_t_start_config,                  &
+                     fixed_decay_glg_t_end_config,                    &
+                     fixed_decay_glf_t_start_config,                  &
+                     fixed_decay_glf_t_end_config,                    &
                      dHi_dt_window_size_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
@@ -2998,6 +3010,10 @@ CONTAINS
     C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
     C%fixed_grounding_line_g                   = fixed_grounding_line_g_config
     C%fixed_grounding_line_f                   = fixed_grounding_line_f_config
+    C%fixed_decay_glg_t_start                  = fixed_decay_glg_t_start_config
+    C%fixed_decay_glg_t_end                    = fixed_decay_glg_t_end_config
+    C%fixed_decay_glf_t_start                  = fixed_decay_glf_t_start_config
+    C%fixed_decay_glf_t_end                    = fixed_decay_glf_t_end_config
 
     ! Memory of previous run during a restart
     C%dHi_dt_window_size                       = dHi_dt_window_size_config

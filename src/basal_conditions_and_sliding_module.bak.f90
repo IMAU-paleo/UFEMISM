@@ -1775,8 +1775,9 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion_Bernales2017'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_delta, t_scale, a_scale, m_scale
-    REAL(dp)                                           :: w_smooth
+    REAL(dp)                                           :: h_scale_max, h_scale_min, t_scale
+    REAL(dp)                                           :: h_scale, h_delta, h_dfrac
+    REAL(dp)                                           :: new_val, min_lim, w_smooth
     REAL(dp)                                           :: ti_diff, w_ti, w_pwp, w_run, w_tot
     INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
     REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
@@ -1788,20 +1789,14 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Initial checks
-    IF ( .NOT. (C%choice_sliding_law == 'Coulomb' .OR. &
-                C%choice_sliding_law == 'Coulomb_regularised' .OR. &
-                C%choice_sliding_law == 'Zoet-Iverson') ) THEN
-
-      CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
-    END IF
-
     IF (time < C%slid_inv_t_start) THEN
       ! Nothing to do for now. Just return.
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time > C%slid_inv_t_end) THEN
-      ! Inversion is done. Return.
+      ! Inversion is done. Use running average of bed roughness.
+      ! ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_ave_a( mesh%vi1:mesh%vi2)
+      ! And return.
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -1813,26 +1808,33 @@ CONTAINS
     ! Allocate smoothed bed roughness field
     CALL allocate_shared_dp_1D( mesh%nV, rough_smoothed, wrough_smoothed)
 
-    ! Adjustment magnitude
-    ! ====================
+    ! ! Define initial ice thickness factor for scaling of inversion
+    ! h_scale_max = 1.0_dp/C%slid_inv_Bernales2017_scale_start
+    ! h_scale_min = 1.0_dp/C%slid_inv_Bernales2017_scale_end
 
-    ! Default values
-    a_scale = C%slid_inv_Bernales2017_scale_start
-    m_scale = .1_dp
-    t_scale = 0._dp
+    ! ! Default value
+    ! h_scale = h_scale_max
 
-    ! Time scale
-    IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
-      ! Compute how much time has passed since start of inversion
-      t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
-      ! Limit t_scale to [0 1]
-      t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
-    END IF
+    ! IF (C%do_slid_inv_Bernales2017_decay) THEN
+    !   IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
+    !     ! Compute how much time has passed since start of inversion
+    !     t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
+    !     ! Limit t_scale to [0 1]
+    !     t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
+    !     ! Reduce scale as time goes on
+    !     h_scale = h_scale_max * (1._dp - t_scale) + h_scale_min * t_scale
+    !   END IF
+    ! END IF
 
-    ! Magnitude decay
     IF (C%do_slid_inv_Bernales2017_decay) THEN
-      ! Reduce adjustment amount as time goes on
-      a_scale = C%slid_inv_Bernales2017_scale_start * (1._dp - t_scale) + C%slid_inv_Bernales2017_scale_end * t_scale
+      IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
+        ! Compute how much time has passed since start of inversion
+        t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
+        ! Limit t_scale to [0 1]
+        t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
+        ! Reduce scale as time goes on
+        C%dt_slid_inv = C%dt_slid_inv * (1._dp - t_scale) + 10._dp * t_scale
+      END IF
     END IF
 
     ! Do the inversion
@@ -1841,50 +1843,100 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Ice thickness difference w.r.t. reference thickness
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_delta = ice%Hi_projected_a( vi) - refgeo%Hi( vi)
+      ! Ratio between this difference and the reference ice thickness
+      h_dfrac = h_delta / MAX(refgeo%Hi( vi), 1._dp)
 
       ! Invert only where the model has grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
+      !IF (ice%mask_sheet_a( vi) == 1 .AND. ice%mask_gl_a(vi) == 0) THEN
 
         ! Mark this vertex as grounded ice
         mask( vi) = 2
 
-        IF (ABS(h_delta) >= 0._dp .AND. ABS(ice%dHi_dt_a( vi)) >= 0._dp) THEN
+        ! If the difference/fraction is outside the specified tolerance
+        ! IF (ABS(h_delta) >= C%slid_inv_Bernales2017_tol_diff .OR. &
+        !     ABS(h_dfrac) >= C%slid_inv_Bernales2017_tol_frac) THEN
 
-          IF (     h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
+        IF (ABS(h_delta) >= C%slid_inv_Bernales2017_tol_diff) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
-
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
-
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
-
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
-
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
-
+          IF (h_delta > 0._dp ) THEN
+            h_scale = 1.0_dp/C%slid_inv_Bernales2017_scale_start
+          ELSE
+            h_scale = 1.0_dp/C%slid_inv_Bernales2017_scale_end
           END IF
 
-          ! Constrain adjusted value to roughness limits
-          ice%phi_fric_inv_a( vi) = MIN( MAX( ice%phi_fric_inv_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
+          ! Scale the difference and restrict it to the [-1.5 1.5] range
+          h_delta = MAX(-1.2_dp, MIN(1.2_dp, h_delta * h_scale))
 
-        END IF
+          ! Compute ice basal temperature relative to the pressure melting point of ice
+          ti_diff = MAX( 0._dp, ice%Ti_pmp_a( vi,C%nz) - ice%Ti_a( vi,C%nz))
+          ! Compute scaling factor based on temperature difference
+          w_ti = 1._dp - (ti_diff**2._dp / 10._dp**2._dp)
+          ! Limit scaling factor to [0 1] interval, just in case
+          w_ti = MAX( 0._dp, MIN( 1._dp, w_ti))
+
+          ! Compute cubic-root-of-complementary-weight based on pore water pressure
+          w_pwp = (ice%Hb_a( vi) - ice%SL_a( vi) - C%Martin2011_hydro_Hb_min) / (C%Martin2011_hydro_Hb_max - C%Martin2011_hydro_Hb_min)
+          ! Compute weight, where 1: saturated and 0: dry
+          w_pwp = 1._dp - w_pwp**3._dp
+          ! Limit weight to [0 1] interval
+          w_pwp = MAX( 0._dp, MIN( 1._dp, w_pwp))
+
+          ! Compute weight based on runoff
+          w_run = (2.0_dp/pi) * ATAN( (SUM(SMB%Runoff( vi,:))**3.0_dp) / (.5_dp**3.0_dp) )
+          ! Limit weight to [0 1] interval, just in case
+          w_run = MAX( 0._dp, MIN( 1._dp, w_run))
+
+          ! Compute final weight
+          w_tot = 1._dp!MAX( w_ti, w_pwp, w_run)
+
+          ! Reduce the adjustment based on (low) basal temperatures, (poor) till saturation, and (low) percolation
+          h_delta = h_delta * w_tot
+
+          ! Further adjust only where the previous value is not significantly improving the result
+          IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -.0_dp) .OR. &
+               (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  .0_dp) ) THEN
+
+            ! Power-law-style sliding laws
+            IF (C%choice_sliding_law == 'Weertman' .OR. &
+                C%choice_sliding_law == 'Tsai2015' .OR. &
+                C%choice_sliding_law == 'Schoof2005') THEN
+
+              ! Save bed roughness at this vertex in aux variable
+              new_val = ice%beta_sq_inv_a( vi)
+              ! Adjust based on scaled ice thickness difference
+              new_val = new_val * (1.5_dp ** h_delta)
+              ! Constrain adjusted value to roughness limits
+              new_val = MIN(MAX(new_val, 1._dp), 10._dp)
+              ! Replace old bed roughness value with the adjusted one
+              ice%beta_sq_inv_a( vi) = new_val
+
+            ! Coulomb-style sliding laws
+            ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+                    C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+                    C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+              ! Save bed roughness at this vertex in aux variable
+              new_val = ice%phi_fric_inv_a( vi)
+
+              ! Adjust based on scaled ice thickness difference
+              new_val = new_val + .007_dp * TAN(-h_delta)!* (1.5_dp ** (-h_delta))
+                                  ! The hardcoded bondian constant yeah baby.
+
+              ! Constrain adjusted value to roughness limits
+              new_val = MIN(MAX(new_val, C%slid_inv_phi_min), C%slid_inv_phi_max)
+
+              ! Replace old bed roughness value with the adjusted one
+              ice%phi_fric_inv_a( vi) = new_val
+
+            ELSE
+              CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+            END IF
+
+          END IF ! else the fit is already improving for some other reason, so leave it alone
+
+        END IF ! else the difference is within the specified tolerance, so leave it alone
 
       ELSE
 
@@ -1911,24 +1963,68 @@ CONTAINS
     IF (C%do_slid_inv_Bernales2017_smooth) THEN
       ! Smooth the resulting field
 
-      ! Store the inverted parameters in a local variable
-      rough_smoothed( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
-      CALL sync
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
 
-      ! Smooth the local variable
-      CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%slid_inv_Bernales2017_smooth_r)
+        ! Store the inverted parameters in a local variable
+        rough_smoothed( mesh%vi1:mesh%vi2) = ice%beta_sq_inv_a( mesh%vi1:mesh%vi2)
+        CALL sync
 
-      ! Combined the smoothed and raw inverted parameter through a weighed average
-      DO vi = mesh%vi1, mesh%vi2
-          ice%phi_fric_a( vi) = (1._dp - C%slid_inv_Bernales2017_smooth_w) * ice%phi_fric_inv_a( vi) + C%slid_inv_Bernales2017_smooth_w * rough_smoothed( vi)
-          ! Make sure the variable stays within the prescribed limits
-          ice%phi_fric_a( vi) = MIN( MAX( ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
-      END DO
-      CALL sync
+        ! Smooth the local variable
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%slid_inv_Bernales2017_smooth_r)
+
+        ! Combined the smoothed and raw inverted parameter through a weighed average
+        DO vi = mesh%vi1, mesh%vi2
+            ice%beta_sq_a( vi) = (1._dp - C%slid_inv_Bernales2017_smooth_w) * ice%beta_sq_inv_a( vi) + C%slid_inv_Bernales2017_smooth_w * rough_smoothed( vi)
+            ! Make sure the variable stays within the prescribed limits
+            ice%beta_sq_a( vi) = MIN(MAX(ice%beta_sq_a( vi), 1._dp), 10._dp)
+        END DO
+        CALL sync
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        ! Store the inverted parameters in a local variable
+        rough_smoothed( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
+        CALL sync
+
+        ! Smooth the local variable
+        CALL smooth_Gaussian_2D( mesh, grid, rough_smoothed, C%slid_inv_Bernales2017_smooth_r)
+
+        ! Combined the smoothed and raw inverted parameter through a weighed average
+        DO vi = mesh%vi1, mesh%vi2
+            ice%phi_fric_a( vi) = (1._dp - C%slid_inv_Bernales2017_smooth_w) * ice%phi_fric_inv_a( vi) + C%slid_inv_Bernales2017_smooth_w * rough_smoothed( vi)
+            ! Make sure the variable stays within the prescribed limits
+            ice%phi_fric_a( vi) = MIN( MAX( ice%phi_fric_a( vi), C%slid_inv_phi_min), C%slid_inv_phi_max)
+        END DO
+        CALL sync
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
 
     ELSE
       ! Don't smooth the resulting field; simply copy it into the main variable
-      ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
+
+      IF (C%choice_sliding_law == 'Weertman' .OR. &
+          C%choice_sliding_law == 'Tsai2015' .OR. &
+          C%choice_sliding_law == 'Schoof2005') THEN
+
+        ! Replace old bed roughness field with the adjusted one
+        ice%beta_sq_a( mesh%vi1:mesh%vi2) = ice%beta_sq_inv_a( mesh%vi1:mesh%vi2)
+
+      ELSEIF (C%choice_sliding_law == 'Coulomb' .OR. &
+              C%choice_sliding_law == 'Coulomb_regularised' .OR. &
+              C%choice_sliding_law == 'Zoet-Iverson') THEN
+
+        ! Replace old bed roughness field with the adjusted one
+        ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_inv_a( mesh%vi1:mesh%vi2)
+
+      ELSE
+        CALL crash('choice_sliding_law "' // TRIM( C%choice_sliding_law) // '" not compatible with basal sliding inversion!')
+      END IF
 
     END IF ! (C%do_slid_inv_Bernales2017_smooth)
     CALL sync

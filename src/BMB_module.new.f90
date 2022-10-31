@@ -2739,8 +2739,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                :: routine_name = 'ocean_temperature_inversion'
     INTEGER                                      :: vi
-    REAL(dp)                                     :: h_delta, h_scale, t_scale, a_scale, m_scale
-    REAL(dp)                                     :: t_melt
+    REAL(dp)                                     :: h_delta, h_delta_next, h_scale, h_input, h_ratio
+    REAL(dp)                                     :: t_melt, t_scale, a_scale, m_scale
     INTEGER,  DIMENSION(:), POINTER              ::  mask,  mask_filled
     INTEGER                                      :: wmask, wmask_filled
     REAL(dp), DIMENSION(:), POINTER              ::  ocean_smoothed
@@ -2757,7 +2757,17 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time > C%ocean_inv_t_end) THEN
-      ! Inversion is done. Return.
+      ! Inversion is done
+      DO vi = mesh%vi1, mesh%vi2
+      !   IF (ice%mask_glf_a( vi) == 1) THEN
+      !     t_scale = MAX( 0._dp, MIN( 1._dp, ice%uabs_vav_a( vi) / 500._dp))
+      !     BMB%T_ocean_base( vi) = BMB%T_base_ave( vi) + t_scale * 0.05_dp + (1._dp - t_scale) * 0.02_dp
+      !   ELSE
+          BMB%T_ocean_base( vi) = BMB%T_base_ave( vi) + 0.00_dp
+      !   END IF
+      END DO
+      CALL sync
+      ! And return
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -2775,20 +2785,17 @@ CONTAINS
     ! Default values
     a_scale = C%ocean_inv_hi_scale
     m_scale = .000_dp
-    t_scale = 0._dp
-
-    ! Time scale
-    IF (C%ocean_inv_t_start < C%ocean_inv_t_end) THEN
-      ! Compute how much time has passed since start of inversion
-      t_scale = (time - C%ocean_inv_t_start) / (C%ocean_inv_t_end - C%ocean_inv_t_start)
-      ! Limit t_scale to [0 1]
-      t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
-    END IF
 
     ! Magnitude decay
     IF (C%do_ocean_inv_decay) THEN
-      ! Reduce adjustment amount as time goes on
-      a_scale = C%ocean_inv_hi_scale * (1._dp - t_scale) + 0.000 * t_scale
+      IF (C%ocean_inv_t_start < C%ocean_inv_t_end) THEN
+        ! Compute how much time has passed since start of inversion
+        t_scale = (time - C%ocean_inv_t_start) / (C%ocean_inv_t_end - C%ocean_inv_t_start)
+        ! Limit t_scale to [0 1]
+        t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
+        ! Reduce adjustment amount as time goes on
+        a_scale = C%ocean_inv_hi_scale * (1._dp - t_scale) + 0.001 * t_scale
+      END IF
     END IF
 
     ! Do the inversion
@@ -2796,7 +2803,8 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
 
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_delta      = ice%Hi_a( vi)           - refgeo%Hi( vi)
+      h_delta_next = ice%Hi_projected_a( vi) - refgeo%Hi( vi)
 
       ! Invert only over non-calving-front shelf vertices
       IF ( ice%mask_shelf_a( vi) == 1 .AND. &
@@ -2809,35 +2817,50 @@ CONTAINS
         ! Use this vertex during extrapolation
         mask( vi) = 2
 
-        IF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
+        IF (ABS(h_delta) >= 0._dp  .AND. ABS(ice%dHi_dt_a( vi)) >= 0._dp) THEN
 
-          IF (t_scale < .9_dp) THEN
+          IF (     h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
+
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-          ELSE
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
 
-        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
+          ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-          ELSEIF (t_scale < .95_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
 
-        ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
+          ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
 
-        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
+          ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+
           END IF
 
-        END IF
+          ! h_input = MAX(-1.2_dp, MIN(1.2_dp, h_delta * h_scale))
+
+          ! ! Further adjust only where the previous value is not improving the result
+          ! IF ( (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -.0_dp) .OR. &
+          !      (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <=  .0_dp) ) THEN
+
+          !   BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + .007_dp * TAN(h_input)
+          !                                                   ! The hardcoded bondian constant yeah baby.
+
+          ! ELSEIF (h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp) THEN
+
+          !   ! h_ratio = MAX( 0._dp, MIN( 1._dp, h_delta_next/h_delta))
+
+          !   ! BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - .001_dp * (1._dp - h_ratio)
+
+          ! ELSEIF (h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp) THEN
+
+          !   ! h_ratio = MAX( 0._dp, MIN( 1._dp, h_delta_next/h_delta))
+
+          !   ! BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + .001_dp * (1._dp - h_ratio)
+
+          ! END IF ! else T_ocean_base does not change from previous time step
+
+        END IF ! else this points is already good enough
 
       ELSE
 
@@ -2860,7 +2883,7 @@ CONTAINS
         t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
                  7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)
+        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)! - .2_dp)
         BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
 
       END IF
@@ -2902,14 +2925,16 @@ CONTAINS
     ! Running T_ocean_base average
     ! ============================
 
-    ! Update the running window: drop oldest record and push the rest to the back
-    BMB%T_base_window( mesh%vi1:mesh%vi2,2:C%ocean_inv_window_size) = BMB%T_base_window( mesh%vi1:mesh%vi2,1:C%ocean_inv_window_size-1)
+    ! ! Update the running window: drop oldest record and push the rest to the back
+    ! BMB%T_base_window( mesh%vi1:mesh%vi2,2:C%ocean_inv_window_size) = BMB%T_base_window( mesh%vi1:mesh%vi2,1:C%ocean_inv_window_size-1)
 
-    ! Update the running window: add new record to beginning of window
-    BMB%T_base_window( mesh%vi1:mesh%vi2,1) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
+    ! ! Update the running window: add new record to beginning of window
+    ! BMB%T_base_window( mesh%vi1:mesh%vi2,1) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
 
-    ! Compute running average
-    BMB%T_base_ave( mesh%vi1:mesh%vi2) = SUM(BMB%T_base_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%ocean_inv_window_size,dp)
+    ! ! Compute running average
+    ! BMB%T_base_ave( mesh%vi1:mesh%vi2) = SUM(BMB%T_base_window( mesh%vi1:mesh%vi2,:),2) / REAL(C%ocean_inv_window_size,dp)
+
+    BMB%T_base_ave( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
 
     ! Finalisation
     ! ============

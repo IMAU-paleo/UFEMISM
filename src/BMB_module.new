@@ -27,10 +27,9 @@ MODULE BMB_module
   USE netcdf_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
-                                             type_remapping_mesh_mesh, type_reference_geometry, type_restart_data, &
-                                             type_grid
+                                             type_remapping_mesh_mesh, type_reference_geometry, type_restart_data
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, smooth_Gaussian_2D
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
 
   IMPLICIT NONE
 
@@ -2292,10 +2291,8 @@ CONTAINS
         ! = Weighed-averaged F_melt [K^-1]
         ! ================================
 
-        F_melt( vi) = 1.0E-01_dp * (1.0_dp - qsh_w * gl_w) + &
+        F_melt( vi) = 1.0E-02_dp * (1.0_dp - qsh_w * gl_w) + &
                       1.0E-00_dp *           qsh_w * gl_w
-
-        ! F_melt( vi) = 1.0E-01_dp
 
       END IF
 
@@ -2723,14 +2720,13 @@ CONTAINS
 ! ===== Inversion of ocean temperatures =====
 ! ===========================================
 
-  SUBROUTINE ocean_temperature_inversion( mesh, grid, ice, BMB, refgeo, time)
+  SUBROUTINE ocean_temperature_inversion( mesh, ice, BMB, refgeo, time)
     ! Invert basal ocean temps using the reference topography
 
     IMPLICIT NONE
 
     ! In/output variables
     TYPE(type_mesh),               INTENT(IN)    :: mesh
-    TYPE(type_grid),               INTENT(IN)    :: grid
     TYPE(type_ice_model),          INTENT(IN)    :: ice
     TYPE(type_BMB_model),          INTENT(INOUT) :: BMB
     TYPE(type_reference_geometry), INTENT(IN)    :: refgeo
@@ -2739,12 +2735,9 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                :: routine_name = 'ocean_temperature_inversion'
     INTEGER                                      :: vi
-    REAL(dp)                                     :: h_delta, h_scale, t_scale, a_scale, m_scale
-    REAL(dp)                                     :: t_melt
+    REAL(dp)                                     :: h_delta, h_scale, t_melt, t_scale
     INTEGER,  DIMENSION(:), POINTER              ::  mask,  mask_filled
     INTEGER                                      :: wmask, wmask_filled
-    REAL(dp), DIMENSION(:), POINTER              ::  ocean_smoothed
-    INTEGER                                      :: wocean_smoothed
 
     ! Initialisation
     ! ==============
@@ -2757,7 +2750,8 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time > C%ocean_inv_t_end) THEN
-      ! Inversion is done. Return.
+      ! Inversion is done. Use running average of bed roughness.
+      BMB%T_ocean_base( mesh%vi1:mesh%vi2) = BMB%T_base_ave( mesh%vi1:mesh%vi2)
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -2766,29 +2760,21 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
     CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
 
-    ! Allocate smoothed bed roughness field
-    CALL allocate_shared_dp_1D( mesh%nV, ocean_smoothed, wocean_smoothed)
-
     ! Adjustment magnitude
     ! ====================
 
-    ! Default values
-    a_scale = C%ocean_inv_hi_scale
-    m_scale = .000_dp
-    t_scale = 0._dp
+    ! Default value
+    t_scale = .2_dp
 
-    ! Time scale
-    IF (C%ocean_inv_t_start < C%ocean_inv_t_end) THEN
-      ! Compute how much time has passed since start of inversion
-      t_scale = (time - C%ocean_inv_t_start) / (C%ocean_inv_t_end - C%ocean_inv_t_start)
-      ! Limit t_scale to [0 1]
-      t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
-    END IF
-
-    ! Magnitude decay
     IF (C%do_ocean_inv_decay) THEN
-      ! Reduce adjustment amount as time goes on
-      a_scale = C%ocean_inv_hi_scale * (1._dp - t_scale) + 0.000 * t_scale
+      IF (C%ocean_inv_t_start < C%ocean_inv_t_end) THEN
+        ! Compute how much time has passed since start of inversion
+        t_scale = (time - C%ocean_inv_t_start) / (C%ocean_inv_t_end - C%ocean_inv_t_start)
+        ! Limit t_scale to [0 1]
+        t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
+        ! Reduce adjustment amount as time goes on
+        t_scale = .2_dp * (1._dp - t_scale) + .05_dp * t_scale
+      END IF
     END IF
 
     ! Do the inversion
@@ -2796,12 +2782,12 @@ CONTAINS
 
     DO vi = mesh%vi1, mesh%vi2
 
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      ! Ice thickness difference w.r.t. reference thickness
+      h_delta = ice%Hi_projected_a( vi) - refgeo%Hi( vi)
 
       ! Invert only over non-calving-front shelf vertices
       IF ( ice%mask_shelf_a( vi) == 1 .AND. &
-           ( ice%mask_cf_a(  vi) == 0 .OR. &
-             ice%mask_glf_a( vi) == 1 ) ) THEN
+           ice%mask_cf_a(    vi) == 0) THEN
 
         ! Add this vertex to mask of inverted ocean temperatures
         BMB%M_ocean_base( vi) = 1
@@ -2809,43 +2795,31 @@ CONTAINS
         ! Use this vertex during extrapolation
         mask( vi) = 2
 
-        IF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
+        IF (     h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= -.0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-          ELSE
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
+          BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + t_scale * (1._dp - EXP(-ABS(h_delta/10._dp)))
 
-        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
+        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= -.0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-          ELSEIF (t_scale < .95_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
+          BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - t_scale * (1._dp - EXP(-ABS(h_delta/10._dp)))
 
-        ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
+        ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < -.0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
+          BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - .05_dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi)*2._dp)))
 
-        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
+        ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > -.0_dp ) THEN
 
-          IF (t_scale < .9_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-          END IF
+          BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) + .05_dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi)*2._dp)))
 
         END IF
 
       ELSE
 
-        ! Remove this vertex from mask of inverted ocean temperatures
-        BMB%M_ocean_base( vi) = 0
+      ! Remove this vertex from mask of inverted ocean temperatures
+      BMB%M_ocean_base( vi) = 0
 
-        ! Not ice shelf: mark it for extrapolation
-        mask( vi) = 1
+      ! Not ice shelf: mark it for extrapolation
+      mask( vi) = 1
 
       END IF
 
@@ -2860,7 +2834,7 @@ CONTAINS
         t_melt = 0.0939_dp - 0.057_dp * BMB%S_ocean_base( vi) - &
                  7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
 
-        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt)
+        BMB%T_ocean_base( vi) = MAX( BMB%T_ocean_base( vi), t_melt - .2_dp)
         BMB%T_ocean_base( vi) = MIN( BMB%T_ocean_base( vi),  5._dp)
 
       END IF
@@ -2873,30 +2847,8 @@ CONTAINS
 
     ! Perform the extrapolation
     IF (par%master) THEN
-      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 40000._dp, mask_filled)
+      CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, BMB%T_ocean_base, 10000._dp, mask_filled)
     END IF
-    CALL sync
-
-    ! Smoothing
-    ! =========
-
-    IF (C%do_ocean_inv_smooth) THEN
-      ! Smooth the resulting field
-
-      ! Store the inverted parameters in a local variable
-      ocean_smoothed( mesh%vi1:mesh%vi2) = BMB%T_ocean_base( mesh%vi1:mesh%vi2)
-      CALL sync
-
-      ! Smooth the local variable
-      CALL smooth_Gaussian_2D( mesh, grid, ocean_smoothed, C%ocean_inv_smooth_r)
-
-      ! Combined the smoothed and raw inverted parameter through a weighed average
-      DO vi = mesh%vi1, mesh%vi2
-          BMB%T_ocean_base( vi) = (1._dp - C%ocean_inv_smooth_w) * BMB%T_ocean_base( vi) + C%ocean_inv_smooth_w * ocean_smoothed( vi)
-      END DO
-      CALL sync
-
-    END IF ! (C%do_ocean_inv_smooth)
     CALL sync
 
     ! Running T_ocean_base average
@@ -2916,7 +2868,6 @@ CONTAINS
 
     CALL deallocate_shared( wmask)
     CALL deallocate_shared( wmask_filled)
-    CALL deallocate_shared( wocean_smoothed)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

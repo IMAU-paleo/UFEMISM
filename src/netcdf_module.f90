@@ -485,7 +485,7 @@ CONTAINS
     IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%t_last_output/1e3, ' kyr - writing output...'
 
     CALL write_to_restart_file_mesh(     region, region%restart_mesh)
-    CALL write_to_restart_file_grid(     region, region%restart_grid)
+    ! CALL write_to_restart_file_grid(     region, region%restart_grid)
     CALL write_to_help_fields_file_mesh( region, region%help_fields_mesh)
     CALL write_to_help_fields_file_grid( region, region%help_fields_grid)
 
@@ -711,7 +711,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_BMB_shelf, region%BMB%BMB_shelf, start = (/ 1, netcdf%ti/)))
     END IF
-    IF (C%do_ocean_temperature_inversion) THEN
+    IF (C%do_ocean_inv) THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_T_ocean_base, region%BMB%T_ocean_base, start = (/ 1, netcdf%ti/)))
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_S_ocean_base, region%BMB%S_ocean_base, start = (/ 1, netcdf%ti/)))
       CALL handle_error( nf90_put_var( netcdf%ncid, netcdf%id_var_M_ocean_base, region%BMB%M_ocean_base, start = (/ 1, netcdf%ti/)))
@@ -874,6 +874,8 @@ CONTAINS
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHs_a, start=(/1, netcdf%ti /) ))
     ELSEIF (field_name == 'f_grnd') THEN
       CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%f_grndx_a, start=(/1, netcdf%ti /) ))
+    ELSEIF (field_name == 'dHi_dt') THEN
+      CALL handle_error( nf90_put_var( netcdf%ncid, id_var, region%ice%dHi_dt_a, start=(/1, netcdf%ti /) ))
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1223,7 +1225,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [vi, time], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
-    IF (C%do_ocean_temperature_inversion) THEN
+    IF (C%do_ocean_inv) THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, [vi, time], netcdf%id_var_T_ocean_base, long_name='Ice shelf basal ocean temperature', units='K')
       CALL create_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, [vi, time], netcdf%id_var_S_ocean_base, long_name='Ice shelf basal ocean salinity', units='PSU')
       CALL create_int_var(    netcdf%ncid, netcdf%name_var_M_ocean_base, [vi, time], netcdf%id_var_M_ocean_base, long_name='Mask of inverted ocean temperature', units='-')
@@ -1527,6 +1529,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHs',                      [vi,    t], id_var, long_name='Ice elevation difference w.r.t PD', units='m')
     ELSEIF (field_name == 'f_grnd') THEN
       CALL create_double_var( netcdf%ncid, 'f_grnd',                   [vi,    t], id_var, long_name='Sub-grid grounded area fraction', units='-')
+    ELSEIF (field_name == 'dHi_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi_dt',                   [vi,    t], id_var, long_name='Ice thickness change rate', units='m/yr')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -1813,7 +1817,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%BMB_shelf, netcdf%id_var_BMB_shelf, netcdf%ti)
     END IF
-    IF (C%do_ocean_temperature_inversion) THEN
+    IF (C%do_ocean_inv) THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%T_ocean_base, netcdf%id_var_T_ocean_base, netcdf%ti)
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%BMB%S_ocean_base, netcdf%id_var_S_ocean_base, netcdf%ti)
     END IF
@@ -1982,6 +1986,8 @@ CONTAINS
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHs_a, id_var, netcdf%ti)
     ELSEIF (field_name == 'f_grnd') THEN
       CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%f_grndx_a, id_var, netcdf%ti)
+    ELSEIF (field_name == 'dHi_dt') THEN
+      CALL map_and_write_to_grid_netcdf_dp_2D( netcdf%ncid, region%mesh, region%grid_output, region%ice%dHi_dt_a, id_var, netcdf%ti)
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN
@@ -2330,7 +2336,7 @@ CONTAINS
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_BMB_shelf, [x, y, t], netcdf%id_var_BMB_shelf, long_name='Ice shelf basal mass balance', units='m/yr')
     END IF
-    IF (C%do_ocean_temperature_inversion) THEN
+    IF (C%do_ocean_inv) THEN
       CALL create_double_var( netcdf%ncid, netcdf%name_var_T_ocean_base, [x, y, t], netcdf%id_var_T_ocean_base, long_name='Ice shelf basal ocean temperature', units='K')
       CALL create_double_var( netcdf%ncid, netcdf%name_var_S_ocean_base, [x, y, t], netcdf%id_var_S_ocean_base, long_name='Ice shelf basal ocean salinity', units='PSU')
     END IF
@@ -2552,6 +2558,8 @@ CONTAINS
       CALL create_double_var( netcdf%ncid, 'dHs',                      [x, y,    t], id_var, long_name='Ice elevation difference w.r.t. PD', units='m')
     ELSEIF (field_name == 'f_grnd') THEN
       CALL create_double_var( netcdf%ncid, 'f_grnd',                   [x, y,    t], id_var, long_name='Sub-grid grounded area fraction', units='-')
+    ELSEIF (field_name == 'dHi_dt') THEN
+      CALL create_double_var( netcdf%ncid, 'dHi_dt',                   [x, y,    t], id_var, long_name='Ice thickness change rate', units='m/yr')
 
     ! Thermal properties
     ELSEIF (field_name == 'Ti') THEN

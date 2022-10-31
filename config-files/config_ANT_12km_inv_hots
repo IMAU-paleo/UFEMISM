@@ -5,7 +5,7 @@
 
   ! General
   start_time_of_run_config                    = 0.0                              ! Start time (in years) of the simulations
-  end_time_of_run_config                      = 1000.0                           ! End   time (in years) of the simulations
+  end_time_of_run_config                      = 150000.0                         ! End   time (in years) of the simulations
   dt_mesh_min_config                          = 1e20                             ! Minimum amount of time (in years) between mesh updates
   dt_coupling_config                          = 1000                             ! Interval of coupling (in years) between the four ice-sheets
 
@@ -20,7 +20,7 @@
   dt_climate_config                           = 10.0                             ! Time step (in years) for updating the climate
   dt_ocean_config                             = 10.0                             ! Time step (in years) for updating the ocean
   dt_SMB_config                               = 10.0                             ! Time step (in years) for updating the SMB
-  dt_BMB_config                               = 5.0                              ! Time step (in years) for updating the BMB
+  dt_BMB_config                               = 10.0                             ! Time step (in years) for updating the BMB
   dt_bedrock_ELRA_config                      = 100.0                            ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
   dt_SELEN_config                             = 1000.0                           ! Time step (in years) for calling SELEN
 
@@ -29,7 +29,7 @@
   dt_SMB_inv_config                           = 5.0                              ! Time step (in years) for calling the iterative inversion of the IMAU-ITM SMB parameters
 
   ! Output
-  dt_output_config                            = 10.0                             ! Time step (in years) for writing output
+  dt_output_config                            = 1000.0                           ! Time step (in years) for writing output
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -42,8 +42,8 @@
   ! Whether or not to let UFEMISM dynamically create its own output folder
   ! ======================================================================
 
-  create_procedural_output_dir_config         = .TRUE.                           ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
-  fixed_output_dir_config                     = 'results_test'                   ! If not, create a directory with this name instead (stops the program if this directory already exists)
+  create_procedural_output_dir_config         = .FALSE.                          ! Automatically create an output directory with a procedural name (e.g. results_20210720_001/)
+  fixed_output_dir_config                     = 'results_ANT_12km_inv_hots'      ! If not, create a directory with this name instead (stops the program if this directory already exists)
 
   ! Debugging
   ! =========
@@ -65,8 +65,8 @@
   dz_max_ice_config                           = 20000.0                          ! Maximum allowed 2nd order surface deviation over ice
   res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
   res_max_ice_config                          = 100.0                            ! Maximum allowed resolution over ice                   [km]
-  res_max_margin_config                       = 40.0                             ! Maximum allowed resolution over land-based ice margin [km]
-  res_max_gl_config                           = 40.0                             !                                 grounding line        [km]
+  res_max_margin_config                       = 12.0                             ! Maximum allowed resolution over land-based ice margin [km]
+  res_max_gl_config                           = 12.0                             !                                 grounding line        [km]
   res_max_cf_config                           = 40.0                             !                                 calving front         [km]
   res_max_mountain_config                     = 200.0                            !                                 mountains             [km]
   res_max_coast_config                        = 200.0                            !                                 coastline             [km]
@@ -97,7 +97,7 @@
 
   dx_grid_output_config                       = 40000.0                          ! Resolution of the square grid used for writing output                [m]
   dx_grid_GIA_config                          = 40000.0                          ! Resolution of the square grid used for GIA modelling (ELRA or SELEN) [m]
-  dx_grid_smooth_config                       = 40000.0                          ! Resolution of the square grid used for data smoothing                [m]
+  dx_grid_smooth_config                       = 10000.0                          ! Resolution of the square grid used for data smoothing                [m]
 
   ! ISMIP-style output
   ! ==================
@@ -111,9 +111,11 @@
   ! Reference geometries (initial, present-day, and GIA equilibrium)
   ! ================================================================
 
-  ! Some pre-processing stuff for reference ice geometry
-  refgeo_Hi_min_config                        = 0.5                              ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
+  ! Some pre- and post- processing stuff for reference ice geometry
+  refgeo_Hi_min_config                        = 0.1                              ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
   remove_Lake_Vostok_config                   = .TRUE.                           ! Remove Lake Vostok when running Antarctic simulations
+  do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
+  r_smooth_geometry_config                    = 0.5                              ! Geometry smoothing radius (in number of reference grid cells)
 
   ! Initial geometry
   choice_refgeo_init_NAM_config               = 'realistic'                      ! Choice of initial geometry for North America; can be "idealised", "realistic", or "restart"
@@ -205,8 +207,6 @@
   vel_ref_Bernales2017_config                 = 30.0                             ! Reference "onset" velocity for an ice stream (point of half SIA reduction)
   include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
   do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
-  do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
-  r_smooth_geometry_config                    = 0.5                              ! Geometry smoothing radius (in number of grid cells)
 
   ! Some parameters for numerically solving the SSA/DIVA
   DIVA_visc_it_norm_dUV_tol_config            = 1E-2                             ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
@@ -264,18 +264,20 @@
   choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
   choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
-  ! Partially fixed geometry, useful for initialisation and inversion runs
-  fixed_sheet_geometry_config                 = 0.0                              ! Keep geometry of grounded ice fixed
-  fixed_shelf_geometry_config                 = 0.0                              ! Keep geometry of floating ice fixed
-  fixed_grounding_line_g_config               = 1.0                              ! Keep ice thickness at the grounded side of grounding line fixed
-  fixed_grounding_line_f_config               = 1.0                              ! Keep ice thickness at the floating side of grounding line fixed
-  fixed_decay_glg_t_start_config              = 100.0                            ! Start time of linear transition between fix/delay and free GL evolution (grounded side)
-  fixed_decay_glg_t_end_config                = 300.0                            ! End   time of linear transition between fix/delay and free GL evolution (grounded side)
-  fixed_decay_glf_t_start_config              = 500.0                            ! Start time of linear transition between fix/delay and free GL evolution (floating side)
-  fixed_decay_glf_t_end_config                = 900.0                            ! End   time of linear transition between fix/delay and free GL evolution (floating side)
+  ! Fixed/delayed ice thickness evolution
+  fixed_sheet_geometry_config                 = 0.0                              ! Fix (1), release (0), or delay grounded ice geometry evolution
+  fixed_shelf_geometry_config                 = 0.99                             ! Fix (1), release (0), or delay floating ice geometry evolution
+  fixed_grounding_line_g_config               = 0.0                              ! Fix (1), release (0), or delay GL geometry evolution (grounded side)
+  fixed_grounding_line_f_config               = 0.99                             ! Fix (1), release (0), or delay GL geometry evolution (floating side)
+  fixed_decay_t_start_config                  = 00000.0                          ! Start time of linear transition between fixed/delayed and free evolution
+  fixed_decay_t_end_config                    = 50000.0                          ! End   time of linear transition between fixed/delayed and free evolution
+
+  ! Fix mask by limiting min/max allowed sheet/shelf ice thickness
+  fixed_mask_t_start_config                   = 0.0                              ! Start time of model mask fixing
+  fixed_mask_t_end_config                     = 0.0                              ! End   time of model mask fixing
 
   ! Memory of previous run during a restart
-  dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
+  dHi_dt_window_size_config                   = 1                                ! Number of previous time steps used to compute a running average of dHi_dt
 
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
@@ -298,7 +300,7 @@
   ! Basal roughness / friction
   choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", or "restart"
   slid_Weertman_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in Weertman sliding law
-  slid_Coulomb_phi_fric_uniform_config        = 30.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
+  slid_Coulomb_phi_fric_uniform_config        = 20.0                             ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   slid_Tsai2015_alpha_sq_uniform_config       = 0.5                              ! Uniform value for alpha_sq in the Tsai2015 sliding law
   slid_Tsai2015_beta_sq_uniform_config        = 1.0                              ! Uniform value for beta_sq  in the Tsai2015 sliding law
   slid_Schoof2005_alpha_sq_uniform_config     = 0.5                              ! Uniform value for alpha_sq in the Schoof2005 sliding law
@@ -317,17 +319,19 @@
   do_slid_inv_config                          = .TRUE.                           ! Whether or not to perform an iterative inversion of bed roughness
   choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
   slid_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
-  slid_inv_t_end_config                       = 80000.0                          ! Maximum model time when the inversion is allowed
-  slid_inv_phi_min_config                     = 0.5                              ! Minimum value of phi_fric allowed during inversion
+  slid_inv_t_end_config                       = 70000.0                          ! Maximum model time when the inversion is allowed
+  slid_inv_phi_min_config                     = 0.1                              ! Minimum value of phi_fric allowed during inversion
   slid_inv_phi_max_config                     = 30.0                             ! Maximum value of phi_fric allowed during inversion
   slid_inv_filename_output_config             = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
-  slid_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
+  slid_inv_window_size_config                 = 1                                ! Number of previous time steps used to compute a running average of inverted values
   !
   do_slid_inv_Bernales2017_smooth_config      = .TRUE.                           ! If set to TRUE, inverted basal roughness is smoothed
   do_slid_inv_Bernales2017_extrap_config      = .TRUE.                           ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
-  slid_inv_Bernales2017_hi_scale_config       = 20000.0                          ! Scaling constant for inversion procedure [m]
+  do_slid_inv_Bernales2017_decay_config       = .TRUE.                           ! If set to TRUE, decrease the inversion adjustment over time
+  slid_inv_Bernales2017_scale_start_config    = 0.5                              ! Initial scaling factor for inversion procedure [m]
+  slid_inv_Bernales2017_scale_end_config      = 0.1                              ! Final   scaling factor for inversion procedure [m]
   slid_inv_Bernales2017_smooth_r_config       = 10000.0                          ! Smoothing radius for inversion procedure [m]
-  slid_inv_Bernales2017_smooth_w_config       = 0.1                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
+  slid_inv_Bernales2017_smooth_w_config       = 0.0                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
   slid_inv_Bernales2017_tol_diff_config       = 0.0                              ! Minimum ice thickness difference [m] that triggers inversion (.OR. &)
   slid_inv_Bernales2017_tol_frac_config       = 0.0                              ! Minimum ratio between ice thickness difference and reference value that triggers inversion
 
@@ -342,7 +346,7 @@
   remove_shelves_larger_than_PD_config        = .TRUE.                           ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
   continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
   continental_shelf_min_height_config         = -2000.0                          ! Maximum depth of the continental shelf
-  minimum_ice_thickness_config                = 0.5                              ! If ice anywhere is thinner than this, remove it
+  minimum_ice_thickness_config                = 0.1                              ! If ice anywhere is thinner than this, remove it
 
   ! Thermodynamics and rheology
   ! ===========================
@@ -386,9 +390,9 @@
   switch_glacial_index_config                 = .FALSE.                          ! If a glacial index is used for the precipitation forcing, it will only depend on CO2
 
   ! Iterative adjustment of precipitation and temperature
-  do_clim_inv_config                          = .TRUE.                           ! Whether or not to adjust climate fields in tricky areas
-  clim_inv_t_start_config                     = -9.9E9                           ! Minimum model time when the inversion is allowed
-  clim_inv_t_end_config                       = +9.9E9                           ! Maximum model time when the inversion is allowed
+  do_clim_inv_config                          = .FALSE.                          ! Whether or not to adjust climate fields in tricky areas
+  clim_inv_t_start_config                     = 0.0                              ! Minimum model time when the inversion is allowed
+  clim_inv_t_end_config                       = 50000.0                          ! Maximum model time when the inversion is allowed
   clim_inv_Hb_min_config                      = 1000.0                           ! Minimum bedrock elevation where the inversion operates
   clim_inv_Hi_max_config                      = 1000.0                           ! Maximum ice thickness where the inversion operates
   clim_inv_window_size_config                 = 500                              ! Number of previous time steps used to compute a running average of inverted values
@@ -484,10 +488,15 @@
   BMB_max_config                              = 10.0                             ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
   BMB_min_config                              = -120.0                           ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
-  do_ocean_temperature_inversion_config       = .TRUE.                           ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
-  ocean_temperature_inv_t_start_config        = 0.0                              ! Minimum model time when the inversion is allowed
-  ocean_temperature_inv_t_end_config          = 90000.0                          ! Maximum model time when the inversion is allowed
-  T_base_window_size_config                   = 200                              ! Number of previous time steps used to compute a running average of inverted T_ocean_base
+  do_ocean_inv_config                         = .TRUE.                           ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
+  do_ocean_inv_smooth_config                  = .FALSE.                          ! If set to TRUE, inverted ocean temps are smoothed
+  do_ocean_inv_decay_config                   = .TRUE.                           ! Whether or not to decrease the inversion adjustment over time
+  ocean_inv_t_start_config                    = 0.0                              ! Minimum model time when the inversion is allowed
+  ocean_inv_t_end_config                      = 100000.0                         ! Maximum model time when the inversion is allowed
+  ocean_inv_hi_scale_config                   = 0.05                             ! Scaling constant for inversion procedure [m]
+  ocean_inv_smooth_r_config                   = 10000                            ! Smoothing radius for inversion procedure [m]
+  ocean_inv_smooth_w_config                   = 0.0                              ! Weight given to the smoothed ocean temps (1 = full smoothing applied)
+  ocean_inv_window_size_config                = 1                                ! Number of previous time steps used to compute a running average of inverted T_ocean_base
 
   BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
   BMB_inv_scale_shelf_config                  = 200.0                            ! Scaling constant for inversion procedure over shelves [m]

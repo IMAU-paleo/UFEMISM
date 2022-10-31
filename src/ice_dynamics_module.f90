@@ -545,8 +545,12 @@ CONTAINS
     ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
     CALL sync
 
-    ! Check if we want to keep the ice thickness fixed for some specific areas
-    CALL fix_ice_thickness( mesh, ice, time)
+    ! Save projected ice thickness at t+dt
+    ice%Hi_projected_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
+
+    ! Check if we want to keep the ice thickness fixed for some specific areas,
+    ! or modify the computed new ice thickness in some way before applying it
+    CALL fix_ice_thickness( mesh, ice, refgeo_PD, time)
 
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = MAX( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
@@ -570,22 +574,27 @@ CONTAINS
 
   END SUBROUTINE update_ice_thickness
 
-  SUBROUTINE fix_ice_thickness( mesh, ice, time)
+  SUBROUTINE fix_ice_thickness( mesh, ice, refgeo_PD, time)
     ! Check if we want to keep the ice thickness fixed in time for specific areas,
     ! or delay its evolution by a given percentage each time step, both options
     ! including the possibility to reduce this constraint over time.
+    ! Additionally, the mask can be forced to stay more or less the same over time
+    ! by not letting ice shelves to become grounded or grounded ice to become afloat,
+    ! i.e. limiting their maximum and minimum allowed ice thicknesses, respectively.
 
     IMPLICIT NONE
 
     ! In- and output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     REAL(dp),                            INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256),    PARAMETER                   :: routine_name = 'fix_ice_thickness'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: fixiness, decay_start, decay_end
+    REAL(dp)                                           :: decay_start, decay_end
+    REAL(dp)                                           :: fixiness, limitness, Hi_lim
 
     ! === Initialisation ===
     ! ======================
@@ -600,8 +609,8 @@ CONTAINS
     fixiness = 1._dp
 
     ! Make sure that the start and end times make sense
-    decay_start = MAX( C%fixed_decay_glf_t_start, C%start_time_of_run)
-    decay_end   = MIN( C%fixed_decay_glf_t_end,   C%end_time_of_run)
+    decay_start = MAX( C%fixed_decay_t_start, C%start_time_of_run)
+    decay_end   = MIN( C%fixed_decay_t_end,   C%end_time_of_run)
 
     ! Compute decaying fixiness
     IF (decay_start >= decay_end) THEN
@@ -621,78 +630,79 @@ CONTAINS
     ! Just in case
     fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
 
-    ! === Fix or delay ====
-    ! =====================
+    ! === Limitness ===
+    ! =================
+
+    ! Intial value
+    limitness = 1._dp
+
+    ! Make sure that the start and end times make sense
+    decay_start = MAX( C%fixed_mask_t_start, C%start_time_of_run)
+    decay_end   = MIN( C%fixed_mask_t_end,   C%end_time_of_run)
+
+    ! Compute decaying fixiness
+    IF (decay_start >= decay_end) THEN
+      ! This makes no sense
+      limitness = 0._dp
+    ELSEIF (time <= decay_start) THEN
+      ! Apply full fix/delay
+      limitness = 1._dp
+    ELSEIF (time >= decay_end) THEN
+      ! Remove any fix/delay
+      limitness = 0._dp
+    ELSE
+      ! Fixiness decreases with time
+      limitness = 1._dp - (time - decay_start) / (decay_end - decay_start)
+    END IF
+
+    ! Just in case
+    limitness = MIN( 1._dp, MAX( 0._dp, limitness))
+
+    ! Compute limit
+    Hi_lim = 30._dp * limitness + 1000._dp * (1._dp - limitness)
+
+    ! === Fix, delay, limit ====
+    ! ==========================
 
     DO vi = mesh%vi1, mesh%vi2
+
+      IF (time < C%fixed_mask_t_end) THEN
+        ice%Hi_tplusdt_a( vi) = MIN( ice%Hi_tplusdt_a( vi), refgeo_PD%Hi( vi) + Hi_lim)
+        ice%Hi_tplusdt_a( vi) = MAX( ice%Hi_tplusdt_a( vi), refgeo_PD%Hi( vi) - Hi_lim)
+      END IF
 
       ! Grounding line (grounded side)
       ! ==============================
 
       IF (ice%mask_gl_a( vi) == 1) THEN
 
-        ! ! Initial fixiness value
-        ! fixiness = 1._dp
-
-        ! ! Make sure that the start and end decay times make sense
-        ! decay_start = MAX( C%fixed_decay_glg_t_start, C%start_time_of_run)
-        ! decay_end   = MIN( C%fixed_decay_glg_t_end,   C%end_time_of_run)
-
-        ! ! Compute decaying fixiness
-        ! IF (decay_start >= decay_end) THEN
-        !   ! This makes no sense
-        !   fixiness = 1._dp
-        ! ELSEIF (time <= decay_start) THEN
-        !   ! Apply full fix/delay
-        !   fixiness = 1._dp
-        ! ELSEIF (time >= decay_end) THEN
-        !   ! Remove any fix/delay
-        !   fixiness = 0._dp
-        ! ELSE
-        !   ! Fixiness decreases with time
-        !   fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
-        ! END IF
-
-        ! ! Just in case
-        ! fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
-
         ! Compute new ice thickness
         ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_g * fixiness + &
                                 ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_g * fixiness)
+
+        ! IF (time > C%fixed_mask_t_start .AND. time < C%fixed_mask_t_end) THEN
+        !   ! Make sure it does not become thinner than what it needs to remain grounded
+        !   ice%Hi_tplusdt_a( vi) = MAX ((ice%SL_a( vi) - ice%Hb_a( vi)) * seawater_density/ice_density + 1._dp, ice%Hi_tplusdt_a( vi))
+        !   ! Make sure it keeps making sense
+        !   ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_tplusdt_a( vi))
+        ! END IF
+
 
       ! Grounding line (floating side)
       ! ==============================
 
       ELSEIF (ice%mask_glf_a( vi) == 1) THEN
 
-        ! ! Initial fixiness value
-        ! fixiness = 1._dp
-
-        ! ! Make sure that the start and end decay times make sense
-        ! decay_start = MAX( C%fixed_decay_glf_t_start, C%start_time_of_run)
-        ! decay_end   = MIN( C%fixed_decay_glf_t_end,   C%end_time_of_run)
-
-        ! ! Compute decaying fixiness
-        ! IF (decay_start >= decay_end) THEN
-        !   ! This makes no sense
-        !   fixiness = 1._dp
-        ! ELSEIF (time <= decay_start) THEN
-        !   ! Apply full fix/delay
-        !   fixiness = 1._dp
-        ! ELSEIF (time >= decay_end) THEN
-        !   ! Remove any fix/delay
-        !   fixiness = 0._dp
-        ! ELSE
-        !   ! Fixiness decreases with time
-        !   fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
-        ! END IF
-
-        ! ! Just in case
-        ! fixiness = MIN( 1._dp, MAX( 0._dp, fixiness))
-
         ! Compute new ice thickness
         ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_f * fixiness + &
                                 ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_f * fixiness)
+
+        ! IF (time>C%fixed_mask_t_start .AND. time<C%fixed_mask_t_end) THEN
+        !   ! Make sure it does not become thicker than what it needs to remain afloat
+        !   ice%Hi_tplusdt_a( vi) = MIN( (ice%SL_a( vi) - ice%Hb_a( vi)) * seawater_density/ice_density - 1._dp, ice%Hi_tplusdt_a( vi))
+        !   ! Make sure it keeps making sense
+        !   ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_tplusdt_a( vi))
+        ! END IF
 
       ! Grounded ice
       ! ============
@@ -700,8 +710,15 @@ CONTAINS
       ELSEIF (ice%mask_sheet_a( vi) == 1) THEN
 
         ! Compute new ice thickness
-        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_sheet_geometry + &
-                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_sheet_geometry)
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_sheet_geometry * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_sheet_geometry * fixiness)
+
+        ! IF (time>C%fixed_mask_t_start .AND. time<C%fixed_mask_t_end) THEN
+        !   ! Make sure it does not become thinner than what it needs to remain grounded
+        !   ice%Hi_tplusdt_a( vi) = MAX ((ice%SL_a( vi) - ice%Hb_a( vi)) * seawater_density/ice_density + 1._dp, ice%Hi_tplusdt_a( vi))
+        !   ! Make sure it keeps making sense
+        !   ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_tplusdt_a( vi))
+        ! END IF
 
       ! Floating ice
       ! ============
@@ -709,8 +726,15 @@ CONTAINS
       ELSEIF (ice%mask_shelf_a( vi) == 1) THEN
 
         ! Compute new ice thickness
-        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_shelf_geometry + &
-                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_shelf_geometry)
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_shelf_geometry * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_shelf_geometry * fixiness)
+
+        ! IF (time>C%fixed_mask_t_start .AND. time<C%fixed_mask_t_end) THEN
+        !   ! Make sure it does not become thicker than what it needs to remain afloat
+        !   ice%Hi_tplusdt_a( vi) = MIN( (ice%SL_a( vi) - ice%Hb_a( vi)) * seawater_density/ice_density - 1._dp, ice%Hi_tplusdt_a( vi))
+        !   ! Make sure it keeps making sense
+        !   ice%Hi_tplusdt_a( vi) = MAX( 0._dp, ice%Hi_tplusdt_a( vi))
+        ! END IF
 
       END IF
 
@@ -1481,6 +1505,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nTri,              ice%f_grndx_b             , ice%wf_grndx_b            )
     CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_x               , ice%wgfrac_x              )
     CALL allocate_shared_int_2D(  mesh%nV  , 64         , ice%gfrac_y               , ice%wgfrac_y              )
+    CALL allocate_shared_dp_2D(   mesh%nV  , 11         , ice%bedrock_cdf           , ice%wbedrock_cdf          )
 
     ! Ice physical properties
     CALL allocate_shared_dp_2D(   mesh%nV  , C%nz       , ice%A_flow_3D_a           , ice%wA_flow_3D_a          )
@@ -1501,6 +1526,7 @@ CONTAINS
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_a        , ice%wdHi_dt_a          )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHs_dt_a        , ice%wdHs_dt_a          )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_tplusdt_a    , ice%wHi_tplusdt_a      )
+    CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%Hi_projected_a  , ice%wHi_projected_a    )
     CALL allocate_shared_dp_1D(   mesh%nV  ,                       ice%dHi_dt_ave_a    , ice%wdHi_dt_ave_a      )
     CALL allocate_shared_dp_2D(   mesh%nV  , C%dHi_dt_window_size, ice%dHi_dt_window_a , ice%wdHi_dt_window_a   )
 
@@ -1579,6 +1605,7 @@ CONTAINS
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        ,    ice%wHi_a        ,    'cons_2nd_order')
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    ,    ice%wdHi_dt_a    ,    'cons_2nd_order')
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a,    ice%wHi_tplusdt_a,    'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_projected_a,  ice%wHi_projected_a,  'cons_2nd_order')
     CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_ave_a,    ice%wdHi_dt_ave_a,    'cons_2nd_order')
     CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%dHi_dt_window_a, ice%wdHi_dt_window_a, 'cons_2nd_order')
 
@@ -1670,6 +1697,7 @@ CONTAINS
     CALL reallocate_shared_dp_1D(  mesh_new%nTri,                ice%f_grndx_b,            ice%wf_grndx_b           )
     CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_x,              ice%wgfrac_x             )
     CALL reallocate_shared_int_2D( mesh_new%nV, 64,              ice%gfrac_y,              ice%wgfrac_y             )
+    CALL reallocate_shared_dp_2D(  mesh_new%nV, 11,              ice%bedrock_cdf,          ice%wbedrock_cdf         )
 
     ! Ice physical properties
     CALL reallocate_shared_dp_2D(  mesh_new%nV, C%nz,            ice%A_flow_3D_a,          ice%wA_flow_3D_a         )

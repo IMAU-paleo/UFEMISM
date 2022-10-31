@@ -243,9 +243,11 @@ MODULE configuration_module
   ! == Reference geometries (initial, present-day, and GIA equilibrium)
   ! ===================================================================
 
-    ! Some pre-processing stuff for reference ice geometry
+    ! Some pre- and post-processing stuff for reference ice geometry
     REAL(dp)            :: refgeo_Hi_min_config                        = 2.0_dp                           ! Remove ice thinner than this value in the reference ice geometry. Particularly useful for BedMachine Greenland, which somehow covers the entire tundra with half a meter of ice...
     LOGICAL             :: remove_Lake_Vostok_config                   = .TRUE.                           ! Remove Lake Vostok when running Antarctic simulations
+    LOGICAL             :: do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
+    REAL(dp)            :: r_smooth_geometry_config                    = 0.5_dp                           ! Geometry smoothing radius (in number of reference grid cells)
 
     ! == Initial geometry
     ! ===================
@@ -366,8 +368,6 @@ MODULE configuration_module
     REAL(dp)            :: vel_ref_Bernales2017_config                 = 30._dp                           ! Reference "onset" velocity for an ice stream (point of half SIA reduction)
     LOGICAL             :: include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
     LOGICAL             :: do_GL_subgrid_friction_config               = .TRUE.                           ! Whether or not to scale basal friction with the sub-grid grounded fraction (needed to get proper GL migration; only turn this off for showing the effect on the MISMIP_mod results!)
-    LOGICAL             :: do_smooth_geometry_config                   = .FALSE.                          ! Whether or not to smooth the model geometry (bedrock + initial ice thickness)
-    REAL(dp)            :: r_smooth_geometry_config                    = 0.5_dp                           ! Geometry smoothing radius (in number of grid cells)
 
     ! Some parameters for numerically solving the SSA/DIVA
     REAL(dp)            :: DIVA_visc_it_norm_dUV_tol_config            = 1E-2_dp                          ! Successive solutions of UV in the effective viscosity iteration must not differ by more than this amount (on average)
@@ -425,17 +425,17 @@ MODULE configuration_module
     CHARACTER(LEN=256)  :: choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
     CHARACTER(LEN=256)  :: choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
-    ! Partially fixed geometry, useful for initialisation and inversion runs
-    ! A value of 1 means fully fixed, 0 means fully free, values in between
-    ! create a "delayed" ice thickness evolution.
-    REAL(dp)            :: fixed_sheet_geometry_config                 = 0._dp                            ! Keep geometry of grounded ice fixed
-    REAL(dp)            :: fixed_shelf_geometry_config                 = 0._dp                            ! Keep geometry of floating ice fixed
-    REAL(dp)            :: fixed_grounding_line_g_config               = 0._dp                            ! Keep ice thickness at the grounded side of grounding line fixed
-    REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Keep ice thickness at the floating side of grounding line fixed
-    REAL(dp)            :: fixed_decay_glg_t_start_config              = +9.9E9_dp                        ! Start time of linear transition between fix/delay and free GL evolution (grounded side)
-    REAL(dp)            :: fixed_decay_glg_t_end_config                = +9.9E9_dp                        ! End   time of linear transition between fix/delay and free GL evolution (grounded side)
-    REAL(dp)            :: fixed_decay_glf_t_start_config              = +9.9E9_dp                        ! Start time of linear transition between fix/delay and free GL evolution (floating side)
-    REAL(dp)            :: fixed_decay_glf_t_end_config                = +9.9E9_dp                        ! End   time of linear transition between fix/delay and free GL evolution (floating side)
+    ! Fix/delay ice thickness evolution
+    REAL(dp)            :: fixed_sheet_geometry_config                 = 0._dp                            ! Fix (1), release (0), or delay grounded ice geometry evolution
+    REAL(dp)            :: fixed_shelf_geometry_config                 = 0._dp                            ! Fix (1), release (0), or delay floating ice geometry evolution
+    REAL(dp)            :: fixed_grounding_line_g_config               = 0._dp                            ! Fix (1), release (0), or delay GL geometry evolution (grounded side)
+    REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Fix (1), release (0), or delay GL geometry evolution (floating side)
+    REAL(dp)            :: fixed_decay_t_start_config                  = +9.9E9_dp                        ! Start time of linear transition between fixed/delayed and free evolution
+    REAL(dp)            :: fixed_decay_t_end_config                    = +9.9E9_dp                        ! End   time of linear transition between fixed/delayed and free evolution
+
+    ! Fix mask by limiting min/max allowed sheet/shelf ice thickness
+    REAL(dp)            :: fixed_mask_t_start_config                   = +9.9E9_dp                        ! Start time of model mask fixing
+    REAL(dp)            :: fixed_mask_t_end_config                     = +9.9E9_dp                        ! End   time of model mask fixing
 
     ! Memory of first dHi_dt of simulation
     INTEGER             :: dHi_dt_window_size_config                   = 1000                             ! Number of previous time steps used to compute a running average of dHi_dt
@@ -488,8 +488,10 @@ MODULE configuration_module
 
     LOGICAL             :: do_slid_inv_Bernales2017_smooth_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
     LOGICAL             :: do_slid_inv_Bernales2017_extrap_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
-    REAL(dp)            :: slid_inv_Bernales2017_hi_scale_config       = 10000._dp                        ! Scaling constant for inversion procedure [m]
-    REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 500._dp                          ! Smoothing radius for inversion procedure [m]
+    LOGICAL             :: do_slid_inv_Bernales2017_decay_config       = .FALSE.                          ! If set to TRUE, vary the inversion adjustment over time through the scaling factor
+    REAL(dp)            :: slid_inv_Bernales2017_scale_start_config    = 10000._dp                        ! Initial scaling factor for inversion procedure [m]
+    REAL(dp)            :: slid_inv_Bernales2017_scale_end_config      = 20000._dp                        ! Final   scaling factor for inversion procedure [m]
+    REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 10000._dp                        ! Smoothing radius for inversion procedure [m]
     REAL(dp)            :: slid_inv_Bernales2017_smooth_w_config       = .01_dp                           ! Weight given to the smoothed roughness (1 = full smoothing applied)
     REAL(dp)            :: slid_inv_Bernales2017_tol_diff_config       = 100._dp                          ! Minimum ice thickness difference [m] that triggers inversion
     REAL(dp)            :: slid_inv_Bernales2017_tol_frac_config       = 1.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
@@ -685,10 +687,15 @@ MODULE configuration_module
     REAL(dp)            :: BMB_max_config                              = 20._dp                           ! Maximum amount of allowed basal mass balance [mie/yr] (+ is refreezing)
     REAL(dp)            :: BMB_min_config                              = -200._dp                         ! Minimum amount of allowed basal mass balance [mie/yr] (- is melting)
 
-    LOGICAL             :: do_ocean_temperature_inversion_config       = .FALSE.                          ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
-    REAL(dp)            :: ocean_temperature_inv_t_start_config        = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
-    REAL(dp)            :: ocean_temperature_inv_t_end_config          = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
-    INTEGER             :: T_base_window_size_config                   = 200                              ! Number of previous time steps used to compute a running average of inverted T_ocean_base
+    LOGICAL             :: do_ocean_inv_config                         = .FALSE.                          ! Whether or not to invert for ocean temperatures in the Bernales202X shelf BMB model
+    LOGICAL             :: do_ocean_inv_smooth_config                  = .FALSE.                          ! If set to TRUE, inverted ocean temps are smoothed
+    LOGICAL             :: do_ocean_inv_decay_config                   = .FALSE.                          ! Whether or not to decrease the inversion adjustment over time
+    REAL(dp)            :: ocean_inv_t_start_config                    = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+    REAL(dp)            :: ocean_inv_t_end_config                      = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+    REAL(dp)            :: ocean_inv_hi_scale_config                   = 100._dp                          ! Scaling constant for inversion procedure [m]
+    INTEGER             :: ocean_inv_window_size_config                = 200                              ! Number of previous time steps used to compute a running average of inverted T_ocean_base
+    REAL(dp)            :: ocean_inv_smooth_r_config                   = 10000._dp                        ! Smoothing radius for inversion procedure [m]
+    REAL(dp)            :: ocean_inv_smooth_w_config                   = .01_dp                           ! Weight given to the smoothed ocean temps (1 = full smoothing applied)
 
     LOGICAL             :: BMB_inv_use_restart_field_config            = .FALSE.                          ! Whether or not to use BMB_shelf field from a the restart file
     REAL(dp)            :: BMB_inv_scale_shelf_config                  = 200._dp                          ! Scaling constant for inversion procedure over shelves [m]
@@ -1054,6 +1061,8 @@ MODULE configuration_module
     ! Some pre-processing stuff for reference ice geometry
     REAL(dp)                            :: refgeo_Hi_min
     LOGICAL                             :: remove_Lake_Vostok
+    LOGICAL                             :: do_smooth_geometry
+    REAL(dp)                            :: r_smooth_geometry
 
     ! Initial geometry
     CHARACTER(LEN=256)                  :: choice_refgeo_init_NAM
@@ -1156,8 +1165,6 @@ MODULE configuration_module
     REAL(dp)                            :: vel_ref_Bernales2017
     LOGICAL                             :: include_SSADIVA_crossterms
     LOGICAL                             :: do_GL_subgrid_friction
-    LOGICAL                             :: do_smooth_geometry
-    REAL(dp)                            :: r_smooth_geometry
 
     ! Some parameters for numerically solving the SSA/DIVA
     REAL(dp)                            :: DIVA_visc_it_norm_dUV_tol
@@ -1220,10 +1227,10 @@ MODULE configuration_module
     REAL(dp)                            :: fixed_shelf_geometry
     REAL(dp)                            :: fixed_grounding_line_g
     REAL(dp)                            :: fixed_grounding_line_f
-    REAL(dp)                            :: fixed_decay_glg_t_start
-    REAL(dp)                            :: fixed_decay_glg_t_end
-    REAL(dp)                            :: fixed_decay_glf_t_start
-    REAL(dp)                            :: fixed_decay_glf_t_end
+    REAL(dp)                            :: fixed_decay_t_start
+    REAL(dp)                            :: fixed_decay_t_end
+    REAL(dp)                            :: fixed_mask_t_start
+    REAL(dp)                            :: fixed_mask_t_end
 
     ! Memory of previous run during a restart
     INTEGER                             :: dHi_dt_window_size
@@ -1276,7 +1283,9 @@ MODULE configuration_module
 
     LOGICAL                             :: do_slid_inv_Bernales2017_smooth
     LOGICAL                             :: do_slid_inv_Bernales2017_extrap
-    REAL(dp)                            :: slid_inv_Bernales2017_hi_scale
+    LOGICAL                             :: do_slid_inv_Bernales2017_decay
+    REAL(dp)                            :: slid_inv_Bernales2017_scale_start
+    REAL(dp)                            :: slid_inv_Bernales2017_scale_end
     REAL(dp)                            :: slid_inv_Bernales2017_smooth_r
     REAL(dp)                            :: slid_inv_Bernales2017_smooth_w
     REAL(dp)                            :: slid_inv_Bernales2017_tol_diff
@@ -1473,10 +1482,15 @@ MODULE configuration_module
     REAL(dp)                            :: BMB_max
     REAL(dp)                            :: BMB_min
 
-    LOGICAL                             :: do_ocean_temperature_inversion
-    REAL(dp)                            :: ocean_temperature_inv_t_start
-    REAL(dp)                            :: ocean_temperature_inv_t_end
-    INTEGER                             :: T_base_window_size
+    LOGICAL                             :: do_ocean_inv
+    LOGICAL                             :: do_ocean_inv_smooth
+    LOGICAL                             :: do_ocean_inv_decay
+    REAL(dp)                            :: ocean_inv_t_start
+    REAL(dp)                            :: ocean_inv_t_end
+    REAL(dp)                            :: ocean_inv_hi_scale
+    INTEGER                             :: ocean_inv_window_size
+    REAL(dp)                            :: ocean_inv_smooth_r
+    REAL(dp)                            :: ocean_inv_smooth_w
 
     LOGICAL                             :: BMB_inv_use_restart_field
     REAL(dp)                            :: BMB_inv_scale_shelf
@@ -2017,6 +2031,8 @@ CONTAINS
                      zeta_config,                                     &
                      refgeo_Hi_min_config,                            &
                      remove_Lake_Vostok_config,                       &
+                     do_smooth_geometry_config,                       &
+                     r_smooth_geometry_config,                        &
                      choice_refgeo_init_NAM_config,                   &
                      choice_refgeo_init_EAS_config,                   &
                      choice_refgeo_init_GRL_config,                   &
@@ -2085,8 +2101,6 @@ CONTAINS
                      vel_ref_Bernales2017_config,                     &
                      include_SSADIVA_crossterms_config,               &
                      do_GL_subgrid_friction_config,                   &
-                     do_smooth_geometry_config,                       &
-                     r_smooth_geometry_config,                        &
                      DIVA_visc_it_norm_dUV_tol_config,                &
                      DIVA_visc_it_nit_config,                         &
                      DIVA_visc_it_relax_config,                       &
@@ -2135,10 +2149,10 @@ CONTAINS
                      fixed_shelf_geometry_config,                     &
                      fixed_grounding_line_g_config,                   &
                      fixed_grounding_line_f_config,                   &
-                     fixed_decay_glg_t_start_config,                  &
-                     fixed_decay_glg_t_end_config,                    &
-                     fixed_decay_glf_t_start_config,                  &
-                     fixed_decay_glf_t_end_config,                    &
+                     fixed_decay_t_start_config,                      &
+                     fixed_decay_t_end_config,                        &
+                     fixed_mask_t_start_config,                       &
+                     fixed_mask_t_end_config,                         &
                      dHi_dt_window_size_config,                       &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
@@ -2177,7 +2191,9 @@ CONTAINS
                      slid_inv_window_size_config,                     &
                      do_slid_inv_Bernales2017_smooth_config,          &
                      do_slid_inv_Bernales2017_extrap_config,          &
-                     slid_inv_Bernales2017_hi_scale_config,           &
+                     do_slid_inv_Bernales2017_decay_config,           &
+                     slid_inv_Bernales2017_scale_start_config,        &
+                     slid_inv_Bernales2017_scale_end_config,          &
                      slid_inv_Bernales2017_smooth_r_config,           &
                      slid_inv_Bernales2017_smooth_w_config,           &
                      slid_inv_Bernales2017_tol_diff_config,           &
@@ -2347,10 +2363,15 @@ CONTAINS
                      choice_BMB_subgrid_config,                       &
                      BMB_max_config,                                  &
                      BMB_min_config,                                  &
-                     do_ocean_temperature_inversion_config,           &
-                     ocean_temperature_inv_t_start_config,            &
-                     ocean_temperature_inv_t_end_config,              &
-                     T_base_window_size_config,                       &
+                     do_ocean_inv_config,                             &
+                     do_ocean_inv_smooth_config,                      &
+                     do_ocean_inv_decay_config,                       &
+                     ocean_inv_t_start_config,                        &
+                     ocean_inv_t_end_config,                          &
+                     ocean_inv_hi_scale_config,                       &
+                     ocean_inv_window_size_config,                    &
+                     ocean_inv_smooth_r_config,                       &
+                     ocean_inv_smooth_w_config,                       &
                      BMB_inv_use_restart_field_config,                &
                      BMB_inv_scale_shelf_config,                      &
                      BMB_inv_scale_ocean_config,                      &
@@ -2504,17 +2525,17 @@ CONTAINS
 
     IF (config_filename == '') RETURN
 
-    ! Write the CONFIG namelist to a temporary file
-    namelist_filename = 'config_namelist_temp.txt'
-    OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
-    WRITE( UNIT = namelist_unit, NML  = CONFIG)
-    CLOSE( UNIT = namelist_unit)
+    ! ! Write the CONFIG namelist to a temporary file
+    ! namelist_filename = 'config_namelist_temp.txt'
+    ! OPEN(  UNIT = namelist_unit, FILE = TRIM( namelist_filename))
+    ! WRITE( UNIT = namelist_unit, NML  = CONFIG)
+    ! CLOSE( UNIT = namelist_unit)
 
-    ! Check the config file for validity
-    CALL check_config_file_validity( config_filename, namelist_filename)
+    ! ! Check the config file for validity
+    ! CALL check_config_file_validity( config_filename, namelist_filename)
 
-    ! Delete the temporary CONFIG namelist file
-    CALL system('rm -f ' // TRIM( namelist_filename))
+    ! ! Delete the temporary CONFIG namelist file
+    ! CALL system('rm -f ' // TRIM( namelist_filename))
 
     ! Open the config file
     OPEN(  UNIT = config_unit, FILE = TRIM( config_filename), STATUS = 'OLD', ACTION = 'READ', IOSTAT = ios)
@@ -2846,6 +2867,8 @@ CONTAINS
     ! Some pre-processing stuff for reference ice geometry
     C%refgeo_Hi_min                            = refgeo_Hi_min_config
     C%remove_Lake_Vostok                       = remove_Lake_Vostok_config
+    C%do_smooth_geometry                       = do_smooth_geometry_config
+    C%r_smooth_geometry                        = r_smooth_geometry_config
 
     ! Initial geometry
     C%choice_refgeo_init_NAM                   = choice_refgeo_init_NAM_config
@@ -2946,8 +2969,6 @@ CONTAINS
     C%vel_ref_Bernales2017                     = vel_ref_Bernales2017_config
     C%include_SSADIVA_crossterms               = include_SSADIVA_crossterms_config
     C%do_GL_subgrid_friction                   = do_GL_subgrid_friction_config
-    C%do_smooth_geometry                       = do_smooth_geometry_config
-    C%r_smooth_geometry                        = r_smooth_geometry_config
 
     ! Some parameters for numerically solving the SSA/DIVA
     C%DIVA_visc_it_norm_dUV_tol                = DIVA_visc_it_norm_dUV_tol_config
@@ -3010,10 +3031,10 @@ CONTAINS
     C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
     C%fixed_grounding_line_g                   = fixed_grounding_line_g_config
     C%fixed_grounding_line_f                   = fixed_grounding_line_f_config
-    C%fixed_decay_glg_t_start                  = fixed_decay_glg_t_start_config
-    C%fixed_decay_glg_t_end                    = fixed_decay_glg_t_end_config
-    C%fixed_decay_glf_t_start                  = fixed_decay_glf_t_start_config
-    C%fixed_decay_glf_t_end                    = fixed_decay_glf_t_end_config
+    C%fixed_decay_t_start                      = fixed_decay_t_start_config
+    C%fixed_decay_t_end                        = fixed_decay_t_end_config
+    C%fixed_mask_t_start                       = fixed_mask_t_start_config
+    C%fixed_mask_t_end                         = fixed_mask_t_end_config
 
     ! Memory of previous run during a restart
     C%dHi_dt_window_size                       = dHi_dt_window_size_config
@@ -3065,7 +3086,9 @@ CONTAINS
     C%slid_inv_window_size                     = slid_inv_window_size_config
     C%do_slid_inv_Bernales2017_smooth          = do_slid_inv_Bernales2017_smooth_config
     C%do_slid_inv_Bernales2017_extrap          = do_slid_inv_Bernales2017_extrap_config
-    C%slid_inv_Bernales2017_hi_scale           = slid_inv_Bernales2017_hi_scale_config
+    C%do_slid_inv_Bernales2017_decay           = do_slid_inv_Bernales2017_decay_config
+    C%slid_inv_Bernales2017_scale_start        = slid_inv_Bernales2017_scale_start_config
+    C%slid_inv_Bernales2017_scale_end          = slid_inv_Bernales2017_scale_end_config
     C%slid_inv_Bernales2017_smooth_r           = slid_inv_Bernales2017_smooth_r_config
     C%slid_inv_Bernales2017_smooth_w           = slid_inv_Bernales2017_smooth_w_config
     C%slid_inv_Bernales2017_tol_diff           = slid_inv_Bernales2017_tol_diff_config
@@ -3259,10 +3282,15 @@ CONTAINS
     C%BMB_max                                  = BMB_max_config
     C%BMB_min                                  = BMB_min_config
 
-    C%do_ocean_temperature_inversion           = do_ocean_temperature_inversion_config
-    C%ocean_temperature_inv_t_start            = ocean_temperature_inv_t_start_config
-    C%ocean_temperature_inv_t_end              = ocean_temperature_inv_t_end_config
-    C%T_base_window_size                       = T_base_window_size_config
+    C%do_ocean_inv                             = do_ocean_inv_config
+    C%do_ocean_inv_smooth                      = do_ocean_inv_smooth_config
+    C%do_ocean_inv_decay                       = do_ocean_inv_decay_config
+    C%ocean_inv_t_start                        = ocean_inv_t_start_config
+    C%ocean_inv_t_end                          = ocean_inv_t_end_config
+    C%ocean_inv_hi_scale                       = ocean_inv_hi_scale_config
+    C%ocean_inv_window_size                    = ocean_inv_window_size_config
+    C%ocean_inv_smooth_r                       = ocean_inv_smooth_r_config
+    C%ocean_inv_smooth_w                       = ocean_inv_smooth_w_config
 
     C%BMB_inv_use_restart_field                = BMB_inv_use_restart_field_config
     C%BMB_inv_scale_shelf                      = BMB_inv_scale_shelf_config

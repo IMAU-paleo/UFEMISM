@@ -28,7 +28,7 @@ MODULE reference_fields_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              is_floating, surface_elevation, remove_Lake_Vostok, &
-                                             oblique_sg_projection, deallocate_grid
+                                             oblique_sg_projection, deallocate_grid, smooth_Gaussian_2D_grid
   USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, &
                                              type_mesh, type_remapping_mesh_mesh, type_restart_data
   USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
@@ -157,6 +157,20 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_refgeo_init "' // TRIM( choice_refgeo_init) // '"!')
     END IF
+
+    ! Smoothing
+    ! =========
+
+    ! Smooth input geometry (bed and ice)
+    IF (C%do_smooth_geometry) THEN
+      IF (par%master) WRITE(0,*) '  Smoothing reference geometries...'
+      CALL smooth_model_geometry( refgeo_PD%grid,    refgeo_PD%Hi_grid,    refgeo_PD%Hb_grid,    refgeo_PD%Hs_grid   )
+      CALL smooth_model_geometry( refgeo_init%grid,  refgeo_init%Hi_grid,  refgeo_init%Hb_grid,  refgeo_init%Hs_grid )
+      CALL smooth_model_geometry( refgeo_GIAeq%grid, refgeo_GIAeq%Hi_grid, refgeo_GIAeq%Hb_grid, refgeo_GIAeq%Hs_grid)
+    END IF
+
+    ! Grid meta data
+    ! ==============
 
     ! Fill in secondary data for the reference geometries (used during mesh creation)
     CALL calc_reference_geometry_secondary_data( refgeo_init%grid , refgeo_init )
@@ -613,6 +627,80 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE apply_mask_noice_GRL_remove_Ellesmere_grid
+
+  ! Apply some light smoothing to the initial geometry to improve numerical stability
+  SUBROUTINE smooth_model_geometry( grid, Hi, Hb, Hs)
+    ! Apply some light smoothing to the initial geometry to improve numerical stability
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_grid),                     INTENT(IN)    :: grid
+    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: Hi, Hb, Hs
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_model_geometry'
+    INTEGER                                            :: i,j
+    REAL(dp), DIMENSION(:,:  ), POINTER                ::  Hb_old,  dHb
+    INTEGER                                            :: wHb_old, wdHb
+    REAL(dp)                                           :: r_smooth
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Smooth with a 2-D Gaussian filter with a standard deviation of 1/2 grid cell
+    r_smooth = grid%dx * C%r_smooth_geometry
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( grid%nx, grid%ny, Hb_old, wHb_old)
+    CALL allocate_shared_dp_2D( grid%nx, grid%ny, dHb,    wdHb   )
+
+    ! Calculate original surface elevation
+    DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
+      Hs( i,j) = surface_elevation( Hi( i,j), Hb( i,j), 0._dp)
+    END DO
+    END DO
+    CALL sync
+
+    ! Store the unsmoothed bed topography so we can determine the smoothing anomaly later
+    Hb_old( grid%i1:grid%i2,:) = Hb( grid%i1:grid%i2,:)
+    CALL sync
+
+    ! Apply smoothing to the bed topography
+    CALL smooth_Gaussian_2D_grid( grid, Hb, r_smooth)
+
+    DO j = 1, grid%ny
+    DO i = grid%i1, grid%i2
+
+      ! Calculate the smoothing anomaly
+      dHb( i,j) = Hb( i,j) - Hb_old( i,j)
+
+      IF (.NOT. is_floating( Hi( i,j), Hb( i,j), 0._dp) .AND. Hi( i,j) > 0._dp) THEN
+
+        ! Correct the ice thickness so the ice surface remains unchanged (only relevant for floating ice)
+        Hi( i,j) = Hi( i,j) - dHb( i,j)
+
+        ! Don't allow negative ice thickness
+        Hi( i,j) = MAX(0._dp, Hi( i,j))
+
+        ! Correct the surface elevation for this if necessary
+        Hs( i,j) = Hi( i,j) + MAX( 0._dp - ice_density / seawater_density * Hi( i,j), Hb( i,j))
+
+      END IF
+
+    END DO
+    END DO
+    CALL sync
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wHb_old)
+    CALL deallocate_shared( wdHb   )
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE smooth_model_geometry
 
 ! ===== Idealised reference geometries (grid) =====
 ! =================================================

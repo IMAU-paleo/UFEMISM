@@ -107,11 +107,12 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: f_grndx_b
     INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_x
     INTEGER,  DIMENSION(:,:  ), POINTER     :: gfrac_y
+    REAL(dp), DIMENSION(:,:  ), POINTER     :: bedrock_cdf
     INTEGER,  DIMENSION(:    ), POINTER     :: basin_ID                    ! The drainage basin to which each grid cell belongs
     INTEGER,                    POINTER     :: nbasins                     ! Total number of basins defined for this region
     INTEGER :: wmask_land_a, wmask_ocean_a, wmask_lake_a, wmask_ice_a, wmask_sheet_a, wmask_shelf_a
     INTEGER :: wmask_coast_a, wmask_margin_a, wmask_gl_a, wmask_glf_a, wmask_cf_a, wmask_a, wf_grnd_a, wf_grnd_b, wf_grndx_a, wf_grndx_b
-    INTEGER :: wbasin_ID, wnbasins, wgfrac_x, wgfrac_y
+    INTEGER :: wbasin_ID, wnbasins, wgfrac_x, wgfrac_y, wbedrock_cdf
 
     ! Ice physical properties
     REAL(dp), DIMENSION(:,:  ), POINTER     :: A_flow_3D_a                 ! Flow parameter [Pa^-3 y^-1]
@@ -191,9 +192,10 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dHs_dt_a
     REAL(dp), DIMENSION(:    ), POINTER     :: Hi_tplusdt_a
+    REAL(dp), DIMENSION(:    ), POINTER     :: Hi_projected_a
     REAL(dp), DIMENSION(:    ), POINTER     :: dHi_dt_ave_a
     REAL(dp), DIMENSION(:,:  ), POINTER     :: dHi_dt_window_a
-    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wdHi_dt_ave_a, wdHi_dt_window_a
+    INTEGER :: wdVi_in, wdVi_out, wdHi_dt_a, wdHs_dt_a, wHi_tplusdt_a, wHi_projected_a, wdHi_dt_ave_a, wdHi_dt_window_a
 
     ! Ice dynamics - calving
     REAL(dp), DIMENSION(:    ), POINTER     :: float_margin_frac_a         ! Ice-covered fraction for calving front pixels

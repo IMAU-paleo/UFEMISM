@@ -223,7 +223,7 @@ CONTAINS
 
       ! Apply the sub-grid grounded fraction
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**2._dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.5_dp
       END DO
       CALL sync
 
@@ -1000,7 +1000,7 @@ CONTAINS
     ! Apply the sub-grid grounded fraction
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**2._dp
+        ice%beta_eff_b( ti) = ice%beta_eff_b( ti) * ice%f_grndx_b( ti)**1.5_dp
       END DO
       CALL sync
     END IF

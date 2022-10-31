@@ -1775,12 +1775,13 @@ CONTAINS
     ! Local variables
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'basal_sliding_inversion_Bernales2017'
     INTEGER                                            :: vi
-    REAL(dp)                                           :: h_delta, t_scale, a_scale, m_scale
-    REAL(dp)                                           :: w_smooth
+    REAL(dp)                                           :: h_scale_max, h_scale_min, t_scale, a_scale, m_scale
+    REAL(dp)                                           :: h_scale, h_delta, h_dfrac, h_delta_next
+    REAL(dp)                                           :: new_val, min_lim, w_smooth
     REAL(dp)                                           :: ti_diff, w_ti, w_pwp, w_run, w_tot
     INTEGER,  DIMENSION(:    ), POINTER                :: mask,  mask_filled
-    REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed
-    INTEGER                                            :: wmask, wmask_filled, wrough_smoothed
+    REAL(dp), DIMENSION(:    ), POINTER                :: rough_smoothed, rough_extrapolate
+    INTEGER                                            :: wmask, wmask_filled, wrough_smoothed, wrough_extrapolate
 
     ! Initialisation
     ! ==============
@@ -1801,7 +1802,9 @@ CONTAINS
       CALL finalise_routine( routine_name)
       RETURN
     ELSEIF (time > C%slid_inv_t_end) THEN
-      ! Inversion is done. Return.
+      ! Inversion is done. Use running average of bed roughness.
+      ! ice%phi_fric_a( mesh%vi1:mesh%vi2) = ice%phi_fric_ave_a( mesh%vi1:mesh%vi2)
+      ! And return.
       CALL finalise_routine( routine_name)
       RETURN
     END IF
@@ -1810,6 +1813,9 @@ CONTAINS
     CALL allocate_shared_int_1D( mesh%nV, mask,        wmask       )
     CALL allocate_shared_int_1D( mesh%nV, mask_filled, wmask_filled)
 
+    ! Allocate extrapolated bed roughness field
+    CALL allocate_shared_dp_1D( mesh%nV, rough_extrapolate, wrough_extrapolate)
+
     ! Allocate smoothed bed roughness field
     CALL allocate_shared_dp_1D( mesh%nV, rough_smoothed, wrough_smoothed)
 
@@ -1817,22 +1823,19 @@ CONTAINS
     ! ====================
 
     ! Default values
-    a_scale = C%slid_inv_Bernales2017_scale_start
-    m_scale = .1_dp
-    t_scale = 0._dp
-
-    ! Time scale
-    IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
-      ! Compute how much time has passed since start of inversion
-      t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
-      ! Limit t_scale to [0 1]
-      t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
-    END IF
+    t_scale = C%slid_inv_Bernales2017_scale_start
+    m_scale = .0_dp!.1_dp
 
     ! Magnitude decay
     IF (C%do_slid_inv_Bernales2017_decay) THEN
-      ! Reduce adjustment amount as time goes on
-      a_scale = C%slid_inv_Bernales2017_scale_start * (1._dp - t_scale) + C%slid_inv_Bernales2017_scale_end * t_scale
+      IF (C%slid_inv_t_start < C%slid_inv_t_end) THEN
+        ! Compute how much time has passed since start of inversion
+        t_scale = (time - C%slid_inv_t_start) / (C%slid_inv_t_end - C%slid_inv_t_start)
+        ! Limit t_scale to [0 1]
+        t_scale = MAX( 0._dp, MIN( t_scale, 1._dp))
+        ! Reduce adjustment amount as time goes on
+        a_scale = C%slid_inv_Bernales2017_scale_start * (1._dp - t_scale) + C%slid_inv_Bernales2017_scale_end * t_scale
+      END IF
     END IF
 
     ! Do the inversion
@@ -1841,7 +1844,8 @@ CONTAINS
     DO vi = mesh%vi1, mesh%vi2
 
       ! Ice thickness difference w.r.t. reference thickness
-      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+      h_delta      = ice%Hi_a( vi)           - refgeo%Hi( vi)
+      h_delta_next = ice%Hi_projected_a( vi) - refgeo%Hi( vi)
 
       ! Invert only where the model has grounded ice
       IF (ice%mask_sheet_a( vi) == 1) THEN
@@ -1851,33 +1855,21 @@ CONTAINS
 
         IF (ABS(h_delta) >= 0._dp .AND. ABS(ice%dHi_dt_a( vi)) >= 0._dp) THEN
 
-          IF (     h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
+          IF (     h_delta > 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
+            ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
 
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
+          ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-            ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
+            ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
 
-          ELSEIF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
+          ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
+            ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
 
-          ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
+          ELSEIF ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
-            END IF
+            ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
 
           END IF
 
@@ -1904,6 +1896,24 @@ CONTAINS
       CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, ice%phi_fric_inv_a, 40000._dp, mask_filled)
     END IF
     CALL sync
+
+    ! IF (C%do_slid_inv_Bernales2017_extrap) THEN
+
+    !   ! Go to LOG domain
+    !   rough_extrapolate( mesh%vi1:mesh%vi2) = LOG(ice%phi_fric_inv_a( mesh%vi1:mesh%vi2))
+    !   CALL sync
+
+    !   ! Perform the extrapolation
+    !   IF (par%master) THEN
+    !     CALL extrapolate_Gaussian_floodfill_mesh( mesh, mask, rough_extrapolate, 40000._dp, mask_filled)
+    !   END IF
+    !   CALL sync
+
+    !   ! Come back from LOG domain
+    !   ice%phi_fric_inv_a( mesh%vi1:mesh%vi2) = EXP(rough_extrapolate( mesh%vi1:mesh%vi2))
+    !   CALL sync
+
+    ! END IF
 
     ! Smoothing
     ! =========
@@ -1952,6 +1962,7 @@ CONTAINS
     CALL deallocate_shared( wmask_filled)
     CALL deallocate_shared( wmask)
     CALL deallocate_shared( wrough_smoothed)
+    CALL deallocate_shared( wrough_extrapolate)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

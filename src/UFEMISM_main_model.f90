@@ -258,31 +258,6 @@ CONTAINS
 
       CALL run_isotopes_model( region)
 
-      ! == Basal sliding inversion
-      ! ==========================
-
-      IF (C%do_slid_inv) THEN
-        IF (region%do_slid_inv) THEN
-          ! Adjust bed roughness
-          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
-        END IF
-      END IF
-
-      ! == Ocean temperature inversion
-      ! ==============================
-
-      IF (C%do_ocean_temperature_inversion .AND. region%do_BMB) THEN
-        ! Adjust ocean temperatures
-        CALL ocean_temperature_inversion( region%mesh, region%ice, region%BMB, region%refgeo_PD, region%time)
-      END IF
-
-      ! == SBM IMAU-ITM inversion
-      ! =========================
-
-      IF (C%do_SMB_IMAUITM_inversion .AND. region%do_SMB_inv) THEN
-        CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
-      END IF
-
       ! == Output
       ! =========
 
@@ -312,6 +287,31 @@ CONTAINS
 
       CALL update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
       CALL sync
+
+      ! == Basal sliding inversion
+      ! ==========================
+
+      IF (C%do_slid_inv) THEN
+        IF (region%do_slid_inv) THEN
+          ! Adjust bed roughness
+          CALL basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%SMB, region%time)
+        END IF
+      END IF
+
+      ! == Ocean temperature inversion
+      ! ==============================
+
+      IF (C%do_ocean_inv .AND. region%do_BMB) THEN
+        ! Adjust ocean temperatures
+        CALL ocean_temperature_inversion( region%mesh, region%grid_smooth, region%ice, region%BMB, region%refgeo_PD, region%time)
+      END IF
+
+      ! == SBM IMAU-ITM inversion
+      ! =========================
+
+      IF (C%do_SMB_IMAUITM_inversion .AND. region%do_SMB_inv) THEN
+        CALL SMB_IMAUITM_inversion( region%mesh, region%ice, region%climate_matrix%applied, region%SMB, region%refgeo_PD)
+      END IF
 
       ! == Advance region time
       ! ======================
@@ -784,7 +784,7 @@ CONTAINS
 
     IF (par%master) WRITE (0,*) ' Finished initialising model region ', region%name, '.'
 
-    ! Finalise routine path
+    ! Finalise routine path˚¡
     CALL finalise_routine( routine_name, n_extra_windows_expected = HUGE( 1))
 
   END SUBROUTINE initialise_model
@@ -1282,7 +1282,7 @@ CONTAINS
 
   END SUBROUTINE run_model_windup
 
-  SUBROUTINE scan_subgrid_grounded( mesh, refgeo, ice)
+  SUBROUTINE scan_subgrid_grounded_old( mesh, refgeo, ice)
     ! Scan them.
 
     IMPLICIT NONE
@@ -1293,7 +1293,7 @@ CONTAINS
     TYPE(type_ice_model),          INTENT(IN) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded'
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded_old'
     INTEGER                                   :: vi, i, j
     INTEGER                                   :: grid_count
     REAL(dp)                                  :: radius, rmax_ref_vs_mem
@@ -1346,9 +1346,9 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE scan_subgrid_grounded
+  END SUBROUTINE scan_subgrid_grounded_old
 
-  SUBROUTINE compute_subgrid_grounded( mesh, refgeo, ice)
+  SUBROUTINE compute_subgrid_grounded_old( mesh, refgeo, ice)
     ! Compute them.
 
     IMPLICIT NONE
@@ -1359,7 +1359,7 @@ CONTAINS
     TYPE(type_ice_model),          INTENT(IN) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded'
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded_old'
     INTEGER                                   :: vi, n
     INTEGER                                   :: grid_count, ground_count
     REAL(dp)                                  :: hb_float, hb_local
@@ -1410,6 +1410,194 @@ CONTAINS
         ice%f_grndx_a( vi) = REAL(ground_count,dp) / REAL(grid_count,dp)
       ELSE
         ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
+      END IF
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE compute_subgrid_grounded_old
+
+  SUBROUTINE scan_subgrid_grounded( mesh, refgeo, ice)
+    ! Scan them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'scan_subgrid_grounded'
+    INTEGER                                   :: vi, i, j
+    INTEGER                                   :: grid_count, ii0, ii1
+    REAL(dp)                                  :: radius, rmax_ref_vs_mem
+    REAL(dp)                                  :: isc, wii0, wii1
+    REAL(dp), DIMENSION(64)                   :: hb_list
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Initialise cumulative density function (CDF)
+    ice%bedrock_cdf = 0._dp
+
+    ! === Scan ===
+    ! ============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Skip vertices at edge of domain
+      IF (mesh%edge_index( vi)  > 0) THEN
+        CYCLE
+      END IF
+
+      ! Initialise list of subgrid bedrock elevations
+      hb_list = 0._dp
+
+      ! Determine maximum search radius based on allocated memory (64 elements per vertex)
+      rmax_ref_vs_mem = ( refgeo%grid%x(2) - refgeo%grid%x(1) ) * sqrt(REAL(64,dp)) / 2._dp
+
+      ! Determine search radius as the min betweeen the vertex radius and the max radius
+      radius = MIN( mesh%R( vi), rmax_ref_vs_mem)
+
+      ! Initialise counter for subgrid cells
+      grid_count = 0
+
+      DO j = 1, refgeo%grid%ny
+      DO i = 1, refgeo%grid%nx
+
+        ! If grid cell is within the search radius
+        IF ( NORM2( [refgeo%grid%x(i), refgeo%grid%y(j)] - mesh%V( vi,:)) <= radius) THEN
+
+          ! Increase counter
+          grid_count = grid_count + 1
+
+          ! Add bedrock elevation to list of found subgrid cells
+          hb_list( grid_count) = refgeo%Hb_grid(i,j)
+
+        END IF
+
+      END DO
+      END DO
+
+      ! === Cumulative density function ===
+      ! ===================================
+
+      ! Inefficient but easy sorting of hb_list
+      DO i = 1, grid_count-1
+      DO j = i+1, grid_count
+        IF (hb_list( i) > hb_list( j)) THEN
+          hb_list( i) = hb_list( i) + hb_list( j)
+          hb_list( j) = hb_list( i) - hb_list( j)
+          hb_list( i) = hb_list( i) - hb_list( j)
+        END IF
+      END DO
+      END DO
+
+      ! Set first (0%) and last bins (100%) of the CDF to the minimum
+      ! and maximum bedrock elevations scanned, respectively
+      ice%bedrock_cdf( vi, 1) = hb_list( 1)
+      ice%bedrock_cdf( vi,11) = hb_list( grid_count)
+
+      ! Compute the bedrock elevation for each of the other CDF bins,
+      ! from the second (10%) to the tenth (90%)
+      DO i = 2, 10
+        isc  = 1._dp + (REAL( grid_count,dp) - 1._dp) * (REAL( i,dp) - 1._dp) / 10._dp
+        ii0  = FLOOR( isc)
+        ii1  = CEILING( isc)
+        wii0 = REAL( ii1,dp) - isc
+        wii1 = 1.0 - wii0
+        ice%bedrock_cdf( vi,i) = wii0 * hb_list( ii0) + wii1 * hb_list( ii1)
+      END DO
+
+    END DO
+    CALL sync
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE scan_subgrid_grounded
+
+  SUBROUTINE compute_subgrid_grounded( mesh, refgeo, ice)
+    ! Compute them.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),               INTENT(IN) :: mesh
+    TYPE(type_reference_geometry), INTENT(IN) :: refgeo
+    TYPE(type_ice_model),          INTENT(IN) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER             :: routine_name = 'compute_subgrid_grounded'
+    INTEGER                                   :: vi
+    REAL(dp)                                  :: hb_float
+    INTEGER                                   :: il, iu
+    REAL(dp)                                  :: wl, wu
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! === Compute ===
+    ! ===============
+
+    DO vi = mesh%vi1, mesh%vi2
+
+      ! Assing edge vertices a value of either 0 or 1 depending
+      ! on their land mask, then skip
+
+      IF (mesh%edge_index( vi)  > 0) THEN
+        ice%f_grndx_a( vi) = REAL(ice%mask_land_a( vi),dp)
+        CYCLE
+      END IF
+
+      ! Compute the bedrock depth at which the current ice thickness and sea level float
+      ! will make this point afloat. Account for GIA here so we don't have to do it in
+      ! the computation of the cumulative density function (CDF).
+
+      hb_float = ice%SL_a( vi) - ice%Hi_a( vi) * ice_density/seawater_density - ice%dHb_a( vi)
+
+      ! Get the fraction of bedrock within vertex radius that is below hb_float as a linear
+      ! interpolation of the numbers in the CDF.
+
+      IF     (hb_float <= MINVAL( ice%bedrock_cdf( vi,:))) THEN
+        ! All sub-grid points are above the floating bedrock elevation
+        ice%f_grndx_a( vi) = 1._dp
+      ELSEIF (hb_float >= MAXVAL( ice%bedrock_cdf( vi,:))) THEN
+        ! All sub-grid points are below the floating bedrock elevation
+        ice%f_grndx_a( vi) = 0._dp
+      ELSE
+        ! Find the 2 elements in the CDF surrounding hb_float
+        iu = 1
+        DO WHILE (ice%bedrock_cdf( vi,iu) < hb_float)
+          iu = iu+1
+        END DO
+        il = iu-1
+
+        ! Interpolate bedrock to get the weights for both CDF percentages
+        wl = (ice%bedrock_cdf( vi,iu) - hb_float) / (ice%bedrock_cdf( vi,iu)-ice%bedrock_cdf( vi,il))
+        wu = 1._dp - wl
+
+        ! Interpolate between percentages, assuming that there are 11 CDF bins between
+        ! 0% and 100%, at 10% intervals, i.e. element 1 is 0% =(1-1)*10%, element 2 is
+        ! 10% = (2-1)*10%, and so on.
+        ice%f_grndx_a( vi) = 1._dp - (10._dp*(il-1)*wl + 10._dp*(iu-1)*wu) / 100._dp
+
       END IF
 
     END DO

@@ -25,7 +25,7 @@ MODULE ice_thickness_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              is_floating
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, type_SMB_model, type_BMB_model, &
                                              type_reference_geometry
   USE mesh_help_functions_module,      ONLY: rotate_xy_to_po_stag, find_containing_vertex

@@ -24,16 +24,14 @@ MODULE SMB_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE data_types_module,               ONLY: type_mesh, type_ice_model, &
-                                             type_SMB_model, type_remapping_mesh_mesh, &
+                                             type_SMB_model, &
                                              type_climate_matrix_regional, &
                                              type_climate_snapshot_regional, type_direct_SMB_forcing_regional, &
                                              type_restart_data, type_grid, type_reference_geometry
   USE forcing_module,                  ONLY: forcing
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D, &
-                                             calc_remapping_operator_grid2mesh, map_grid2mesh_2D, map_grid2mesh_3D, &
-                                             deallocate_remapping_operators_grid2mesh
+  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, remap_field_dp_3D
 
   IMPLICIT NONE
 
@@ -855,13 +853,12 @@ CONTAINS
 ! == Remapping after mesh update
 ! ==============================
 
-  SUBROUTINE remap_SMB_model( mesh_old, mesh_new, map, SMB)
+  SUBROUTINE remap_SMB_model( mesh_old, mesh_new, SMB)
     ! Remap or reallocate all the data fields
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_SMB_model),                INTENT(INOUT) :: SMB
 
     ! Local variables:
@@ -878,16 +875,8 @@ CONTAINS
 
     IF (C%choice_SMB_model == 'IMAU-ITM') THEN
       ! Firn depth and melt-during-previous-year must be remapped
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
-      CALL remap_field_dp_3D( mesh_old, mesh_new, map, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
-
-      ! IF (C%do_SMB_IMAUITM_inversion) THEN
-        ! Remap inverted IMAU-ITM paramaters so they are not reset after a mesh update
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_constant_inv, SMB%wC_abl_constant_inv, 'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Ts_inv,       SMB%wC_abl_Ts_inv,       'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_abl_Q_inv,        SMB%wC_abl_Q_inv,        'trilin')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, SMB%C_refr_inv,         SMB%wC_refr_inv,         'trilin')
-      ! END IF
+      CALL remap_field_dp_2D( mesh_old, mesh_new, SMB%MeltPreviousYear, SMB%wMeltPreviousYear, 'trilin')
+      CALL remap_field_dp_3D( mesh_old, mesh_new, SMB%FirnDepth,        SMB%wFirnDepth,        'trilin')
 
       ! Reallocate rather than remap; after a mesh update we'll immediately run the SMB model anyway
       CALL reallocate_shared_dp_2D( mesh_new%nV, 12, SMB%Q_TOA,            SMB%wQ_TOA           )

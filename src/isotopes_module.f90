@@ -21,14 +21,14 @@ MODULE isotopes_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
+
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_model_region, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh, type_model_region
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
   IMPLICIT NONE
-    
+
 CONTAINS
 
   ! == Run the isotopes model
@@ -239,24 +239,24 @@ CONTAINS
 !
 !    ! Calculate total isotope content
 !    ! ===============================
-!    
+!
 !    total_isotope_content = 0._dp
 !    total_ice_volume_msle = 0._dp
-!    
+!
 !    DO vi = mesh%vi1, mesh%vi2
-!          
+!
 !      IF (Hi( vi) > 0._dp) THEN
 !        Hi_msle = Hi( vi) * mesh%A( vi) * ice_density / (seawater_density * ocean_area)
 !        total_isotope_content = total_isotope_content + Hi_msle * IsoIce( vi)
 !        total_ice_volume_msle = total_ice_volume_msle + Hi_msle
-!      END IF   
+!      END IF
 !
 !    END DO
 !    CALL sync
-!    
+!
 !    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_isotope_content, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
 !    CALL MPI_ALLREDUCE( MPI_IN_PLACE, total_ice_volume_msle, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-!    
+!
 !    ! Weighted average of isotope content with Hi
 !    IF (par%master) THEN
 !      IF (total_ice_volume_msle > 0._dp) THEN
@@ -266,15 +266,15 @@ CONTAINS
 !      END IF
 !    END IF
 !    CALL sync
-!    
+!
 !    ! Contribution to benthic d18O
 !    d18O_contribution = -1._dp * mean_isotope_content * total_ice_volume_msle / mean_ocean_depth
-!    
+!
 !    ! Finalise routine path
 !    CALL finalise_routine( routine_name)
-    
+
   END SUBROUTINE calculate_isotope_content
-  
+
   ! == Initialise the isotopes model (allocating shared memory)
   SUBROUTINE initialise_isotopes_model( region)
     ! Allocate memory for the data fields of the isotopes model.
@@ -446,13 +446,12 @@ CONTAINS
   END SUBROUTINE calculate_reference_isotopes
 
   ! Remap isotope model data after a mesh update
-  SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, map, region)
+  SUBROUTINE remap_isotopes_model( mesh_old, mesh_new, region)
     ! Remap or reallocate all the data fields
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_model_region),             INTENT(INOUT) :: region
 
     ! Local variables:

@@ -30,9 +30,8 @@ MODULE reference_fields_module
                                              is_floating, surface_elevation, remove_Lake_Vostok, deallocate_grid
   USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
   USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
-  USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh, type_remapping_mesh_mesh
-  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, map_grid2mesh_2D, &
-                                             deallocate_remapping_operators_grid2mesh, remap_field_dp_2D
+  USE data_types_module,               ONLY: type_model_region, type_grid, type_reference_geometry, type_mesh
+  USE mesh_mapping_module,             ONLY: map_from_xy_grid_to_mesh_2D
 
   IMPLICIT NONE
 
@@ -1627,7 +1626,7 @@ CONTAINS
 ! ===== Mapping of reference data onto model mesh =====
 ! =====================================================
 
-  SUBROUTINE map_reference_geometries_to_mesh( region, mesh)
+  SUBROUTINE map_reference_geometries_to_mesh( region)
     ! Map the initial, present-day, and GIAeq reference geometries from their original
     ! square grids to the model mesh.
     !
@@ -1639,12 +1638,10 @@ CONTAINS
 
     ! Input and output variables
     TYPE(type_model_region),        INTENT(INOUT) :: region
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'map_reference_geometries_to_mesh'
     CHARACTER(LEN=256)                            :: choice_refgeo_init, choice_refgeo_PD, choice_refgeo_GIAeq
-    LOGICAL                                       :: did_remap_init, did_remap_PD, did_remap_GIAeq, do_reuse_init_map, do_reuse_PD_map
     INTEGER                                       :: vi
 
     ! Add routine to path
@@ -1672,20 +1669,20 @@ CONTAINS
     ! Initial ice-sheet geometry
     ! ==========================
 
-    did_remap_init = .FALSE.
-
     IF     (choice_refgeo_init == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
 
-      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_init, C%choice_refgeo_init_idealised)
 
     ELSEIF (choice_refgeo_init == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
 
       IF (par%master) WRITE(0,*) '   Mapping initial reference geometry to the mesh...'
-      CALL calc_remapping_operator_grid2mesh( region%refgeo_init%grid, mesh)
-      CALL map_reference_geometry_to_mesh( mesh, region%refgeo_init)
-      did_remap_init = .TRUE.
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_init%grid, region%mesh, region%refgeo_init%Hi_grid, region%refgeo_init%Hi)
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_init%grid, region%mesh, region%refgeo_init%Hb_grid, region%refgeo_init%Hb)
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        region%refgeo_init%Hs( vi) = surface_elevation( region%refgeo_init%Hi( vi), region%refgeo_init%Hb( vi), 0._dp)
+      END DO
 
     ELSEIF (choice_refgeo_init == 'restart') THEN
       ! For initial geometries from a restart file, just assing to them the already read data
@@ -1693,7 +1690,7 @@ CONTAINS
       IF (region%time == C%start_time_of_run) THEN
         ! Initialisation of the model
 
-        DO vi = mesh%vi1, mesh%vi2
+        DO vi = region%mesh%vi1, region%mesh%vi2
           region%refgeo_init%Hi( vi) = region%restart%Hi( vi)
           region%refgeo_init%Hb( vi) = region%restart%Hb( vi)
           region%refgeo_init%Hs( vi) = region%restart%Hs( vi)
@@ -1712,39 +1709,20 @@ CONTAINS
     ! Present-day ice-sheet geometry
     ! ==============================
 
-    IF (par%master) WRITE(0,*) '   Mapping present-day reference geometry to the mesh...'
-
-    did_remap_PD = .FALSE.
-
     IF     (choice_refgeo_PD == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
 
-      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_PD, C%choice_refgeo_PD_idealised)
 
     ELSEIF (choice_refgeo_PD == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
 
-      ! Check if we can re-use the remapping arrays from the initial geometry
-      do_reuse_init_map = .FALSE.
-      IF (did_remap_init) THEN
-        IF (region%refgeo_PD%grid%xmin == region%refgeo_init%grid%xmin .AND. &
-            region%refgeo_PD%grid%xmax == region%refgeo_init%grid%xmax .AND. &
-            region%refgeo_PD%grid%ymin == region%refgeo_init%grid%ymin .AND. &
-            region%refgeo_PD%grid%ymax == region%refgeo_init%grid%ymax .AND. &
-            region%refgeo_PD%grid%dx   == region%refgeo_init%grid%dx   .AND. &
-            region%refgeo_PD%grid%nx   == region%refgeo_init%grid%nx   .AND. &
-            region%refgeo_PD%grid%ny   == region%refgeo_init%grid%ny) THEN
-          do_reuse_init_map = .TRUE.
-        END IF
-      END IF
-      IF (do_reuse_init_map) THEN
-        CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_PD%grid%M_map_grid2mesh, perr)
-      ELSE
-        CALL calc_remapping_operator_grid2mesh( region%refgeo_PD%grid, mesh)
-      END IF
-
-      CALL map_reference_geometry_to_mesh( mesh, region%refgeo_PD)
-      did_remap_PD = .TRUE.
+      IF (par%master) WRITE(0,*) '   Mapping present-day reference geometry to the mesh...'
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_PD%grid, region%mesh, region%refgeo_PD%Hi_grid, region%refgeo_PD%Hi)
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_PD%grid, region%mesh, region%refgeo_PD%Hb_grid, region%refgeo_PD%Hb)
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        region%refgeo_PD%Hs( vi) = surface_elevation( region%refgeo_PD%Hi( vi), region%refgeo_PD%Hb( vi), 0._dp)
+      END DO
 
     ELSE
       CALL crash('unknown choice_refgeo_PD "' // TRIM( choice_refgeo_PD) // '"!')
@@ -1753,147 +1731,29 @@ CONTAINS
     ! GIA equilibrium ice-sheet geometry
     ! ==================================
 
-    IF (par%master) WRITE(0,*) '   Mapping GIA equilibrium reference geometry to the mesh...'
-
-    did_remap_GIAeq = .FALSE.
-
     IF     (choice_refgeo_GIAeq == 'idealised') THEN
       ! For idealised geometries, calculate the exact solution directly on the mesh instead of remapping it from the grid
 
-      CALL initialise_reference_geometry_idealised_mesh( mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
+      CALL initialise_reference_geometry_idealised_mesh( region%mesh, region%refgeo_GIAeq, C%choice_refgeo_GIAeq_idealised)
 
     ELSEIF (choice_refgeo_GIAeq == 'realistic') THEN
       ! For realistic geometries, remap the data from the grid
 
-      ! Check if we can re-use the remapping arrays from the initial/PD geometry
-      do_reuse_init_map = .FALSE.
-      IF (did_remap_init) THEN
-        IF (region%refgeo_GIAeq%grid%xmin == region%refgeo_init%grid%xmin .AND. &
-            region%refgeo_GIAeq%grid%xmax == region%refgeo_init%grid%xmax .AND. &
-            region%refgeo_GIAeq%grid%ymin == region%refgeo_init%grid%ymin .AND. &
-            region%refgeo_GIAeq%grid%ymax == region%refgeo_init%grid%ymax .AND. &
-            region%refgeo_GIAeq%grid%dx   == region%refgeo_init%grid%dx   .AND. &
-            region%refgeo_GIAeq%grid%nx   == region%refgeo_init%grid%nx   .AND. &
-            region%refgeo_GIAeq%grid%ny   == region%refgeo_init%grid%ny) THEN
-          do_reuse_init_map = .TRUE.
-        END IF
-      END IF
-      do_reuse_PD_map = .FALSE.
-      IF (did_remap_init) THEN
-        IF (region%refgeo_GIAeq%grid%xmin == region%refgeo_PD%grid%xmin .AND. &
-            region%refgeo_GIAeq%grid%xmax == region%refgeo_PD%grid%xmax .AND. &
-            region%refgeo_GIAeq%grid%ymin == region%refgeo_PD%grid%ymin .AND. &
-            region%refgeo_GIAeq%grid%ymax == region%refgeo_PD%grid%ymax .AND. &
-            region%refgeo_GIAeq%grid%dx   == region%refgeo_PD%grid%dx   .AND. &
-            region%refgeo_GIAeq%grid%nx   == region%refgeo_PD%grid%nx   .AND. &
-            region%refgeo_GIAeq%grid%ny   == region%refgeo_PD%grid%ny) THEN
-          do_reuse_PD_map = .TRUE.
-        END IF
-      END IF
-      IF     (do_reuse_init_map) THEN
-        CALL MatDuplicate( region%refgeo_init%grid%M_map_grid2mesh, MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
-      ELSEIF (do_reuse_PD_map) THEN
-        CALL MatDuplicate( region%refgeo_PD%grid%M_map_grid2mesh  , MAT_COPY_VALUES, region%refgeo_GIAeq%grid%M_map_grid2mesh, perr)
-      ELSE
-        CALL calc_remapping_operator_grid2mesh( region%refgeo_GIAeq%grid, mesh)
-      END IF
-
-      CALL map_reference_geometry_to_mesh( mesh, region%refgeo_GIAeq)
-      did_remap_GIAeq = .TRUE.
+      IF (par%master) WRITE(0,*) '   Mapping GIA-equilibrium reference geometry to the mesh...'
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_GIAeq%grid, region%mesh, region%refgeo_GIAeq%Hi_grid, region%refgeo_GIAeq%Hi)
+      CALL map_from_xy_grid_to_mesh_2D( region%refgeo_GIAeq%grid, region%mesh, region%refgeo_GIAeq%Hb_grid, region%refgeo_GIAeq%Hb)
+      DO vi = region%mesh%vi1, region%mesh%vi2
+        region%refgeo_GIAeq%Hs( vi) = surface_elevation( region%refgeo_GIAeq%Hi( vi), region%refgeo_GIAeq%Hb( vi), 0._dp)
+      END DO
 
     ELSE
       CALL crash('unknown choice_refgeo_GIAeq "' // TRIM( choice_refgeo_GIAeq) // '"!')
     END IF
 
-    ! Clean up after yourself
-    IF (did_remap_init ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_init%grid )
-    IF (did_remap_PD   ) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_PD%grid   )
-    IF (did_remap_GIAeq) CALL deallocate_remapping_operators_grid2mesh( region%refgeo_GIAeq%grid)
-
     ! Finalise routine path
-    CALL finalise_routine( routine_name, n_extra_windows_expected = 9)
+    CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_reference_geometries_to_mesh
-
-  SUBROUTINE map_reference_geometry_to_mesh( mesh, refgeo)
-    ! Map data for a single reference geometry from its original square grid to the model mesh.
-
-    IMPLICIT NONE
-
-    ! Input and output variables
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh
-    TYPE(type_reference_geometry),  INTENT(INOUT) :: refgeo
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'map_reference_geometry_to_mesh'
-    INTEGER                                       :: vi
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! Map PD data to the mesh
-    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hi_grid, refgeo%Hi)
-    CALL map_grid2mesh_2D( refgeo%grid, mesh, refgeo%Hb_grid, refgeo%Hb)
-
-    DO vi = mesh%vi1, mesh%vi2
-      refgeo%Hs( vi) = surface_elevation( refgeo%Hi( vi), refgeo%Hb( vi), 0._dp)
-    END DO
-    CALL sync
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE map_reference_geometry_to_mesh
-
-  SUBROUTINE remap_restart_init_topo( region, mesh_old, mesh_new, map)
-
-    IMPLICIT NONE
-
-    ! Input and output variables
-    TYPE(type_model_region),        INTENT(INOUT) :: region
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh_old
-    TYPE(type_mesh),                INTENT(INOUT) :: mesh_new
-    TYPE(type_remapping_mesh_mesh), INTENT(IN)    :: map
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'remap_restart_init_topo'
-    INTEGER                                       :: int_dummy, vi
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! To prevent compiler warnings for unused variables
-    int_dummy = mesh_old%nV
-    int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
-
-    ! Determine whether we actually need to remap the restart init topo
-    IF ( (region%name == 'NAM' .AND. C%choice_refgeo_init_NAM == 'restart') .OR. &
-         (region%name == 'EAS' .AND. C%choice_refgeo_init_EAS == 'restart') .OR. &
-         (region%name == 'GRL' .AND. C%choice_refgeo_init_GRL == 'restart') .OR. &
-         (region%name == 'ANT' .AND. C%choice_refgeo_init_ANT == 'restart') ) THEN
-
-      IF (par%master) WRITE(0,*) '   Mapping (restart) initial reference geometry to the new mesh...'
-
-      ! Remap restart topo
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hi, region%restart%wHi, 'cons_2nd_order')
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hb, region%restart%wHb, 'cons_2nd_order')
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, region%restart%Hs, region%restart%wHs, 'cons_2nd_order')
-
-      ! Assing the (potentially remapped) restart data
-      DO vi = mesh_new%vi1, mesh_new%vi2
-        region%refgeo_init%Hi( vi) = region%restart%Hi( vi)
-        region%refgeo_init%Hb( vi) = region%restart%Hb( vi)
-        region%refgeo_init%Hs( vi) = region%restart%Hs( vi)
-      END DO
-      CALL sync
-
-    END IF
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE remap_restart_init_topo
 
 ! ===== Analytical solutions used to initialise some benchmark experiments =====
 ! ==============================================================================

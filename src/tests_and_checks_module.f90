@@ -1179,49 +1179,49 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_01( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_xflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_xflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_02( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_yflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_yflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_03( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_xyflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_xyflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_04( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_yx.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_yx.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_05( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_yx_xflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_yx_xflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_06( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_yx_yflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_yx_yflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_07( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hi_xy_2D_yx_xyflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hi_xy_2D_yx_xyflip.nc'
     field_name_options = 'default_options_Hi'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_08( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
@@ -1260,49 +1260,49 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_xflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_xflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_02( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_yflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_yflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_03( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_xyflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_xyflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_04( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_yx.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_yx.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_05( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_yx_xflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_yx_xflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_06( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_yx_yflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_yx_yflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_07( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_xy_2D_monthly_yx_xyflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_xy_2D_monthly_yx_xyflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_08( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
@@ -1341,25 +1341,25 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta1.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta1.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta2.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta2.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_02( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta3.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta3.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_03( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta4.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta4.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_04( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
@@ -1398,61 +1398,61 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_01( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_lonflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_lonflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_02( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_latflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_latflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_03( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_lonlatflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_lonlatflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_04( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_latlon.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_latlon.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_05( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_latlon_lonflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_latlon_lonflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_06( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_latlon_latflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_latlon_latflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_07( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_latlon_lonlatflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_latlon_lonlatflip.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_08( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_lonshift.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_lonshift.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_09( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_lonlat_2D_lon180.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_lonlat_2D_lon180.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_10( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
@@ -1491,61 +1491,61 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_lonflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_lonflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_02( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_latflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_latflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_03( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_lonlatflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_lonlatflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_04( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_latlon.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_latlon.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_05( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_latlon_lonflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_latlon_lonflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_06( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_latlon_latflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_latlon_latflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_07( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_latlon_lonlatflip.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_latlon_lonlatflip.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_08( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_lonshift.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_lonshift.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_09( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_lonlat_2D_monthly_lon180.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_lonlat_2D_monthly_lon180.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_10( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
@@ -1584,25 +1584,25 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta1.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta1.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta2.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta2.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_02( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta3.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta3.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_03( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_xy_3D_zeta4.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_xy_3D_zeta4.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_04( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
@@ -1641,7 +1641,7 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Hs_mesh_2D.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Hs_mesh_2D.nc'
     field_name_options = 'default_options_Hs'
     CALL read_field_from_file_2D( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_a_01( mesh%vi1:mesh%vi2) = d( mesh%vi1:mesh%vi2)
@@ -1680,7 +1680,7 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, 12, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/T2m_mesh_2D_monthly.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/T2m_mesh_2D_monthly.nc'
     field_name_options = 'T2m'
     CALL read_field_from_file_2D_monthly( filename, field_name_options, mesh, d, region_name)
     debug%dp_2D_monthly_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
@@ -1719,25 +1719,25 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( mesh%nV, C%nz, d, wd)
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_mesh_3D_zeta1.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_mesh_3D_zeta1.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_01( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_mesh_3D_zeta2.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_mesh_3D_zeta2.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_02( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_mesh_3D_zeta3.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_mesh_3D_zeta3.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_03( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)
     CALL write_to_debug_file
 
-    filename = '/Users/berends/Documents/Models/UFEMISM/tools/matlab/tijn/Ti_mesh_3D_zeta4.nc'
+    filename = '/Users/berends/Documents/Datasets/test_netcdf_files/Ti_mesh_3D_zeta4.nc'
     field_name_options = 'Ti'
     CALL read_field_from_file_3D( filename, field_name_options, mesh, d, region_name)
     debug%dp_3D_a_04( mesh%vi1:mesh%vi2,:) = d( mesh%vi1:mesh%vi2,:)

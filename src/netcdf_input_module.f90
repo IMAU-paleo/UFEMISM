@@ -34,8 +34,7 @@ MODULE netcdf_input_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_grid, type_grid_lonlat, type_remapping_lonlat2mesh, &
-                                             type_remapping_mesh_mesh, type_model_region
+  USE data_types_module,               ONLY: type_mesh, type_grid, type_grid_lonlat, type_model_region
   USE netcdf,                          ONLY: NF90_MAX_VAR_DIMS
   USE mesh_memory_module,              ONLY: allocate_mesh_primary, allocate_mesh_secondary, deallocate_mesh_all
   USE mesh_help_functions_module,      ONLY: calc_triangle_geometric_centres, find_Voronoi_cell_areas, calc_lat_lon_coordinates, &
@@ -43,10 +42,9 @@ MODULE netcdf_input_module
                                              find_Voronoi_cell_geometric_centres
   USE mesh_ArakawaC_module,            ONLY: make_Ac_mesh
   USE mesh_operators_module,           ONLY: calc_matrix_operators_mesh
-  USE mesh_mapping_module,             ONLY: calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh, &
-                                             map_grid2mesh_2D, map_grid2mesh_3D, create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, &
-                                             map_lonlat2mesh_3D, deallocate_remapping_arrays_lonlat_mesh, calc_remapping_operators_mesh_mesh, &
-                                             remap_field_dp_2D, remap_field_dp_3D, deallocate_remapping_operators_mesh_mesh
+  USE mesh_mapping_module,             ONLY: map_from_xy_grid_to_mesh_2D        , map_from_lonlat_grid_to_mesh_2D        , map_from_mesh_to_mesh_2D, &
+                                             map_from_xy_grid_to_mesh_2D_monthly, map_from_lonlat_grid_to_mesh_2D_monthly, map_from_mesh_to_mesh_2D_monthly, &
+                                             map_from_xy_grid_to_mesh_3D        , map_from_lonlat_grid_to_mesh_3D        , map_from_mesh_to_mesh_3D
   USE utilities_module,                ONLY: flip_1D_dp, flip_2D_x1_dp, flip_2D_x2_dp, flip_3D_x1_dp, flip_3D_x2_dp, flip_3D_x3_dp, &
                                              permute_2D_dp, permute_3D_dp, permute_2D_int, permute_3D_int, inverse_oblique_sg_projection, &
                                              deallocate_grid, deallocate_grid_lonlat, remap_zeta_grid_dp, remap_zeta_mesh_dp
@@ -68,9 +66,8 @@ MODULE netcdf_input_module
                                              check_xy_grid_field_int_2D, check_xy_grid_field_dp_2D, check_xy_grid_field_dp_2D_monthly, check_xy_grid_field_dp_3D, &
                                              check_lonlat_grid_field_int_2D, check_lonlat_grid_field_dp_2D, check_lonlat_grid_field_dp_2D_monthly, check_lonlat_grid_field_dp_3D, &
                                              check_mesh_field_int_2D, check_mesh_field_dp_2D, check_mesh_field_dp_2D_monthly, check_mesh_field_dp_3D, &
+                                             check_xy_grid_field_dp_3D_ocean, check_lonlat_grid_field_dp_3D_ocean, check_mesh_field_dp_3D_ocean, &
                                              inquire_xy_grid, inquire_lonlat_grid, inquire_mesh
-
-  USE netcdf_module, ONLY: debug, write_to_debug_file
 
   IMPLICIT NONE
 
@@ -111,8 +108,6 @@ CONTAINS
     INTEGER                                            :: wd_grid_lonlat_from_file
     REAL(dp), DIMENSION(:    ), POINTER                ::  d_mesh_from_file
     INTEGER                                            :: wd_mesh_from_file
-    TYPE(type_remapping_lonlat2mesh)                   :: map_lonlat
-    TYPE(type_remapping_mesh_mesh)                     :: map_meshmesh
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -140,16 +135,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_xy_file_2D( filename, field_name_options, region_name, grid_from_file, d_grid_from_file, wd_grid_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operator_grid2mesh( grid_from_file, mesh)
-
       ! Remap data
-      CALL map_grid2mesh_2D( grid_from_file, mesh, d_grid_from_file, d)
+      CALL map_from_xy_grid_to_mesh_2D( grid_from_file, mesh, d_grid_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid(                             grid_from_file)
-      CALL deallocate_remapping_operators_grid2mesh(    grid_from_file)
-      CALL deallocate_shared(                        wd_grid_from_file)
+      CALL deallocate_grid(      grid_from_file)
+      CALL deallocate_shared( wd_grid_from_file)
 
     ELSEIF (has_lonlat_grid) THEN
       ! Data is provided on a lon/lat-grid
@@ -157,16 +148,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_lonlat_file_2D( filename, field_name_options, region_name, grid_lonlat_from_file, d_grid_lonlat_from_file, wd_grid_lonlat_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL create_remapping_arrays_lonlat_mesh( mesh, grid_lonlat_from_file, map_lonlat)
-
       ! Remap data
-      CALL map_lonlat2mesh_2D( mesh, map_lonlat, d_grid_lonlat_from_file, d)
+      CALL map_from_lonlat_grid_to_mesh_2D( grid_lonlat_from_file, mesh, d_grid_lonlat_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid_lonlat(                     grid_lonlat_from_file)
-      CALL deallocate_remapping_arrays_lonlat_mesh(     map_lonlat          )
-      CALL deallocate_shared(                       wd_grid_lonlat_from_file)
+      CALL deallocate_grid_lonlat(    grid_lonlat_from_file)
+      CALL deallocate_shared(      wd_grid_lonlat_from_file)
 
     ELSEIF (has_mesh) THEN
       ! Data is provided on a mesh
@@ -174,20 +161,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_mesh_file_2D( filename, field_name_options, region_name, mesh_from_file, d_mesh_from_file, wd_mesh_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operators_mesh_mesh( mesh_from_file, mesh, map_meshmesh)
-
       ! Remap data
-      CALL remap_field_dp_2D( mesh_from_file, mesh, map_meshmesh, d_mesh_from_file, wd_mesh_from_file, 'cons_2nd_order')
-
-      ! Copy result to output memory
-      d( mesh%vi1:mesh%vi2) = d_mesh_from_file( mesh%vi1:mesh%vi2)
-      CALL sync
+      CALL map_from_mesh_to_mesh_2D( mesh_from_file, mesh, d_mesh_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_mesh_all(                         mesh_from_file)
-      CALL deallocate_remapping_operators_mesh_mesh( map_meshmesh     )
-      CALL deallocate_shared(                        wd_mesh_from_file)
+      CALL deallocate_mesh_all(    mesh_from_file)
+      CALL deallocate_shared(   wd_mesh_from_file)
 
     ELSE
       CALL crash('file "' // TRIM( filename) // '" does not contain a recognised x/y-grid, lon/lat-grid, or mesh!')
@@ -229,8 +208,6 @@ CONTAINS
     INTEGER                                            :: wd_grid_lonlat_from_file
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_mesh_from_file
     INTEGER                                            :: wd_mesh_from_file
-    TYPE(type_remapping_lonlat2mesh)                   :: map_lonlat
-    TYPE(type_remapping_mesh_mesh)                     :: map_meshmesh
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -258,16 +235,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_xy_file_2D_monthly( filename, field_name_options, region_name, grid_from_file, d_grid_from_file, wd_grid_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operator_grid2mesh( grid_from_file, mesh)
-
       ! Remap data
-      CALL map_grid2mesh_3D( grid_from_file, mesh, d_grid_from_file, d)
+      CALL map_from_xy_grid_to_mesh_2D_monthly( grid_from_file, mesh, d_grid_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid(                             grid_from_file)
-      CALL deallocate_remapping_operators_grid2mesh(    grid_from_file)
-      CALL deallocate_shared(                        wd_grid_from_file)
+      CALL deallocate_grid(      grid_from_file)
+      CALL deallocate_shared( wd_grid_from_file)
 
     ELSEIF (has_lonlat_grid) THEN
       ! Data is provided on a lon/lat-grid
@@ -275,16 +248,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_lonlat_file_2D_monthly( filename, field_name_options, region_name, grid_lonlat_from_file, d_grid_lonlat_from_file, wd_grid_lonlat_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL create_remapping_arrays_lonlat_mesh( mesh, grid_lonlat_from_file, map_lonlat)
-
       ! Remap data
-      CALL map_lonlat2mesh_3D( mesh, map_lonlat, d_grid_lonlat_from_file, d)
+      CALL map_from_lonlat_grid_to_mesh_2D_monthly( grid_lonlat_from_file, mesh, d_grid_lonlat_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid_lonlat(                     grid_lonlat_from_file)
-      CALL deallocate_remapping_arrays_lonlat_mesh(     map_lonlat          )
-      CALL deallocate_shared(                       wd_grid_lonlat_from_file)
+      CALL deallocate_grid_lonlat(    grid_lonlat_from_file)
+      CALL deallocate_shared(      wd_grid_lonlat_from_file)
 
     ELSEIF (has_mesh) THEN
       ! Data is provided on a mesh
@@ -292,20 +261,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_mesh_file_2D_monthly( filename, field_name_options, region_name, mesh_from_file, d_mesh_from_file, wd_mesh_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operators_mesh_mesh( mesh_from_file, mesh, map_meshmesh)
-
       ! Remap data
-      CALL remap_field_dp_3D( mesh_from_file, mesh, map_meshmesh, d_mesh_from_file, wd_mesh_from_file, 'cons_2nd_order')
-
-      ! Copy result to output memory
-      d( mesh%vi1:mesh%vi2,:) = d_mesh_from_file( mesh%vi1:mesh%vi2,:)
-      CALL sync
+      CALL map_from_mesh_to_mesh_2D_monthly( mesh_from_file, mesh, d_mesh_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_mesh_all(                         mesh_from_file)
-      CALL deallocate_remapping_operators_mesh_mesh( map_meshmesh     )
-      CALL deallocate_shared(                        wd_mesh_from_file)
+      CALL deallocate_mesh_all(    mesh_from_file)
+      CALL deallocate_shared(   wd_mesh_from_file)
 
     ELSE
       CALL crash('file "' // TRIM( filename) // '" does not contain a recognised x/y-grid, lon/lat-grid, or mesh!')
@@ -349,8 +310,6 @@ CONTAINS
     INTEGER                                            :: wd_grid_lonlat_from_file
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_mesh_from_file
     INTEGER                                            :: wd_mesh_from_file
-    TYPE(type_remapping_lonlat2mesh)                   :: map_lonlat
-    TYPE(type_remapping_mesh_mesh)                     :: map_meshmesh
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -378,16 +337,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_xy_file_3D( filename, field_name_options, region_name, grid_from_file, d_grid_from_file, wd_grid_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operator_grid2mesh( grid_from_file, mesh)
-
-      ! Remap data to the model mesh
-      CALL map_grid2mesh_3D( grid_from_file, mesh, d_grid_from_file, d)
+      ! Remap data
+      CALL map_from_xy_grid_to_mesh_3D( grid_from_file, mesh, d_grid_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid(                             grid_from_file)
-      CALL deallocate_remapping_operators_grid2mesh(    grid_from_file)
-      CALL deallocate_shared(                        wd_grid_from_file)
+      CALL deallocate_grid(      grid_from_file)
+      CALL deallocate_shared( wd_grid_from_file)
 
     ELSEIF (has_lonlat_grid) THEN
       ! Data is provided on a lon/lat-grid
@@ -395,16 +350,12 @@ CONTAINS
       ! Read grid and gridded data
       CALL read_field_from_lonlat_file_3D( filename, field_name_options, region_name, grid_lonlat_from_file, d_grid_lonlat_from_file, wd_grid_lonlat_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL create_remapping_arrays_lonlat_mesh( mesh, grid_lonlat_from_file, map_lonlat)
-
-      ! Remap data to the model mesh
-      CALL map_lonlat2mesh_3D( mesh, map_lonlat, d_grid_lonlat_from_file, d)
+      ! Remap data
+      CALL map_from_lonlat_grid_to_mesh_3D( grid_lonlat_from_file, mesh, d_grid_lonlat_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_grid_lonlat(                     grid_lonlat_from_file)
-      CALL deallocate_remapping_arrays_lonlat_mesh(     map_lonlat          )
-      CALL deallocate_shared(                       wd_grid_lonlat_from_file)
+      CALL deallocate_grid_lonlat(    grid_lonlat_from_file)
+      CALL deallocate_shared(      wd_grid_lonlat_from_file)
 
     ELSEIF (has_mesh) THEN
       ! Data is provided on a mesh
@@ -412,20 +363,12 @@ CONTAINS
       ! Read file mesh and data
       CALL read_field_from_mesh_file_3D( filename, field_name_options, region_name, mesh_from_file, d_mesh_from_file, wd_mesh_from_file, time_to_read)
 
-      ! Calculate remapping operator
-      CALL calc_remapping_operators_mesh_mesh( mesh_from_file, mesh, map_meshmesh)
-
-      ! Remap data to the model mesh
-      CALL remap_field_dp_3D( mesh_from_file, mesh, map_meshmesh, d_mesh_from_file, wd_mesh_from_file, 'cons_2nd_order')
-
-      ! Copy result to output memory
-      d( mesh%vi1:mesh%vi2,:) = d_mesh_from_file( mesh%vi1:mesh%vi2,:)
-      CALL sync
+      ! Remap data
+      CALL map_from_mesh_to_mesh_3D( mesh_from_file, mesh, d_mesh_from_file, d)
 
       ! Clean up after yourself
-      CALL deallocate_mesh_all(                         mesh_from_file)
-      CALL deallocate_remapping_operators_mesh_mesh( map_meshmesh     )
-      CALL deallocate_shared(                        wd_mesh_from_file)
+      CALL deallocate_mesh_all(    mesh_from_file)
+      CALL deallocate_shared(   wd_mesh_from_file)
 
     ELSE
       CALL crash('file "' // TRIM( filename) // '" does not contain a recognised x/y-grid, lon/lat-grid, or mesh!')
@@ -824,6 +767,134 @@ CONTAINS
 
   END SUBROUTINE read_field_from_xy_file_3D
 
+  SUBROUTINE read_field_from_xy_file_3D_ocean(       filename, field_name_options, region_name, grid, d, wd, nz_ocean, z_ocean, wz_ocean, time_to_read)
+    ! Read a 3-D ocean data field from a NetCDF file on an x/y-grid,
+    ! and return both the grid and the data.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_grid),                     INTENT(INOUT) :: grid
+    REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: d
+    INTEGER,                             INTENT(OUT)   :: wd
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
+    INTEGER,                             INTENT(OUT)   :: nz_ocean
+    REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: z_ocean
+    INTEGER,                             INTENT(OUT)   :: wz_ocean
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_xy_file_3D_ocean'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+    CHARACTER(LEN=256)                                 :: indexing, xdir, ydir
+    REAL(dp), DIMENSION(:,:,:,:), POINTER              ::  d_with_time
+    INTEGER                                            :: wd_with_time
+    INTEGER                                            :: ti
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Set up the grid from the file
+    CALL setup_xy_grid_from_file( filename, grid, region_name)
+
+    ! Set up the zeta coordinate from the file
+    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+
+    ! Look for the specified variable in the file
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
+
+    ! Check if the variable has the required dimensions
+    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+
+    ! Determine indexing and dimension directions
+    CALL determine_xy_indexing( filename, var_name, indexing, xdir, ydir)
+
+    IF     (indexing == 'xy') THEN
+
+      ! Allocate shared memory
+      CALL allocate_shared_dp_3D( grid%nx, grid%ny, nz_ocean, d, wd)
+
+      ! Read data from file
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        CALL read_var_dp_3D( filename, id_var, d)
+      ELSE
+        ! Allocate shared memory
+        CALL allocate_shared_dp_4D( grid%nx, grid%ny, nz_ocean, 1, d_with_time, wd_with_time)
+        ! Find out which timeframe to read
+        CALL find_timeframe( filename, time_to_read, ti)
+        ! Read data
+        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, nz_ocean, 1 /) )
+        ! Copy to output memory
+        d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
+        ! Clean up after yourself
+        CALL deallocate_shared( wd_with_time)
+      END IF
+
+    ELSEIF (indexing == 'yx') THEN
+
+      ! Allocate shared memory
+      CALL allocate_shared_dp_3D( grid%ny, grid%nx, nz_ocean, d, wd)
+
+      ! Read data from file
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        CALL read_var_dp_3D( filename, id_var, d)
+      ELSE
+        ! Allocate shared memory
+        CALL allocate_shared_dp_4D( grid%ny, grid%nx, nz_ocean, 1, d_with_time, wd_with_time)
+        ! Find out which timeframe to read
+        CALL find_timeframe( filename, time_to_read, ti)
+        ! Read data
+        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%ny, grid%nx, nz_ocean, 1 /) )
+        ! Copy to output memory
+        d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
+        ! Clean up after yourself
+        CALL deallocate_shared( wd_with_time)
+      END IF
+
+    ELSE
+      CALL crash('unknown indexing = "' // TRIM( indexing) // '"!')
+    END IF
+
+    ! Perform necessary corrections to the gridded data
+
+    ! Indexing
+    IF     (indexing == 'xy') THEN
+      ! No need to do anything
+    ELSEIF (indexing == 'yx') THEN
+      CALL permute_3D_dp( d, wd, map = [2,1,3])
+    ELSE
+      CALL crash('unknown indexing = "' // TRIM( indexing) // '"!')
+    END IF
+
+    ! xdir
+    IF     (xdir == 'normal') THEN
+      ! No need to do anything
+    ELSEIF (xdir == 'reverse') THEN
+      CALL flip_1D_dp( grid%x)
+      CALL flip_3D_x1_dp( d)
+    ELSE
+      CALL crash('unknown xdir = "' // TRIM( xdir) // '"!')
+    END IF
+
+    ! ydir
+    IF     (ydir == 'normal') THEN
+      ! No need to do anything
+    ELSEIF (ydir == 'reverse') THEN
+      CALL flip_1D_dp( grid%y)
+      CALL flip_3D_x2_dp( d)
+    ELSE
+      CALL crash('unknown ydir = "' // TRIM( ydir) // '"!')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 19)
+
+  END SUBROUTINE read_field_from_xy_file_3D_ocean
+
   ! Read a field from a lon/lat-grid file
   SUBROUTINE read_field_from_lonlat_file_2D(         filename, field_name_options, region_name, grid, d, wd, time_to_read)
     ! Read a 2-D data field from a NetCDF file on a lon/lat-grid,
@@ -1218,6 +1289,137 @@ CONTAINS
 
   END SUBROUTINE read_field_from_lonlat_file_3D
 
+  SUBROUTINE read_field_from_lonlat_file_3D_ocean(   filename, field_name_options, region_name, grid, d, wd, nz_ocean, z_ocean, wz_ocean, time_to_read)
+    ! Read a 3-D ocean data field from a NetCDF file on a lon/lat-grid,
+    ! and return both the grid and the data.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_grid_lonlat),              INTENT(INOUT) :: grid
+    REAL(dp), DIMENSION(:,:,:), POINTER, INTENT(OUT)   :: d
+    INTEGER,                             INTENT(OUT)   :: wd
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
+    INTEGER,                             INTENT(OUT)   :: nz_ocean
+    REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: z_ocean
+    INTEGER,                             INTENT(OUT)   :: wz_ocean
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_lonlat_file_3D_ocean'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+    CHARACTER(LEN=256)                                 :: indexing, londir, latdir
+    REAL(dp), DIMENSION(:,:,:,:), POINTER              ::  d_with_time
+    INTEGER                                            :: wd_with_time
+    INTEGER                                            :: ti
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Set up the grid from the file
+    CALL setup_lonlat_grid_from_file( filename, grid, region_name)
+
+    ! Set up the zeta coordinate from the file
+    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+
+    ! Look for the specified variable in the file
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
+
+    ! Check if the variable has the required dimensions
+    CALL check_lonlat_grid_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+
+    ! Determine indexing and dimension directions
+    CALL determine_lonlat_indexing( filename, var_name, indexing, londir, latdir)
+
+    IF     (indexing == 'lonlat') THEN
+
+      ! Allocate shared memory
+      CALL allocate_shared_dp_3D( grid%nlon, grid%nlat, nz_ocean, d, wd)
+
+      ! Read data from file
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        CALL read_var_dp_3D( filename, id_var, d)
+      ELSE
+        ! Allocate shared memory
+        CALL allocate_shared_dp_4D( grid%nlon, grid%nlat, nz_ocean, 1, d_with_time, wd_with_time)
+        ! Find out which timeframe to read
+        CALL find_timeframe( filename, time_to_read, ti)
+        ! Read data
+        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlon, grid%nlat, nz_ocean, 1 /) )
+        ! Copy to output memory
+        d( grid%i1:grid%i2,:,:) = d_with_time( grid%i1:grid%i2,:,:,1)
+        ! Clean up after yourself
+        CALL deallocate_shared( wd_with_time)
+      END IF
+
+    ELSEIF (indexing == 'latlon') THEN
+
+      ! Allocate shared memory
+      CALL allocate_shared_dp_3D( grid%nlat, grid%nlon, nz_ocean, d, wd)
+
+      ! Read data from file
+      IF (.NOT. PRESENT( time_to_read)) THEN
+        CALL read_var_dp_3D( filename, id_var, d)
+      ELSE
+        ! Allocate shared memory
+        CALL allocate_shared_dp_4D( grid%nlat, grid%nlon, nz_ocean, 1, d_with_time, wd_with_time)
+        ! Find out which timeframe to read
+        CALL find_timeframe( filename, time_to_read, ti)
+        ! Read data
+        CALL read_var_dp_4D( filename, id_var, d_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nlat, grid%nlon, nz_ocean, 1 /) )
+        ! Copy to output memory
+        d( :,grid%i1:grid%i2,:) = d_with_time( :,grid%i1:grid%i2,:,1)
+        ! Clean up after yourself
+        CALL deallocate_shared( wd_with_time)
+      END IF
+
+    ELSE
+      CALL crash('unknown indexing = "' // TRIM( indexing) // '"!')
+    END IF
+
+    ! Perform necessary corrections to the gridded data
+
+    ! Indexing
+    IF     (indexing == 'lonlat') THEN
+      ! No need to do anything
+    ELSEIF (indexing == 'latlon') THEN
+      CALL permute_3D_dp( d, wd, map = [2,1,3])
+    ELSE
+      CALL crash('unknown indexing = "' // TRIM( indexing) // '"!')
+    END IF
+
+    ! londir
+    IF     (londir == 'normal') THEN
+      ! No need to do anything
+    ELSEIF (londir == 'reverse') THEN
+      CALL flip_1D_dp( grid%lon)
+      CALL flip_3D_x1_dp( d)
+    ELSE
+      CALL crash('unknown londir = "' // TRIM( londir) // '"!')
+    END IF
+
+    ! latdir
+    IF     (latdir == 'normal') THEN
+      ! No need to do anything
+    ELSEIF (latdir == 'reverse') THEN
+      CALL flip_1D_dp( grid%lat)
+      CALL flip_3D_x2_dp( d)
+    ELSE
+      CALL crash('unknown latdir = "' // TRIM( latdir) // '"!')
+    END IF
+
+    ! Correct longitude shifts and range
+    CALL correct_longitude_shifts_and_range_3D( filename, grid, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
+
+  END SUBROUTINE read_field_from_lonlat_file_3D_ocean
+
   ! Read a field from a mesh file
   SUBROUTINE read_field_from_mesh_file_2D(           filename, field_name_options, region_name, mesh, d, wd, time_to_read)
     ! Read a 2-D data field from a NetCDF file on a mesh,
@@ -1339,7 +1541,7 @@ CONTAINS
 
   END SUBROUTINE read_field_from_mesh_file_2D_monthly
 
-  SUBROUTINE read_field_from_mesh_file_3D(   filename, field_name_options, region_name, mesh, d, wd, time_to_read)
+  SUBROUTINE read_field_from_mesh_file_3D(           filename, field_name_options, region_name, mesh, d, wd, time_to_read)
     ! Read a 3-D data field from a NetCDF file on a mesh,
     ! and return both the grid and the data.
 
@@ -1416,6 +1618,72 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
 
   END SUBROUTINE read_field_from_mesh_file_3D
+
+  SUBROUTINE read_field_from_mesh_file_3D_ocean(     filename, field_name_options, region_name, mesh, d, wd, nz_ocean, z_ocean, wz_ocean, time_to_read)
+    ! Read a 3-D ocean data field from a NetCDF file on a mesh,
+    ! and return both the grid and the data.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    REAL(dp), DIMENSION(:,:  ), POINTER, INTENT(OUT)   :: d
+    INTEGER,                             INTENT(OUT)   :: wd
+    REAL(dp), OPTIONAL,                  INTENT(IN)    :: time_to_read
+    INTEGER,                             INTENT(OUT)   :: nz_ocean
+    REAL(dp), DIMENSION(:    ), POINTER, INTENT(OUT)   :: z_ocean
+    INTEGER,                             INTENT(OUT)   :: wz_ocean
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'read_field_from_mesh_file_3D_ocean'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+    REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
+    INTEGER                                            :: wd_with_time
+    INTEGER                                            :: ti
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Set up the grid from the file
+    CALL setup_mesh_from_file( filename, mesh, region_name)
+
+    ! Set up the zeta coordinate from the file
+    CALL setup_z_ocean_from_file( filename, nz_ocean, z_ocean, wz_ocean)
+
+    ! Look for the specified variable in the file
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('couldnt find any of the options "' // TRIM( field_name_options) // '" in file "' // TRIM( filename)  // '"!')
+
+    ! Check if the variable has the required dimensions
+    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = PRESENT( time_to_read))
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_2D( mesh%nV, nz_ocean, d, wd)
+
+    ! Read data from file
+    IF (.NOT. PRESENT( time_to_read)) THEN
+      CALL read_var_dp_2D( filename, id_var, d)
+    ELSE
+      ! Allocate shared memory
+      CALL allocate_shared_dp_3D( mesh%nV, nz_ocean, 1, d_with_time, wd_with_time)
+      ! Find out which timeframe to read
+      CALL find_timeframe( filename, time_to_read, ti)
+      ! Read data
+      CALL read_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ mesh%nV, nz_ocean, 1 /) )
+      ! Copy to output memory
+      d( mesh%vi1:mesh%vi2,:) = d_with_time( mesh%vi1:mesh%vi2,:,1)
+      ! Clean up after yourself
+      CALL deallocate_shared( wd_with_time)
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name, n_extra_windows_expected = 1)
+
+  END SUBROUTINE read_field_from_mesh_file_3D_ocean
 
   ! ===== Set up grids/mesh from a NetCDF file =====
   ! ================================================
@@ -1558,6 +1826,9 @@ CONTAINS
     END DO
     CALL sync
 
+    ! Give the grid a nice name
+    grid%name = 'xy_grid_from_file_"' // TRIM( filename) // '"'
+
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 18)
 
@@ -1592,10 +1863,15 @@ CONTAINS
     ! Allocate memory for the grid size
     CALL allocate_shared_int_0D( grid%nlon, grid%wnlon)
     CALL allocate_shared_int_0D( grid%nlat, grid%wnlat)
+    CALL allocate_shared_int_0D( grid%n   , grid%wn   )
 
     ! Inquire lon and lat dimensions
     CALL inquire_dim_multiple_options( filename, field_name_options_lon, id_dim_lon, dim_length = grid%nlon)
     CALL inquire_dim_multiple_options( filename, field_name_options_lat, id_dim_lat, dim_length = grid%nlat)
+
+    IF (par%master) THEN
+      grid%n = grid%nlon * grid%nlat
+    END IF
 
     ! Allocate memory for lon and lat
     CALL allocate_shared_dp_1D( grid%nlon, grid%lon, grid%wlon)
@@ -1620,6 +1896,9 @@ CONTAINS
     CALL allocate_shared_dp_0D( grid%phi_m      , grid%wphi_m      )
     CALL allocate_shared_dp_0D( grid%beta_stereo, grid%wbeta_stereo)
 
+    CALL allocate_shared_int_2D( grid%nlon, grid%nlat, grid%ij2n, grid%wij2n)
+    CALL allocate_shared_int_2D( grid%n   , 2,         grid%n2ij, grid%wn2ij)
+
     ! Calculate secondary grid data
     IF (par%master) THEN
 
@@ -1643,6 +1922,24 @@ CONTAINS
       grid%lonmax = MAXVAL( grid%lon)
       grid%latmin = MINVAL( grid%lat)
       grid%latmax = MAXVAL( grid%lat)
+
+      ! Conversion tables for grid-form vs. vector-form data
+      n = 0
+      DO i = 1, grid%nlon
+        IF (MOD(i,2) == 1) THEN
+          DO j = 1, grid%nlat
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        ELSE
+          DO j = grid%nlat, 1, -1
+            n = n+1
+            grid%ij2n( i,j) = n
+            grid%n2ij( n,:) = [i,j]
+          END DO
+        END IF
+      END DO
 
     END IF ! IF (par%master) THEN
     CALL sync
@@ -1669,6 +1966,9 @@ CONTAINS
     ! Set up parallelisation domains
     CALL partition_list( grid%nlon, par%i, par%n, grid%i1, grid%i2)
     CALL partition_list( grid%nlat, par%i, par%n, grid%j1, grid%j2)
+
+    ! Give the grid a nice name
+    grid%name = 'lonlat_grid_from_file_"' // TRIM( filename) // '"'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 10)
@@ -1766,6 +2066,9 @@ CONTAINS
     CALL find_Voronoi_cell_geometric_centres( mesh)
 
     CALL check_mesh( mesh)
+
+    ! Give the mesh a nice name
+    mesh%name = 'mesh_from_file_"' // TRIM( filename) // '"'
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 107)

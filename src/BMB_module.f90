@@ -24,10 +24,10 @@ MODULE BMB_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              interpolate_ocean_depth, is_floating
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, type_remapping_mesh_mesh, &
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_BMB_model, &
                                              type_climate_snapshot_regional, type_ocean_snapshot_regional, &
-                                             type_remapping_mesh_mesh, type_reference_geometry
+                                             type_reference_geometry
   USE forcing_module,                  ONLY: forcing, get_insolation_at_time_month_and_lat
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
 
@@ -2559,13 +2559,12 @@ CONTAINS
 !===== Remapping after mesh update =====
 !=======================================
 
-  SUBROUTINE remap_BMB_model( mesh_old, mesh_new, map, BMB)
+  SUBROUTINE remap_BMB_model( mesh_old, mesh_new, BMB)
     ! Remap or reallocate all the data fields
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_BMB_model),                INTENT(INOUT) :: BMB
 
     ! Local variables:
@@ -2578,7 +2577,6 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
 
     ! Reallocate rather than remap; after a mesh update we'll immediately run the BMB model anyway.
     CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB,       BMB%wBMB      )
@@ -2586,7 +2584,7 @@ CONTAINS
 
     ! Exception for iterative inversion of ice shelf basal melt rates, to avoid resetting it.
     IF (C%choice_BMB_shelf_model == 'inversion') THEN
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, BMB%BMB_shelf, BMB%wBMB_shelf, 'cons_2nd_order')
+      CALL remap_field_dp_2D( mesh_old, mesh_new, BMB%BMB_shelf, BMB%wBMB_shelf, 'cons_2nd_order')
     ELSE
       CALL reallocate_shared_dp_1D( mesh_new%nV, BMB%BMB_shelf, BMB%wBMB_shelf)
     END IF

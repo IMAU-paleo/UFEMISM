@@ -61,7 +61,6 @@ UFEMISM_program_objects = \
         mesh_creation_module.o \
         mesh_update_module.o \
         zeta_module.o \
-        netcdf_module.o \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \
@@ -118,7 +117,6 @@ UFEMISM_program_objects = \
         mesh_creation_module.o \
         mesh_update_module.o \
         zeta_module.o \
-        netcdf_module.o \
         netcdf_basic_module.o \
         netcdf_input_module.o \
         netcdf_output_module.o \

@@ -27,9 +27,10 @@ MODULE ice_dynamics_module
   USE utilities_module,                      ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                                    check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                                    vertical_average, surface_elevation
-  USE netcdf_module,                         ONLY: debug, write_to_debug_file
+  USE netcdf_debug_module,                   ONLY: debug, write_to_debug_file
   USE data_types_module,                     ONLY: type_model_region, type_mesh, type_ice_model, type_reference_geometry, &
-                                                   type_remapping_mesh_mesh, type_restart_data
+                                                   type_restart_data
+  USE netcdf_input_module,                   ONLY: read_field_from_file_2D
   USE mesh_mapping_module,                   ONLY: remap_field_dp_2D, remap_field_dp_3D
   USE general_ice_model_data_module,         ONLY: update_general_ice_model_data
   USE mesh_operators_module,                 ONLY: map_a_to_c_2D, ddx_a_to_c_2D, ddy_a_to_c_2D
@@ -943,7 +944,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_init
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
@@ -982,13 +983,7 @@ CONTAINS
     CALL initialise_basal_conditions( mesh, ice, restart)
 
     ! Geothermal heat flux
-    IF     (C%choice_geothermal_heat_flux == 'constant') THEN
-      ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
-    ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
-      CALL map_geothermal_heat_flux_to_mesh( mesh, ice)
-    ELSE
-      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
-    END IF
+    CALL initialise_geothermal_heat_flux( mesh, ice)
 
     ! Initialise data and matrices for the velocity solver(s)
     ! If we're running with choice_ice_dynamics == "none", initialise the velocity
@@ -1007,38 +1002,38 @@ CONTAINS
 
   END SUBROUTINE initialise_ice_model
 
-  SUBROUTINE map_geothermal_heat_flux_to_mesh( mesh, ice)
-
-    USE data_types_module,          ONLY: type_remapping_lonlat2mesh
-    USE forcing_module,             ONLY: forcing
-    USE mesh_mapping_module,        ONLY: create_remapping_arrays_lonlat_mesh, map_lonlat2mesh_2D, deallocate_remapping_arrays_lonlat_mesh
+  SUBROUTINE initialise_geothermal_heat_flux( mesh, ice)
+    ! Initialise the 2-D geothermal heat flux, either with a uniform value
+    ! or from an external file.
+    !
+    ! Assumes memory has already been allocated.
 
     IMPLICIT NONE
 
     ! In- and output variables
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_geothermal_heat_flux_to_mesh'
-    TYPE(type_remapping_lonlat2mesh)                   :: map
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_geothermal_heat_flux'
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Calculate mapping arrays
-    CALL create_remapping_arrays_lonlat_mesh( mesh, forcing%grid_ghf, map)
-
-    ! Map global climate data to the mesh
-    CALL map_lonlat2mesh_2D( mesh, map, forcing%ghf_ghf, ice%GHF_a)
-
-    ! Deallocate mapping arrays
-    CALL deallocate_remapping_arrays_lonlat_mesh( map)
+    IF     (C%choice_geothermal_heat_flux == 'constant' .OR. C%choice_geothermal_heat_flux == 'uniform') THEN
+      ! Use a spatially uniform value
+      ice%GHF_a( mesh%vi1:mesh%vi2) = C%constant_geothermal_heat_flux
+    ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
+      ! Read a 2-D field from an external file
+      CALL read_field_from_file_2D( C%filename_geothermal_heat_flux, 'hflux', mesh, ice%GHF_a, 'ANT')
+    ELSE
+      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE map_geothermal_heat_flux_to_mesh
+  END SUBROUTINE initialise_geothermal_heat_flux
 
   SUBROUTINE allocate_ice_model( mesh, ice)
     ! Use MPI_WIN_ALLOCATE_SHARED to allocate shared memory space for an array.
@@ -1179,13 +1174,12 @@ CONTAINS
 
   END SUBROUTINE allocate_ice_model
 
-  SUBROUTINE remap_ice_model( mesh_old, mesh_new, map, ice, refgeo_PD, time)
+  SUBROUTINE remap_ice_model( mesh_old, mesh_new, ice, refgeo_PD, time)
     ! Remap or reallocate all the data fields
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_reference_geometry),       INTENT(IN)    :: refgeo_PD
     REAL(dp),                            INTENT(IN)    :: time
@@ -1198,10 +1192,10 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! The only fields that actually need to be mapped. The rest only needs memory reallocation.
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_a        , ice%wHi_a        , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_2nd_order')
-   !CALL remap_field_dp_3D( mesh_old, mesh_new, map, ice%Ti_a        , ice%wTi_a        , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, ice%Hi_a        , ice%wHi_a        , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, ice%dHi_dt_a    , ice%wdHi_dt_a    , 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, ice%Hi_tplusdt_a, ice%wHi_tplusdt_a, 'cons_2nd_order')
+   !CALL remap_field_dp_3D( mesh_old, mesh_new, ice%Ti_a        , ice%wTi_a        , 'cons_2nd_order')
 
     ! Remove very thin ice resulting from remapping errors
     DO vi = mesh_new%vi1, mesh_new%vi2
@@ -1220,34 +1214,28 @@ CONTAINS
     CALL sync
 
     ! Remap englacial temperature (needs some special attention because of the discontinuity at the ice margin)
-    CALL remap_ice_temperature( mesh_old, mesh_new, map, ice)
+    CALL remap_ice_temperature( mesh_old, mesh_new, ice)
 
     ! Remap bedrock change and add up to PD to prevent accumulation of numerical diffusion
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, ice%dHb_a,               ice%wdHb_a,               'cons_2nd_order')
     CALL reallocate_shared_dp_1D(    mesh_new%nV,  ice%Hb_a,                   ice%wHb_a                     )
     ice%Hb_a( mesh_new%vi1:mesh_new%vi2) = refgeo_PD%Hb( mesh_new%vi1:mesh_new%vi2) + ice%dHb_a( mesh_new%vi1:mesh_new%vi2)
 
     ! Geothermal heat flux
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%GHF_a, ice%wGHF_a)
-    IF     (C%choice_geothermal_heat_flux == 'constant') THEN
-      ice%GHF_a( mesh_new%vi1:mesh_new%vi2) = C%constant_geothermal_heat_flux
-    ELSEIF (C%choice_geothermal_heat_flux == 'spatial') THEN
-      CALL map_geothermal_heat_flux_to_mesh( mesh_new, ice)
-    ELSE
-      CALL crash('unknown choice_geothermal_heat_flux "' // TRIM( C%choice_geothermal_heat_flux) // '"!')
-    END IF
+    CALL initialise_geothermal_heat_flux( mesh_new, ice)
 
     ! Basal conditions
-    CALL remap_basal_conditions( mesh_old, mesh_new, map, ice)
+    CALL remap_basal_conditions( mesh_old, mesh_new, ice)
 
     ! GIA and sea level
     CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_a, ice%wdHb_a) ! Remapped above only to compute Hb_a. Recomputed later when needed.
-    CALL remap_field_dp_2D(   mesh_old, mesh_new, map, ice%SL_a,     ice%wSL_a,     'cons_2nd_order') ! If not remapped, gets reset to 0 -> not good.
+    CALL remap_field_dp_2D(   mesh_old, mesh_new, ice%SL_a,     ice%wSL_a,     'cons_2nd_order') ! If not remapped, gets reset to 0 -> not good.
     IF (C%choice_GIA_model == 'SELEN') THEN
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dSL_dt_a, ice%wdSL_dt_a, 'cons_2nd_order') ! until next call to SELEN -> not good.
+      CALL remap_field_dp_2D( mesh_old, mesh_new, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
+      CALL remap_field_dp_2D( mesh_old, mesh_new, ice%dSL_dt_a, ice%wdSL_dt_a, 'cons_2nd_order') ! until next call to SELEN -> not good.
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
-      CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
+      CALL remap_field_dp_2D( mesh_old, mesh_new, ice%dHb_dt_a, ice%wdHb_dt_a, 'cons_2nd_order') ! If not remapped, gets reset to and remains 0
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dSL_dt_a, ice%wdSL_dt_a)                         ! until next call to ELRA -> not good.
     ELSEIF (C%choice_GIA_model == 'none') THEN
       CALL reallocate_shared_dp_1D( mesh_new%nV, ice%dHb_dt_a, ice%wdHb_dt_a)
@@ -1378,10 +1366,10 @@ CONTAINS
     ! to get reasonable velocities for the thermodynamics.
     IF (C%choice_ice_dynamics == 'none') THEN
       C%choice_ice_dynamics = 'DIVA'
-      CALL remap_velocities( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities( mesh_old, mesh_new, ice)
       C%choice_ice_dynamics = 'none'
     ELSE
-      CALL remap_velocities( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities( mesh_old, mesh_new, ice)
     END IF
 
     ! Recalculate ice flow factor

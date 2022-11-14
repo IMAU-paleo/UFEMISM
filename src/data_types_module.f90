@@ -267,6 +267,9 @@ MODULE data_types_module
     ! Basic meta properties
     ! =====================
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     CHARACTER(LEN=3)                        :: region_name                   ! NAM, EAS, GRL, ANT
     REAL(dp),                   POINTER     :: lambda_M                      ! Oblique stereographic projection parameters
     REAL(dp),                   POINTER     :: phi_M
@@ -430,6 +433,9 @@ MODULE data_types_module
   TYPE type_grid
     ! A regular square grid covering a model region
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     ! Basic grid data
     INTEGER,                    POINTER     :: nx, ny, n
     REAL(dp),                   POINTER     :: dx
@@ -441,8 +447,6 @@ MODULE data_types_module
     INTEGER                                 :: i1, i2, j1, j2
 
     ! Sparse matrices representing the remapping operations between a mesh and a grid
-    TYPE(tMat)                              :: M_map_grid2mesh              ! Remapping from a grid to a mesh using second-order conservative remapping
-    TYPE(tMat)                              :: M_map_mesh2grid              ! Remapping from a mesh to a grid using second-order conservative remapping
     REAL(dp),                   POINTER     :: tol_dist
     INTEGER :: wtol_dist
 
@@ -468,8 +472,11 @@ MODULE data_types_module
   TYPE type_grid_lonlat
     ! A regular square lon/lat-grid
 
+    ! Name
+    CHARACTER(LEN=256)                      :: name
+
     ! Basic grid data
-    INTEGER,                    POINTER     :: nlon, nlat
+    INTEGER,                    POINTER     :: nlon, nlat, n
     REAL(dp),                   POINTER     :: dlon, dlat
     REAL(dp), DIMENSION(:    ), POINTER     :: lon, lat
     REAL(dp),                   POINTER     :: lonmin, lonmax, latmin, latmax
@@ -478,6 +485,10 @@ MODULE data_types_module
     ! Parallelisation by domain decomposition
     INTEGER                                 :: i1, i2, j1, j2
 
+    ! Conversion tables for grid-form vs. vector-form data
+    INTEGER,  DIMENSION(:,:  ), POINTER     :: ij2n, n2ij
+    INTEGER :: wij2n, wn2ij
+
     ! Projection parameters for the grid
     REAL(dp),                   POINTER     :: lambda_M
     REAL(dp),                   POINTER     :: phi_M
@@ -485,6 +496,20 @@ MODULE data_types_module
     INTEGER :: wlambda_M, wphi_M, wbeta_stereo
 
   END TYPE type_grid_lonlat
+
+  ! == Mapping object
+  ! =================
+
+  TYPE type_map
+    ! A mapping object
+
+    LOGICAL                                 :: is_used   = .FALSE.           ! Flag that indicates whether this map is in use
+    CHARACTER(LEN=256)                      :: name_src  = ''                ! Name of the source grid
+    CHARACTER(LEN=256)                      :: name_dst  = ''                ! Name of the destination grid
+    CHARACTER(LEN=256)                      :: method    = ''                ! Remapping method (nearest-neighbour, bilinear, 2-nd order conservative, etc.)
+    TYPE(tMat)                              :: M                             ! The actual operator matrix
+
+  END TYPE type_map
 
   ! == Reference geometries
   ! =======================
@@ -535,26 +560,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: LI_xdy, LI_mxydx, LI_xydy
 
   END TYPE type_single_row_mapping_matrices
-
-  TYPE type_remapping_mesh_mesh
-    ! Sparse matrices representing the remapping operations between two meshes for different remapping methods
-
-    INTEGER                                 :: int_dummy
-    TYPE(tMat)                              :: M_trilin                     ! Remapping using trilinear interpolation
-    TYPE(tMat)                              :: M_nearest_neighbour          ! Remapping using nearest-neighbour interpolation
-    TYPE(tMat)                              :: M_cons_1st_order             ! Remapping using first-order conservative remapping
-    TYPE(tMat)                              :: M_cons_2nd_order             ! Remapping using second-order conservative remapping
-
-  END TYPE type_remapping_mesh_mesh
-
-  TYPE type_remapping_lonlat2mesh
-    ! Indices and weights for mapping data from a global lon/lat-grid to the model mesh using bilinear interpolation
-
-    INTEGER,  DIMENSION(:    ), POINTER     :: ilat1, ilat2, ilon1, ilon2
-    REAL(dp), DIMENSION(:    ), POINTER     :: wlat1, wlat2, wlon1, wlon2
-    INTEGER :: wilat1, wilat2, wilon1, wilon2, wwlat1, wwlat2, wwlon1, wwlon2
-
-  END TYPE type_remapping_lonlat2mesh
 
   ! == Forcing
   ! ==========
@@ -607,12 +612,6 @@ MODULE data_types_module
     REAL(dp), DIMENSION(:,:  ), POINTER     :: ins_Q_TOA0, ins_Q_TOA1
     INTEGER :: wins_nyears, wins_nlat, wins_time, wins_lat, wins_t0, wins_t1, wins_Q_TOA0, wins_Q_TOA1
 
-    ! External forcing: geothermal heat flux
-    TYPE(type_netcdf_geothermal_heat_flux)  :: netcdf_ghf
-    TYPE(type_grid_lonlat)                  :: grid_ghf
-    REAL(dp), DIMENSION(:,:  ), POINTER     :: ghf_ghf
-    INTEGER :: wghf_ghf
-
     ! External forcing: sea level record
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_time
     REAL(dp), DIMENSION(:    ), POINTER     :: sealevel_record
@@ -633,10 +632,7 @@ MODULE data_types_module
     TYPE(type_netcdf_climate_data)          :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! General forcing info (not relevant for PD observations)
     REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
@@ -666,10 +662,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_climate_forcing_global) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears
@@ -695,10 +688,7 @@ MODULE data_types_module
     TYPE(type_netcdf_direct_SMB_forcing_global) :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! Time dimension
     INTEGER,                    POINTER     :: nyears
@@ -739,10 +729,7 @@ MODULE data_types_module
     TYPE(type_netcdf_ocean_data)            :: netcdf
 
     ! Grid
-    INTEGER,                    POINTER     :: nlat, nlon
-    REAL(dp), DIMENSION(:    ), POINTER     :: lat
-    REAL(dp), DIMENSION(:    ), POINTER     :: lon
-    INTEGER :: wnlat, wnlon, wlat, wlon
+    TYPE(type_grid_lonlat)                  :: grid
 
     ! General forcing info (not relevant for PD observations)
     REAL(dp),                   POINTER     :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
@@ -755,10 +742,10 @@ MODULE data_types_module
     ! Global 3-D ocean data on the original vertical grid
     REAL(dp),                   POINTER     :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
     REAL(dp), DIMENSION(:    ), POINTER     :: z_ocean_raw                   ! Vertical coordinate of the 3-D ocean fields [m below sea surface]
-    INTEGER,                    POINTER     :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
+    INTEGER                                 :: nz_ocean_raw                  ! Number of vertical layers in the 3-D ocean fields
     REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean_raw                   ! 3-D annual mean ocean temperature [K]
     REAL(dp), DIMENSION(:,:,:), POINTER     :: S_ocean_raw                   ! 3-D annual mean ocean salinity    [PSU]
-    INTEGER :: wT_ocean_mean, wz_ocean_raw, wnz_ocean_raw, wT_ocean_raw, wS_ocean_raw
+    INTEGER :: wT_ocean_mean, wz_ocean_raw, wT_ocean_raw, wS_ocean_raw
 
     ! Global 3-D ocean data on the ice-model vertical grid
     REAL(dp), DIMENSION(:,:,:), POINTER     :: T_ocean                       ! 3-D annual mean ocean temperature [K]

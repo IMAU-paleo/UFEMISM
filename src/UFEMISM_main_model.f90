@@ -22,17 +22,15 @@ MODULE UFEMISM_main_model
                                                  reallocate_shared_int_3D, reallocate_shared_dp_3D, &
                                                  deallocate_shared
   USE netcdf_debug_module,                 ONLY: debug, write_to_debug_file, create_debug_file, initialise_debug_fields, reallocate_debug_fields, associate_debug_fields
-  USE netcdf_module,                       ONLY: create_output_files, write_to_output_files
-  USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, type_remapping_mesh_mesh, &
+  USE netcdf_output_module,                ONLY: create_output_files, write_to_output_files
+  USE data_types_module,                   ONLY: type_model_region, type_mesh, type_grid, &
                                                  type_climate_matrix_global, type_ocean_matrix_global
-  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh, remap_restart_init_topo
+  USE reference_fields_module,             ONLY: initialise_reference_geometries, map_reference_geometries_to_mesh
   USE mesh_memory_module,                  ONLY: deallocate_mesh_all
   USE mesh_help_functions_module,          ONLY: inverse_oblique_sg_projection
   USE mesh_creation_module,                ONLY: create_mesh_from_cart_data
-  USE mesh_mapping_module,                 ONLY: calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                                 calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
-                                                 calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
   USE mesh_update_module,                  ONLY: determine_mesh_fitness, create_new_mesh
+  USE mesh_mapping_module,                 ONLY: clear_all_maps_involving_this_mesh
   USE general_ice_model_data_module,       ONLY: initialise_mask_noice, initialise_basins
   USE ice_dynamics_module,                 ONLY: initialise_ice_model,                    remap_ice_model,      run_ice_model,      update_ice_thickness
   USE thermodynamics_module,               ONLY: initialise_ice_temperature,                                    run_thermo_model,   calc_ice_rheology
@@ -313,7 +311,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'run_model_update_mesh'
-    TYPE(type_remapping_mesh_mesh)                     :: map
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -323,25 +320,8 @@ CONTAINS
 
     IF (par%master) WRITE(0,*) '  Reallocating and remapping after mesh update...'
 
-    ! Update the mapping operators between the new mesh and the fixed square grids
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_output)
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_GIA   )
-    CALL deallocate_remapping_operators_mesh2grid(           region%grid_smooth)
-
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_output)
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_GIA   )
-    CALL deallocate_remapping_operators_grid2mesh(           region%grid_smooth)
-
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_output)
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_GIA   )
-    CALL calc_remapping_operator_mesh2grid( region%mesh_new, region%grid_smooth)
-
-    CALL calc_remapping_operator_grid2mesh( region%grid_output, region%mesh_new)
-    CALL calc_remapping_operator_grid2mesh( region%grid_GIA   , region%mesh_new)
-    CALL calc_remapping_operator_grid2mesh( region%grid_smooth, region%mesh_new)
-
-    ! Calculate the mapping arrays
-    CALL calc_remapping_operators_mesh_mesh( region%mesh, region%mesh_new, map)
+    ! Throw away the mapping operators involving the old mesh
+    CALL clear_all_maps_involving_this_mesh( region%mesh)
 
     ! Recalculate the "no ice" mask (also needed for the climate model)
     CALL reallocate_shared_int_1D( region%mesh_new%nV, region%mask_noice, region%wmask_noice)
@@ -377,18 +357,13 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh_new%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
 
     ! Map reference geometries from the square grids to the mesh
-    CALL map_reference_geometries_to_mesh( region, region%mesh_new)
-
-    IF (C%is_restart) THEN
-      ! Map restart initial geometry from old to new mesh (if needed)
-      CALL remap_restart_init_topo( region, region%mesh, region%mesh_new, map)
-    END IF
+    CALL map_reference_geometries_to_mesh( region)
 
     ! Remap the GIA submodel
     IF (C%choice_GIA_model == 'none') THEN
       ! Do nothing
     ELSEIF (C%choice_GIA_model == 'ELRA') THEN
-      CALL remap_ELRA_model(   region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%grid_GIA)
+      CALL remap_ELRA_model(   region%mesh, region%mesh_new, region%ice, region%refgeo_PD, region%grid_GIA)
     ELSEIF (C%choice_GIA_model == 'SELEN') THEN
 #     if (defined(DO_SELEN))
       CALL remap_SELEN_model(  region%mesh_new, region%SELEN)
@@ -398,17 +373,15 @@ CONTAINS
     END IF
 
     ! Remap all other submodels
-    CALL remap_ice_model(      region%mesh, region%mesh_new, map, region%ice, region%refgeo_PD, region%time)
-    CALL remap_climate_model(  region%mesh, region%mesh_new, map, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name, region%time)
-    CALL remap_ocean_model(    region%mesh, region%mesh_new, map, region%ocean_matrix)
-    CALL remap_SMB_model(      region%mesh, region%mesh_new, map, region%SMB)
-    CALL remap_BMB_model(      region%mesh, region%mesh_new, map, region%BMB)
-    CALL remap_isotopes_model( region%mesh, region%mesh_new, map, region)
-
-    ! Deallocate shared memory for the mapping arrays
-    CALL deallocate_remapping_operators_mesh_mesh( map)
+    CALL remap_ice_model(      region%mesh, region%mesh_new, region%ice, region%refgeo_PD, region%time)
+    CALL remap_climate_model(  region%mesh, region%mesh_new, region%climate_matrix, climate_matrix_global, region%refgeo_PD, region%grid_smooth, region%mask_noice, region%name, region%time)
+    CALL remap_ocean_model(    region%mesh, region%mesh_new, region%ocean_matrix)
+    CALL remap_SMB_model(      region%mesh, region%mesh_new, region%SMB)
+    CALL remap_BMB_model(      region%mesh, region%mesh_new, region%BMB)
+    CALL remap_isotopes_model( region%mesh, region%mesh_new, region)
 
     ! Deallocate the old mesh, bind the region%mesh pointers to the new mesh.
+    CALL clear_all_maps_involving_this_mesh( region%mesh)
     CALL deallocate_mesh_all( region%mesh)
     region%mesh = region%mesh_new
 
@@ -533,7 +506,7 @@ CONTAINS
     CALL allocate_shared_dp_1D( region%mesh%nV, region%refgeo_GIAeq%Hs, region%refgeo_GIAeq%wHs)
 
     ! Map data from the square grids to the mesh
-    CALL map_reference_geometries_to_mesh( region, region%mesh)
+    CALL map_reference_geometries_to_mesh( region)
 
     IF (par%master) WRITE(0,*) '  Finished mapping reference geometries.'
 
@@ -545,6 +518,10 @@ CONTAINS
     CALL initialise_model_square_grid( region, region%grid_output, C%dx_grid_output)
     CALL initialise_model_square_grid( region, region%grid_GIA,    C%dx_grid_GIA   )
     CALL initialise_model_square_grid( region, region%grid_smooth, C%dx_grid_smooth)
+
+    region%grid_output%name = 'model_grid_output'
+    region%grid_GIA%name    = 'model_grid_GIA'
+    region%grid_smooth%name = 'model_grid_smooth'
 
     ! ===== Initialise dummy fields for debugging =====
     ! =================================================
@@ -1010,13 +987,6 @@ CONTAINS
       END DO
     END IF
     CALL sync
-
-    ! === Mappings between mesh and grid ===
-    ! ======================================
-
-    ! Calculate mapping arrays between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( region%mesh, grid)
-    CALL calc_remapping_operator_grid2mesh( grid, region%mesh)
 
     ! === Geographical coordinates ===
     ! ================================

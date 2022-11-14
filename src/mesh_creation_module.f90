@@ -1747,6 +1747,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'create_final_mesh_from_merged_submesh'
     INTEGER                                       :: nV, nTri
+    CHARACTER(LEN=8)                              :: date_str
+    CHARACTER(LEN=10)                             :: time_str
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1793,6 +1795,13 @@ CONTAINS
     CALL create_transect(                     mesh)
 
     CALL check_mesh( mesh)
+
+    ! Give the mesh a nice name
+    IF (par%master) THEN
+      CALL date_and_time( DATE = date_str, TIME = time_str)
+      mesh%name = 'model_mesh_' // date_str // '_' // time_str
+    END IF
+    CALL MPI_BCAST( mesh%name, 256, MPI_CHAR, 0, MPI_COMM_WORLD, ierr)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 58)

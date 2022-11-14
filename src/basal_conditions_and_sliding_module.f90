@@ -25,15 +25,15 @@ MODULE basal_conditions_and_sliding_module
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_1D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
                                              SSA_Schoof2006_analytical_solution, extrapolate_Gaussian_floodfill_mesh
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file, create_BIV_bed_roughness_file_mesh, &
-                                             create_BIV_bed_roughness_file_grid, inquire_BIV_target_velocity, &
-                                             read_BIV_target_velocity, get_grid_from_file
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_remapping_mesh_mesh, &
-                                             type_reference_geometry, type_grid, type_restart_data
+  USE netcdf_debug_module,             ONLY: debug
+  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_reference_geometry, type_grid, type_restart_data
   USE data_types_netcdf_module,        ONLY: type_netcdf_BIV_target_velocity
-  USE mesh_mapping_module,             ONLY: remap_field_dp_2D, smooth_Gaussian_2D, calc_remapping_operator_grid2mesh, &
-                                             deallocate_remapping_operators_grid2mesh, map_grid2mesh_2D
+  USE mesh_mapping_module,             ONLY: smooth_Gaussian_2D, map_from_xy_grid_to_mesh_2D, remap_field_dp_2D
   USE mesh_help_functions_module,      ONLY: mesh_bilinear_dp, find_containing_vertex
+  USE netcdf_input_module,             ONLY: read_field_from_xy_file_2D
+  USE netcdf_output_module,            ONLY: create_new_netcdf_file_for_writing, setup_mesh_in_netcdf_file, setup_xy_grid_in_netcdf_file, &
+                                             add_field_mesh_int_2D, add_field_grid_int_2D, write_to_field_multiple_options_mesh_dp_2D, &
+                                             write_to_field_multiple_options_grid_dp_2D
 
   IMPLICIT NONE
 
@@ -74,7 +74,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
     TYPE(type_restart_data),             INTENT(IN)    :: restart
 
@@ -1459,15 +1459,14 @@ CONTAINS
 ! ===== Remapping =====
 ! =====================
 
-  SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_basal_conditions( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1477,16 +1476,16 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Basal hydrology
-    CALL remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+    CALL remap_basal_hydrology( mesh_old, mesh_new, ice)
 
     ! Bed roughness
-    CALL remap_bed_roughness( mesh_old, mesh_new, map, ice)
+    CALL remap_bed_roughness( mesh_old, mesh_new, ice)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_conditions
-  SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_basal_hydrology( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
@@ -1494,7 +1493,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
     TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1507,7 +1505,6 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
 
     ! Allocate shared memory
     IF     (C%choice_basal_hydrology == 'saturated') THEN
@@ -1526,15 +1523,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_basal_hydrology
-  SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_bed_roughness( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -1547,7 +1543,6 @@ CONTAINS
     ! To prevent compiler warnings for unused variables
     int_dummy = mesh_old%nV
     int_dummy = mesh_new%nV
-    int_dummy = map%int_dummy
 
     ! == Reallocate/Remap shared memory
     ! =================================
@@ -1561,9 +1556,9 @@ CONTAINS
     ELSEIF (C%choice_sliding_law == 'Weertman') THEN
       ! Power-law sliding law
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_a, ice%wbeta_sq_a, 'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%beta_sq_a , ice%wbeta_sq_a )
@@ -1573,10 +1568,10 @@ CONTAINS
             C%choice_sliding_law == 'Schoof2005') THEN
       ! Modified power-law relation
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%alpha_sq_a, ice%walpha_sq_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_a,  ice%wbeta_sq_a,  'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%beta_sq_inv_a, ice%wbeta_sq_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%alpha_sq_a, ice%walpha_sq_a)
@@ -1588,10 +1583,10 @@ CONTAINS
             C%choice_sliding_law == 'Zoet-Iverson') THEN
       ! Yield-stress sliding law
       IF (C%do_BIVgeo .OR. C%choice_basal_roughness == 'restart') THEN
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
-        CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%phi_fric_a, ice%wphi_fric_a, 'cons_2nd_order')
+        CALL remap_field_dp_2D( mesh_old, mesh_new, ice%tauc_a,     ice%wtauc_a,     'cons_2nd_order')
         IF (C%do_BIVgeo) THEN
-          CALL remap_field_dp_2D( mesh_old, mesh_new, map, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
+          CALL remap_field_dp_2D( mesh_old, mesh_new, ice%phi_fric_inv_a, ice%wphi_fric_inv_a, 'cons_2nd_order')
         END IF
       ELSE
         CALL reallocate_shared_dp_1D( mesh_new%nV, ice%phi_fric_a, ice%wphi_fric_a)
@@ -2220,18 +2215,43 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_grid),                     INTENT(IN)    :: grid
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_inverted_bed_roughness_to_file'
+    CHARACTER(LEN=256)                                 :: filename_mesh, filename_grid
+    INTEGER                                            :: i
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    CALL create_BIV_bed_roughness_file_mesh( mesh,       ice)
-    CALL create_BIV_bed_roughness_file_grid( mesh, grid, ice)
+    ! File names
+    filename_mesh = TRIM( C%BIVgeo_filename_output)
+    filename_grid = TRIM( C%BIVgeo_filename_output)
+    i = INDEX( filename_grid,'.nc')
+    filename_grid = filename_grid( 1:i-1) // '_grid.nc'
+
+    ! Create files
+    CALL create_new_netcdf_file_for_writing( filename_mesh)
+    CALL create_new_netcdf_file_for_writing( filename_grid)
+
+    ! Set up mesh and grid
+    CALL setup_mesh_in_netcdf_file(    filename_mesh, mesh)
+    CALL setup_xy_grid_in_netcdf_file( filename_grid, grid)
+
+    ! Add variables and write data
+    IF     (C%choice_sliding_law == 'Weertman') THEN
+      ! Add variables
+      CALL add_field_mesh_int_2D( filename_mesh, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      CALL add_field_grid_int_2D( filename_grid, 'beta_sq', long_name = 'beta_sq', units = 'Pa m^−1/3 yr^1/3')
+      ! Write data
+      CALL write_to_field_multiple_options_mesh_dp_2D( filename_mesh,              'beta_sq', ice%beta_sq_a)
+      CALL write_to_field_multiple_options_grid_dp_2D( filename_grid, mesh, 'ANT', 'beta_sq', ice%beta_sq_a)
+    ELSE
+      CALL crash('unknown choice_sliding_law "' // TRIM( C%choice_sliding_law) // '"!')
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -2244,7 +2264,7 @@ CONTAINS
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2274,18 +2294,19 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_basal_inversion
+
   SUBROUTINE initialise_basal_inversion_target_velocity( mesh, ice)
     ! Initialise the target velocity fields used in a velocity-based basal inversion routine
 
     IMPLICIT NONE
 
     ! Input variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_basal_inversion_target_velocity'
-    TYPE(type_netcdf_BIV_target_velocity)              :: netcdf
+    CHARACTER(LEN=256)                                 :: filename
     TYPE(type_grid)                                    :: grid_raw
     REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_surf_raw,  v_surf_raw,  uabs_surf_raw
     INTEGER                                            :: wu_surf_raw, wv_surf_raw, wuabs_surf_raw
@@ -2298,31 +2319,16 @@ CONTAINS
     ! Determine filename
     IF     (C%choice_BIVgeo_method == 'CISM+' .OR. &
             C%choice_BIVgeo_method == 'Berends2022') THEN
-      netcdf%filename = C%BIVgeo_target_velocity_filename
+      filename = C%BIVgeo_target_velocity_filename
     ELSE
       CALL crash('unknown choice_BIVgeo_method "' // TRIM(C%choice_BIVgeo_method) // '"!')
     END IF
 
-    IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( netcdf%filename), '...'
+    IF (par%master) WRITE(0,*) '  Initialising basal inversion target velocity from file ', TRIM( filename), '...'
 
-    ! Set up the grid for this input file
-    CALL get_grid_from_file( netcdf%filename, grid_raw)
-
-    ! Calculate the mapping operator between this grid and the mesh
-    CALL calc_remapping_operator_grid2mesh( grid_raw, mesh)
-
-    ! Inquire if all the required fields are present in the specified NetCDF file
-    CALL inquire_BIV_target_velocity( netcdf)
-    CALL sync
-
-    ! Allocate memory for raw data
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, u_surf_raw   , wu_surf_raw   )
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, v_surf_raw   , wv_surf_raw   )
-    CALL allocate_shared_dp_2D( grid_raw%nx, grid_raw%ny, uabs_surf_raw, wuabs_surf_raw)
-
-    ! Read data from input file
-    CALL read_BIV_target_velocity( netcdf, u_surf_raw, v_surf_raw)
-    CALL sync
+    ! Read x and y velocities from the NetCDF file
+    CALL read_field_from_xy_file_2D( filename, 'u_surf', 'ANT', grid_raw, u_surf_raw, wu_surf_raw)
+    CALL read_field_from_xy_file_2D( filename, 'v_surf', 'ANT', grid_raw, v_surf_raw, wv_surf_raw)
 
     ! NOTE: do not check for NaNs in the target velocity field. The Rignot 2011 Antarctica velocity product
     !       has a lot of missing data points, indicated by NaN values. This is acceptable, the basal inversion
@@ -2356,8 +2362,8 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_1D( mesh%nV, ice%BIV_uabs_surf_target, ice%wBIV_uabs_surf_target)
 
-    ! Map (transposed) raw data to the model mesh
-    CALL map_grid2mesh_2D( grid_raw, mesh, uabs_surf_raw, ice%BIV_uabs_surf_target)
+    ! Map raw data to the model mesh
+    CALL map_from_xy_grid_to_mesh_2D( grid_raw, mesh, uabs_surf_raw, ice%BIV_uabs_surf_target)
 
     ! Deallocate raw data
     CALL deallocate_shared( grid_raw%wnx  )
@@ -2365,7 +2371,6 @@ CONTAINS
     CALL deallocate_shared( grid_raw%wdx  )
     CALL deallocate_shared( grid_raw%wx   )
     CALL deallocate_shared( grid_raw%wy   )
-    CALL deallocate_remapping_operators_grid2mesh( grid_raw)
     CALL deallocate_shared( wu_surf_raw   )
     CALL deallocate_shared( wv_surf_raw   )
     CALL deallocate_shared( wuabs_surf_raw)

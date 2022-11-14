@@ -32,8 +32,7 @@ MODULE netcdf_output_module
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_grid, type_grid_lonlat, type_remapping_lonlat2mesh, &
-                                             type_remapping_mesh_mesh, type_ice_model, type_model_region
+  USE data_types_module,               ONLY: type_mesh, type_grid, type_model_region
   USE netcdf,                          ONLY: NF90_UNLIMITED, NF90_INT, NF90_FLOAT, NF90_DOUBLE
   USE netcdf_basic_module,             ONLY: nerr, field_name_options_x, field_name_options_y, field_name_options_zeta, field_name_options_z_ocean, &
                                              field_name_options_lon, field_name_options_lat, field_name_options_time, field_name_options_month, &
@@ -47,23 +46,208 @@ MODULE netcdf_output_module
                                              field_name_options_Hi, field_name_options_Hb, field_name_options_Hs, field_name_options_dHb, &
                                              field_name_options_SL, field_name_options_Ti, &
                                              inquire_dim_multiple_options, inquire_var_multiple_options, get_first_option_from_list, &
-                                             check_x, check_y, check_lon, check_lat, check_mesh_dimensions, check_zeta, check_month, check_time, &
+                                             check_x, check_y, check_lon, check_lat, check_mesh_dimensions, check_zeta, check_z_ocean, check_month, check_time, &
                                              create_new_netcdf_file_for_writing, create_dimension, create_variable, add_attribute_char, &
                                              write_var_int_0D, write_var_int_1D, write_var_int_2D, write_var_int_3D, write_var_int_4D, &
                                              write_var_dp_0D , write_var_dp_1D , write_var_dp_2D , write_var_dp_3D , write_var_dp_4D, &
                                              check_xy_grid_field_int_2D, check_xy_grid_field_dp_2D, check_xy_grid_field_dp_2D_monthly, check_xy_grid_field_dp_3D, &
                                              check_lonlat_grid_field_int_2D, check_lonlat_grid_field_dp_2D, check_lonlat_grid_field_dp_2D_monthly, check_lonlat_grid_field_dp_3D, &
                                              check_mesh_field_int_2D, check_mesh_field_dp_2D, check_mesh_field_dp_2D_monthly, check_mesh_field_dp_3D, &
-                                             check_mesh_field_int_2D_b, check_mesh_field_int_2D_c, check_mesh_field_dp_2D_b, check_mesh_field_dp_2D_c
+                                             check_mesh_field_int_2D_b, check_mesh_field_int_2D_c, check_mesh_field_dp_2D_b, check_mesh_field_dp_2D_c, &
+                                             check_xy_grid_field_dp_3D_ocean, check_mesh_field_dp_3D_ocean
   USE netcdf_input_module,             ONLY: setup_xy_grid_from_file
-  USE mesh_mapping_module,             ONLY: calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, map_mesh2grid_2D, map_mesh2grid_3D
+  USE mesh_mapping_module,             ONLY: map_from_mesh_to_xy_grid_2D, map_from_mesh_to_xy_grid_2D_monthly, map_from_mesh_to_xy_grid_3D, map_from_mesh_to_xy_grid_3D_ocean
   USE utilities_module,                ONLY: deallocate_grid
-
-  USE netcdf_module, ONLY: debug, write_to_debug_file
 
   IMPLICIT NONE
 
 CONTAINS
+
+! ===== Main output functions =====
+! =================================
+
+  SUBROUTINE create_output_files( region)
+    ! Create a new set of output NetCDF files (restart + help_fields + debug)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_model_region),        INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'create_output_files'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (par%master) WRITE(0,*) '  Creating new output files based on new mesh...'
+
+    ! Get output file names
+    CALL get_output_filenames( region)
+
+    ! Create the files
+    CALL create_restart_file_mesh(     region%restart_mesh%filename    , region%mesh       )
+    CALL create_restart_file_grid(     region%restart_grid%filename    , region%grid_output)
+    CALL create_help_fields_file_mesh( region%help_fields_mesh%filename, region%mesh       )
+    CALL create_help_fields_file_grid( region%help_fields_grid%filename, region%grid_output)
+
+    ! ISMIP6 output
+    IF (C%do_write_ISMIP_output) THEN
+!      CALL create_ISMIP_output_files( region)
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE create_output_files
+
+  SUBROUTINE write_to_output_files( region)
+    ! Write the current model state to the existing output files
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_model_region), INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_output_files'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (par%master) WRITE(0,'(A,F8.3,A)') '   t = ', region%time/1e3, ' kyr - writing output...'
+
+    CALL write_to_restart_file_mesh(     region%restart_mesh%filename    , region)
+    CALL write_to_restart_file_grid(     region%restart_grid%filename    , region)
+    CALL write_to_help_fields_file_mesh( region%help_fields_mesh%filename, region)
+    CALL write_to_help_fields_file_grid( region%help_fields_grid%filename, region)
+    !IF (C%do_write_ISMIP_output) CALL write_to_ISMIP_output_files( region)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_output_files
+
+  SUBROUTINE get_output_filenames( region)
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_model_region), INTENT(INOUT) :: region
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'get_output_filenames'
+    CHARACTER(LEN=256)          :: short_filename
+    LOGICAL                     :: ex
+    INTEGER                     :: n
+    CHARACTER(LEN=256)          :: ns
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! restart file (mesh)
+    ! ===================
+
+    short_filename = 'restart_NAM_00001.nc'
+    short_filename(9:11) = region%name
+    n = 1
+
+    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+
+    DO WHILE (ex)
+
+     n=n+1
+
+     WRITE(ns,*) n
+     ns = ADJUSTL(ns)
+
+     IF (n<10) THEN
+       short_filename = short_filename(1:12) // '0000' // TRIM(ns) // '.nc'
+     ELSEIF (n<100) THEN
+       short_filename = short_filename(1:12) // '000' // TRIM(ns) // '.nc'
+     ELSEIF (n<1000) THEN
+       short_filename = short_filename(1:12) // '00' // TRIM(ns) // '.nc'
+     ELSEIF (n<10000) THEN
+       short_filename = short_filename(1:12) // '0' // TRIM(ns) // '.nc'
+     ELSE
+       short_filename = short_filename(1:12) // TRIM(ns) // '.nc'
+     END IF
+
+     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+
+    END DO
+
+    DO n = 1, 256
+      region%restart_mesh%filename(n:n) = ' '
+    END DO
+    region%restart_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+
+    ! help_fields file (mesh)
+    ! =======================
+
+    short_filename = 'help_fields_NAM_00001.nc'
+    short_filename(13:15) = region%name
+    n = 1
+
+    INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+
+    DO WHILE (ex)
+
+     n=n+1
+
+     WRITE(ns,*) n
+     ns = ADJUSTL(ns)
+
+     IF (n<10) THEN
+       short_filename = short_filename(1:16) // '0000' // TRIM(ns) // '.nc'
+     ELSEIF (n<100) THEN
+       short_filename = short_filename(1:16) // '000' // TRIM(ns) // '.nc'
+     ELSEIF (n<1000) THEN
+       short_filename = short_filename(1:16) // '00' // TRIM(ns) // '.nc'
+     ELSEIF (n<10000) THEN
+       short_filename = short_filename(1:16) // '0' // TRIM(ns) // '.nc'
+     ELSE
+       short_filename = short_filename(1:16) // TRIM(ns) // '.nc'
+     END IF
+
+     INQUIRE( FILE=(TRIM(C%output_dir) // TRIM(short_filename)), EXIST=ex )
+
+    END DO
+
+    DO n = 1, 256
+      region%help_fields_mesh%filename(n:n) = ' '
+    END DO
+    region%help_fields_mesh%filename = TRIM(C%output_dir)//TRIM(short_filename)
+
+    ! restart file (grid)
+    ! ===================
+
+    short_filename = 'restart_grid_NAM.nc'
+    short_filename(14:16) = region%name
+    DO n = 1, 256
+      region%restart_grid%filename(n:n) = ' '
+    END DO
+    region%restart_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+
+    ! help_fields file (grid)
+    ! =======================
+
+    short_filename = 'help_fields_grid_NAM.nc'
+    short_filename(18:20) = region%name
+    DO n = 1, 256
+      region%help_fields_grid%filename(n:n) = ' '
+    END DO
+    region%help_fields_grid%filename = TRIM(C%output_dir)//TRIM(short_filename)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE get_output_filenames
 
   ! ===== Top-level functions =====
   ! ===============================
@@ -1487,11 +1671,8 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_2D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_2D( mesh, grid, d, d_grid)
 
     ! Inquire length of time dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
@@ -1508,7 +1689,6 @@ CONTAINS
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
     CALL deallocate_shared( wd_grid_with_time)
 
@@ -1558,11 +1738,8 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, 12, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_3D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_2D_monthly( mesh, grid, d, d_grid)
 
     ! Inquire length of time dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
@@ -1579,7 +1756,6 @@ CONTAINS
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
     CALL deallocate_shared( wd_grid_with_time)
 
@@ -1629,11 +1805,8 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_3D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_3D( mesh, grid, d, d_grid)
 
     ! Inquire length of time dimension
     CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
@@ -1650,7 +1823,6 @@ CONTAINS
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
     CALL deallocate_shared( wd_grid_with_time)
 
@@ -1658,6 +1830,73 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_field_multiple_options_grid_dp_3D
+
+  SUBROUTINE write_to_field_multiple_options_grid_dp_3D_ocean( filename, mesh, region_name, field_name_options, d)
+    ! Write a 3-D ocean data field defined on a mesh to a NetCDF file variable on an x/y-grid
+    ! (Mind you, that's 3-D in the physical sense, so a 1-D array!)
+    !
+    ! Write to the last time frame of the variable
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_grid_dp_3D_ocean'
+    INTEGER                                            :: id_var, id_dim_time, ti
+    CHARACTER(LEN=256)                                 :: var_name
+    TYPE(type_grid)                                    :: grid
+    REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_grid
+    INTEGER                                            :: wd_grid
+    REAL(dp), DIMENSION(:,:,:,:), POINTER              ::  d_grid_with_time
+    INTEGER                                            :: wd_grid_with_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = .TRUE.)
+
+    ! Set up grid from file
+    CALL setup_xy_grid_from_file( filename, grid, region_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz_ocean, d_grid, wd_grid)
+
+    ! Map data from mesh to grid
+    CALL map_from_mesh_to_xy_grid_3D_ocean( mesh, grid, d, d_grid)
+
+    ! Inquire length of time dimension
+    CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_4D( grid%nx, grid%ny, C%nz_ocean, 1, d_grid_with_time, wd_grid_with_time)
+
+    ! Copy data
+    d_grid_with_time( grid%i1:grid%i2,:,:,1) = d_grid( grid%i1:grid%i2,:,:)
+    CALL sync
+
+    ! Write data to the variable
+    CALL write_var_dp_4D( filename, id_var, d_grid_with_time, start = (/ 1, 1, 1, ti /), count = (/ grid%nx, grid%ny, C%nz_ocean, 1 /) )
+
+    ! Clean up after yourself
+    CALL deallocate_grid( grid)
+    CALL deallocate_shared( wd_grid)
+    CALL deallocate_shared( wd_grid_with_time)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_grid_dp_3D_ocean
 
   SUBROUTINE write_to_field_multiple_options_grid_dp_2D_notime( filename, mesh, region_name, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on an x/y-grid
@@ -1698,18 +1937,14 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_2D( grid%nx, grid%ny, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_2D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_2D( mesh, grid, d, d_grid)
 
     ! Write data to the variable
     CALL write_var_dp_2D( filename, id_var, d_grid)
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
 
     ! Finalise routine path
@@ -1756,18 +1991,14 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, 12, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_3D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_2D_monthly( mesh, grid, d, d_grid)
 
     ! Write data to the variable
     CALL write_var_dp_3D( filename, id_var, d_grid)
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
 
     ! Finalise routine path
@@ -1814,24 +2045,74 @@ CONTAINS
     ! Allocate shared memory
     CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz, d_grid, wd_grid)
 
-    ! Calculate mapping operator between the mesh and the grid
-    CALL calc_remapping_operator_mesh2grid( mesh, grid)
-
     ! Map data from mesh to grid
-    CALL map_mesh2grid_3D( mesh, grid, d, d_grid)
+    CALL map_from_mesh_to_xy_grid_3D( mesh, grid, d, d_grid)
 
     ! Write data to the variable
     CALL write_var_dp_3D( filename, id_var, d_grid)
 
     ! Clean up after yourself
     CALL deallocate_grid( grid)
-    CALL deallocate_remapping_operators_mesh2grid( grid)
     CALL deallocate_shared( wd_grid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_field_multiple_options_grid_dp_3D_notime
+
+  SUBROUTINE write_to_field_multiple_options_grid_dp_3D_ocean_notime( filename, mesh, region_name, field_name_options, d)
+    ! Write a 3-D ocean data field defined on a mesh to a NetCDF file variable on an x/y-grid
+    ! (Mind you, that's 3-D in the physical sense, so a 1-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_grid_dp_3D_ocean_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+    TYPE(type_grid)                                    :: grid
+    REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_grid
+    INTEGER                                            :: wd_grid
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = .FALSE.)
+
+    ! Set up grid from file
+    CALL setup_xy_grid_from_file( filename, grid, region_name)
+
+    ! Allocate shared memory
+    CALL allocate_shared_dp_3D( grid%nx, grid%ny, C%nz_ocean, d_grid, wd_grid)
+
+    ! Map data from mesh to grid
+    CALL map_from_mesh_to_xy_grid_3D_ocean( mesh, grid, d, d_grid)
+
+    ! Write data to the variable
+    CALL write_var_dp_3D( filename, id_var, d_grid)
+
+    ! Clean up after yourself
+    CALL deallocate_grid( grid)
+    CALL deallocate_shared( wd_grid)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_grid_dp_3D_ocean_notime
 
   ! Write data to a mesh output file
   SUBROUTINE write_to_field_multiple_options_mesh_int_2D(               filename, field_name_options, d)
@@ -2049,6 +2330,60 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_3D
+
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_ocean(                filename, field_name_options, d)
+    ! Write a 3-D ocean data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 3-D in the physical sense, so a 2-D array!)
+    !
+    ! Write to the last time frame of the variable
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_3D_ocean'
+    INTEGER                                            :: id_var, id_dim_time, ti
+    CHARACTER(LEN=256)                                 :: var_name
+    INTEGER                                            :: nV, vi1, vi2
+    REAL(dp), DIMENSION(:,:,:), POINTER                ::  d_with_time
+    INTEGER                                            :: wd_with_time
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = .TRUE.)
+
+    ! Inquire length of time dimension
+    CALL inquire_dim_multiple_options( filename, field_name_options_time, id_dim_time, dim_length = ti)
+
+    ! Allocate shared memory
+    nV = SIZE( d,1)
+    CALL allocate_shared_dp_3D( nV, C%nz_ocean, 1, d_with_time, wd_with_time)
+
+    ! Copy data
+    CALL partition_list( nV, par%i, par%n, vi1, vi2)
+    d_with_time( vi1:vi2,:,1) = d( vi1:vi2,:)
+    CALL sync
+
+    ! Write data to the variable
+    CALL write_var_dp_3D( filename, id_var, d_with_time, start = (/ 1, 1, ti /), count = (/ nV, C%nz_ocean, 1 /) )
+
+    ! Clean up after yourself
+    CALL deallocate_shared( wd_with_time)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_ocean
 
   SUBROUTINE write_to_field_multiple_options_mesh_int_2D_notime(        filename, field_name_options, d)
     ! Write a 2-D data field defined on a mesh to a NetCDF file variable on the same mesh
@@ -2337,6 +2672,42 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_notime
+
+  SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_ocean_notime(         filename, field_name_options, d)
+    ! Write a 3-D ocean data field defined on a mesh to a NetCDF file variable on the same mesh
+    ! (Mind you, that's 3-D in the physical sense, so a 2-D array!)
+    !
+    ! The variable in the NetCDF file has no time dimension.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: field_name_options
+    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: d
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'write_to_field_multiple_options_mesh_dp_3D_ocean_notime'
+    INTEGER                                            :: id_var
+    CHARACTER(LEN=256)                                 :: var_name
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Inquire the variable
+    CALL inquire_var_multiple_options( filename, field_name_options, id_var, var_name = var_name)
+    IF (id_var == -1) CALL crash('no variables for name options "' // TRIM( field_name_options) // '" were found in file "' // TRIM( filename) // '"!')
+
+    ! Check if this variable has the correct type and dimensions
+    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = .FALSE.)
+
+    ! Write data to the variable
+    CALL write_var_dp_2D( filename, id_var, d)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE write_to_field_multiple_options_mesh_dp_3D_ocean_notime
 
   ! Write new time value to file
   SUBROUTINE write_time_to_file( filename, time)
@@ -2631,6 +3002,57 @@ CONTAINS
 
   END SUBROUTINE add_field_grid_dp_3D
 
+  SUBROUTINE add_field_grid_dp_3D_ocean( filename, var_name, long_name, units)
+    ! Add a 3-D ocean variable to an existing NetCDF file with an x/y-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_grid_dp_3D'
+    INTEGER                                            :: id_dim_x, id_dim_y, id_dim_z_ocean, id_dim_time, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if x,y, and time dimensions and variables are there
+    CALL check_x(       filename)
+    CALL check_y(       filename)
+    CALL check_z_ocean( filename)
+    CALL check_time(    filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_x      , id_dim_x      )
+    CALL inquire_dim_multiple_options( filename, field_name_options_y      , id_dim_y      )
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean)
+    CALL inquire_dim_multiple_options( filename, field_name_options_time   , id_dim_time   )
+
+    ! Safety
+    IF (id_dim_x       == -1) CALL crash('no x dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_y       == -1) CALL crash('no y dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_z_ocean == -1) CALL crash('no z_ocean dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_time    == -1) CALL crash('no time dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_x, id_dim_y, id_dim_z_ocean, id_dim_time /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = .TRUE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_grid_dp_3D_ocean
+
   SUBROUTINE add_field_grid_int_2D_notime( filename, var_name, long_name, units)
     ! Add a 2-D variable to an existing NetCDF file with an x/y-grid
 
@@ -2816,6 +3238,54 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE add_field_grid_dp_3D_notime
+
+  SUBROUTINE add_field_grid_dp_3D_ocean_notime( filename, var_name, long_name, units)
+    ! Add a 3-D ocean variable to an existing NetCDF file with an x/y-grid
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_grid_dp_3D_ocean_notime'
+    INTEGER                                            :: id_dim_x, id_dim_y, id_dim_z_ocean, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if x,y, and time dimensions and variables are there
+    CALL check_x(       filename)
+    CALL check_y(       filename)
+    CALL check_z_ocean( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_x      , id_dim_x      )
+    CALL inquire_dim_multiple_options( filename, field_name_options_y      , id_dim_y      )
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean)
+
+    ! Safety
+    IF (id_dim_x       == -1) CALL crash('no x dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_y       == -1) CALL crash('no y dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_z_ocean == -1) CALL crash('no z_ocean dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_x, id_dim_y, id_dim_z_ocean /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_xy_grid_field_dp_3D_ocean( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_grid_dp_3D_ocean_notime
 
   ! Set up mesh and meshed variables
   SUBROUTINE setup_mesh_in_netcdf_file( filename, mesh)
@@ -3139,6 +3609,53 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE add_field_mesh_dp_3D
+
+  SUBROUTINE add_field_mesh_dp_3D_ocean( filename, var_name, long_name, units)
+    ! Add a 3-D ocean variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_dp_3D_ocean'
+    INTEGER                                            :: id_dim_vi, id_dim_z_ocean, id_dim_time, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_z_ocean(         filename)
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nV , id_dim_vi     )
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean)
+    CALL inquire_dim_multiple_options( filename, field_name_options_time   , id_dim_time   )
+
+    ! Safety
+    IF (id_dim_vi      == -1) CALL crash('no vi dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_z_ocean == -1) CALL crash('no z_ocean dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_time    == -1) CALL crash('no time dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_vi, id_dim_z_ocean, id_dim_time /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = .TRUE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_dp_3D_ocean
 
   SUBROUTINE add_field_mesh_int_2D_notime( filename, var_name, long_name, units)
     ! Add a 2-D variable to an existing NetCDF file with a mesh
@@ -3482,6 +3999,51 @@ CONTAINS
 
   END SUBROUTINE add_field_mesh_dp_3D_notime
 
+  SUBROUTINE add_field_mesh_dp_3D_ocean_notime( filename, var_name, long_name, units)
+    ! Add a 3-D ocean variable to an existing NetCDF file with a mesh
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+    CHARACTER(LEN=*),                    INTENT(IN)    :: var_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: long_name
+    CHARACTER(LEN=*),          OPTIONAL, INTENT(IN)    :: units
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_field_mesh_dp_3D_ocean_notime'
+    INTEGER                                            :: id_dim_vi, id_dim_z_ocean, id_var
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Check if all mesh dimensions and variables are there
+    CALL check_z_ocean(         filename)
+    CALL check_mesh_dimensions( filename)
+
+    ! Inquire dimensions
+    CALL inquire_dim_multiple_options( filename, field_name_options_dim_nV , id_dim_vi     )
+    CALL inquire_dim_multiple_options( filename, field_name_options_z_ocean, id_dim_z_ocean)
+
+    ! Safety
+    IF (id_dim_vi      == -1) CALL crash('no vi dimension could be found in file "' // TRIM( filename) // '"!')
+    IF (id_dim_z_ocean == -1) CALL crash('no z_ocean dimension could be found in file "' // TRIM( filename) // '"!')
+
+    ! Create variable
+    CALL create_variable( filename, var_name, NF90_DOUBLE, (/ id_dim_vi, id_dim_z_ocean /), id_var)
+
+    ! Add attributes
+    IF (PRESENT( long_name)) CALL add_attribute_char( filename, id_var, 'long_name', long_name)
+    IF (PRESENT( units    )) CALL add_attribute_char( filename, id_var, 'units'    , units    )
+
+    ! Final safety check
+    CALL check_mesh_field_dp_3D_ocean( filename, var_name, should_have_time = .FALSE.)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_field_mesh_dp_3D_ocean_notime
+
   ! Add extra dimensions
   SUBROUTINE add_time_dimension_to_file( filename)
     ! Add a time dimension and variable to an existing NetCDF file
@@ -3577,6 +4139,38 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE add_zeta_dimension_to_file
+
+  SUBROUTINE add_z_ocean_dimension_to_file( filename)
+    ! Add a z_ocean dimension and variable to an existing NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    CHARACTER(LEN=*),                    INTENT(IN)    :: filename
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'add_z_ocean_dimension_to_file'
+    INTEGER                                            :: id_dim_z_ocean
+    INTEGER                                            :: id_var_z_ocean
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Create month dimension
+    CALL create_dimension( filename, get_first_option_from_list( field_name_options_z_ocean), C%nz, id_dim_z_ocean)
+
+    ! Create month variable
+    CALL create_variable(  filename, get_first_option_from_list( field_name_options_z_ocean), NF90_DOUBLE, (/ id_dim_z_ocean /), id_var_z_ocean)
+    CALL add_attribute_char( filename, id_var_z_ocean, 'long_name', 'Depth in ocean column')
+    CALL add_attribute_char( filename, id_var_z_ocean, 'units', 'm')
+
+    ! Write month variable
+    CALL write_var_dp_1D( filename, id_var_z_ocean, C%z_ocean)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE add_z_ocean_dimension_to_file
 
   ! ===== Tests =====
   ! =================

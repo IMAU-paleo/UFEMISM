@@ -20,10 +20,10 @@ MODULE ice_velocity_module
                                              deallocate_shared
   USE utilities_module,                ONLY: check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                              check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D
-  USE netcdf_module,                   ONLY: debug, write_to_debug_file
+  USE netcdf_debug_module,             ONLY: debug, write_to_debug_file
 
   ! Import specific functionality
-  USE data_types_module,               ONLY: type_mesh, type_ice_model, type_sparse_matrix_CSR_dp, type_remapping_mesh_mesh
+  USE data_types_module,               ONLY: type_mesh, type_ice_model
   USE mesh_mapping_module,             ONLY: remap_field_dp_2D
   USE mesh_operators_module,           ONLY: map_a_to_b_2D, ddx_a_to_b_2D, ddy_a_to_b_2D, map_b_to_c_2D, &
                                              ddx_b_to_a_2D, ddy_b_to_a_2D, map_b_to_a_3D, map_b_to_a_2D, &
@@ -33,7 +33,7 @@ MODULE ice_velocity_module
                                              vertical_integrate
   USE sparse_matrix_module,            ONLY: allocate_matrix_CSR_dist, finalise_matrix_CSR_dist, solve_matrix_equation_CSR, deallocate_matrix_CSR
   USE basal_conditions_and_sliding_module, ONLY: calc_basal_conditions, calc_sliding_law
-  USE netcdf_module,                   ONLY: write_CSR_matrix_to_NetCDF
+  USE netcdf_debug_module,             ONLY: write_CSR_matrix_to_NetCDF
   USE utilities_module,                ONLY: SSA_Schoof2006_analytical_solution
   USE general_ice_model_data_module,   ONLY: determine_grounded_fractions
 
@@ -2409,15 +2409,14 @@ CONTAINS
     CALL finalise_routine( routine_name, n_extra_windows_expected = 7)
 
   END SUBROUTINE initialise_SSADIVA_stiffness_matrix
-  SUBROUTINE remap_velocities( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_velocities( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2427,13 +2426,13 @@ CONTAINS
     CALL init_routine( routine_name)
 
     IF     (C%choice_ice_dynamics == 'SIA') THEN
-      CALL remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities_SIA( mesh_old, mesh_new, ice)
     ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-      CALL remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities_SSA( mesh_old, mesh_new, ice)
     ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-      CALL remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities_SIASSA( mesh_old, mesh_new, ice)
     ELSEIF (C%choice_ice_dynamics == 'DIVA') THEN
-      CALL remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
+      CALL remap_velocities_DIVA( mesh_old, mesh_new, ice)
     ELSE
       CALL crash('unknown choice_ice_dynamics "' // TRIM( C%choice_ice_dynamics) // '"!')
     END IF
@@ -2442,15 +2441,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities
-  SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_velocities_SIA( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2463,7 +2461,6 @@ CONTAINS
     ! To prevent compiler warnings
     dp_dummy = mesh_old%V(   1,1)
     dp_dummy = mesh_new%V(   1,1)
-    dp_dummy = map%int_dummy
     dp_dummy = ice%Hi_a( 1)
 
     ! No need to remap anything, just reallocate
@@ -2505,15 +2502,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SIA
-  SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_velocities_SSA( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2536,8 +2532,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
 
     ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, v_a, wv_a, 'cons_2nd_order')
 
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2622,15 +2618,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SSA
-  SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_velocities_SIASSA( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2653,8 +2648,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_base_SSA_b, v_a)
 
     ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, v_a, wv_a, 'cons_2nd_order')
 
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_base_SSA_b, ice%wu_base_SSA_b)
@@ -2739,15 +2734,14 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE remap_velocities_SIASSA
-  SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, map, ice)
+  SUBROUTINE remap_velocities_DIVA( mesh_old, mesh_new, ice)
     ! Remap or reallocate all the data fields
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_old
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh_new
-    TYPE(type_remapping_mesh_mesh),      INTENT(IN)    :: map
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_old
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh_new
     TYPE(type_ice_model),                INTENT(INOUT) :: ice
 
     ! Local variables:
@@ -2770,8 +2764,8 @@ CONTAINS
     CALL map_b_to_a_2D( mesh_old, ice%v_vav_b, v_a)
 
     ! Remap a-grid velocities
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, u_a, wu_a, 'cons_2nd_order')
-    CALL remap_field_dp_2D( mesh_old, mesh_new, map, v_a, wv_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, u_a, wu_a, 'cons_2nd_order')
+    CALL remap_field_dp_2D( mesh_old, mesh_new, v_a, wv_a, 'cons_2nd_order')
 
     ! Reallocate b-grid velocities
     CALL reallocate_shared_dp_1D( mesh_new%nTri, ice%u_vav_b, ice%wu_vav_b)

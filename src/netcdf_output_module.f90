@@ -145,11 +145,6 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (.NOT. par%master) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
     ! restart file (mesh)
     ! ===================
 

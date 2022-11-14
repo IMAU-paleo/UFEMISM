@@ -320,7 +320,7 @@ CONTAINS
       DO mi = 1, SIZE( Atlas,1)
         IF (.NOT. Atlas( mi)%is_used) THEN
           found_empty_page = .TRUE.
-          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid,Atlas( mi))
           mi_valid = mi
           EXIT
         END IF
@@ -377,7 +377,7 @@ CONTAINS
       DO mi = 1, SIZE( Atlas,1)
         IF (.NOT. Atlas( mi)%is_used) THEN
           found_empty_page = .TRUE.
-          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
           mi_valid = mi
           EXIT
         END IF
@@ -434,7 +434,7 @@ CONTAINS
       DO mi = 1, SIZE( Atlas,1)
         IF (.NOT. Atlas( mi)%is_used) THEN
           found_empty_page = .TRUE.
-          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
           mi_valid = mi
           EXIT
         END IF
@@ -491,7 +491,7 @@ CONTAINS
       DO mi = 1, SIZE( Atlas,1)
         IF (.NOT. Atlas( mi)%is_used) THEN
           found_empty_page = .TRUE.
-          CALL create_map_from_xy_grid_to_mesh( grid, mesh, Atlas( mi))
+          CALL create_map_from_mesh_to_xy_grid( mesh, grid, Atlas( mi))
           mi_valid = mi
           EXIT
         END IF

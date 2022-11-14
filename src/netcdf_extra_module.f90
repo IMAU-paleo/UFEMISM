@@ -455,9 +455,6 @@ CONTAINS
     INTEGER                                           :: i,n
     INTEGER,  DIMENSION(1024)                         :: path_int_enc
 
-    ! DENK DROM
-    CALL crash('fixme!')
-
 !    IF (.NOT. par%master) RETURN
 !
 !    ! Open the file for writing
@@ -515,9 +512,6 @@ CONTAINS
     INTEGER                                           :: t,nl
     INTEGER                                           :: i,n
     CHARACTER(LEN=256)                                :: var_name, long_name
-
-    ! DENK DROM
-    CALL crash('fixme!')
 
 !    IF (.NOT. par%master) RETURN
 !

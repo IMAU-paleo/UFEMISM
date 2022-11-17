@@ -1,0 +1,68 @@
+name: mininism Github Action
+env:
+  os: ubuntu-22.04
+
+on:
+  push:
+    branches: 
+      - master
+      - minimism
+      - develop
+  pull_request:
+    branches:
+      - master
+      - minimism
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build minimism
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # sudo apt-get upgrade
+          sudo apt-get install libopenmpi-dev libnetcdff-dev \
+                               netcdf-bin libopenblas-dev    \
+                               makedepf90 petsc-dev
+      
+      - name: compile minimism
+        run: |
+          cd src
+          make -j2
+
+      - uses: actions/cache@v3
+        with:
+          path: src/UFEMISM_program
+          key: ${{ github.sha }}-binary
+
+  test:
+    name: Test minimism
+    runs-on: ubuntu-22.04
+    needs:
+      - build
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/cache@v3
+        with:
+          path: src/UFEMISM_program
+          key: ${{ github.sha }}-binary
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libopenmpi-dev libnetcdff-dev \
+                               netcdf-bin libopenblas-dev    \
+                               petsc-dev
+
+      - name: Run EISMINT 1
+        run: |
+          cd tests
+          mpirun -n 2 ../src/UFEMISM_program eismint_1.cfg

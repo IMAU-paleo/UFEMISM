@@ -10,7 +10,7 @@ module thermodynamics_module
   use parallel_module,            only : par, sync, ierr, cerr, partition_list
   use utilities_module,           only : check_for_NaN_dp_1D,  check_for_NaN_dp_2D,  check_for_NaN_dp_3D, &
                                          check_for_NaN_int_1D, check_for_NaN_int_2D, check_for_NaN_int_3D, &
-                                         vertical_average, interpolate_ocean_depth, tridiagonal_solve
+                                         vertical_average, interpolate_ocean_depth, tomas_algorithm
   use netcdf_module,              only : debug
   use data_types_module,          only : type_mesh, type_ice_model, type_remapping_mesh_mesh, &
                                          type_climate_snapshot_regional, type_ocean_snapshot_regional, &
@@ -362,7 +362,8 @@ contains
       end if
 
       ! Solve the tridiagonal matrix equation representing the heat equation for this grid cell
-      Ti_new( vi,:) = tridiagonal_solve( alpha, beta, gamma, delta)
+      ! Note, destroys alpha and delta
+      Ti_new( vi,:) = tomas_algorithm( alpha, beta, gamma, delta, C%nz)
 
       ! Make sure ice temperature doesn't exceed pressure melting point
       do k = 1, C%nz-1

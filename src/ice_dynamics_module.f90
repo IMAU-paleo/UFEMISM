@@ -15,9 +15,11 @@ MODULE ice_dynamics_module
   use utilities_module,                    only : surface_elevation, thickness_above_floatation
   use reallocate_mod,                      only : reallocate_bounds
   use mesh_mapping_module,                 only : remap_field_dp_2D
+  use mesh_operators_module,               only : map_a_to_c_2d, ddx_a_to_c_2D, ddy_a_to_c_2D
   use general_ice_model_data_module,       only : update_general_ice_model_data, determine_masks
   use ice_velocity_module,                 only : solve_SIA, solve_SSA, solve_DIVA, remap_velocities, &
-                                                  map_velocities_b_to_c_2D, initialise_velocity_solver
+                                                  map_velocities_b_to_c_2D, initialise_velocity_solver, &
+                                                  map_velocities_b_to_c_3D
   use ice_thickness_module,                only : calc_dHi_dt
   use basal_conditions_and_sliding_module, only : initialise_basal_conditions, remap_basal_conditions
   use thermodynamics_module,               only : calc_ice_rheology, remap_ice_temperature
@@ -48,8 +50,7 @@ contains
     CALL init_routine( routine_name)
 
     IF (C%choice_timestepping == 'direct') THEN
-      ! CALL run_ice_dynamics_direct( region, t_end)
-      call crash('choice_timestepping "direct" not implemented yet!')
+      call run_ice_dynamics_direct( region, t_end)
     ELSEIF (C%choice_timestepping == 'pc') THEN
       CALL run_ice_dynamics_pc( region, t_end)
     ELSE
@@ -221,104 +222,98 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! ! Calculate ice velocities with the selected ice-dynamical approximation
-    ! ! ======================================================================
+    ! Calculate ice velocities with the selected ice-dynamical approximation
+    ! ======================================================================
 
-    ! IF     (C%choice_ice_dynamics == 'none') THEN
-    !   ! Fixed ice geometry
+    select case(C%choice_ice_dynamics)
+    case('none')
+      ! Fixed ice geometry
+    case('SIA')
+      ! Shallow ice approximation
+      IF (region%time == region%t_next_SIA) THEN
 
-    ! ELSEIF (C%choice_ice_dynamics == 'SIA') THEN
-    !   ! Shallow ice approximation
+        ! Calculate new ice velocities
+        CALL solve_SIA( region%mesh, region%ice)
 
-    !   IF (region%time == region%t_next_SIA) THEN
+        ! Calculate critical time step
+        CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
+        region%dt_crit_SIA = dt_crit_SIA
 
-    !     ! Calculate new ice velocities
-    !     CALL solve_SIA( region%mesh, region%ice)
+        ! Update timer
+        region%t_last_SIA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_SIA
 
-    !     ! Calculate critical time step
-    !     CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-    !     IF (par%master) region%dt_crit_SIA = dt_crit_SIA
+      END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
 
-    !     ! Update timer
-    !     IF (par%master) region%t_last_SIA = region%time
-    !     IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
-    !     CALL sync
+    case('SSA')
+      ! Shallow shelf approximation
+      IF (region%time == region%t_next_SSA) THEN
 
-    !   END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
+        ! Calculate new ice velocities
+        CALL solve_SSA( region%mesh, region%ice)
 
-    ! ELSEIF (C%choice_ice_dynamics == 'SSA') THEN
-    !   ! Shallow shelf approximation
+        ! Calculate critical time step
+        CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
+        region%dt_crit_SSA = dt_crit_SSA
 
-    !   IF (region%time == region%t_next_SSA) THEN
+        ! Update timer
+        region%t_last_SSA = region%time
+        region%t_next_SSA = region%time + region%dt_crit_SSA
 
-    !     ! Calculate new ice velocities
-    !     CALL solve_SSA( region%mesh, region%ice)
+      END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
 
-    !     ! Calculate critical time step
-    !     CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-    !     IF (par%master) region%dt_crit_SSA = dt_crit_SSA
+    case('SIA/SSA')
+      ! Hybrid SIA/SSA (Bueler and Brown, 2009)
 
-    !     ! Update timer
-    !     IF (par%master) region%t_last_SSA = region%time
-    !     IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
-    !     CALL sync
+      IF (region%time == region%t_next_SIA) THEN
 
-    !   END IF ! IF (ABS(region%time - region%t_next_SSA) < dt_tol) THEN
+        ! Calculate new ice velocities
+        CALL solve_SIA( region%mesh, region%ice)
 
-    ! ELSEIF (C%choice_ice_dynamics == 'SIA/SSA') THEN
-    !   ! Hybrid SIA/SSA (Bueler and Brown, 2009)
+        ! Calculate critical time step
+        CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
+        region%dt_crit_SIA = dt_crit_SIA
 
-    !   IF (region%time == region%t_next_SIA) THEN
+        ! Update timer
+        region%t_last_SIA = region%time
+        region%t_next_SIA = region%time + region%dt_crit_SIA
 
-    !     ! Calculate new ice velocities
-    !     CALL solve_SIA( region%mesh, region%ice)
+      END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
 
-    !     ! Calculate critical time step
-    !     CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
-    !     IF (par%master) region%dt_crit_SIA = dt_crit_SIA
+      IF (region%time == region%t_next_SSA) THEN
 
-    !     ! Update timer
-    !     IF (par%master) region%t_last_SIA = region%time
-    !     IF (par%master) region%t_next_SIA = region%time + region%dt_crit_SIA
-    !     CALL sync
+        ! Calculate new ice velocities
+        CALL solve_SSA( region%mesh, region%ice)
 
-    !   END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
+        ! Calculate critical time step
+        CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
+        region%dt_crit_SSA = dt_crit_SSA
 
-    !   IF (region%time == region%t_next_SSA) THEN
+        ! Update timer
+        region%t_last_SSA = region%time
+        region%t_next_SSA = region%time + region%dt_crit_SSA
 
-    !     ! Calculate new ice velocities
-    !     CALL solve_SSA( region%mesh, region%ice)
+      END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
 
-    !     ! Calculate critical time step
-    !     CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_SSA)
-    !     IF (par%master) region%dt_crit_SSA = dt_crit_SSA
+    case default ! select case(C%choice_ice_dynamics)
+        CALL crash('"direct" time stepping works only with SIA, SSA, or SIA/SSA ice dynamics, not with DIVA!')
+    end select ! select case(C%choice_ice_dynamics)
 
-    !     ! Update timer
-    !     IF (par%master) region%t_last_SSA = region%time
-    !     IF (par%master) region%t_next_SSA = region%time + region%dt_crit_SSA
-    !     CALL sync
+    ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
+    CALL determine_timesteps_and_actions( region, t_end)
 
-    !   END IF ! IF (ABS(region%time - region%t_next_SIA) < dt_tol) THEN
+    !IF (par%master) WRITE(0,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_SIA = ', dt_crit_SIA, ', dt_crit_SSA = ', dt_crit_SSA, ', dt = ', region%dt
 
-    ! ELSE ! IF     (C%choice_ice_dynamics == 'SIA') THEN
-    !   CALL crash('"direct" time stepping works only with SIA, SSA, or SIA/SSA ice dynamics, not with DIVA!')
-    ! END IF ! IF     (C%choice_ice_dynamics == 'SIA') THEN
+    ! Calculate new ice geometry
+    ! ==========================
 
-    ! ! Adjust the time step to prevent overshooting other model components (thermodynamics, SMB, output, etc.)
-    ! CALL determine_timesteps_and_actions( region, t_end)
-
-    ! !IF (par%master) WRITE(0,'(A,F7.4,A,F7.4,A,F7.4)') 'dt_crit_SIA = ', dt_crit_SIA, ', dt_crit_SSA = ', dt_crit_SSA, ', dt = ', region%dt
-
-    ! ! Calculate new ice geometry
-    ! ! ==========================
-
-    ! IF (C%choice_ice_dynamics == 'none') THEN
-    !   ! Fixed ice geometry
-    !   region%ice%dHi_dt_a( region%mesh%vi1 : region%mesh%vi2) = 0._dp
-    !   CALL sync
-    ! ELSE
-    !   CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
-    ! END IF
+    IF (C%choice_ice_dynamics == 'none') THEN
+      ! Fixed ice geometry
+      region%ice%dHi_dt_a( region%mesh%vi1 : region%mesh%vi2) = 0._dp
+      CALL sync
+    ELSE
+      CALL calc_dHi_dt( region%mesh, region%ice, region%SMB, region%BMB, region%dt, region%mask_noice, region%refgeo_PD)
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -673,10 +668,10 @@ contains
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_critical_timestep_SIA'
     INTEGER                                            :: aci, vi ,vj, k
-    REAL(dp), DIMENSION(:    ), POINTER                ::  u_c,  v_c,  Hi_c,  dHs_dx_c,  dHs_dy_c
-    INTEGER                                            :: wu_c, wv_c, wHi_c, wdHs_dx_c, wdHs_dy_c
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  u_3D_c,  v_3D_c
-    INTEGER                                            :: wu_3D_c, wv_3D_c
+    REAL(dp), DIMENSION(:    ), allocatable            :: u_c,  v_c,  Hi_c,  dHs_dx_c,  dHs_dy_c
+    REAL(dp), DIMENSION(:,:  ), allocatable            :: u_3D_c,  v_3D_c
+    real(dp), dimension(:    ), allocatable            :: u_vav_b, v_vav_b
+    real(dp), dimension(:,:  ), allocatable            :: u_3D_b, v_3D_b
     REAL(dp)                                           :: D_SIA, dist, dt
     REAL(dp), PARAMETER                                :: dt_correction_factor = 0.9_dp ! Make actual applied time step a little bit smaller, just to be sure.
 
@@ -684,56 +679,74 @@ contains
     CALL init_routine( routine_name)
 
     ! ! Allocate shared memory
-    ! CALL allocate_shared_dp_1D( mesh%nAc,       u_c     , wu_c     )
-    ! CALL allocate_shared_dp_1D( mesh%nAc,       v_c     , wv_c     )
-    ! CALL allocate_shared_dp_1D( mesh%nAc,       Hi_c    , wHi_c    )
-    ! CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dx_c, wdHs_dx_c)
-    ! CALL allocate_shared_dp_1D( mesh%nAc,       dHs_dy_c, wdHs_dy_c)
-    ! CALL allocate_shared_dp_2D( mesh%nAc, C%nz, u_3D_c  , wu_3D_c  )
-    ! CALL allocate_shared_dp_2D( mesh%nAc, C%nz, v_3D_c  , wv_3D_c  )
+    allocate( u_c     (mesh%ci1:mesh%ci2      ))
+    allocate( v_c     (mesh%ci1:mesh%ci2      ))
+    allocate( Hi_c    (mesh%ci1:mesh%ci2      ))
+    allocate( dHs_dx_c(mesh%ci1:mesh%ci2      ))
+    allocate( dHs_dy_c(mesh%ci1:mesh%ci2      ))
+    allocate( u_3D_c  (mesh%ci1:mesh%ci2, C%nz))
+    allocate( v_3D_c  (mesh%ci1:mesh%ci2, C%nz))
 
-    ! ! Calculate ice velocity and thickness, and surface slopes on the staggered grid
-    ! CALL map_velocities_b_to_c_2D( mesh, ice%u_vav_b, ice%v_vav_b, u_c, v_c)
-    ! CALL map_a_to_c_2D( mesh, ice%Hi_a, Hi_c    )
-    ! CALL ddx_a_to_c_2D( mesh, ice%Hs_a, dHs_dx_c)
-    ! CALL ddy_a_to_c_2D( mesh, ice%Hs_a, dHs_dy_c)
-    ! CALL map_velocities_b_to_c_3D( mesh, ice%u_3D_b, ice%v_3D_b, u_3D_c, v_3D_c)
+    allocate(u_vav_b(mesh%nTri))
+    allocate(v_vav_b(mesh%nTri))
+    u_vav_b(mesh%ti1:mesh%ti2) = ice%u_vav_b
+    v_vav_b(mesh%ti1:mesh%ti2) = ice%v_vav_b
+    call allgather_array(u_vav_b)
+    call allgather_array(v_vav_b)
 
-    ! ! Initialise time step with maximum allowed value
-    ! dt_crit_SIA = C%dt_max
+    allocate(u_3D_b(mesh%nTri, C%nz))
+    allocate(v_3D_b(mesh%nTri, C%nz))
+    u_3D_b(mesh%ti1:mesh%ti2,:) = ice%u_3D_b
+    v_3D_b(mesh%ti1:mesh%ti2,:) = ice%v_3D_b
+    call allgather_array(u_3D_b)
+    call allgather_array(v_3D_b)
 
-    ! DO aci = mesh%ci1, mesh%ci2
+    ! Calculate ice velocity and thickness, and surface slopes on the staggered grid
+    CALL map_velocities_b_to_c_2D( mesh, u_vav_b, v_vav_b, u_c, v_c)
+    CALL map_a_to_c_2D( mesh, ice%Hi_a, Hi_c    )
+    CALL ddx_a_to_c_2D( mesh, ice%Hs_a, dHs_dx_c)
+    CALL ddy_a_to_c_2D( mesh, ice%Hs_a, dHs_dy_c)
+    CALL map_velocities_b_to_c_3D( mesh, u_3D_b, v_3D_b, u_3D_c, v_3D_c)
 
-    !   ! Calculate the SIA ice diffusivity
-    !   D_SIA = 1E-9_dp
-    !   D_SIA = MAX( D_SIA, ABS( u_c( aci) * Hi_c( aci) / dHs_dx_c( aci) ))
-    !   D_SIA = MAX( D_SIA, ABS( v_c( aci) * Hi_c( aci) / dHs_dy_c( aci) ))
+    ! Initialise time step with maximum allowed value
+    dt_crit_SIA = C%dt_max
 
-    !   vi = mesh%Aci( aci,1)
-    !   vj = mesh%Aci( aci,2)
-    !   dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
-    !   dt = dist**2 / (6._dp * D_SIA)
-    !   dt_crit_SIA = MIN(dt_crit_SIA, dt)
+    DO aci = mesh%ci1, mesh%ci2
 
-    !   ! Also check the 3D advective time step
-    !   DO k = 1, C%nz
-    !     dt = dist / (ABS( u_3D_c( aci,k)) + ABS( v_3D_c( aci,k)))
-    !     dt_crit_SIA = MIN( dt_crit_SIA, dt)
-    !   END DO
+      ! Calculate the SIA ice diffusivity
+      D_SIA = 1E-9_dp
+      D_SIA = MAX( D_SIA, ABS( u_c( aci) * Hi_c( aci) / dHs_dx_c( aci) ))
+      D_SIA = MAX( D_SIA, ABS( v_c( aci) * Hi_c( aci) / dHs_dy_c( aci) ))
 
-    ! END DO
+      vi = mesh%Aci( aci,1)
+      vj = mesh%Aci( aci,2)
+      dist = NORM2( mesh%V( vi,:) - mesh%V( vj,:))
+      dt = dist**2 / (6._dp * D_SIA)
+      dt_crit_SIA = MIN(dt_crit_SIA, dt)
 
-    ! CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_SIA, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
-    ! dt_crit_SIA = dt_crit_SIA * dt_correction_factor
+      ! Also check the 3D advective time step
+      DO k = 1, C%nz
+        dt = dist / (ABS( u_3D_c( aci,k)) + ABS( v_3D_c( aci,k)))
+        dt_crit_SIA = MIN( dt_crit_SIA, dt)
+      END DO
 
-    ! ! Clean up after yourself
-    ! CALL deallocate_shared( wu_c     )
-    ! CALL deallocate_shared( wv_c     )
-    ! CALL deallocate_shared( wHi_c    )
-    ! CALL deallocate_shared( wdHs_dx_c)
-    ! CALL deallocate_shared( wdHs_dy_c)
-    ! CALL deallocate_shared( wu_3D_c  )
-    ! CALL deallocate_shared( wv_3D_c  )
+    END DO
+
+    CALL MPI_ALLREDUCE( MPI_IN_PLACE, dt_crit_SIA, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    dt_crit_SIA = dt_crit_SIA * dt_correction_factor
+
+    ! Clean up after yourself
+    deallocate( u_c     )
+    deallocate( v_c     )
+    deallocate( Hi_c    )
+    deallocate( dHs_dx_c)
+    deallocate( dHs_dy_c)
+    deallocate( u_3D_c  )
+    deallocate( v_3D_c  )
+    deallocate( u_vav_b )
+    deallocate( v_vav_b )
+    deallocate( u_3D_b  )
+    deallocate( v_3D_b  )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1051,7 +1064,9 @@ contains
 
     ! Ice dynamics - calving
     allocate(  ice%float_margin_frac_a (mesh%vi1:mesh%vi2               ))
+    ice%float_margin_frac_a = 0d0
     allocate(  ice%Hi_eff_cf_a         (mesh%vi1:mesh%vi2               ))
+    ice%Hi_eff_cf_a = 0d0
 
     ! Ice dynamics - predictor/corrector ice thickness update
     allocate(  ice%pc_tau              (mesh%vi1:mesh%vi2               ))

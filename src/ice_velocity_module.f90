@@ -1925,9 +1925,9 @@ contains
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(1       :mesh%nAc), INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2), INTENT(OUT)   :: u_c, v_c
+    TYPE(type_mesh),                         INTENT(IN)  :: mesh
+    REAL(dp), DIMENSION(1       :mesh%nTri), INTENT(IN)  :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2 ), INTENT(OUT) :: u_c, v_c
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_c_2D'
@@ -1971,16 +1971,15 @@ contains
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_c_2D
-#if 0
   SUBROUTINE map_velocities_b_to_c_3D( mesh, u_b, v_b, u_c, v_c)
     ! Map velocity fields from the b-grid to the c-grid
 
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    REAL(dp), DIMENSION(:,:  ),          INTENT(IN)    :: u_b, v_b
-    REAL(dp), DIMENSION(:,:  ),          INTENT(OUT)   :: u_c, v_c
+    TYPE(type_mesh),                                INTENT(IN)  :: mesh
+    REAL(dp), DIMENSION(1       :mesh%nTri, C%nz ), INTENT(IN)  :: u_b, v_b
+    REAL(dp), DIMENSION(mesh%ci1:mesh%ci2 , C%nz ), INTENT(OUT) :: u_c, v_c
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'map_velocities_b_to_c_3D'
@@ -2046,14 +2045,11 @@ contains
       END IF
 
     END DO
-    CALL sync
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE map_velocities_b_to_c_3D
-
-#endif
 
   ! Initialise data fields for the velocity solver(s)
   subroutine initialise_velocity_solver( mesh, ice)

@@ -71,8 +71,8 @@ MODULE configuration_module
   ! Benchmark experiments
   ! =====================
 
-  LOGICAL             :: do_benchmark_experiment_config              = .TRUE.
-  CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_I'
+  LOGICAL             :: do_benchmark_experiment_config              = .false.
+  CHARACTER(LEN=256)  :: choice_benchmark_experiment_config          = 'EISMINT_1'
   REAL(dp)            :: SSA_icestream_m_config                      = 1                                ! Values tested by Schoof are 1, 10, and 20
   REAL(dp)            :: ISMIP_HOM_L_config                          = 160000.0                         ! Domain size of the ISMIP-HOM benchmarks
   CHARACTER(LEN=256)  :: ISMIP_HOM_E_Arolla_filename_config          = 'arolla100.dat'                  ! Path to the Haut Glacier d'Arolla input file

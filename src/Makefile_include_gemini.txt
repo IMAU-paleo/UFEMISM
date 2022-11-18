@@ -17,4 +17,4 @@
                             -I$(NETCDF_DIR)/include -I$(PETSC_DIR)/include
 
 # Linking flags of libaries:
-  LDFLAGS                 = -L${NETCDF_DIR}/lib -lnetcdf -lnetcdff -L${PETSC_DIR}/lib -lpetsc -L${LAPACK_DIR}/lib -llapack -lpthread
+  LDFLAGS                 = -L${NETCDF_DIR}/lib -lnetcdf -lnetcdff -L${PETSC_DIR}/lib -lpetsc -L${LAPACK_DIR}/lib  -lpthread

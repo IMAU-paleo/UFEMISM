@@ -270,7 +270,8 @@ contains
       has_converged = .false.
       if     (resid_UV < C%DIVA_visc_it_norm_dUV_tol) then
         has_converged = .true.
-      elseif (viscosity_iteration_i >= C%DIVA_visc_it_nit) then
+      endif
+      if (viscosity_iteration_i >= C%DIVA_visc_it_nit) then
         has_converged = .true.
       end if
 

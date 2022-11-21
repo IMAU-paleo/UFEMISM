@@ -1134,7 +1134,7 @@ CONTAINS
   END SUBROUTINE deallocate_matrix_CSR
   
   SUBROUTINE allocate_matrix_CSR_dist( AA, m, n)
-    ! Allocate shared memory for a CSR-format sparse m-by-n matrix A
+    ! Allocate distributed memory for a CSR-format sparse m-by-n matrix A
     ! 
     ! NOTE: uses local allocatable memory, so that the processes can create their own
     !       CSR lists in parallel; use "finalise_matrix_CSR" after this is done!

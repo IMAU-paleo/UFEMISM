@@ -1133,7 +1133,7 @@ CONTAINS
   
   END SUBROUTINE deallocate_matrix_CSR
   
-  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n)
+  SUBROUTINE allocate_matrix_CSR_dist( AA, m, n, i1, i2)
     ! Allocate distributed memory for a CSR-format sparse m-by-n matrix A
     ! 
     ! NOTE: uses local allocatable memory, so that the processes can create their own
@@ -1144,6 +1144,7 @@ CONTAINS
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
     INTEGER,                             INTENT(IN)    :: m, n
+    integer, optional,                   intent(in)    :: i1, i2
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'allocate_matrix_CSR_dist'
@@ -1157,15 +1158,25 @@ CONTAINS
     ! Allocate local memory
     AA%nnz_max = 2000
     AA%nnz     = 0
+
+    if (present(i1).and.present(i2)) then
+      AA%ptr_i1 = i1
+      AA%ptr_i2 = i2
+    else
+      call partition_list(m, par%i, par%n, AA%ptr_i1, AA%ptr_i2)
+    endif
+
     
-    ALLOCATE( AA%ptr(   AA%m+1    ))
+    ALLOCATE( AA%ptr( AA%ptr_i1 : AA%ptr_i2 + 1))
     ALLOCATE( AA%index( AA%nnz_max))
     ALLOCATE( AA%val(   AA%nnz_max))
     
     AA%ptr   = 1
     AA%index = 0
     AA%val   = 0._dp
-    
+
+
+     
     ! Finalise routine path
     CALL finalise_routine( routine_name, n_extra_windows_expected = 2)
     
@@ -1190,7 +1201,7 @@ CONTAINS
     AA%val(   AA%nnz) = v
     
     ! Update pointer list
-    AA%ptr( i+1 : AA%m+1) = AA%nnz+1
+    AA%ptr( i+1 : AA%ptr_i2+1) = AA%nnz+1
     
     ! Extend memory if necessary
     IF (AA%nnz > AA%nnz_max - 1000) CALL extend_matrix_CSR_dist( AA, 1000)
@@ -1227,7 +1238,7 @@ CONTAINS
     CALL finalise_routine( routine_name)
   
   END SUBROUTINE extend_matrix_CSR_dist
-  SUBROUTINE finalise_matrix_CSR_dist( AA, i1, i2)
+  SUBROUTINE finalise_matrix_CSR_dist( AA )
     ! Finalise a CSR-format sparse m-by-n matrix A from distributed to shared memory
     !
     ! NOTE: each process has data for rows i1-i2
@@ -1236,7 +1247,6 @@ CONTAINS
     
     ! In- and output variables:
     TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT) :: AA
-    INTEGER,                             INTENT(IN)    :: i1, i2
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'finalise_matrix_CSR_dist'
@@ -1255,7 +1265,7 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Sort the column entries in the assembled matrix
-    CALL sort_columns_in_CSR( AA, i1, i2)
+    CALL sort_columns_in_CSR( AA, AA%ptr_i1, AA%ptr_i2)
 
     ! Determine range of indices for each process
     call mpi_allgather( AA%nnz, 1, MPI_INTEGER, counts, 1, MPI_INTEGER, MPI_COMM_WORLD, err)
@@ -1264,6 +1274,8 @@ CONTAINS
     do n=2,size(displs)
       displs(n) = displs(n-1) + counts(n-1)
     end do
+
+    ! fix the ptr 
     
     ! (re)-allocate memory. This is superfluous, but gives us better bounds checking (-fcheck=bounds)
     allocate( index(1:AA%nnz))

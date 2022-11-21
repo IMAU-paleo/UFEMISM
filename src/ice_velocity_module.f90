@@ -1156,16 +1156,17 @@ contains
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    !(dividable by 2) ranges for b_buv,uv_buv
+    t21 = 1+2*(mesh%ti1-1)
+    t22 =   2*(mesh%ti2)
+
     ! Allocate shared memory
     allocate( N_b    (   mesh%ti1:mesh%ti2))
     allocate( dN_dx_b(   mesh%ti1:mesh%ti2))
     allocate( dN_dy_b(   mesh%ti1:mesh%ti2))
-    allocate( b_buv  (          1:mesh%nTri*2))
-    allocate( uv_buv (          1:mesh%nTri*2))
+    allocate( b_buv  (        t21:     t22))
+    allocate( uv_buv (        t21:     t22))
 
-    !(dividable by 2) ranges for b_buv,uv_buv
-    t21 = 1+2*(mesh%ti1-1)
-    t22 =   2*(mesh%ti2)
 
     ! PETSc ranges for b_buv,uv_buv
     call partition_list(mesh%nTri*2, par%i, par%n, pti1, pti2)
@@ -1183,16 +1184,16 @@ contains
       IF (mesh%Tri_edge_index( ti) == 0) THEN
         ! Free triangle: fill in matrix row for the SSA/DIVA
         IF (C%include_SSADIVA_crossterms) THEN
-          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
-          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_1_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free( mesh, ice, u_b, ti, N_b, dN_dx_b, dN_dy_b, b_buv, uv_buv)
         ELSE
-          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
-          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv(t21:t22), uv_buv(t21:t22))
+          CALL calc_DIVA_matrix_coefficients_eq_1_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
+          CALL calc_DIVA_matrix_coefficients_eq_2_free_sans( mesh, ice, u_b, ti, N_b, b_buv, uv_buv)
         END IF
       ELSE
         ! Border triangle: apply boundary conditions
-        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
-        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv(t21:t22), uv_buv(t21:t22))
+        CALL calc_DIVA_matrix_coefficients_eq_1_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
+        CALL calc_DIVA_matrix_coefficients_eq_2_boundary( mesh, ice, u_b, ti, b_buv, uv_buv)
       END IF
 
     END DO
@@ -1203,10 +1204,8 @@ contains
     ! TODO: The problem: b_buv and uv_buv are divideable by two but, petsc doesnt know that and
     ! will divide 6 into 3:3 for two procs for example, whereas the division should be 2:4 here in that case.
     ! Solution: point-to-point communication of boundaries, or fixing it in petsc (possible, but hard)
-    call allgather_array(b_buv,t21,t22)
-    call allgather_array(uv_buv,t21,t22)
 
-    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv(pti1:pti2), uv_buv(pti1:pti2), &
+    CALL solve_matrix_equation_CSR( ice%M_SSADIVA, b_buv, uv_buv, &
       C%DIVA_choice_matrix_solver, &
       C%DIVA_SOR_nit             , &
       C%DIVA_SOR_tol             , &
@@ -1214,9 +1213,7 @@ contains
       C%DIVA_PETSc_rtol          , &
       C%DIVA_PETSc_abstol)
 
-    call check_for_nan(uv_buv(pti1:pti2), "uv_buv")
-
-    call allgather_array(uv_buv)
+    call check_for_nan(uv_buv(t21:t22), "uv_buv")
 
   ! Get solution back on the b-grid
   ! ================================
@@ -2352,7 +2349,8 @@ contains
     nrows           = 2*mesh%nTri    ! to
 
     ! since we do not call add_entry, we must ensure enough memory is allocated
-    call allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols )
+    call allocate_matrix_CSR_dist( ice%M_SSADIVA, nrows, ncols, 1+2*(n1-1), n2*2)
+    ice%M_SSADIVA%balanced = .false.
 
     allocate(ti2n_u( 1:mesh%nTri))
     allocate(ti2n_v( 1:mesh%nTri))
@@ -2461,14 +2459,14 @@ contains
       end if ! IF (MOD( n,2) == 1) THEN
 
       ! Finalise this matrix row
-      ice%M_SSADIVA%ptr( n+1 : 2*mesh%nTri+1) = ice%M_SSADIVA%nnz+1
+      ice%M_SSADIVA%ptr( n+1 : ) = ice%M_SSADIVA%nnz+1
 
       ! Extend memory if necessary
       IF (ice%M_SSADIVA%nnz > ice%M_SSADIVA%nnz_max - 1000) CALL extend_matrix_CSR_dist( ice%M_SSADIVA, 1000)
     end do ! DO n = n1, n2
 
     ! Combine results from the different processes
-    call finalise_matrix_CSR_dist( ice%M_SSADIVA, 1+2*(n1-1), n2*2)
+    call finalise_matrix_CSR_dist( ice%M_SSADIVA )
 
     ! Finalise routine path
     call finalise_routine( routine_name, n_extra_windows_expected = 7)

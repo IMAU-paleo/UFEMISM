@@ -85,7 +85,7 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'solve_matrix_equation_PETSc'
-    INTEGER                                            :: m, n, n1, n2, m1, m2
+    INTEGER                                            :: m, n, n1, n2, m1, m2, m_local, n_local
     TYPE(tVec)                                         :: b
     TYPE(tVec)                                         :: x
     TYPE(tKSP)                                         :: KSP_solver
@@ -96,18 +96,17 @@ CONTAINS
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
-    call partition_list(m, par%i, par%n, m1, m2)
-    call partition_list(n, par%i, par%n, n1, n2)
+    CALL MatGetLocalSize( A, m_local, n_local, perr)
     
-    IF (n2-n1+1 /= SIZE( xx,1) .OR. m2-m1+1 /= SIZE( bb,1)) THEN
+    IF (n_local /= SIZE( xx,1) .OR. m_local /= SIZE( bb,1)) THEN
       CALL crash('matrix and vector sub-sizes dont match!')
     END IF
     
   ! == Set up right-hand side and solution vectors as PETSc data structures
   ! =======================================================================
     
-    CALL vec_double2petsc( xx, x, n)
-    CALL vec_double2petsc( bb, b, m)
+    CALL vec_double2petsc( xx, x, n, n_local)
+    CALL vec_double2petsc( bb, b, m, m_local)
     
   ! Set up the solver
   ! =================
@@ -152,7 +151,7 @@ CONTAINS
   END SUBROUTINE solve_matrix_equation_PETSc
   
 ! == Conversion between 1-D Fortran double-precision arrays and PETSc parallel vectors
-  SUBROUTINE vec_double2petsc( xx, x, n)
+  SUBROUTINE vec_double2petsc( xx, x, n, n_local)
     ! Convert a regular 1-D Fortran double-precision array to a PETSc parallel vector
       
     IMPLICIT NONE
@@ -160,7 +159,7 @@ CONTAINS
     ! In- and output variables:
     REAL(dp), DIMENSION(:    ),          INTENT(IN)    :: xx
     TYPE(tVec),                          INTENT(INOUT) :: x
-    integer,                             intent(in)    :: n
+    integer,                             intent(in)    :: n, n_local
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'vec_double2petsc'
@@ -171,7 +170,7 @@ CONTAINS
 
     ! Create parallel vector
     CALL VecCreate( PETSC_COMM_WORLD, x, perr)
-    CALL VecSetSizes( x, PETSC_DECIDE, n, perr)
+    CALL VecSetSizes( x, n_local, n, perr)
     CALL VecSetFromOptions( x, perr)
     
     ! Get parallelisation domains ("ownership ranges")
@@ -342,7 +341,8 @@ CONTAINS
     CALL init_routine( routine_name)
     
     ! Determine process domains
-    call partition_list(A_CSR%m, par%i, par%n, i1, i2)
+    i1 = A_CSR%ptr_i1
+    i2 = A_CSR%ptr_i2
 
     nrows_proc = i2+1-i1
     
@@ -375,8 +375,12 @@ CONTAINS
     ptr_proc( nrows_proc) = A_CSR%ptr( i2+1) - A_CSR%ptr( i1)
     
     ! Create PETSc matrix
-    CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, PETSC_DECIDE, PETSC_DETERMINE, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)
-    
+    if (A_CSR%balanced) then
+      CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, PETSC_DECIDE, A_CSR%m, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)
+    else
+      ! Special treatment if the rows are not partitioned according to PETSC
+      CALL MatCreateMPIAIJWithArrays( PETSC_COMM_WORLD, nrows_proc, nrows_proc, A_CSR%m, A_CSR%n, ptr_proc, index_proc, val_proc, A, perr)
+    endif 
     ! Assemble matrix and vectors, using the 2-step process:
     !   MatAssemblyBegin(), MatAssemblyEnd()
     ! Computations can be done while messages are in transition
@@ -408,28 +412,26 @@ CONTAINS
     
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'multiply_PETSc_matrix_with_vector_1D'
-    TYPE(PetscInt)                                     :: m, n
+    TYPE(PetscInt)                                     :: m, n, m_local, n_local
     TYPE(tVec)                                         :: x, y
     integer                                            :: m1, m2, n1, n2
-    real(dp), dimension(:    ), pointer                :: xxp, yyp
+    real(dp), dimension(:    ), pointer                :: xxp
     
     ! Add routine to path
     CALL init_routine( routine_name)
     
     ! Safety
     CALL MatGetSize( A, m, n, perr)
-    call partition_list(m, par%i, par%n, m1, m2)
-    call partition_list(n, par%i, par%n, n1, n2)
+    CALL MatGetLocalSize( A, m_local, n_local, perr)
     
-    IF (n2-n1+1 /= SIZE( xx,1) .OR. m2-m1+1 /= SIZE( yy,1)) THEN
+    IF (n_local /= SIZE( xx,1) .OR. m_local /= SIZE( yy,1)) THEN
       CALL crash('matrix and vector sub-sizes dont match!')
     END IF
 
-    xxp(n1:n2) => xx
-    yyp(m1:m2) => yy
+    xxp(1:n_local) => xx
 
     ! Convert Fortran array xx to PETSc vector x
-    CALL vec_double2petsc( xxp, x, n)
+    CALL vec_double2petsc( xxp, x, n, n_local)
     
     ! Set up PETSc vector y for the answer
     CALL VecCreate( PETSC_COMM_WORLD, y, perr)

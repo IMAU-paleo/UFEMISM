@@ -27,4 +27,4 @@ $(OBJ_PATH)/%.o : %.f90 Makefile_include_local.txt
                             ${NCINC} -I${PETSC_DIR} 
 
 # Linking flags of libaries:
-  LDFLAGS                 = -L/usr/local/lib ${NCLIB} -lpetsc -lopenblas -g
+  LDFLAGS                 = -L/usr/local/lib ${NCLIB} -lpetsc -g

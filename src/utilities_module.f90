@@ -13,18 +13,6 @@ MODULE utilities_module
   USE data_types_module,             ONLY: type_mesh, type_grid, type_model_region
 
   implicit none
-  ! Interfaces to LAPACK, which are otherwise implicitly generated (taken from
-  ! LAPACK source)
-  !  *
-  !  *  -- LAPACK routine (version 3.1) --
-  !  *     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd..
-  !  *     November 2006
-  interface
-    SUBROUTINE DGTSV( N, NRHS, DL, D, DU, B, LDB, INFO )
-      INTEGER            INFO, LDB, N, NRHS
-      DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * )
-    END SUBROUTINE
-  end interface
 
   interface check_for_nan
     procedure :: check_for_NaN_dp_1D
@@ -1054,48 +1042,41 @@ CONTAINS
 
   END SUBROUTINE SSA_Schoof2006_analytical_solution
 
-! == Some wrappers for LAPACK matrix functionality
-  function tridiagonal_solve( ldiag, diag, udiag, rhs) result(x)
-    ! Lapack tridiagnal solver (in double precision):
-    ! Matrix system solver for tridiagonal matrices.
-    ! Used e.g. in solving the ADI scheme.
-    ! ldiag = lower diagonal elements (j,j-1) of the matrix
-    ! diag  = diagonal elements (j,j) of the matrix
-    ! udiag = upper diagonal elements (j,j+1) of the matrix
-    ! rhs   = right hand side of the matrix equation in the ADI scheme
-
+! == Tomas algorithm for solving a system of tridiagonal linear equations A*x=b
+! NOTE destroys rhs and diag in the process
+! A consists of diag,ldiag,udiag
+! b = rhs
+! x = x
+  function tomas_algorithm(ldiag, diag, udiag, rhs, n) result(x)
     implicit none
 
     ! Input variables:
-    real(dp), dimension(:),            intent(in) :: diag
-    real(dp), dimension(size(diag)-1), intent(in) :: udiag, ldiag
-    real(dp), dimension(size(diag)),   intent(in) :: rhs
+    real(dp), dimension(2:n),          intent(in)    :: ldiag
+    real(dp), dimension(n),            intent(inout) :: diag
+    real(dp), dimension(1:n-1),        intent(in)    :: udiag
+    real(dp), dimension(n),            intent(inout) :: rhs
+    integer,                           intent(in)    :: n
 
     ! Result variable:
-    real(dp), dimension(size(diag))               :: x
+    real(dp), dimension(n)                           :: x
 
     ! Local variables:
-    integer                                       :: info
-    real(dp), dimension(size(diag))               :: diag_copy
-    real(dp), dimension(size(udiag))              :: udiag_copy, ldiag_copy
+    integer                                          :: i
+    real(dp)                                         :: coef
 
-    ! The LAPACK solver will overwrite the rhs with the solution x. Therefore we
-    ! first copy the rhs in the solution vector x:
-    x = rhs
-
-    ! The LAPACK solver will change the elements in the matrix, therefore we copy them:
-    diag_copy  =  diag
-    udiag_copy = udiag
-    ldiag_copy = ldiag
-
-    call DGTSV(size(diag), 1, ldiag_copy, diag_copy, udiag_copy, x, size(diag), info)
-
-    if (info /= 0) then
-      write(0,*) 'tridiagonal_solve - ERROR: LAPACK solver DGTSV returned error message info = ', info
-      call MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
-    end if
-
-  end function tridiagonal_solve
+    ! Forward elimination
+    do i = 2,n
+      coef = ldiag(i)/diag(i-1)
+      diag(i) = diag(i)-coef*udiag(i-1)
+      rhs(i) = rhs(i)-coef*rhs(i-1)
+    end do
+      
+    ! Backward substitution
+    x(n) = rhs(n)/diag(n)
+    do i=n-1,1,-1
+      x(i) = (rhs(i) - udiag(i)*x(i+1))/diag(i)
+    end do
+  end function
 
 ! == Finding inverses of some very small matrices
   SUBROUTINE calc_matrix_inverse_2_by_2( A, Ainv)

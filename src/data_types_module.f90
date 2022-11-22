@@ -26,6 +26,8 @@ module data_types_module
     INTEGER                                 :: nnz                         ! Number         of non-zero entries in A locally (determines how much memory is allocated)
     integer                                 :: nnz_tot                     ! globally nnz entries
     INTEGER,  DIMENSION(:    ), allocatable :: ptr
+    integer                                 :: ptr_i1, ptr_i2              ! set by allocate, which rows are on this processor, defaults to normal partition_list
+    logical                                 :: balanced = .true.           ! SSADIVA is not 'balanced' like petsc wants it to be
     INTEGER,  DIMENSION(:    ), allocatable :: index
     REAL(dp), DIMENSION(:    ), allocatable :: val
 

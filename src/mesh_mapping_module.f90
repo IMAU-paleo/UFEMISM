@@ -914,9 +914,9 @@ CONTAINS
     DEALLOCATE( Vor)
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( A_xdy_a_g_CSR  , mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( A_mxydx_a_g_CSR, mesh%vi1, mesh%vi2)
-    CALL finalise_matrix_CSR_dist( A_xydy_a_g_CSR , mesh%vi1, mesh%vi2)
+    CALL finalise_matrix_CSR_dist( A_xdy_a_g_CSR  )
+    CALL finalise_matrix_CSR_dist( A_mxydx_a_g_CSR)
+    CALL finalise_matrix_CSR_dist( A_xydy_a_g_CSR )
 
     ! Convert matrices from Fortran to PETSc types
     CALL mat_CSR2petsc( A_xdy_a_g_CSR  , A_xdy_a_g  )
@@ -1335,9 +1335,9 @@ CONTAINS
     DEALLOCATE( single_row_Tri%LI_xydy    )
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( A_xdy_g_b_CSR  , n1, n2)
-    CALL finalise_matrix_CSR_dist( A_mxydx_g_b_CSR, n1, n2)
-    CALL finalise_matrix_CSR_dist( A_xydy_g_b_CSR , n1, n2)
+    CALL finalise_matrix_CSR_dist( A_xdy_g_b_CSR  )
+    CALL finalise_matrix_CSR_dist( A_mxydx_g_b_CSR)
+    CALL finalise_matrix_CSR_dist( A_xydy_g_b_CSR )
 
     ! Convert matrices from Fortran to PETSc types
     CALL mat_CSR2petsc( A_xdy_g_b_CSR  , A_xdy_g_b  )
@@ -1854,9 +1854,9 @@ CONTAINS
     CALL sync
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( B_xdy_b_a_CSR  , mesh_tri%ti1, mesh_tri%ti2)
-    CALL finalise_matrix_CSR_dist( B_mxydx_b_a_CSR, mesh_tri%ti1, mesh_tri%ti2)
-    CALL finalise_matrix_CSR_dist( B_xydy_b_a_CSR , mesh_tri%ti1, mesh_tri%ti2)
+    CALL finalise_matrix_CSR_dist( B_xdy_b_a_CSR   )
+    CALL finalise_matrix_CSR_dist( B_mxydx_b_a_CSR )
+    CALL finalise_matrix_CSR_dist( B_xydy_b_a_CSR  )
 
     ! Convert matrices from Fortran to PETSc types
     CALL mat_CSR2petsc( B_xdy_b_a_CSR  , B_xdy_b_a  )
@@ -1967,9 +1967,9 @@ CONTAINS
     CALL sync
 
     ! Assemble matrices
-    CALL finalise_matrix_CSR_dist( B_xdy_a_b_CSR  , mesh_Vor%vi1, mesh_Vor%vi2)
-    CALL finalise_matrix_CSR_dist( B_mxydx_a_b_CSR, mesh_Vor%vi1, mesh_Vor%vi2)
-    CALL finalise_matrix_CSR_dist( B_xydy_a_b_CSR , mesh_Vor%vi1, mesh_Vor%vi2)
+    CALL finalise_matrix_CSR_dist( B_xdy_a_b_CSR   )
+    CALL finalise_matrix_CSR_dist( B_mxydx_a_b_CSR )
+    CALL finalise_matrix_CSR_dist( B_xydy_a_b_CSR  )
 
     ! Convert matrices from Fortran to PETSc types
     CALL mat_CSR2petsc( B_xdy_a_b_CSR  , B_xdy_a_b  )

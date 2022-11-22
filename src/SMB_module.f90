@@ -531,19 +531,33 @@ contains
 
     ! Data fields
     allocate(  SMB%AlbedoSurf      (mesh%vi1:mesh%vi2    ))
+    SMB%AlbedoSurf = 0
     allocate(  SMB%MeltPreviousYear(mesh%vi1:mesh%vi2    ))
+    SMB%MeltPreviousYear = 0
     allocate(  SMB%FirnDepth       (mesh%vi1:mesh%vi2, 12))
+    SMB%FirnDepth = 0
     allocate(  SMB%Rainfall        (mesh%vi1:mesh%vi2, 12))
+    SMB%Rainfall = 0
     allocate(  SMB%Snowfall        (mesh%vi1:mesh%vi2, 12))
+    SMB%Snowfall = 0
     allocate(  SMB%AddedFirn       (mesh%vi1:mesh%vi2, 12))
+    SMB%AddedFirn = 0
     allocate(  SMB%Melt            (mesh%vi1:mesh%vi2, 12))
+    SMB%Melt = 0
     allocate(  SMB%Refreezing      (mesh%vi1:mesh%vi2, 12))
+    SMB%Refreezing = 0
     allocate(  SMB%Refreezing_year (mesh%vi1:mesh%vi2    ))
+    SMB%Refreezing_year = 0
     allocate(  SMB%Runoff          (mesh%vi1:mesh%vi2, 12))
+    SMB%Runoff = 0
     allocate(  SMB%Albedo          (mesh%vi1:mesh%vi2, 12))
+    SMB%Albedo = 0
     !allocate(  SMB%Albedo_year     (mesh%vi1:mesh%vi2    ))
+    !SMB%Albedo_year = 0
     allocate(  SMB%SMB             (mesh%vi1:mesh%vi2, 12))
+    SMB%SMB = 0
     allocate(  SMB%SMB_year        (mesh%vi1:mesh%vi2    ))
+    SMB%SMB_year = 0
 
     ! === Parameters ===
     ! ==================

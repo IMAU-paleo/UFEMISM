@@ -177,8 +177,11 @@ contains
     ! ===============
 
     allocate(BMB%BMB      (mesh%vi1:mesh%vi2))
+    BMB%BMB = 0
     allocate(BMB%BMB_shelf(mesh%vi1:mesh%vi2))
+    BMB%BMB_shelf = 0
     allocate(BMB%BMB_sheet(mesh%vi1:mesh%vi2))
+    BMB%BMB_sheet = 0
 
     ! === Ice sheet ===
     ! =================

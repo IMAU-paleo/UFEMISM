@@ -45,6 +45,7 @@ contains
     ! Local variables:
     integer                             :: vi, k
     real(dp), dimension(:), allocatable :: dHs_dt_a, dHs_dx_a, dHs_dy_a, dHi_dx_a, dHi_dy_a
+    real(dp)                            :: Hi_a
 
     ! Allocate shared memory
     allocate( dHs_dt_a (mesh%vi1:mesh%vi2) )
@@ -70,13 +71,14 @@ contains
 
     ! Calculate derivatives of zeta
     do vi = mesh%vi1, mesh%vi2
+      Hi_a = max(ice%Hi_a(vi),0.00001) ! Cannot divide by zero 
 
-      ice%dzeta_dz_a(vi) = -1._dp / ice%Hi_a( vi)
+      ice%dzeta_dz_a(vi) = -1._dp / Hi_a
 
       do k = 1, C%nz
-        ice%dzeta_dt_a( vi,k)  =  (dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi)) / ice%Hi_a( vi)
-        ice%dzeta_dx_a( vi,k)  =  (dHs_dx_a( vi)  - C%zeta(k) *     dHi_dx_a( vi)) / ice%Hi_a( vi)
-        ice%dzeta_dy_a( vi,k)  =  (dHs_dy_a( vi)  - C%zeta(k) *     dHi_dy_a( vi)) / ice%Hi_a( vi)
+        ice%dzeta_dt_a( vi,k)  =  (dHs_dt_a( vi)  - C%zeta(k) * ice%dHi_dt_a( vi)) / Hi_a
+        ice%dzeta_dx_a( vi,k)  =  (dHs_dx_a( vi)  - C%zeta(k) *     dHi_dx_a( vi)) / Hi_a
+        ice%dzeta_dy_a( vi,k)  =  (dHs_dy_a( vi)  - C%zeta(k) *     dHi_dy_a( vi)) / Hi_a
       end do
 
     end do

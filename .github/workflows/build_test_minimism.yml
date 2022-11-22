@@ -28,8 +28,7 @@ jobs:
           sudo apt-get update
           # sudo apt-get upgrade
           sudo apt-get install libopenmpi-dev libnetcdff-dev \
-                               netcdf-bin libopenblas-dev    \
-                               makedepf90 petsc-dev
+                               netcdf-bin makedepf90 petsc-dev
       
       - name: compile minimism
         run: |
@@ -59,8 +58,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libopenmpi-dev libnetcdff-dev \
-                               netcdf-bin libopenblas-dev    \
-                               petsc-dev
+                               netcdf-bin petsc-dev
 
       - name: Run EISMINT 1
         run: |

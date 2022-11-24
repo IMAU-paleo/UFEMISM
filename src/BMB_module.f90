@@ -2794,6 +2794,8 @@ CONTAINS
     ! Do the inversion
     ! ================
 
+    ! milg
+
     DO vi = mesh%vi1, mesh%vi2
 
       h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
@@ -2821,8 +2823,8 @@ CONTAINS
 
           IF (t_scale < .9_dp) THEN
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
-          ELSEIF (t_scale < .95_dp) THEN
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+          ! ELSEIF (t_scale < .95_dp) THEN
+            ! BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
           END IF
 
         ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN

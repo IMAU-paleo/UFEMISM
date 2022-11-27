@@ -1818,7 +1818,7 @@ CONTAINS
 
     ! Default values
     a_scale = C%slid_inv_Bernales2017_scale_start
-    m_scale = .1_dp
+    m_scale = .0_dp
     t_scale = 0._dp
 
     ! Time scale
@@ -1853,7 +1853,7 @@ CONTAINS
 
           IF (     h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) >= .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
+            IF (t_scale < .9_dp) THEN
               ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
             ELSE
               ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
@@ -1861,21 +1861,21 @@ CONTAINS
 
           ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
+            IF (t_scale < .9_dp) THEN
+              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/2._dp * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
             ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/2._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
             END IF
 
           ELSEIF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
+            IF (t_scale < .9_dp) THEN
               ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
             END IF
 
           ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) THEN
 
-            IF (t_scale < .8_dp) THEN
+            IF (t_scale < .9_dp) THEN
               ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) - m_scale * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
             END IF
 

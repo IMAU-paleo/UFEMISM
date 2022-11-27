@@ -233,14 +233,14 @@ CONTAINS
       END IF
 
       ! Run the SMB model
-      IF (region%do_SMB) THEN
+      ! IF (region%do_SMB) THEN
         CALL run_SMB_model( region%mesh, region%ice, region%climate_matrix, region%time, region%SMB, region%mask_noice)
-      END IF
+      ! END IF
 
       ! Run the BMB model
-      IF (region%do_BMB) THEN
+      ! IF (region%do_BMB) THEN
         CALL run_BMB_model( region%mesh, region%ice, region%ocean_matrix%applied, region%BMB, region%name, region%time, region%refgeo_PD)
-      END IF
+      ! END IF
 
       t2 = MPI_WTIME()
       IF (par%master) region%tcomp_climate = region%tcomp_climate + t2 - t1

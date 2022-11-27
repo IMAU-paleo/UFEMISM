@@ -28,17 +28,17 @@
 
     do_NAM_config                               = .false.                          ! North America
     do_EAS_config                               = .false.                          ! Eurasia
-    do_GRL_config                               = .true.                           ! Greenland
-    do_ANT_config                               = .false.                          ! Antarctica
+    do_GRL_config                               = .false.                          ! Greenland
+    do_ANT_config                               = .true.                           ! Antarctica
 
   ! Mesh generation
   ! ===============
 
     ! Resolutions
     res_max_config                              = 200.0                            ! Maximum allowed resolution                            [km]
-    res_max_margin_config                       = 5.0                              ! Maximum allowed resolution over land-based ice margin [km]
-    res_max_gl_config                           = 5.0                              !                                 grounding line        [km]
-    res_max_cf_config                           = 5.0                              !                                 calving front         [km]
+    res_max_margin_config                       = 20.0                             ! Maximum allowed resolution over land-based ice margin [km]
+    res_max_gl_config                           = 20.0                             !                                 grounding line        [km]
+    res_max_cf_config                           = 20.0                             !                                 calving front         [km]
     res_max_mountain_config                     = 200.0                            !                                 mountains             [km]
     res_max_coast_config                        = 200.0                            !                                 coastline             [km]
 
@@ -150,7 +150,7 @@
     m_enh_shelf_config                          = 0.7                              ! Ice flow enhancement factor for floating ice
 
     ! Ice dynamics
-    choice_ice_dynamics_config                  = 'SIA'                            ! Choice of ice-dynamics approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
+    choice_ice_dynamics_config                  = 'SSA'                            ! Choice of ice-dynamics approximation: "none" (= fixed geometry), "SIA", "SSA", "SIA/SSA", "DIVA"
     include_SSADIVA_crossterms_config           = .TRUE.                           ! Whether or not to include the "cross-terms" of the SSA/DIVA
 
     ! Boundary conditions
@@ -201,6 +201,14 @@
     choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
     choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
+    ! Fixed/delayed ice thickness evolution
+    fixed_sheet_geometry_config                 = 0.0                              ! Fixed (1), free (0), or delayed grounded ice geometry evolution
+    fixed_shelf_geometry_config                 = 0.0                              ! Fixed (1), free (0), or delayed floating ice geometry evolution
+    fixed_grounding_line_g_config               = 1.0                              ! Fixed (1), free (0), or delayed GL geometry evolution (grounded side)
+    fixed_grounding_line_f_config               = 1.0                              ! Fixed (1), free (0), or delayed GL geometry evolution (floating side)
+    fixed_decay_t_start_config                  = 0.0                              ! Start time of linear transition between fixed/delayed and free evolution
+    fixed_decay_t_end_config                    = 0.0                              ! End   time of linear transition between fixed/delayed and free evolution
+
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
 
@@ -228,7 +236,7 @@
   ! ======================
 
     do_remove_shelves_config                    = .FALSE.                          ! If set to TRUE, all floating ice is always instantly removed (used in the ABUMIP-ABUK experiment)
-    remove_shelves_larger_than_PD_config        = .FALSE.                          ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
+    remove_shelves_larger_than_PD_config        = .TRUE.                           ! If set to TRUE, all floating ice beyond the present-day calving front is removed (used for some Antarctic spin-ups)
     continental_shelf_calving_config            = .FALSE.                          ! If set to TRUE, all ice beyond the continental shelf edge (set by a maximum depth) is removed
     continental_shelf_min_height_config         = -1500.0                          ! Maximum depth of the continental shelf
     minimum_ice_thickness_config                = 0.1                              ! If ice anywhere is thinner than this, remove it
@@ -239,7 +247,7 @@
     choice_initial_ice_temperature_config       = 'Robin'                          ! Choice of initial ice temperature profile: "uniform", "linear", "Robin", "restart"
     uniform_ice_temperature_config              = 270.0                            ! Uniform ice temperature (applied when choice_initial_ice_temperature_config = "uniform")
     choice_thermo_model_config                  = '3D_heat_equation'               ! Choice of thermodynamical model: "none", "3D_heat_equation"
-    choice_ice_rheology_config                  = 'uniform'                        ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"
+    choice_ice_rheology_config                  = 'Huybrechts1992'                 ! Choice of ice rheology model: "uniform", "Huybrechts1992", "MISMIP_mod"
     uniform_flow_factor_config                  = 1E-16                            ! Uniform ice flow factor (applied when choice_ice_rheology_model_config = "uniform")
     choice_ice_heat_capacity_config             = 'Pounder1965'                    ! Choice of ice heat capacity model: "uniform", "Pounder1965"
     uniform_ice_heat_capacity_config            = 2009.0                           ! Uniform ice heat capacity (applied when choice_ice_heat_capacity_config = "uniform")

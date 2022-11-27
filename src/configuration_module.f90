@@ -345,6 +345,14 @@ MODULE configuration_module
   CHARACTER(LEN=256)  :: choice_mask_noice_GRL_config                = 'GRL_remove_Ellesmere'
   CHARACTER(LEN=256)  :: choice_mask_noice_ANT_config                = 'none'                           ! For Antarctica, additional choices are included for certain idealised-geometry experiments: "MISMIP_mod", "MISMIP+"
 
+  ! Fix/delay ice thickness evolution
+  REAL(dp)            :: fixed_sheet_geometry_config                 = 0._dp                            ! Fixed (1), free (0), or delayed grounded ice geometry evolution
+  REAL(dp)            :: fixed_shelf_geometry_config                 = 0._dp                            ! Fixed (1), free (0), or delayed floating ice geometry evolution
+  REAL(dp)            :: fixed_grounding_line_g_config               = 0._dp                            ! Fixed (1), free (0), or delayed GL geometry evolution (grounded side)
+  REAL(dp)            :: fixed_grounding_line_f_config               = 0._dp                            ! Fixed (1), free (0), or delayed GL geometry evolution (floating side)
+  REAL(dp)            :: fixed_decay_t_start_config                  = +9.9E9_dp                        ! Start time of linear transition between fixed/delayed and free evolution
+  REAL(dp)            :: fixed_decay_t_end_config                    = +9.9E9_dp                        ! End   time of linear transition between fixed/delayed and free evolution
+
   ! Ice dynamics - basal conditions and sliding
   ! ===========================================
 
@@ -901,6 +909,16 @@ MODULE configuration_module
     CHARACTER(LEN=256)                  :: choice_mask_noice_EAS
     CHARACTER(LEN=256)                  :: choice_mask_noice_GRL
     CHARACTER(LEN=256)                  :: choice_mask_noice_ANT
+
+    ! Partially fixed geometry, useful for initialisation and inversion runs
+    REAL(dp)                            :: fixed_sheet_geometry
+    REAL(dp)                            :: fixed_shelf_geometry
+    REAL(dp)                            :: fixed_grounding_line_g
+    REAL(dp)                            :: fixed_grounding_line_f
+    REAL(dp)                            :: fixed_decay_t_start
+    REAL(dp)                            :: fixed_decay_t_end
+    REAL(dp)                            :: fixed_mask_t_start
+    REAL(dp)                            :: fixed_mask_t_end
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================
@@ -1539,6 +1557,12 @@ CONTAINS
                      choice_mask_noice_EAS_config,                    &
                      choice_mask_noice_GRL_config,                    &
                      choice_mask_noice_ANT_config,                    &
+                     fixed_sheet_geometry_config,                     &
+                     fixed_shelf_geometry_config,                     &
+                     fixed_grounding_line_g_config,                   &
+                     fixed_grounding_line_f_config,                   &
+                     fixed_decay_t_start_config,                      &
+                     fixed_decay_t_end_config,                        &
                      choice_sliding_law_config,                       &
                      choice_idealised_sliding_law_config,             &
                      slid_delta_v_config,                             &
@@ -2067,6 +2091,14 @@ CONTAINS
     C%choice_mask_noice_EAS                    = choice_mask_noice_EAS_config
     C%choice_mask_noice_GRL                    = choice_mask_noice_GRL_config
     C%choice_mask_noice_ANT                    = choice_mask_noice_ANT_config
+
+    ! Partially fixed geometry, useful for initialisation and inversion runs
+    C%fixed_sheet_geometry                     = fixed_sheet_geometry_config
+    C%fixed_shelf_geometry                     = fixed_shelf_geometry_config
+    C%fixed_grounding_line_g                   = fixed_grounding_line_g_config
+    C%fixed_grounding_line_f                   = fixed_grounding_line_f_config
+    C%fixed_decay_t_start                      = fixed_decay_t_start_config
+    C%fixed_decay_t_end                        = fixed_decay_t_end_config
 
     ! Ice dynamics - basal conditions and sliding
     ! ===========================================

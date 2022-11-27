@@ -569,7 +569,7 @@ contains
 ! ===== Ice thickness update =====
 ! ================================
 
-  subroutine update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
+  subroutine update_ice_thickness( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq, time)
     ! Update the ice thickness at the end of a model time loop
 
     implicit none
@@ -580,6 +580,7 @@ contains
     integer, dimension(mesh%vi1:mesh%vi2), intent(in)    :: mask_noice
     type(type_reference_geometry),         intent(in)    :: refgeo_PD
     type(type_reference_geometry),         intent(in)    :: refgeo_GIAeq
+    real(dp),                              intent(in)    :: time
 
     ! Local variables:
     character(len=256), parameter                        :: routine_name = 'update_ice_thickness'
@@ -590,6 +591,9 @@ contains
     ! Save the previous ice mask, for use in thermodynamics
     ice%mask_ice_a_prev( mesh%vi1:mesh%vi2) = ice%mask_ice_a( mesh%vi1:mesh%vi2)
     call allgather_array(ice%mask_ice_a_prev)
+
+    ! Fix ice thickness over specific areas, if so desired
+    call fix_ice_thickness( mesh, ice, time)
 
     ! Set ice thickness to new value
     ice%Hi_a( mesh%vi1:mesh%vi2) = max( 0._dp, ice%Hi_tplusdt_a( mesh%vi1:mesh%vi2))
@@ -607,6 +611,111 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine update_ice_thickness
+
+  subroutine fix_ice_thickness( mesh, ice, time)
+    ! Check if we want to keep the ice thickness fixed in time for specific areas,
+    ! or delay its evolution by a given percentage each time step. Both options
+    ! include the possibility of reducing this constraint over time until ice is
+    ! eventually free to evolve naturally.
+
+    implicit none
+
+    ! In- and output variables:
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
+    real(dp),             intent(in)    :: time
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'fix_ice_thickness'
+    integer                             :: vi
+    real(dp)                            :: decay_start, decay_end, fixiness
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Fixiness ===
+    ! ================
+
+    ! Intial value
+    fixiness = 1._dp
+
+    ! Make sure that the start and end times make sense
+    decay_start = max( C%fixed_decay_t_start, C%start_time_of_run)
+    decay_end   = min( C%fixed_decay_t_end,   C%end_time_of_run)
+
+    ! Compute decaying fixiness
+    if (decay_start >= decay_end) then
+      ! This makes no sense
+      fixiness = 1._dp
+    elseif (time <= decay_start) then
+      ! Apply full fix/delay
+      fixiness = 1._dp
+    elseif (time >= decay_end) then
+      ! Remove any fix/delay
+      fixiness = 0._dp
+    else
+      ! Fixiness decreases with time
+      fixiness = 1._dp - (time - decay_start) / (decay_end - decay_start)
+    end if
+
+    ! Just in case
+    fixiness = min( 1._dp, max( 0._dp, fixiness))
+
+    ! === Fix, delay, limit ====
+    ! ==========================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      ! Grounding line (grounded side)
+      ! ==============================
+
+      if (ice%mask_gl_a( vi) == 1) then
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_g * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_g * fixiness)
+
+      ! Grounding line (floating side)
+      ! ==============================
+
+      elseif (ice%mask_glf_a( vi) == 1) then
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_grounding_line_f * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_grounding_line_f * fixiness)
+
+      ! Grounded ice
+      ! ============
+
+      elseif (ice%mask_sheet_a( vi) == 1) then
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_sheet_geometry * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_sheet_geometry * fixiness)
+
+      ! Floating ice
+      ! ============
+
+      elseif (ice%mask_shelf_a( vi) == 1) then
+
+        ! Compute new ice thickness
+        ice%Hi_tplusdt_a( vi) = ice%Hi_a( vi)         *          C%fixed_shelf_geometry * fixiness + &
+                                ice%Hi_tplusdt_a( vi) * (1._dp - C%fixed_shelf_geometry * fixiness)
+
+      end if
+
+    end do
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine fix_ice_thickness
 
   subroutine additional_ice_removal( mesh, ice, mask_noice, refgeo_PD, refgeo_GIAeq)
     ! Remove ice following various criteria

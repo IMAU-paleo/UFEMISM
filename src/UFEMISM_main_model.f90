@@ -255,7 +255,7 @@ contains
       ! == Update ice geometry
       ! ======================
 
-      call update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq)
+      call update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
 
       ! Advance region time
       ! ===================

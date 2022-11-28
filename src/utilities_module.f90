@@ -714,30 +714,29 @@ CONTAINS
   END SUBROUTINE line_integral_xydy
 
 ! == Smoothing operations
-  SUBROUTINE smooth_Gaussian_2D_grid( grid, d, r)
+  subroutine smooth_Gaussian_2D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 2D data field d
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables:
-    TYPE(type_grid),                     INTENT(IN)    :: grid
-    REAL(dp), DIMENSION(:,:  ),          INTENT(INOUT) :: d
-    REAL(dp),                            INTENT(IN)    :: r      ! Smoothing radius in m
+    type(type_grid),          intent(in)    :: grid
+    real(dp), dimension(:,:), intent(inout) :: d
+    real(dp),                 intent(in)    :: r      ! Smoothing radius in m
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'smooth_Gaussian_2D_grid'
-    INTEGER                                            :: i,j,ii,jj,n
-    REAL(dp), DIMENSION(:,:  ), POINTER                ::  d_ext,  d_ext_smooth
-    INTEGER                                            :: wd_ext, wd_ext_smooth
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: f
+    character(len=256), parameter           :: routine_name = 'smooth_Gaussian_2D_grid'
+    integer                                 :: i,j,ii,jj,n
+    real(dp), dimension(:,:  ), allocatable :: d_ext, d_ext_smooth
+    real(dp), dimension(:    ), allocatable :: f
 
-    n = CEILING( r / grid%dx) * 3  ! Number of cells to extend the data by (3 standard deviations is enough to capture the tails of the normal distribution)
+    n = ceiling( r / grid%dx) * 3  ! Number of cells to extend the data by (3 standard deviations is enough to capture the tails of the normal distribution)
 
     ! Fill in the smoothing filters
-    ALLOCATE( f( -n:n))
+    allocate( f( -n:n))
     f = 0._dp
     DO i = -n, n
-      f(i) = EXP( -0.5_dp * (REAL(i,dp) * grid%dx/r)**2)
+      f(i) = exp( -0.5_dp * (real(i,dp) * grid%dx/r)**2)
     END DO
     f = f / SUM(f)
 
@@ -746,7 +745,7 @@ CONTAINS
     allocate(d_ext_smooth( grid%nx + 2*n, grid%ny + 2*n ))
 
     ! Copy data to the extended array and fill in the margins
-    d(1+n:grid%nx+n,1+n:grid%ny+n) = d
+    d_ext(1+n:grid%nx+n,1+n:grid%ny+n) = d
     ! West
     d_ext( n+1:n+grid%nx, 1            ) = d( :      ,1      )
     ! East
@@ -764,40 +763,41 @@ CONTAINS
     ! Convolute extended data with the smoothing filter
     d_ext_smooth( 1+n:grid%nx+n,:) = 0._dp
 
-    DO j = 1, grid%ny
-    DO i = 1, grid%nx
-      DO ii = -n, n
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      do ii = -n, n
         d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n+ii,j+n) * f(ii)
-      END DO
-    END DO
-    END DO
+      end do
+    end do
+    end do
 
     d_ext( 1+n:grid%nx+n,:) = d_ext_smooth( 1+n:grid%nx+n,:)
 
-    DO j = 1, grid%ny
+    do j = 1, grid%ny
       d_ext(           1:          n,j) = d( 1      ,j)
       d_ext( grid%nx+n+1:grid%nx+2*n,j) = d( grid%nx,j)
-    END DO
+    end do
 
     d_ext_smooth( 1+n:grid%nx+n,:) = 0._dp
 
-    DO j = 1, grid%ny
-    DO i = 1, grid%nx
-      DO jj = -n, n
+    do j = 1, grid%ny
+    do i = 1, grid%nx
+      do jj = -n, n
         d_ext_smooth( i+n,j+n) = d_ext_smooth( i+n,j+n) + d_ext( i+n,j+n+jj) * f(jj)
-      END DO
-    END DO
-    END DO
+      end do
+    end do
+    end do
 
     ! Copy data back
     d = d_ext_smooth( 1+n:grid%nx+n, 1+n:grid%ny+n)
 
     ! Clean up after yourself
-    DEALLOCATE( f)
+    deallocate( f)
     deallocate( d_ext)
     deallocate( d_ext_smooth)
 
-  END SUBROUTINE smooth_Gaussian_2D_grid
+  end subroutine smooth_Gaussian_2D_grid
+
   SUBROUTINE smooth_Gaussian_3D_grid( grid, d, r)
     ! Apply a Gaussian smoothing filter of with sigma = n*dx to the 3D data field d
 
@@ -1070,7 +1070,7 @@ CONTAINS
       diag(i) = diag(i)-coef*udiag(i-1)
       rhs(i) = rhs(i)-coef*rhs(i-1)
     end do
-      
+
     ! Backward substitution
     x(n) = rhs(n)/diag(n)
     do i=n-1,1,-1
@@ -2348,5 +2348,192 @@ CONTAINS
     end if
 
   end subroutine time_display
+
+  ! == Gaussian extrapolation (used for e.g. basal roughness inversion)
+  subroutine extrapolate_Gaussian_floodfill_mesh( mesh, mask, d, sigma, mask_filled)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! Note about the mask:
+    !    2 = data provided
+    !    1 = no data provided, fill allowed
+    !    0 = no fill allowed
+    ! (so basically this routine extrapolates data from the area
+    !  where mask == 2 into the area where mask == 1)
+    !
+    ! NOTE: Not parallelised! When using this routine to extrapolate ocean data,
+    !       parallelisation can be achieved by dividing the vertical layers over
+    !       the processes. Otherwise, be careful to only let the Master process
+    !       call this routine!
+
+    implicit none
+
+    ! In/output variables:
+    type(type_mesh),        intent(in)    :: mesh
+    integer,  dimension(:), intent(in)    :: mask
+    real(dp), dimension(:), intent(inout) :: d
+    real(dp),               intent(in)    :: sigma
+    integer,  dimension(:), intent(out)   :: mask_filled   ! 1 = successfully filled, 2 = failed to fill (region of to-be-filled pixels not connected to source data)
+
+    ! Local variables:
+    character(len=256), parameter         :: routine_name = 'extrapolate_Gaussian_floodfill_mesh'
+    integer                               :: vi, ci, vc, it, k
+    integer                               :: stackN1, stackN2
+    integer, dimension(:), allocatable    :: stack1, stack2
+    integer, dimension(:), allocatable    :: map
+    integer                               :: n_search
+    logical                               :: has_filled_neighbours
+    integer                               :: n
+    real(dp)                              :: sum_d, w, sum_w
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! Search "radius"
+    ! n_search = 1 + CEILING( 2._dp * sigma / grid%dx)
+
+    ! Allocate map and stacks
+    allocate( map(    mesh%nV))
+    allocate( stack1( mesh%nV))
+    allocate( stack2( mesh%nV))
+
+    map         = 0
+    stack1      = 0
+    stack2      = 0
+    stackN1     = 0
+    stackN2     = 0
+    mask_filled = 0
+
+    ! Initialise the map from the mask
+    do vi = 1, mesh%nV
+      if (mask( vi) == 2) then
+        map( vi) = 2
+      end if
+    end do
+
+    ! Initialise the stack with all empty-next-to-filled mesh vertices
+    do vi = 1, mesh%nV
+
+      if (mask( vi) == 1) then
+        ! This vertex is empty and should be filled
+
+        has_filled_neighbours = .false.
+        do ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+          if (mask( vc) == 2) then
+            has_filled_neighbours = .true.
+            exit
+          end if
+          if (has_filled_neighbours) exit
+        end do
+
+        if (has_filled_neighbours) then
+          ! Add this empty-with-filled-neighbours mesh vertex to the stack,
+          ! and mark it as stacked on the map
+          map( vi) = 1
+          stackN2 = stackN2 + 1
+          stack2( stackN2) = vi
+        end if
+
+      end if ! (map( vi) == 0)
+
+    end do
+
+    ! Perform the flood-fill
+    it = 0
+    do while (stackN2 > 0)
+
+      it = it + 1
+
+      ! Go over all the stacked empty-next-to-filled mesh vertices, perform the
+      ! Gaussian-kernel extrapolation to fill, and mark them as as such on the map
+      do k = 1, stackN2
+
+        ! Get mesh vertex index
+        vi = stack2( k)
+
+        ! Find Gaussian-weighted average value over nearby filled pixels within the basin
+        n     = 0
+        sum_d = 0._dp
+        sum_w = 0._dp
+
+        do ci = 1, mesh%nC( vi)
+          vc = mesh%C( vi,ci)
+
+          if (map( vc) == 2) then
+            n     = n + 1
+            w     = exp( -0.5_dp * (norm2( mesh%V( vi,:) - mesh%V( vc,:)) / sigma)**2)
+            sum_w = sum_w + w
+            sum_d = sum_d + w * d( vc)
+          end if
+
+        end do
+
+        ! Fill in averaged value
+        d( vi) = sum_d / sum_w
+
+      end do ! do k = 1, stackN2
+
+      ! Mark all newly-filled mesh vertices as such
+      do k = 1, stackN2
+
+        ! Get mesh vertex index
+        vi = stack2( k)
+
+        ! Mark grid cell as filled
+        map( vi) = 2
+        mask_filled( vi) = 1
+
+      end do ! do k = 1, stackN2
+
+      ! Cycle the stacks
+      stack1  = stack2
+      stackN1 = stackN2
+      stack2  = 0
+      stackN2 = 0
+
+      ! List new empty-next-to-filled grid cells
+      do k = 1, stackN1
+
+        ! Get grid cell indices
+        vi = stack1( k)
+
+        ! Find empty neighbours; if unlisted, list them and mark them on the map
+        do ci = 1, mesh%nC( vi)
+            vc = mesh%C( vi,ci)
+
+          if (map( vc) == 0 .and. mask( vc) == 1) then
+            map( vc) = 1
+            stackN2 = stackN2 + 1
+            stack2( stackN2) = vc
+          end if
+
+        end do
+
+      end do ! do k = 1, stackN1
+
+      ! Safety
+      if (it > 2 * mesh%nV) then
+        call crash('flood-fill got stuck!')
+      end if
+
+    end do ! do while (stackN2 > 0)
+
+    ! Mark grid cells that could not be filled
+    do vi = 1, mesh%nV
+      if (mask_filled( vi) == 0 .and. mask( vi) == 1) then
+        mask_filled( vi) = 2
+      end if
+    end do
+
+    ! Clean up after yourself
+    deallocate( map   )
+    deallocate( stack1)
+    deallocate( stack2)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine extrapolate_Gaussian_floodfill_mesh
 
 END MODULE utilities_module

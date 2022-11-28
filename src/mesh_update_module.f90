@@ -572,29 +572,29 @@ MODULE mesh_update_module
   END SUBROUTINE refine_mesh
 
   ! == Determine if mesh updating is needed
-  SUBROUTINE determine_mesh_fitness( mesh, ice, fitness)
+  subroutine determine_mesh_fitness( mesh, ice, fitness)
     ! Determine how "fit" the current mesh is.
 
-    IMPLICIT NONE
+    implicit none
 
     ! In/output variables
-    TYPE(type_mesh),            INTENT(IN)        :: mesh
-    TYPE(type_ice_model),       INTENT(INOUT)     :: ice
-    REAL(dp),                   INTENT(OUT)       :: fitness
+    type(type_mesh),      intent(in)    :: mesh
+    type(type_ice_model), intent(inout) :: ice
+    real(dp),             intent(out)   :: fitness
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                 :: routine_name = 'determine_mesh_fitness'
-    INTEGER                                       :: ti, i, status(MPI_STATUS_SIZE)
-    INTEGER                                       :: v1, v2, v3
-    REAL(dp), DIMENSION(2)                        :: p,q,r,pq,qr,rp
-    REAL(dp)                                      :: dmax
-    REAL(dp), PARAMETER                           :: res_tol = 1.2_dp ! Resolution tolerance factor
-    INTEGER                                       :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
-    REAL(dp)                                      :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
-    REAL(dp)                                      :: fcoast, fmargin, fgl, fcf
+    character(len=256), parameter       :: routine_name = 'determine_mesh_fitness'
+    integer                             :: ti, i, status(MPI_STATUS_SIZE)
+    integer                             :: v1, v2, v3
+    real(dp), dimension(2)              :: p,q,r,pq,qr,rp
+    real(dp)                            :: dmax
+    real(dp), parameter                 :: res_tol = 1.2_dp ! Resolution tolerance factor
+    integer                             :: ncoast, nucoast, nmargin, numargin, ngl, nugl, ncf, nucf
+    real(dp)                            :: lcoast, lucoast, lmargin, lumargin, lgl, lugl, lcf, lucf
+    real(dp)                            :: fcoast, fmargin, fgl, fcf
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    call init_routine( routine_name)
 
     fitness = 1._dp
 
@@ -618,7 +618,7 @@ MODULE mesh_update_module
     lugl     = 0._dp
     lucf     = 0._dp
 
-    DO ti = 1, mesh%nTri
+    do ti = 1, mesh%nTri
 
       ! Triangle vertex indices
       v1 = mesh%Tri( ti,1)
@@ -636,62 +636,79 @@ MODULE mesh_update_module
       rp = r-p
 
       ! Longest triangle leg
-      dmax = MAXVAL([SQRT(pq(1)**2+pq(2)**2), SQRT(qr(1)**2+qr(2)**2), SQRT(rp(1)**2+rp(2)**2)])
+      dmax = maxval([sqrt(pq(1)**2+pq(2)**2), sqrt(qr(1)**2+qr(2)**2), sqrt(rp(1)**2+rp(2)**2)])
 
-      IF (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) THEN
+      if (ice%mask_coast_a( v1)==1 .OR. ice%mask_coast_a( v2)==1 .OR. ice%mask_coast_a( v3)==1) then
         ncoast = ncoast + 1
         lcoast = lcoast + dmax
-        IF (dmax > C%res_max_coast*2.0_dp*1000._dp*res_tol) THEN
+        if (dmax > C%res_max_coast*2.0_dp*1000._dp*res_tol) then
           nucoast = nucoast + 1
           lucoast = lucoast + dmax
-        END IF
-      END IF
+        end if
+      end if
 
-      IF (ice%mask_margin_a( v1)==1 .OR. ice%mask_margin_a( v2)==1 .OR. ice%mask_margin_a( v3)==1) THEN
+      if (ice%mask_margin_a( v1)==1 .OR. ice%mask_margin_a( v2)==1 .OR. ice%mask_margin_a( v3)==1) then
         nmargin = nmargin + 1
         lmargin = lmargin + dmax
-        IF (dmax > C%res_max_margin*2.0_dp*1000._dp*res_tol) THEN
+        if (dmax > C%res_max_margin*2.0_dp*1000._dp*res_tol) then
           numargin = numargin + 1
           lumargin = lumargin + dmax
-        END IF
-      END IF
-      IF (ice%mask_gl_a( v1)==1 .OR. ice%mask_gl_a( v2)==1 .OR. ice%mask_gl_a( v3)==1) THEN
+        end if
+      end if
+
+      if (ice%mask_gl_a( v1)==1 .OR. ice%mask_gl_a( v2)==1 .OR. ice%mask_gl_a( v3)==1) then
         ngl = ngl + 1
         lgl = lgl + dmax
-        IF (dmax > C%res_max_gl*2.0_dp*1000._dp*res_tol) THEN
+        if (dmax > C%res_max_gl*2.0_dp*1000._dp*res_tol) then
           nugl = nugl + 1
           lugl = lugl + dmax
-        END IF
-      END IF
-      IF (ice%mask_cf_a( v1)==1 .OR. ice%mask_cf_a( v2)==1 .OR. ice%mask_cf_a( v3)==1) THEN
+        end if
+      end if
+
+      if (ice%mask_cf_a( v1)==1 .OR. ice%mask_cf_a( v2)==1 .OR. ice%mask_cf_a( v3)==1) then
         ncf = ncf + 1
         lcf = lcf + dmax
-        IF (dmax > C%res_max_cf*2.0_dp*1000._dp*res_tol) THEN
+        if (dmax > C%res_max_cf*2.0_dp*1000._dp*res_tol) then
           nucf = nucf + 1
           lucf = lucf + dmax
-        END IF
-      END IF
+        end if
+      end if
 
-    END DO ! DO ti = 1, mesh%nT
+    end do ! do ti = 1, mesh%nT
 
     ! Calculate mesh fitness
-    fcoast  = 1._dp - lucoast  / lcoast
-    fmargin = 1._dp - lumargin / lmargin
-    fgl     = 1._dp - lugl     / lgl
-    fcf     = 1._dp - lucf     / lcf
 
-    IF (ncoast ==0) fcoast  = 1._dp
-    IF (nmargin==0) fmargin = 1._dp
-    IF (ngl    ==0) fgl     = 1._dp
-    if (ncf    ==0) fcf     = 1._dp
+    if (ncoast == 0) then
+      fcoast = 1._dp
+    else
+      fcoast = 1._dp - lucoast / lcoast
+    end if
 
-    fitness = MIN( MIN( MIN( fcoast, fmargin), fgl), fcf)
+    if (nmargin == 0) then
+      fmargin = 1._dp
+    else
+      fmargin = 1._dp - lumargin / lmargin
+    end if
 
-    !WRITE(0,'(A,I3,A)') '   Mesh fitness: ', NINT(fitness * 100._dp), ' %'
+    if (ngl == 0) then
+      fgl = 1._dp
+    else
+      fgl = 1._dp - lugl / lgl
+    end if
+
+    if (ncf == 0) then
+      fcf = 1._dp
+    else
+      fcf = 1._dp - lucf / lcf
+    end if
+
+    fitness = min( min( min( fcoast, fmargin), fgl), fcf)
+
+    write(0,'(A,I3,A)') '   Mesh fitness: ', nint(fitness * 100._dp), ' %'
 
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    call finalise_routine( routine_name)
 
-  END SUBROUTINE determine_mesh_fitness
+  end subroutine determine_mesh_fitness
 
 END MODULE mesh_update_module

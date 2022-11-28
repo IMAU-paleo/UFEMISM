@@ -1862,9 +1862,9 @@ CONTAINS
           ELSEIF ( h_delta <= 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) THEN
 
             IF (t_scale < .9_dp) THEN
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/2._dp * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
+              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/3._dp * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
             ELSE
-              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/2._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+              ice%phi_fric_inv_a( vi) = ice%phi_fric_inv_a( vi) + a_scale/3._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
             END IF
 
           ELSEIF ( h_delta >= 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN

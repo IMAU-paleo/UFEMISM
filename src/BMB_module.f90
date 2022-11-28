@@ -2824,7 +2824,7 @@ CONTAINS
           IF (t_scale < .9_dp) THEN
             BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - a_scale * (1._dp - EXP(-ABS(h_delta*ice%dHi_dt_a( vi))))
           ELSE
-            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale/10._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
+            BMB%T_ocean_base( vi) = BMB%T_ocean_base( vi) - C%ocean_inv_hi_scale/20._dp * (1._dp - EXP(-ABS(ice%dHi_dt_a( vi))))
           END IF
 
         ELSEIF ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) THEN

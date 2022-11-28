@@ -404,7 +404,7 @@ contains
       region%ice%pc_f1 = region%ice%dHi_dt_a
 
       ! Predict new ice geometry
-      region%ice%Hi_pred = MAX(0._dp,  region%ice%Hi_a + region%dt_crit_ice * &
+      region%ice%Hi_pred = max(0._dp,  region%ice%Hi_a + region%dt_crit_ice * &
                              ((1._dp + region%ice%pc_zeta / 2._dp) * region%ice%pc_f1 - &
                                       (region%ice%pc_zeta / 2._dp) * region%ice%pc_f2))
 
@@ -1025,6 +1025,16 @@ contains
       region%t_next_ELRA    = region%t_last_ELRA + C%dt_bedrock_ELRA
     end if
     t_next = min( t_next, region%t_next_ELRA)
+
+    region%do_slid_inv = .false.
+    if (C%do_slid_inv) then
+      if (region%time == region%t_next_slid_inv) then
+        region%do_slid_inv     = .true.
+        region%t_last_slid_inv = region%time
+        region%t_next_slid_inv = region%t_last_slid_inv + C%dt_slid_inv
+      end if
+      t_next = min( t_next, region%t_next_slid_inv)
+    end if
 
     region%do_output  = .false.
     if (region%time == region%t_next_output) then

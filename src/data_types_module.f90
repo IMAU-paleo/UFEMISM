@@ -116,6 +116,7 @@ module data_types_module
 
     ! Ice dynamics - basal roughness / friction
     REAL(dp), DIMENSION(:    ), allocatable :: phi_fric_a                  ! Till friction angle (degrees)
+    REAL(dp), DIMENSION(:    ), allocatable :: phi_fric_inv_a              ! Inverted till friction angle (degrees)
     REAL(dp), DIMENSION(:    ), allocatable :: tauc_a                      ! Till yield stress tauc   (used when choice_sliding_law = "Coloumb" or "Coulomb_regularised")
     REAL(dp), DIMENSION(:    ), allocatable :: alpha_sq_a                  ! Coulomb-law friction coefficient [unitless]         (used when choice_sliding_law =             "Tsai2015", or "Schoof2005")
     REAL(dp), DIMENSION(:    ), allocatable :: beta_sq_a                   ! Power-law friction coefficient   [Pa m^−1/3 yr^1/3] (used when choice_sliding_law = "Weertman", "Tsai2015", or "Schoof2005")
@@ -975,6 +976,7 @@ module data_types_module
     REAL(dp)                                :: t_last_SMB,     t_next_SMB
     REAL(dp)                                :: t_last_BMB,     t_next_BMB
     REAL(dp)                                :: t_last_ELRA,    t_next_ELRA
+    REAL(dp)                                :: t_last_slid_inv, t_next_slid_inv
     LOGICAL                                 :: do_mesh
     LOGICAL                                 :: do_SIA
     LOGICAL                                 :: do_SSA
@@ -986,6 +988,7 @@ module data_types_module
     LOGICAL                                 :: do_BMB
     LOGICAL                                 :: do_output
     LOGICAL                                 :: do_ELRA
+    LOGICAL                                 :: do_slid_inv
 
     ! The region's ice sheet's volume and volume above flotation (in mSLE, so the second one is the ice sheets GMSL contribution)
     REAL(dp)                                :: ice_area

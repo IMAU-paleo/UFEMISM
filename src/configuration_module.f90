@@ -59,6 +59,7 @@ MODULE configuration_module
   REAL(dp)            :: dt_output_config                            = 5000.0_dp                        ! Time step (in years) for writing output
   REAL(dp)            :: dt_mesh_min_config                          = 50._dp                           ! Minimum amount of time (in years) between mesh updates
   REAL(dp)            :: dt_bedrock_ELRA_config                      = 100._dp                          ! Time step (in years) for updating the bedrock deformation rate with the ELRA model
+  REAL(dp)            :: dt_slid_inv_config                          = 10._dp                           ! Time step (in years) for calling the iterative inversion of basal roughness
 
   ! Which ice sheets do we simulate?
   ! ================================
@@ -372,7 +373,7 @@ MODULE configuration_module
   REAL(dp)            :: Martin2011_hydro_Hb_max_config              = 1000._dp                         ! Martin et al. (2011) basal hydrology model: high-end Hb  value of bedrock-dependent pore-water pressure
 
   ! Basal roughness / friction
-  CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'parameterised'                  ! "uniform", "parameterised", "prescribed"
+  CHARACTER(LEN=256)  :: choice_basal_roughness_config               = 'uniform'                        ! "uniform", "parameterised", "prescribed", "restart"
   REAL(dp)            :: slid_Weertman_beta_sq_uniform_config        = 1.0E4_dp                         ! Uniform value for beta_sq  in Weertman sliding law
   REAL(dp)            :: slid_Coulomb_phi_fric_uniform_config        = 15._dp                           ! Uniform value for phi_fric in (regularised) Coulomb sliding law
   REAL(dp)            :: slid_Tsai2015_alpha_sq_uniform_config       = 0.5_dp                           ! Uniform value for alpha_sq in the Tsai2015 sliding law
@@ -386,6 +387,33 @@ MODULE configuration_module
   REAL(dp)            :: Martin2011till_phi_min_config               = 5._dp                            ! Martin et al. (2011) bed roughness model: low-end  phi value of bedrock-dependent till friction angle
   REAL(dp)            :: Martin2011till_phi_max_config               = 20._dp                           ! Martin et al. (2011) bed roughness model: high-end phi value of bedrock-dependent till friction angle
   CHARACTER(LEN=256)  :: basal_roughness_filename_config             = ''                               ! NetCDF file containing a basal roughness field for the chosen sliding law
+
+  ! Basal roughness inversion
+  LOGICAL             :: do_slid_inv_config                          = .FALSE.                          ! Whether or not to perform an iterative inversion of bed roughness
+  CHARACTER(LEN=256)  :: choice_slid_inv_method_config               = 'Bernales2017'                   ! Choice of iterative inversion method: "Bernales2017", "Berends2022"
+  REAL(dp)            :: slid_inv_t_start_config                     = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+  REAL(dp)            :: slid_inv_t_end_config                       = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+  REAL(dp)            :: slid_inv_phi_min_config                     = .1_dp                            ! Minimum value of phi_fric allowed during inversion
+  REAL(dp)            :: slid_inv_phi_max_config                     = 30._dp                           ! Maximum value of phi_fric allowed during inversion
+  CHARACTER(LEN=256)  :: slid_inv_filename_output_config             = 'bed_roughness_inv.nc'           ! NetCDF file where the final inverted basal roughness will be saved
+  INTEGER             :: slid_inv_window_size_config                 = 1                                ! Number of previous time steps used to compute a running average of inverted values
+
+  LOGICAL             :: do_slid_inv_Bernales2017_smooth_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is smoothed
+  LOGICAL             :: do_slid_inv_Bernales2017_extrap_config      = .FALSE.                          ! If set to TRUE, inverted basal roughness is extrapolated over ice-free regions
+  LOGICAL             :: do_slid_inv_Bernales2017_decay_config       = .FALSE.                          ! If set to TRUE, vary the inversion adjustment over time through the scaling factor
+  REAL(dp)            :: slid_inv_Bernales2017_scale_start_config    = .5_dp                            ! Initial scaling factor for inversion procedure [m]
+  REAL(dp)            :: slid_inv_Bernales2017_scale_end_config      = .2_dp                            ! Final   scaling factor for inversion procedure [m]
+  REAL(dp)            :: slid_inv_Bernales2017_smooth_r_config       = 40000._dp                        ! Smoothing radius for inversion procedure [m]
+  REAL(dp)            :: slid_inv_Bernales2017_smooth_w_config       = .1_dp                            ! Weight given to the smoothed roughness (1 = full smoothing applied)
+  REAL(dp)            :: slid_inv_Bernales2017_tol_diff_config       = 0._dp                            ! Minimum ice thickness difference [m] that triggers inversion
+  REAL(dp)            :: slid_inv_Bernales2017_tol_frac_config       = 0.0_dp                           ! Minimum ratio between ice thickness difference and reference value that triggers inversion
+
+  REAL(dp)            :: slid_inv_Berends2022_tauc_config            = 10._dp                           ! Timescale       in the Berends2022 geometry/velocity-based basal inversion method [yr]
+  REAL(dp)            :: slid_inv_Berends2022_H0_config              = 100._dp                          ! First  thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+  REAL(dp)            :: slid_inv_Berends2022_u0_config              = 250._dp                          ! First  velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+  REAL(dp)            :: slid_inv_Berends2022_Hi_scale_config        = 300._dp                          ! Second thickness scale in the Berends2022 geometry/velocity-based basal inversion method [m]
+  REAL(dp)            :: slid_inv_Berends2022_u_scale_config         = 3000._dp                         ! Second velocity  scale in the Berends2022 geometry/velocity-based basal inversion method [m/yr]
+  CHARACTER(LEN=256)  :: slid_inv_target_velocity_filename_config    = ''                               ! NetCDF file where the target velocities are read in the Berends2022 geometry/velocity-based basal inversion methods
 
   ! Ice dynamics - calving
   ! ======================
@@ -643,6 +671,7 @@ MODULE configuration_module
     REAL(dp)                            :: dt_output
     REAL(dp)                            :: dt_mesh_min
     REAL(dp)                            :: dt_bedrock_ELRA
+    REAL(dp)                            :: dt_slid_inv
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -953,6 +982,33 @@ MODULE configuration_module
     REAL(dp)                            :: Martin2011till_phi_min
     REAL(dp)                            :: Martin2011till_phi_max
     CHARACTER(LEN=256)                  :: basal_roughness_filename
+
+    ! Basal roughness inversion
+    LOGICAL                             :: do_slid_inv
+    CHARACTER(LEN=256)                  :: choice_slid_inv_method
+    REAL(dp)                            :: slid_inv_t_start
+    REAL(dp)                            :: slid_inv_t_end
+    REAL(dp)                            :: slid_inv_phi_min
+    REAL(dp)                            :: slid_inv_phi_max
+    CHARACTER(LEN=256)                  :: slid_inv_filename_output
+    INTEGER                             :: slid_inv_window_size
+
+    LOGICAL                             :: do_slid_inv_Bernales2017_smooth
+    LOGICAL                             :: do_slid_inv_Bernales2017_extrap
+    LOGICAL                             :: do_slid_inv_Bernales2017_decay
+    REAL(dp)                            :: slid_inv_Bernales2017_scale_start
+    REAL(dp)                            :: slid_inv_Bernales2017_scale_end
+    REAL(dp)                            :: slid_inv_Bernales2017_smooth_r
+    REAL(dp)                            :: slid_inv_Bernales2017_smooth_w
+    REAL(dp)                            :: slid_inv_Bernales2017_tol_diff
+    REAL(dp)                            :: slid_inv_Bernales2017_tol_frac
+
+    REAL(dp)                            :: slid_inv_Berends2022_tauc
+    REAL(dp)                            :: slid_inv_Berends2022_H0
+    REAL(dp)                            :: slid_inv_Berends2022_u0
+    REAL(dp)                            :: slid_inv_Berends2022_Hi_scale
+    REAL(dp)                            :: slid_inv_Berends2022_u_scale
+    CHARACTER(LEN=256)                  :: slid_inv_target_velocity_filename
 
     ! Ice dynamics - calving
     ! ======================
@@ -1403,6 +1459,7 @@ CONTAINS
                      dt_output_config,                                &
                      dt_mesh_min_config,                              &
                      dt_bedrock_ELRA_config,                          &
+                     dt_slid_inv_config,                              &
                      do_NAM_config,                                   &
                      do_EAS_config,                                   &
                      do_GRL_config,                                   &
@@ -1588,6 +1645,29 @@ CONTAINS
                      Martin2011till_phi_min_config,                   &
                      Martin2011till_phi_max_config,                   &
                      basal_roughness_filename_config,                 &
+                     do_slid_inv_config,                              &
+                     choice_slid_inv_method_config,                   &
+                     slid_inv_t_start_config,                         &
+                     slid_inv_t_end_config,                           &
+                     slid_inv_phi_min_config,                         &
+                     slid_inv_phi_max_config,                         &
+                     slid_inv_filename_output_config,                 &
+                     slid_inv_window_size_config,                     &
+                     do_slid_inv_Bernales2017_smooth_config,          &
+                     do_slid_inv_Bernales2017_extrap_config,          &
+                     do_slid_inv_Bernales2017_decay_config,           &
+                     slid_inv_Bernales2017_scale_start_config,        &
+                     slid_inv_Bernales2017_scale_end_config,          &
+                     slid_inv_Bernales2017_smooth_r_config,           &
+                     slid_inv_Bernales2017_smooth_w_config,           &
+                     slid_inv_Bernales2017_tol_diff_config,           &
+                     slid_inv_Bernales2017_tol_frac_config,           &
+                     slid_inv_Berends2022_tauc_config,                &
+                     slid_inv_Berends2022_H0_config,                  &
+                     slid_inv_Berends2022_u0_config,                  &
+                     slid_inv_Berends2022_Hi_scale_config,            &
+                     slid_inv_Berends2022_u_scale_config,             &
+                     slid_inv_target_velocity_filename_config,        &
                      choice_calving_law_config,                       &
                      calving_threshold_thickness_config,              &
                      do_remove_shelves_config,                        &
@@ -1823,6 +1903,7 @@ CONTAINS
     C%dt_output                                = dt_output_config
     C%dt_mesh_min                              = dt_mesh_min_config
     C%dt_bedrock_ELRA                          = dt_bedrock_ELRA_config
+    C%dt_slid_inv                              = dt_slid_inv_config
 
     ! Which ice sheets do we simulate?
     ! ================================
@@ -2133,6 +2214,31 @@ CONTAINS
     C%Martin2011till_phi_min                   = Martin2011till_phi_min_config
     C%Martin2011till_phi_max                   = Martin2011till_phi_max_config
     C%basal_roughness_filename                 = basal_roughness_filename_config
+
+    ! Basal roughness inversion
+    C%do_slid_inv                              = do_slid_inv_config
+    C%choice_slid_inv_method                   = choice_slid_inv_method_config
+    C%slid_inv_t_start                         = slid_inv_t_start_config
+    C%slid_inv_t_end                           = slid_inv_t_end_config
+    C%slid_inv_phi_min                         = slid_inv_phi_min_config
+    C%slid_inv_phi_max                         = slid_inv_phi_max_config
+    C%slid_inv_filename_output                 = slid_inv_filename_output_config
+    C%slid_inv_window_size                     = slid_inv_window_size_config
+    C%do_slid_inv_Bernales2017_smooth          = do_slid_inv_Bernales2017_smooth_config
+    C%do_slid_inv_Bernales2017_extrap          = do_slid_inv_Bernales2017_extrap_config
+    C%do_slid_inv_Bernales2017_decay           = do_slid_inv_Bernales2017_decay_config
+    C%slid_inv_Bernales2017_scale_start        = slid_inv_Bernales2017_scale_start_config
+    C%slid_inv_Bernales2017_scale_end          = slid_inv_Bernales2017_scale_end_config
+    C%slid_inv_Bernales2017_smooth_r           = slid_inv_Bernales2017_smooth_r_config
+    C%slid_inv_Bernales2017_smooth_w           = slid_inv_Bernales2017_smooth_w_config
+    C%slid_inv_Bernales2017_tol_diff           = slid_inv_Bernales2017_tol_diff_config
+    C%slid_inv_Bernales2017_tol_frac           = slid_inv_Bernales2017_tol_frac_config
+    C%slid_inv_Berends2022_tauc                = slid_inv_Berends2022_tauc_config
+    C%slid_inv_Berends2022_H0                  = slid_inv_Berends2022_H0_config
+    C%slid_inv_Berends2022_u0                  = slid_inv_Berends2022_u0_config
+    C%slid_inv_Berends2022_Hi_scale            = slid_inv_Berends2022_Hi_scale_config
+    C%slid_inv_Berends2022_u_scale             = slid_inv_Berends2022_u_scale_config
+    C%slid_inv_target_velocity_filename        = slid_inv_target_velocity_filename_config
 
     ! Ice dynamics - calving
     ! ======================

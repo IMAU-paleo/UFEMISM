@@ -5,31 +5,32 @@ module UFEMISM_main_model
 ! ================
 
   use mpi
-  use configuration_module,          only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
-  use parallel_module,               only : par, sync, ierr, cerr, partition_list
-  use data_types_module,             only : type_model_region, type_grid, type_remapping_mesh_mesh, &
-                                            type_climate_matrix_global, type_ocean_matrix_global
-  use reference_fields_module,       only : initialise_reference_geometries, map_reference_geometries_to_mesh
-  use mesh_memory_module,            only : deallocate_mesh_all
-  use mesh_creation_module,          only : create_mesh_from_cart_data
-  use mesh_mapping_module,           only : calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
-                                            calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
-                                            calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
-  use mesh_update_module,            only : determine_mesh_fitness, create_new_mesh
-  use mesh_single_module,            only : create_new_mesh_single, create_single_mesh_from_cart_data
-  use netcdf_module,                 only : initialise_debug_fields, create_output_files, associate_debug_fields, &
-                                            write_to_output_files, create_debug_file, reallocate_debug_fields
-  use ice_dynamics_module,           only : initialise_ice_model, remap_ice_model, run_ice_model, update_ice_thickness
-  use climate_module,                only : initialise_climate_model_regional, remap_climate_model, run_climate_model
-  use ocean_module,                  only : initialise_ocean_model_regional, remap_ocean_model, run_ocean_model
-  use BMB_module,                    only : initialise_BMB_model, remap_bmb_model, run_BMB_model
-  use SMB_module,                    only : initialise_SMB_model, remap_smb_model, run_SMB_model
-  use general_ice_model_data_module, only : initialise_mask_noice, initialise_basins
-  use utilities_module,              only : time_display, inverse_oblique_sg_projection
-  use thermodynamics_module,         only : initialise_thermo_model, run_thermo_model
-  use general_sea_level_module,      only : calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
-  use scalar_data_output_module,     only : initialise_regional_scalar_data, write_regional_scalar_data
-  use forcing_module,                only : forcing, update_sealevel_at_model_time
+  use configuration_module,                only : dp, C, routine_path, init_routine, finalise_routine, crash, warning
+  use parallel_module,                     only : par, sync, ierr, cerr, partition_list
+  use data_types_module,                   only : type_model_region, type_grid, type_remapping_mesh_mesh, &
+                                                  type_climate_matrix_global, type_ocean_matrix_global
+  use reference_fields_module,             only : initialise_reference_geometries, map_reference_geometries_to_mesh
+  use mesh_memory_module,                  only : deallocate_mesh_all
+  use mesh_creation_module,                only : create_mesh_from_cart_data
+  use mesh_mapping_module,                 only : calc_remapping_operators_mesh_mesh, deallocate_remapping_operators_mesh_mesh, &
+                                                  calc_remapping_operator_mesh2grid, deallocate_remapping_operators_mesh2grid, &
+                                                  calc_remapping_operator_grid2mesh, deallocate_remapping_operators_grid2mesh
+  use mesh_update_module,                  only : determine_mesh_fitness, create_new_mesh
+  use mesh_single_module,                  only : create_new_mesh_single, create_single_mesh_from_cart_data
+  use netcdf_module,                       only : initialise_debug_fields, create_output_files, associate_debug_fields, &
+                                                  write_to_output_files, create_debug_file, reallocate_debug_fields
+  use ice_dynamics_module,                 only : initialise_ice_model, remap_ice_model, run_ice_model, update_ice_thickness
+  use climate_module,                      only : initialise_climate_model_regional, remap_climate_model, run_climate_model
+  use ocean_module,                        only : initialise_ocean_model_regional, remap_ocean_model, run_ocean_model
+  use BMB_module,                          only : initialise_BMB_model, remap_bmb_model, run_BMB_model
+  use SMB_module,                          only : initialise_SMB_model, remap_smb_model, run_SMB_model
+  use general_ice_model_data_module,       only : initialise_mask_noice, initialise_basins
+  use utilities_module,                    only : time_display, inverse_oblique_sg_projection
+  use thermodynamics_module,               only : initialise_thermo_model, run_thermo_model
+  use general_sea_level_module,            only : calculate_PD_sealevel_contribution, calculate_icesheet_volume_and_area
+  use scalar_data_output_module,           only : initialise_regional_scalar_data, write_regional_scalar_data
+  use forcing_module,                      only : forcing, update_sealevel_at_model_time
+  use basal_conditions_and_sliding_module, only : basal_sliding_inversion
 
 ! ===== Preamble =====
 ! ====================
@@ -150,7 +151,7 @@ contains
       ! Set timer
       t1 = MPI_WTIME()
 
-      !Default value
+      ! Default value
       meshfitness = 1._dp
 
       ! Check if the mesh needs to be updated
@@ -256,6 +257,14 @@ contains
       ! ======================
 
       call update_ice_thickness( region%mesh, region%ice, region%mask_noice, region%refgeo_PD, region%refgeo_GIAeq, region%time)
+
+      ! == Basal sliding inversion
+      ! ==========================
+
+      if (C%do_slid_inv .AND. region%do_slid_inv) then
+        ! Adjust bed roughness
+        call basal_sliding_inversion( region%mesh, region%grid_smooth, region%ice, region%refgeo_PD, region%time)
+      end if
 
       ! Advance region time
       ! ===================
@@ -418,25 +427,27 @@ contains
     call calculate_PD_sealevel_contribution( region)
 
     ! Run all model components again after updating the mesh
-    region%t_next_SIA     = region%time
-    region%t_next_SSA     = region%time
-    region%t_next_DIVA    = region%time
-    region%t_next_thermo  = region%time
-    region%t_next_climate = region%time
-    region%t_next_ocean   = region%time
-    region%t_next_SMB     = region%time
-    region%t_next_BMB     = region%time
-    region%t_next_ELRA    = region%time
+    region%t_next_SIA      = region%time
+    region%t_next_SSA      = region%time
+    region%t_next_DIVA     = region%time
+    region%t_next_thermo   = region%time
+    region%t_next_climate  = region%time
+    region%t_next_ocean    = region%time
+    region%t_next_SMB      = region%time
+    region%t_next_BMB      = region%time
+    region%t_next_ELRA     = region%time
+    region%t_next_slid_inv = region%time
 
-    region%do_SIA         = .true.
-    region%do_SSA         = .true.
-    region%do_DIVA        = .true.
-    region%do_thermo      = .true.
-    region%do_climate     = .true.
-    region%do_ocean       = .true.
-    region%do_SMB         = .true.
-    region%do_BMB         = .true.
-    region%do_ELRA        = .true.
+    region%do_SIA          = .true.
+    region%do_SSA          = .true.
+    region%do_DIVA         = .true.
+    region%do_thermo       = .true.
+    region%do_climate      = .true.
+    region%do_ocean        = .true.
+    region%do_SMB          = .true.
+    region%do_BMB          = .true.
+    region%do_ELRA         = .true.
+    region%do_slid_inv     = .true.
 
     if (par%master) then
       write(*,"(A)") '  Finished reallocating and remapping.'
@@ -668,61 +679,65 @@ contains
     ! Timers and time steps
     ! =====================
 
-    region%time           = C%start_time_of_run
-    region%dt             = C%dt_min
-    region%dt_prev        = C%dt_min
+    region%time             = C%start_time_of_run
+    region%dt               = C%dt_min
+    region%dt_prev          = C%dt_min
 
-    region%dt_crit_SIA    = C%dt_min
-    region%dt_crit_SSA    = C%dt_min
-    region%dt_crit_ice    = C%dt_min
+    region%dt_crit_SIA      = C%dt_min
+    region%dt_crit_SSA      = C%dt_min
+    region%dt_crit_ice      = C%dt_min
 
-    region%t_last_mesh    = C%start_time_of_run
-    region%t_next_mesh    = C%start_time_of_run + C%dt_mesh_min
-    region%do_mesh        = .false.
+    region%t_last_mesh      = C%start_time_of_run
+    region%t_next_mesh      = C%start_time_of_run + C%dt_mesh_min
+    region%do_mesh          = .false.
 
-    region%t_last_SIA     = C%start_time_of_run
-    region%t_next_SIA     = C%start_time_of_run
-    region%do_SIA         = .true.
+    region%t_last_SIA       = C%start_time_of_run
+    region%t_next_SIA       = C%start_time_of_run
+    region%do_SIA           = .true.
 
-    region%t_last_SSA     = C%start_time_of_run
-    region%t_next_SSA     = C%start_time_of_run
-    region%do_SSA         = .true.
+    region%t_last_SSA       = C%start_time_of_run
+    region%t_next_SSA       = C%start_time_of_run
+    region%do_SSA           = .true.
 
-    region%t_last_DIVA    = C%start_time_of_run
-    region%t_next_DIVA    = C%start_time_of_run
-    region%do_DIVA        = .true.
+    region%t_last_DIVA      = C%start_time_of_run
+    region%t_next_DIVA      = C%start_time_of_run
+    region%do_DIVA          = .true.
 
-    region%t_last_thermo  = C%start_time_of_run
-    region%t_next_thermo  = C%start_time_of_run + C%dt_thermo
-    region%do_thermo      = .false.
+    region%t_last_thermo    = C%start_time_of_run
+    region%t_next_thermo    = C%start_time_of_run + C%dt_thermo
+    region%do_thermo        = .false.
 
-    region%t_last_climate = C%start_time_of_run
-    region%t_next_climate = C%start_time_of_run
-    region%do_climate     = .true.
+    region%t_last_climate   = C%start_time_of_run
+    region%t_next_climate   = C%start_time_of_run
+    region%do_climate       = .true.
 
-    region%t_last_ocean   = C%start_time_of_run
-    region%t_next_ocean   = C%start_time_of_run
-    region%do_ocean       = .true.
+    region%t_last_ocean     = C%start_time_of_run
+    region%t_next_ocean     = C%start_time_of_run
+    region%do_ocean         = .true.
 
-    region%t_last_SMB     = C%start_time_of_run
-    region%t_next_SMB     = C%start_time_of_run
-    region%do_SMB         = .true.
+    region%t_last_SMB       = C%start_time_of_run
+    region%t_next_SMB       = C%start_time_of_run
+    region%do_SMB           = .true.
 
-    region%t_last_BMB     = C%start_time_of_run
-    region%t_next_BMB     = C%start_time_of_run
-    region%do_BMB         = .true.
+    region%t_last_BMB       = C%start_time_of_run
+    region%t_next_BMB       = C%start_time_of_run
+    region%do_BMB           = .true.
 
-    region%t_last_ELRA    = C%start_time_of_run
-    region%t_next_ELRA    = C%start_time_of_run
+    region%t_last_ELRA      = C%start_time_of_run
+    region%t_next_ELRA      = C%start_time_of_run
     if (C%choice_GIA_model == 'ELRA') then
-      region%do_ELRA      = .true.
+      region%do_ELRA        = .true.
     else
-      region%do_ELRA      = .false.
+      region%do_ELRA        = .false.
     end if
 
-    region%t_last_output  = C%start_time_of_run
-    region%t_next_output  = C%start_time_of_run
-    region%do_output      = .true.
+    region%t_last_slid_inv  = C%start_time_of_run
+    region%t_next_slid_inv  = C%start_time_of_run + C%dt_slid_inv
+    region%do_slid_inv      = .false.
+
+    region%t_last_output    = C%start_time_of_run
+    region%t_next_output    = C%start_time_of_run
+    region%do_output        = .true.
 
     ! Finalise routine path
     call finalise_routine( routine_name, n_extra_windows_expected = 65)

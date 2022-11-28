@@ -1062,7 +1062,6 @@ contains
 
     ! Local variables:
     character(len=256), parameter       :: routine_name = 'initialise_basal_sliding_inversion'
-    integer                             :: k
 
     ! === Initialisation ===
     ! ======================

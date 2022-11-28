@@ -297,8 +297,18 @@
 
     ! NetCDF file containing the present-day observed ocean
     filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
-    name_ocean_temperature_obs_config           = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
-    name_ocean_salinity_obs_config              = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+    name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+    name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+
+    do_ocean_inv_config                         = .FALSE.                          ! Whether or not to perform an iterative inversion of ocean temperatures
+    ocean_inv_t_start_config                    = -9.9E9                           ! Minimum model time when the inversion is allowed
+    ocean_inv_t_end_config                      = +9.9E9                           ! Maximum model time when the inversion is allowed
+    ocean_inv_temp_max_config                   = 5.0                              ! Maximum value of ocean temperatures allowed during inversion
+    ocean_inv_scale_start_config                = 0.05                             ! Initial scaling factor for inversion procedure [m]
+    ocean_inv_scale_end_config                  = 0.05                             ! Final   scaling factor for inversion procedure [m]
+    ocean_inv_smooth_r_config                   = 40000.0                          ! Smoothing radius for inversion procedure [m]
+    ocean_inv_smooth_w_config                   = 0.0                              ! Weight given to the smoothed roughness (1 = full smoothing applied)
+    ocean_inv_filename_output_config            = 'ocean_temperature_inv.nc'       ! NetCDF file where the final inverted ocean temperature will be saved
 
   ! Surface mass balance
   ! ====================

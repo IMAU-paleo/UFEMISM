@@ -882,34 +882,35 @@ module data_types_module
 
   END TYPE type_ocean_matrix_global
 
-  TYPE type_ocean_snapshot_regional
+  type type_ocean_snapshot_regional
     ! Global ocean snapshot, either from present-day observations (e.g. WOA18) or from a GCM snapshot, projected onto the regional model mesh.
 
-    CHARACTER(LEN=256)                      :: name                          ! 'ERA40', 'HadCM3_PI', etc.
+    character(len=256)                      :: name                          ! 'ERA40', 'HadCM3_PI', etc.
 
     ! General forcing info (not relevant for PD observations)
-    REAL(dp)                                :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
-    REAL(dp)                                :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
-    REAL(dp)                                :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
-    REAL(dp)                                :: orbit_obl
-    REAL(dp)                                :: orbit_pre
-    REAL(dp)                                :: sealevel
+    real(dp)                                :: CO2                           ! CO2 concentration in ppm that was used to force the GCM
+    real(dp)                                :: orbit_time                    ! The time (in ky ago) for the orbital forcing (Q_TOA can then be read from Laskar data)
+    real(dp)                                :: orbit_ecc                     ! Orbital parameters that were used to force the GCM
+    real(dp)                                :: orbit_obl
+    real(dp)                                :: orbit_pre
+    real(dp)                                :: sealevel
 
     ! Ocean data
-    REAL(dp)                                :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T_ocean                       ! 3-D annual mean ocean temperature [K]
-    REAL(dp), DIMENSION(:,:  ), allocatable :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T_ocean_ext                   ! 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
-    REAL(dp), DIMENSION(:,:  ), allocatable :: S_ocean_ext                   ! 3-D annual mean ocean salinity   , extrapolated beneath ice shelves [PSU]
-    REAL(dp), DIMENSION(:,:  ), allocatable :: T_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
-    REAL(dp), DIMENSION(:,:  ), allocatable :: S_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean salinity,    extrapolated beneath ice shelves [PSU]
-    CHARACTER(LEN=256)                      :: hires_ocean_foldername        ! Name of folder containing the extrapolated ocean data (not bias-corrected)
+    real(dp)                                :: T_ocean_mean                  ! Regional mean ocean temperature (used for basal melt when no ocean temperature data is provided)
+    real(dp), dimension(:,:  ), allocatable :: T_ocean                       ! 3-D annual mean ocean temperature [K]
+    real(dp), dimension(:,:  ), allocatable :: S_ocean                       ! 3-D annual mean ocean salinity    [PSU]
+    real(dp), dimension(:,:  ), allocatable :: T_ocean_ext                   ! 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
+    real(dp), dimension(:,:  ), allocatable :: S_ocean_ext                   ! 3-D annual mean ocean salinity   , extrapolated beneath ice shelves [PSU]
+    real(dp), dimension(:,:  ), allocatable :: T_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean temperature, extrapolated beneath ice shelves [K]
+    real(dp), dimension(:,:  ), allocatable :: S_ocean_corr_ext              ! Bias-corrected 3-D annual mean ocean salinity,    extrapolated beneath ice shelves [PSU]
+    real(dp), dimension(:    ), allocatable :: T_ocean_inv                   ! Inverted annual mean ocean temperature at the base of ice shelves [K]
+    character(len=256)                      :: hires_ocean_foldername        ! Name of folder containing the extrapolated ocean data (not bias-corrected)
 
     ! History of the weighing fiallocatable
-    REAL(dp), DIMENSION(:,:  ), allocatable :: w_tot_history
-    INTEGER                                 :: nw_tot_history
+    real(dp), dimension(:,:  ), allocatable :: w_tot_history
+    integer                                 :: nw_tot_history
 
-  END TYPE type_ocean_snapshot_regional
+  end type type_ocean_snapshot_regional
 
   TYPE type_ocean_matrix_regional
     ! All the relevant ocean data fields (PD observations, GCM snapshots, and final, applied ocean) on the model region grid

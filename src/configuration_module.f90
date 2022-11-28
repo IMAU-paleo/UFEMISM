@@ -64,9 +64,9 @@ MODULE configuration_module
   ! Which ice sheets do we simulate?
   ! ================================
 
-  LOGICAL             :: do_NAM_config                               = .TRUE.                          ! North America
-  LOGICAL             :: do_EAS_config                               = .TRUE.                          ! Eurasia
-  LOGICAL             :: do_GRL_config                               = .TRUE.                          ! Greenland
+  LOGICAL             :: do_NAM_config                               = .TRUE.                           ! North America
+  LOGICAL             :: do_EAS_config                               = .TRUE.                           ! Eurasia
+  LOGICAL             :: do_GRL_config                               = .TRUE.                           ! Greenland
   LOGICAL             :: do_ANT_config                               = .TRUE.                           ! Antarctica
 
   ! Benchmark experiments
@@ -262,12 +262,12 @@ MODULE configuration_module
   INTEGER             :: d18O_record_length_config                   = 2051
 
   ! Geothermal heat flux
-  CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'constant'                        ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
+  CHARACTER(LEN=256)  :: choice_geothermal_heat_flux_config          = 'constant'                       ! Choice of geothermal heat flux; can be 'constant' or 'spatial'
   REAL(dp)            :: constant_geothermal_heat_flux_config        = 1.72E06_dp                       ! Geothermal Heat flux [J m^-2 yr^-1] Sclater et al. (1980)
   CHARACTER(LEN=256)  :: filename_geothermal_heat_flux_config        = 'data/GHF/geothermal_heatflux_ShapiroRitzwoller2004_global_1x1_deg.nc'
 
   ! Parameters for calculating modelled benthic d18O
-  LOGICAL             :: do_calculate_benthic_d18O_config            = .TRUE.                          ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
+  LOGICAL             :: do_calculate_benthic_d18O_config            = .TRUE.                           ! Whether or not to calculate modelled benthic d18O (set to .FALSE. for e.g. idealised-geometry experiments, future projections)
   REAL(dp)            :: dT_deepwater_averaging_window_config        = 3000                             ! Time window (in yr) over which global mean temperature anomaly is averaged to find the deep-water temperature anomaly
   REAL(dp)            :: dT_deepwater_dT_surf_ratio_config           = 0.25_dp                          ! Ratio between global mean surface temperature change and deep-water temperature change
   REAL(dp)            :: d18O_dT_deepwater_ratio_config              = -0.28_dp                         ! Ratio between deep-water temperature change and benthic d18O change
@@ -442,7 +442,7 @@ MODULE configuration_module
   ! == Climate
   ! ==========
 
-    character(len=256)  :: choice_climate_model_config                 = 'PD_obs'                        ! Choice of climate model: "none", "PD_obs", "matrix_warm_cold"
+    character(len=256)  :: choice_climate_model_config                 = 'PD_obs'                         ! Choice of climate model: "none", "PD_obs", "matrix_warm_cold"
     character(len=256)  :: choice_idealised_climate_config             = 'EISMINT1_A'
 
     ! NetCDF files containing direct global/regional climate forcing
@@ -483,8 +483,8 @@ MODULE configuration_module
 
     ! NetCDF file containing the present-day observed ocean
     character(len=256)  :: filename_PD_obs_ocean_config                = 'data/WOA/woa18_decav_ts00_04_remapcon_r360x180_NaN.nc'
-    character(len=256)  :: name_ocean_temperature_obs_config           = 't_an' ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
-    character(len=256)  :: name_ocean_salinity_obs_config              = 's_an' ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
+    character(len=256)  :: name_ocean_temperature_obs_config           = 't_an'                           ! E.g. objectively analysed mean (t_an) or statistical mean (t_mn)
+    character(len=256)  :: name_ocean_salinity_obs_config              = 's_an'                           ! E.g. objectively analysed mean (s_an) or statistical mean (s_mn)
 
     ! GCM snapshots in the matrix_warm_cold option
     character(len=256)  :: filename_GCM_ocean_snapshot_PI_config       = 'data/COSMOS_ocean_examples/COSMOS_PI_oceanTS_prep.nc'
@@ -510,6 +510,17 @@ MODULE configuration_module
     character(len=256)  :: ocean_extrap_hires_geo_filename_GRL_config  = 'data/Bedmachine_Greenland/BedMachine_Greenland_v4_5km.nc'      ! resolution, used for ocean
     character(len=256)  :: ocean_extrap_hires_geo_filename_ANT_config  = 'data/Bedmachine_Antarctica/Bedmachine_v1_Antarctica_5km.nc' ! data extrapolation
     real(dp)            :: ocean_w_tot_hist_averaging_window_config    = 1500._dp                         ! Time window (in yr) over which the weighing fields for sea-water temperature at maximum depth are averaged
+
+    ! Ocean temperature inversion
+    logical             :: do_ocean_inv_config                         = .FALSE.                          ! Whether or not to perform an iterative inversion of ocean temperatures
+    real(dp)            :: ocean_inv_t_start_config                    = -9.9E9_dp                        ! Minimum model time when the inversion is allowed
+    real(dp)            :: ocean_inv_t_end_config                      = +9.9E9_dp                        ! Maximum model time when the inversion is allowed
+    real(dp)            :: ocean_inv_temp_max_config                   = 5._dp                            ! Maximum value of ocean temperatures allowed during inversion
+    real(dp)            :: ocean_inv_scale_start_config                = .05_dp                           ! Initial scaling factor for inversion procedure [m]
+    real(dp)            :: ocean_inv_scale_end_config                  = .05_dp                           ! Final   scaling factor for inversion procedure [m]
+    real(dp)            :: ocean_inv_smooth_r_config                   = 40000._dp                        ! Smoothing radius for inversion procedure [m]
+    real(dp)            :: ocean_inv_smooth_w_config                   = .0_dp                            ! Weight given to the smoothed roughness (1 = full smoothing applied)
+    character(len=256)  :: ocean_inv_filename_output_config            = 'ocean_temperature_inv.nc'       ! NetCDF file where the final inverted ocean temperature will be saved
 
   ! Surface mass balance
   ! ====================
@@ -1097,7 +1108,7 @@ MODULE configuration_module
       character(len=256)                  :: choice_ocean_vertical_grid
       real(dp)                            :: ocean_vertical_grid_max_depth
       real(dp)                            :: ocean_regular_grid_dz
-      INTEGER                             :: nz_ocean
+      integer                             :: nz_ocean
       real(dp), dimension(:), allocatable :: z_ocean
       character(len=256)                  :: ocean_extrap_dir
       real(dp)                            :: ocean_extrap_res
@@ -1107,6 +1118,17 @@ MODULE configuration_module
       character(len=256)                  :: ocean_extrap_hires_geo_filename_GRL
       character(len=256)                  :: ocean_extrap_hires_geo_filename_ANT
       real(dp)                            :: ocean_w_tot_hist_averaging_window
+
+      ! Ocean temperature inversion
+      logical                             :: do_ocean_inv
+      real(dp)                            :: ocean_inv_t_start
+      real(dp)                            :: ocean_inv_t_end
+      real(dp)                            :: ocean_inv_temp_max
+      real(dp)                            :: ocean_inv_scale_start
+      real(dp)                            :: ocean_inv_scale_end
+      real(dp)                            :: ocean_inv_smooth_r
+      real(dp)                            :: ocean_inv_smooth_w
+      character(len=256)                  :: ocean_inv_filename_output
 
     ! Surface mass balance
     ! ====================
@@ -1753,6 +1775,15 @@ CONTAINS
                      ocean_extrap_hires_geo_filename_GRL_config,      &
                      ocean_extrap_hires_geo_filename_ANT_config,      &
                      ocean_w_tot_hist_averaging_window_config,        &
+                     do_ocean_inv_config,                             &
+                     ocean_inv_t_start_config,                        &
+                     ocean_inv_t_end_config,                          &
+                     ocean_inv_temp_max_config,                       &
+                     ocean_inv_scale_start_config,                    &
+                     ocean_inv_scale_end_config,                      &
+                     ocean_inv_smooth_r_config,                       &
+                     ocean_inv_smooth_w_config,                       &
+                     ocean_inv_filename_output_config,                &
                      choice_SMB_model_config,                         &
                      choice_idealised_SMB_config,                     &
                      SMB_uniform_config,                              &
@@ -2335,6 +2366,18 @@ CONTAINS
       C%ocean_extrap_hires_geo_filename_GRL      = ocean_extrap_hires_geo_filename_GRL_config
       C%ocean_extrap_hires_geo_filename_ANT      = ocean_extrap_hires_geo_filename_ANT_config
       C%ocean_w_tot_hist_averaging_window        = ocean_w_tot_hist_averaging_window_config
+
+      ! Ocean temperature inversion
+      C%do_ocean_inv                             = do_ocean_inv_config
+      C%ocean_inv_t_start                        = ocean_inv_t_start_config
+      C%ocean_inv_t_end                          = ocean_inv_t_end_config
+      C%ocean_inv_temp_max                       = ocean_inv_temp_max_config
+      C%ocean_inv_scale_start                    = ocean_inv_scale_start_config
+      C%ocean_inv_scale_end                      = ocean_inv_scale_end_config
+      C%ocean_inv_smooth_r                       = ocean_inv_smooth_r_config
+      C%ocean_inv_smooth_w                       = ocean_inv_smooth_w_config
+      C%ocean_inv_filename_output                = ocean_inv_filename_output_config
+
 
     ! Surface mass balance
     ! ====================

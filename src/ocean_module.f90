@@ -4,23 +4,28 @@ module ocean_module
 ! ====================
 
   use mpi
+  use parameters_module,    only : ice_density, seawater_density
   use configuration_module, only : dp, C, init_routine, finalise_routine, crash
   use parallel_module,      only : par, partition_list, cerr, ierr, sync
   use data_types_module,    only : type_ocean_matrix_global, type_ocean_snapshot_global, &
                                    type_ocean_matrix_regional, type_ocean_snapshot_regional, &
-                                   type_model_region, type_mesh, type_highres_ocean_data
+                                   type_model_region, type_mesh, type_highres_ocean_data, &
+                                   type_grid, type_ice_model, type_reference_geometry
   use netcdf_module,        only : inquire_PD_obs_global_ocean_file, read_PD_obs_global_ocean_file, &
                                    inquire_hires_geometry_file, read_hires_geometry_file, &
                                    inquire_extrapolated_ocean_file, read_extrapolated_ocean_file, &
                                    create_extrapolated_ocean_file
   use utilities_module,     only : remap_cons_2nd_order_1D, inverse_oblique_sg_projection, &
-                                   map_glob_to_grid_3D, extrapolate_Gaussian_floodfill
+                                   map_glob_to_grid_3D, extrapolate_Gaussian_floodfill, &
+                                   interpolate_ocean_depth, extrapolate_Gaussian_floodfill_mesh
   use mesh_mapping_module,  only : calc_remapping_operator_mesh2grid, map_mesh2grid_2D, &
                                    calc_remapping_operator_grid2mesh, map_grid2mesh_3D, &
                                    deallocate_remapping_operators_mesh2grid, &
-                                   deallocate_remapping_operators_grid2mesh
+                                   deallocate_remapping_operators_grid2mesh, &
+                                   smooth_Gaussian_2D
   use utilities_module,     only : surface_elevation
   use reallocate_mod,       only : reallocate_bounds
+  use mpi_module,           only : allgather_array
 
 contains
 
@@ -294,8 +299,13 @@ contains
     end do
     end do
 
+    if (C%do_ocean_inv) then
+      ! Initialise inverted ocean temperature field
+      call initialise_ocean_temperature_inversion( region%mesh, region%ice, region%ocean_matrix%PD_obs)
+    end if
+
     ! Finalise routine path
-    call finalise_routine( routine_name, n_extra_windows_expected=14)
+    call finalise_routine( routine_name)
 
   end subroutine initialise_ocean_model_PD_obs_regional
 
@@ -1659,46 +1669,44 @@ contains
 
     select case (C%choice_ocean_model)
 
-    case ('none')
-      ! No need to do anything
+      case ('none')
+        ! No need to do anything
 
-    case ('PD_obs')
-      ! Keep the ocean fixed to present-day observed conditions
+      case ('PD_obs')
+        ! Keep the ocean fixed to present-day observed conditions
 
-      ! Allocate the PD_obs and applied snapshots
-      call reallocate_subocean( mesh_new, ocean_matrix%PD_obs )
-      call reallocate_subocean( mesh_new, ocean_matrix%applied)
+        ! Allocate the PD_obs and applied snapshots
+        call reallocate_subocean( mesh_new, ocean_matrix%PD_obs )
+        call reallocate_subocean( mesh_new, ocean_matrix%applied)
 
-      ! Map high-resolution extrapolated ocean data to the new model mesh
-      call remap_ocean_data( mesh_new, ocean_matrix%PD_obs)
+        ! Map high-resolution extrapolated ocean data to the new model mesh
+        call remap_ocean_data( mesh_new, ocean_matrix%PD_obs)
 
-      do k = 1, C%nz_ocean
-      do vi = mesh_new%vi1, mesh_new%vi2
+        do k = 1, C%nz_ocean
+        do vi = mesh_new%vi1, mesh_new%vi2
 
-        ! PD_obs doesn't have a bias-corrected version
-        ocean_matrix%PD_obs%T_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%T_ocean_ext( vi,k)
-        ocean_matrix%PD_obs%S_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%S_ocean_ext( vi,k)
+          ! PD_obs doesn't have a bias-corrected version
+          ocean_matrix%PD_obs%T_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%T_ocean_ext( vi,k)
+          ocean_matrix%PD_obs%S_ocean_corr_ext(  vi,k) = ocean_matrix%PD_obs%S_ocean_ext( vi,k)
 
-        ! Initialise applied ocean forcing with present-day observations
-        ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
-        ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
-        ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
-        ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%PD_obs%S_ocean(          vi,k)
-        ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
-        ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
+          ! Initialise applied ocean forcing with present-day observations
+          ocean_matrix%applied%T_ocean(          vi,k) = ocean_matrix%PD_obs%T_ocean(          vi,k)
+          ocean_matrix%applied%T_ocean_ext(      vi,k) = ocean_matrix%PD_obs%T_ocean_ext(      vi,k)
+          ocean_matrix%applied%T_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%T_ocean_corr_ext( vi,k)
+          ocean_matrix%applied%S_ocean(          vi,k) = ocean_matrix%PD_obs%S_ocean(          vi,k)
+          ocean_matrix%applied%S_ocean_ext(      vi,k) = ocean_matrix%PD_obs%S_ocean_ext(      vi,k)
+          ocean_matrix%applied%S_ocean_corr_ext( vi,k) = ocean_matrix%PD_obs%S_ocean_corr_ext( vi,k)
 
-      end do
-      end do
+        end do
+        end do
 
-    case ('matrix_warm_cold')
-      ! Run the warm/cold ocean matrix
-        call crash(trim(C%choice_ocean_model) // &
-                   ' not implemented yet...')
+      case ('matrix_warm_cold')
+        ! Run the warm/cold ocean matrix
+        call crash(trim(C%choice_ocean_model) // ' not implemented yet...')
 
-    case default
-      ! Unknown option
-      call crash('unknown choice_ocean_model "' // &
-                  trim(C%choice_ocean_model) // '"!')
+      case default
+        ! Unknown option
+        call crash('unknown choice_ocean_model "' // trim(C%choice_ocean_model) // '"!')
 
     end select
 
@@ -1827,5 +1835,239 @@ contains
     call finalise_routine( routine_name)
 
   end subroutine remap_ocean_data
+
+! ===== Ocean temperature inversion =====
+! =======================================
+
+  subroutine ocean_temperature_inversion( mesh, grid, ice, ocean, refgeo, time)
+    ! Invert basal ocean temps using the reference topography
+
+    implicit none
+
+    ! In/output variables
+    type(type_mesh),                    intent(in)    :: mesh
+    type(type_grid),                    intent(in)    :: grid
+    type(type_ice_model),               intent(in)    :: ice
+    type(type_ocean_snapshot_regional), intent(inout) :: ocean
+    type(type_reference_geometry),      intent(in)    :: refgeo
+    real(dp),                           intent(in)    :: time
+
+    ! Local variables:
+    character(len=256), parameter                   :: routine_name = 'ocean_temperature_inversion'
+    integer                                         :: vi
+    real(dp)                                        :: h_delta, h_scale, t_scale, a_scale, m_scale
+    real(dp)                                        :: depth, s_base, t_melt
+    integer,  dimension(:), allocatable             :: mask, mask_filled
+    real(dp), dimension(:), allocatable             :: ocn_inv
+
+    ! Initialisation
+    ! ==============
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    if (time < C%ocean_inv_t_start .or. &
+        time > C%ocean_inv_t_end) then
+      ! Nothing to do for now. Just return.
+      call finalise_routine( routine_name)
+      return
+    end if
+
+    ! Allocate arrays for extrapolation
+    allocate( mask (mesh%nV))
+    allocate( mask_filled (mesh%nV))
+    allocate( ocn_inv (mesh%nV))
+    mask = 0
+    mask_filled = 0
+    ocn_inv = 0._dp
+
+    ! Adjustment magnitude
+    ! ====================
+
+    ! Default values
+    a_scale = C%ocean_inv_scale_start
+    m_scale = .0_dp
+    t_scale = 0._dp
+
+    ! Time scale
+    if (C%ocean_inv_t_start < C%ocean_inv_t_end) then
+      ! Compute how much time has passed since start of inversion
+      t_scale = (time - C%ocean_inv_t_start) / (C%ocean_inv_t_end - C%ocean_inv_t_start)
+      ! Limit t_scale to [0 1]
+      t_scale = max( 0._dp, min( t_scale, 1._dp))
+    end if
+
+    ! Magnitude decay
+    a_scale = C%ocean_inv_scale_start * (1._dp - t_scale) + C%ocean_inv_scale_end * t_scale
+
+    ! Do the inversion
+    ! ================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      h_delta = ice%Hi_a( vi) - refgeo%Hi( vi)
+
+      ! Invert only over non-calving-front shelf vertices
+      if ( ice%mask_shelf_a( vi) == 1 .and. &
+           ( ice%mask_cf_a(  vi) == 0 .or. &
+             ice%mask_glf_a( vi) == 1 ) ) then
+
+        ! Use this vertex during extrapolation
+        mask( vi) = 2
+
+        if ( h_delta > 0._dp .and. ice%dHi_dt_a( vi) >= .0_dp ) then
+
+          if (t_scale < .9_dp) then
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) + a_scale * (1._dp - exp( -abs( h_delta*ice%dHi_dt_a( vi))))
+          else
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) + C%ocean_inv_scale_start * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          end if
+
+        elseif ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) <= .0_dp ) then
+
+          if (t_scale < .9_dp) then
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) - a_scale * (1._dp - exp( -abs( h_delta*ice%dHi_dt_a( vi))))
+          else
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) - C%ocean_inv_scale_start/20._dp * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          end if
+
+        elseif ( h_delta > 0._dp .AND. ice%dHi_dt_a( vi) < .0_dp ) then
+
+          if (t_scale < .9_dp) then
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) - m_scale * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          end if
+
+        elseif ( h_delta < 0._dp .AND. ice%dHi_dt_a( vi) > .0_dp ) then
+
+          if (t_scale < .9_dp) then
+            ocean%T_ocean_inv( vi) = ocean%T_ocean_inv( vi) + m_scale * (1._dp - exp( -abs( ice%dHi_dt_a( vi))))
+          end if
+
+        end if
+
+      else
+
+        ! Not ice shelf: mark it for extrapolation
+        mask( vi) = 1
+
+      end if
+
+    end do
+
+    ! Limit basal temperatures
+    do vi = mesh%vi1, mesh%vi2
+
+      if (ice%mask_shelf_a( vi) == 1) then
+
+        ! Calculate depth
+        depth = max( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
+
+        ! Find ocean salinity at this depth
+        call interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%S_ocean_corr_ext( vi,:), depth, s_base)
+
+        t_melt = 0.0939_dp - 0.057_dp * s_base - 7.64E-04_dp * ice%Hi_a( vi) * ice_density / seawater_density
+
+        ocean%T_ocean_inv( vi) = MAX( ocean%T_ocean_inv( vi), t_melt)
+        ocean%T_ocean_inv( vi) = MIN( ocean%T_ocean_inv( vi),  5._dp)
+
+      end if
+
+    end do
+
+    ! Communicate results
+    ! ===================
+
+    ! Gather mask info
+    call allgather_array(mask)
+    call allgather_array(mask_filled)
+
+    ! Gather inverted bed roughness
+    ocn_inv( mesh%vi1:mesh%vi2) = ocean%T_ocean_inv
+    call allgather_array(ocn_inv)
+
+    ! Extrapolate the resulting field
+    ! ===============================
+
+    ! Perform the extrapolation
+    call extrapolate_Gaussian_floodfill_mesh( mesh, mask, ocn_inv, 40000._dp, mask_filled)
+    ! Copy results to main variable
+    ocean%T_ocean_inv = ocn_inv( mesh%vi1:mesh%vi2)
+
+    ! Smoothing
+    ! =========
+
+    ! Smooth the resulting field
+    if (C%ocean_inv_smooth_w > 0._dp) then
+      call smooth_Gaussian_2D( mesh, grid, ocn_inv, C%ocean_inv_smooth_r)
+    end if
+
+    do vi = mesh%vi1, mesh%vi2
+      ! Combine the smoothed and raw inverted parameter through a weighed average
+      ocean%T_ocean_corr_ext( vi,:) = (1._dp - C%ocean_inv_smooth_w) * ocean%T_ocean_inv( vi) + C%ocean_inv_smooth_w * ocn_inv( vi)
+    end do
+
+    ! Finalisation
+    ! ============
+
+    ! Clean up after yourself
+    deallocate( mask_filled)
+    deallocate( mask)
+    deallocate( ocn_inv)
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine ocean_temperature_inversion
+
+  subroutine initialise_ocean_temperature_inversion( mesh, ice, ocean)
+    ! Fill in the initial guess for the bed roughness
+
+    implicit none
+
+    ! Input variables:
+    type(type_mesh),                    intent(in)    :: mesh
+    type(type_ice_model),               intent(in)    :: ice
+    type(type_ocean_snapshot_regional), intent(inout) :: ocean
+
+    ! Local variables:
+    character(len=256), parameter       :: routine_name = 'initialise_ocean_temperature_inversion'
+    integer                             :: vi
+    real(dp)                            :: depth
+
+    ! === Initialisation ===
+    ! ======================
+
+    ! Add routine to path
+    call init_routine( routine_name)
+
+    ! === Allocation ===
+    ! ==================
+
+    allocate( ocean%T_ocean_inv (mesh%vi1:mesh%vi2))
+
+    ! === Initial value ===
+    ! =====================
+
+    do vi = mesh%vi1, mesh%vi2
+
+      if (ice%mask_shelf_a( vi) == 1) then
+
+        ! Calculate depth
+        depth = max( 0.1_dp, ice%Hi_a( vi) * ice_density / seawater_density)
+
+        ! Find ocean salinity at this depth
+        call interpolate_ocean_depth( C%nz_ocean, C%z_ocean, ocean%T_ocean_corr_ext( vi,:), &
+                                      depth, ocean%T_ocean_inv( vi))
+      end if
+
+    end do
+
+    ! === Finalisation ===
+    ! ====================
+
+    ! Finalise routine path
+    call finalise_routine( routine_name)
+
+  end subroutine initialise_ocean_temperature_inversion
 
 end module
